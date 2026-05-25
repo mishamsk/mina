@@ -1,0 +1,6 @@
+/mina
+/dist/
+*.db
+*.duckdb
+*.test
+coverage.out
