@@ -122,6 +122,112 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /tags:
+    get:
+      operationId: listTags
+      summary: List tags.
+      parameters:
+        - name: include_hidden
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Tags in deterministic FQN order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+    post:
+      operationId: createTag
+      summary: Create a tag.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTagRequest"
+      responses:
+        "201":
+          description: Tag created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /tags/{tag_id}:
+    parameters:
+      - name: tag_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getTag
+      summary: Get a tag.
+      parameters:
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Tag found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateTag
+      summary: Update tag hidden state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTagRequest"
+      responses:
+        "200":
+          description: Tag updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteTag
+      summary: Tombstone a tag.
+      responses:
+        "204":
+          description: Tag tombstoned.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   responses:
     InvalidRequest:
@@ -226,6 +332,17 @@ components:
         is_hidden:
           type: boolean
           default: false
+    CreateTagRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - fqn
+      properties:
+        fqn:
+          type: string
+        is_hidden:
+          type: boolean
+          default: false
     ErrorResponse:
       type: object
       additionalProperties: false
@@ -244,7 +361,58 @@ components:
           type: string
           enum:
             - ok
+    Tag:
+      type: object
+      additionalProperties: false
+      required:
+        - tag_id
+        - fqn
+        - is_hidden
+        - name
+        - level
+        - created_at
+        - updated_at
+      properties:
+        tag_id:
+          type: integer
+          format: int64
+        fqn:
+          type: string
+        is_hidden:
+          type: boolean
+        parent_fqn:
+          type: string
+          nullable: true
+        name:
+          type: string
+        level:
+          type: integer
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        tombstoned_at:
+          type: string
+          nullable: true
+    TagListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - tags
+      properties:
+        tags:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
     UpdateCategoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - is_hidden
+      properties:
+        is_hidden:
+          type: boolean
+    UpdateTagRequest:
       type: object
       additionalProperties: false
       required:

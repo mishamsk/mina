@@ -47,6 +47,9 @@ RETURNING category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
 		)
 		category, err = scanCategory(row)
 		if err != nil {
+			if isUniqueConstraintError(err) {
+				return fmt.Errorf("%w: active category fqn already exists", ErrConflict)
+			}
 			return fmt.Errorf("insert category: %w", err)
 		}
 

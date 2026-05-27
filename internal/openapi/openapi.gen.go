@@ -90,6 +90,12 @@ type CreateCategoryRequest struct {
 	IsHidden *bool  `json:"is_hidden,omitempty"`
 }
 
+// CreateTagRequest defines model for CreateTagRequest.
+type CreateTagRequest struct {
+	Fqn      string `json:"fqn"`
+	IsHidden *bool  `json:"is_hidden,omitempty"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Error APIError `json:"error"`
@@ -103,8 +109,31 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// Tag defines model for Tag.
+type Tag struct {
+	CreatedAt    string  `json:"created_at"`
+	Fqn          string  `json:"fqn"`
+	IsHidden     bool    `json:"is_hidden"`
+	Level        int     `json:"level"`
+	Name         string  `json:"name"`
+	ParentFqn    *string `json:"parent_fqn,omitempty"`
+	TagId        int64   `json:"tag_id"`
+	TombstonedAt *string `json:"tombstoned_at,omitempty"`
+	UpdatedAt    string  `json:"updated_at"`
+}
+
+// TagListResponse defines model for TagListResponse.
+type TagListResponse struct {
+	Tags []Tag `json:"tags"`
+}
+
 // UpdateCategoryRequest defines model for UpdateCategoryRequest.
 type UpdateCategoryRequest struct {
+	IsHidden bool `json:"is_hidden"`
+}
+
+// UpdateTagRequest defines model for UpdateTagRequest.
+type UpdateTagRequest struct {
 	IsHidden bool `json:"is_hidden"`
 }
 
@@ -131,35 +160,54 @@ type GetCategoryParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
+// ListTagsParams defines parameters for ListTags.
+type ListTagsParams struct {
+	IncludeHidden     *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// GetTagParams defines parameters for GetTag.
+type GetTagParams struct {
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody = CreateCategoryRequest
 
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = UpdateCategoryRequest
 
+// CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
+type CreateTagJSONRequestBody = CreateTagRequest
+
+// UpdateTagJSONRequestBody defines body for UpdateTag for application/json ContentType.
+type UpdateTagJSONRequestBody = UpdateTagRequest
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"zFjfb+M2DP5XBG6PRpLuugHzW9fddQV2Rdd1T8UhUC0m0c2WXIluFxT+3wfKjn/FTS69XntPcSyL/PiR",
-	"+kj7ERKb5dagIQ/xIzj0uTUew59TaxapToivE2sITbiUeZ7qRJK2ZvrZW8P3fLLCTPLVjw4XEMMP09bw",
-	"tFr10/fOWXdVu4CyLCNQ6BOnczYGMVyvUDi8K9CTSGrvXjxoWgn8T3vSZik8ScIJlBGcm3uZanVVbXgb",
-	"lNoLXcEIkD4iray6sHSSpvYB1SuDsgWhUBa9MJaEL/LcOhLU4kUlsgAxoL2w9MEWRr0JdaiEQ28Ll6B4",
-	"kBXiBaOZAO+rTbLHk8vzYDhgU0qzLZleOpujI821upCpxwjyzi2OSCH/oikyiG+gztO89g8RGEvz4BIi",
-	"qGiZ8y1Z5y6CTQ1CBNoQOiPTOQYonyKgdY4QgyenzZLpzNB7uQw+B2tlBOxVO66ImwpZ+3xry95+xoTY",
-	"1qkkXFq3PjTmettch6QurMskQczofzmGxg8Hs0THjhKHklDNJY3gjmBxZ0bvaz9faaWwu3prbYrS8HKK",
-	"95h2ljoOjcxw1GQuHRqa1x5NkabyNkWIyRU4wjbZ7NaTNQ32vTuKXD0d6jBFHSIrFrox11Fs4uyx2POz",
-	"K7V/ak/NWXlWmut/mjDz+45mU1BlA0k6J9dPRc62R9GHSDfWOtp7APwvKiqFC1mk1JgYFtkANtscw9uX",
-	"pMNw4kZ1dhHbqNMQ0VAoWkx/oExp9UxQ3P8K3xU2+++IHA3A1LvG0PwTyvXrMrpTDgZQ2me30fCz2ixs",
-	"MKOJDzN81EaKq/d/X4uTy3OI4B6dr7rJbHI0mXEINkcjcw0xvJvMJu+AxYRWAdm0f1aWGEJj7KHBnSuI",
-	"gU/iaftYkCKZIaHzEN88gmZndwW69ebks6IlaaGwVYS2Q+6v3N0mW2U7zOynqD+//TSbvVhnHxWtkQbf",
-	"0ii0EYo5zLTh0S0RH/66ENYpdGH4OK7QjTltopgORrwwGBRZJrkxhrSJNr3Bam79SIL7ogVVPaKn36xa",
-	"vxxFo8pY9sufW1O5laejF8/TjtysRd2tnp8G3vbr/m3NC0Q/bxVRQm5yt64mvs5JnT52+m9ZFX+KhNuZ",
-	"/T3c72W2x+xxtXmUhvacfR0Tx/u3NZN2n4nrDYI+GdG4TJ0hdQI9QKO+Z0HZWaib94E3Sc4Z0jAtY5xz",
-	"p2kp78+N/XPf5X5rMmeVzLifH21P6ZyIXFKy2q6JfvP+Rso2PiF8kbK9csHUo/dblUxFVFMzohoOmk8W",
-	"LHKrMPs9OYqcIVXTIXxDKgfz5xPv6bmzCXovtBfyXurwblUT+/N+hra+hPSZusLwaWLjo2KFKSrL/wMA",
-	"AP//",
+	"7FhNb+M2EP0rBNujYCfdtEB9S9PdNEA3SFP3FCwMRhrL3EqkQo6SGoH/ezGkvi1bcT4cL7CnOJI4fPNm",
+	"+PRGjzzUaaYVKLR88sgN2EwrC+6fM63miQyRfodaISj3U2RZIkOBUqvxV6sVXbPhAlJBv340MOcT/sO4",
+	"Djz2d+34ozHaXBdb8NVqFfAIbGhkRsH4hE8XwAzc5WCRhcXulj1IXDD4T1qUKmYWBcKIrwJ+oe5FIqNr",
+	"v+B9UErLpIfhIH0GXOjoUuNpkugHiPYMSucILNJgmdLIbJ5l2iDDGi9ELHUQHdpLjZ90rqJ3oQ4iZsDq",
+	"3ITAHoRHPCc0I07ripC04+nVhQvssEWRpFgiuTI6A4OSenUuEgsBzxqXKKMI6C+oPOWTG17UaVbszwOu",
+	"NM7cljzgnpYZXRJF7QJe9iAPuFQIRolkBg7Kl4DjMgM+4RaNVDHRmYK1InZ7du6tAk67SkMdceOR1c/X",
+	"sfTtVwiRYp0JhFib5a45F8tm0hV1rk0qkE8I/S8nvNqHkonB0EahAYEQzQT24A74/E71Xpd2tpBRBM27",
+	"t1onIBTdTuAeksatxoZKpNAbMhMGFM6KHVWeJOI2AT5Bk0MP26jTW4taVdgHV+RZtDnVbokaRHoWmjkX",
+	"WZR5tlhs7bOttH9Ki9VZeVaZi/8kQmqHjmbVUKsKkjBGLDdlTrF70btMy2gN7d0B/pOaKoK5yBOsQnSb",
+	"rAObYm7GOxXx4UNtq+duOKEUyG09UAlpF1FX02pMf4BIcPFMUPSqzm1Tg/W/PcrZAVOs6kMzFfGuJ+Wb",
+	"lTcRP13E31YLCyivLINTEb9AAVHET9c+apsh2XMB+3D+49J4meBtbacOkPrZzWieLWevBYSelWquXRiJ",
+	"1Gj8s1SCXX/8e8pOry54wO/BWO/6jkbHoyNCrzNQIpN8wj+MjkYfOJ0KXDhk4/Y7LQaXGmF3RvQi4hNO",
+	"/XJWP+bOlEgBwVg+uXnkkja7y8Esy9akUxImeQR1y9ZOdli2t4esT91uYb8E7Tnrp6OjV3Pgveaix4jX",
+	"NDKpWEQcplLRiBWyT39dMm0iMG5IOPHo+jatshh3RjFn4PM0FWRgXdlYXV4XNdO2p8Btc8F9P4LF33S0",
+	"fD2Keh3Mqt3+JJurtTodv3qdttRmyQo5fX4ZaNmvw8uqQb9dN08UE2Xtln4ya5zU8WPDJ6988yeAsF7Z",
+	"3931VmVbzJ74xb001OfsZUycDC+rJuI2E9MSQZuMoF+mzgEbie6gUYcsKFsbtZzb36U454DdsvRxTm+a",
+	"mvL2fNc+903u18wXqWRKZvZ43YhRITKB4WK9J9ou4o2Urd+qPEnZ9twwhTd8r5bxRFU9w7w5qD4tksgt",
+	"3OCz0YqcA/rRiL8hlZ3ha8P3tMzoEKxl0jJxL6Tz/QWxPw8ztPbFss3UNbhPiOUenpWCotKDb/RqU3rg",
+	"u0vrHUiGDBpxtydrRnUcNGU0Q72lH2uMNHu2Ym467C3AwRgwFHHjzI0f/UT+BMNVVm3Ia1Gyh2WzfMqb",
+	"HZbP7Bs3V1ta7wAsVVmCYTdVfSHal5F6OzVa+8CyZ/u0pSUOwzShiNf80mr1fwAAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

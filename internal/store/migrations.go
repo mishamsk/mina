@@ -42,6 +42,23 @@ CREATE UNIQUE INDEX category_active_fqn_unique
 ON category(fqn)
 WHERE tombstoned_at IS NULL;`,
 	},
+	{
+		Version: 3,
+		Name:    "create_tag",
+		SQL: `
+CREATE TABLE tag (
+	tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	fqn TEXT NOT NULL,
+	is_hidden INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	tombstoned_at TEXT
+);
+
+CREATE UNIQUE INDEX tag_active_fqn_unique
+ON tag(fqn)
+WHERE tombstoned_at IS NULL;`,
+	},
 }
 
 // LatestSchemaVersion returns the highest schema version known to this binary.

@@ -9,10 +9,10 @@
   - `testscript` v1.14.1 supports CLI smoke scripts.
 - Package inventory:
   - `cmd/mina`: minimal CLI entrypoint with help and version output.
-  - `internal/models`: category data shapes and stable API error response models.
-  - `internal/store`: SQLite connection, migration, transaction, category persistence, and test database helpers.
-  - `internal/controllers`: category use cases and validation.
-  - `internal/routers`: REST handler tree, health endpoint, category routes, and JSON API error mapping.
+  - `internal/models`: category/tag data shapes and stable API error response models.
+  - `internal/store`: SQLite connection, migration, transaction, category/tag persistence, and test database helpers.
+  - `internal/controllers`: category/tag use cases and validation.
+  - `internal/routers`: REST handler tree, health endpoint, category/tag routes, and JSON API error mapping.
   - `internal/app`: process composition for config, database open/create/migrate policy, controllers, and routers.
   - `internal/apptest`: in-process app boundary test client.
   - `internal/openapi`: generated OpenAPI contract package.
@@ -21,7 +21,7 @@
   - App composition requires an explicit database path.
   - App composition can create a missing database file only when `CreateIfMissing` is true.
   - Migrations are upgrade-only and recorded in `schema_version`.
-  - Current schema version: `2`.
+  - Current schema version: `3`.
 - Category behavior:
   - `POST /categories` creates active categories with colon-separated `fqn` validation.
   - `GET /categories/{category_id}` reads non-tombstoned categories by default.
@@ -31,6 +31,16 @@
   - `PATCH /categories/{category_id}` updates hidden state.
   - `DELETE /categories/{category_id}` tombstones categories.
   - Active category `fqn` values must be unique; tombstoned rows do not block recreation.
+  - `parent_fqn`, `name`, and `level` are derived from `fqn`.
+- Tag behavior:
+  - `POST /tags` creates active tags with colon-separated `fqn` validation.
+  - `GET /tags/{tag_id}` reads non-tombstoned tags by default.
+  - `GET /tags` lists tags by `fqn`, excluding hidden and tombstoned rows by default.
+  - `include_hidden=true` includes hidden tags in list responses.
+  - `include_tombstoned=true` includes tombstoned tags in get/list responses.
+  - `PATCH /tags/{tag_id}` updates hidden state.
+  - `DELETE /tags/{tag_id}` tombstones tags.
+  - Active tag `fqn` values must be unique; tombstoned rows do not block recreation.
   - `parent_fqn`, `name`, and `level` are derived from `fqn`.
 - OpenAPI contract:
   - Source: `api/openapi.yaml`.

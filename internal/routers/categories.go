@@ -1,11 +1,6 @@
 package routers
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,7 +49,7 @@ func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
 	})
 
 	mux.HandleFunc("GET /categories/{category_id}", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := parseIDPathValue(w, r, "category_id")
+		id, ok := parseIDPathValue(w, r, "/categories/", "category_id")
 		if !ok {
 			return
 		}
@@ -73,7 +68,7 @@ func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
 	})
 
 	mux.HandleFunc("PATCH /categories/{category_id}", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := parseIDPathValue(w, r, "category_id")
+		id, ok := parseIDPathValue(w, r, "/categories/", "category_id")
 		if !ok {
 			return
 		}
@@ -94,7 +89,7 @@ func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
 	})
 
 	mux.HandleFunc("DELETE /categories/{category_id}", func(w http.ResponseWriter, r *http.Request) {
-		id, ok := parseIDPathValue(w, r, "category_id")
+		id, ok := parseIDPathValue(w, r, "/categories/", "category_id")
 		if !ok {
 			return
 		}
@@ -108,8 +103,8 @@ func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
 	})
 }
 
-func parseIDPathValue(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
-	rawID := strings.TrimPrefix(r.URL.Path, "/categories/")
+func parseIDPathValue(w http.ResponseWriter, r *http.Request, prefix string, name string) (int64, bool) {
+	rawID := strings.TrimPrefix(r.URL.Path, prefix)
 	if rawID == "" || strings.Contains(rawID, "/") {
 		WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, name+" must be a positive integer")
 		return 0, false
@@ -122,48 +117,4 @@ func parseIDPathValue(w http.ResponseWriter, r *http.Request, name string) (int6
 	}
 
 	return id, true
-}
-
-func parseBoolQuery(w http.ResponseWriter, r *http.Request, name string) (bool, bool) {
-	value := r.URL.Query().Get(name)
-	if value == "" {
-		return false, true
-	}
-
-	parsed, err := strconv.ParseBool(value)
-	if err != nil {
-		WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, name+" must be a boolean")
-		return false, false
-	}
-
-	return parsed, true
-}
-
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(body); err != nil {
-		WriteAPIError(w, http.StatusInternalServerError, models.ErrorCodeInternal, "failed to write response")
-	}
-}
-
-func decodeStrictJSON(r *http.Request, dst any) error {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return fmt.Errorf("read request body: %w", err)
-	}
-	if len(bytes.TrimSpace(body)) == 0 {
-		return errors.New("empty request body")
-	}
-
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(dst); err != nil {
-		return fmt.Errorf("decode request body: %w", err)
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		return errors.New("multiple JSON values")
-	}
-
-	return nil
 }

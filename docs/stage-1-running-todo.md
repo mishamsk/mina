@@ -65,19 +65,19 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 5: Add tag CRUD API
-- [ ] Add tag model, validation, store operations, controller, router, and OpenAPI contract.
-- [ ] Implement create, get, list, update hidden state, and tombstone delete behavior.
-- [ ] Derive or expose tag `parent_fqn`, `name`, and `level` from colon-separated `fqn`.
-- [ ] Exclude hidden and tombstoned tags from default list responses unless explicitly requested.
-- [ ] Add boundary tests covering create/read/list/update/delete, hidden filtering, duplicate active `fqn`, and hierarchy-derived fields.
-- [ ] Regenerate OpenAPI artifacts.
-- [ ] Update `PROJECT_STATE.md` with tag behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add tag model, validation, store operations, controller, router, and OpenAPI contract.
+- [x] Implement create, get, list, update hidden state, and tombstone delete behavior.
+- [x] Derive or expose tag `parent_fqn`, `name`, and `level` from colon-separated `fqn`.
+- [x] Exclude hidden and tombstoned tags from default list responses unless explicitly requested.
+- [x] Add boundary tests covering create/read/list/update/delete, hidden filtering, duplicate active `fqn`, and hierarchy-derived fields.
+- [x] Regenerate OpenAPI artifacts.
+- [x] Update `PROJECT_STATE.md` with tag behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 6: Add household member CRUD API
 - [ ] Add member model, validation, store operations, controller, router, and OpenAPI contract.

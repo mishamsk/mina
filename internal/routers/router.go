@@ -21,6 +21,7 @@ func New(deps Dependencies) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	registerCategoryRoutes(mux, deps)
+	registerTagRoutes(mux, deps)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if routeExistsWithDifferentMethod(r) {
@@ -42,15 +43,16 @@ func routeExistsWithDifferentMethod(r *http.Request) bool {
 	switch r.URL.Path {
 	case "/health":
 		return r.Method != http.MethodGet
-	case "/categories":
+	case "/categories", "/tags":
 		return r.Method != http.MethodGet && r.Method != http.MethodPost
 	default:
-		return categoryIDPath(r.URL.Path) && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete
+		return resourceIDPath(r.URL.Path, "/categories/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete ||
+			resourceIDPath(r.URL.Path, "/tags/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete
 	}
 }
 
-func categoryIDPath(path string) bool {
-	rawID := strings.TrimPrefix(path, "/categories/")
+func resourceIDPath(path string, prefix string) bool {
+	rawID := strings.TrimPrefix(path, prefix)
 	if rawID == path || rawID == "" || strings.Contains(rawID, "/") {
 		return false
 	}
