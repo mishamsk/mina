@@ -14,9 +14,10 @@
 - [ ] ...
 - [ ] Task N
 - [ ] Verification
-  - [ ] `gofmt` applied to edited Go files
-  - [ ] Focused boundary scenario tests pass
-  - [ ] `go test ./...` passes
+  - [ ] `just fmt` passes
+  - [ ] `just test-boundary` passes for touched behavior
+  - [ ] `just test` passes
+  - [ ] `just pre-commit` passes
   - [ ] Required docs updated
 
 ### Commit 2: [commit desc]
@@ -24,19 +25,21 @@
 - [ ] ...
 - [ ] Task N
 - [ ] Verification
-  - [ ] `gofmt` applied to edited Go files
-  - [ ] Focused boundary scenario tests pass
-  - [ ] `go test ./...` passes
+  - [ ] `just fmt` passes
+  - [ ] `just test-boundary` passes for touched behavior
+  - [ ] `just test` passes
+  - [ ] `just pre-commit` passes
   - [ ] Required docs updated
 
 ## Deferred Verification
 
-- [ ] True CLI scripts pass when relevant
-- [ ] True JSON REST API scripts pass when relevant
-- [ ] Release/risky-change smoke tests pass
+- [ ] `just test-cli` passes when relevant
+- [ ] `just test-rest` passes when relevant
+- [ ] `just smoke` passes for release or risky changes
 
 ## Final Verification
 
-- [ ] In-memory boundary scenario suite passes
-- [ ] `go test ./...` passes
+- [ ] `just test-boundary` passes
+- [ ] `just test` passes
+- [ ] `just pre-commit` passes
 - [ ] Deferred verification completed or explicitly marked not relevant

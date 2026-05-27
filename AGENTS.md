@@ -17,9 +17,12 @@ The active build scope is Phase 1 Stage 1: REST APIs only.
 ## Infra & Dev Practices
 
 - Never work around environment failures. If the shell, Go toolchain, or repo scripts fail for environmental reasons, stop and ask.
+- The Justfile is the only owner of developer recipes. Run formatting, tests, checks, hooks, and scripts through `just`.
+- Do not invoke `gofmt`, `go test`, `prek`, or other recipe internals directly unless debugging the recipe itself.
+- `just pre-commit` owns pre-commit behavior. It should run `prek` internally when hooks exist.
 - Use Go modules. Keep dependencies small and explicit.
 - Write idiomatic, typed Go. Use package-level boundaries instead of generic abstraction layers until a real boundary exists.
-- Run `gofmt` on edited Go files.
+- Run `just fmt` after editing Go files.
 - Keep side effects isolated at explicit boundaries: filesystem, database, subprocesses, network listeners, clocks, and terminal I/O.
 - Keep model packages data-focused. Put validation, persistence, and transport mapping in owning packages.
 - Keep router/handler code thin. Domain behavior belongs in controllers/use-case packages.
@@ -29,9 +32,10 @@ The active build scope is Phase 1 Stage 1: REST APIs only.
 
 For every commit:
 
-- Run the repository pre-commit command if one exists.
-- Run `go test ./...` once code exists.
-- Run any focused boundary scenario tests for the touched behavior.
+- Run `just fmt` when code changed.
+- Run `just test` once code exists.
+- Run `just test-boundary` for touched behavior once that recipe exists.
+- Run `just pre-commit` before committing once that recipe exists.
 - For changes that alter durable behavior, API contracts, state, or ownership boundaries, update the relevant docs in the same commit.
 - For pure documentation changes, no reviewer subagent is required.
 - If reviewer prompts are added later, run at most one review pass per non-mechanical commit and address findings before committing.
