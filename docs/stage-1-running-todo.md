@@ -35,19 +35,19 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 3: Add app composition, database open, and migrations
-- [ ] Choose and add the local database driver dependency for a portable single-file database.
-- [ ] Add app composition that wires config, database open/create/migrate policy, controllers, and routers.
-- [ ] Add versioned upgrade-only migrations and a schema-version table.
-- [ ] Add store helpers for connection use, transaction boundaries, migration application, and temporary test databases.
-- [ ] Add stable machine-readable API error response models and HTTP error mapping.
-- [ ] Add boundary test harness helpers that send typed requests through the in-process app.
-- [ ] Update `PROJECT_STATE.md` with database and app composition behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Choose and add the local database driver dependency for a portable single-file database.
+- [x] Add app composition that wires config, database open/create/migrate policy, controllers, and routers.
+- [x] Add versioned upgrade-only migrations and a schema-version table.
+- [x] Add store helpers for connection use, transaction boundaries, migration application, and temporary test databases.
+- [x] Add stable machine-readable API error response models and HTTP error mapping.
+- [x] Add boundary test harness helpers that send typed requests through the in-process app.
+- [x] Update `PROJECT_STATE.md` with database and app composition behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 4: Add category CRUD API
 - [ ] Add category model, validation, store operations, controller, router, and OpenAPI contract.

@@ -9,17 +9,27 @@
   - `testscript` v1.14.1 supports CLI smoke scripts.
 - Package inventory:
   - `cmd/mina`: minimal CLI entrypoint with help and version output.
-  - `internal/models`: data shape package placeholder.
-  - `internal/store`: database and migration package placeholder.
-  - `internal/controllers`: domain use-case package placeholder.
-  - `internal/routers`: REST mapping package placeholder.
-  - `internal/app`: process composition package placeholder.
+  - `internal/models`: data shapes and stable API error response models.
+  - `internal/store`: SQLite connection, migration, transaction, and test database helpers.
+  - `internal/controllers`: domain use-case registry placeholder.
+  - `internal/routers`: REST handler tree, health endpoint, and JSON API error mapping.
+  - `internal/app`: process composition for config, database open/create/migrate policy, controllers, and routers.
+  - `internal/apptest`: in-process app boundary test client.
   - `internal/openapi`: generated OpenAPI contract package.
+- Database behavior:
+  - Local accounting state uses SQLite through `modernc.org/sqlite` v1.50.1.
+  - App composition requires an explicit database path.
+  - App composition can create a missing database file only when `CreateIfMissing` is true.
+  - Migrations are upgrade-only and recorded in `schema_version`.
+  - Current schema version: `1`.
 - OpenAPI contract:
   - Source: `api/openapi.yaml`.
   - Generator config: `api/oapi-codegen.yaml`.
   - Generated output: `internal/openapi/openapi.gen.go`.
   - Generated-file policy: `docs/generated-files.md`.
+- REST behavior:
+  - `GET /health` returns `{"status":"ok"}`.
+  - Missing routes and unsupported methods return the stable `{"error":{"code","message"}}` JSON envelope.
 - Developer recipes are owned by `Justfile`:
   - `just fmt`: format Go packages.
   - `just lint`: run Go linting.

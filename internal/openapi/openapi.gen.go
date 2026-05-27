@@ -15,6 +15,30 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
+// Defines values for APIErrorCode.
+const (
+	APIErrorCodeInternalError    APIErrorCode = "internal_error"
+	APIErrorCodeInvalidRequest   APIErrorCode = "invalid_request"
+	APIErrorCodeMethodNotAllowed APIErrorCode = "method_not_allowed"
+	APIErrorCodeNotFound         APIErrorCode = "not_found"
+)
+
+// Valid indicates whether the value is a known member of the APIErrorCode enum.
+func (e APIErrorCode) Valid() bool {
+	switch e {
+	case APIErrorCodeInternalError:
+		return true
+	case APIErrorCodeInvalidRequest:
+		return true
+	case APIErrorCodeMethodNotAllowed:
+		return true
+	case APIErrorCodeNotFound:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseStatus.
 const (
 	Ok HealthResponseStatus = "ok"
@@ -30,6 +54,20 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// APIError defines model for APIError.
+type APIError struct {
+	Code    APIErrorCode `json:"code"`
+	Message string       `json:"message"`
+}
+
+// APIErrorCode defines model for APIError.Code.
+type APIErrorCode string
+
+// ErrorResponse defines model for ErrorResponse.
+type ErrorResponse struct {
+	Error APIError `json:"error"`
+}
+
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	Status HealthResponseStatus `json:"status"`
@@ -38,16 +76,22 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// MethodNotAllowed defines model for MethodNotAllowed.
+type MethodNotAllowed = ErrorResponse
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"XJCxbuMwEER/RZi7UpB0547dFYfERQDDcRekWEtri45EMtyVAcPQvweknDhIxcFqRph5V7R+DN6xU4G5",
-	"QtqeR8rykWnQfssSvBNOF+o6q9Y7GjbRB45qWWAONAiXCN9OV4iSTlmxm0aYF/g3vJbQS2AYiEbrjpjn",
-	"EpHfJxu5S55b6u7z+xO3ijkZrTv49EO1OqRvT9ZRsf3/vCv+bdYoceYo1jsYNNWfqsFcwgd2FCwMVlVT",
-	"rVAikPa5Vt3neUkeWdOT6lOat+5g8MC6AECquDDIwb9Nk57WO2WXgxTCYNscrU+SGnxyTOp35AMMftV3",
-	"0PWNcv0DcZ7ZsbTRBl2m7HouQvQtixRWCjqTHWg/cJXZyTSOFC8w2HLwUb+sy7hkmuePAAAA//8=",
+	"rFPNbtswDH4Vg9vRsL11u/jWQ7Hl0CHIeiuGQLWYWJ0saiKdoSj87gPltGnddcCGncKQEr8f+buHjoZI",
+	"AYMwtPeQkCMFxvznEqUn+4Xk3Hv6iVZ7HQXBIFqaGL3rjDgK9S1T0B53PQ5Gq7cJd9DCm/oEUM9Tri9S",
+	"orQ5QsE0TSVY5C65qMughasei0SjYGEJuQgkBY8xUpJCdIQ/RmRBWwyZYgW64rhdwc/Xq4yRaVrrdK3x",
+	"60QRkzhVtzOesYT4pKXiLOovhnGA9hpcOBjv7PaIByUEku2OxmChhBl7qy1zNKgEFwRTMH6LGf9bCXIX",
+	"EVpgSS7sYdJ7zGafgRazqQSFckm9vp7pnM6fdtHNLXaiu547+Xdq8cGhPz3Vo5NLckt9J06f0Xjp/5EU",
+	"i5GRnz4Cff+Niwsyx1sv2ehBF3aUzXbidXbpgik2F1+vivP1Cko4YOL5s2uqd1WjEihiMNFBC2dVU51B",
+	"CdFIn2nVfZan5R5zDpR+TsHKQgufUGYDoHyepvdN898CtLD4lQTFRB0yF44LczDOmxuPlcr70Hx8DeGR",
+	"cv0i/Tlj4zCYdActbDDH8QFjdkWDOE2/AgAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
