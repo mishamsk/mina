@@ -1,0 +1,5 @@
+package: openapi
+generate:
+  models: true
+  embedded-spec: true
+output: internal/openapi/openapi.gen.go

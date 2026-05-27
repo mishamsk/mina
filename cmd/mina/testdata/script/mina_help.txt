@@ -1,0 +1,10 @@
+# The minimal CLI prints help and exits successfully.
+exec mina --help
+stdout 'Mina local-first personal finance API'
+stdout 'Usage:'
+! stderr .
+
+# The minimal CLI prints a stable development version.
+exec mina --version
+stdout 'mina 0.0.0-dev'
+! stderr .

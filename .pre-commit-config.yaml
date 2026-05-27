@@ -1,0 +1,28 @@
+repos:
+  - repo: local
+    hooks:
+      - id: mina-fmt
+        name: mina fmt
+        entry: just fmt
+        language: system
+        pass_filenames: false
+      - id: mina-openapi
+        name: mina openapi
+        entry: just openapi
+        language: system
+        pass_filenames: false
+      - id: mina-lint
+        name: mina lint
+        entry: just lint
+        language: system
+        pass_filenames: false
+      - id: mina-test-boundary
+        name: mina test-boundary
+        entry: just test-boundary
+        language: system
+        pass_filenames: false
+      - id: mina-test
+        name: mina test
+        entry: just test
+        language: system
+        pass_filenames: false

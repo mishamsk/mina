@@ -14,33 +14,61 @@ func main() {
 
 func run(args []string, stdout io.Writer, stderr io.Writer) int {
 	if len(args) == 0 {
-		printHelp(stdout)
-		return 0
+		return exitCode(printHelp(stdout), 0)
 	}
 
 	if len(args) != 1 {
-		fmt.Fprintln(stderr, "usage error: expected at most one argument")
-		printHelp(stderr)
+		if err := printUsageError(stderr, "expected at most one argument"); err != nil {
+			return 1
+		}
 		return 2
 	}
 
 	switch args[0] {
 	case "-h", "--help", "help":
-		printHelp(stdout)
-		return 0
+		return exitCode(printHelp(stdout), 0)
 	case "-v", "--version", "version":
-		fmt.Fprintf(stdout, "mina %s\n", version)
+		if _, err := fmt.Fprintf(stdout, "mina %s\n", version); err != nil {
+			return 1
+		}
 		return 0
 	default:
-		fmt.Fprintf(stderr, "usage error: unknown argument %q\n", args[0])
-		printHelp(stderr)
+		if err := printUsageError(stderr, fmt.Sprintf("unknown argument %q", args[0])); err != nil {
+			return 1
+		}
 		return 2
 	}
 }
 
-func printHelp(w io.Writer) {
-	fmt.Fprintln(w, "Mina local-first personal finance API")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  mina [--help|--version]")
+func exitCode(err error, successCode int) int {
+	if err != nil {
+		return 1
+	}
+
+	return successCode
+}
+
+func printUsageError(w io.Writer, message string) error {
+	if _, err := fmt.Fprintf(w, "usage error: %s\n", message); err != nil {
+		return err
+	}
+
+	return printHelp(w)
+}
+
+func printHelp(w io.Writer) error {
+	lines := []string{
+		"Mina local-first personal finance API",
+		"",
+		"Usage:",
+		"  mina [--help|--version]",
+	}
+
+	for _, line := range lines {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

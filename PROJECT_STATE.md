@@ -1,7 +1,12 @@
 # Project State
 
 - Implementation scope: Phase 1 Stage 1 REST API.
-- Go module: `mina.local/mina`, minimum Go version `1.25`.
+- Go module: `mina.local/mina`, minimum Go version `1.25.0`.
+- Tooling:
+  - `prek` 0.4+ drives configured pre-commit hooks.
+  - `golangci-lint` v2.12.2 is pinned as a Go module tool.
+  - `oapi-codegen` v2.7.0 is pinned as a Go module tool.
+  - `testscript` v1.14.1 supports CLI smoke scripts.
 - Package inventory:
   - `cmd/mina`: minimal CLI entrypoint with help and version output.
   - `internal/models`: data shape package placeholder.
@@ -9,9 +14,18 @@
   - `internal/controllers`: domain use-case package placeholder.
   - `internal/routers`: REST mapping package placeholder.
   - `internal/app`: process composition package placeholder.
+  - `internal/openapi`: generated OpenAPI contract package.
+- OpenAPI contract:
+  - Source: `api/openapi.yaml`.
+  - Generator config: `api/oapi-codegen.yaml`.
+  - Generated output: `internal/openapi/openapi.gen.go`.
+  - Generated-file policy: `docs/generated-files.md`.
 - Developer recipes are owned by `Justfile`:
   - `just fmt`: format Go packages.
+  - `just lint`: run Go linting.
+  - `just openapi`: regenerate OpenAPI contract output.
   - `just test`: run Go tests.
   - `just test-boundary`: run current boundary-capable test set.
-  - `just pre-commit`: run formatting and tests.
-  - `just test-cli`, `just test-rest`, and `just smoke`: placeholders for later process-level suites.
+  - `just pre-commit`: run configured `prek` hooks when present.
+  - `just test-cli`: run current CLI smoke scripts.
+  - `just test-rest` and `just smoke`: placeholders for later process-level suites.

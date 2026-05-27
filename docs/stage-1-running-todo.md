@@ -21,18 +21,18 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 2: Add linting, hooks, and generated-contract scaffolding
-- [ ] Add `prek` configuration and wire `just pre-commit` to run it when hooks exist.
-- [ ] Add Go linting through a pinned tool path owned by `just`, likely `golangci-lint`.
-- [ ] Add OpenAPI generation dependencies and a `just openapi` recipe, choosing one generator path before handlers are built.
-- [ ] Add `testscript` dependency and a small CLI smoke test using the minimal command from commit 1.
-- [ ] Add a generated-files policy for OpenAPI output and ensure generated artifacts are deterministic.
-- [ ] Update `PROJECT_STATE.md` with the toolchain and recipe inventory.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add `prek` configuration and wire `just pre-commit` to run it when hooks exist.
+- [x] Add Go linting through a pinned tool path owned by `just`, likely `golangci-lint`.
+- [x] Add OpenAPI generation dependencies and a `just openapi` recipe, choosing one generator path before handlers are built.
+- [x] Add `testscript` dependency and a small CLI smoke test using the minimal command from commit 1.
+- [x] Add a generated-files policy for OpenAPI output and ensure generated artifacts are deterministic.
+- [x] Update `PROJECT_STATE.md` with the toolchain and recipe inventory.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 3: Add app composition, database open, and migrations
 - [ ] Choose and add the local database driver dependency for a portable single-file database.
