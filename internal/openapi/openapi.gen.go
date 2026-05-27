@@ -17,6 +17,7 @@ import (
 
 // Defines values for APIErrorCode.
 const (
+	APIErrorCodeConflict         APIErrorCode = "conflict"
 	APIErrorCodeInternalError    APIErrorCode = "internal_error"
 	APIErrorCodeInvalidRequest   APIErrorCode = "invalid_request"
 	APIErrorCodeMethodNotAllowed APIErrorCode = "method_not_allowed"
@@ -26,6 +27,8 @@ const (
 // Valid indicates whether the value is a known member of the APIErrorCode enum.
 func (e APIErrorCode) Valid() bool {
 	switch e {
+	case APIErrorCodeConflict:
+		return true
 	case APIErrorCodeInternalError:
 		return true
 	case APIErrorCodeInvalidRequest:
@@ -63,6 +66,30 @@ type APIError struct {
 // APIErrorCode defines model for APIError.Code.
 type APIErrorCode string
 
+// Category defines model for Category.
+type Category struct {
+	CategoryId   int64   `json:"category_id"`
+	CreatedAt    string  `json:"created_at"`
+	Fqn          string  `json:"fqn"`
+	IsHidden     bool    `json:"is_hidden"`
+	Level        int     `json:"level"`
+	Name         string  `json:"name"`
+	ParentFqn    *string `json:"parent_fqn,omitempty"`
+	TombstonedAt *string `json:"tombstoned_at,omitempty"`
+	UpdatedAt    string  `json:"updated_at"`
+}
+
+// CategoryListResponse defines model for CategoryListResponse.
+type CategoryListResponse struct {
+	Categories []Category `json:"categories"`
+}
+
+// CreateCategoryRequest defines model for CreateCategoryRequest.
+type CreateCategoryRequest struct {
+	Fqn      string `json:"fqn"`
+	IsHidden *bool  `json:"is_hidden,omitempty"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Error APIError `json:"error"`
@@ -76,22 +103,63 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// UpdateCategoryRequest defines model for UpdateCategoryRequest.
+type UpdateCategoryRequest struct {
+	IsHidden bool `json:"is_hidden"`
+}
+
+// Conflict defines model for Conflict.
+type Conflict = ErrorResponse
+
+// InvalidRequest defines model for InvalidRequest.
+type InvalidRequest = ErrorResponse
+
 // MethodNotAllowed defines model for MethodNotAllowed.
 type MethodNotAllowed = ErrorResponse
+
+// NotFound defines model for NotFound.
+type NotFound = ErrorResponse
+
+// ListCategoriesParams defines parameters for ListCategories.
+type ListCategoriesParams struct {
+	IncludeHidden     *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// GetCategoryParams defines parameters for GetCategory.
+type GetCategoryParams struct {
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
+type CreateCategoryJSONRequestBody = CreateCategoryRequest
+
+// UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
+type UpdateCategoryJSONRequestBody = UpdateCategoryRequest
 
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"rFPNbtswDH4Vg9vRsL11u/jWQ7Hl0CHIeiuGQLWYWJ0saiKdoSj87gPltGnddcCGncKQEr8f+buHjoZI",
-	"AYMwtPeQkCMFxvznEqUn+4Xk3Hv6iVZ7HQXBIFqaGL3rjDgK9S1T0B53PQ5Gq7cJd9DCm/oEUM9Tri9S",
-	"orQ5QsE0TSVY5C65qMughasei0SjYGEJuQgkBY8xUpJCdIQ/RmRBWwyZYgW64rhdwc/Xq4yRaVrrdK3x",
-	"60QRkzhVtzOesYT4pKXiLOovhnGA9hpcOBjv7PaIByUEku2OxmChhBl7qy1zNKgEFwRTMH6LGf9bCXIX",
-	"EVpgSS7sYdJ7zGafgRazqQSFckm9vp7pnM6fdtHNLXaiu547+Xdq8cGhPz3Vo5NLckt9J06f0Xjp/5EU",
-	"i5GRnz4Cff+Niwsyx1sv2ehBF3aUzXbidXbpgik2F1+vivP1Cko4YOL5s2uqd1WjEihiMNFBC2dVU51B",
-	"CdFIn2nVfZan5R5zDpR+TsHKQgufUGYDoHyepvdN898CtLD4lQTFRB0yF44LczDOmxuPlcr70Hx8DeGR",
-	"cv0i/Tlj4zCYdActbDDH8QFjdkWDOE2/AgAA//8=",
+	"zFjfb+M2DP5XBG6PRpLuugHzW9fddQV2Rdd1T8UhUC0m0c2WXIluFxT+3wfKjn/FTS69XntPcSyL/PiR",
+	"+kj7ERKb5dagIQ/xIzj0uTUew59TaxapToivE2sITbiUeZ7qRJK2ZvrZW8P3fLLCTPLVjw4XEMMP09bw",
+	"tFr10/fOWXdVu4CyLCNQ6BOnczYGMVyvUDi8K9CTSGrvXjxoWgn8T3vSZik8ScIJlBGcm3uZanVVbXgb",
+	"lNoLXcEIkD4iray6sHSSpvYB1SuDsgWhUBa9MJaEL/LcOhLU4kUlsgAxoL2w9MEWRr0JdaiEQ28Ll6B4",
+	"kBXiBaOZAO+rTbLHk8vzYDhgU0qzLZleOpujI821upCpxwjyzi2OSCH/oikyiG+gztO89g8RGEvz4BIi",
+	"qGiZ8y1Z5y6CTQ1CBNoQOiPTOQYonyKgdY4QgyenzZLpzNB7uQw+B2tlBOxVO66ImwpZ+3xry95+xoTY",
+	"1qkkXFq3PjTmettch6QurMskQczofzmGxg8Hs0THjhKHklDNJY3gjmBxZ0bvaz9faaWwu3prbYrS8HKK",
+	"95h2ljoOjcxw1GQuHRqa1x5NkabyNkWIyRU4wjbZ7NaTNQ32vTuKXD0d6jBFHSIrFrox11Fs4uyx2POz",
+	"K7V/ak/NWXlWmut/mjDz+45mU1BlA0k6J9dPRc62R9GHSDfWOtp7APwvKiqFC1mk1JgYFtkANtscw9uX",
+	"pMNw4kZ1dhHbqNMQ0VAoWkx/oExp9UxQ3P8K3xU2+++IHA3A1LvG0PwTyvXrMrpTDgZQ2me30fCz2ixs",
+	"MKOJDzN81EaKq/d/X4uTy3OI4B6dr7rJbHI0mXEINkcjcw0xvJvMJu+AxYRWAdm0f1aWGEJj7KHBnSuI",
+	"gU/iaftYkCKZIaHzEN88gmZndwW69ebks6IlaaGwVYS2Q+6v3N0mW2U7zOynqD+//TSbvVhnHxWtkQbf",
+	"0ii0EYo5zLTh0S0RH/66ENYpdGH4OK7QjTltopgORrwwGBRZJrkxhrSJNr3Bam79SIL7ogVVPaKn36xa",
+	"vxxFo8pY9sufW1O5laejF8/TjtysRd2tnp8G3vbr/m3NC0Q/bxVRQm5yt64mvs5JnT52+m9ZFX+KhNuZ",
+	"/T3c72W2x+xxtXmUhvacfR0Tx/u3NZN2n4nrDYI+GdG4TJ0hdQI9QKO+Z0HZWaib94E3Sc4Z0jAtY5xz",
+	"p2kp78+N/XPf5X5rMmeVzLifH21P6ZyIXFKy2q6JfvP+Rso2PiF8kbK9csHUo/dblUxFVFMzohoOmk8W",
+	"LHKrMPs9OYqcIVXTIXxDKgfz5xPv6bmzCXovtBfyXurwblUT+/N+hra+hPSZusLwaWLjo2KFKSrL/wMA",
+	"AP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

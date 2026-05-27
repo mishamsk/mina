@@ -16,8 +16,120 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /categories:
+    get:
+      operationId: listCategories
+      summary: List categories.
+      parameters:
+        - name: include_hidden
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Categories in deterministic FQN order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+    post:
+      operationId: createCategory
+      summary: Create a category.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+      responses:
+        "201":
+          description: Category created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /categories/{category_id}:
+    parameters:
+      - name: category_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getCategory
+      summary: Get a category.
+      parameters:
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Category found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateCategory
+      summary: Update category hidden state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategoryRequest"
+      responses:
+        "200":
+          description: Category updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteCategory
+      summary: Tombstone a category.
+      responses:
+        "204":
+          description: Category tombstoned.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   responses:
+    InvalidRequest:
+      description: The request is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     MethodNotAllowed:
       description: The route does not support the requested method.
       content:
@@ -36,6 +148,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: The request conflicts with existing state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
     APIError:
       type: object
@@ -50,9 +168,64 @@ components:
             - invalid_request
             - not_found
             - method_not_allowed
+            - conflict
             - internal_error
         message:
           type: string
+    Category:
+      type: object
+      additionalProperties: false
+      required:
+        - category_id
+        - fqn
+        - is_hidden
+        - name
+        - level
+        - created_at
+        - updated_at
+      properties:
+        category_id:
+          type: integer
+          format: int64
+        fqn:
+          type: string
+        is_hidden:
+          type: boolean
+        parent_fqn:
+          type: string
+          nullable: true
+        name:
+          type: string
+        level:
+          type: integer
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        tombstoned_at:
+          type: string
+          nullable: true
+    CategoryListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - categories
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+    CreateCategoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - fqn
+      properties:
+        fqn:
+          type: string
+        is_hidden:
+          type: boolean
+          default: false
     ErrorResponse:
       type: object
       additionalProperties: false
@@ -71,3 +244,11 @@ components:
           type: string
           enum:
             - ok
+    UpdateCategoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - is_hidden
+      properties:
+        is_hidden:
+          type: boolean

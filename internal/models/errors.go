@@ -10,6 +10,8 @@ const (
 	ErrorCodeNotFound ErrorCode = "not_found"
 	// ErrorCodeMethodNotAllowed identifies an unsupported method for a path.
 	ErrorCodeMethodNotAllowed ErrorCode = "method_not_allowed"
+	// ErrorCodeConflict identifies a request that conflicts with existing state.
+	ErrorCodeConflict ErrorCode = "conflict"
 	// ErrorCodeInternal identifies unexpected server failures.
 	ErrorCodeInternal ErrorCode = "internal_error"
 )

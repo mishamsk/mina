@@ -1,8 +1,8 @@
 package routers
 
 import (
-	"encoding/json"
 	"net/http"
+	"strings"
 
 	"mina.local/mina/internal/controllers"
 	"mina.local/mina/internal/models"
@@ -18,16 +18,12 @@ func New(deps Dependencies) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
-			WriteAPIError(w, http.StatusInternalServerError, models.ErrorCodeInternal, "failed to write response")
-		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-
-	_ = deps.Controllers
+	registerCategoryRoutes(mux, deps)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/health" && r.Method != http.MethodGet {
+		if routeExistsWithDifferentMethod(r) {
 			WriteAPIError(w, http.StatusMethodNotAllowed, models.ErrorCodeMethodNotAllowed, "method not allowed")
 			return
 		}
@@ -40,4 +36,24 @@ func New(deps Dependencies) http.Handler {
 
 		handler.ServeHTTP(w, r)
 	})
+}
+
+func routeExistsWithDifferentMethod(r *http.Request) bool {
+	switch r.URL.Path {
+	case "/health":
+		return r.Method != http.MethodGet
+	case "/categories":
+		return r.Method != http.MethodGet && r.Method != http.MethodPost
+	default:
+		return categoryIDPath(r.URL.Path) && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete
+	}
+}
+
+func categoryIDPath(path string) bool {
+	rawID := strings.TrimPrefix(path, "/categories/")
+	if rawID == path || rawID == "" || strings.Contains(rawID, "/") {
+		return false
+	}
+
+	return true
 }

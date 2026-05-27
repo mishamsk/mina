@@ -51,7 +51,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		}
 	}
 
-	controllerSet := controllers.New()
+	controllerSet := controllers.New(db)
 	handler := routers.New(routers.Dependencies{Controllers: controllerSet})
 
 	return &App{

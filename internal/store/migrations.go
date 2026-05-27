@@ -25,6 +25,23 @@ CREATE TABLE IF NOT EXISTS schema_version (
 	applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );`,
 	},
+	{
+		Version: 2,
+		Name:    "create_category",
+		SQL: `
+CREATE TABLE category (
+	category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	fqn TEXT NOT NULL,
+	is_hidden INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	tombstoned_at TEXT
+);
+
+CREATE UNIQUE INDEX category_active_fqn_unique
+ON category(fqn)
+WHERE tombstoned_at IS NULL;`,
+	},
 }
 
 // LatestSchemaVersion returns the highest schema version known to this binary.
