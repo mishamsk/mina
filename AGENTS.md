@@ -32,10 +32,10 @@ The active build scope is Phase 1 Stage 1: REST APIs only.
 
 For every commit:
 
+- Run `/review` in a subagent once after commit to trigger a review, and apply fixes
 - Run `just fmt` when code changed.
 - Run `just test` once code exists.
 - Run `just test-boundary` for touched behavior once that recipe exists.
 - Run `just pre-commit` before committing once that recipe exists.
 - For changes that alter durable behavior, API contracts, state, or ownership boundaries, update the relevant docs in the same commit.
 - For pure documentation changes, no reviewer subagent is required.
-- If reviewer prompts are added later, run at most one review pass per non-mechanical commit and address findings before committing.
