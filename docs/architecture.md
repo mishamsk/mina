@@ -2,7 +2,7 @@
 
 - Keep this file short. It is a map and a home for hard design rules.
 - Keep it evergreen. Do not describe old designs, migrations, or history.
-- Put package details in package docs. Put schema details in `docs/phase-1-data-model.md`.
+- Put schema details in `docs/phase-1-data-model.md`.
 
 ## What Mina Is
 
@@ -32,7 +32,6 @@ The active scope is Phase 1 Stage 1:
 - Product scope: `docs/business-requirements.md`.
 - Phase 1 data model: `docs/phase-1-data-model.md`.
 - Current implementation inventory: `PROJECT_STATE.md`.
-- Package documentation template: `docs/package_doc_template.md`.
 - Running work checklist template: `docs/running_todo_template.md`.
 
 ## Layering
@@ -108,10 +107,3 @@ Mina tests behavior at boundaries. Do not build a unit-test suite around private
 - True process tests cover CLI behavior and real JSON REST behavior.
 - True process tests are not required on every commit.
 - Run true process tests before release work and after risky CLI/server/JSON changes.
-
-## Package Documentation
-
-- Exported Go APIs that cross package boundaries must have normal Go doc comments.
-- Markdown package docs are for implicit contracts only.
-- If a package has no implicit contracts, its doc should say `No implicit contracts.`
-- Keep package docs below the level of endpoint lists, schema catalogs, or implementation history.
