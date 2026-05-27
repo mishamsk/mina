@@ -2,23 +2,23 @@
 
 ## Plan Context
 
-Stage 1 builds the Go REST API only. The repository currently has documentation but no Go module or implementation. Start with repeatable developer infrastructure and a minimal runnable app, then add model-owned API/store/controller/router slices with boundary scenario tests. Keep transactions last because balanced journal records depend on accounts, members, categories, tags, statuses, and database transaction support.
+Stage 1 builds the Go REST API only. The repository has a Go module, repeatable developer recipes, package placeholders, and a minimal runnable CLI. Continue by adding model-owned API/store/controller/router slices with boundary scenario tests. Keep transactions last because balanced journal records depend on accounts, members, categories, tags, statuses, and database transaction support.
 
 ## Tasks
 
 ### Commit 1: Bootstrap Go module and developer recipes
-- [ ] Create the Go module with the module path chosen for this repository.
-- [ ] Add the initial package layout for models, store, controllers, routers, app composition, and CLI entrypoint without implementing domain behavior.
-- [ ] Add a minimal `cmd/mina` command that can print version/help and exit successfully.
-- [ ] Add `Justfile` recipes as the sole developer entrypoints: `fmt`, `test`, `test-boundary`, `pre-commit`, and placeholders for later `test-cli`, `test-rest`, and `smoke`.
-- [ ] Pin the minimum Go version and document any required local tools in the recipe comments.
-- [ ] Update `PROJECT_STATE.md` with the new module, package inventory, and available recipes.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Create the Go module with the module path chosen for this repository.
+- [x] Add the initial package layout for models, store, controllers, routers, app composition, and CLI entrypoint without implementing domain behavior.
+- [x] Add a minimal `cmd/mina` command that can print version/help and exit successfully.
+- [x] Add `Justfile` recipes as the sole developer entrypoints: `fmt`, `test`, `test-boundary`, `pre-commit`, and placeholders for later `test-cli`, `test-rest`, and `smoke`.
+- [x] Pin the minimum Go version and document any required local tools in the recipe comments.
+- [x] Update `PROJECT_STATE.md` with the new module, package inventory, and available recipes.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 2: Add linting, hooks, and generated-contract scaffolding
 - [ ] Add `prek` configuration and wire `just pre-commit` to run it when hooks exist.
