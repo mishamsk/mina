@@ -47,7 +47,7 @@ Stage 2. Basic TUI for manual entry and search
 Stage 3. Full web UI with table-based views and in-table search/filtering
 
 ### Phase 2: Basic Reporting
-Requirements TBD. Candidate areas include account balances, monthly spend/income summaries, and saved searches.
+Requirements TBD. Candidate areas include account balances, monthly spend/income summaries, saved searches, tag/category/member summaries, and personal vs. shared expense views.
 
 ### Phase 3: Recurring Transactions & Budgeting
 Transaction templates, scheduling, and monthly category-based budgeting.
@@ -102,7 +102,7 @@ Each record within a transaction contains:
 - **Amount in USD**: Converted value at time of transaction
 - **Household member**: Optional attribution to a specific member; when unspecified, represents a whole-household transaction
 - **Category**: Single category assignment
-- **Tags**: Multiple tags for cross-cutting analysis
+- **Tags**: Multiple tags for flexible grouping
 - **Memo**: Description or notes
 
 ### Record Dates
@@ -138,7 +138,7 @@ Three dates track the lifecycle:
 ### Tags
 
 - **Hierarchical structure**: Path-based names (e.g., `Trips:Vacation:Summer2024`)
-- **Multiple tags per record**: Used for cross-cutting analysis
+- **Multiple tags per record**: Used for flexible grouping
 - **Flexible usage**: Suitable for trips, projects, tax items, or any custom grouping
 - **Hidden state**: Same behavior as categories
 
@@ -146,7 +146,6 @@ Three dates track the lifecycle:
 
 - Named members of the household
 - Used for attributing individual records within transactions
-- Enables analysis of personal vs. shared expenses
 
 ## Currency
 
@@ -207,7 +206,7 @@ Search and filter records by:
 # Future Phases
 
 ## Phase 2: Basic Reporting
-*Requirements TBD. Candidate areas include account balances, monthly spend/income summaries, and saved searches.*
+*Requirements TBD. Candidate areas include account balances, monthly spend/income summaries, saved searches, tag/category/member summaries, and personal vs. shared expense views.*
 
 ## Phase 3: Recurring Transactions & Budgeting
 *Requirements TBD*
