@@ -346,6 +346,173 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	return records, nil
 }
 
+// BulkCategorize assigns one active category to active journal records atomically.
+func (s *TransactionStore) BulkCategorize(ctx context.Context, recordIDs []int64, categoryID int64) (int, error) {
+	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
+		if err := validateActiveJournalRecords(ctx, tx, recordIDs); err != nil {
+			return err
+		}
+		exists, err := activeCategoryExists(ctx, tx, categoryID)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return ErrInvalidReference
+		}
+
+		args := append([]any{categoryID}, int64Args(recordIDs)...)
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE journal_record
+SET category_id = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
+			args...,
+		); err != nil {
+			return fmt.Errorf("bulk categorize journal records: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return len(recordIDs), nil
+}
+
+// BulkReassignAccount assigns one active account to active journal records atomically.
+func (s *TransactionStore) BulkReassignAccount(ctx context.Context, recordIDs []int64, accountID int64) (int, error) {
+	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
+		if err := validateActiveJournalRecords(ctx, tx, recordIDs); err != nil {
+			return err
+		}
+		exists, err := activeAccountExists(ctx, tx, accountID)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return ErrInvalidReference
+		}
+
+		args := append([]any{accountID}, int64Args(recordIDs)...)
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE journal_record
+SET account_id = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
+			args...,
+		); err != nil {
+			return fmt.Errorf("bulk reassign journal record accounts: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return len(recordIDs), nil
+}
+
+// BulkUpdateTags adds and removes active tags on active journal records atomically.
+func (s *TransactionStore) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagIDs []int64, removeTagIDs []int64) (int, error) {
+	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
+		if err := validateActiveJournalRecords(ctx, tx, recordIDs); err != nil {
+			return err
+		}
+		if err := validateActiveTags(ctx, tx, append(append([]int64{}, addTagIDs...), removeTagIDs...)); err != nil {
+			return err
+		}
+
+		for _, recordID := range recordIDs {
+			for _, tagID := range addTagIDs {
+				if _, err := tx.ExecContext(
+					ctx,
+					"INSERT OR IGNORE INTO journal_record_tag (record_id, tag_id) VALUES (?, ?)",
+					recordID,
+					tagID,
+				); err != nil {
+					return fmt.Errorf("bulk add journal record tag: %w", err)
+				}
+			}
+		}
+
+		if len(removeTagIDs) > 0 {
+			args := append(int64Args(recordIDs), int64Args(removeTagIDs)...)
+			if _, err := tx.ExecContext(
+				ctx,
+				`DELETE FROM journal_record_tag
+WHERE record_id IN (`+placeholders(len(recordIDs))+`)
+  AND tag_id IN (`+placeholders(len(removeTagIDs))+`)`,
+				args...,
+			); err != nil {
+				return fmt.Errorf("bulk remove journal record tags: %w", err)
+			}
+		}
+
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE journal_record
+SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
+			int64Args(recordIDs)...,
+		); err != nil {
+			return fmt.Errorf("bulk update journal record tag timestamps: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return len(recordIDs), nil
+}
+
+// BulkUpdateStatuses updates posting and reconciliation statuses on active journal records atomically.
+func (s *TransactionStore) BulkUpdateStatuses(
+	ctx context.Context,
+	recordIDs []int64,
+	postingStatus *models.PostingStatus,
+	reconciliationStatus *models.ReconciliationStatus,
+) (int, error) {
+	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
+		if err := validateActiveJournalRecords(ctx, tx, recordIDs); err != nil {
+			return err
+		}
+
+		setClauses := []string{}
+		args := []any{}
+		if postingStatus != nil {
+			setClauses = append(setClauses, "posting_status = ?")
+			args = append(args, *postingStatus)
+		}
+		if reconciliationStatus != nil {
+			setClauses = append(setClauses, "reconciliation_status = ?")
+			args = append(args, *reconciliationStatus)
+		}
+		setClauses = append(setClauses, "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")
+		args = append(args, int64Args(recordIDs)...)
+
+		if _, err := tx.ExecContext(
+			ctx,
+			"UPDATE journal_record SET "+strings.Join(setClauses, ", ")+" WHERE record_id IN ("+placeholders(len(recordIDs))+")",
+			args...,
+		); err != nil {
+			return fmt.Errorf("bulk update journal record statuses: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return len(recordIDs), nil
+}
+
 type transactionScanner interface {
 	Scan(dest ...any) error
 }
@@ -609,6 +776,56 @@ func validateTransactionReferences(ctx context.Context, tx *sql.Tx, req models.C
 	return nil
 }
 
+func validateActiveJournalRecords(ctx context.Context, queryer rowQuerier, recordIDs []int64) error {
+	if len(recordIDs) == 0 {
+		return ErrInvalidReference
+	}
+
+	var count int
+	err := queryer.QueryRowContext(
+		ctx,
+		`SELECT COUNT(DISTINCT jr.record_id)
+FROM journal_record jr
+JOIN "transaction" tr ON tr.transaction_id = jr.transaction_id
+WHERE jr.record_id IN (`+placeholders(len(recordIDs))+`)
+  AND jr.tombstoned_at IS NULL
+  AND tr.tombstoned_at IS NULL`,
+		int64Args(recordIDs)...,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check active journal records: %w", err)
+	}
+	if count != len(recordIDs) {
+		return ErrInvalidReference
+	}
+
+	return nil
+}
+
+func validateActiveTags(ctx context.Context, queryer rowQuerier, tagIDs []int64) error {
+	if len(tagIDs) == 0 {
+		return nil
+	}
+
+	var count int
+	err := queryer.QueryRowContext(
+		ctx,
+		`SELECT COUNT(DISTINCT tag_id)
+FROM tag
+WHERE tag_id IN (`+placeholders(len(tagIDs))+`)
+  AND tombstoned_at IS NULL`,
+		int64Args(tagIDs)...,
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check active tags: %w", err)
+	}
+	if count != len(tagIDs) {
+		return ErrInvalidReference
+	}
+
+	return nil
+}
+
 func activeCategoryExists(ctx context.Context, queryer rowQuerier, categoryID int64) (bool, error) {
 	var id int64
 	err := queryer.QueryRowContext(
@@ -702,4 +919,21 @@ func decimalStringInRange(value string, minValue *string, maxValue *string) (boo
 	}
 
 	return true, nil
+}
+
+func placeholders(count int) string {
+	if count <= 0 {
+		return ""
+	}
+
+	return strings.TrimSuffix(strings.Repeat("?,", count), ",")
+}
+
+func int64Args(values []int64) []any {
+	args := make([]any, 0, len(values))
+	for _, value := range values {
+		args = append(args, value)
+	}
+
+	return args
 }

@@ -131,6 +131,109 @@ func (c *TransactionController) SearchRecords(ctx context.Context, opts RecordSe
 	return c.store.SearchRecords(ctx, store.RecordSearchOptions(opts))
 }
 
+// BulkCategorize assigns one category to selected journal records.
+func (c *TransactionController) BulkCategorize(ctx context.Context, req models.BulkCategorizeRecordsRequest) (models.BulkRecordOperationResponse, error) {
+	if err := validateRecordSelection(req.RecordIDs); err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+	if req.CategoryID <= 0 {
+		return models.BulkRecordOperationResponse{}, invalidRequest("category_id must be positive")
+	}
+
+	count, err := c.store.BulkCategorize(ctx, req.RecordIDs, req.CategoryID)
+	if errors.Is(err, store.ErrInvalidReference) {
+		return models.BulkRecordOperationResponse{}, invalidRequest("records or category missing or inactive resource")
+	}
+	if err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+
+	return bulkRecordOperationResponse(req.RecordIDs, count), nil
+}
+
+// BulkUpdateTags adds and removes tags on selected journal records.
+func (c *TransactionController) BulkUpdateTags(ctx context.Context, req models.BulkTagRecordsRequest) (models.BulkRecordOperationResponse, error) {
+	if err := validateRecordSelection(req.RecordIDs); err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+	if len(req.AddTagIDs) == 0 && len(req.RemoveTagIDs) == 0 {
+		return models.BulkRecordOperationResponse{}, invalidRequest("add_tag_ids or remove_tag_ids is required")
+	}
+	if err := validatePositiveUniqueIDs("add_tag_ids", req.AddTagIDs); err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+	if err := validatePositiveUniqueIDs("remove_tag_ids", req.RemoveTagIDs); err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+	if err := validateNoIDOverlap("add_tag_ids", req.AddTagIDs, "remove_tag_ids", req.RemoveTagIDs); err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+
+	count, err := c.store.BulkUpdateTags(ctx, req.RecordIDs, req.AddTagIDs, req.RemoveTagIDs)
+	if errors.Is(err, store.ErrInvalidReference) {
+		return models.BulkRecordOperationResponse{}, invalidRequest("records or tags missing or inactive resource")
+	}
+	if err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+
+	return bulkRecordOperationResponse(req.RecordIDs, count), nil
+}
+
+// BulkReassignAccount assigns one account to selected journal records.
+func (c *TransactionController) BulkReassignAccount(ctx context.Context, req models.BulkReassignRecordsAccountRequest) (models.BulkRecordOperationResponse, error) {
+	if err := validateRecordSelection(req.RecordIDs); err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+	if req.AccountID <= 0 {
+		return models.BulkRecordOperationResponse{}, invalidRequest("account_id must be positive")
+	}
+
+	count, err := c.store.BulkReassignAccount(ctx, req.RecordIDs, req.AccountID)
+	if errors.Is(err, store.ErrInvalidReference) {
+		return models.BulkRecordOperationResponse{}, invalidRequest("records or account missing or inactive resource")
+	}
+	if err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+
+	return bulkRecordOperationResponse(req.RecordIDs, count), nil
+}
+
+// BulkUpdateStatuses updates posting and reconciliation statuses on selected journal records.
+func (c *TransactionController) BulkUpdateStatuses(ctx context.Context, req models.BulkUpdateRecordStatusRequest) (models.BulkRecordOperationResponse, error) {
+	if err := validateRecordSelection(req.RecordIDs); err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+	if req.PostingStatus == nil && req.ReconciliationStatus == nil {
+		return models.BulkRecordOperationResponse{}, invalidRequest("posting_status or reconciliation_status is required")
+	}
+	if req.PostingStatus != nil {
+		switch *req.PostingStatus {
+		case models.PostingStatusPending, models.PostingStatusPosted, models.PostingStatusCancelled:
+		default:
+			return models.BulkRecordOperationResponse{}, invalidRequest("posting_status must be pending, posted, or cancelled")
+		}
+	}
+	if req.ReconciliationStatus != nil {
+		switch *req.ReconciliationStatus {
+		case models.ReconciliationStatusReconciled, models.ReconciliationStatusUnreconciled:
+		default:
+			return models.BulkRecordOperationResponse{}, invalidRequest("reconciliation_status must be reconciled or unreconciled")
+		}
+	}
+
+	count, err := c.store.BulkUpdateStatuses(ctx, req.RecordIDs, req.PostingStatus, req.ReconciliationStatus)
+	if errors.Is(err, store.ErrInvalidReference) {
+		return models.BulkRecordOperationResponse{}, invalidRequest("records missing or inactive resource")
+	}
+	if err != nil {
+		return models.BulkRecordOperationResponse{}, err
+	}
+
+	return bulkRecordOperationResponse(req.RecordIDs, count), nil
+}
+
 func (c *TransactionController) validateTransactionRequest(ctx context.Context, initiatedDate string, records []models.CreateJournalRecordRequest) error {
 	if err := validateEffectiveDate(initiatedDate); err != nil {
 		return invalidRequest("initiated_date must use YYYY-MM-DD format")
@@ -274,6 +377,50 @@ func (c *TransactionController) validateRecordSearchOptions(opts RecordSearchOpt
 
 func indexedField(index int, name string) string {
 	return "records[" + strconv.Itoa(index) + "]." + name
+}
+
+func validateRecordSelection(recordIDs []int64) error {
+	if len(recordIDs) == 0 {
+		return invalidRequest("record_ids must contain at least one record")
+	}
+
+	return validatePositiveUniqueIDs("record_ids", recordIDs)
+}
+
+func validatePositiveUniqueIDs(name string, ids []int64) error {
+	seen := map[int64]struct{}{}
+	for _, id := range ids {
+		if id <= 0 {
+			return invalidRequest(name + " values must be positive")
+		}
+		if _, ok := seen[id]; ok {
+			return invalidRequest(name + " values must be unique")
+		}
+		seen[id] = struct{}{}
+	}
+
+	return nil
+}
+
+func validateNoIDOverlap(firstName string, firstIDs []int64, secondName string, secondIDs []int64) error {
+	firstSet := map[int64]struct{}{}
+	for _, id := range firstIDs {
+		firstSet[id] = struct{}{}
+	}
+	for _, id := range secondIDs {
+		if _, ok := firstSet[id]; ok {
+			return invalidRequest(firstName + " and " + secondName + " must not overlap")
+		}
+	}
+
+	return nil
+}
+
+func bulkRecordOperationResponse(recordIDs []int64, count int) models.BulkRecordOperationResponse {
+	return models.BulkRecordOperationResponse{
+		RecordIDs:    append([]int64{}, recordIDs...),
+		UpdatedCount: count,
+	}
 }
 
 func validateOptionalDate(name string, value *string) error {

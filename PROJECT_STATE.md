@@ -40,6 +40,11 @@
   - `GET /accounts/{account_id}/records` searches active journal records for one account while preserving each record's containing `transaction_id`.
   - Record search supports exact allowlisted filters for account, category, tag, member, posting status, reconciliation status, amount ranges, USD amount ranges, initiated date ranges, pending date ranges, posted date ranges, and memo substring.
   - Account-record views use the account id from the path and reject `account_id` as a query filter.
+  - `POST /records/bulk/category` assigns one active category to selected active journal records atomically.
+  - `POST /records/bulk/tags` adds and removes active tags on selected active journal records atomically.
+  - `POST /records/bulk/account` assigns one active account to selected active journal records atomically.
+  - `POST /records/bulk/status` updates posting and/or reconciliation status for selected active journal records atomically.
+  - Bulk record operations reject empty selections, duplicate ids, missing or inactive selected records, and missing or inactive referenced accounts, categories, or tags.
 - Shared list/query behavior:
   - List endpoints reject unsupported query parameters.
   - List endpoints parse `include_hidden`, `include_tombstoned`, `sort`, `sort_dir`, `limit`, and `offset` through shared router helpers when the endpoint supports them.

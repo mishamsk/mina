@@ -103,3 +103,35 @@ type TransactionListResponse struct {
 type JournalRecordSearchResponse struct {
 	Records []JournalRecord `json:"records"`
 }
+
+// BulkCategorizeRecordsRequest is the request body for assigning one category to records.
+type BulkCategorizeRecordsRequest struct {
+	RecordIDs  []int64 `json:"record_ids"`
+	CategoryID int64   `json:"category_id"`
+}
+
+// BulkTagRecordsRequest is the request body for adding and removing record tags.
+type BulkTagRecordsRequest struct {
+	RecordIDs    []int64 `json:"record_ids"`
+	AddTagIDs    []int64 `json:"add_tag_ids,omitempty"`
+	RemoveTagIDs []int64 `json:"remove_tag_ids,omitempty"`
+}
+
+// BulkReassignRecordsAccountRequest is the request body for assigning one account to records.
+type BulkReassignRecordsAccountRequest struct {
+	RecordIDs []int64 `json:"record_ids"`
+	AccountID int64   `json:"account_id"`
+}
+
+// BulkUpdateRecordStatusRequest is the request body for updating record statuses.
+type BulkUpdateRecordStatusRequest struct {
+	RecordIDs            []int64               `json:"record_ids"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+}
+
+// BulkRecordOperationResponse is the response body for bulk record operations.
+type BulkRecordOperationResponse struct {
+	RecordIDs    []int64 `json:"record_ids"`
+	UpdatedCount int     `json:"updated_count"`
+}

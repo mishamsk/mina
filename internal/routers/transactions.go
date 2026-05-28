@@ -124,6 +124,70 @@ func registerTransactionRoutes(mux *http.ServeMux, deps Dependencies) {
 
 		writeJSON(w, http.StatusOK, models.JournalRecordSearchResponse{Records: records})
 	})
+
+	mux.HandleFunc("POST /records/bulk/category", func(w http.ResponseWriter, r *http.Request) {
+		var req models.BulkCategorizeRecordsRequest
+		if err := decodeStrictJSON(r, &req); err != nil {
+			WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid JSON request body")
+			return
+		}
+
+		response, err := deps.Controllers.Transactions.BulkCategorize(r.Context(), req)
+		if err != nil {
+			WriteControllerError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, response)
+	})
+
+	mux.HandleFunc("POST /records/bulk/tags", func(w http.ResponseWriter, r *http.Request) {
+		var req models.BulkTagRecordsRequest
+		if err := decodeStrictJSON(r, &req); err != nil {
+			WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid JSON request body")
+			return
+		}
+
+		response, err := deps.Controllers.Transactions.BulkUpdateTags(r.Context(), req)
+		if err != nil {
+			WriteControllerError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, response)
+	})
+
+	mux.HandleFunc("POST /records/bulk/account", func(w http.ResponseWriter, r *http.Request) {
+		var req models.BulkReassignRecordsAccountRequest
+		if err := decodeStrictJSON(r, &req); err != nil {
+			WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid JSON request body")
+			return
+		}
+
+		response, err := deps.Controllers.Transactions.BulkReassignAccount(r.Context(), req)
+		if err != nil {
+			WriteControllerError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, response)
+	})
+
+	mux.HandleFunc("POST /records/bulk/status", func(w http.ResponseWriter, r *http.Request) {
+		var req models.BulkUpdateRecordStatusRequest
+		if err := decodeStrictJSON(r, &req); err != nil {
+			WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid JSON request body")
+			return
+		}
+
+		response, err := deps.Controllers.Transactions.BulkUpdateStatuses(r.Context(), req)
+		if err != nil {
+			WriteControllerError(w, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, response)
+	})
 }
 
 func rejectQueryParams(w http.ResponseWriter, r *http.Request) bool {
@@ -250,4 +314,13 @@ func accountRecordsPath(path string) bool {
 	rawID = strings.TrimSuffix(rawID, "/records")
 
 	return rawID != "" && !strings.Contains(rawID, "/")
+}
+
+func recordBulkOperationPath(path string) bool {
+	switch path {
+	case "/records/bulk/category", "/records/bulk/tags", "/records/bulk/account", "/records/bulk/status":
+		return true
+	default:
+		return false
+	}
 }

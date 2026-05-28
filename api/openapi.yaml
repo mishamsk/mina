@@ -1111,6 +1111,82 @@ paths:
                 $ref: "#/components/schemas/JournalRecordSearchResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+  /records/bulk/category:
+    post:
+      operationId: bulkCategorizeJournalRecords
+      summary: Assign one category to selected journal records.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkCategorizeRecordsRequest"
+      responses:
+        "200":
+          description: Records categorized.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRecordOperationResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /records/bulk/tags:
+    post:
+      operationId: bulkUpdateJournalRecordTags
+      summary: Add and remove tags on selected journal records.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkTagRecordsRequest"
+      responses:
+        "200":
+          description: Record tags updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRecordOperationResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /records/bulk/account:
+    post:
+      operationId: bulkReassignJournalRecordAccount
+      summary: Assign one account to selected journal records.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkReassignRecordsAccountRequest"
+      responses:
+        "200":
+          description: Record accounts reassigned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRecordOperationResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /records/bulk/status:
+    post:
+      operationId: bulkUpdateJournalRecordStatuses
+      summary: Update posting and reconciliation statuses on selected journal records.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkUpdateRecordStatusRequest"
+      responses:
+        "200":
+          description: Record statuses updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkRecordOperationResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
   /transactions/{transaction_id}:
     parameters:
       - name: transaction_id
@@ -1528,6 +1604,111 @@ components:
         external_system:
           type: string
           nullable: true
+    BulkCategorizeRecordsRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - record_ids
+        - category_id
+      properties:
+        record_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+    BulkTagRecordsRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 2
+      description: Provide at least one non-empty add_tag_ids or remove_tag_ids array. The two arrays must not overlap.
+      required:
+        - record_ids
+      properties:
+        record_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        add_tag_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        remove_tag_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+    BulkReassignRecordsAccountRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - record_ids
+        - account_id
+      properties:
+        record_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        account_id:
+          type: integer
+          format: int64
+          minimum: 1
+    BulkUpdateRecordStatusRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 2
+      description: Provide posting_status, reconciliation_status, or both.
+      required:
+        - record_ids
+      properties:
+        record_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        posting_status:
+          $ref: "#/components/schemas/PostingStatus"
+        reconciliation_status:
+          $ref: "#/components/schemas/ReconciliationStatus"
+    BulkRecordOperationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - record_ids
+        - updated_count
+      properties:
+        record_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        updated_count:
+          type: integer
+          minimum: 0
     CreateTransactionRequest:
       type: object
       additionalProperties: false

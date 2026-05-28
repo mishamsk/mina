@@ -185,20 +185,20 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 13: Add Stage 1 bulk operations
-- [ ] Add bulk categorization for selected records.
-- [ ] Add bulk tagging and untagging for selected records.
-- [ ] Add bulk account reassignment for selected records.
-- [ ] Add bulk posting/reconciliation status updates.
-- [ ] Ensure each bulk operation runs in a database transaction and validates every referenced row before writing.
-- [ ] Add boundary tests for all-or-nothing behavior, empty selections, missing references, and read-after-write through record search.
-- [ ] Regenerate OpenAPI artifacts.
-- [ ] Update `PROJECT_STATE.md` with bulk operation behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add bulk categorization for selected records.
+- [x] Add bulk tagging and untagging for selected records.
+- [x] Add bulk account reassignment for selected records.
+- [x] Add bulk posting/reconciliation status updates.
+- [x] Ensure each bulk operation runs in a database transaction and validates every referenced row before writing.
+- [x] Add boundary tests for all-or-nothing behavior, empty selections, missing references, and read-after-write through record search.
+- [x] Regenerate OpenAPI artifacts.
+- [x] Update `PROJECT_STATE.md` with bulk operation behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 14: Finish Stage 1 CLI server and process-level REST tests
 - [ ] Add CLI flags for explicit database path, host, port, and migration/open behavior.

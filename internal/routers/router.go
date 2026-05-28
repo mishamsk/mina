@@ -61,7 +61,8 @@ func routeExistsWithDifferentMethod(r *http.Request) bool {
 			accountCreditLimitHistoryPath(r.URL.Path) && r.Method != http.MethodGet && r.Method != http.MethodPost ||
 			resourceIDPath(r.URL.Path, "/credit-limit-history/") && r.Method != http.MethodGet && r.Method != http.MethodDelete ||
 			resourceIDPath(r.URL.Path, "/exchange-rates/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete ||
-			resourceIDPath(r.URL.Path, "/transactions/") && r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete
+			resourceIDPath(r.URL.Path, "/transactions/") && r.Method != http.MethodGet && r.Method != http.MethodPut && r.Method != http.MethodDelete ||
+			recordBulkOperationPath(r.URL.Path) && r.Method != http.MethodPost
 	}
 }
 
