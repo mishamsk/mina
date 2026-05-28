@@ -13,6 +13,7 @@ import (
 // MemberListOptions controls member list visibility.
 type MemberListOptions struct {
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // MemberController owns household member use cases and validation.
@@ -65,6 +66,7 @@ func (c *MemberController) Get(ctx context.Context, id int64, includeTombstoned 
 func (c *MemberController) List(ctx context.Context, opts MemberListOptions) ([]models.Member, error) {
 	return c.store.List(ctx, store.MemberListOptions{
 		IncludeTombstoned: opts.IncludeTombstoned,
+		List:              opts.List,
 	})
 }
 

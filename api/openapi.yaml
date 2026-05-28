@@ -33,6 +33,38 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: fqn
+            enum:
+              - fqn
+              - created_at
+              - updated_at
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
           description: Categories in deterministic FQN order.
@@ -139,6 +171,38 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: fqn
+            enum:
+              - fqn
+              - created_at
+              - updated_at
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
           description: Tags in deterministic FQN order.
@@ -239,6 +303,38 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: name
+            enum:
+              - name
+              - created_at
+              - updated_at
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
           description: Members in deterministic name order.
@@ -347,6 +443,38 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: fqn
+            enum:
+              - fqn
+              - created_at
+              - updated_at
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
           description: Accounts in deterministic FQN order.
@@ -455,6 +583,37 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: effective_date
+            enum:
+              - effective_date
+              - created_at
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
           description: Credit limit history in effective-date order.
@@ -557,6 +716,40 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: currency_pair
+            enum:
+              - currency_pair
+              - from_currency
+              - to_currency
+              - effective_date
+              - created_at
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
           description: Exchange rates in deterministic currency/date order.

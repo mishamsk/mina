@@ -22,6 +22,13 @@
   - App composition can create a missing database file only when `CreateIfMissing` is true.
   - Migrations are upgrade-only and recorded in `schema_version`.
   - Current schema version: `7`.
+- Shared list/query behavior:
+  - List endpoints reject unsupported query parameters.
+  - List endpoints parse `include_hidden`, `include_tombstoned`, `sort`, `sort_dir`, `limit`, and `offset` through shared router helpers when the endpoint supports them.
+  - `sort` keys and `sort_dir` values are endpoint-specific allowlists.
+  - Dynamic SQL sort identifiers are selected from store-owned allowlists; user values use parameter binding.
+  - `limit` is optional and must be between `1` and `500`; `offset` is optional and must be non-negative.
+  - Default list responses remain unpaginated and use deterministic endpoint-specific ordering.
 - Exchange rate behavior:
   - `POST /exchange-rates` creates historical exchange rates.
   - `GET /exchange-rates/{exchange_rate_id}` reads non-tombstoned exchange rates by default.

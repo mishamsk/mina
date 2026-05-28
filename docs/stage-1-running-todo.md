@@ -139,18 +139,18 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 10: Add shared list, filter, sort, and pagination contracts
-- [ ] Add typed allowlists for filter fields, sort keys, and sort directions used by Stage 1 list endpoints.
-- [ ] Add shared request parsing and validation for pagination and include-hidden/include-tombstoned options.
-- [ ] Ensure all dynamic SQL identifiers are selected from typed allowlists and all values use parameter binding.
-- [ ] Add boundary tests for unsupported filters, unsupported sort keys, default hidden exclusion, and deterministic pagination.
-- [ ] Regenerate OpenAPI artifacts.
-- [ ] Update `PROJECT_STATE.md` with shared list/query behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add typed allowlists for filter fields, sort keys, and sort directions used by Stage 1 list endpoints.
+- [x] Add shared request parsing and validation for pagination and include-hidden/include-tombstoned options.
+- [x] Ensure all dynamic SQL identifiers are selected from typed allowlists and all values use parameter binding.
+- [x] Add boundary tests for unsupported filters, unsupported sort keys, default hidden exclusion, and deterministic pagination.
+- [x] Regenerate OpenAPI artifacts.
+- [x] Update `PROJECT_STATE.md` with shared list/query behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 11: Add transaction and journal record create/read API
 - [ ] Add transaction, journal record, posting status, reconciliation status, and source models.

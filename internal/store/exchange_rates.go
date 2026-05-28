@@ -15,6 +15,7 @@ type ExchangeRateListOptions struct {
 	ToCurrency        *string
 	EffectiveDate     *string
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // ExchangeRateStore persists exchange rates.
@@ -108,7 +109,7 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query += " ORDER BY from_currency ASC, to_currency ASC, effective_date ASC, exchange_rate_id ASC"
+	query, args = appendListOrderAndPage(query, args, opts.List, exchangeRateSortColumns, models.SortKeyCurrencyPair, "exchange_rate_id")
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -227,4 +228,12 @@ LIMIT 1`,
 	}
 
 	return true, nil
+}
+
+var exchangeRateSortColumns = map[models.SortKey][]string{
+	models.SortKeyCreatedAt:     {"created_at"},
+	models.SortKeyCurrencyPair:  {"from_currency", "to_currency", "effective_date"},
+	models.SortKeyEffectiveDate: {"effective_date"},
+	models.SortKeyFromCurrency:  {"from_currency"},
+	models.SortKeyToCurrency:    {"to_currency"},
 }

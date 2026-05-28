@@ -12,6 +12,7 @@ import (
 // CreditLimitHistoryListOptions controls credit limit history list visibility.
 type CreditLimitHistoryListOptions struct {
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // CreditLimitHistoryStore persists account credit limit history.
@@ -108,7 +109,7 @@ WHERE account_id = ?`
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query += " ORDER BY effective_date ASC, credit_limit_history_id ASC"
+	query, args = appendListOrderAndPage(query, args, opts.List, creditLimitHistorySortColumns, models.SortKeyEffectiveDate, "credit_limit_history_id")
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -224,4 +225,9 @@ LIMIT 1`,
 	}
 
 	return true, nil
+}
+
+var creditLimitHistorySortColumns = map[models.SortKey][]string{
+	models.SortKeyCreatedAt:     {"created_at"},
+	models.SortKeyEffectiveDate: {"effective_date"},
 }

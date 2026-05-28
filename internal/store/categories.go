@@ -13,6 +13,7 @@ import (
 type CategoryListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // CategoryStore persists categories.
@@ -88,15 +89,16 @@ func (s *CategoryStore) List(ctx context.Context, opts CategoryListOptions) ([]m
 	query := `SELECT category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
 FROM category
 WHERE 1 = 1`
+	args := []any{}
 	if !opts.IncludeHidden {
 		query += " AND is_hidden = 0"
 	}
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query += " ORDER BY fqn ASC, category_id ASC"
+	query, args = appendListOrderAndPage(query, args, opts.List, categorySortColumns, models.SortKeyFQN, "category_id")
 
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
@@ -209,4 +211,10 @@ func categoryFQNExists(ctx context.Context, tx *sql.Tx, fqn string) (bool, error
 	}
 
 	return true, nil
+}
+
+var categorySortColumns = map[models.SortKey][]string{
+	models.SortKeyCreatedAt: {"created_at"},
+	models.SortKeyFQN:       {"fqn"},
+	models.SortKeyUpdatedAt: {"updated_at"},
 }

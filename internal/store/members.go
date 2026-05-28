@@ -12,6 +12,7 @@ import (
 // MemberListOptions controls member list visibility.
 type MemberListOptions struct {
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // MemberStore persists household members.
@@ -86,12 +87,13 @@ func (s *MemberStore) List(ctx context.Context, opts MemberListOptions) ([]model
 	query := `SELECT member_id, name, created_at, updated_at, tombstoned_at
 FROM member
 WHERE 1 = 1`
+	args := []any{}
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query += " ORDER BY name ASC, member_id ASC"
+	query, args = appendListOrderAndPage(query, args, opts.List, memberSortColumns, models.SortKeyName, "member_id")
 
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list members: %w", err)
 	}
@@ -205,4 +207,10 @@ func memberNameExists(ctx context.Context, tx *sql.Tx, name string) (bool, error
 	}
 
 	return true, nil
+}
+
+var memberSortColumns = map[models.SortKey][]string{
+	models.SortKeyCreatedAt: {"created_at"},
+	models.SortKeyName:      {"name"},
+	models.SortKeyUpdatedAt: {"updated_at"},
 }

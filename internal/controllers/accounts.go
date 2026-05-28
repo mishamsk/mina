@@ -14,6 +14,7 @@ import (
 type AccountListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // AccountController owns account use cases and validation.
@@ -73,6 +74,7 @@ func (c *AccountController) List(ctx context.Context, opts AccountListOptions) (
 	return c.store.List(ctx, store.AccountListOptions{
 		IncludeHidden:     opts.IncludeHidden,
 		IncludeTombstoned: opts.IncludeTombstoned,
+		List:              opts.List,
 	})
 }
 

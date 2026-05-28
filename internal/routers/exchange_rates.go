@@ -25,9 +25,38 @@ func registerExchangeRateRoutes(mux *http.ServeMux, deps Dependencies) {
 	})
 
 	mux.HandleFunc("GET /exchange-rates", func(w http.ResponseWriter, r *http.Request) {
-		opts, ok := parseExchangeRateListOptions(w, r)
+		query, ok := parseListQuery(w, r, listQueryContract{
+			AllowTombstoned: true,
+			FilterKeys: map[models.FilterKey]struct{}{
+				models.FilterKeyEffectiveDate: {},
+				models.FilterKeyFromCurrency:  {},
+				models.FilterKeyToCurrency:    {},
+			},
+			SortKeys: map[models.SortKey]struct{}{
+				models.SortKeyCreatedAt:     {},
+				models.SortKeyCurrencyPair:  {},
+				models.SortKeyEffectiveDate: {},
+				models.SortKeyFromCurrency:  {},
+				models.SortKeyToCurrency:    {},
+			},
+			DefaultSortKey: models.SortKeyCurrencyPair,
+		})
 		if !ok {
 			return
+		}
+
+		opts := controllers.ExchangeRateListOptions{
+			IncludeTombstoned: query.IncludeTombstoned,
+			List:              query.List,
+		}
+		if value, ok := query.Filters[models.FilterKeyFromCurrency]; ok {
+			opts.FromCurrency = &value
+		}
+		if value, ok := query.Filters[models.FilterKeyToCurrency]; ok {
+			opts.ToCurrency = &value
+		}
+		if value, ok := query.Filters[models.FilterKeyEffectiveDate]; ok {
+			opts.EffectiveDate = &value
 		}
 
 		rates, err := deps.Controllers.ExchangeRates.List(r.Context(), opts)
@@ -92,40 +121,4 @@ func registerExchangeRateRoutes(mux *http.ServeMux, deps Dependencies) {
 
 		w.WriteHeader(http.StatusNoContent)
 	})
-}
-
-func parseExchangeRateListOptions(w http.ResponseWriter, r *http.Request) (controllers.ExchangeRateListOptions, bool) {
-	query := r.URL.Query()
-	for name, values := range query {
-		switch name {
-		case "from_currency", "to_currency", "effective_date", "include_tombstoned":
-			if len(values) != 1 || values[0] == "" {
-				WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, name+" must have one non-empty value")
-				return controllers.ExchangeRateListOptions{}, false
-			}
-		default:
-			WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "unsupported exchange rate filter")
-			return controllers.ExchangeRateListOptions{}, false
-		}
-	}
-
-	includeTombstoned, ok := parseBoolQuery(w, r, "include_tombstoned")
-	if !ok {
-		return controllers.ExchangeRateListOptions{}, false
-	}
-
-	opts := controllers.ExchangeRateListOptions{
-		IncludeTombstoned: includeTombstoned,
-	}
-	if values, ok := query["from_currency"]; ok {
-		opts.FromCurrency = &values[0]
-	}
-	if values, ok := query["to_currency"]; ok {
-		opts.ToCurrency = &values[0]
-	}
-	if values, ok := query["effective_date"]; ok {
-		opts.EffectiveDate = &values[0]
-	}
-
-	return opts, true
 }

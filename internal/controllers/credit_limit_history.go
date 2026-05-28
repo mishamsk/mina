@@ -14,6 +14,7 @@ import (
 // CreditLimitHistoryListOptions controls credit limit history list visibility.
 type CreditLimitHistoryListOptions struct {
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // CreditLimitHistoryController owns credit limit history use cases and validation.
@@ -79,6 +80,7 @@ func (c *CreditLimitHistoryController) ListByAccount(ctx context.Context, accoun
 
 	history, err := c.store.ListByAccount(ctx, accountID, store.CreditLimitHistoryListOptions{
 		IncludeTombstoned: opts.IncludeTombstoned,
+		List:              opts.List,
 	})
 	if errors.Is(err, store.ErrNotFound) {
 		return nil, notFound("account not found")

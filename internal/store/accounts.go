@@ -14,6 +14,7 @@ import (
 type AccountListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // AccountStore persists accounts.
@@ -92,15 +93,16 @@ func (s *AccountStore) List(ctx context.Context, opts AccountListOptions) ([]mod
 	query := `SELECT account_id, fqn, is_hidden, currency, external_id, external_system, created_at, updated_at, tombstoned_at
 FROM account
 WHERE 1 = 1`
+	args := []any{}
 	if !opts.IncludeHidden {
 		query += " AND is_hidden = 0"
 	}
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query += " ORDER BY fqn ASC, account_id ASC"
+	query, args = appendListOrderAndPage(query, args, opts.List, accountSortColumns, models.SortKeyFQN, "account_id")
 
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}
@@ -235,4 +237,10 @@ func accountFQNExists(ctx context.Context, tx *sql.Tx, fqn string) (bool, error)
 	}
 
 	return true, nil
+}
+
+var accountSortColumns = map[models.SortKey][]string{
+	models.SortKeyCreatedAt: {"created_at"},
+	models.SortKeyFQN:       {"fqn"},
+	models.SortKeyUpdatedAt: {"updated_at"},
 }

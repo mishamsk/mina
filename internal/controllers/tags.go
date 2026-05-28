@@ -14,6 +14,7 @@ import (
 type TagListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // TagController owns tag use cases and validation.
@@ -67,6 +68,7 @@ func (c *TagController) List(ctx context.Context, opts TagListOptions) ([]models
 	return c.store.List(ctx, store.TagListOptions{
 		IncludeHidden:     opts.IncludeHidden,
 		IncludeTombstoned: opts.IncludeTombstoned,
+		List:              opts.List,
 	})
 }
 

@@ -13,6 +13,7 @@ import (
 type TagListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // TagStore persists tags.
@@ -88,15 +89,16 @@ func (s *TagStore) List(ctx context.Context, opts TagListOptions) ([]models.Tag,
 	query := `SELECT tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
 FROM tag
 WHERE 1 = 1`
+	args := []any{}
 	if !opts.IncludeHidden {
 		query += " AND is_hidden = 0"
 	}
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query += " ORDER BY fqn ASC, tag_id ASC"
+	query, args = appendListOrderAndPage(query, args, opts.List, tagSortColumns, models.SortKeyFQN, "tag_id")
 
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list tags: %w", err)
 	}
@@ -209,4 +211,10 @@ func tagFQNExists(ctx context.Context, tx *sql.Tx, fqn string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+var tagSortColumns = map[models.SortKey][]string{
+	models.SortKeyCreatedAt: {"created_at"},
+	models.SortKeyFQN:       {"fqn"},
+	models.SortKeyUpdatedAt: {"updated_at"},
 }

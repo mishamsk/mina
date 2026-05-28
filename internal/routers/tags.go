@@ -25,18 +25,24 @@ func registerTagRoutes(mux *http.ServeMux, deps Dependencies) {
 	})
 
 	mux.HandleFunc("GET /tags", func(w http.ResponseWriter, r *http.Request) {
-		includeHidden, ok := parseBoolQuery(w, r, "include_hidden")
-		if !ok {
-			return
-		}
-		includeTombstoned, ok := parseBoolQuery(w, r, "include_tombstoned")
+		query, ok := parseListQuery(w, r, listQueryContract{
+			AllowHidden:     true,
+			AllowTombstoned: true,
+			SortKeys: map[models.SortKey]struct{}{
+				models.SortKeyCreatedAt: {},
+				models.SortKeyFQN:       {},
+				models.SortKeyUpdatedAt: {},
+			},
+			DefaultSortKey: models.SortKeyFQN,
+		})
 		if !ok {
 			return
 		}
 
 		tags, err := deps.Controllers.Tags.List(r.Context(), controllers.TagListOptions{
-			IncludeHidden:     includeHidden,
-			IncludeTombstoned: includeTombstoned,
+			IncludeHidden:     query.IncludeHidden,
+			IncludeTombstoned: query.IncludeTombstoned,
+			List:              query.List,
 		})
 		if err != nil {
 			WriteControllerError(w, err)

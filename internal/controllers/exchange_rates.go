@@ -16,6 +16,7 @@ type ExchangeRateListOptions struct {
 	ToCurrency        *string
 	EffectiveDate     *string
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // ExchangeRateController owns exchange rate use cases and validation.
@@ -96,6 +97,7 @@ func (c *ExchangeRateController) List(ctx context.Context, opts ExchangeRateList
 		ToCurrency:        opts.ToCurrency,
 		EffectiveDate:     opts.EffectiveDate,
 		IncludeTombstoned: opts.IncludeTombstoned,
+		List:              opts.List,
 	})
 }
 

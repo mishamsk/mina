@@ -14,6 +14,7 @@ import (
 type CategoryListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	List              models.ListOptions
 }
 
 // CategoryController owns category use cases and validation.
@@ -67,6 +68,7 @@ func (c *CategoryController) List(ctx context.Context, opts CategoryListOptions)
 	return c.store.List(ctx, store.CategoryListOptions{
 		IncludeHidden:     opts.IncludeHidden,
 		IncludeTombstoned: opts.IncludeTombstoned,
+		List:              opts.List,
 	})
 }
 

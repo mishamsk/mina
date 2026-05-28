@@ -25,13 +25,22 @@ func registerMemberRoutes(mux *http.ServeMux, deps Dependencies) {
 	})
 
 	mux.HandleFunc("GET /members", func(w http.ResponseWriter, r *http.Request) {
-		includeTombstoned, ok := parseBoolQuery(w, r, "include_tombstoned")
+		query, ok := parseListQuery(w, r, listQueryContract{
+			AllowTombstoned: true,
+			SortKeys: map[models.SortKey]struct{}{
+				models.SortKeyCreatedAt: {},
+				models.SortKeyName:      {},
+				models.SortKeyUpdatedAt: {},
+			},
+			DefaultSortKey: models.SortKeyName,
+		})
 		if !ok {
 			return
 		}
 
 		members, err := deps.Controllers.Members.List(r.Context(), controllers.MemberListOptions{
-			IncludeTombstoned: includeTombstoned,
+			IncludeTombstoned: query.IncludeTombstoned,
+			List:              query.List,
 		})
 		if err != nil {
 			WriteControllerError(w, err)

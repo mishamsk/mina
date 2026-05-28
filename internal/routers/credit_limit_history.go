@@ -38,13 +38,21 @@ func registerCreditLimitHistoryRoutes(mux *http.ServeMux, deps Dependencies) {
 		if !ok {
 			return
 		}
-		includeTombstoned, ok := parseBoolQuery(w, r, "include_tombstoned")
+		query, ok := parseListQuery(w, r, listQueryContract{
+			AllowTombstoned: true,
+			SortKeys: map[models.SortKey]struct{}{
+				models.SortKeyCreatedAt:     {},
+				models.SortKeyEffectiveDate: {},
+			},
+			DefaultSortKey: models.SortKeyEffectiveDate,
+		})
 		if !ok {
 			return
 		}
 
 		history, err := deps.Controllers.CreditLimitHistory.ListByAccount(r.Context(), accountID, controllers.CreditLimitHistoryListOptions{
-			IncludeTombstoned: includeTombstoned,
+			IncludeTombstoned: query.IncludeTombstoned,
+			List:              query.List,
 		})
 		if err != nil {
 			WriteControllerError(w, err)

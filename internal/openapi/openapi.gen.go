@@ -57,6 +57,243 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for ListAccountsParamsSort.
+const (
+	ListAccountsParamsSortCreatedAt ListAccountsParamsSort = "created_at"
+	ListAccountsParamsSortFqn       ListAccountsParamsSort = "fqn"
+	ListAccountsParamsSortUpdatedAt ListAccountsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListAccountsParamsSort enum.
+func (e ListAccountsParamsSort) Valid() bool {
+	switch e {
+	case ListAccountsParamsSortCreatedAt:
+		return true
+	case ListAccountsParamsSortFqn:
+		return true
+	case ListAccountsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListAccountsParamsSortDir.
+const (
+	ListAccountsParamsSortDirAsc  ListAccountsParamsSortDir = "asc"
+	ListAccountsParamsSortDirDesc ListAccountsParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListAccountsParamsSortDir enum.
+func (e ListAccountsParamsSortDir) Valid() bool {
+	switch e {
+	case ListAccountsParamsSortDirAsc:
+		return true
+	case ListAccountsParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListCreditLimitHistoryParamsSort.
+const (
+	ListCreditLimitHistoryParamsSortCreatedAt     ListCreditLimitHistoryParamsSort = "created_at"
+	ListCreditLimitHistoryParamsSortEffectiveDate ListCreditLimitHistoryParamsSort = "effective_date"
+)
+
+// Valid indicates whether the value is a known member of the ListCreditLimitHistoryParamsSort enum.
+func (e ListCreditLimitHistoryParamsSort) Valid() bool {
+	switch e {
+	case ListCreditLimitHistoryParamsSortCreatedAt:
+		return true
+	case ListCreditLimitHistoryParamsSortEffectiveDate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListCreditLimitHistoryParamsSortDir.
+const (
+	ListCreditLimitHistoryParamsSortDirAsc  ListCreditLimitHistoryParamsSortDir = "asc"
+	ListCreditLimitHistoryParamsSortDirDesc ListCreditLimitHistoryParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListCreditLimitHistoryParamsSortDir enum.
+func (e ListCreditLimitHistoryParamsSortDir) Valid() bool {
+	switch e {
+	case ListCreditLimitHistoryParamsSortDirAsc:
+		return true
+	case ListCreditLimitHistoryParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListCategoriesParamsSort.
+const (
+	ListCategoriesParamsSortCreatedAt ListCategoriesParamsSort = "created_at"
+	ListCategoriesParamsSortFqn       ListCategoriesParamsSort = "fqn"
+	ListCategoriesParamsSortUpdatedAt ListCategoriesParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListCategoriesParamsSort enum.
+func (e ListCategoriesParamsSort) Valid() bool {
+	switch e {
+	case ListCategoriesParamsSortCreatedAt:
+		return true
+	case ListCategoriesParamsSortFqn:
+		return true
+	case ListCategoriesParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListCategoriesParamsSortDir.
+const (
+	ListCategoriesParamsSortDirAsc  ListCategoriesParamsSortDir = "asc"
+	ListCategoriesParamsSortDirDesc ListCategoriesParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListCategoriesParamsSortDir enum.
+func (e ListCategoriesParamsSortDir) Valid() bool {
+	switch e {
+	case ListCategoriesParamsSortDirAsc:
+		return true
+	case ListCategoriesParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListExchangeRatesParamsSort.
+const (
+	ListExchangeRatesParamsSortCreatedAt     ListExchangeRatesParamsSort = "created_at"
+	ListExchangeRatesParamsSortCurrencyPair  ListExchangeRatesParamsSort = "currency_pair"
+	ListExchangeRatesParamsSortEffectiveDate ListExchangeRatesParamsSort = "effective_date"
+	ListExchangeRatesParamsSortFromCurrency  ListExchangeRatesParamsSort = "from_currency"
+	ListExchangeRatesParamsSortToCurrency    ListExchangeRatesParamsSort = "to_currency"
+)
+
+// Valid indicates whether the value is a known member of the ListExchangeRatesParamsSort enum.
+func (e ListExchangeRatesParamsSort) Valid() bool {
+	switch e {
+	case ListExchangeRatesParamsSortCreatedAt:
+		return true
+	case ListExchangeRatesParamsSortCurrencyPair:
+		return true
+	case ListExchangeRatesParamsSortEffectiveDate:
+		return true
+	case ListExchangeRatesParamsSortFromCurrency:
+		return true
+	case ListExchangeRatesParamsSortToCurrency:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListExchangeRatesParamsSortDir.
+const (
+	ListExchangeRatesParamsSortDirAsc  ListExchangeRatesParamsSortDir = "asc"
+	ListExchangeRatesParamsSortDirDesc ListExchangeRatesParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListExchangeRatesParamsSortDir enum.
+func (e ListExchangeRatesParamsSortDir) Valid() bool {
+	switch e {
+	case ListExchangeRatesParamsSortDirAsc:
+		return true
+	case ListExchangeRatesParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListMembersParamsSort.
+const (
+	ListMembersParamsSortCreatedAt ListMembersParamsSort = "created_at"
+	ListMembersParamsSortName      ListMembersParamsSort = "name"
+	ListMembersParamsSortUpdatedAt ListMembersParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListMembersParamsSort enum.
+func (e ListMembersParamsSort) Valid() bool {
+	switch e {
+	case ListMembersParamsSortCreatedAt:
+		return true
+	case ListMembersParamsSortName:
+		return true
+	case ListMembersParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListMembersParamsSortDir.
+const (
+	ListMembersParamsSortDirAsc  ListMembersParamsSortDir = "asc"
+	ListMembersParamsSortDirDesc ListMembersParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListMembersParamsSortDir enum.
+func (e ListMembersParamsSortDir) Valid() bool {
+	switch e {
+	case ListMembersParamsSortDirAsc:
+		return true
+	case ListMembersParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListTagsParamsSort.
+const (
+	ListTagsParamsSortCreatedAt ListTagsParamsSort = "created_at"
+	ListTagsParamsSortFqn       ListTagsParamsSort = "fqn"
+	ListTagsParamsSortUpdatedAt ListTagsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListTagsParamsSort enum.
+func (e ListTagsParamsSort) Valid() bool {
+	switch e {
+	case ListTagsParamsSortCreatedAt:
+		return true
+	case ListTagsParamsSortFqn:
+		return true
+	case ListTagsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListTagsParamsSortDir.
+const (
+	ListTagsParamsSortDirAsc  ListTagsParamsSortDir = "asc"
+	ListTagsParamsSortDirDesc ListTagsParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListTagsParamsSortDir enum.
+func (e ListTagsParamsSortDir) Valid() bool {
+	switch e {
+	case ListTagsParamsSortDirAsc:
+		return true
+	case ListTagsParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIError defines model for APIError.
 type APIError struct {
 	Code    APIErrorCode `json:"code"`
@@ -263,9 +500,19 @@ type NotFound = ErrorResponse
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
-	IncludeHidden     *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	IncludeHidden     *bool                      `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+	IncludeTombstoned *bool                      `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	Sort              *ListAccountsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir           *ListAccountsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit             *int                       `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset            *int                       `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// ListAccountsParamsSort defines parameters for ListAccounts.
+type ListAccountsParamsSort string
+
+// ListAccountsParamsSortDir defines parameters for ListAccounts.
+type ListAccountsParamsSortDir string
 
 // GetAccountParams defines parameters for GetAccount.
 type GetAccountParams struct {
@@ -274,14 +521,34 @@ type GetAccountParams struct {
 
 // ListCreditLimitHistoryParams defines parameters for ListCreditLimitHistory.
 type ListCreditLimitHistoryParams struct {
-	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	IncludeTombstoned *bool                                `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	Sort              *ListCreditLimitHistoryParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir           *ListCreditLimitHistoryParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit             *int                                 `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset            *int                                 `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// ListCreditLimitHistoryParamsSort defines parameters for ListCreditLimitHistory.
+type ListCreditLimitHistoryParamsSort string
+
+// ListCreditLimitHistoryParamsSortDir defines parameters for ListCreditLimitHistory.
+type ListCreditLimitHistoryParamsSortDir string
 
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
-	IncludeHidden     *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	IncludeHidden     *bool                        `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+	IncludeTombstoned *bool                        `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	Sort              *ListCategoriesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir           *ListCategoriesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit             *int                         `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset            *int                         `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// ListCategoriesParamsSort defines parameters for ListCategories.
+type ListCategoriesParamsSort string
+
+// ListCategoriesParamsSortDir defines parameters for ListCategories.
+type ListCategoriesParamsSortDir string
 
 // GetCategoryParams defines parameters for GetCategory.
 type GetCategoryParams struct {
@@ -295,11 +562,21 @@ type GetCreditLimitHistoryParams struct {
 
 // ListExchangeRatesParams defines parameters for ListExchangeRates.
 type ListExchangeRatesParams struct {
-	FromCurrency      *string `form:"from_currency,omitempty" json:"from_currency,omitempty"`
-	ToCurrency        *string `form:"to_currency,omitempty" json:"to_currency,omitempty"`
-	EffectiveDate     *string `form:"effective_date,omitempty" json:"effective_date,omitempty"`
-	IncludeTombstoned *bool   `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	FromCurrency      *string                         `form:"from_currency,omitempty" json:"from_currency,omitempty"`
+	ToCurrency        *string                         `form:"to_currency,omitempty" json:"to_currency,omitempty"`
+	EffectiveDate     *string                         `form:"effective_date,omitempty" json:"effective_date,omitempty"`
+	IncludeTombstoned *bool                           `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	Sort              *ListExchangeRatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir           *ListExchangeRatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit             *int                            `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset            *int                            `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// ListExchangeRatesParamsSort defines parameters for ListExchangeRates.
+type ListExchangeRatesParamsSort string
+
+// ListExchangeRatesParamsSortDir defines parameters for ListExchangeRates.
+type ListExchangeRatesParamsSortDir string
 
 // GetExchangeRateParams defines parameters for GetExchangeRate.
 type GetExchangeRateParams struct {
@@ -308,8 +585,18 @@ type GetExchangeRateParams struct {
 
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
-	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	IncludeTombstoned *bool                     `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	Sort              *ListMembersParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir           *ListMembersParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit             *int                      `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset            *int                      `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// ListMembersParamsSort defines parameters for ListMembers.
+type ListMembersParamsSort string
+
+// ListMembersParamsSortDir defines parameters for ListMembers.
+type ListMembersParamsSortDir string
 
 // GetMemberParams defines parameters for GetMember.
 type GetMemberParams struct {
@@ -318,9 +605,19 @@ type GetMemberParams struct {
 
 // ListTagsParams defines parameters for ListTags.
 type ListTagsParams struct {
-	IncludeHidden     *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	IncludeHidden     *bool                  `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+	IncludeTombstoned *bool                  `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	Sort              *ListTagsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir           *ListTagsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit             *int                   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset            *int                   `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// ListTagsParamsSort defines parameters for ListTags.
+type ListTagsParamsSort string
+
+// ListTagsParamsSortDir defines parameters for ListTags.
+type ListTagsParamsSortDir string
 
 // GetTagParams defines parameters for GetTag.
 type GetTagParams struct {
@@ -365,44 +662,46 @@ type UpdateTagJSONRequestBody = UpdateTagRequest
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"HG0ZiZeVI/Dt9v8BAAD//w==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
