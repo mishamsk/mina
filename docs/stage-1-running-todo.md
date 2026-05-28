@@ -110,19 +110,19 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 8: Add credit limit history API
-- [ ] Add credit limit history model, validation, store operations, controller, router, and OpenAPI contract.
-- [ ] Implement create, get, list by account, and tombstone delete behavior.
-- [ ] Validate referenced accounts, effective dates, and non-negative credit limits.
-- [ ] Preserve history instead of overwriting earlier limits.
-- [ ] Add boundary tests covering account linkage, duplicate account/effective-date conflicts, tombstone behavior, and list ordering.
-- [ ] Regenerate OpenAPI artifacts.
-- [ ] Update `PROJECT_STATE.md` with credit limit behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add credit limit history model, validation, store operations, controller, router, and OpenAPI contract.
+- [x] Implement create, get, list by account, and tombstone delete behavior.
+- [x] Validate referenced accounts, effective dates, and non-negative credit limits.
+- [x] Preserve history instead of overwriting earlier limits.
+- [x] Add boundary tests covering account linkage, duplicate account/effective-date conflicts, tombstone behavior, and list ordering.
+- [x] Regenerate OpenAPI artifacts.
+- [x] Update `PROJECT_STATE.md` with credit limit behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 9: Add exchange rate CRUD API
 - [ ] Add exchange rate model, validation, store operations, controller, router, and OpenAPI contract.

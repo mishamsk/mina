@@ -9,10 +9,10 @@
   - `testscript` v1.14.1 supports CLI smoke scripts.
 - Package inventory:
   - `cmd/mina`: minimal CLI entrypoint with help and version output.
-  - `internal/models`: account/category/tag/member data shapes and stable API error response models.
-  - `internal/store`: SQLite connection, migration, transaction, account/category/tag/member persistence, and test database helpers.
-  - `internal/controllers`: account/category/tag/member use cases and validation.
-  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member routes, and JSON API error mapping.
+  - `internal/models`: account/category/tag/member/credit-limit-history data shapes and stable API error response models.
+  - `internal/store`: SQLite connection, migration, transaction, account/category/tag/member/credit-limit-history persistence, and test database helpers.
+  - `internal/controllers`: account/category/tag/member/credit-limit-history use cases and validation.
+  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history routes, and JSON API error mapping.
   - `internal/app`: process composition for config, database open/create/migrate policy, controllers, and routers.
   - `internal/apptest`: in-process app boundary test client.
   - `internal/openapi`: generated OpenAPI contract package.
@@ -21,7 +21,16 @@
   - App composition requires an explicit database path.
   - App composition can create a missing database file only when `CreateIfMissing` is true.
   - Migrations are upgrade-only and recorded in `schema_version`.
-  - Current schema version: `5`.
+  - Current schema version: `6`.
+- Credit limit history behavior:
+  - `POST /accounts/{account_id}/credit-limit-history` creates credit limit history entries for active accounts.
+  - `GET /accounts/{account_id}/credit-limit-history` lists active credit limit history entries by `effective_date`, then id.
+  - `GET /credit-limit-history/{credit_limit_history_id}` reads non-tombstoned credit limit history entries by default.
+  - `include_tombstoned=true` includes tombstoned credit limit history entries in get/list responses.
+  - `DELETE /credit-limit-history/{credit_limit_history_id}` tombstones credit limit history entries.
+  - `credit_limit` is stored as a non-negative decimal string with at most 18 digits and 8 fractional digits.
+  - `effective_date` must use `YYYY-MM-DD` calendar-date format.
+  - Active credit limit history entries must be unique per account and effective date; tombstoned rows do not block recreation.
 - Account behavior:
   - `POST /accounts` creates active accounts with colon-separated `fqn` validation.
   - `currency` is optional; when present it must be a three-letter uppercase code.

@@ -24,6 +24,7 @@ func New(deps Dependencies) http.Handler {
 	registerTagRoutes(mux, deps)
 	registerMemberRoutes(mux, deps)
 	registerAccountRoutes(mux, deps)
+	registerCreditLimitHistoryRoutes(mux, deps)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if routeExistsWithDifferentMethod(r) {
@@ -51,7 +52,9 @@ func routeExistsWithDifferentMethod(r *http.Request) bool {
 		return resourceIDPath(r.URL.Path, "/categories/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete ||
 			resourceIDPath(r.URL.Path, "/tags/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete ||
 			resourceIDPath(r.URL.Path, "/members/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete ||
-			resourceIDPath(r.URL.Path, "/accounts/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete
+			resourceIDPath(r.URL.Path, "/accounts/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete ||
+			accountCreditLimitHistoryPath(r.URL.Path) && r.Method != http.MethodGet && r.Method != http.MethodPost ||
+			resourceIDPath(r.URL.Path, "/credit-limit-history/") && r.Method != http.MethodGet && r.Method != http.MethodDelete
 	}
 }
 

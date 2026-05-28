@@ -95,6 +95,23 @@ CREATE UNIQUE INDEX account_active_fqn_unique
 ON account(fqn)
 WHERE tombstoned_at IS NULL;`,
 	},
+	{
+		Version: 6,
+		Name:    "create_credit_limit_history",
+		SQL: `
+CREATE TABLE credit_limit_history (
+	credit_limit_history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	account_id INTEGER NOT NULL REFERENCES account(account_id),
+	credit_limit TEXT NOT NULL,
+	effective_date TEXT NOT NULL,
+	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	tombstoned_at TEXT
+);
+
+CREATE UNIQUE INDEX credit_limit_history_active_account_date_unique
+ON credit_limit_history(account_id, effective_date)
+WHERE tombstoned_at IS NULL;`,
+	},
 }
 
 // LatestSchemaVersion returns the highest schema version known to this binary.

@@ -436,6 +436,98 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /accounts/{account_id}/credit-limit-history:
+    parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: listCreditLimitHistory
+      summary: List credit limit history for an account.
+      parameters:
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Credit limit history in effective-date order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditLimitHistoryListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: createCreditLimitHistory
+      summary: Create a credit limit history entry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCreditLimitHistoryRequest"
+      responses:
+        "201":
+          description: Credit limit history entry created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditLimitHistory"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /credit-limit-history/{credit_limit_history_id}:
+    parameters:
+      - name: credit_limit_history_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getCreditLimitHistory
+      summary: Get a credit limit history entry.
+      parameters:
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Credit limit history entry found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditLimitHistory"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteCreditLimitHistory
+      summary: Tombstone a credit limit history entry.
+      responses:
+        "204":
+          description: Credit limit history entry tombstoned.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   responses:
     InvalidRequest:
@@ -525,6 +617,44 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Account"
+    CreditLimitHistory:
+      type: object
+      additionalProperties: false
+      required:
+        - credit_limit_history_id
+        - account_id
+        - credit_limit
+        - effective_date
+        - created_at
+      properties:
+        credit_limit_history_id:
+          type: integer
+          format: int64
+        account_id:
+          type: integer
+          format: int64
+        credit_limit:
+          type: string
+          pattern: ^[0-9]{1,18}(\.[0-9]{1,8})?$
+          maxLength: 19
+        effective_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        created_at:
+          type: string
+        tombstoned_at:
+          type: string
+          nullable: true
+    CreditLimitHistoryListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - credit_limit_history
+      properties:
+        credit_limit_history:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreditLimitHistory"
     APIError:
       type: object
       additionalProperties: false
@@ -617,6 +747,20 @@ components:
         external_system:
           type: string
           nullable: true
+    CreateCreditLimitHistoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - credit_limit
+        - effective_date
+      properties:
+        credit_limit:
+          type: string
+          pattern: ^[0-9]{1,18}(\.[0-9]{1,8})?$
+          maxLength: 19
+        effective_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
     CreateTagRequest:
       type: object
       additionalProperties: false

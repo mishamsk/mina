@@ -121,6 +121,12 @@ type CreateCategoryRequest struct {
 	IsHidden *bool  `json:"is_hidden,omitempty"`
 }
 
+// CreateCreditLimitHistoryRequest defines model for CreateCreditLimitHistoryRequest.
+type CreateCreditLimitHistoryRequest struct {
+	CreditLimit   string `json:"credit_limit"`
+	EffectiveDate string `json:"effective_date"`
+}
+
 // CreateMemberRequest defines model for CreateMemberRequest.
 type CreateMemberRequest struct {
 	Name string `json:"name"`
@@ -130,6 +136,21 @@ type CreateMemberRequest struct {
 type CreateTagRequest struct {
 	Fqn      string `json:"fqn"`
 	IsHidden *bool  `json:"is_hidden,omitempty"`
+}
+
+// CreditLimitHistory defines model for CreditLimitHistory.
+type CreditLimitHistory struct {
+	AccountId            int64   `json:"account_id"`
+	CreatedAt            string  `json:"created_at"`
+	CreditLimit          string  `json:"credit_limit"`
+	CreditLimitHistoryId int64   `json:"credit_limit_history_id"`
+	EffectiveDate        string  `json:"effective_date"`
+	TombstonedAt         *string `json:"tombstoned_at,omitempty"`
+}
+
+// CreditLimitHistoryListResponse defines model for CreditLimitHistoryListResponse.
+type CreditLimitHistoryListResponse struct {
+	CreditLimitHistory []CreditLimitHistory `json:"credit_limit_history"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -222,6 +243,11 @@ type GetAccountParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
+// ListCreditLimitHistoryParams defines parameters for ListCreditLimitHistory.
+type ListCreditLimitHistoryParams struct {
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
 	IncludeHidden     *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
@@ -230,6 +256,11 @@ type ListCategoriesParams struct {
 
 // GetCategoryParams defines parameters for GetCategory.
 type GetCategoryParams struct {
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// GetCreditLimitHistoryParams defines parameters for GetCreditLimitHistory.
+type GetCreditLimitHistoryParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
@@ -260,6 +291,9 @@ type CreateAccountJSONRequestBody = CreateAccountRequest
 // UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
 type UpdateAccountJSONRequestBody = UpdateAccountRequest
 
+// CreateCreditLimitHistoryJSONRequestBody defines body for CreateCreditLimitHistory for application/json ContentType.
+type CreateCreditLimitHistoryJSONRequestBody = CreateCreditLimitHistoryRequest
+
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody = CreateCategoryRequest
 
@@ -283,34 +317,39 @@ type UpdateTagJSONRequestBody = UpdateTagRequest
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
