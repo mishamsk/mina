@@ -112,6 +112,24 @@ CREATE UNIQUE INDEX credit_limit_history_active_account_date_unique
 ON credit_limit_history(account_id, effective_date)
 WHERE tombstoned_at IS NULL;`,
 	},
+	{
+		Version: 7,
+		Name:    "create_exchange_rate",
+		SQL: `
+CREATE TABLE exchange_rate (
+	exchange_rate_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	from_currency TEXT NOT NULL,
+	to_currency TEXT NOT NULL,
+	rate TEXT NOT NULL,
+	effective_date TEXT NOT NULL,
+	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	tombstoned_at TEXT
+);
+
+CREATE UNIQUE INDEX exchange_rate_active_pair_date_unique
+ON exchange_rate(from_currency, to_currency, effective_date)
+WHERE tombstoned_at IS NULL;`,
+	},
 }
 
 // LatestSchemaVersion returns the highest schema version known to this binary.

@@ -9,6 +9,7 @@ type Controllers struct {
 	Members            *MemberController
 	Accounts           *AccountController
 	CreditLimitHistory *CreditLimitHistoryController
+	ExchangeRates      *ExchangeRateController
 }
 
 // New creates the Stage 1 controller registry.
@@ -19,5 +20,6 @@ func New(db *sql.DB) *Controllers {
 		Members:            NewMemberController(db),
 		Accounts:           NewAccountController(db),
 		CreditLimitHistory: NewCreditLimitHistoryController(db),
+		ExchangeRates:      NewExchangeRateController(db),
 	}
 }

@@ -528,6 +528,124 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /exchange-rates:
+    get:
+      operationId: listExchangeRates
+      summary: List exchange rates.
+      parameters:
+        - name: from_currency
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Z]{3}$
+        - name: to_currency
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[A-Z]{3}$
+        - name: effective_date
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Exchange rates in deterministic currency/date order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeRateListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+    post:
+      operationId: createExchangeRate
+      summary: Create an exchange rate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExchangeRateRequest"
+      responses:
+        "201":
+          description: Exchange rate created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeRate"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /exchange-rates/{exchange_rate_id}:
+    parameters:
+      - name: exchange_rate_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getExchangeRate
+      summary: Get an exchange rate.
+      parameters:
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Exchange rate found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeRate"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateExchangeRate
+      summary: Update an exchange rate value.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateExchangeRateRequest"
+      responses:
+        "200":
+          description: Exchange rate updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeRate"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteExchangeRate
+      summary: Tombstone an exchange rate.
+      responses:
+        "204":
+          description: Exchange rate tombstoned.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   responses:
     InvalidRequest:
@@ -655,6 +773,48 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CreditLimitHistory"
+    ExchangeRate:
+      type: object
+      additionalProperties: false
+      required:
+        - exchange_rate_id
+        - from_currency
+        - to_currency
+        - rate
+        - effective_date
+        - created_at
+      properties:
+        exchange_rate_id:
+          type: integer
+          format: int64
+        from_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        to_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        rate:
+          type: string
+          pattern: ^[0-9]{1,18}(\.[0-9]{1,8})?$
+          maxLength: 19
+        effective_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        created_at:
+          type: string
+        tombstoned_at:
+          type: string
+          nullable: true
+    ExchangeRateListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - exchange_rates
+      properties:
+        exchange_rates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExchangeRate"
     APIError:
       type: object
       additionalProperties: false
@@ -755,6 +915,28 @@ components:
         - effective_date
       properties:
         credit_limit:
+          type: string
+          pattern: ^[0-9]{1,18}(\.[0-9]{1,8})?$
+          maxLength: 19
+        effective_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+    CreateExchangeRateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - from_currency
+        - to_currency
+        - rate
+        - effective_date
+      properties:
+        from_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        to_currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        rate:
           type: string
           pattern: ^[0-9]{1,18}(\.[0-9]{1,8})?$
           maxLength: 19
@@ -894,6 +1076,16 @@ components:
         external_system:
           type: string
           nullable: true
+    UpdateExchangeRateRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - rate
+      properties:
+        rate:
+          type: string
+          pattern: ^[0-9]{1,18}(\.[0-9]{1,8})?$
+          maxLength: 19
     UpdateTagRequest:
       type: object
       additionalProperties: false

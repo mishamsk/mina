@@ -9,10 +9,10 @@
   - `testscript` v1.14.1 supports CLI smoke scripts.
 - Package inventory:
   - `cmd/mina`: minimal CLI entrypoint with help and version output.
-  - `internal/models`: account/category/tag/member/credit-limit-history data shapes and stable API error response models.
-  - `internal/store`: SQLite connection, migration, transaction, account/category/tag/member/credit-limit-history persistence, and test database helpers.
-  - `internal/controllers`: account/category/tag/member/credit-limit-history use cases and validation.
-  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history routes, and JSON API error mapping.
+  - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate data shapes and stable API error response models.
+  - `internal/store`: SQLite connection, migration, transaction, account/category/tag/member/credit-limit-history/exchange-rate persistence, and test database helpers.
+  - `internal/controllers`: account/category/tag/member/credit-limit-history/exchange-rate use cases and validation.
+  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate routes, and JSON API error mapping.
   - `internal/app`: process composition for config, database open/create/migrate policy, controllers, and routers.
   - `internal/apptest`: in-process app boundary test client.
   - `internal/openapi`: generated OpenAPI contract package.
@@ -21,7 +21,18 @@
   - App composition requires an explicit database path.
   - App composition can create a missing database file only when `CreateIfMissing` is true.
   - Migrations are upgrade-only and recorded in `schema_version`.
-  - Current schema version: `6`.
+  - Current schema version: `7`.
+- Exchange rate behavior:
+  - `POST /exchange-rates` creates historical exchange rates.
+  - `GET /exchange-rates/{exchange_rate_id}` reads non-tombstoned exchange rates by default.
+  - `GET /exchange-rates` lists exchange rates by currency pair and effective date.
+  - `GET /exchange-rates` supports exact allowlisted filters: `from_currency`, `to_currency`, `effective_date`, and `include_tombstoned`.
+  - `PATCH /exchange-rates/{exchange_rate_id}` updates the rate value for active exchange rates.
+  - `DELETE /exchange-rates/{exchange_rate_id}` tombstones exchange rates.
+  - Currency codes must be three-letter uppercase codes.
+  - `rate` is stored as a positive decimal string with at most 18 digits and 8 fractional digits.
+  - `effective_date` must use `YYYY-MM-DD` calendar-date format.
+  - Active exchange rates must be unique per currency pair and effective date; tombstoned rows do not block recreation.
 - Credit limit history behavior:
   - `POST /accounts/{account_id}/credit-limit-history` creates credit limit history entries for active accounts.
   - `GET /accounts/{account_id}/credit-limit-history` lists active credit limit history entries by `effective_date`, then id.

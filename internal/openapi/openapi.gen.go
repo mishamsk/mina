@@ -127,6 +127,14 @@ type CreateCreditLimitHistoryRequest struct {
 	EffectiveDate string `json:"effective_date"`
 }
 
+// CreateExchangeRateRequest defines model for CreateExchangeRateRequest.
+type CreateExchangeRateRequest struct {
+	EffectiveDate string `json:"effective_date"`
+	FromCurrency  string `json:"from_currency"`
+	Rate          string `json:"rate"`
+	ToCurrency    string `json:"to_currency"`
+}
+
 // CreateMemberRequest defines model for CreateMemberRequest.
 type CreateMemberRequest struct {
 	Name string `json:"name"`
@@ -156,6 +164,22 @@ type CreditLimitHistoryListResponse struct {
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Error APIError `json:"error"`
+}
+
+// ExchangeRate defines model for ExchangeRate.
+type ExchangeRate struct {
+	CreatedAt      string  `json:"created_at"`
+	EffectiveDate  string  `json:"effective_date"`
+	ExchangeRateId int64   `json:"exchange_rate_id"`
+	FromCurrency   string  `json:"from_currency"`
+	Rate           string  `json:"rate"`
+	ToCurrency     string  `json:"to_currency"`
+	TombstonedAt   *string `json:"tombstoned_at,omitempty"`
+}
+
+// ExchangeRateListResponse defines model for ExchangeRateListResponse.
+type ExchangeRateListResponse struct {
+	ExchangeRates []ExchangeRate `json:"exchange_rates"`
 }
 
 // HealthResponse defines model for HealthResponse.
@@ -208,6 +232,11 @@ type UpdateAccountRequest struct {
 // UpdateCategoryRequest defines model for UpdateCategoryRequest.
 type UpdateCategoryRequest struct {
 	IsHidden bool `json:"is_hidden"`
+}
+
+// UpdateExchangeRateRequest defines model for UpdateExchangeRateRequest.
+type UpdateExchangeRateRequest struct {
+	Rate string `json:"rate"`
 }
 
 // UpdateMemberRequest defines model for UpdateMemberRequest.
@@ -264,6 +293,19 @@ type GetCreditLimitHistoryParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
+// ListExchangeRatesParams defines parameters for ListExchangeRates.
+type ListExchangeRatesParams struct {
+	FromCurrency      *string `form:"from_currency,omitempty" json:"from_currency,omitempty"`
+	ToCurrency        *string `form:"to_currency,omitempty" json:"to_currency,omitempty"`
+	EffectiveDate     *string `form:"effective_date,omitempty" json:"effective_date,omitempty"`
+	IncludeTombstoned *bool   `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// GetExchangeRateParams defines parameters for GetExchangeRate.
+type GetExchangeRateParams struct {
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
@@ -300,6 +342,12 @@ type CreateCategoryJSONRequestBody = CreateCategoryRequest
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = UpdateCategoryRequest
 
+// CreateExchangeRateJSONRequestBody defines body for CreateExchangeRate for application/json ContentType.
+type CreateExchangeRateJSONRequestBody = CreateExchangeRateRequest
+
+// UpdateExchangeRateJSONRequestBody defines body for UpdateExchangeRate for application/json ContentType.
+type UpdateExchangeRateJSONRequestBody = UpdateExchangeRateRequest
+
 // CreateMemberJSONRequestBody defines body for CreateMember for application/json ContentType.
 type CreateMemberJSONRequestBody = CreateMemberRequest
 
@@ -317,39 +365,44 @@ type UpdateTagJSONRequestBody = UpdateTagRequest
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"HG0ZiZeVI/Dt9v8BAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

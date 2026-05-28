@@ -125,18 +125,18 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 9: Add exchange rate CRUD API
-- [ ] Add exchange rate model, validation, store operations, controller, router, and OpenAPI contract.
-- [ ] Implement create, get, list/filter by currency pair and effective date, update if supported by the chosen API contract, and tombstone delete behavior.
-- [ ] Validate currency codes, positive rates, and effective dates.
-- [ ] Add boundary tests covering create/read/list/update/delete, duplicate active currency-pair/date conflicts, and filter allowlists.
-- [ ] Regenerate OpenAPI artifacts.
-- [ ] Update `PROJECT_STATE.md` with exchange rate behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add exchange rate model, validation, store operations, controller, router, and OpenAPI contract.
+- [x] Implement create, get, list/filter by currency pair and effective date, update if supported by the chosen API contract, and tombstone delete behavior.
+- [x] Validate currency codes, positive rates, and effective dates.
+- [x] Add boundary tests covering create/read/list/update/delete, duplicate active currency-pair/date conflicts, and filter allowlists.
+- [x] Regenerate OpenAPI artifacts.
+- [x] Update `PROJECT_STATE.md` with exchange rate behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 10: Add shared list, filter, sort, and pagination contracts
 - [ ] Add typed allowlists for filter fields, sort keys, and sort directions used by Stage 1 list endpoints.
