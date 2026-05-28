@@ -69,6 +69,12 @@ type CreateTransactionRequest struct {
 	Records       []CreateJournalRecordRequest `json:"records"`
 }
 
+// UpdateTransactionRequest is the request body for replacing a transaction.
+type UpdateTransactionRequest struct {
+	InitiatedDate string                       `json:"initiated_date"`
+	Records       []CreateJournalRecordRequest `json:"records"`
+}
+
 // CreateJournalRecordRequest is one record inside a create transaction request.
 type CreateJournalRecordRequest struct {
 	AccountID            int64                `json:"account_id"`
@@ -91,4 +97,9 @@ type CreateJournalRecordRequest struct {
 // TransactionListResponse is the response body for transaction list endpoints.
 type TransactionListResponse struct {
 	Transactions []Transaction `json:"transactions"`
+}
+
+// JournalRecordSearchResponse is the response body for record search endpoints.
+type JournalRecordSearchResponse struct {
+	Records []JournalRecord `json:"records"`
 }

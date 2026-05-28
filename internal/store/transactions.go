@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
 
 	"mina.local/mina/internal/models"
 )
@@ -12,6 +14,27 @@ import (
 // TransactionStore persists transactions and journal records.
 type TransactionStore struct {
 	db *sql.DB
+}
+
+// RecordSearchOptions controls journal record search filters.
+type RecordSearchOptions struct {
+	AccountID            *int64
+	CategoryID           *int64
+	MemberID             *int64
+	TagID                *int64
+	PostingStatus        *models.PostingStatus
+	ReconciliationStatus *models.ReconciliationStatus
+	AmountMin            *string
+	AmountMax            *string
+	AmountUSDMin         *string
+	AmountUSDMax         *string
+	InitiatedDateFrom    *string
+	InitiatedDateTo      *string
+	PendingDateFrom      *string
+	PendingDateTo        *string
+	PostedDateFrom       *string
+	PostedDateTo         *string
+	MemoContains         *string
 }
 
 // NewTransactionStore creates a transaction store using db.
@@ -38,6 +61,63 @@ RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
 		transaction, err = scanTransaction(row)
 		if err != nil {
 			return fmt.Errorf("insert transaction: %w", err)
+		}
+
+		for _, recordReq := range req.Records {
+			record, err := insertJournalRecord(ctx, tx, transaction.ID, recordReq)
+			if err != nil {
+				return err
+			}
+			transaction.Records = append(transaction.Records, record)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return models.Transaction{}, err
+	}
+
+	return transaction, nil
+}
+
+// Replace atomically replaces a transaction's metadata and active journal records.
+func (s *TransactionStore) Replace(ctx context.Context, id int64, req models.UpdateTransactionRequest) (models.Transaction, error) {
+	var transaction models.Transaction
+	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
+		row := tx.QueryRowContext(
+			ctx,
+			`UPDATE "transaction"
+SET initiated_date = ?
+WHERE transaction_id = ? AND tombstoned_at IS NULL
+RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
+			req.InitiatedDate,
+			id,
+		)
+		var err error
+		transaction, err = scanTransaction(row)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("update transaction: %w", err)
+		}
+
+		if err := validateTransactionReferences(ctx, tx, models.CreateTransactionRequest(req)); err != nil {
+			if errors.Is(err, ErrNotFound) {
+				return fmt.Errorf("%w: %v", ErrInvalidReference, err)
+			}
+			return err
+		}
+
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE journal_record
+SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE transaction_id = ? AND tombstoned_at IS NULL`,
+			id,
+		); err != nil {
+			return fmt.Errorf("tombstone replaced journal records: %w", err)
 		}
 
 		for _, recordReq := range req.Records {
@@ -124,6 +204,146 @@ ORDER BY initiated_date ASC, transaction_id ASC`,
 	}
 
 	return transactions, nil
+}
+
+// Tombstone marks a transaction and its active journal records deleted.
+func (s *TransactionStore) Tombstone(ctx context.Context, id int64) error {
+	return WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(
+			ctx,
+			`UPDATE "transaction"
+SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE transaction_id = ? AND tombstoned_at IS NULL`,
+			id,
+		)
+		if err != nil {
+			return fmt.Errorf("tombstone transaction: %w", err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("read tombstone affected rows: %w", err)
+		}
+		if affected == 0 {
+			return ErrNotFound
+		}
+
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE journal_record
+SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE transaction_id = ? AND tombstoned_at IS NULL`,
+			id,
+		); err != nil {
+			return fmt.Errorf("tombstone transaction journal records: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// SearchRecords returns active journal records matching filters.
+func (s *TransactionStore) SearchRecords(ctx context.Context, opts RecordSearchOptions) ([]models.JournalRecord, error) {
+	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
+	jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
+	jr.created_at, jr.updated_at, jr.tombstoned_at
+FROM journal_record jr
+JOIN "transaction" tx ON tx.transaction_id = jr.transaction_id
+WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
+	args := []any{}
+	if opts.AccountID != nil {
+		query += " AND jr.account_id = ?"
+		args = append(args, *opts.AccountID)
+	}
+	if opts.CategoryID != nil {
+		query += " AND jr.category_id = ?"
+		args = append(args, *opts.CategoryID)
+	}
+	if opts.MemberID != nil {
+		query += " AND jr.member_id = ?"
+		args = append(args, *opts.MemberID)
+	}
+	if opts.TagID != nil {
+		query += " AND EXISTS (SELECT 1 FROM journal_record_tag jrt WHERE jrt.record_id = jr.record_id AND jrt.tag_id = ?)"
+		args = append(args, *opts.TagID)
+	}
+	if opts.PostingStatus != nil {
+		query += " AND jr.posting_status = ?"
+		args = append(args, *opts.PostingStatus)
+	}
+	if opts.ReconciliationStatus != nil {
+		query += " AND jr.reconciliation_status = ?"
+		args = append(args, *opts.ReconciliationStatus)
+	}
+	if opts.InitiatedDateFrom != nil {
+		query += " AND tx.initiated_date >= ?"
+		args = append(args, *opts.InitiatedDateFrom)
+	}
+	if opts.InitiatedDateTo != nil {
+		query += " AND tx.initiated_date <= ?"
+		args = append(args, *opts.InitiatedDateTo)
+	}
+	if opts.PendingDateFrom != nil {
+		query += " AND jr.pending_date >= ?"
+		args = append(args, *opts.PendingDateFrom)
+	}
+	if opts.PendingDateTo != nil {
+		query += " AND jr.pending_date <= ?"
+		args = append(args, *opts.PendingDateTo)
+	}
+	if opts.PostedDateFrom != nil {
+		query += " AND jr.posted_date >= ?"
+		args = append(args, *opts.PostedDateFrom)
+	}
+	if opts.PostedDateTo != nil {
+		query += " AND jr.posted_date <= ?"
+		args = append(args, *opts.PostedDateTo)
+	}
+	if opts.MemoContains != nil {
+		query += " AND jr.memo LIKE ? ESCAPE '\\'"
+		args = append(args, "%"+escapeLikePattern(*opts.MemoContains)+"%")
+	}
+	query += " ORDER BY tx.initiated_date ASC, jr.transaction_id ASC, jr.record_id ASC"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("search journal records: %w", err)
+	}
+
+	records := []models.JournalRecord{}
+	for rows.Next() {
+		record, err := scanJournalRecord(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan searched journal record: %w", err)
+		}
+		matchesAmount, err := recordMatchesAmountRanges(record, opts)
+		if err != nil {
+			return nil, err
+		}
+		if !matchesAmount {
+			continue
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate searched journal records: %w; close searched journal record rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate searched journal records: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close searched journal record rows: %w", err)
+	}
+
+	for index := range records {
+		tagIDs, err := s.tagIDsByRecordID(ctx, records[index].ID)
+		if err != nil {
+			return nil, err
+		}
+		records[index].TagIDs = tagIDs
+	}
+
+	return records, nil
 }
 
 type transactionScanner interface {
@@ -435,6 +655,50 @@ func activeTagExists(ctx context.Context, queryer rowQuerier, tagID int64) (bool
 	}
 	if err != nil {
 		return false, fmt.Errorf("check active tag: %w", err)
+	}
+
+	return true, nil
+}
+
+func escapeLikePattern(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `%`, `\%`)
+	value = strings.ReplaceAll(value, `_`, `\_`)
+
+	return value
+}
+
+func recordMatchesAmountRanges(record models.JournalRecord, opts RecordSearchOptions) (bool, error) {
+	matches, err := decimalStringInRange(record.Amount, opts.AmountMin, opts.AmountMax)
+	if err != nil || !matches {
+		return matches, err
+	}
+
+	return decimalStringInRange(record.AmountUSD, opts.AmountUSDMin, opts.AmountUSDMax)
+}
+
+func decimalStringInRange(value string, minValue *string, maxValue *string) (bool, error) {
+	decimal, ok := new(big.Rat).SetString(value)
+	if !ok {
+		return false, fmt.Errorf("parse stored decimal %q", value)
+	}
+	if minValue != nil {
+		minDecimal, ok := new(big.Rat).SetString(*minValue)
+		if !ok {
+			return false, fmt.Errorf("parse decimal filter %q", *minValue)
+		}
+		if decimal.Cmp(minDecimal) < 0 {
+			return false, nil
+		}
+	}
+	if maxValue != nil {
+		maxDecimal, ok := new(big.Rat).SetString(*maxValue)
+		if !ok {
+			return false, fmt.Errorf("parse decimal filter %q", *maxValue)
+		}
+		if decimal.Cmp(maxDecimal) > 0 {
+			return false, nil
+		}
 	}
 
 	return true, nil

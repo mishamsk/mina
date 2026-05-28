@@ -17,6 +17,27 @@ type TransactionController struct {
 	store *store.TransactionStore
 }
 
+// RecordSearchOptions controls journal record search filters.
+type RecordSearchOptions struct {
+	AccountID            *int64
+	CategoryID           *int64
+	MemberID             *int64
+	TagID                *int64
+	PostingStatus        *models.PostingStatus
+	ReconciliationStatus *models.ReconciliationStatus
+	AmountMin            *string
+	AmountMax            *string
+	AmountUSDMin         *string
+	AmountUSDMax         *string
+	InitiatedDateFrom    *string
+	InitiatedDateTo      *string
+	PendingDateFrom      *string
+	PendingDateTo        *string
+	PostedDateFrom       *string
+	PostedDateTo         *string
+	MemoContains         *string
+}
+
 // NewTransactionController creates a TransactionController backed by db.
 func NewTransactionController(db *sql.DB) *TransactionController {
 	return &TransactionController{
@@ -26,28 +47,36 @@ func NewTransactionController(db *sql.DB) *TransactionController {
 
 // Create validates and creates a transaction and its journal records.
 func (c *TransactionController) Create(ctx context.Context, req models.CreateTransactionRequest) (models.Transaction, error) {
-	if err := validateEffectiveDate(req.InitiatedDate); err != nil {
-		return models.Transaction{}, invalidRequest("initiated_date must use YYYY-MM-DD format")
-	}
-	if len(req.Records) < 2 {
-		return models.Transaction{}, invalidRequest("transaction requires at least two records")
-	}
-
-	balanceUSD := big.NewInt(0)
-	for index, record := range req.Records {
-		amountUSD, err := c.validateJournalRecord(ctx, index, record)
-		if err != nil {
-			return models.Transaction{}, err
-		}
-		balanceUSD.Add(balanceUSD, amountUSD)
-	}
-	if balanceUSD.Sign() != 0 {
-		return models.Transaction{}, invalidRequest("transaction records must balance to zero amount_usd")
+	if err := c.validateTransactionRequest(ctx, req.InitiatedDate, req.Records); err != nil {
+		return models.Transaction{}, err
 	}
 
 	transaction, err := c.store.Create(ctx, req)
 	if errors.Is(err, store.ErrNotFound) {
 		return models.Transaction{}, invalidRequest("transaction references missing or inactive resource")
+	}
+	if err != nil {
+		return models.Transaction{}, err
+	}
+
+	return transaction, nil
+}
+
+// Replace validates and replaces a transaction and its journal records.
+func (c *TransactionController) Replace(ctx context.Context, id int64, req models.UpdateTransactionRequest) (models.Transaction, error) {
+	if id <= 0 {
+		return models.Transaction{}, invalidRequest("transaction_id must be positive")
+	}
+	if err := c.validateTransactionRequest(ctx, req.InitiatedDate, req.Records); err != nil {
+		return models.Transaction{}, err
+	}
+
+	transaction, err := c.store.Replace(ctx, id, req)
+	if errors.Is(err, store.ErrInvalidReference) {
+		return models.Transaction{}, invalidRequest("transaction references missing or inactive resource")
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		return models.Transaction{}, notFound("transaction not found")
 	}
 	if err != nil {
 		return models.Transaction{}, err
@@ -76,6 +105,53 @@ func (c *TransactionController) Get(ctx context.Context, id int64) (models.Trans
 // List returns transactions with nested journal records.
 func (c *TransactionController) List(ctx context.Context) ([]models.Transaction, error) {
 	return c.store.List(ctx)
+}
+
+// Delete tombstones a transaction and its journal records.
+func (c *TransactionController) Delete(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return invalidRequest("transaction_id must be positive")
+	}
+
+	if err := c.store.Tombstone(ctx, id); errors.Is(err, store.ErrNotFound) {
+		return notFound("transaction not found")
+	} else if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SearchRecords returns journal records matching validated filters.
+func (c *TransactionController) SearchRecords(ctx context.Context, opts RecordSearchOptions) ([]models.JournalRecord, error) {
+	if err := c.validateRecordSearchOptions(opts); err != nil {
+		return nil, err
+	}
+
+	return c.store.SearchRecords(ctx, store.RecordSearchOptions(opts))
+}
+
+func (c *TransactionController) validateTransactionRequest(ctx context.Context, initiatedDate string, records []models.CreateJournalRecordRequest) error {
+	if err := validateEffectiveDate(initiatedDate); err != nil {
+		return invalidRequest("initiated_date must use YYYY-MM-DD format")
+	}
+	if len(records) < 2 {
+		return invalidRequest("transaction requires at least two records")
+	}
+
+	balanceUSD := big.NewInt(0)
+	for index, record := range records {
+		amountUSD, err := c.validateJournalRecord(ctx, index, record)
+		if err != nil {
+			return err
+		}
+		balanceUSD.Add(balanceUSD, amountUSD)
+	}
+	if balanceUSD.Sign() != 0 {
+		return invalidRequest("transaction records must balance to zero amount_usd")
+	}
+
+	return nil
 }
 
 func (c *TransactionController) validateJournalRecord(_ context.Context, index int, record models.CreateJournalRecordRequest) (*big.Int, error) {
@@ -139,6 +215,61 @@ func (c *TransactionController) validateJournalRecord(_ context.Context, index i
 	}
 
 	return amountUSD, nil
+}
+
+func (c *TransactionController) validateRecordSearchOptions(opts RecordSearchOptions) error {
+	if opts.AccountID != nil && *opts.AccountID <= 0 {
+		return invalidRequest("account_id must be positive")
+	}
+	if opts.CategoryID != nil && *opts.CategoryID <= 0 {
+		return invalidRequest("category_id must be positive")
+	}
+	if opts.MemberID != nil && *opts.MemberID <= 0 {
+		return invalidRequest("member_id must be positive")
+	}
+	if opts.TagID != nil && *opts.TagID <= 0 {
+		return invalidRequest("tag_id must be positive")
+	}
+	if opts.PostingStatus != nil {
+		if err := validatePostingStatus(0, *opts.PostingStatus); err != nil {
+			return invalidRequest("posting_status must be pending, posted, or cancelled")
+		}
+	}
+	if opts.ReconciliationStatus != nil {
+		if err := validateReconciliationStatus(0, *opts.ReconciliationStatus); err != nil {
+			return invalidRequest("reconciliation_status must be reconciled or unreconciled")
+		}
+	}
+	if opts.MemoContains != nil && *opts.MemoContains == "" {
+		return invalidRequest("memo_contains must be non-empty")
+	}
+	for name, value := range map[string]*string{
+		"amount_min":          opts.AmountMin,
+		"amount_max":          opts.AmountMax,
+		"amount_usd_min":      opts.AmountUSDMin,
+		"amount_usd_max":      opts.AmountUSDMax,
+		"initiated_date_from": opts.InitiatedDateFrom,
+		"initiated_date_to":   opts.InitiatedDateTo,
+		"pending_date_from":   opts.PendingDateFrom,
+		"pending_date_to":     opts.PendingDateTo,
+		"posted_date_from":    opts.PostedDateFrom,
+		"posted_date_to":      opts.PostedDateTo,
+	} {
+		if value == nil {
+			continue
+		}
+		if strings.Contains(name, "date") {
+			if err := validateEffectiveDate(*value); err != nil {
+				return invalidRequest(name + " must use YYYY-MM-DD format")
+			}
+			continue
+		}
+		if _, err := parseSignedDecimal(*value); err != nil {
+			return invalidRequest(name + " must be a decimal with at most 18 digits and 8 fractional digits")
+		}
+	}
+
+	return nil
 }
 
 func indexedField(index int, name string) string {

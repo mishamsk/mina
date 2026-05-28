@@ -169,20 +169,20 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 12: Add transaction update, delete, and record search API
-- [ ] Implement full historical transaction replacement or patch semantics, choosing one stable contract and documenting it in API docs.
-- [ ] Ensure transaction updates run atomically and re-check double-entry balance.
-- [ ] Implement transaction tombstone delete behavior.
-- [ ] Add record search/filter endpoints for amount ranges, date ranges, memo text, account, category, tags, member, posting status, and reconciliation status.
-- [ ] Add account-record view behavior that returns matching records while preserving containing transaction identity.
-- [ ] Add boundary tests covering update balance checks, delete/tombstone behavior, each supported record filter, combined filters, and SQL allowlist rejection.
-- [ ] Regenerate OpenAPI artifacts.
-- [ ] Update `PROJECT_STATE.md` with transaction update/delete/search behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Implement full historical transaction replacement or patch semantics, choosing one stable contract and documenting it in API docs.
+- [x] Ensure transaction updates run atomically and re-check double-entry balance.
+- [x] Implement transaction tombstone delete behavior.
+- [x] Add record search/filter endpoints for amount ranges, date ranges, memo text, account, category, tags, member, posting status, and reconciliation status.
+- [x] Add account-record view behavior that returns matching records while preserving containing transaction identity.
+- [x] Add boundary tests covering update balance checks, delete/tombstone behavior, each supported record filter, combined filters, and SQL allowlist rejection.
+- [x] Regenerate OpenAPI artifacts.
+- [x] Update `PROJECT_STATE.md` with transaction update/delete/search behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 13: Add Stage 1 bulk operations
 - [ ] Add bulk categorization for selected records.

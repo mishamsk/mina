@@ -868,6 +868,249 @@ paths:
                 $ref: "#/components/schemas/Transaction"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+  /records:
+    get:
+      operationId: searchJournalRecords
+      summary: Search active journal records.
+      parameters:
+        - name: account_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: tag_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: member_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: posting_status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/PostingStatus"
+        - name: reconciliation_status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ReconciliationStatus"
+        - name: amount_min
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+            maxLength: 20
+        - name: amount_max
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+            maxLength: 20
+        - name: amount_usd_min
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+            maxLength: 20
+        - name: amount_usd_max
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+            maxLength: 20
+        - name: initiated_date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: initiated_date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: pending_date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: pending_date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: posted_date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: posted_date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: memo_contains
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching active journal records in transaction date order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalRecordSearchResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /accounts/{account_id}/records:
+    parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: searchAccountJournalRecords
+      summary: Search active journal records for one account.
+      parameters:
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: tag_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: member_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: posting_status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/PostingStatus"
+        - name: reconciliation_status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ReconciliationStatus"
+        - name: amount_min
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+            maxLength: 20
+        - name: amount_max
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+            maxLength: 20
+        - name: amount_usd_min
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+            maxLength: 20
+        - name: amount_usd_max
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+            maxLength: 20
+        - name: initiated_date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: initiated_date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: pending_date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: pending_date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: posted_date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: posted_date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        - name: memo_contains
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching active account records with containing transaction identity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalRecordSearchResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
   /transactions/{transaction_id}:
     parameters:
       - name: transaction_id
@@ -887,6 +1130,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: replaceTransaction
+      summary: Replace a transaction and its journal records.
+      description: Replaces initiated_date and the full journal record set atomically. The transaction_id is preserved, previous active records are tombstoned, and replacement records must balance to zero amount_usd.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTransactionRequest"
+      responses:
+        "200":
+          description: Transaction replaced.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteTransaction
+      summary: Tombstone a transaction and its journal records.
+      responses:
+        "204":
+          description: Transaction tombstoned.
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "404":
@@ -1269,6 +1543,21 @@ components:
           minItems: 2
           items:
             $ref: "#/components/schemas/CreateJournalRecordRequest"
+    UpdateTransactionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - initiated_date
+        - records
+      properties:
+        initiated_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        records:
+          type: array
+          minItems: 2
+          items:
+            $ref: "#/components/schemas/CreateJournalRecordRequest"
     CreateTagRequest:
       type: object
       additionalProperties: false
@@ -1417,6 +1706,16 @@ components:
         tombstoned_at:
           type: string
           nullable: true
+    JournalRecordSearchResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - records
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/JournalRecord"
     PostingStatus:
       type: string
       enum:

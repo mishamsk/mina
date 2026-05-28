@@ -12,7 +12,7 @@
   - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate/transaction data shapes and stable API error response models.
   - `internal/store`: SQLite connection, migration, transaction helper, account/category/tag/member/credit-limit-history/exchange-rate/transaction persistence, and test database helpers.
   - `internal/controllers`: account/category/tag/member/credit-limit-history/exchange-rate/transaction use cases and validation.
-  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction routes, and JSON API error mapping.
+  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, and JSON API error mapping.
   - `internal/app`: process composition for config, database open/create/migrate policy, controllers, and routers.
   - `internal/apptest`: in-process app boundary test client.
   - `internal/openapi`: generated OpenAPI contract package.
@@ -22,7 +22,7 @@
   - App composition can create a missing database file only when `CreateIfMissing` is true.
   - Migrations are upgrade-only and recorded in `schema_version`.
   - Current schema version: `8`.
-- Transaction create/read behavior:
+- Transaction behavior:
   - `POST /transactions` creates a transaction and its journal records atomically.
   - Transactions require `initiated_date` in `YYYY-MM-DD` calendar-date format and at least two records.
   - Journal records validate active account, category, optional member, and tag references.
@@ -34,6 +34,12 @@
   - Supported source is `manual`.
   - `GET /transactions/{transaction_id}` reads a transaction with nested journal records.
   - `GET /transactions` lists transactions with nested journal records by initiated date, then id.
+  - `PUT /transactions/{transaction_id}` performs full replacement: it preserves the transaction id, replaces `initiated_date`, tombstones prior active journal records, inserts the replacement record set, and re-checks double-entry balance atomically.
+  - `DELETE /transactions/{transaction_id}` tombstones the transaction and its active journal records atomically.
+  - `GET /records` searches active journal records while preserving each record's containing `transaction_id`.
+  - `GET /accounts/{account_id}/records` searches active journal records for one account while preserving each record's containing `transaction_id`.
+  - Record search supports exact allowlisted filters for account, category, tag, member, posting status, reconciliation status, amount ranges, USD amount ranges, initiated date ranges, pending date ranges, posted date ranges, and memo substring.
+  - Account-record views use the account id from the path and reject `account_id` as a query filter.
 - Shared list/query behavior:
   - List endpoints reject unsupported query parameters.
   - List endpoints parse `include_hidden`, `include_tombstoned`, `sort`, `sort_dir`, `limit`, and `offset` through shared router helpers when the endpoint supports them.
