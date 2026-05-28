@@ -153,20 +153,20 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 11: Add transaction and journal record create/read API
-- [ ] Add transaction, journal record, posting status, reconciliation status, and source models.
-- [ ] Add transaction store operations that persist transaction metadata and journal records atomically.
-- [ ] Add controller validation for referenced accounts, members, categories, tags, dates, statuses, source, currency, amount, and amount USD.
-- [ ] Enforce double-entry balance before writing records.
-- [ ] Implement create transaction, get transaction with records, and list transactions with nested records.
-- [ ] Add boundary tests covering a balanced manual transaction, imbalance rejection, missing references, status validation, and persisted read-after-write behavior.
-- [ ] Regenerate OpenAPI artifacts.
-- [ ] Update `PROJECT_STATE.md` with transaction create/read behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add transaction, journal record, posting status, reconciliation status, and source models.
+- [x] Add transaction store operations that persist transaction metadata and journal records atomically.
+- [x] Add controller validation for referenced accounts, members, categories, tags, dates, statuses, source, currency, amount, and amount USD.
+- [x] Enforce double-entry balance before writing records.
+- [x] Implement create transaction, get transaction with records, and list transactions with nested records.
+- [x] Add boundary tests covering a balanced manual transaction, imbalance rejection, missing references, status validation, and persisted read-after-write behavior.
+- [x] Regenerate OpenAPI artifacts.
+- [x] Update `PROJECT_STATE.md` with transaction create/read behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 12: Add transaction update, delete, and record search API
 - [ ] Implement full historical transaction replacement or patch semantics, choosing one stable contract and documenting it in API docs.

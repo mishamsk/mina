@@ -839,6 +839,58 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /transactions:
+    get:
+      operationId: listTransactions
+      summary: List transactions with journal records.
+      responses:
+        "200":
+          description: Transactions in initiated-date order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionListResponse"
+    post:
+      operationId: createTransaction
+      summary: Create a balanced transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransactionRequest"
+      responses:
+        "201":
+          description: Transaction created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /transactions/{transaction_id}:
+    parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getTransaction
+      summary: Get a transaction with journal records.
+      responses:
+        "200":
+          description: Transaction found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   responses:
     InvalidRequest:
@@ -1136,6 +1188,87 @@ components:
         effective_date:
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+    CreateJournalRecordRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - account_id
+        - currency
+        - amount
+        - amount_usd
+        - category_id
+        - posting_status
+        - reconciliation_status
+        - source
+      properties:
+        account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        member_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        amount:
+          type: string
+          pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+          maxLength: 20
+        amount_usd:
+          type: string
+          pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+          maxLength: 20
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        tag_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        memo:
+          type: string
+          nullable: true
+        pending_date:
+          type: string
+          nullable: true
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        posted_date:
+          type: string
+          nullable: true
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        posting_status:
+          $ref: "#/components/schemas/PostingStatus"
+        reconciliation_status:
+          $ref: "#/components/schemas/ReconciliationStatus"
+        source:
+          $ref: "#/components/schemas/Source"
+        external_id:
+          type: string
+          nullable: true
+        external_system:
+          type: string
+          nullable: true
+    CreateTransactionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - initiated_date
+        - records
+      properties:
+        initiated_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        records:
+          type: array
+          minItems: 2
+          items:
+            $ref: "#/components/schemas/CreateJournalRecordRequest"
     CreateTagRequest:
       type: object
       additionalProperties: false
@@ -1204,6 +1337,101 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Member"
+    JournalRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - record_id
+        - transaction_id
+        - account_id
+        - currency
+        - amount
+        - amount_usd
+        - category_id
+        - tag_ids
+        - posting_status
+        - reconciliation_status
+        - source
+        - created_at
+        - updated_at
+      properties:
+        record_id:
+          type: integer
+          format: int64
+        transaction_id:
+          type: integer
+          format: int64
+        account_id:
+          type: integer
+          format: int64
+        member_id:
+          type: integer
+          format: int64
+          nullable: true
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        amount:
+          type: string
+          pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+          maxLength: 20
+        amount_usd:
+          type: string
+          pattern: ^-?([0-9]{1,18}|[0-9]{1,17}\.[0-9]{1}|[0-9]{1,16}\.[0-9]{1,2}|[0-9]{1,15}\.[0-9]{1,3}|[0-9]{1,14}\.[0-9]{1,4}|[0-9]{1,13}\.[0-9]{1,5}|[0-9]{1,12}\.[0-9]{1,6}|[0-9]{1,11}\.[0-9]{1,7}|[0-9]{1,10}\.[0-9]{1,8})$
+          maxLength: 20
+        category_id:
+          type: integer
+          format: int64
+        tag_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        memo:
+          type: string
+          nullable: true
+        pending_date:
+          type: string
+          nullable: true
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        posted_date:
+          type: string
+          nullable: true
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        posting_status:
+          $ref: "#/components/schemas/PostingStatus"
+        reconciliation_status:
+          $ref: "#/components/schemas/ReconciliationStatus"
+        source:
+          $ref: "#/components/schemas/Source"
+        external_id:
+          type: string
+          nullable: true
+        external_system:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        tombstoned_at:
+          type: string
+          nullable: true
+    PostingStatus:
+      type: string
+      enum:
+        - pending
+        - posted
+        - cancelled
+    ReconciliationStatus:
+      type: string
+      enum:
+        - reconciled
+        - unreconciled
+    Source:
+      type: string
+      enum:
+        - manual
     Tag:
       type: object
       additionalProperties: false
@@ -1247,6 +1475,40 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Tag"
+    Transaction:
+      type: object
+      additionalProperties: false
+      required:
+        - transaction_id
+        - initiated_date
+        - created_at
+        - records
+      properties:
+        transaction_id:
+          type: integer
+          format: int64
+        initiated_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+        created_at:
+          type: string
+        tombstoned_at:
+          type: string
+          nullable: true
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/JournalRecord"
+    TransactionListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - transactions
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
     UpdateCategoryRequest:
       type: object
       additionalProperties: false

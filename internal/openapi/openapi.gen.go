@@ -57,6 +57,60 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for PostingStatus.
+const (
+	Cancelled PostingStatus = "cancelled"
+	Pending   PostingStatus = "pending"
+	Posted    PostingStatus = "posted"
+)
+
+// Valid indicates whether the value is a known member of the PostingStatus enum.
+func (e PostingStatus) Valid() bool {
+	switch e {
+	case Cancelled:
+		return true
+	case Pending:
+		return true
+	case Posted:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReconciliationStatus.
+const (
+	Reconciled   ReconciliationStatus = "reconciled"
+	Unreconciled ReconciliationStatus = "unreconciled"
+)
+
+// Valid indicates whether the value is a known member of the ReconciliationStatus enum.
+func (e ReconciliationStatus) Valid() bool {
+	switch e {
+	case Reconciled:
+		return true
+	case Unreconciled:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for Source.
+const (
+	Manual Source = "manual"
+)
+
+// Valid indicates whether the value is a known member of the Source enum.
+func (e Source) Valid() bool {
+	switch e {
+	case Manual:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListAccountsParamsSort.
 const (
 	ListAccountsParamsSortCreatedAt ListAccountsParamsSort = "created_at"
@@ -372,6 +426,25 @@ type CreateExchangeRateRequest struct {
 	ToCurrency    string `json:"to_currency"`
 }
 
+// CreateJournalRecordRequest defines model for CreateJournalRecordRequest.
+type CreateJournalRecordRequest struct {
+	AccountId            int64                `json:"account_id"`
+	Amount               string               `json:"amount"`
+	AmountUsd            string               `json:"amount_usd"`
+	CategoryId           int64                `json:"category_id"`
+	Currency             string               `json:"currency"`
+	ExternalId           *string              `json:"external_id,omitempty"`
+	ExternalSystem       *string              `json:"external_system,omitempty"`
+	MemberId             *int64               `json:"member_id,omitempty"`
+	Memo                 *string              `json:"memo,omitempty"`
+	PendingDate          *string              `json:"pending_date,omitempty"`
+	PostedDate           *string              `json:"posted_date,omitempty"`
+	PostingStatus        PostingStatus        `json:"posting_status"`
+	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
+	Source               Source               `json:"source"`
+	TagIds               *[]int64             `json:"tag_ids,omitempty"`
+}
+
 // CreateMemberRequest defines model for CreateMemberRequest.
 type CreateMemberRequest struct {
 	Name string `json:"name"`
@@ -381,6 +454,12 @@ type CreateMemberRequest struct {
 type CreateTagRequest struct {
 	Fqn      string `json:"fqn"`
 	IsHidden *bool  `json:"is_hidden,omitempty"`
+}
+
+// CreateTransactionRequest defines model for CreateTransactionRequest.
+type CreateTransactionRequest struct {
+	InitiatedDate string                       `json:"initiated_date"`
+	Records       []CreateJournalRecordRequest `json:"records"`
 }
 
 // CreditLimitHistory defines model for CreditLimitHistory.
@@ -427,6 +506,30 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// JournalRecord defines model for JournalRecord.
+type JournalRecord struct {
+	AccountId            int64                `json:"account_id"`
+	Amount               string               `json:"amount"`
+	AmountUsd            string               `json:"amount_usd"`
+	CategoryId           int64                `json:"category_id"`
+	CreatedAt            string               `json:"created_at"`
+	Currency             string               `json:"currency"`
+	ExternalId           *string              `json:"external_id,omitempty"`
+	ExternalSystem       *string              `json:"external_system,omitempty"`
+	MemberId             *int64               `json:"member_id,omitempty"`
+	Memo                 *string              `json:"memo,omitempty"`
+	PendingDate          *string              `json:"pending_date,omitempty"`
+	PostedDate           *string              `json:"posted_date,omitempty"`
+	PostingStatus        PostingStatus        `json:"posting_status"`
+	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
+	RecordId             int64                `json:"record_id"`
+	Source               Source               `json:"source"`
+	TagIds               []int64              `json:"tag_ids"`
+	TombstonedAt         *string              `json:"tombstoned_at,omitempty"`
+	TransactionId        int64                `json:"transaction_id"`
+	UpdatedAt            string               `json:"updated_at"`
+}
+
 // Member defines model for Member.
 type Member struct {
 	CreatedAt    string  `json:"created_at"`
@@ -440,6 +543,15 @@ type Member struct {
 type MemberListResponse struct {
 	Members []Member `json:"members"`
 }
+
+// PostingStatus defines model for PostingStatus.
+type PostingStatus string
+
+// ReconciliationStatus defines model for ReconciliationStatus.
+type ReconciliationStatus string
+
+// Source defines model for Source.
+type Source string
 
 // Tag defines model for Tag.
 type Tag struct {
@@ -457,6 +569,20 @@ type Tag struct {
 // TagListResponse defines model for TagListResponse.
 type TagListResponse struct {
 	Tags []Tag `json:"tags"`
+}
+
+// Transaction defines model for Transaction.
+type Transaction struct {
+	CreatedAt     string          `json:"created_at"`
+	InitiatedDate string          `json:"initiated_date"`
+	Records       []JournalRecord `json:"records"`
+	TombstonedAt  *string         `json:"tombstoned_at,omitempty"`
+	TransactionId int64           `json:"transaction_id"`
+}
+
+// TransactionListResponse defines model for TransactionListResponse.
+type TransactionListResponse struct {
+	Transactions []Transaction `json:"transactions"`
 }
 
 // UpdateAccountRequest defines model for UpdateAccountRequest.
@@ -657,51 +783,63 @@ type CreateTagJSONRequestBody = CreateTagRequest
 // UpdateTagJSONRequestBody defines body for UpdateTag for application/json ContentType.
 type UpdateTagJSONRequestBody = UpdateTagRequest
 
+// CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
+type CreateTransactionJSONRequestBody = CreateTransactionRequest
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"xrBwWOxUe0XzqlJ+dU1/x5E2m/8FAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

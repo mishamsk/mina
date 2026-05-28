@@ -9,10 +9,10 @@
   - `testscript` v1.14.1 supports CLI smoke scripts.
 - Package inventory:
   - `cmd/mina`: minimal CLI entrypoint with help and version output.
-  - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate data shapes and stable API error response models.
-  - `internal/store`: SQLite connection, migration, transaction, account/category/tag/member/credit-limit-history/exchange-rate persistence, and test database helpers.
-  - `internal/controllers`: account/category/tag/member/credit-limit-history/exchange-rate use cases and validation.
-  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate routes, and JSON API error mapping.
+  - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate/transaction data shapes and stable API error response models.
+  - `internal/store`: SQLite connection, migration, transaction helper, account/category/tag/member/credit-limit-history/exchange-rate/transaction persistence, and test database helpers.
+  - `internal/controllers`: account/category/tag/member/credit-limit-history/exchange-rate/transaction use cases and validation.
+  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction routes, and JSON API error mapping.
   - `internal/app`: process composition for config, database open/create/migrate policy, controllers, and routers.
   - `internal/apptest`: in-process app boundary test client.
   - `internal/openapi`: generated OpenAPI contract package.
@@ -21,7 +21,19 @@
   - App composition requires an explicit database path.
   - App composition can create a missing database file only when `CreateIfMissing` is true.
   - Migrations are upgrade-only and recorded in `schema_version`.
-  - Current schema version: `7`.
+  - Current schema version: `8`.
+- Transaction create/read behavior:
+  - `POST /transactions` creates a transaction and its journal records atomically.
+  - Transactions require `initiated_date` in `YYYY-MM-DD` calendar-date format and at least two records.
+  - Journal records validate active account, category, optional member, and tag references.
+  - Journal record `currency` must be a three-letter uppercase code.
+  - Journal record `amount` and `amount_usd` are stored as non-zero decimal strings with at most 18 digits and 8 fractional digits.
+  - Transaction records must balance to zero by `amount_usd`.
+  - Supported posting statuses are `pending`, `posted`, and `cancelled`.
+  - Supported reconciliation statuses are `reconciled` and `unreconciled`.
+  - Supported source is `manual`.
+  - `GET /transactions/{transaction_id}` reads a transaction with nested journal records.
+  - `GET /transactions` lists transactions with nested journal records by initiated date, then id.
 - Shared list/query behavior:
   - List endpoints reject unsupported query parameters.
   - List endpoints parse `include_hidden`, `include_tombstoned`, `sort`, `sort_dir`, `limit`, and `offset` through shared router helpers when the endpoint supports them.

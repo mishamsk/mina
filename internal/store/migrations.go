@@ -130,6 +130,51 @@ CREATE UNIQUE INDEX exchange_rate_active_pair_date_unique
 ON exchange_rate(from_currency, to_currency, effective_date)
 WHERE tombstoned_at IS NULL;`,
 	},
+	{
+		Version: 8,
+		Name:    "create_transaction_and_journal_record",
+		SQL: `
+CREATE TABLE "transaction" (
+	transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	initiated_date TEXT NOT NULL,
+	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	tombstoned_at TEXT
+);
+
+CREATE TABLE journal_record (
+	record_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	transaction_id INTEGER NOT NULL REFERENCES "transaction"(transaction_id),
+	account_id INTEGER NOT NULL REFERENCES account(account_id),
+	member_id INTEGER REFERENCES member(member_id),
+	currency TEXT NOT NULL,
+	amount TEXT NOT NULL,
+	amount_usd TEXT NOT NULL,
+	category_id INTEGER NOT NULL REFERENCES category(category_id),
+	memo TEXT,
+	pending_date TEXT,
+	posted_date TEXT,
+	posting_status TEXT NOT NULL,
+	reconciliation_status TEXT NOT NULL,
+	source TEXT NOT NULL,
+	external_id TEXT,
+	external_system TEXT,
+	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	tombstoned_at TEXT
+);
+
+CREATE TABLE journal_record_tag (
+	record_id INTEGER NOT NULL REFERENCES journal_record(record_id) ON DELETE CASCADE,
+	tag_id INTEGER NOT NULL REFERENCES tag(tag_id),
+	PRIMARY KEY(record_id, tag_id)
+);
+
+CREATE INDEX journal_record_transaction_id_idx
+ON journal_record(transaction_id);
+
+CREATE INDEX journal_record_tag_record_id_idx
+ON journal_record_tag(record_id);`,
+	},
 }
 
 // LatestSchemaVersion returns the highest schema version known to this binary.
