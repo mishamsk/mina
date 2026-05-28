@@ -66,6 +66,28 @@ type APIError struct {
 // APIErrorCode defines model for APIError.Code.
 type APIErrorCode string
 
+// Account defines model for Account.
+type Account struct {
+	AccountId      int64   `json:"account_id"`
+	CreatedAt      string  `json:"created_at"`
+	Currency       *string `json:"currency,omitempty"`
+	ExternalId     *string `json:"external_id,omitempty"`
+	ExternalSystem *string `json:"external_system,omitempty"`
+	Fqn            string  `json:"fqn"`
+	IsHidden       bool    `json:"is_hidden"`
+	Kind           string  `json:"kind"`
+	Level          int     `json:"level"`
+	Name           string  `json:"name"`
+	ParentFqn      *string `json:"parent_fqn,omitempty"`
+	TombstonedAt   *string `json:"tombstoned_at,omitempty"`
+	UpdatedAt      string  `json:"updated_at"`
+}
+
+// AccountListResponse defines model for AccountListResponse.
+type AccountListResponse struct {
+	Accounts []Account `json:"accounts"`
+}
+
 // Category defines model for Category.
 type Category struct {
 	CategoryId   int64   `json:"category_id"`
@@ -82,6 +104,15 @@ type Category struct {
 // CategoryListResponse defines model for CategoryListResponse.
 type CategoryListResponse struct {
 	Categories []Category `json:"categories"`
+}
+
+// CreateAccountRequest defines model for CreateAccountRequest.
+type CreateAccountRequest struct {
+	Currency       *string `json:"currency,omitempty"`
+	ExternalId     *string `json:"external_id,omitempty"`
+	ExternalSystem *string `json:"external_system,omitempty"`
+	Fqn            string  `json:"fqn"`
+	IsHidden       *bool   `json:"is_hidden,omitempty"`
 }
 
 // CreateCategoryRequest defines model for CreateCategoryRequest.
@@ -146,6 +177,13 @@ type TagListResponse struct {
 	Tags []Tag `json:"tags"`
 }
 
+// UpdateAccountRequest defines model for UpdateAccountRequest.
+type UpdateAccountRequest struct {
+	ExternalId     *string `json:"external_id,omitempty"`
+	ExternalSystem *string `json:"external_system,omitempty"`
+	IsHidden       bool    `json:"is_hidden"`
+}
+
 // UpdateCategoryRequest defines model for UpdateCategoryRequest.
 type UpdateCategoryRequest struct {
 	IsHidden bool `json:"is_hidden"`
@@ -172,6 +210,17 @@ type MethodNotAllowed = ErrorResponse
 
 // NotFound defines model for NotFound.
 type NotFound = ErrorResponse
+
+// ListAccountsParams defines parameters for ListAccounts.
+type ListAccountsParams struct {
+	IncludeHidden     *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// GetAccountParams defines parameters for GetAccount.
+type GetAccountParams struct {
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
 
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
@@ -205,6 +254,12 @@ type GetTagParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
+// CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
+type CreateAccountJSONRequestBody = CreateAccountRequest
+
+// UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
+type UpdateAccountJSONRequestBody = UpdateAccountRequest
+
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody = CreateCategoryRequest
 
@@ -228,30 +283,34 @@ type UpdateTagJSONRequestBody = UpdateTagRequest
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"7Fnfb9s2EP5XCG6PQpyu2YD5revaLsBSdJn3VBQGI51ldhKpkqd0RuD/feAP/TRl2YntuMOe4ljS3Xf3",
-	"HU/fnR9oLPNCChCo6fSBKtCFFBrsP6+lWGQ8RvM5lgJB2I+sKDIeM+RSTD5rKcx3Ol5Czsyn7xUs6JR+",
-	"N2kMT9xVPXmjlFS33gVdr9cRTUDHihfGGJ3S2RKIgi8laCSx967JV45LAv9wjVykRCNDuKDriF6Le5bx",
-	"5NY98DwouSbcwbCQbgCXMnkv8VWWya+QnBiULBFIIkETIZHosiikQoINXkhIbiFatO8lvpWlSJ4ldZAQ",
-	"BVqWKgbylTnEC4PmgprnvEnj8dWHa2vYYksSbmyx7IOSBSjkplYXLNMQ0aL1lYkoAfMXRJnT6UfqeZp7",
-	"/zSiQuLcuqQRdWmZm6+Y5y6iVQ3SiHKBoATL5mChfIoorgqgU6pRcZGadOagNUutz961dUSNV65MRXx0",
-	"yJr7G1vy7jPEaGy9ZgipVKt9Y/aPzbkldSFVzpBODfqfrmjtxwSTgjKOYgUMIZkzDOCO6OKLCH7P9XzJ",
-	"kwTaV++kzIAJczmDe8hal1oOBcshaLJgCgTOvUdRZhm7y4BOUZUQyDbK/E6jFDX20SfKIhkOtU9RK5Eu",
-	"C+2YfRRVnJ0sdvxso/Z3rrE+K4+i2f/HEXI9djTrglrXkJhSbDUUubEdRG8jray1eu8e8HcqqgQWrMyw",
-	"NtEvsh5sY3MY7w3kd6Aeh3agYHv+7V3DAGYsPf9cddv3fjih6tDbirDu5H1E/abaYPoNWIbLR4IyWqHU",
-	"7ZeA/DvQuntg/FMhNK6O9j2t21tsbm3u3rEHG+hxO2IDs+5++3Q9l7kn9Dznf/eG56kaa3eV2RDmGUsP",
-	"S/UZv01ZunsFHrfQPJQDv3VnLH1C8SFLd688UzZjZWcNhnD+ZcN42vt1azn1gDT3DqN5xrenA/Dot+eh",
-	"MmHu5WIhrRmOptLpDReM3L75c0ZefbimEb0Hpd2Uc3nx4uLSoJcFCFZwOqUvLy4vXlJzLHFpkU26Gi4F",
-	"G5rBbgev64ROqSnY181t9lCzHNC2wY8PlBtnX0pQq+psmGMaZ2UCzZlpJrdxlbDdZHPs9zP7KeruFX64",
-	"vDzYxBkU04HBs0kj4YIkJoc5F1wjj8nbP94TqRJQdii+cuhCTusoJr3Vgx1YyzxnZmCztJGGXmu1kDpA",
-	"cFdMU1ePoPEXmawOl6KgYl93y9/07fUGTy8OztMWblbE9/PH02Ae+3n8sXqx1eXNJYqwiruV20S0Turk",
-	"oTUXrl3xZ4Cwyeyv9vsOs53MXrmHg2loztnTMnE1/li9AepmYlYh6CYjCrepd4CtQPfoUefcULYWarWn",
-	"ehZy3gH2aQnl3LxpmpR39xndc9/O/Yb6M10yN7PTi00laIgoGMbLzZroypgjdbawVtqps524YLw4fa6S",
-	"cYmqa4Y4cVCv0k2TW9o5e1CKvAN0kzg9Yip7s/7A/rhQMgatCdeE3TNuBw+f2B/HM7Sxoe9m6hbsyrzy",
-	"4bLiU9SaQAfl2o2/55vvg4F5PcCHD3dTU5kIDy+qlrLUsJRZQjwXo9rKbwGOqay609GJdVW15Rii5mw0",
-	"VZ+67pmaPNTrpR1kVYvUMVHls3BekiqQi2FpVQf7n2goWyr1DERVkJhxcdVejZ5KWh21sYXWPieWVaPl",
-	"cnpJ9bRO6DVYv8Tsm9I3w2rLOKguZuaG/9dAwZXrmFQxuTvR7sfwOKpMZiw9qixp7UxPrEns/jtIwNmo",
-	"EWRp68xNHtxvDjtIj4q1Md1hgj0v0eFCHtYZLrJvXGRsKb0zkBcVBeOKov4N7FRy4njdaOMXnBMLiS0l",
-	"cR5bGWTpxkJmvf43AAD//w==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

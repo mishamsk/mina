@@ -330,6 +330,112 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: List accounts.
+      parameters:
+        - name: include_hidden
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Accounts in deterministic FQN order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+    post:
+      operationId: createAccount
+      summary: Create an account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+      responses:
+        "201":
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /accounts/{account_id}:
+    parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getAccount
+      summary: Get an account.
+      parameters:
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Account found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateAccount
+      summary: Update account hidden state and external identifiers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAccountRequest"
+      responses:
+        "200":
+          description: Account updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteAccount
+      summary: Tombstone an account.
+      responses:
+        "204":
+          description: Account tombstoned.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   responses:
     InvalidRequest:
@@ -363,6 +469,62 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    Account:
+      type: object
+      additionalProperties: false
+      required:
+        - account_id
+        - fqn
+        - kind
+        - is_hidden
+        - name
+        - level
+        - created_at
+        - updated_at
+      properties:
+        account_id:
+          type: integer
+          format: int64
+        fqn:
+          type: string
+        kind:
+          type: string
+        is_hidden:
+          type: boolean
+        currency:
+          type: string
+          nullable: true
+          pattern: ^[A-Z]{3}$
+        external_id:
+          type: string
+          nullable: true
+        external_system:
+          type: string
+          nullable: true
+        parent_fqn:
+          type: string
+          nullable: true
+        name:
+          type: string
+        level:
+          type: integer
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        tombstoned_at:
+          type: string
+          nullable: true
+    AccountListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - accounts
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Account"
     APIError:
       type: object
       additionalProperties: false
@@ -434,6 +596,27 @@ components:
         is_hidden:
           type: boolean
           default: false
+    CreateAccountRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - fqn
+      properties:
+        fqn:
+          type: string
+        is_hidden:
+          type: boolean
+          default: false
+        currency:
+          type: string
+          nullable: true
+          pattern: ^[A-Z]{3}$
+        external_id:
+          type: string
+          nullable: true
+        external_system:
+          type: string
+          nullable: true
     CreateTagRequest:
       type: object
       additionalProperties: false
@@ -553,6 +736,20 @@ components:
       properties:
         is_hidden:
           type: boolean
+    UpdateAccountRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - is_hidden
+      properties:
+        is_hidden:
+          type: boolean
+        external_id:
+          type: string
+          nullable: true
+        external_system:
+          type: string
+          nullable: true
     UpdateTagRequest:
       type: object
       additionalProperties: false

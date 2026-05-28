@@ -9,10 +9,10 @@
   - `testscript` v1.14.1 supports CLI smoke scripts.
 - Package inventory:
   - `cmd/mina`: minimal CLI entrypoint with help and version output.
-  - `internal/models`: category/tag/member data shapes and stable API error response models.
-  - `internal/store`: SQLite connection, migration, transaction, category/tag/member persistence, and test database helpers.
-  - `internal/controllers`: category/tag/member use cases and validation.
-  - `internal/routers`: REST handler tree, health endpoint, category/tag/member routes, and JSON API error mapping.
+  - `internal/models`: account/category/tag/member data shapes and stable API error response models.
+  - `internal/store`: SQLite connection, migration, transaction, account/category/tag/member persistence, and test database helpers.
+  - `internal/controllers`: account/category/tag/member use cases and validation.
+  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member routes, and JSON API error mapping.
   - `internal/app`: process composition for config, database open/create/migrate policy, controllers, and routers.
   - `internal/apptest`: in-process app boundary test client.
   - `internal/openapi`: generated OpenAPI contract package.
@@ -21,7 +21,19 @@
   - App composition requires an explicit database path.
   - App composition can create a missing database file only when `CreateIfMissing` is true.
   - Migrations are upgrade-only and recorded in `schema_version`.
-  - Current schema version: `4`.
+  - Current schema version: `5`.
+- Account behavior:
+  - `POST /accounts` creates active accounts with colon-separated `fqn` validation.
+  - `currency` is optional; when present it must be a three-letter uppercase code.
+  - `external_id` and `external_system` are optional and must be provided together.
+  - `GET /accounts/{account_id}` reads non-tombstoned accounts by default.
+  - `GET /accounts` lists accounts by `fqn`, excluding hidden and tombstoned rows by default.
+  - `include_hidden=true` includes hidden accounts in list responses.
+  - `include_tombstoned=true` includes tombstoned accounts in get/list responses.
+  - `PATCH /accounts/{account_id}` replaces hidden state and external identifiers.
+  - `DELETE /accounts/{account_id}` tombstones accounts.
+  - Active account `fqn` values must be unique; tombstoned rows do not block recreation.
+  - `kind`, `parent_fqn`, `name`, and `level` are derived from `fqn`.
 - Category behavior:
   - `POST /categories` creates active categories with colon-separated `fqn` validation.
   - `GET /categories/{category_id}` reads non-tombstoned categories by default.

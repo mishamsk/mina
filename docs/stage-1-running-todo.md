@@ -94,20 +94,20 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 7: Add account CRUD API
-- [ ] Add account model, validation, store operations, controller, router, and OpenAPI contract.
-- [ ] Implement create, get, list, update hidden state and external identifiers, and tombstone delete behavior.
-- [ ] Derive or expose account `kind`, `parent_fqn`, `name`, and `level` from colon-separated `fqn`.
-- [ ] Validate currency and external identifier fields without requiring local config to interpret the database.
-- [ ] Exclude hidden and tombstoned accounts from default list responses unless explicitly requested.
-- [ ] Add boundary tests covering create/read/list/update/delete, hidden filtering, duplicate active `fqn`, hierarchy-derived fields, and currency validation.
-- [ ] Regenerate OpenAPI artifacts.
-- [ ] Update `PROJECT_STATE.md` with account behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add account model, validation, store operations, controller, router, and OpenAPI contract.
+- [x] Implement create, get, list, update hidden state and external identifiers, and tombstone delete behavior.
+- [x] Derive or expose account `kind`, `parent_fqn`, `name`, and `level` from colon-separated `fqn`.
+- [x] Validate currency and external identifier fields without requiring local config to interpret the database.
+- [x] Exclude hidden and tombstoned accounts from default list responses unless explicitly requested.
+- [x] Add boundary tests covering create/read/list/update/delete, hidden filtering, duplicate active `fqn`, hierarchy-derived fields, and currency validation.
+- [x] Regenerate OpenAPI artifacts.
+- [x] Update `PROJECT_STATE.md` with account behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 8: Add credit limit history API
 - [ ] Add credit limit history model, validation, store operations, controller, router, and OpenAPI contract.

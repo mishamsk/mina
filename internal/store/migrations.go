@@ -75,6 +75,26 @@ CREATE UNIQUE INDEX member_active_name_unique
 ON member(name)
 WHERE tombstoned_at IS NULL;`,
 	},
+	{
+		Version: 5,
+		Name:    "create_account",
+		SQL: `
+CREATE TABLE account (
+	account_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	fqn TEXT NOT NULL,
+	is_hidden INTEGER NOT NULL DEFAULT 0,
+	currency TEXT,
+	external_id TEXT,
+	external_system TEXT,
+	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+	tombstoned_at TEXT
+);
+
+CREATE UNIQUE INDEX account_active_fqn_unique
+ON account(fqn)
+WHERE tombstoned_at IS NULL;`,
+	},
 }
 
 // LatestSchemaVersion returns the highest schema version known to this binary.

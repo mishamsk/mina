@@ -7,6 +7,7 @@ type Controllers struct {
 	Categories *CategoryController
 	Tags       *TagController
 	Members    *MemberController
+	Accounts   *AccountController
 }
 
 // New creates the Stage 1 controller registry.
@@ -15,5 +16,6 @@ func New(db *sql.DB) *Controllers {
 		Categories: NewCategoryController(db),
 		Tags:       NewTagController(db),
 		Members:    NewMemberController(db),
+		Accounts:   NewAccountController(db),
 	}
 }
