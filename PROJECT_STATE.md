@@ -8,7 +8,7 @@
   - `oapi-codegen` v2.7.0 is pinned as a Go module tool.
   - `testscript` v1.14.1 supports CLI smoke scripts.
 - Package inventory:
-  - `cmd/mina`: minimal CLI entrypoint with help and version output.
+  - `cmd/mina`: CLI entrypoint with help/version output and the local REST API server.
   - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate/transaction data shapes and stable API error response models.
   - `internal/store`: SQLite connection, migration, transaction helper, account/category/tag/member/credit-limit-history/exchange-rate/transaction persistence, and test database helpers.
   - `internal/controllers`: account/category/tag/member/credit-limit-history/exchange-rate/transaction use cases and validation.
@@ -117,7 +117,13 @@
   - Generator config: `api/oapi-codegen.yaml`.
   - Generated output: `internal/openapi/openapi.gen.go`.
   - Generated-file policy: `docs/generated-files.md`.
-- REST behavior:
+- CLI and REST behavior:
+  - `mina --help` prints command usage.
+  - `mina --version` prints the development version.
+  - `mina serve --db PATH` starts the REST API server with an explicit database path.
+  - `mina serve` supports `--host`, `--port`, `--create`, and `--migrate` flags for listener binding and database open/migration policy.
+  - `--create` must be supplied to create a missing database file; otherwise missing database paths are rejected before opening SQLite.
+  - `--migrate=false` opens an existing database without applying migrations and is rejected when combined with creation of a missing database.
   - `GET /health` returns `{"status":"ok"}`.
   - Missing routes and unsupported methods return the stable `{"error":{"code","message"}}` JSON envelope.
 - Developer recipes are owned by `Justfile`:
@@ -128,4 +134,5 @@
   - `just test-boundary`: run current boundary-capable test set.
   - `just pre-commit`: run configured `prek` hooks when present.
   - `just test-cli`: run current CLI smoke scripts.
-  - `just test-rest` and `just smoke`: placeholders for later process-level suites.
+  - `just test-rest`: run the process-level REST smoke test.
+  - `just smoke`: run CLI and REST process smoke tests.

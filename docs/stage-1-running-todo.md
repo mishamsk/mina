@@ -201,29 +201,29 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 14: Finish Stage 1 CLI server and process-level REST tests
-- [ ] Add CLI flags for explicit database path, host, port, and migration/open behavior.
-- [ ] Start the REST API server through app composition with no hidden global database, config, clock, or listener state.
-- [ ] Add process-level CLI tests for help, bad flags, database creation/opening, and server startup failure cases.
-- [ ] Add process-level REST smoke tests for real JSON request/response behavior against a temporary database.
-- [ ] Add `just test-cli`, `just test-rest`, and `just smoke` recipes if they were placeholders.
-- [ ] Regenerate OpenAPI artifacts and verify generated contract is current.
-- [ ] Update `PROJECT_STATE.md` with the completed Stage 1 operator-visible workflow.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add CLI flags for explicit database path, host, port, and migration/open behavior.
+- [x] Start the REST API server through app composition with no hidden global database, config, clock, or listener state.
+- [x] Add process-level CLI tests for help, bad flags, database creation/opening, and server startup failure cases.
+- [x] Add process-level REST smoke tests for real JSON request/response behavior against a temporary database.
+- [x] Add `just test-cli`, `just test-rest`, and `just smoke` recipes if they were placeholders.
+- [x] Regenerate OpenAPI artifacts and verify generated contract is current.
+- [x] Update `PROJECT_STATE.md` with the completed Stage 1 operator-visible workflow.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ## Deferred Verification
 
-- [ ] `just test-cli` passes when relevant
-- [ ] `just test-rest` passes when relevant
-- [ ] `just smoke` passes for release or risky changes
+- [x] `just test-cli` passes when relevant
+- [x] `just test-rest` passes when relevant
+- [x] `just smoke` passes for release or risky changes
 
 ## Final Verification
 
-- [ ] `just test-boundary` passes
-- [ ] `just test` passes
-- [ ] `just pre-commit` passes
-- [ ] Deferred verification completed or explicitly marked not relevant
+- [x] `just test-boundary` passes
+- [x] `just test` passes
+- [x] `just pre-commit` passes
+- [x] Deferred verification completed or explicitly marked not relevant

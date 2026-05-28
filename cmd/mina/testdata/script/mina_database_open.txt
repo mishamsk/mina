@@ -1,0 +1,18 @@
+# Missing databases are rejected unless creation is explicit.
+! exec mina serve --db $WORK/missing.db --host 192.0.2.1 --port 0
+stderr 'database path does not exist'
+! exists $WORK/missing.db
+
+# Explicit creation happens before listener startup.
+! exec mina serve --db $WORK/created.db --create --host 192.0.2.1 --port 0
+stderr 'listen error:'
+exists $WORK/created.db
+
+# New databases cannot be created without applying migrations.
+! exec mina serve --db $WORK/unmigrated.db --create --migrate=false --host 192.0.2.1 --port 0
+stderr '--migrate=false requires an existing database'
+! exists $WORK/unmigrated.db
+
+# Existing databases can be opened without applying migrations.
+! exec mina serve --db $WORK/created.db --migrate=false --host 192.0.2.1 --port 0
+stderr 'listen error:'

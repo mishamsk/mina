@@ -25,7 +25,8 @@ test-cli:
     go test ./cmd/mina -run TestCLISmokeScripts
 
 test-rest:
-    @echo "test-rest placeholder: no REST process tests yet"
+    go test ./cmd/mina -run TestRESTSmokeProcess
 
 smoke:
-    @echo "smoke placeholder: no smoke suite yet"
+    just test-cli
+    just test-rest

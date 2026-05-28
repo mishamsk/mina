@@ -1,0 +1,7 @@
+# The serve command rejects malformed flags before starting.
+! exec mina serve --db $WORK/mina.db --port not-a-number
+stderr 'invalid value "not-a-number" for flag -port'
+
+# The serve command requires an explicit database path.
+! exec mina serve
+stderr 'serve requires --db'
