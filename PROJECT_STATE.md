@@ -9,10 +9,10 @@
   - `testscript` v1.14.1 supports CLI smoke scripts.
 - Package inventory:
   - `cmd/mina`: minimal CLI entrypoint with help and version output.
-  - `internal/models`: category/tag data shapes and stable API error response models.
-  - `internal/store`: SQLite connection, migration, transaction, category/tag persistence, and test database helpers.
-  - `internal/controllers`: category/tag use cases and validation.
-  - `internal/routers`: REST handler tree, health endpoint, category/tag routes, and JSON API error mapping.
+  - `internal/models`: category/tag/member data shapes and stable API error response models.
+  - `internal/store`: SQLite connection, migration, transaction, category/tag/member persistence, and test database helpers.
+  - `internal/controllers`: category/tag/member use cases and validation.
+  - `internal/routers`: REST handler tree, health endpoint, category/tag/member routes, and JSON API error mapping.
   - `internal/app`: process composition for config, database open/create/migrate policy, controllers, and routers.
   - `internal/apptest`: in-process app boundary test client.
   - `internal/openapi`: generated OpenAPI contract package.
@@ -21,7 +21,7 @@
   - App composition requires an explicit database path.
   - App composition can create a missing database file only when `CreateIfMissing` is true.
   - Migrations are upgrade-only and recorded in `schema_version`.
-  - Current schema version: `3`.
+  - Current schema version: `4`.
 - Category behavior:
   - `POST /categories` creates active categories with colon-separated `fqn` validation.
   - `GET /categories/{category_id}` reads non-tombstoned categories by default.
@@ -42,6 +42,14 @@
   - `DELETE /tags/{tag_id}` tombstones tags.
   - Active tag `fqn` values must be unique; tombstoned rows do not block recreation.
   - `parent_fqn`, `name`, and `level` are derived from `fqn`.
+- Member behavior:
+  - `POST /members` creates active household members with non-blank name validation.
+  - `GET /members/{member_id}` reads non-tombstoned members by default.
+  - `GET /members` lists members by name, excluding tombstoned rows by default.
+  - `include_tombstoned=true` includes tombstoned members in get/list responses.
+  - `PATCH /members/{member_id}` updates member name.
+  - `DELETE /members/{member_id}` tombstones members.
+  - Active member names must be unique; tombstoned rows do not block recreation.
 - OpenAPI contract:
   - Source: `api/openapi.yaml`.
   - Generator config: `api/oapi-codegen.yaml`.

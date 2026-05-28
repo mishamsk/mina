@@ -228,6 +228,108 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /members:
+    get:
+      operationId: listMembers
+      summary: List household members.
+      parameters:
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Members in deterministic name order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+    post:
+      operationId: createMember
+      summary: Create a household member.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMemberRequest"
+      responses:
+        "201":
+          description: Member created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /members/{member_id}:
+    parameters:
+      - name: member_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getMember
+      summary: Get a household member.
+      parameters:
+        - name: include_tombstoned
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Member found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateMember
+      summary: Update household member name.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberRequest"
+      responses:
+        "200":
+          description: Member updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: deleteMember
+      summary: Tombstone a household member.
+      responses:
+        "204":
+          description: Member tombstoned.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
 components:
   responses:
     InvalidRequest:
@@ -343,6 +445,14 @@ components:
         is_hidden:
           type: boolean
           default: false
+    CreateMemberRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
     ErrorResponse:
       type: object
       additionalProperties: false
@@ -361,6 +471,37 @@ components:
           type: string
           enum:
             - ok
+    Member:
+      type: object
+      additionalProperties: false
+      required:
+        - member_id
+        - name
+        - created_at
+        - updated_at
+      properties:
+        member_id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        tombstoned_at:
+          type: string
+          nullable: true
+    MemberListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - members
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/Member"
     Tag:
       type: object
       additionalProperties: false
@@ -420,3 +561,11 @@ components:
       properties:
         is_hidden:
           type: boolean
+    UpdateMemberRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string

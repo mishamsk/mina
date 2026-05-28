@@ -80,18 +80,18 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
   - [x] Required docs updated
 
 ### Commit 6: Add household member CRUD API
-- [ ] Add member model, validation, store operations, controller, router, and OpenAPI contract.
-- [ ] Implement create, get, list, update name if supported by the chosen API contract, and tombstone delete behavior.
-- [ ] Keep members available for transaction record attribution and exclude tombstoned members from default list responses.
-- [ ] Add boundary tests covering create/read/list/update/delete, duplicate or blank names per chosen validation, and tombstone behavior.
-- [ ] Regenerate OpenAPI artifacts.
-- [ ] Update `PROJECT_STATE.md` with member behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add member model, validation, store operations, controller, router, and OpenAPI contract.
+- [x] Implement create, get, list, update name if supported by the chosen API contract, and tombstone delete behavior.
+- [x] Keep members available for transaction record attribution and exclude tombstoned members from default list responses.
+- [x] Add boundary tests covering create/read/list/update/delete, duplicate or blank names per chosen validation, and tombstone behavior.
+- [x] Regenerate OpenAPI artifacts.
+- [x] Update `PROJECT_STATE.md` with member behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 7: Add account CRUD API
 - [ ] Add account model, validation, store operations, controller, router, and OpenAPI contract.

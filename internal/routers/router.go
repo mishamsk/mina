@@ -22,6 +22,7 @@ func New(deps Dependencies) http.Handler {
 	})
 	registerCategoryRoutes(mux, deps)
 	registerTagRoutes(mux, deps)
+	registerMemberRoutes(mux, deps)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if routeExistsWithDifferentMethod(r) {
@@ -43,11 +44,12 @@ func routeExistsWithDifferentMethod(r *http.Request) bool {
 	switch r.URL.Path {
 	case "/health":
 		return r.Method != http.MethodGet
-	case "/categories", "/tags":
+	case "/categories", "/tags", "/members":
 		return r.Method != http.MethodGet && r.Method != http.MethodPost
 	default:
 		return resourceIDPath(r.URL.Path, "/categories/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete ||
-			resourceIDPath(r.URL.Path, "/tags/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete
+			resourceIDPath(r.URL.Path, "/tags/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete ||
+			resourceIDPath(r.URL.Path, "/members/") && r.Method != http.MethodGet && r.Method != http.MethodPatch && r.Method != http.MethodDelete
 	}
 }
 
