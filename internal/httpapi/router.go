@@ -54,8 +54,12 @@ func NewWithOptions(deps Dependencies, opts Options) http.Handler {
 		WriteAPIError(w, http.StatusMethodNotAllowed, models.ErrorCodeMethodNotAllowed, "method not allowed")
 	})
 
-	manualMux := newManualMux(deps)
-	openapi.HandlerWithOptions(newGeneratedServer(manualMux), openapi.ChiServerOptions{
+	strict := openapi.NewStrictHandlerWithOptions(
+		newStrictServer(deps),
+		[]openapi.StrictMiddlewareFunc{strictRequestContextMiddleware},
+		strictHTTPServerOptions(),
+	)
+	openapi.HandlerWithOptions(strict, openapi.ChiServerOptions{
 		BaseRouter:       router,
 		ErrorHandlerFunc: generatedRequestErrorHandler,
 	})
@@ -75,25 +79,9 @@ func applyMiddleware(router chi.Router, opts Options) {
 	if opts.AccessLog != nil {
 		router.Use(accessLogger(opts.AccessLog))
 	}
+	router.Use(strictJSONBodyValidator)
 	router.Use(panicErrorEnvelope)
 	router.Use(withRecoveryLogEntry)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Timeout(timeout))
-}
-
-func newManualMux(deps Dependencies) http.Handler {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	registerCategoryRoutes(mux, deps)
-	registerTagRoutes(mux, deps)
-	registerMemberRoutes(mux, deps)
-	registerAccountRoutes(mux, deps)
-	registerCreditLimitHistoryRoutes(mux, deps)
-	registerExchangeRateRoutes(mux, deps)
-	registerTransactionRoutes(mux, deps)
-
-	return mux
 }

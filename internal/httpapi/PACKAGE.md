@@ -10,6 +10,7 @@
 
 - Error responses use the stable JSON error envelope defined by the REST contract.
 - Request middleware supplies request IDs, real IP handling, panic recovery, local API timeout enforcement, and optional access logs.
+- Generated strict-server operation methods are the HTTP adapter implementation surface.
 - HTTP handlers call service use cases; they do not own domain validation or SQL.
 
 ## Boundaries

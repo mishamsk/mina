@@ -69,6 +69,29 @@ func TestRouterGeneratedBindingErrorsKeepExistingMinaMessages(t *testing.T) {
 	assertMinaError(t, idResponse, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "account_id must be a positive integer")
 }
 
+func TestRouterStrictJSONValidationRejectsNullRequiredBool(t *testing.T) {
+	handler := New(Dependencies{})
+	request := httptest.NewRequest(http.MethodPatch, "/categories/1", strings.NewReader(`{"is_hidden":null}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	assertMinaError(t, response, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "is_hidden is required")
+}
+
+func TestRouterStrictJSONValidationRejectsNestedUnknownFields(t *testing.T) {
+	handler := New(Dependencies{})
+	body := `{"initiated_date":"2024-01-01","records":[{"account_id":1,"currency":"USD","amount":"1.00","amount_usd":"1.00","category_id":1,"posting_status":"posted","reconciliation_status":"reconciled","source":"manual","extra":true}]}`
+	request := httptest.NewRequest(http.MethodPost, "/transactions", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	assertMinaError(t, response, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid JSON request body")
+}
+
 func TestRouterRecoversPanicsWithMinaEnvelope(t *testing.T) {
 	router := chi.NewRouter()
 	applyMiddleware(router, Options{})

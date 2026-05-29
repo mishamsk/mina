@@ -49,19 +49,19 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
   - [x] Required docs updated
 
 ### Commit 3: Move handlers behind generated operation interfaces
-- [ ] Replace manual `mux.HandleFunc` registration functions with a generated server implementation type in `internal/httpapi`.
-- [ ] Map generated request objects to existing service inputs in thin adapter methods.
-- [ ] Map service outputs to generated response objects or existing REST DTOs, depending on the chosen generated package boundary.
-- [ ] Implement strict-server response object methods for every OpenAPI operation.
-- [ ] Keep stable Mina JSON error responses for validation errors, not-found errors, conflicts, unsupported methods, and missing routes.
-- [ ] Keep HTTP adapter code free of database, runtime, and domain decision ownership.
-- [ ] Preserve all existing endpoint paths, methods, status codes, response shapes, and query semantics.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Replace manual `mux.HandleFunc` registration functions with a generated server implementation type in `internal/httpapi`.
+- [x] Map generated request objects to existing service inputs in thin adapter methods.
+- [x] Map service outputs to generated response objects or existing REST DTOs, depending on the chosen generated package boundary.
+- [x] Implement strict-server response object methods for every OpenAPI operation.
+- [x] Keep stable Mina JSON error responses for validation errors, not-found errors, conflicts, unsupported methods, and missing routes.
+- [x] Keep HTTP adapter code free of database, runtime, and domain decision ownership.
+- [x] Preserve all existing endpoint paths, methods, status codes, response shapes, and query semantics.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 4: Replace redundant manual parsing and routing code
 - [ ] Remove manual route registration helpers made redundant by generated registration.
@@ -111,7 +111,7 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
 ## Deferred Verification
 
 - [ ] `just test-cli` passes when route or middleware behavior can affect process startup or CLI output
-- [ ] `just test-rest` passes after generated server wiring replaces manual handlers
+- [x] `just test-rest` passes after generated server wiring replaces manual handlers
 - [ ] `just smoke` passes before considering the migration complete
 
 ## Final Verification

@@ -17,7 +17,7 @@
 - Package inventory:
   - `cmd/mina`: Cobra CLI entrypoint with help/version output, `serve`, and `migrate` commands.
   - `internal/runtime`: process config structs and validation, database open/create/migrate policy, service/store composition, HTTP adapter options, and app handler wiring.
-  - `internal/httpapi`: Chi REST router, generated OpenAPI route registration, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, JSON API error mapping, REST DTO models subpackage, and generated OpenAPI contract subpackage.
+  - `internal/httpapi`: Chi REST router, generated OpenAPI route registration, strict-server operation adapter methods, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, JSON API error mapping, REST DTO models subpackage, and generated OpenAPI contract subpackage.
   - `internal/services`: app-owned service package family. `accounts`, `categories`, `tags`, `members`, `exchangerates`, `creditlimits`, and `transactions` own their domain types, validation, use cases, and repository interfaces; `journalrecords` and `recordbulk` remain target skeletons.
   - `internal/store`: DuckDB connection, migration, transaction helper, repository implementations, account/category/tag/member/credit-limit-history/exchange-rate/transaction and record bulk persistence, and test database helpers.
   - `internal/apptest`: in-process app boundary test client that constructs apps through `internal/runtime`.
@@ -128,6 +128,7 @@
   - Generator config: `api/oapi-codegen.yaml`.
   - Generated output: `internal/httpapi/openapi/openapi.gen.go`.
   - `oapi-codegen` remains the REST contract generator for models, the embedded spec, Chi server contracts, and strict-server operation contracts.
+  - `internal/httpapi` implements generated strict-server operations directly; generated request binding supplies path/query/body objects before service use cases are called.
   - Generated-file policy: `docs/generated-files.md`.
   - API decimal values are JSON strings, not JSON numbers; decimal schemas match DuckDB `DECIMAL(18,8)` with at most 10 integer digits and 8 fractional digits.
   - Decimal responses are read from DuckDB `DECIMAL(18,8)` values and may use DuckDB-normalized scale.
