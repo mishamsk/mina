@@ -98,14 +98,14 @@ This plan addresses every item in `docs/review.md`. Start with the durable docs 
 
 ## Deferred Verification
 
-- [ ] Run the non-default testscript integration recipe after any CLI, real-network REST, process startup, or JSON-over-HTTP behavior changes.
-- [ ] Run any future manual-smoke commands only when a concrete uncovered risk exists and after adding them as explicit temporary commands or comments, not as an empty default recipe.
+- [x] Run the non-default testscript integration recipe after any CLI, real-network REST, process startup, or JSON-over-HTTP behavior changes.
+- [x] Run any future manual-smoke commands only when a concrete uncovered risk exists and after adding them as explicit temporary commands or comments, not as an empty default recipe.
 
 ## Final Verification
 
-- [ ] `just init` passes on a clean checkout with required local tools available
-- [ ] `just fmt` passes
-- [ ] `just test` passes without running testscript end-to-end suites
-- [ ] The non-default testscript integration recipe passes
-- [ ] `just pre-commit` passes without running tests or mutating generated code
-- [ ] `docs/review.md` items are all covered by completed tasks in this plan
+- [x] `just init` passes on a clean checkout with required local tools available
+- [x] `just fmt` passes
+- [x] `just test` passes without running testscript end-to-end suites
+- [x] The non-default testscript integration recipe passes
+- [x] `just pre-commit` passes without running tests or mutating generated code
+- [x] `docs/review.md` items are all covered by completed tasks in this plan
