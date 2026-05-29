@@ -12,13 +12,14 @@ repos:
       - id: check-yaml
       - id: check-xml
       - id: mixed-line-ending
-        args: [--fix=no]
       - id: check-symlinks
       - id: destroyed-symlinks
       - id: check-merge-conflict
       - id: detect-private-key
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
   - repo: local
     hooks:
       - id: mina-fmt-check
