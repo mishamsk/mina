@@ -93,33 +93,33 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
   - [x] Required docs updated
 
 ### Commit 6: Finish cleanup and contract verification
-- [ ] Audit all REST endpoints against `api/openapi.yaml` and generated operation coverage.
-- [ ] Remove obsolete HTTP helper functions, tests, and package docs that describe the old manual router.
-- [ ] Ensure generated code is the only source of route path/method declarations unless a route is intentionally outside OpenAPI, such as `/health`.
-- [ ] Update `PROJECT_STATE.md`, `docs/generated-files.md`, and package docs for durable behavior and ownership changes.
-- [ ] Run process-level smoke tests for CLI server startup and real JSON REST behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just openapi` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just test-cli` passes
-  - [ ] `just test-rest` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Audit all REST endpoints against `api/openapi.yaml` and generated operation coverage.
+- [x] Remove obsolete HTTP helper functions, tests, and package docs that describe the old manual router.
+- [x] Ensure generated code is the only source of route path/method declarations unless a route is intentionally outside OpenAPI, such as `/health`.
+- [x] Update `PROJECT_STATE.md`, `docs/generated-files.md`, and package docs for durable behavior and ownership changes.
+- [x] Run process-level smoke tests for CLI server startup and real JSON REST behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just openapi` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just test-cli` passes
+  - [x] `just test-rest` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ## Deferred Verification
 
-- [ ] `just test-cli` passes when route or middleware behavior can affect process startup or CLI output
+- [x] `just test-cli` passes when route or middleware behavior can affect process startup or CLI output
 - [x] `just test-rest` passes after generated server wiring replaces manual handlers
-- [ ] `just smoke` passes before considering the migration complete
+- [x] `just smoke` passes before considering the migration complete
 
 ## Final Verification
 
-- [ ] `just openapi` passes
-- [ ] `just test-boundary` passes
-- [ ] `just test` passes
-- [ ] `just test-cli` passes
-- [ ] `just test-rest` passes
-- [ ] `just pre-commit` passes
-- [ ] Deferred verification completed or explicitly marked not relevant
+- [x] `just openapi` passes
+- [x] `just test-boundary` passes
+- [x] `just test` passes
+- [x] `just test-cli` passes
+- [x] `just test-rest` passes
+- [x] `just pre-commit` passes
+- [x] Deferred verification completed or explicitly marked not relevant

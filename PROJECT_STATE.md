@@ -129,6 +129,7 @@
   - Generated output: `internal/httpapi/openapi/openapi.gen.go`.
   - `oapi-codegen` remains the REST contract generator for models, the embedded spec, Chi server contracts, and strict-server operation contracts.
   - `internal/httpapi` implements generated strict-server operations directly; generated request binding supplies path/query/body objects before service use cases are called.
+  - Generated OpenAPI route registration is the only source of REST route path/method declarations.
   - Generated-file policy: `docs/generated-files.md`.
   - API decimal values are JSON strings, not JSON numbers; decimal schemas match DuckDB `DECIMAL(18,8)` with at most 10 integer digits and 8 fractional digits.
   - Decimal responses are read from DuckDB `DECIMAL(18,8)` values and may use DuckDB-normalized scale.
