@@ -15,8 +15,8 @@
 - [ ] Task N
 - [ ] Verification
   - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
   - [ ] `just test` passes
+  - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
   - [ ] Required docs updated
 
@@ -26,20 +26,21 @@
 - [ ] Task N
 - [ ] Verification
   - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
   - [ ] `just test` passes
+  - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
   - [ ] Required docs updated
 
 ## Deferred Verification
 
-- [ ] `just test-cli` passes when relevant
-- [ ] `just test-rest` passes when relevant
-- [ ] `just smoke` passes for release or risky changes
+- [ ] `just test-integration` passes after CLI, real-network REST, process startup, JSON-over-HTTP, or later TUI changes.
+- [ ] Manual smoke commands are run only when a concrete uncovered risk remains, and are added as explicit temporary commands or comments.
 
 ## Final Verification
 
-- [ ] `just test-boundary` passes
+- [ ] `just init` passes on a clean checkout with required local tools available
+- [ ] `just fmt` passes
 - [ ] `just test` passes
+- [ ] `just test-integration` passes
 - [ ] `just pre-commit` passes
 - [ ] Deferred verification completed or explicitly marked not relevant

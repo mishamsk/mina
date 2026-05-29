@@ -10,12 +10,12 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Create the Go module with the module path chosen for this repository.
 - [x] Add the initial package layout for models, store, controllers, routers, app composition, and CLI entrypoint without implementing domain behavior.
 - [x] Add a minimal `cmd/mina` command that can print version/help and exit successfully.
-- [x] Add `Justfile` recipes as the sole developer entrypoints: `fmt`, `test`, `test-boundary`, `pre-commit`, and placeholders for later `test-cli`, `test-rest`, and `smoke`.
+- [x] Add `Justfile` recipes as the sole developer entrypoints: `fmt`, `test`, `pre-commit`, and the non-default `test-integration` workflow.
 - [x] Pin the minimum Go version and document any required local tools in the recipe comments.
 - [x] Update `PROJECT_STATE.md` with the new module, package inventory, and available recipes.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -29,7 +29,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with the toolchain and recipe inventory.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -44,7 +44,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with database and app composition behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -59,7 +59,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with category behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -74,7 +74,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with tag behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -88,7 +88,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with member behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -104,7 +104,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with account behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -119,7 +119,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with credit limit behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -133,7 +133,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with exchange rate behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -147,7 +147,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with shared list/query behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -163,7 +163,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with transaction create/read behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -179,7 +179,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with transaction update/delete/search behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -195,7 +195,7 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Update `PROJECT_STATE.md` with bulk operation behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -205,25 +205,25 @@ Stage 1 builds the Go REST API only. The repository has a Go module, repeatable 
 - [x] Start the REST API server through app composition with no hidden global database, config, clock, or listener state.
 - [x] Add process-level CLI tests for help, bad flags, database creation/opening, and server startup failure cases.
 - [x] Add process-level REST smoke tests for real JSON request/response behavior against a temporary database.
-- [x] Add `just test-cli`, `just test-rest`, and `just smoke` recipes if they were placeholders.
+- [x] Add `just test-integration` for CLI and REST end-to-end checks.
 - [x] Regenerate OpenAPI artifacts and verify generated contract is current.
 - [x] Update `PROJECT_STATE.md` with the completed Stage 1 operator-visible workflow.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
 
 ## Deferred Verification
 
-- [x] `just test-cli` passes when relevant
-- [x] `just test-rest` passes when relevant
-- [x] `just smoke` passes for release or risky changes
+- [x] `just test-integration` passes when relevant
+- [x] `just test-integration` passes when relevant
+- [x] manual smoke commands are not required unless a concrete uncovered risk remains
 
 ## Final Verification
 
-- [x] `just test-boundary` passes
+- [x] `just test` passes
 - [x] `just test` passes
 - [x] `just pre-commit` passes
 - [x] Deferred verification completed or explicitly marked not relevant

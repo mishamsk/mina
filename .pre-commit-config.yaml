@@ -16,11 +16,6 @@ repos:
         entry: just lint
         language: system
         pass_filenames: false
-      - id: mina-test-boundary
-        name: mina test-boundary
-        entry: just test-boundary
-        language: system
-        pass_filenames: false
       - id: mina-test
         name: mina test
         entry: just test

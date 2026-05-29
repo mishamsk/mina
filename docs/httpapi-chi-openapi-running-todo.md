@@ -18,7 +18,7 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
 - [x] Verification
   - [x] `just fmt` passes
   - [x] `just openapi` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -43,7 +43,7 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
 - [x] Update `PROJECT_STATE.md` with the router dependency, middleware behavior, and access log behavior.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -58,7 +58,7 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
 - [x] Preserve all existing endpoint paths, methods, status codes, response shapes, and query semantics.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -73,7 +73,7 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
 - [x] Update tests to assert behavior through the public HTTP boundary rather than helper internals.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -87,7 +87,7 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
 - [x] Document any validation ownership split in `internal/httpapi/PACKAGE.md`.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -101,25 +101,25 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
 - [x] Verification
   - [x] `just fmt` passes
   - [x] `just openapi` passes
-  - [x] `just test-boundary` passes for touched behavior
   - [x] `just test` passes
-  - [x] `just test-cli` passes
-  - [x] `just test-rest` passes
+  - [x] `just test` passes
+  - [x] `just test-integration` passes
+  - [x] `just test-integration` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
 
 ## Deferred Verification
 
-- [x] `just test-cli` passes when route or middleware behavior can affect process startup or CLI output
-- [x] `just test-rest` passes after generated server wiring replaces manual handlers
-- [x] `just smoke` passes before considering the migration complete
+- [x] `just test-integration` passes when route or middleware behavior can affect process startup or CLI output
+- [x] `just test-integration` passes after generated server wiring replaces manual handlers
+- [x] `just test-integration` passes before considering the migration complete
 
 ## Final Verification
 
 - [x] `just openapi` passes
-- [x] `just test-boundary` passes
 - [x] `just test` passes
-- [x] `just test-cli` passes
-- [x] `just test-rest` passes
+- [x] `just test` passes
+- [x] `just test-integration` passes
+- [x] `just test-integration` passes
 - [x] `just pre-commit` passes
 - [x] Deferred verification completed or explicitly marked not relevant

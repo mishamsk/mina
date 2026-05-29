@@ -17,8 +17,7 @@
   - Store-owned allowlists for dynamic filtering and sorting.
 - Current test workflow:
   - Default tests should be in-process high-level boundary tests.
-  - End-to-end CLI and real-network REST coverage belongs in the non-default testscript integration workflow.
+  - End-to-end CLI and real-network REST coverage belongs in the non-default `just test-integration` workflow.
 - Known next work:
-  - Align local recipes and pre-commit checks with the two-test-class policy.
-  - Move all process-level end-to-end coverage under testscript.
+  - Rebuild pre-commit checks around light non-mutating hooks.
   - Build and adopt the in-process scenario test harness.

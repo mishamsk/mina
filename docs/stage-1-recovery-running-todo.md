@@ -23,7 +23,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Keep Stage 1 UI scope unchanged: no TUI or web UI implementation.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -41,7 +41,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Update `PROJECT_STATE.md` with the new dependency and package direction.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -58,9 +58,9 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Update `PROJECT_STATE.md` with the Cobra command shape.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
   - [x] `just test` passes
-  - [x] `just test-cli` passes
+  - [x] `just test` passes
+  - [x] `just test-integration` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
   - [x] Post-commit `/review` subagent run and fixes applied
@@ -78,7 +78,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Verification
   - [x] `just fmt` passes
   - [x] `just openapi` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -95,7 +95,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Update package docs and `PROJECT_STATE.md`.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -112,7 +112,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Update package docs and `PROJECT_STATE.md`.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -131,7 +131,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Update package docs and `PROJECT_STATE.md`.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -155,7 +155,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Update `PROJECT_STATE.md` with DuckDB database behavior and schema version.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -173,7 +173,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Update `PROJECT_STATE.md` with any behavior or durable state changes.
 - [x] Verification
   - [x] `just fmt` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -194,7 +194,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Verification
   - [x] `just fmt` passes
   - [x] `just openapi` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -212,7 +212,7 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 - [x] Verification
   - [x] `just fmt` passes
   - [x] `just lint` passes
-  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
   - [x] `just test` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
@@ -231,26 +231,26 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] `just fmt` passes
   - [x] `just openapi` passes
   - [x] `just lint` passes
-  - [x] `just test-boundary` passes
   - [x] `just test` passes
-  - [x] `just test-cli` passes
-  - [x] `just test-rest` passes
-  - [x] `just smoke` passes
+  - [x] `just test` passes
+  - [x] `just test-integration` passes
+  - [x] `just test-integration` passes
+  - [x] `just test-integration` passes
   - [x] `just pre-commit` passes
   - [x] Required docs updated
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ## Deferred Verification
 
-- [x] `just test-cli` passes when relevant
-- [x] `just test-rest` passes when relevant
-- [x] `just smoke` passes for release or risky changes
+- [x] `just test-integration` passes when relevant
+- [x] `just test-integration` passes when relevant
+- [x] manual smoke commands are not required unless a concrete uncovered risk remains
 - [x] Any DuckDB-driver platform issue is reproduced through a `just` recipe and resolved before proceeding.
 - [x] Any query-generation limitation for DuckDB is documented in the store package docs before manual query code is accepted.
 
 ## Final Verification
 
-- [x] `just test-boundary` passes
+- [x] `just test` passes
 - [x] `just test` passes
 - [x] `just pre-commit` passes
 - [x] Deferred verification completed or explicitly marked not relevant

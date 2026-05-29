@@ -28,20 +28,20 @@ This plan addresses every item in `docs/review.md`. Start with the durable docs 
   - [x] No code verification required for this docs-only commit
 
 ### Commit 2: Align Justfile and local tool bootstrap
-- [ ] Replace the current top-of-file comments and shell setting with the requested shared import and shell configuration: `import? "~/.justfile"`, Bash with `-euo pipefail`, and the PowerShell Windows shell. (`docs/review.md`: `Justfile:1`, `Justfile:4`)
-- [ ] Add an `init` recipe that checks for `mise` and `prek`, then installs the pre-commit hook through `prek`. (`docs/review.md`: `Justfile:2`)
-- [ ] Add `mise.toml` with Go pinned to `1.25`. (`docs/review.md`: `Justfile:2`)
-- [ ] Keep `just test` limited to the non-testscript in-process test set; full end-to-end testscript suites must not run on default test calls. (`docs/review.md`: `Justfile:19`)
-- [ ] Remove the `test-boundary` recipe and all Justfile or doc ambiguity that presents it as a separate suite. (`docs/review.md`: `Justfile:21`)
-- [ ] Route full CLI and real-network REST integration coverage through testscript-owned recipes instead of direct special-case Go test commands. (`docs/review.md`: `Justfile:31`)
-- [ ] Remove the active empty `smoke` recipe; leave only a clear comment if a future agent-only manual-smoke placeholder is useful. (`docs/review.md`: `Justfile:33`)
-- [ ] Update docs touched in Commit 1 if recipe names or workflow wording need final alignment.
-- [ ] Verification
-  - [ ] `just init` passes
-  - [ ] `just fmt` passes if code changed
-  - [ ] `just test` passes
-  - [ ] The non-default testscript integration recipe passes if created in this commit
-  - [ ] Required docs updated
+- [x] Replace the current top-of-file comments and shell setting with the requested shared import and shell configuration: `import? "~/.justfile"`, Bash with `-euo pipefail`, and the PowerShell Windows shell. (`docs/review.md`: `Justfile:1`, `Justfile:4`)
+- [x] Add an `init` recipe that checks for `mise` and `prek`, then installs the pre-commit hook through `prek`. (`docs/review.md`: `Justfile:2`)
+- [x] Add `mise.toml` with Go pinned to `1.25`. (`docs/review.md`: `Justfile:2`)
+- [x] Keep `just test` limited to the non-testscript in-process test set; full end-to-end testscript suites must not run on default test calls. (`docs/review.md`: `Justfile:19`)
+- [x] Remove the `test-boundary` recipe and all Justfile or doc ambiguity that presents it as a separate suite. (`docs/review.md`: `Justfile:21`)
+- [x] Route full CLI and real-network REST integration coverage through testscript-owned recipes instead of direct special-case Go test commands. (`docs/review.md`: `Justfile:31`)
+- [x] Remove the active empty `smoke` recipe; leave only a clear comment if a future agent-only manual-smoke placeholder is useful. (`docs/review.md`: `Justfile:33`)
+- [x] Update docs touched in Commit 1 if recipe names or workflow wording need final alignment.
+- [x] Verification
+  - [x] `just init` passes
+  - [x] `just fmt` passes if code changed
+  - [x] `just test` passes
+  - [x] The non-default testscript integration recipe passes if created in this commit
+  - [x] Required docs updated
 
 ### Commit 3: Rebuild pre-commit around light non-mutating checks
 - [ ] Add all relevant supported `prek` built-in hooks from the documented built-in hook set. (`docs/review.md`: `.pre-commit-config.yaml:1`)
