@@ -1,168 +1,24 @@
 # Project State
 
-- Implementation scope: Phase 1 Stage 1 REST API.
-- Go module: `mina.local/mina`, minimum Go version `1.25.0`.
-- Tooling:
-  - `prek` 0.4+ drives configured pre-commit hooks.
-  - `golangci-lint` v2.12.2 is pinned as a Go module tool.
-  - `oapi-codegen` v2.7.0 is pinned as a Go module tool.
-  - `testscript` v1.14.1 supports CLI smoke scripts.
-- Direct dependencies:
-  - `github.com/duckdb/duckdb-go/v2` v2.10503.1 for the DuckDB `database/sql` driver.
-  - `github.com/getkin/kin-openapi` v0.135.0 for generated OpenAPI spec loading and validation.
-  - `github.com/go-chi/chi/v5` v5.3.0 for REST routing and middleware.
-  - `github.com/oapi-codegen/runtime` v1.4.1 for generated OpenAPI request binding.
-  - `github.com/rogpeppe/go-internal` v1.14.1 for `testscript` CLI smoke tests.
-  - `github.com/spf13/cobra` v1.10.2 for CLI parsing.
-- Package inventory:
-  - `cmd/mina`: Cobra CLI entrypoint with help/version output, `serve`, and `migrate` commands.
-  - `internal/runtime`: process config structs and validation, database open/create/migrate policy, service/store composition, HTTP adapter options, and app handler wiring.
-  - `internal/httpapi`: Chi REST router, generated OpenAPI route registration, strict-server operation adapter methods, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, JSON API error mapping, app-owned query parsing helpers, and generated OpenAPI contract subpackage.
-  - `internal/services`: app-owned service package family. `accounts`, `categories`, `tags`, `members`, `exchangerates`, `creditlimits`, and `transactions` own their domain types, validation, use cases, and repository interfaces; `journalrecords` and `recordbulk` remain target skeletons.
-  - `internal/store`: DuckDB connection, migration, transaction helper, repository implementations, account/category/tag/member/credit-limit-history/exchange-rate/transaction and record bulk persistence, and test database helpers.
-  - `internal/apptest`: in-process app boundary test client that constructs apps through `internal/runtime`.
-  - `internal/architecture`: import-boundary tests for the documented package ownership rules.
-- Database behavior:
-  - Local accounting state uses DuckDB through `github.com/duckdb/duckdb-go/v2` v2.10503.1.
-  - App composition requires an explicit database path.
-  - App composition can create a missing database file only when `CreateIfMissing` is true.
-  - Migrations are upgrade-only and recorded in `schema_version`.
-  - Current schema version: `9`.
-- Transaction behavior:
-  - `POST /transactions` creates a transaction and its journal records atomically.
-  - Transactions require `initiated_date` in `YYYY-MM-DD` calendar-date format and at least two records.
-  - Journal records validate active account, category, optional member, and tag references.
-  - Journal record `currency` must be a three-letter uppercase code.
-  - Journal record `amount` and `amount_usd` are accepted as non-zero decimal strings with at most 10 integer digits and 8 fractional digits and persisted as DuckDB `DECIMAL(18,8)`.
-  - Transaction records must balance to zero by `amount_usd`.
-  - Supported posting statuses are `pending`, `posted`, and `cancelled`.
-  - Supported reconciliation statuses are `reconciled` and `unreconciled`.
-  - Supported source is `manual`.
-  - `GET /transactions/{transaction_id}` reads a transaction with nested journal records.
-  - `GET /transactions` lists transactions with nested journal records by initiated date, then id.
-  - `PUT /transactions/{transaction_id}` performs full replacement: it preserves the transaction id, replaces `initiated_date`, tombstones prior active journal records, inserts the replacement record set, and re-checks double-entry balance atomically.
-  - `DELETE /transactions/{transaction_id}` tombstones the transaction and its active journal records atomically.
-  - `GET /records` searches active journal records while preserving each record's containing `transaction_id`.
-  - `GET /accounts/{account_id}/records` searches active journal records for one account while preserving each record's containing `transaction_id`.
-  - Record search supports exact allowlisted filters for account, category, tag, member, posting status, reconciliation status, amount ranges, USD amount ranges, initiated date ranges, pending date ranges, posted date ranges, and memo substring.
-  - Account-record views use the account id from the path and reject `account_id` as a query filter.
-  - `POST /records/bulk/category` assigns one active category to selected active journal records atomically.
-  - `POST /records/bulk/tags` adds and removes active tags on selected active journal records atomically.
-  - `POST /records/bulk/account` assigns one active account to selected active journal records atomically.
-  - `POST /records/bulk/status` updates posting and/or reconciliation status for selected active journal records atomically.
-  - Bulk record operations reject empty selections, duplicate ids, missing or inactive selected records, and missing or inactive referenced accounts, categories, or tags.
-- Shared list/query behavior:
-  - List endpoints reject unsupported query parameters.
-  - List endpoints parse `include_hidden`, `include_tombstoned`, `sort`, `sort_dir`, `limit`, and `offset` through shared router helpers when the endpoint supports them.
-  - `sort` keys and `sort_dir` values are endpoint-specific allowlists.
-  - Dynamic SQL sort identifiers are selected from store-owned allowlists; user values use parameter binding.
-  - `limit` is optional and must be between `1` and `500`; `offset` is optional and must be non-negative.
-  - Default list responses remain unpaginated and use deterministic endpoint-specific ordering.
-- Store mapping behavior:
-  - Account, category, and tag hierarchy fields are DuckDB generated virtual columns and are read through repository queries.
-  - Journal record tags are persisted as `journal_record.tag_ids INTEGER[]`; there is no journal record tag join table.
-  - DuckDB enum values are stored uppercase and mapped back to lowercase service/API values before responses leave the store.
-  - Active uniqueness is enforced by DuckDB expression indexes for non-tombstoned rows and by repository prechecks for stable API conflict messages.
-- Exchange rate behavior:
-  - `POST /exchange-rates` creates historical exchange rates.
-  - `GET /exchange-rates/{exchange_rate_id}` reads non-tombstoned exchange rates by default.
-  - `GET /exchange-rates` lists exchange rates by currency pair and effective date.
-  - `GET /exchange-rates` supports exact allowlisted filters: `from_currency`, `to_currency`, `effective_date`, and `include_tombstoned`.
-  - `PATCH /exchange-rates/{exchange_rate_id}` updates the rate value for active exchange rates.
-  - `DELETE /exchange-rates/{exchange_rate_id}` tombstones exchange rates.
-  - Currency codes must be three-letter uppercase codes.
-  - `rate` is accepted as a positive decimal string with at most 10 integer digits and 8 fractional digits and persisted as DuckDB `DECIMAL(18,8)`.
-  - `effective_date` must use `YYYY-MM-DD` calendar-date format.
-  - Active exchange rates must be unique per currency pair and effective date; tombstoned rows do not block recreation.
-- Credit limit history behavior:
-  - `POST /accounts/{account_id}/credit-limit-history` creates credit limit history entries for active accounts.
-  - `GET /accounts/{account_id}/credit-limit-history` lists active credit limit history entries by `effective_date`, then id.
-  - `GET /credit-limit-history/{credit_limit_history_id}` reads non-tombstoned credit limit history entries by default.
-  - `include_tombstoned=true` includes tombstoned credit limit history entries in get/list responses.
-  - `DELETE /credit-limit-history/{credit_limit_history_id}` tombstones credit limit history entries.
-  - `credit_limit` is accepted as a non-negative decimal string with at most 10 integer digits and 8 fractional digits and persisted as DuckDB `DECIMAL(18,8)`.
-  - `effective_date` must use `YYYY-MM-DD` calendar-date format.
-  - Active credit limit history entries must be unique per account and effective date; tombstoned rows do not block recreation.
-- Account behavior:
-  - `POST /accounts` creates active accounts with colon-separated `fqn` validation.
-  - `currency` is optional; when present it must be a three-letter uppercase code.
-  - `external_id` and `external_system` are optional and must be provided together.
-  - `GET /accounts/{account_id}` reads non-tombstoned accounts by default.
-  - `GET /accounts` lists accounts by `fqn`, excluding hidden and tombstoned rows by default.
-  - `include_hidden=true` includes hidden accounts in list responses.
-  - `include_tombstoned=true` includes tombstoned accounts in get/list responses.
-  - `PATCH /accounts/{account_id}` replaces hidden state and external identifiers.
-  - `DELETE /accounts/{account_id}` tombstones accounts.
-  - Active account `fqn` values must be unique; tombstoned rows do not block recreation.
-  - `kind`, `parent_fqn`, `name`, and `level` are derived from `fqn`.
-- Category behavior:
-  - `POST /categories` creates active categories with colon-separated `fqn` validation.
-  - `GET /categories/{category_id}` reads non-tombstoned categories by default.
-  - `GET /categories` lists categories by `fqn`, excluding hidden and tombstoned rows by default.
-  - `include_hidden=true` includes hidden categories in list responses.
-  - `include_tombstoned=true` includes tombstoned categories in get/list responses.
-  - `PATCH /categories/{category_id}` updates hidden state.
-  - `DELETE /categories/{category_id}` tombstones categories.
-  - Active category `fqn` values must be unique; tombstoned rows do not block recreation.
-  - `parent_fqn`, `name`, and `level` are derived from `fqn`.
-- Tag behavior:
-  - `POST /tags` creates active tags with colon-separated `fqn` validation.
-  - `GET /tags/{tag_id}` reads non-tombstoned tags by default.
-  - `GET /tags` lists tags by `fqn`, excluding hidden and tombstoned rows by default.
-  - `include_hidden=true` includes hidden tags in list responses.
-  - `include_tombstoned=true` includes tombstoned tags in get/list responses.
-  - `PATCH /tags/{tag_id}` updates hidden state.
-  - `DELETE /tags/{tag_id}` tombstones tags.
-  - Active tag `fqn` values must be unique; tombstoned rows do not block recreation.
-  - `parent_fqn`, `name`, and `level` are derived from `fqn`.
-- Member behavior:
-  - `POST /members` creates active household members with non-blank name validation.
-  - `GET /members/{member_id}` reads non-tombstoned members by default.
-  - `GET /members` lists members by name, excluding tombstoned rows by default.
-  - `include_tombstoned=true` includes tombstoned members in get/list responses.
-  - `PATCH /members/{member_id}` updates member name.
-  - `DELETE /members/{member_id}` tombstones members.
-  - Active member names must be unique; tombstoned rows do not block recreation.
-- OpenAPI contract:
-  - Source: `api/openapi.yaml`.
-  - Generator config: `api/oapi-codegen.yaml`.
-  - Generated output: `internal/httpapi/openapi/openapi.gen.go`.
-  - `oapi-codegen` remains the REST contract generator for models, the embedded spec, Chi server contracts, and strict-server operation contracts.
-  - `internal/httpapi` implements generated strict-server operations directly; generated request binding supplies path/query/body objects before service use cases are called.
-  - Generated OpenAPI route registration is the only source of REST route path/method declarations.
-  - Generated-file policy: `docs/generated-files.md`.
-  - API decimal values are JSON strings, not JSON numbers; decimal schemas match DuckDB `DECIMAL(18,8)` with at most 10 integer digits and 8 fractional digits.
-  - Decimal responses are read from DuckDB `DECIMAL(18,8)` values and may use DuckDB-normalized scale.
-  - API enum values are lowercase; DuckDB enum values are uppercase and mapped in the store before HTTP responses are built.
-  - API date values are `YYYY-MM-DD` strings backed by DuckDB `DATE` columns.
-  - API timestamp values are strings read from DuckDB `TIMESTAMP` columns.
-  - The stable JSON error envelope is `{"error":{"code","message"}}`.
-  - Stage 1 transaction creation accepts only `source: "manual"`; the broader data-model `source` enum values are reserved for later import/recurring stages.
-  - `budget` exists in the DuckDB schema for the Phase 1 data model and has no Stage 1 REST API.
-- CLI and REST behavior:
-  - `mina --help` and `mina help` print command usage.
-  - `mina --version` prints the development version.
-  - `mina serve --db PATH` starts the REST API server with an explicit database path.
-  - `mina serve` supports `--host`, `--port`, `--create`, and `--migrate` flags for listener binding and database open/migration policy.
-  - `mina serve` writes access logs to stderr by default.
-  - `mina serve --access-log PATH` writes access logs to the selected file instead of stderr.
-  - `mina serve --quiet` disables access logs while preserving startup output and errors.
-  - `mina serve` rejects `--quiet` combined with `--access-log`.
-  - `mina migrate --db PATH` applies database migrations without starting an HTTP listener.
-  - `mina migrate` supports `--create` to create a missing database file before applying migrations.
-  - `--create` must be supplied to create a missing database file; otherwise missing database paths are rejected before opening DuckDB.
-  - `--migrate=false` opens an existing database without applying migrations and is rejected when combined with creation of a missing database.
-  - `GET /health` returns `{"status":"ok"}`.
-  - Missing routes and unsupported methods return the stable `{"error":{"code","message"}}` JSON envelope.
-  - The REST router applies request IDs, real IP handling, panic recovery, a 30-second local API timeout, and configured access logging through Chi-compatible middleware.
-- Developer recipes are owned by `Justfile`:
-  - `just fmt`: format Go packages.
-  - `just lint`: run Go linting.
-  - `just openapi`: regenerate OpenAPI contract output.
-  - `just tidy`: run Go module tidy.
-  - `just test`: run Go tests.
-  - `just test-boundary`: run current boundary-capable test set.
-  - `just pre-commit`: run configured `prek` hooks when present.
-  - `just test-cli`: run current CLI smoke scripts.
-  - `just test-rest`: run the process-level REST smoke test.
-  - `just smoke`: run CLI and REST process smoke tests.
+- Active scope: Phase 1 Stage 1 REST APIs in one Go `cmd/mina` binary.
+- Durable state target: portable DuckDB accounting state opened through runtime/store composition.
+- Default operator workflow: start the REST API with `mina serve --db PATH --create --migrate`, or apply migrations without serving with `mina migrate --db PATH --create`.
+- Implemented durable API capability groups:
+  - Health checks and stable JSON error envelopes.
+  - Account, category, tag, and household member CRUD/list flows.
+  - Exchange-rate and account credit-limit-history flows.
+  - Transaction creation, read, list, full replacement, and tombstone deletion with nested journal records.
+  - Journal-record search and account-record search.
+  - Bulk journal-record category, tag, account, and status updates.
+- Implemented durable storage behavior:
+  - Upgrade-only DuckDB migrations with schema-version tracking.
+  - Atomic double-entry transaction persistence and replacement.
+  - Tombstone-aware reads and list defaults for applicable resources.
+  - Store-owned allowlists for dynamic filtering and sorting.
+- Current test workflow:
+  - Default tests should be in-process high-level boundary tests.
+  - End-to-end CLI and real-network REST coverage belongs in the non-default testscript integration workflow.
+- Known next work:
+  - Align local recipes and pre-commit checks with the two-test-class policy.
+  - Move all process-level end-to-end coverage under testscript.
+  - Build and adopt the in-process scenario test harness.

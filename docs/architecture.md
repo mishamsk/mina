@@ -24,14 +24,6 @@ The active scope is Phase 1 Stage 1:
 - Store: DuckDB open/migrate/query code and repository implementations.
 - HTTP API: REST/OpenAPI adapter, HTTP request/response mapping, and status mapping.
 - Runtime: in-process composition of config, database handles, stores, services, HTTP adapters, and listeners.
-- Boundary scenario test: test that drives public behavior through an app or CLI/API boundary.
-
-## Where To Look
-
-- Product scope: `docs/business-requirements.md`.
-- Phase 1 data model: `docs/phase-1-data-model.md`.
-- Current implementation inventory: `PROJECT_STATE.md`.
-- Running work checklist template: `docs/running_todo_template.md`.
 
 ## Package Boundaries
 
@@ -56,14 +48,19 @@ Rules:
 
 ## Persistent State
 
-- Accounting state lives in one DuckDB database file.
-- DuckDB is the required persistent database engine.
+- The app opens an in-memory DuckDB database first.
+- When a database file is provided, the app attaches it as the portable accounting-state database.
+- Accounting state lives in one DuckDB schema selected by runtime/store state.
+- The accounting schema defaults to `main` and may be configured to a different schema.
+- When no accounting-state database file is provided, demos and tests may store accounting state in a schema of the in-memory database.
+- Store state owns the fully qualified accounting schema name, whether attached or in-memory.
+- DuckDB is the required database engine.
 - DuckDB SQL is the schema and query dialect.
-- `docs/phase-1-data-model.md` is the source of truth for persistent tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
+- `docs/phase-1-data-model.md` is the source of truth for accounting-state tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
 - Local config is operational state only.
 - Config must not be required to interpret the accounting database.
-- The selected database path comes from explicit CLI input or local config.
-- Operational caches, if added, must be rebuildable and reside outside the portable accounting state unless explicitly documented.
+- The selected database path and schema come from explicit CLI input or local config.
+- Rebuildable in-memory/cache schemas may be added outside accounting state when documented by their owning runtime/store code.
 - Exports are explicit user actions.
 
 ## REST API
@@ -100,16 +97,17 @@ Rules:
 
 ## Testing
 
-Mina tests behavior at boundaries. Do not build a unit-test suite around private helpers.
+Mina has two test classes: in-process high-level boundary tests and testscript-driven end-to-end integration tests. Do not build a unit-test suite around private helpers.
 
-- Most tests are boundary scenario tests.
-- About 90% of tests should run in memory.
-- In-memory tests construct typed API requests through a test client and send them into the app pipeline.
-- In-memory tests should use a fresh temporary database or isolated in-memory database.
-- Scenario shape: perform an action, then read through another public path and assert persisted behavior.
-- Example: add a transaction, then list transactions and verify it is returned.
+- Normal tests are in-process high-level boundary tests.
+- Normal tests bypass CLI and network listeners.
+- Normal tests exercise app logic through an in-memory client, in-memory DuckDB, and per-test schemas.
+- Normal tests should use reusable harness building blocks so test bodies read as user scenarios instead of setup boilerplate.
+- Basic persistence checks may create through the in-memory client and assert attached database state directly.
+- Other scenario tests should use the in-memory client for fixture setup and assertions.
+- Good tests are independent of implementation details such as SQL construction, router internals, repository methods, and private service helpers.
 - Do not mock controllers, services, or stores for normal behavior tests.
-- Keep a small number of true process tests.
-- True process tests cover CLI behavior and real JSON REST behavior.
-- True process tests are not required on every commit.
-- Run true process tests before release work and after risky CLI/server/JSON changes.
+- End-to-end integration tests run only through testscript.
+- End-to-end integration tests are not run by default.
+- End-to-end integration tests own real-network REST tests, CLI tests, and later TUI tests.
+- Run end-to-end integration tests before release work and after risky CLI, server, JSON-over-HTTP, or later TUI changes.

@@ -19,7 +19,7 @@ The active build scope is Phase 1 Stage 1: REST APIs only.
 - Never work around environment failures. If the shell, Go toolchain, or repo scripts fail for environmental reasons, stop and ask.
 - The Justfile is the only owner of developer recipes. Run formatting, tests, checks, hooks, and scripts through `just`.
 - Do not invoke `gofmt`, `go test`, `prek`, or other recipe internals directly unless debugging the recipe itself.
-- `just pre-commit` owns pre-commit behavior. It should run `prek` internally when hooks exist.
+- Run `just pre-commit` for configured pre-commit checks; the Justfile owns the details.
 - Use Go modules. Keep dependencies small and explicit.
 - Write idiomatic, typed Go. Use package-level boundaries instead of generic abstraction layers until a real boundary exists.
 - Run `just fmt` after editing Go files.
@@ -34,8 +34,8 @@ For every commit:
 
 - Run `/review` in a subagent once after commit to trigger a review, and apply fixes
 - Run `just fmt` when code changed.
-- Run `just test` once code exists.
-- Run `just test-boundary` for touched behavior once that recipe exists.
-- Run `just pre-commit` before committing once that recipe exists.
+- Run `just test` for the default in-process test set once code exists.
+- Run the non-default testscript integration recipe before committing changes that touch CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior once that recipe exists.
+- Run `just pre-commit` before committing once configured hooks exist.
 - For changes that alter durable behavior, API contracts, state, or ownership boundaries, update the relevant docs in the same commit.
 - For pure documentation changes, no reviewer subagent is required.
