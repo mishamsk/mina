@@ -18,6 +18,6 @@
 - Current test workflow:
   - Default tests should be in-process high-level boundary tests.
   - End-to-end CLI and real-network REST coverage belongs in the non-default `just test-integration` workflow.
+  - Pre-commit runs light non-mutating checks, including generated OpenAPI freshness.
 - Known next work:
-  - Rebuild pre-commit checks around light non-mutating hooks.
   - Build and adopt the in-process scenario test harness.

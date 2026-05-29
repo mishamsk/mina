@@ -1,23 +1,38 @@
 repos:
+  - repo: builtin
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-illegal-windows-names
+      - id: check-json
+      - id: check-json5
+      - id: pretty-format-json
+      - id: check-toml
+      - id: check-vcs-permalinks
+      - id: check-yaml
+      - id: check-xml
+      - id: mixed-line-ending
+        args: [--fix=no]
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
   - repo: local
     hooks:
-      - id: mina-fmt
-        name: mina fmt
-        entry: just fmt
+      - id: mina-fmt-check
+        name: mina fmt check
+        entry: just fmt-check
         language: system
         pass_filenames: false
-      - id: mina-openapi
-        name: mina openapi
-        entry: just openapi
+      - id: mina-openapi-check
+        name: mina openapi check
+        entry: just openapi-check
         language: system
         pass_filenames: false
       - id: mina-lint
         name: mina lint
         entry: just lint
-        language: system
-        pass_filenames: false
-      - id: mina-test
-        name: mina test
-        entry: just test
         language: system
         pass_filenames: false

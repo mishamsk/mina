@@ -44,16 +44,16 @@ This plan addresses every item in `docs/review.md`. Start with the durable docs 
   - [x] Required docs updated
 
 ### Commit 3: Rebuild pre-commit around light non-mutating checks
-- [ ] Add all relevant supported `prek` built-in hooks from the documented built-in hook set. (`docs/review.md`: `.pre-commit-config.yaml:1`)
-- [ ] Remove all test-running hooks from `.pre-commit-config.yaml`; pre-commit must stay light and not run `just test` or any integration suite. (`docs/review.md`: `.pre-commit-config.yaml:19`)
-- [ ] Replace the mutating OpenAPI pre-commit hook with a non-mutating generated-code freshness check that fails when generated output does not match `api/openapi.yaml` and `api/oapi-codegen.yaml`. (`docs/review.md`: `.pre-commit-config.yaml:9`)
-- [ ] Add or adjust a Justfile recipe for the non-mutating generated-code check if the hook needs a stable entrypoint.
-- [ ] Ensure `just pre-commit` runs the configured hooks without falling back to obsolete `test-boundary` behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes if code changed
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Add all relevant supported `prek` built-in hooks from the documented built-in hook set. (`docs/review.md`: `.pre-commit-config.yaml:1`)
+- [x] Remove all test-running hooks from `.pre-commit-config.yaml`; pre-commit must stay light and not run `just test` or any integration suite. (`docs/review.md`: `.pre-commit-config.yaml:19`)
+- [x] Replace the mutating OpenAPI pre-commit hook with a non-mutating generated-code freshness check that fails when generated output does not match `api/openapi.yaml` and `api/oapi-codegen.yaml`. (`docs/review.md`: `.pre-commit-config.yaml:9`)
+- [x] Add or adjust a Justfile recipe for the non-mutating generated-code check if the hook needs a stable entrypoint.
+- [x] Ensure `just pre-commit` runs the configured hooks without falling back to obsolete `test-boundary` behavior.
+- [x] Verification
+  - [x] `just fmt` passes if code changed
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 4: Move end-to-end coverage fully under testscript
 - [ ] Inventory current process-level CLI and REST tests and classify them as testscript end-to-end coverage or in-process tests.
