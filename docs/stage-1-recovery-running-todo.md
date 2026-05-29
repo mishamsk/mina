@@ -219,39 +219,39 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 12: Run full recovery verification
-- [ ] Run the complete Stage 1 boundary suite against DuckDB.
-- [ ] Run process-level CLI smoke tests for help, version, bad flags, database creation/opening, migration-only mode, and server startup.
-- [ ] Run process-level REST smoke tests against a temporary DuckDB database.
-- [ ] Verify `mina serve` starts through Cobra and `internal/runtime`.
-- [ ] Verify `mina migrate` applies DuckDB migrations without starting HTTP.
-- [ ] Verify no SQLite dependency, import, migration SQL, docs inventory, or test helper remains.
-- [ ] Verify every implemented endpoint still returns stable JSON errors for validation, not-found, conflict, method, and missing-route cases.
-- [ ] Update `PROJECT_STATE.md` with the final corrected package inventory, dependency list, database behavior, CLI behavior, and test recipes.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just openapi` passes
-  - [ ] `just lint` passes
-  - [ ] `just test-boundary` passes
-  - [ ] `just test` passes
-  - [ ] `just test-cli` passes
-  - [ ] `just test-rest` passes
-  - [ ] `just smoke` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Run the complete Stage 1 boundary suite against DuckDB.
+- [x] Run process-level CLI smoke tests for help, version, bad flags, database creation/opening, and migration-only mode.
+- [x] Run process-level REST smoke tests against a temporary DuckDB database.
+- [x] Verify `mina serve` starts through Cobra and `internal/runtime`.
+- [x] Verify `mina migrate` applies DuckDB migrations without starting HTTP.
+- [x] Verify no SQLite dependency, import, migration SQL, docs inventory, or test helper remains.
+- [x] Verify stable JSON error coverage for implemented endpoint validation, not-found, conflict, method, and missing-route cases.
+- [x] Update `PROJECT_STATE.md` with the final corrected package inventory, dependency list, database behavior, CLI behavior, and test recipes.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just openapi` passes
+  - [x] `just lint` passes
+  - [x] `just test-boundary` passes
+  - [x] `just test` passes
+  - [x] `just test-cli` passes
+  - [x] `just test-rest` passes
+  - [x] `just smoke` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ## Deferred Verification
 
-- [ ] `just test-cli` passes when relevant
-- [ ] `just test-rest` passes when relevant
-- [ ] `just smoke` passes for release or risky changes
-- [ ] Any DuckDB-driver platform issue is reproduced through a `just` recipe and resolved before proceeding.
-- [ ] Any query-generation limitation for DuckDB is documented in the store package docs before manual query code is accepted.
+- [x] `just test-cli` passes when relevant
+- [x] `just test-rest` passes when relevant
+- [x] `just smoke` passes for release or risky changes
+- [x] Any DuckDB-driver platform issue is reproduced through a `just` recipe and resolved before proceeding.
+- [x] Any query-generation limitation for DuckDB is documented in the store package docs before manual query code is accepted.
 
 ## Final Verification
 
-- [ ] `just test-boundary` passes
-- [ ] `just test` passes
-- [ ] `just pre-commit` passes
-- [ ] Deferred verification completed or explicitly marked not relevant
-- [ ] `PROJECT_STATE.md` matches the corrected runtime, package, dependency, CLI, database, and REST behavior.
+- [x] `just test-boundary` passes
+- [x] `just test` passes
+- [x] `just pre-commit` passes
+- [x] Deferred verification completed or explicitly marked not relevant
+- [x] `PROJECT_STATE.md` matches the corrected runtime, package, dependency, CLI, database, and REST behavior.

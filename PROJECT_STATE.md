@@ -7,10 +7,11 @@
   - `golangci-lint` v2.12.2 is pinned as a Go module tool.
   - `oapi-codegen` v2.7.0 is pinned as a Go module tool.
   - `testscript` v1.14.1 supports CLI smoke scripts.
-- Direct dependencies staged for the recovery refactor:
-  - `github.com/spf13/cobra` v1.10.2 for CLI parsing.
+- Direct dependencies:
   - `github.com/duckdb/duckdb-go/v2` v2.10503.1 for the DuckDB `database/sql` driver.
-  - Decimal API inputs remain strings at service/HTTP boundaries; store persistence uses DuckDB `DECIMAL(18,8)` columns.
+  - `github.com/getkin/kin-openapi` v0.135.0 for generated OpenAPI spec loading and validation.
+  - `github.com/rogpeppe/go-internal` v1.14.1 for `testscript` CLI smoke tests.
+  - `github.com/spf13/cobra` v1.10.2 for CLI parsing.
 - Package inventory:
   - `cmd/mina`: Cobra CLI entrypoint with help/version output, `serve`, and `migrate` commands.
   - `internal/runtime`: process config structs and validation, database open/create/migrate policy, service/store composition, and app handler wiring.
