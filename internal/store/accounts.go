@@ -5,22 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services"
+	"mina.local/mina/internal/services/accounts"
 )
-
-// AccountListOptions controls account list visibility.
-type AccountListOptions struct {
-	IncludeHidden     bool
-	IncludeTombstoned bool
-	List              models.ListOptions
-}
 
 // AccountStore persists accounts.
 type AccountStore struct {
 	db *sql.DB
 }
+
+var _ accounts.Repository = (*AccountStore)(nil)
 
 // NewAccountStore creates an account store using db.
 func NewAccountStore(db *sql.DB) *AccountStore {
@@ -28,15 +23,15 @@ func NewAccountStore(db *sql.DB) *AccountStore {
 }
 
 // Create persists a new account.
-func (s *AccountStore) Create(ctx context.Context, req models.CreateAccountRequest) (models.Account, error) {
-	var account models.Account
+func (s *AccountStore) Create(ctx context.Context, input accounts.CreateInput) (accounts.Account, error) {
+	var account accounts.Account
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := accountFQNExists(ctx, tx, req.FQN)
+		exists, err := accountFQNExists(ctx, tx, input.FQN)
 		if err != nil {
 			return err
 		}
 		if exists {
-			return fmt.Errorf("%w: active account fqn already exists", ErrConflict)
+			return fmt.Errorf("%w: active account fqn already exists", services.ErrConflict)
 		}
 
 		row := tx.QueryRowContext(
@@ -44,16 +39,16 @@ func (s *AccountStore) Create(ctx context.Context, req models.CreateAccountReque
 			`INSERT INTO account (fqn, is_hidden, currency, external_id, external_system)
 VALUES (?, ?, ?, ?, ?)
 RETURNING account_id, fqn, is_hidden, currency, external_id, external_system, created_at, updated_at, tombstoned_at`,
-			req.FQN,
-			req.IsHidden != nil && *req.IsHidden,
-			req.Currency,
-			req.ExternalID,
-			req.ExternalSystem,
+			input.FQN,
+			input.IsHidden,
+			input.Currency,
+			input.ExternalID,
+			input.ExternalSystem,
 		)
 		account, err = scanAccount(row)
 		if err != nil {
 			if isUniqueConstraintError(err) {
-				return fmt.Errorf("%w: active account fqn already exists", ErrConflict)
+				return fmt.Errorf("%w: active account fqn already exists", services.ErrConflict)
 			}
 			return fmt.Errorf("insert account: %w", err)
 		}
@@ -61,14 +56,14 @@ RETURNING account_id, fqn, is_hidden, currency, external_id, external_system, cr
 		return nil
 	})
 	if err != nil {
-		return models.Account{}, err
+		return accounts.Account{}, err
 	}
 
 	return account, nil
 }
 
 // Get returns an account by ID.
-func (s *AccountStore) Get(ctx context.Context, id int64, includeTombstoned bool) (models.Account, error) {
+func (s *AccountStore) Get(ctx context.Context, id int64, includeTombstoned bool) (accounts.Account, error) {
 	query := `SELECT account_id, fqn, is_hidden, currency, external_id, external_system, created_at, updated_at, tombstoned_at
 FROM account
 WHERE account_id = ?`
@@ -79,17 +74,17 @@ WHERE account_id = ?`
 
 	account, err := scanAccount(s.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Account{}, ErrNotFound
+		return accounts.Account{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.Account{}, fmt.Errorf("get account: %w", err)
+		return accounts.Account{}, fmt.Errorf("get account: %w", err)
 	}
 
 	return account, nil
 }
 
 // List returns accounts in deterministic hierarchy order.
-func (s *AccountStore) List(ctx context.Context, opts AccountListOptions) ([]models.Account, error) {
+func (s *AccountStore) List(ctx context.Context, opts accounts.ListOptions) ([]accounts.Account, error) {
 	query := `SELECT account_id, fqn, is_hidden, currency, external_id, external_system, created_at, updated_at, tombstoned_at
 FROM account
 WHERE 1 = 1`
@@ -100,14 +95,14 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query, args = appendListOrderAndPage(query, args, opts.List, accountSortColumns, models.SortKeyFQN, "account_id")
+	query, args = appendServiceListOrderAndPage(query, args, opts.List, accountSortColumns, services.SortKeyFQN, "account_id")
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}
 
-	accounts := []models.Account{}
+	accounts := []accounts.Account{}
 	for rows.Next() {
 		account, err := scanAccount(rows)
 		if err != nil {
@@ -129,7 +124,7 @@ WHERE 1 = 1`
 }
 
 // UpdateMutable updates account hidden state and external identifiers.
-func (s *AccountStore) UpdateMutable(ctx context.Context, id int64, req models.UpdateAccountRequest) (models.Account, error) {
+func (s *AccountStore) UpdateMutable(ctx context.Context, id int64, input accounts.UpdateInput) (accounts.Account, error) {
 	row := s.db.QueryRowContext(
 		ctx,
 		`UPDATE account
@@ -139,17 +134,17 @@ SET is_hidden = ?,
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE account_id = ? AND tombstoned_at IS NULL
 RETURNING account_id, fqn, is_hidden, currency, external_id, external_system, created_at, updated_at, tombstoned_at`,
-		*req.IsHidden,
-		req.ExternalID,
-		req.ExternalSystem,
+		*input.IsHidden,
+		input.ExternalID,
+		input.ExternalSystem,
 		id,
 	)
 	account, err := scanAccount(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Account{}, ErrNotFound
+		return accounts.Account{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.Account{}, fmt.Errorf("update account mutable fields: %w", err)
+		return accounts.Account{}, fmt.Errorf("update account mutable fields: %w", err)
 	}
 
 	return account, nil
@@ -174,7 +169,7 @@ WHERE account_id = ? AND tombstoned_at IS NULL`,
 		return fmt.Errorf("read tombstone affected rows: %w", err)
 	}
 	if affected == 0 {
-		return ErrNotFound
+		return services.ErrNotFound
 	}
 
 	return nil
@@ -184,8 +179,8 @@ type accountScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanAccount(scanner accountScanner) (models.Account, error) {
-	var account models.Account
+func scanAccount(scanner accountScanner) (accounts.Account, error) {
+	var account accounts.Account
 	var currency sql.NullString
 	var externalID sql.NullString
 	var externalSystem sql.NullString
@@ -201,7 +196,7 @@ func scanAccount(scanner accountScanner) (models.Account, error) {
 		&account.UpdatedAt,
 		&tombstonedAt,
 	); err != nil {
-		return models.Account{}, err
+		return accounts.Account{}, err
 	}
 	if currency.Valid {
 		account.Currency = &currency.String
@@ -215,9 +210,6 @@ func scanAccount(scanner accountScanner) (models.Account, error) {
 	if tombstonedAt.Valid {
 		account.TombstonedAt = &tombstonedAt.String
 	}
-
-	account.ParentFQN, account.Name, account.Level = models.HierarchyFields(account.FQN)
-	account.Kind = strings.Split(account.FQN, ":")[0]
 
 	return account, nil
 }
@@ -239,8 +231,8 @@ func accountFQNExists(ctx context.Context, tx *sql.Tx, fqn string) (bool, error)
 	return true, nil
 }
 
-var accountSortColumns = map[models.SortKey][]string{
-	models.SortKeyCreatedAt: {"created_at"},
-	models.SortKeyFQN:       {"fqn"},
-	models.SortKeyUpdatedAt: {"updated_at"},
+var accountSortColumns = map[services.SortKey][]string{
+	services.SortKeyCreatedAt: {"created_at"},
+	services.SortKeyFQN:       {"fqn"},
+	services.SortKeyUpdatedAt: {"updated_at"},
 }

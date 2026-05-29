@@ -6,22 +6,16 @@ import (
 	"errors"
 	"fmt"
 
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services"
+	"mina.local/mina/internal/services/exchangerates"
 )
-
-// ExchangeRateListOptions controls exchange rate list filters and visibility.
-type ExchangeRateListOptions struct {
-	FromCurrency      *string
-	ToCurrency        *string
-	EffectiveDate     *string
-	IncludeTombstoned bool
-	List              models.ListOptions
-}
 
 // ExchangeRateStore persists exchange rates.
 type ExchangeRateStore struct {
 	db *sql.DB
 }
+
+var _ exchangerates.Repository = (*ExchangeRateStore)(nil)
 
 // NewExchangeRateStore creates an exchange rate store using db.
 func NewExchangeRateStore(db *sql.DB) *ExchangeRateStore {
@@ -29,15 +23,15 @@ func NewExchangeRateStore(db *sql.DB) *ExchangeRateStore {
 }
 
 // Create persists a new exchange rate.
-func (s *ExchangeRateStore) Create(ctx context.Context, req models.CreateExchangeRateRequest) (models.ExchangeRate, error) {
-	var rate models.ExchangeRate
+func (s *ExchangeRateStore) Create(ctx context.Context, input exchangerates.CreateInput) (exchangerates.ExchangeRate, error) {
+	var rate exchangerates.ExchangeRate
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := activeExchangeRateExists(ctx, tx, req.FromCurrency, req.ToCurrency, req.EffectiveDate)
+		exists, err := activeExchangeRateExists(ctx, tx, input.FromCurrency, input.ToCurrency, input.EffectiveDate)
 		if err != nil {
 			return err
 		}
 		if exists {
-			return fmt.Errorf("%w: active exchange rate already exists for currency pair and effective date", ErrConflict)
+			return fmt.Errorf("%w: active exchange rate already exists for currency pair and effective date", services.ErrConflict)
 		}
 
 		row := tx.QueryRowContext(
@@ -45,15 +39,15 @@ func (s *ExchangeRateStore) Create(ctx context.Context, req models.CreateExchang
 			`INSERT INTO exchange_rate (from_currency, to_currency, rate, effective_date)
 VALUES (?, ?, ?, ?)
 RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at`,
-			req.FromCurrency,
-			req.ToCurrency,
-			req.Rate,
-			req.EffectiveDate,
+			input.FromCurrency,
+			input.ToCurrency,
+			input.Rate,
+			input.EffectiveDate,
 		)
 		rate, err = scanExchangeRate(row)
 		if err != nil {
 			if isUniqueConstraintError(err) {
-				return fmt.Errorf("%w: active exchange rate already exists for currency pair and effective date", ErrConflict)
+				return fmt.Errorf("%w: active exchange rate already exists for currency pair and effective date", services.ErrConflict)
 			}
 			return fmt.Errorf("insert exchange rate: %w", err)
 		}
@@ -61,14 +55,14 @@ RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, cr
 		return nil
 	})
 	if err != nil {
-		return models.ExchangeRate{}, err
+		return exchangerates.ExchangeRate{}, err
 	}
 
 	return rate, nil
 }
 
 // Get returns an exchange rate by ID.
-func (s *ExchangeRateStore) Get(ctx context.Context, id int64, includeTombstoned bool) (models.ExchangeRate, error) {
+func (s *ExchangeRateStore) Get(ctx context.Context, id int64, includeTombstoned bool) (exchangerates.ExchangeRate, error) {
 	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
 FROM exchange_rate
 WHERE exchange_rate_id = ?`
@@ -79,17 +73,17 @@ WHERE exchange_rate_id = ?`
 
 	rate, err := scanExchangeRate(s.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.ExchangeRate{}, ErrNotFound
+		return exchangerates.ExchangeRate{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.ExchangeRate{}, fmt.Errorf("get exchange rate: %w", err)
+		return exchangerates.ExchangeRate{}, fmt.Errorf("get exchange rate: %w", err)
 	}
 
 	return rate, nil
 }
 
 // List returns exchange rates using explicit filters and deterministic ordering.
-func (s *ExchangeRateStore) List(ctx context.Context, opts ExchangeRateListOptions) ([]models.ExchangeRate, error) {
+func (s *ExchangeRateStore) List(ctx context.Context, opts exchangerates.ListOptions) ([]exchangerates.ExchangeRate, error) {
 	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
 FROM exchange_rate
 WHERE 1 = 1`
@@ -109,14 +103,14 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query, args = appendListOrderAndPage(query, args, opts.List, exchangeRateSortColumns, models.SortKeyCurrencyPair, "exchange_rate_id")
+	query, args = appendServiceListOrderAndPage(query, args, opts.List, exchangeRateSortColumns, services.SortKeyCurrencyPair, "exchange_rate_id")
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list exchange rates: %w", err)
 	}
 
-	rates := []models.ExchangeRate{}
+	rates := []exchangerates.ExchangeRate{}
 	for rows.Next() {
 		rate, err := scanExchangeRate(rows)
 		if err != nil {
@@ -138,7 +132,7 @@ WHERE 1 = 1`
 }
 
 // UpdateRate updates an active exchange rate value.
-func (s *ExchangeRateStore) UpdateRate(ctx context.Context, id int64, rate string) (models.ExchangeRate, error) {
+func (s *ExchangeRateStore) UpdateRate(ctx context.Context, id int64, rate string) (exchangerates.ExchangeRate, error) {
 	row := s.db.QueryRowContext(
 		ctx,
 		`UPDATE exchange_rate
@@ -150,10 +144,10 @@ RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, cr
 	)
 	updated, err := scanExchangeRate(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.ExchangeRate{}, ErrNotFound
+		return exchangerates.ExchangeRate{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.ExchangeRate{}, fmt.Errorf("update exchange rate: %w", err)
+		return exchangerates.ExchangeRate{}, fmt.Errorf("update exchange rate: %w", err)
 	}
 
 	return updated, nil
@@ -177,7 +171,7 @@ WHERE exchange_rate_id = ? AND tombstoned_at IS NULL`,
 		return fmt.Errorf("read tombstone affected rows: %w", err)
 	}
 	if affected == 0 {
-		return ErrNotFound
+		return services.ErrNotFound
 	}
 
 	return nil
@@ -187,8 +181,8 @@ type exchangeRateScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanExchangeRate(scanner exchangeRateScanner) (models.ExchangeRate, error) {
-	var rate models.ExchangeRate
+func scanExchangeRate(scanner exchangeRateScanner) (exchangerates.ExchangeRate, error) {
+	var rate exchangerates.ExchangeRate
 	var tombstonedAt sql.NullString
 	if err := scanner.Scan(
 		&rate.ID,
@@ -199,7 +193,7 @@ func scanExchangeRate(scanner exchangeRateScanner) (models.ExchangeRate, error) 
 		&rate.CreatedAt,
 		&tombstonedAt,
 	); err != nil {
-		return models.ExchangeRate{}, err
+		return exchangerates.ExchangeRate{}, err
 	}
 	if tombstonedAt.Valid {
 		rate.TombstonedAt = &tombstonedAt.String
@@ -230,10 +224,10 @@ LIMIT 1`,
 	return true, nil
 }
 
-var exchangeRateSortColumns = map[models.SortKey][]string{
-	models.SortKeyCreatedAt:     {"created_at"},
-	models.SortKeyCurrencyPair:  {"from_currency", "to_currency", "effective_date"},
-	models.SortKeyEffectiveDate: {"effective_date"},
-	models.SortKeyFromCurrency:  {"from_currency"},
-	models.SortKeyToCurrency:    {"to_currency"},
+var exchangeRateSortColumns = map[services.SortKey][]string{
+	services.SortKeyCreatedAt:     {"created_at"},
+	services.SortKeyCurrencyPair:  {"from_currency", "to_currency", "effective_date"},
+	services.SortKeyEffectiveDate: {"effective_date"},
+	services.SortKeyFromCurrency:  {"from_currency"},
+	services.SortKeyToCurrency:    {"to_currency"},
 }

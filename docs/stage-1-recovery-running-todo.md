@@ -102,21 +102,21 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 6: Refactor account, credit limit, and exchange rate services
-- [ ] Create app-owned packages for accounts, credit limit history, and exchange rates with domain types, `Service`, and repository interfaces.
-- [ ] Move validation and use-case logic out of the old controller package.
-- [ ] Keep account hierarchy, currency validation, external identifier validation, credit limit validation, and exchange rate validation in service packages.
-- [ ] Keep HTTP DTO mapping in `internal/httpapi`.
-- [ ] Make `internal/store` implement the new repositories.
-- [ ] Preserve current REST behavior for all account, credit limit history, and exchange rate endpoints.
-- [ ] Update boundary tests for hidden/tombstoned filtering, active uniqueness, currency/rate/decimal validation, effective-date validation, and list ordering.
-- [ ] Update package docs and `PROJECT_STATE.md`.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Create app-owned packages for accounts, credit limit history, and exchange rates with domain types, `Service`, and repository interfaces.
+- [x] Move validation and use-case logic out of the old controller package.
+- [x] Keep account hierarchy, currency validation, external identifier validation, credit limit validation, and exchange rate validation in service packages.
+- [x] Keep HTTP DTO mapping in `internal/httpapi`.
+- [x] Make `internal/store` implement the new repositories.
+- [x] Preserve current REST behavior for all account, credit limit history, and exchange rate endpoints.
+- [x] Update boundary tests for hidden/tombstoned filtering, active uniqueness, currency/rate/decimal validation, effective-date validation, and list ordering.
+- [x] Update package docs and `PROJECT_STATE.md`.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 7: Refactor transaction, journal record, search, and bulk services
 - [ ] Create app-owned transaction and journal record packages, or one transaction package with record-owned subtypes, matching the architecture decision.

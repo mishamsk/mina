@@ -15,10 +15,10 @@
   - `cmd/mina`: Cobra CLI entrypoint with help/version output, `serve`, and `migrate` commands.
   - `internal/runtime`: process config structs and validation, database open/create/migrate policy, controller/store composition, and app handler wiring.
   - `internal/httpapi`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, JSON API error mapping, and generated OpenAPI contract subpackage.
-  - `internal/services`: app-owned service package family. `categories`, `tags`, and `members` own their domain types, validation, use cases, and repository interfaces; `accounts`, `exchangerates`, `creditlimits`, `transactions`, `journalrecords`, and `recordbulk` are target skeletons.
+  - `internal/services`: app-owned service package family. `accounts`, `categories`, `tags`, `members`, `exchangerates`, and `creditlimits` own their domain types, validation, use cases, and repository interfaces; `transactions`, `journalrecords`, and `recordbulk` are target skeletons.
   - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate/transaction data shapes and stable API error response models.
   - `internal/store`: SQLite connection, migration, transaction helper, repository implementations, account/category/tag/member/credit-limit-history/exchange-rate/transaction persistence, and test database helpers.
-  - `internal/controllers`: temporary controller registry plus account/credit-limit-history/exchange-rate/transaction use cases and validation.
+  - `internal/controllers`: temporary controller registry plus transaction use cases and validation.
   - `internal/apptest`: in-process app boundary test client that constructs apps through `internal/runtime`.
 - Database behavior:
   - Local accounting state uses SQLite through `modernc.org/sqlite` v1.50.1.

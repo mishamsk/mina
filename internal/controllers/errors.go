@@ -19,7 +19,3 @@ func invalidRequest(message string) *Error {
 func notFound(message string) *Error {
 	return &Error{Code: models.ErrorCodeNotFound, Message: message}
 }
-
-func conflict(message string) *Error {
-	return &Error{Code: models.ErrorCodeConflict, Message: message}
-}

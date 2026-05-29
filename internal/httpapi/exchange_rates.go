@@ -3,8 +3,8 @@ package httpapi
 import (
 	"net/http"
 
-	"mina.local/mina/internal/controllers"
 	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services/exchangerates"
 )
 
 func registerExchangeRateRoutes(mux *http.ServeMux, deps Dependencies) {
@@ -15,13 +15,18 @@ func registerExchangeRateRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		rate, err := deps.Controllers.ExchangeRates.Create(r.Context(), req)
+		rate, err := deps.ExchangeRates.Create(r.Context(), exchangerates.CreateInput{
+			FromCurrency:  req.FromCurrency,
+			ToCurrency:    req.ToCurrency,
+			Rate:          req.Rate,
+			EffectiveDate: req.EffectiveDate,
+		})
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, rate)
+		writeJSON(w, http.StatusCreated, exchangeRateResponse(rate))
 	})
 
 	mux.HandleFunc("GET /exchange-rates", func(w http.ResponseWriter, r *http.Request) {
@@ -45,9 +50,9 @@ func registerExchangeRateRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		opts := controllers.ExchangeRateListOptions{
+		opts := exchangerates.ListOptions{
 			IncludeTombstoned: query.IncludeTombstoned,
-			List:              query.List,
+			List:              serviceListOptions(query.List),
 		}
 		if value, ok := query.Filters[models.FilterKeyFromCurrency]; ok {
 			opts.FromCurrency = &value
@@ -59,13 +64,13 @@ func registerExchangeRateRoutes(mux *http.ServeMux, deps Dependencies) {
 			opts.EffectiveDate = &value
 		}
 
-		rates, err := deps.Controllers.ExchangeRates.List(r.Context(), opts)
+		rates, err := deps.ExchangeRates.List(r.Context(), opts)
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, models.ExchangeRateListResponse{ExchangeRates: rates})
+		writeJSON(w, http.StatusOK, models.ExchangeRateListResponse{ExchangeRates: exchangeRateResponses(rates)})
 	})
 
 	mux.HandleFunc("GET /exchange-rates/{exchange_rate_id}", func(w http.ResponseWriter, r *http.Request) {
@@ -78,13 +83,13 @@ func registerExchangeRateRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		rate, err := deps.Controllers.ExchangeRates.Get(r.Context(), id, includeTombstoned)
+		rate, err := deps.ExchangeRates.Get(r.Context(), id, includeTombstoned)
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, rate)
+		writeJSON(w, http.StatusOK, exchangeRateResponse(rate))
 	})
 
 	mux.HandleFunc("PATCH /exchange-rates/{exchange_rate_id}", func(w http.ResponseWriter, r *http.Request) {
@@ -99,13 +104,13 @@ func registerExchangeRateRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		rate, err := deps.Controllers.ExchangeRates.UpdateRate(r.Context(), id, req)
+		rate, err := deps.ExchangeRates.UpdateRate(r.Context(), id, exchangerates.UpdateInput{Rate: req.Rate})
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, rate)
+		writeJSON(w, http.StatusOK, exchangeRateResponse(rate))
 	})
 
 	mux.HandleFunc("DELETE /exchange-rates/{exchange_rate_id}", func(w http.ResponseWriter, r *http.Request) {
@@ -114,11 +119,32 @@ func registerExchangeRateRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		if err := deps.Controllers.ExchangeRates.Delete(r.Context(), id); err != nil {
+		if err := deps.ExchangeRates.Delete(r.Context(), id); err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+func exchangeRateResponse(rate exchangerates.ExchangeRate) models.ExchangeRate {
+	return models.ExchangeRate{
+		ID:            rate.ID,
+		FromCurrency:  rate.FromCurrency,
+		ToCurrency:    rate.ToCurrency,
+		Rate:          rate.Rate,
+		EffectiveDate: rate.EffectiveDate,
+		CreatedAt:     rate.CreatedAt,
+		TombstonedAt:  rate.TombstonedAt,
+	}
+}
+
+func exchangeRateResponses(rates []exchangerates.ExchangeRate) []models.ExchangeRate {
+	responses := make([]models.ExchangeRate, 0, len(rates))
+	for _, rate := range rates {
+		responses = append(responses, exchangeRateResponse(rate))
+	}
+
+	return responses
 }

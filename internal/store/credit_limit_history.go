@@ -6,19 +6,16 @@ import (
 	"errors"
 	"fmt"
 
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services"
+	"mina.local/mina/internal/services/creditlimits"
 )
-
-// CreditLimitHistoryListOptions controls credit limit history list visibility.
-type CreditLimitHistoryListOptions struct {
-	IncludeTombstoned bool
-	List              models.ListOptions
-}
 
 // CreditLimitHistoryStore persists account credit limit history.
 type CreditLimitHistoryStore struct {
 	db *sql.DB
 }
+
+var _ creditlimits.Repository = (*CreditLimitHistoryStore)(nil)
 
 // NewCreditLimitHistoryStore creates a credit limit history store using db.
 func NewCreditLimitHistoryStore(db *sql.DB) *CreditLimitHistoryStore {
@@ -26,23 +23,23 @@ func NewCreditLimitHistoryStore(db *sql.DB) *CreditLimitHistoryStore {
 }
 
 // Create persists a new credit limit history entry for an active account.
-func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, req models.CreateCreditLimitHistoryRequest) (models.CreditLimitHistory, error) {
-	var history models.CreditLimitHistory
+func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, input creditlimits.CreateInput) (creditlimits.CreditLimitHistory, error) {
+	var history creditlimits.CreditLimitHistory
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
 		accountExists, err := activeAccountExists(ctx, tx, accountID)
 		if err != nil {
 			return err
 		}
 		if !accountExists {
-			return ErrNotFound
+			return services.ErrNotFound
 		}
 
-		exists, err := activeCreditLimitHistoryExists(ctx, tx, accountID, req.EffectiveDate)
+		exists, err := activeCreditLimitHistoryExists(ctx, tx, accountID, input.EffectiveDate)
 		if err != nil {
 			return err
 		}
 		if exists {
-			return fmt.Errorf("%w: active credit limit history already exists for account and effective date", ErrConflict)
+			return fmt.Errorf("%w: active credit limit history already exists for account and effective date", services.ErrConflict)
 		}
 
 		row := tx.QueryRowContext(
@@ -51,13 +48,13 @@ func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, r
 VALUES (?, ?, ?)
 RETURNING credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at`,
 			accountID,
-			req.CreditLimit,
-			req.EffectiveDate,
+			input.CreditLimit,
+			input.EffectiveDate,
 		)
 		history, err = scanCreditLimitHistory(row)
 		if err != nil {
 			if isUniqueConstraintError(err) {
-				return fmt.Errorf("%w: active credit limit history already exists for account and effective date", ErrConflict)
+				return fmt.Errorf("%w: active credit limit history already exists for account and effective date", services.ErrConflict)
 			}
 			return fmt.Errorf("insert credit limit history: %w", err)
 		}
@@ -65,14 +62,14 @@ RETURNING credit_limit_history_id, account_id, credit_limit, effective_date, cre
 		return nil
 	})
 	if err != nil {
-		return models.CreditLimitHistory{}, err
+		return creditlimits.CreditLimitHistory{}, err
 	}
 
 	return history, nil
 }
 
 // Get returns a credit limit history entry by ID.
-func (s *CreditLimitHistoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (models.CreditLimitHistory, error) {
+func (s *CreditLimitHistoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (creditlimits.CreditLimitHistory, error) {
 	query := `SELECT credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at
 FROM credit_limit_history
 WHERE credit_limit_history_id = ?`
@@ -83,23 +80,23 @@ WHERE credit_limit_history_id = ?`
 
 	history, err := scanCreditLimitHistory(s.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.CreditLimitHistory{}, ErrNotFound
+		return creditlimits.CreditLimitHistory{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.CreditLimitHistory{}, fmt.Errorf("get credit limit history: %w", err)
+		return creditlimits.CreditLimitHistory{}, fmt.Errorf("get credit limit history: %w", err)
 	}
 
 	return history, nil
 }
 
 // ListByAccount returns credit limit history for an active account in effective-date order.
-func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID int64, opts CreditLimitHistoryListOptions) ([]models.CreditLimitHistory, error) {
+func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID int64, opts creditlimits.ListOptions) ([]creditlimits.CreditLimitHistory, error) {
 	accountExists, err := activeAccountExists(ctx, s.db, accountID)
 	if err != nil {
 		return nil, err
 	}
 	if !accountExists {
-		return nil, ErrNotFound
+		return nil, services.ErrNotFound
 	}
 
 	query := `SELECT credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at
@@ -109,14 +106,14 @@ WHERE account_id = ?`
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query, args = appendListOrderAndPage(query, args, opts.List, creditLimitHistorySortColumns, models.SortKeyEffectiveDate, "credit_limit_history_id")
+	query, args = appendServiceListOrderAndPage(query, args, opts.List, creditLimitHistorySortColumns, services.SortKeyEffectiveDate, "credit_limit_history_id")
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list credit limit history: %w", err)
 	}
 
-	history := []models.CreditLimitHistory{}
+	history := []creditlimits.CreditLimitHistory{}
 	for rows.Next() {
 		entry, err := scanCreditLimitHistory(rows)
 		if err != nil {
@@ -155,7 +152,7 @@ WHERE credit_limit_history_id = ? AND tombstoned_at IS NULL`,
 		return fmt.Errorf("read tombstone affected rows: %w", err)
 	}
 	if affected == 0 {
-		return ErrNotFound
+		return services.ErrNotFound
 	}
 
 	return nil
@@ -165,8 +162,8 @@ type creditLimitHistoryScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanCreditLimitHistory(scanner creditLimitHistoryScanner) (models.CreditLimitHistory, error) {
-	var history models.CreditLimitHistory
+func scanCreditLimitHistory(scanner creditLimitHistoryScanner) (creditlimits.CreditLimitHistory, error) {
+	var history creditlimits.CreditLimitHistory
 	var tombstonedAt sql.NullString
 	if err := scanner.Scan(
 		&history.ID,
@@ -176,7 +173,7 @@ func scanCreditLimitHistory(scanner creditLimitHistoryScanner) (models.CreditLim
 		&history.CreatedAt,
 		&tombstonedAt,
 	); err != nil {
-		return models.CreditLimitHistory{}, err
+		return creditlimits.CreditLimitHistory{}, err
 	}
 	if tombstonedAt.Valid {
 		history.TombstonedAt = &tombstonedAt.String
@@ -227,7 +224,7 @@ LIMIT 1`,
 	return true, nil
 }
 
-var creditLimitHistorySortColumns = map[models.SortKey][]string{
-	models.SortKeyCreatedAt:     {"created_at"},
-	models.SortKeyEffectiveDate: {"effective_date"},
+var creditLimitHistorySortColumns = map[services.SortKey][]string{
+	services.SortKeyCreatedAt:     {"created_at"},
+	services.SortKeyEffectiveDate: {"effective_date"},
 }

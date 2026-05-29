@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"mina.local/mina/internal/controllers"
 	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services/creditlimits"
 )
 
 const accountCreditLimitHistorySuffix = "/credit-limit-history"
@@ -24,13 +24,16 @@ func registerCreditLimitHistoryRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		history, err := deps.Controllers.CreditLimitHistory.Create(r.Context(), accountID, req)
+		history, err := deps.CreditLimits.Create(r.Context(), accountID, creditlimits.CreateInput{
+			CreditLimit:   req.CreditLimit,
+			EffectiveDate: req.EffectiveDate,
+		})
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, history)
+		writeJSON(w, http.StatusCreated, creditLimitHistoryResponse(history))
 	})
 
 	mux.HandleFunc("GET /accounts/{account_id}/credit-limit-history", func(w http.ResponseWriter, r *http.Request) {
@@ -50,16 +53,16 @@ func registerCreditLimitHistoryRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		history, err := deps.Controllers.CreditLimitHistory.ListByAccount(r.Context(), accountID, controllers.CreditLimitHistoryListOptions{
+		history, err := deps.CreditLimits.ListByAccount(r.Context(), accountID, creditlimits.ListOptions{
 			IncludeTombstoned: query.IncludeTombstoned,
-			List:              query.List,
+			List:              serviceListOptions(query.List),
 		})
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, models.CreditLimitHistoryListResponse{CreditLimitHistory: history})
+		writeJSON(w, http.StatusOK, models.CreditLimitHistoryListResponse{CreditLimitHistory: creditLimitHistoryResponses(history)})
 	})
 
 	mux.HandleFunc("GET /credit-limit-history/{credit_limit_history_id}", func(w http.ResponseWriter, r *http.Request) {
@@ -72,13 +75,13 @@ func registerCreditLimitHistoryRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		history, err := deps.Controllers.CreditLimitHistory.Get(r.Context(), id, includeTombstoned)
+		history, err := deps.CreditLimits.Get(r.Context(), id, includeTombstoned)
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, history)
+		writeJSON(w, http.StatusOK, creditLimitHistoryResponse(history))
 	})
 
 	mux.HandleFunc("DELETE /credit-limit-history/{credit_limit_history_id}", func(w http.ResponseWriter, r *http.Request) {
@@ -87,13 +90,33 @@ func registerCreditLimitHistoryRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		if err := deps.Controllers.CreditLimitHistory.Delete(r.Context(), id); err != nil {
+		if err := deps.CreditLimits.Delete(r.Context(), id); err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+func creditLimitHistoryResponse(history creditlimits.CreditLimitHistory) models.CreditLimitHistory {
+	return models.CreditLimitHistory{
+		ID:            history.ID,
+		AccountID:     history.AccountID,
+		CreditLimit:   history.CreditLimit,
+		EffectiveDate: history.EffectiveDate,
+		CreatedAt:     history.CreatedAt,
+		TombstonedAt:  history.TombstonedAt,
+	}
+}
+
+func creditLimitHistoryResponses(history []creditlimits.CreditLimitHistory) []models.CreditLimitHistory {
+	responses := make([]models.CreditLimitHistory, 0, len(history))
+	for _, entry := range history {
+		responses = append(responses, creditLimitHistoryResponse(entry))
+	}
+
+	return responses
 }
 
 func parseAccountCreditLimitHistoryPath(w http.ResponseWriter, r *http.Request) (int64, bool) {
