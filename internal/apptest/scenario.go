@@ -34,11 +34,35 @@ func (s *Scenario) Account(fqn string) models.Account {
 	return response.Body
 }
 
+// AccountWithCurrency creates an account fixture with a currency through the API client.
+func (s *Scenario) AccountWithCurrency(fqn string, currency string) models.Account {
+	s.client.t.Helper()
+
+	response := Decode[models.Account](s.client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+		Fqn:      fqn,
+		Currency: &currency,
+	})
+	requireStatus(s.client, "create account", response.StatusCode, http.StatusCreated, response.RawBody)
+	return response.Body
+}
+
 // Category creates a category fixture through the API client.
 func (s *Scenario) Category(fqn string) models.Category {
 	s.client.t.Helper()
 
 	response := Decode[models.Category](s.client, http.MethodPost, "/categories", models.CreateCategoryRequest{Fqn: fqn})
+	requireStatus(s.client, "create category", response.StatusCode, http.StatusCreated, response.RawBody)
+	return response.Body
+}
+
+// CategoryWithHidden creates a category fixture with explicit hidden state through the API client.
+func (s *Scenario) CategoryWithHidden(fqn string, hidden bool) models.Category {
+	s.client.t.Helper()
+
+	response := Decode[models.Category](s.client, http.MethodPost, "/categories", models.CreateCategoryRequest{
+		Fqn:      fqn,
+		IsHidden: &hidden,
+	})
 	requireStatus(s.client, "create category", response.StatusCode, http.StatusCreated, response.RawBody)
 	return response.Body
 }
@@ -61,15 +85,29 @@ func (s *Scenario) Member(name string) models.Member {
 	return response.Body
 }
 
+// ExchangeRate creates an exchange-rate fixture through the API client.
+func (s *Scenario) ExchangeRate(fromCurrency string, toCurrency string, effectiveDate string) models.ExchangeRate {
+	s.client.t.Helper()
+
+	response := Decode[models.ExchangeRate](s.client, http.MethodPost, "/exchange-rates", models.CreateExchangeRateRequest{
+		FromCurrency:  fromCurrency,
+		ToCurrency:    toCurrency,
+		Rate:          "1.10000000",
+		EffectiveDate: effectiveDate,
+	})
+	requireStatus(s.client, "create exchange rate", response.StatusCode, http.StatusCreated, response.RawBody)
+	return response.Body
+}
+
 // TransactionRefs creates the standard accounts, category, tag, and member fixtures for transaction scenarios.
 func (s *Scenario) TransactionRefs() TransactionRefs {
 	s.client.t.Helper()
 
-	checking := s.Account("asset:Checking")
+	checking := s.AccountWithCurrency("checking:Chase:Primary", "USD")
 	merchant := s.Account("expense:Merchant")
-	category := s.Category("Food:Dining")
-	tag := s.Tag("Trips:Paris")
-	member := s.Member("Alex")
+	category := s.Category("Food:Restaurants")
+	tag := s.Tag("Trips:Local")
+	member := s.Member("Avery")
 
 	return TransactionRefs{
 		CheckingAccountID: checking.AccountId,

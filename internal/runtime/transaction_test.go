@@ -225,44 +225,14 @@ type transactionRefs struct {
 func createTransactionRefs(t *testing.T, client *apptest.Client) transactionRefs {
 	t.Helper()
 
-	checking := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
-		Fqn:      "checking:Chase:Primary",
-		Currency: stringPtr("USD"),
-	})
-	if checking.StatusCode != http.StatusCreated {
-		t.Fatalf("checking account status = %d, want %d; body %s", checking.StatusCode, http.StatusCreated, checking.RawBody)
-	}
-	merchant := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
-		Fqn: "merchant:CoffeeShop",
-	})
-	if merchant.StatusCode != http.StatusCreated {
-		t.Fatalf("merchant account status = %d, want %d; body %s", merchant.StatusCode, http.StatusCreated, merchant.RawBody)
-	}
-	category := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
-		Fqn: "Food:Restaurants",
-	})
-	if category.StatusCode != http.StatusCreated {
-		t.Fatalf("category status = %d, want %d; body %s", category.StatusCode, http.StatusCreated, category.RawBody)
-	}
-	tag := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
-		Fqn: "Trips:Local",
-	})
-	if tag.StatusCode != http.StatusCreated {
-		t.Fatalf("tag status = %d, want %d; body %s", tag.StatusCode, http.StatusCreated, tag.RawBody)
-	}
-	member := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
-		Name: "Avery",
-	})
-	if member.StatusCode != http.StatusCreated {
-		t.Fatalf("member status = %d, want %d; body %s", member.StatusCode, http.StatusCreated, member.RawBody)
-	}
+	refs := client.Scenario().TransactionRefs()
 
 	return transactionRefs{
-		CheckingAccountId: checking.Body.AccountId,
-		MerchantAccountId: merchant.Body.AccountId,
-		CategoryId:        category.Body.CategoryId,
-		TagId:             tag.Body.TagId,
-		MemberId:          member.Body.MemberId,
+		CheckingAccountId: refs.CheckingAccountID,
+		MerchantAccountId: refs.MerchantAccountID,
+		CategoryId:        refs.CategoryID,
+		TagId:             refs.TagID,
+		MemberId:          refs.MemberID,
 	}
 }
 

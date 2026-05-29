@@ -18,12 +18,6 @@ func newStrictServer(deps Dependencies) *strictServer {
 	return &strictServer{deps: deps}
 }
 
-func generatedChiServerOptions() openapi.ChiServerOptions {
-	return openapi.ChiServerOptions{
-		ErrorHandlerFunc: generatedRequestErrorHandler,
-	}
-}
-
 func strictHTTPServerOptions() openapi.StrictHTTPServerOptions {
 	return openapi.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  generatedRequestErrorHandler,

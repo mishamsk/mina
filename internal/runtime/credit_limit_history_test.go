@@ -187,15 +187,7 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 func createCreditLimitAccount(t *testing.T, client *apptest.Client) models.Account {
 	t.Helper()
 
-	account := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
-		Fqn:      "credit:Visa:Rewards",
-		Currency: stringPtr("USD"),
-	})
-	if account.StatusCode != http.StatusCreated {
-		t.Fatalf("account create status = %d, want %d; body %s", account.StatusCode, http.StatusCreated, account.RawBody)
-	}
-
-	return account.Body
+	return client.Scenario().AccountWithCurrency("credit:Visa:Rewards", "USD")
 }
 
 func creditLimitHistoryPath(id int64) string {

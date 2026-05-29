@@ -226,38 +226,18 @@ func createSearchRefs(t *testing.T, client *apptest.Client) searchRefs {
 	t.Helper()
 
 	base := createTransactionRefs(t, client)
-	savings := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
-		Fqn:      "savings:Emergency",
-		Currency: stringPtr("USD"),
-	})
-	if savings.StatusCode != http.StatusCreated {
-		t.Fatalf("savings account status = %d, want %d; body %s", savings.StatusCode, http.StatusCreated, savings.RawBody)
-	}
-	category := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
-		Fqn: "Housing:Rent",
-	})
-	if category.StatusCode != http.StatusCreated {
-		t.Fatalf("second category status = %d, want %d; body %s", category.StatusCode, http.StatusCreated, category.RawBody)
-	}
-	tag := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
-		Fqn: "Recurring:Monthly",
-	})
-	if tag.StatusCode != http.StatusCreated {
-		t.Fatalf("second tag status = %d, want %d; body %s", tag.StatusCode, http.StatusCreated, tag.RawBody)
-	}
-	member := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
-		Name: "Blake",
-	})
-	if member.StatusCode != http.StatusCreated {
-		t.Fatalf("second member status = %d, want %d; body %s", member.StatusCode, http.StatusCreated, member.RawBody)
-	}
+	scenario := client.Scenario()
+	savings := scenario.AccountWithCurrency("savings:Emergency", "USD")
+	category := scenario.Category("Housing:Rent")
+	tag := scenario.Tag("Recurring:Monthly")
+	member := scenario.Member("Blake")
 
 	return searchRefs{
 		transactionRefs:  base,
-		SavingsAccountId: savings.Body.AccountId,
-		SecondCategoryId: category.Body.CategoryId,
-		SecondTagId:      tag.Body.TagId,
-		SecondMemberId:   member.Body.MemberId,
+		SavingsAccountId: savings.AccountId,
+		SecondCategoryId: category.CategoryId,
+		SecondTagId:      tag.TagId,
+		SecondMemberId:   member.MemberId,
 	}
 }
 

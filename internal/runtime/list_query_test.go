@@ -82,29 +82,11 @@ func TestSharedListQueryCompositeSortDirection(t *testing.T) {
 func createListQueryCategory(t *testing.T, client *apptest.Client, fqn string, hidden bool) models.Category {
 	t.Helper()
 
-	category := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
-		Fqn:      fqn,
-		IsHidden: boolPtr(hidden),
-	})
-	if category.StatusCode != http.StatusCreated {
-		t.Fatalf("create category %q status = %d, want %d; body %s", fqn, category.StatusCode, http.StatusCreated, category.RawBody)
-	}
-
-	return category.Body
+	return client.Scenario().CategoryWithHidden(fqn, hidden)
 }
 
 func createListQueryExchangeRate(t *testing.T, client *apptest.Client, fromCurrency string, toCurrency string, effectiveDate string) models.ExchangeRate {
 	t.Helper()
 
-	rate := apptest.Decode[models.ExchangeRate](client, http.MethodPost, "/exchange-rates", models.CreateExchangeRateRequest{
-		FromCurrency:  fromCurrency,
-		ToCurrency:    toCurrency,
-		Rate:          "1.10000000",
-		EffectiveDate: effectiveDate,
-	})
-	if rate.StatusCode != http.StatusCreated {
-		t.Fatalf("create exchange rate %s/%s %s status = %d, want %d; body %s", fromCurrency, toCurrency, effectiveDate, rate.StatusCode, http.StatusCreated, rate.RawBody)
-	}
-
-	return rate.Body
+	return client.Scenario().ExchangeRate(fromCurrency, toCurrency, effectiveDate)
 }

@@ -83,18 +83,18 @@ This plan addresses every item in `docs/review.md`. Start with the durable docs 
   - [x] Required docs updated
 
 ### Commit 6: Refactor current tests to the corrected policy
-- [ ] Refactor existing normal tests onto the in-process scenario harness.
-- [ ] Move basic create/persist assertions to the approved persistence-check pattern only where that is the behavior under test. (`docs/review.md`: `docs/architecture.md:101`)
-- [ ] Refactor transaction, list, filter, update, delete, and bulk-operation scenarios so setup and assertions go through the typed client. (`docs/review.md`: `docs/architecture.md:101`)
-- [ ] Remove tests around private helpers where public scenario coverage gives the same signal.
-- [ ] Confirm no ordinary test depends on CLI, real network listeners, testscript, or package-private implementation details.
-- [ ] Update `PROJECT_STATE.md` only if the durable test/workflow status changed from the earlier doc correction.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test` passes
-  - [ ] The non-default testscript integration recipe passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Refactor existing normal tests onto the in-process scenario harness.
+- [x] Move basic create/persist assertions to the approved persistence-check pattern only where that is the behavior under test. (`docs/review.md`: `docs/architecture.md:101`)
+- [x] Refactor transaction, list, filter, update, delete, and bulk-operation scenarios so setup and assertions go through the typed client. (`docs/review.md`: `docs/architecture.md:101`)
+- [x] Remove tests around private helpers where public scenario coverage gives the same signal.
+- [x] Confirm no ordinary test depends on CLI, real network listeners, testscript, or package-private implementation details.
+- [x] Update `PROJECT_STATE.md` only if the durable test/workflow status changed from the earlier doc correction.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test` passes
+  - [x] The non-default testscript integration recipe passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ## Deferred Verification
 

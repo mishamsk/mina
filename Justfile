@@ -12,7 +12,7 @@ fmt:
     go fmt ./...
 
 fmt-check:
-    files="$(gofmt -l $(git ls-files '*.go'))"; if [ -n "$files" ]; then printf 'Go files need formatting:\n%s\n' "$files" >&2; exit 1; fi
+    files="$(git ls-files '*.go' | while IFS= read -r file; do [ -f "$file" ] && gofmt -l "$file"; done)"; if [ -n "$files" ]; then printf 'Go files need formatting:\n%s\n' "$files" >&2; exit 1; fi
 
 lint:
     go tool golangci-lint run ./...

@@ -1,4 +1,9 @@
 # The minimal CLI prints help and exits successfully.
+exec mina
+stdout 'Mina local-first personal finance API'
+stdout 'Usage:'
+! stderr .
+
 exec mina --help
 stdout 'Mina local-first personal finance API'
 stdout 'Usage:'

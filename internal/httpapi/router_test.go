@@ -2,13 +2,12 @@ package httpapi
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/go-chi/chi/v5"
 
 	models "mina.local/mina/internal/httpapi/openapi"
 )
@@ -104,27 +103,60 @@ func TestRouterGeneratedBodyBindingErrorsKeepMinaEnvelope(t *testing.T) {
 }
 
 func TestRouterRecoversPanicsWithMinaEnvelope(t *testing.T) {
-	router := chi.NewRouter()
-	applyMiddleware(router, Options{})
-	router.Get("/panic", func(http.ResponseWriter, *http.Request) {
+	handler := New(Dependencies{})
+	registerTestGetRoute(t, handler, "/panic", func(http.ResponseWriter, *http.Request) {
 		panic("boom")
 	})
 	response := httptest.NewRecorder()
 
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/panic", nil))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/panic", nil))
 
 	assertMinaError(t, response, http.StatusInternalServerError, models.APIErrorCodeInternalError, "internal server error")
 }
 
 func TestRouterTimeoutCancelsRequest(t *testing.T) {
-	router := chi.NewRouter()
-	applyMiddleware(router, Options{Timeout: time.Nanosecond})
-	router.Get("/slow", func(w http.ResponseWriter, r *http.Request) {
+	handler := NewWithOptions(Dependencies{}, Options{Timeout: time.Nanosecond})
+	registerTestGetRoute(t, handler, "/slow", func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()
 	})
 	response := httptest.NewRecorder()
 
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/slow", nil))
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/slow", nil))
 
 	assertMinaError(t, response, http.StatusGatewayTimeout, models.APIErrorCodeInternalError, "request timed out")
+}
+
+func registerTestGetRoute(t *testing.T, handler http.Handler, pattern string, route http.HandlerFunc) {
+	t.Helper()
+
+	router, ok := handler.(interface {
+		Get(pattern string, h http.HandlerFunc)
+	})
+	if !ok {
+		t.Fatalf("handler %T does not support registering test routes", handler)
+	}
+
+	router.Get(pattern, route)
+}
+
+func assertMinaError(t *testing.T, response *httptest.ResponseRecorder, status int, code models.APIErrorCode, message string) {
+	t.Helper()
+
+	if response.Code != status {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, status, response.Body.String())
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Fatalf("content type = %q, want application/json", contentType)
+	}
+
+	var body models.ErrorResponse
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if body.Error.Code != code {
+		t.Fatalf("error code = %q, want %q", body.Error.Code, code)
+	}
+	if body.Error.Message != message {
+		t.Fatalf("error message = %q, want %q", body.Error.Message, message)
+	}
 }
