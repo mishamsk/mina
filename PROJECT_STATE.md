@@ -12,8 +12,8 @@
   - `github.com/duckdb/duckdb-go/v2` v2.10503.1 for the DuckDB `database/sql` driver.
   - No app-level decimal package is selected yet; decimal handling remains string-based until a service or DuckDB mapping requires exact arithmetic.
 - Package inventory:
-  - `cmd/mina`: CLI entrypoint with help/version output and the local REST API server.
-  - `internal/runtime`: target composition-root skeleton for config, database lifecycle policy, and mode wiring.
+  - `cmd/mina`: Cobra CLI entrypoint with help/version output, `serve`, and `migrate` commands.
+  - `internal/runtime`: target composition-root skeleton with process config structs and validation for database lifecycle policy.
   - `internal/httpapi`: target REST adapter skeleton for route registration, HTTP mapping, and OpenAPI DTO conversion.
   - `internal/services`: target app-owned service package family with domain packages `accounts`, `categories`, `tags`, `members`, `exchangerates`, `creditlimits`, `transactions`, `journalrecords`, and `recordbulk`.
   - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate/transaction data shapes and stable API error response models.
@@ -126,10 +126,12 @@
   - `oapi-codegen` remains the REST contract generator.
   - Generated-file policy: `docs/generated-files.md`.
 - CLI and REST behavior:
-  - `mina --help` prints command usage.
+  - `mina --help` and `mina help` print command usage.
   - `mina --version` prints the development version.
   - `mina serve --db PATH` starts the REST API server with an explicit database path.
   - `mina serve` supports `--host`, `--port`, `--create`, and `--migrate` flags for listener binding and database open/migration policy.
+  - `mina migrate --db PATH` applies database migrations without starting an HTTP listener.
+  - `mina migrate` supports `--create` to create a missing database file before applying migrations.
   - `--create` must be supplied to create a missing database file; otherwise missing database paths are rejected before opening SQLite.
   - `--migrate=false` opens an existing database without applying migrations and is rejected when combined with creation of a missing database.
   - `GET /health` returns `{"status":"ok"}`.

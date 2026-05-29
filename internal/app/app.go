@@ -11,15 +11,12 @@ import (
 
 	"mina.local/mina/internal/controllers"
 	"mina.local/mina/internal/routers"
+	"mina.local/mina/internal/runtime"
 	"mina.local/mina/internal/store"
 )
 
 // Config controls process-local app composition.
-type Config struct {
-	DatabasePath    string
-	CreateIfMissing bool
-	ApplyMigrations bool
-}
+type Config = runtime.Config
 
 // App is a composed in-process Mina application.
 type App struct {
@@ -29,8 +26,8 @@ type App struct {
 
 // New opens the configured database, applies migrations when requested, and wires the REST handler.
 func New(ctx context.Context, cfg Config) (*App, error) {
-	if cfg.DatabasePath == "" {
-		return nil, errors.New("database path is required")
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 
 	if err := prepareDatabasePath(cfg.DatabasePath, cfg.CreateIfMissing); err != nil {

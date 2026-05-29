@@ -4,7 +4,39 @@ stdout 'Mina local-first personal finance API'
 stdout 'Usage:'
 ! stderr .
 
+exec mina help
+stdout 'Mina local-first personal finance API'
+! stderr .
+
+exec mina help serve
+stdout 'Serve the REST API'
+stdout '--db'
+stdout '--host'
+stdout '--port'
+stdout '--create'
+stdout '--migrate'
+! stderr .
+
+exec mina serve --help
+stdout 'Serve the REST API'
+stdout '--db'
+stdout '--host'
+stdout '--port'
+stdout '--create'
+stdout '--migrate'
+! stderr .
+
+exec mina migrate --help
+stdout 'Apply database migrations'
+stdout '--db'
+stdout '--create'
+! stderr .
+
 # The minimal CLI prints a stable development version.
 exec mina --version
+stdout 'mina 0.0.0-dev'
+! stderr .
+
+exec mina version
 stdout 'mina 0.0.0-dev'
 ! stderr .

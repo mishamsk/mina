@@ -16,3 +16,12 @@ stderr '--migrate=false requires an existing database'
 # Existing databases can be opened without applying migrations.
 ! exec mina serve --db $WORK/created.db --migrate=false --host 192.0.2.1 --port 0
 stderr 'listen error:'
+
+# The migrate command applies migrations without starting an HTTP listener.
+exec mina migrate --db $WORK/migrated.db --create
+! stderr 'listen error:'
+exists $WORK/migrated.db
+
+# The migrate command does not accept HTTP listener flags.
+! exec mina migrate --db $WORK/migrated.db --host 127.0.0.1
+stderr 'unknown flag: --host'

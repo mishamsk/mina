@@ -48,22 +48,22 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 3: Replace CLI parsing with Cobra
-- [ ] Rebuild `cmd/mina` around a Cobra root command.
-- [ ] Preserve `mina --help`, `mina help`, `mina --version`, and current exit-code behavior.
-- [ ] Implement `mina serve` flags through Cobra and pflag, preserving `--db`, `--host`, `--port`, `--create`, and `--migrate`.
-- [ ] Add `mina migrate` as a migration-only runtime mode with no HTTP listener.
-- [ ] Move process config structs and validation that are not command rendering concerns into `internal/runtime/config.go`.
-- [ ] Keep command output and error text stable where tests already cover it, unless the architecture commit intentionally changes the CLI contract.
-- [ ] Update CLI smoke tests for Cobra help, bad flags, version, serve startup failures, and migrate-only behavior.
-- [ ] Update `PROJECT_STATE.md` with the Cobra command shape.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just test-cli` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Rebuild `cmd/mina` around a Cobra root command.
+- [x] Preserve `mina --help`, `mina help`, `mina --version`, and current exit-code behavior.
+- [x] Implement `mina serve` flags through Cobra and pflag, preserving `--db`, `--host`, `--port`, `--create`, and `--migrate`.
+- [x] Add `mina migrate` as a migration-only runtime mode with no HTTP listener.
+- [x] Move process config structs and validation that are not command rendering concerns into `internal/runtime/config.go`.
+- [x] Keep command output and error text stable where tests already cover it, unless the architecture commit intentionally changes the CLI contract.
+- [x] Update CLI smoke tests for Cobra help, bad flags, version, serve startup failures, and migrate-only behavior.
+- [x] Update `PROJECT_STATE.md` with the Cobra command shape.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just test-cli` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 4: Move composition and REST adapter packages
 - [ ] Move `internal/app` composition responsibilities to `internal/runtime`.
