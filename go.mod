@@ -10,6 +10,8 @@ tool (
 require (
 	github.com/duckdb/duckdb-go/v2 v2.10503.1
 	github.com/getkin/kin-openapi v0.135.0
+	github.com/go-chi/chi/v5 v5.3.0
+	github.com/oapi-codegen/runtime v1.4.1
 	github.com/rogpeppe/go-internal v1.14.1
 	github.com/spf13/cobra v1.10.2
 )
@@ -43,6 +45,7 @@ require (
 	github.com/alingse/asasalint v0.0.11 // indirect
 	github.com/alingse/nilnesserr v0.2.0 // indirect
 	github.com/apache/arrow-go/v18 v18.5.1 // indirect
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/ashanbrown/forbidigo/v2 v2.3.1 // indirect
 	github.com/ashanbrown/makezero/v2 v2.2.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
