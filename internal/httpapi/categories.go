@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"mina.local/mina/internal/controllers"
 	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services/categories"
 )
 
 func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
@@ -17,13 +17,16 @@ func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		category, err := deps.Controllers.Categories.Create(r.Context(), req)
+		category, err := deps.Categories.Create(r.Context(), categories.CreateInput{
+			FQN:      req.FQN,
+			IsHidden: req.IsHidden != nil && *req.IsHidden,
+		})
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, category)
+		writeJSON(w, http.StatusCreated, categoryResponse(category))
 	})
 
 	mux.HandleFunc("GET /categories", func(w http.ResponseWriter, r *http.Request) {
@@ -41,17 +44,17 @@ func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		categories, err := deps.Controllers.Categories.List(r.Context(), controllers.CategoryListOptions{
+		categoryList, err := deps.Categories.List(r.Context(), categories.ListOptions{
 			IncludeHidden:     query.IncludeHidden,
 			IncludeTombstoned: query.IncludeTombstoned,
-			List:              query.List,
+			List:              serviceListOptions(query.List),
 		})
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, models.CategoryListResponse{Categories: categories})
+		writeJSON(w, http.StatusOK, models.CategoryListResponse{Categories: categoryResponses(categoryList)})
 	})
 
 	mux.HandleFunc("GET /categories/{category_id}", func(w http.ResponseWriter, r *http.Request) {
@@ -64,13 +67,13 @@ func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		category, err := deps.Controllers.Categories.Get(r.Context(), id, includeTombstoned)
+		category, err := deps.Categories.Get(r.Context(), id, includeTombstoned)
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, category)
+		writeJSON(w, http.StatusOK, categoryResponse(category))
 	})
 
 	mux.HandleFunc("PATCH /categories/{category_id}", func(w http.ResponseWriter, r *http.Request) {
@@ -85,13 +88,13 @@ func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		category, err := deps.Controllers.Categories.UpdateHidden(r.Context(), id, req)
+		category, err := deps.Categories.UpdateHidden(r.Context(), id, req.IsHidden)
 		if err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
-		writeJSON(w, http.StatusOK, category)
+		writeJSON(w, http.StatusOK, categoryResponse(category))
 	})
 
 	mux.HandleFunc("DELETE /categories/{category_id}", func(w http.ResponseWriter, r *http.Request) {
@@ -100,13 +103,36 @@ func registerCategoryRoutes(mux *http.ServeMux, deps Dependencies) {
 			return
 		}
 
-		if err := deps.Controllers.Categories.Delete(r.Context(), id); err != nil {
+		if err := deps.Categories.Delete(r.Context(), id); err != nil {
 			WriteControllerError(w, err)
 			return
 		}
 
 		w.WriteHeader(http.StatusNoContent)
 	})
+}
+
+func categoryResponse(category categories.Category) models.Category {
+	return models.Category{
+		ID:           category.ID,
+		FQN:          category.FQN,
+		IsHidden:     category.IsHidden,
+		ParentFQN:    category.ParentFQN,
+		Name:         category.Name,
+		Level:        category.Level,
+		CreatedAt:    category.CreatedAt,
+		UpdatedAt:    category.UpdatedAt,
+		TombstonedAt: category.TombstonedAt,
+	}
+}
+
+func categoryResponses(categories []categories.Category) []models.Category {
+	responses := make([]models.Category, 0, len(categories))
+	for _, category := range categories {
+		responses = append(responses, categoryResponse(category))
+	}
+
+	return responses
 }
 
 func parseIDPathValue(w http.ResponseWriter, r *http.Request, prefix string, name string) (int64, bool) {

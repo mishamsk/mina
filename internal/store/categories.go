@@ -7,19 +7,16 @@ import (
 	"fmt"
 
 	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services"
+	"mina.local/mina/internal/services/categories"
 )
-
-// CategoryListOptions controls category list visibility.
-type CategoryListOptions struct {
-	IncludeHidden     bool
-	IncludeTombstoned bool
-	List              models.ListOptions
-}
 
 // CategoryStore persists categories.
 type CategoryStore struct {
 	db *sql.DB
 }
+
+var _ categories.Repository = (*CategoryStore)(nil)
 
 // NewCategoryStore creates a category store using db.
 func NewCategoryStore(db *sql.DB) *CategoryStore {
@@ -27,15 +24,15 @@ func NewCategoryStore(db *sql.DB) *CategoryStore {
 }
 
 // Create persists a new category.
-func (s *CategoryStore) Create(ctx context.Context, req models.CreateCategoryRequest) (models.Category, error) {
-	var category models.Category
+func (s *CategoryStore) Create(ctx context.Context, input categories.CreateInput) (categories.Category, error) {
+	var category categories.Category
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := categoryFQNExists(ctx, tx, req.FQN)
+		exists, err := categoryFQNExists(ctx, tx, input.FQN)
 		if err != nil {
 			return err
 		}
 		if exists {
-			return fmt.Errorf("%w: active category fqn already exists", ErrConflict)
+			return fmt.Errorf("%w: active category fqn already exists", services.ErrConflict)
 		}
 
 		row := tx.QueryRowContext(
@@ -43,13 +40,13 @@ func (s *CategoryStore) Create(ctx context.Context, req models.CreateCategoryReq
 			`INSERT INTO category (fqn, is_hidden)
 VALUES (?, ?)
 RETURNING category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
-			req.FQN,
-			req.IsHidden != nil && *req.IsHidden,
+			input.FQN,
+			input.IsHidden,
 		)
 		category, err = scanCategory(row)
 		if err != nil {
 			if isUniqueConstraintError(err) {
-				return fmt.Errorf("%w: active category fqn already exists", ErrConflict)
+				return fmt.Errorf("%w: active category fqn already exists", services.ErrConflict)
 			}
 			return fmt.Errorf("insert category: %w", err)
 		}
@@ -57,14 +54,14 @@ RETURNING category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
 		return nil
 	})
 	if err != nil {
-		return models.Category{}, err
+		return categories.Category{}, err
 	}
 
 	return category, nil
 }
 
 // Get returns a category by ID.
-func (s *CategoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (models.Category, error) {
+func (s *CategoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (categories.Category, error) {
 	query := `SELECT category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
 FROM category
 WHERE category_id = ?`
@@ -75,17 +72,17 @@ WHERE category_id = ?`
 
 	category, err := scanCategory(s.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Category{}, ErrNotFound
+		return categories.Category{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.Category{}, fmt.Errorf("get category: %w", err)
+		return categories.Category{}, fmt.Errorf("get category: %w", err)
 	}
 
 	return category, nil
 }
 
 // List returns categories in deterministic hierarchy order.
-func (s *CategoryStore) List(ctx context.Context, opts CategoryListOptions) ([]models.Category, error) {
+func (s *CategoryStore) List(ctx context.Context, opts categories.ListOptions) ([]categories.Category, error) {
 	query := `SELECT category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
 FROM category
 WHERE 1 = 1`
@@ -96,14 +93,14 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query, args = appendListOrderAndPage(query, args, opts.List, categorySortColumns, models.SortKeyFQN, "category_id")
+	query, args = appendServiceListOrderAndPage(query, args, opts.List, categorySortColumns, services.SortKeyFQN, "category_id")
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
 
-	categories := []models.Category{}
+	categories := []categories.Category{}
 	for rows.Next() {
 		category, err := scanCategory(rows)
 		if err != nil {
@@ -125,7 +122,7 @@ WHERE 1 = 1`
 }
 
 // UpdateHidden updates a category's hidden state.
-func (s *CategoryStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (models.Category, error) {
+func (s *CategoryStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (categories.Category, error) {
 	row := s.db.QueryRowContext(
 		ctx,
 		`UPDATE category
@@ -137,10 +134,10 @@ RETURNING category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
 	)
 	category, err := scanCategory(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Category{}, ErrNotFound
+		return categories.Category{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.Category{}, fmt.Errorf("update category hidden state: %w", err)
+		return categories.Category{}, fmt.Errorf("update category hidden state: %w", err)
 	}
 
 	return category, nil
@@ -165,7 +162,7 @@ WHERE category_id = ? AND tombstoned_at IS NULL`,
 		return fmt.Errorf("read tombstone affected rows: %w", err)
 	}
 	if affected == 0 {
-		return ErrNotFound
+		return services.ErrNotFound
 	}
 
 	return nil
@@ -175,8 +172,8 @@ type categoryScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanCategory(scanner categoryScanner) (models.Category, error) {
-	var category models.Category
+func scanCategory(scanner categoryScanner) (categories.Category, error) {
+	var category categories.Category
 	var tombstonedAt sql.NullString
 	if err := scanner.Scan(
 		&category.ID,
@@ -186,7 +183,7 @@ func scanCategory(scanner categoryScanner) (models.Category, error) {
 		&category.UpdatedAt,
 		&tombstonedAt,
 	); err != nil {
-		return models.Category{}, err
+		return categories.Category{}, err
 	}
 	if tombstonedAt.Valid {
 		category.TombstonedAt = &tombstonedAt.String
@@ -213,8 +210,8 @@ func categoryFQNExists(ctx context.Context, tx *sql.Tx, fqn string) (bool, error
 	return true, nil
 }
 
-var categorySortColumns = map[models.SortKey][]string{
-	models.SortKeyCreatedAt: {"created_at"},
-	models.SortKeyFQN:       {"fqn"},
-	models.SortKeyUpdatedAt: {"updated_at"},
+var categorySortColumns = map[services.SortKey][]string{
+	services.SortKeyCreatedAt: {"created_at"},
+	services.SortKeyFQN:       {"fqn"},
+	services.SortKeyUpdatedAt: {"updated_at"},
 }

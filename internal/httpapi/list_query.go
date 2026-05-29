@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services"
 )
 
 const maxListLimit = 500
@@ -130,4 +131,13 @@ func parseListInt(w http.ResponseWriter, name string, raw string, min int, max i
 	}
 
 	return value, true
+}
+
+func serviceListOptions(opts models.ListOptions) services.ListOptions {
+	return services.ListOptions{
+		SortKey:       services.SortKey(opts.SortKey),
+		SortDirection: services.SortDirection(opts.SortDirection),
+		Limit:         opts.Limit,
+		Offset:        opts.Offset,
+	}
 }

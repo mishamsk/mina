@@ -7,19 +7,16 @@ import (
 	"fmt"
 
 	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services"
+	"mina.local/mina/internal/services/tags"
 )
-
-// TagListOptions controls tag list visibility.
-type TagListOptions struct {
-	IncludeHidden     bool
-	IncludeTombstoned bool
-	List              models.ListOptions
-}
 
 // TagStore persists tags.
 type TagStore struct {
 	db *sql.DB
 }
+
+var _ tags.Repository = (*TagStore)(nil)
 
 // NewTagStore creates a tag store using db.
 func NewTagStore(db *sql.DB) *TagStore {
@@ -27,15 +24,15 @@ func NewTagStore(db *sql.DB) *TagStore {
 }
 
 // Create persists a new tag.
-func (s *TagStore) Create(ctx context.Context, req models.CreateTagRequest) (models.Tag, error) {
-	var tag models.Tag
+func (s *TagStore) Create(ctx context.Context, input tags.CreateInput) (tags.Tag, error) {
+	var tag tags.Tag
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := tagFQNExists(ctx, tx, req.FQN)
+		exists, err := tagFQNExists(ctx, tx, input.FQN)
 		if err != nil {
 			return err
 		}
 		if exists {
-			return fmt.Errorf("%w: active tag fqn already exists", ErrConflict)
+			return fmt.Errorf("%w: active tag fqn already exists", services.ErrConflict)
 		}
 
 		row := tx.QueryRowContext(
@@ -43,13 +40,13 @@ func (s *TagStore) Create(ctx context.Context, req models.CreateTagRequest) (mod
 			`INSERT INTO tag (fqn, is_hidden)
 VALUES (?, ?)
 RETURNING tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
-			req.FQN,
-			req.IsHidden != nil && *req.IsHidden,
+			input.FQN,
+			input.IsHidden,
 		)
 		tag, err = scanTag(row)
 		if err != nil {
 			if isUniqueConstraintError(err) {
-				return fmt.Errorf("%w: active tag fqn already exists", ErrConflict)
+				return fmt.Errorf("%w: active tag fqn already exists", services.ErrConflict)
 			}
 			return fmt.Errorf("insert tag: %w", err)
 		}
@@ -57,14 +54,14 @@ RETURNING tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
 		return nil
 	})
 	if err != nil {
-		return models.Tag{}, err
+		return tags.Tag{}, err
 	}
 
 	return tag, nil
 }
 
 // Get returns a tag by ID.
-func (s *TagStore) Get(ctx context.Context, id int64, includeTombstoned bool) (models.Tag, error) {
+func (s *TagStore) Get(ctx context.Context, id int64, includeTombstoned bool) (tags.Tag, error) {
 	query := `SELECT tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
 FROM tag
 WHERE tag_id = ?`
@@ -75,17 +72,17 @@ WHERE tag_id = ?`
 
 	tag, err := scanTag(s.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Tag{}, ErrNotFound
+		return tags.Tag{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.Tag{}, fmt.Errorf("get tag: %w", err)
+		return tags.Tag{}, fmt.Errorf("get tag: %w", err)
 	}
 
 	return tag, nil
 }
 
 // List returns tags in deterministic hierarchy order.
-func (s *TagStore) List(ctx context.Context, opts TagListOptions) ([]models.Tag, error) {
+func (s *TagStore) List(ctx context.Context, opts tags.ListOptions) ([]tags.Tag, error) {
 	query := `SELECT tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
 FROM tag
 WHERE 1 = 1`
@@ -96,14 +93,14 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query, args = appendListOrderAndPage(query, args, opts.List, tagSortColumns, models.SortKeyFQN, "tag_id")
+	query, args = appendServiceListOrderAndPage(query, args, opts.List, tagSortColumns, services.SortKeyFQN, "tag_id")
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list tags: %w", err)
 	}
 
-	tags := []models.Tag{}
+	tags := []tags.Tag{}
 	for rows.Next() {
 		tag, err := scanTag(rows)
 		if err != nil {
@@ -125,7 +122,7 @@ WHERE 1 = 1`
 }
 
 // UpdateHidden updates a tag's hidden state.
-func (s *TagStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (models.Tag, error) {
+func (s *TagStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (tags.Tag, error) {
 	row := s.db.QueryRowContext(
 		ctx,
 		`UPDATE tag
@@ -137,10 +134,10 @@ RETURNING tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
 	)
 	tag, err := scanTag(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Tag{}, ErrNotFound
+		return tags.Tag{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.Tag{}, fmt.Errorf("update tag hidden state: %w", err)
+		return tags.Tag{}, fmt.Errorf("update tag hidden state: %w", err)
 	}
 
 	return tag, nil
@@ -165,7 +162,7 @@ WHERE tag_id = ? AND tombstoned_at IS NULL`,
 		return fmt.Errorf("read tombstone affected rows: %w", err)
 	}
 	if affected == 0 {
-		return ErrNotFound
+		return services.ErrNotFound
 	}
 
 	return nil
@@ -175,8 +172,8 @@ type tagScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanTag(scanner tagScanner) (models.Tag, error) {
-	var tag models.Tag
+func scanTag(scanner tagScanner) (tags.Tag, error) {
+	var tag tags.Tag
 	var tombstonedAt sql.NullString
 	if err := scanner.Scan(
 		&tag.ID,
@@ -186,7 +183,7 @@ func scanTag(scanner tagScanner) (models.Tag, error) {
 		&tag.UpdatedAt,
 		&tombstonedAt,
 	); err != nil {
-		return models.Tag{}, err
+		return tags.Tag{}, err
 	}
 	if tombstonedAt.Valid {
 		tag.TombstonedAt = &tombstonedAt.String
@@ -213,8 +210,8 @@ func tagFQNExists(ctx context.Context, tx *sql.Tx, fqn string) (bool, error) {
 	return true, nil
 }
 
-var tagSortColumns = map[models.SortKey][]string{
-	models.SortKeyCreatedAt: {"created_at"},
-	models.SortKeyFQN:       {"fqn"},
-	models.SortKeyUpdatedAt: {"updated_at"},
+var tagSortColumns = map[services.SortKey][]string{
+	services.SortKeyCreatedAt: {"created_at"},
+	services.SortKeyFQN:       {"fqn"},
+	services.SortKeyUpdatedAt: {"updated_at"},
 }

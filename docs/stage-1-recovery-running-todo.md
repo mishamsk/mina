@@ -85,21 +85,21 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 5: Refactor category, tag, and member into service packages
-- [ ] Create app-owned packages for categories, tags, and members with domain types, `Service`, and repository interfaces.
-- [ ] Move validation and use-case logic out of the old controller package.
-- [ ] Keep HTTP request/response parsing and OpenAPI DTO mapping in `internal/httpapi`.
-- [ ] Make `internal/store` implement the category, tag, and member repositories.
-- [ ] Remove HTTP, OpenAPI, SQL, and generated DB type imports from these service packages.
-- [ ] Preserve current REST behavior for create, get, list, patch, delete, hidden filtering, tombstone filtering, duplicate active values, and hierarchy-derived fields.
-- [ ] Update boundary tests to use runtime/httpapi construction and service-owned expected types where appropriate.
-- [ ] Update package docs and `PROJECT_STATE.md`.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Create app-owned packages for categories, tags, and members with domain types, `Service`, and repository interfaces.
+- [x] Move validation and use-case logic out of the old controller package.
+- [x] Keep HTTP request/response parsing and OpenAPI DTO mapping in `internal/httpapi`.
+- [x] Make `internal/store` implement the category, tag, and member repositories.
+- [x] Remove HTTP, OpenAPI, SQL, and generated DB type imports from these service packages.
+- [x] Preserve current REST behavior for create, get, list, patch, delete, hidden filtering, tombstone filtering, duplicate active values, and hierarchy-derived fields.
+- [x] Update boundary tests to use runtime/httpapi construction and service-owned expected types where appropriate.
+- [x] Update package docs and `PROJECT_STATE.md`.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 6: Refactor account, credit limit, and exchange rate services
 - [ ] Create app-owned packages for accounts, credit limit history, and exchange rates with domain types, `Service`, and repository interfaces.

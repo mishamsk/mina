@@ -7,6 +7,7 @@ import (
 
 	"mina.local/mina/internal/controllers"
 	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services"
 )
 
 // WriteAPIError writes a stable JSON API error response.
@@ -32,8 +33,27 @@ func WriteControllerError(w http.ResponseWriter, err error) {
 		WriteAPIError(w, statusForCode(controllerErr.Code), controllerErr.Code, controllerErr.Message)
 		return
 	}
+	var serviceErr *services.Error
+	if errors.As(err, &serviceErr) {
+		code := modelErrorCode(serviceErr.Code)
+		WriteAPIError(w, statusForCode(code), code, serviceErr.Message)
+		return
+	}
 
 	WriteAPIError(w, http.StatusInternalServerError, models.ErrorCodeInternal, "internal server error")
+}
+
+func modelErrorCode(code services.ErrorCode) models.ErrorCode {
+	switch code {
+	case services.ErrorCodeInvalidRequest:
+		return models.ErrorCodeInvalidRequest
+	case services.ErrorCodeNotFound:
+		return models.ErrorCodeNotFound
+	case services.ErrorCodeConflict:
+		return models.ErrorCodeConflict
+	default:
+		return models.ErrorCodeInternal
+	}
 }
 
 func statusForCode(code models.ErrorCode) int {

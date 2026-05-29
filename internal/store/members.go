@@ -6,19 +6,16 @@ import (
 	"errors"
 	"fmt"
 
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services"
+	"mina.local/mina/internal/services/members"
 )
-
-// MemberListOptions controls member list visibility.
-type MemberListOptions struct {
-	IncludeTombstoned bool
-	List              models.ListOptions
-}
 
 // MemberStore persists household members.
 type MemberStore struct {
 	db *sql.DB
 }
+
+var _ members.Repository = (*MemberStore)(nil)
 
 // NewMemberStore creates a member store using db.
 func NewMemberStore(db *sql.DB) *MemberStore {
@@ -26,15 +23,15 @@ func NewMemberStore(db *sql.DB) *MemberStore {
 }
 
 // Create persists a new member.
-func (s *MemberStore) Create(ctx context.Context, req models.CreateMemberRequest) (models.Member, error) {
-	var member models.Member
+func (s *MemberStore) Create(ctx context.Context, input members.CreateInput) (members.Member, error) {
+	var member members.Member
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := memberNameExists(ctx, tx, req.Name)
+		exists, err := memberNameExists(ctx, tx, input.Name)
 		if err != nil {
 			return err
 		}
 		if exists {
-			return fmt.Errorf("%w: active member name already exists", ErrConflict)
+			return fmt.Errorf("%w: active member name already exists", services.ErrConflict)
 		}
 
 		row := tx.QueryRowContext(
@@ -42,12 +39,12 @@ func (s *MemberStore) Create(ctx context.Context, req models.CreateMemberRequest
 			`INSERT INTO member (name)
 VALUES (?)
 RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
-			req.Name,
+			input.Name,
 		)
 		member, err = scanMember(row)
 		if err != nil {
 			if isUniqueConstraintError(err) {
-				return fmt.Errorf("%w: active member name already exists", ErrConflict)
+				return fmt.Errorf("%w: active member name already exists", services.ErrConflict)
 			}
 			return fmt.Errorf("insert member: %w", err)
 		}
@@ -55,14 +52,14 @@ RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
 		return nil
 	})
 	if err != nil {
-		return models.Member{}, err
+		return members.Member{}, err
 	}
 
 	return member, nil
 }
 
 // Get returns a member by ID.
-func (s *MemberStore) Get(ctx context.Context, id int64, includeTombstoned bool) (models.Member, error) {
+func (s *MemberStore) Get(ctx context.Context, id int64, includeTombstoned bool) (members.Member, error) {
 	query := `SELECT member_id, name, created_at, updated_at, tombstoned_at
 FROM member
 WHERE member_id = ?`
@@ -73,17 +70,17 @@ WHERE member_id = ?`
 
 	member, err := scanMember(s.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Member{}, ErrNotFound
+		return members.Member{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.Member{}, fmt.Errorf("get member: %w", err)
+		return members.Member{}, fmt.Errorf("get member: %w", err)
 	}
 
 	return member, nil
 }
 
 // List returns members in deterministic name order.
-func (s *MemberStore) List(ctx context.Context, opts MemberListOptions) ([]models.Member, error) {
+func (s *MemberStore) List(ctx context.Context, opts members.ListOptions) ([]members.Member, error) {
 	query := `SELECT member_id, name, created_at, updated_at, tombstoned_at
 FROM member
 WHERE 1 = 1`
@@ -91,14 +88,14 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
-	query, args = appendListOrderAndPage(query, args, opts.List, memberSortColumns, models.SortKeyName, "member_id")
+	query, args = appendServiceListOrderAndPage(query, args, opts.List, memberSortColumns, services.SortKeyName, "member_id")
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list members: %w", err)
 	}
 
-	members := []models.Member{}
+	members := []members.Member{}
 	for rows.Next() {
 		member, err := scanMember(rows)
 		if err != nil {
@@ -120,7 +117,7 @@ WHERE 1 = 1`
 }
 
 // UpdateName updates a member's name.
-func (s *MemberStore) UpdateName(ctx context.Context, id int64, name string) (models.Member, error) {
+func (s *MemberStore) UpdateName(ctx context.Context, id int64, name string) (members.Member, error) {
 	row := s.db.QueryRowContext(
 		ctx,
 		`UPDATE member
@@ -132,13 +129,13 @@ RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
 	)
 	member, err := scanMember(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Member{}, ErrNotFound
+		return members.Member{}, services.ErrNotFound
 	}
 	if err != nil {
 		if isUniqueConstraintError(err) {
-			return models.Member{}, fmt.Errorf("%w: active member name already exists", ErrConflict)
+			return members.Member{}, fmt.Errorf("%w: active member name already exists", services.ErrConflict)
 		}
-		return models.Member{}, fmt.Errorf("update member name: %w", err)
+		return members.Member{}, fmt.Errorf("update member name: %w", err)
 	}
 
 	return member, nil
@@ -163,7 +160,7 @@ WHERE member_id = ? AND tombstoned_at IS NULL`,
 		return fmt.Errorf("read tombstone affected rows: %w", err)
 	}
 	if affected == 0 {
-		return ErrNotFound
+		return services.ErrNotFound
 	}
 
 	return nil
@@ -173,8 +170,8 @@ type memberScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanMember(scanner memberScanner) (models.Member, error) {
-	var member models.Member
+func scanMember(scanner memberScanner) (members.Member, error) {
+	var member members.Member
 	var tombstonedAt sql.NullString
 	if err := scanner.Scan(
 		&member.ID,
@@ -183,7 +180,7 @@ func scanMember(scanner memberScanner) (models.Member, error) {
 		&member.UpdatedAt,
 		&tombstonedAt,
 	); err != nil {
-		return models.Member{}, err
+		return members.Member{}, err
 	}
 	if tombstonedAt.Valid {
 		member.TombstonedAt = &tombstonedAt.String
@@ -209,8 +206,8 @@ func memberNameExists(ctx context.Context, tx *sql.Tx, name string) (bool, error
 	return true, nil
 }
 
-var memberSortColumns = map[models.SortKey][]string{
-	models.SortKeyCreatedAt: {"created_at"},
-	models.SortKeyName:      {"name"},
-	models.SortKeyUpdatedAt: {"updated_at"},
+var memberSortColumns = map[services.SortKey][]string{
+	services.SortKeyCreatedAt: {"created_at"},
+	services.SortKeyName:      {"name"},
+	services.SortKeyUpdatedAt: {"updated_at"},
 }
