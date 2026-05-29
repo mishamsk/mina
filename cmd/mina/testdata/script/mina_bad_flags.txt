@@ -5,3 +5,7 @@ stderr 'invalid value "not-a-number" for flag -port'
 # The serve command requires an explicit database path.
 ! exec mina serve
 stderr 'serve requires --db'
+
+# Access log redirection and quiet mode are mutually exclusive.
+! exec mina serve --db $WORK/mina.db --quiet --access-log $WORK/access.log
+stderr '--quiet cannot be combined with --access-log'

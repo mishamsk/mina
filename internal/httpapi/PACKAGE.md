@@ -2,18 +2,19 @@
 
 ## Purpose
 
-- Owns REST route registration, HTTP request parsing, response encoding, REST DTOs, and OpenAPI DTO mapping.
+- Owns Chi route registration, HTTP request parsing, response encoding, REST DTOs, and OpenAPI DTO mapping.
 - Contains the adapter-owned generated OpenAPI contract subpackage.
   DTO structs live in the adapter-owned `models` subpackage.
 
 ## Implicit Contracts
 
 - Error responses use the stable JSON error envelope defined by the REST contract.
+- Request middleware supplies request IDs, real IP handling, panic recovery, local API timeout enforcement, and optional access logs.
 - HTTP handlers call service use cases; they do not own domain validation or SQL.
 
 ## Boundaries
 
-- Owns: HTTP status mapping, transport DTO conversion, REST query parsing, REST DTO models, and generated OpenAPI code if colocated.
+- Owns: HTTP status mapping, transport DTO conversion, REST query parsing, REST DTO models, router middleware, and generated OpenAPI code if colocated.
 - Does not own: database opening, CLI parsing, SQL execution, or service-layer decisions.
 
 ## Testing Notes

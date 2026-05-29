@@ -126,6 +126,8 @@ func newServeCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd.Flags().IntVar(&cfg.Port, "port", cfg.Port, "port for the REST API")
 	cmd.Flags().BoolVar(&cfg.CreateIfMissing, "create", false, "create the database file when it does not exist")
 	cmd.Flags().BoolVar(&cfg.ApplyMigrations, "migrate", cfg.ApplyMigrations, "apply database migrations before serving")
+	cmd.Flags().StringVar(&cfg.AccessLogPath, "access-log", "", "write access logs to a file instead of stderr")
+	cmd.Flags().BoolVar(&cfg.Quiet, "quiet", false, "disable access logs")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
 	})
@@ -186,10 +188,19 @@ func serve(stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	accessLog, closeAccessLog, err := openAccessLog(stderr, cfg)
+	if err != nil {
+		return err
+	}
+	defer closeAccessLog()
+
 	appInstance, err := runtime.New(ctx, runtime.Config{
 		DatabasePath:    cfg.DatabasePath,
 		CreateIfMissing: cfg.CreateIfMissing,
 		ApplyMigrations: cfg.ApplyMigrations,
+		HTTP: runtime.HTTPConfig{
+			AccessLog: accessLog,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("startup error: %w", err)
@@ -223,6 +234,24 @@ func serve(stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig) error {
 	}
 
 	return nil
+}
+
+func openAccessLog(stderr io.Writer, cfg runtime.ServeConfig) (io.Writer, func(), error) {
+	if cfg.Quiet {
+		return nil, func() {}, nil
+	}
+	if cfg.AccessLogPath == "" {
+		return stderr, func() {}, nil
+	}
+
+	file, err := os.OpenFile(cfg.AccessLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("access log error: %w", err)
+	}
+
+	return file, func() {
+		_ = file.Close()
+	}, nil
 }
 
 func migrate(stderr io.Writer, cfg runtime.Config) error {

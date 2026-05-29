@@ -50,7 +50,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		}
 	}
 
-	handler := httpapi.New(httpapi.Dependencies{
+	handler := httpapi.NewWithOptions(httpapi.Dependencies{
 		Categories:    categories.NewService(store.NewCategoryStore(db)),
 		Tags:          tags.NewService(store.NewTagStore(db)),
 		Members:       members.NewService(store.NewMemberStore(db)),
@@ -58,6 +58,9 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(db)),
 		ExchangeRates: exchangerates.NewService(store.NewExchangeRateStore(db)),
 		Transactions:  transactions.NewService(store.NewTransactionStore(db)),
+	}, httpapi.Options{
+		AccessLog: cfg.HTTP.AccessLog,
+		Timeout:   cfg.HTTP.Timeout,
 	})
 
 	return &App{

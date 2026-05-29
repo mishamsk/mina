@@ -24,29 +24,29 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
   - [x] Required docs updated
 
 ### Commit 2: Add Chi router, middleware, and access log config
-- [ ] Add `github.com/go-chi/chi/v5` as the HTTP router dependency.
-- [ ] Build the `internal/httpapi.New` router around `chi.NewRouter()` and generated `oapi-codegen` handler registration.
-- [ ] Add a baseline middleware stack using Chi middleware:
-  - [ ] `middleware.RequestID`
-  - [ ] `middleware.RealIP`
-  - [ ] `middleware.Recoverer`
-  - [ ] `middleware.Timeout` with an explicit local API timeout
-  - [ ] `middleware.Logger` or a Chi-compatible request logger with equivalent access log output
-- [ ] Add `serve` access log configuration with these modes:
-  - [ ] Default console logging uses conventional process streams without requiring extra flags.
-  - [ ] `--access-log PATH` writes access logs to a file instead of console output.
-  - [ ] `--quiet` disables access logs while preserving startup errors and fatal diagnostics.
-- [ ] Reject incompatible logging flag combinations, such as `--quiet` with `--access-log`.
-- [ ] Keep startup output deterministic enough for CLI process tests.
-- [ ] Preserve current process behavior for `mina serve` and in-process boundary tests.
-- [ ] Add or update tests for panic recovery, access logging mode selection, quiet mode, access-log file output, timeout behavior if externally observable, and route method handling.
-- [ ] Update `PROJECT_STATE.md` with the router dependency, middleware behavior, and access log behavior.
+- [x] Add `github.com/go-chi/chi/v5` as the HTTP router dependency.
+- [x] Build the `internal/httpapi.New` router around `chi.NewRouter()` and generated `oapi-codegen` handler registration.
+- [x] Add a baseline middleware stack using Chi middleware:
+  - [x] `middleware.RequestID`
+  - [x] `middleware.RealIP`
+  - [x] `middleware.Recoverer`
+  - [x] `middleware.Timeout` with an explicit local API timeout
+  - [x] `middleware.Logger` or a Chi-compatible request logger with equivalent access log output
+- [x] Add `serve` access log configuration with these modes:
+  - [x] Default console logging uses conventional process streams without requiring extra flags.
+  - [x] `--access-log PATH` writes access logs to a file instead of console output.
+  - [x] `--quiet` disables access logs while preserving startup errors and fatal diagnostics.
+- [x] Reject incompatible logging flag combinations, such as `--quiet` with `--access-log`.
+- [x] Keep startup output deterministic enough for CLI process tests.
+- [x] Preserve current process behavior for `mina serve` and in-process boundary tests.
+- [x] Add or update tests for panic recovery, access logging mode selection, quiet mode, access-log file output, timeout behavior if externally observable, and route method handling.
+- [x] Update `PROJECT_STATE.md` with the router dependency, middleware behavior, and access log behavior.
 - [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 3: Move handlers behind generated operation interfaces
 - [ ] Replace manual `mux.HandleFunc` registration functions with a generated server implementation type in `internal/httpapi`.

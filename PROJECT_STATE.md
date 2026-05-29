@@ -10,12 +10,14 @@
 - Direct dependencies:
   - `github.com/duckdb/duckdb-go/v2` v2.10503.1 for the DuckDB `database/sql` driver.
   - `github.com/getkin/kin-openapi` v0.135.0 for generated OpenAPI spec loading and validation.
+  - `github.com/go-chi/chi/v5` v5.3.0 for REST routing and middleware.
+  - `github.com/oapi-codegen/runtime` v1.4.1 for generated OpenAPI request binding.
   - `github.com/rogpeppe/go-internal` v1.14.1 for `testscript` CLI smoke tests.
   - `github.com/spf13/cobra` v1.10.2 for CLI parsing.
 - Package inventory:
   - `cmd/mina`: Cobra CLI entrypoint with help/version output, `serve`, and `migrate` commands.
-  - `internal/runtime`: process config structs and validation, database open/create/migrate policy, service/store composition, and app handler wiring.
-  - `internal/httpapi`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, JSON API error mapping, REST DTO models subpackage, and generated OpenAPI contract subpackage.
+  - `internal/runtime`: process config structs and validation, database open/create/migrate policy, service/store composition, HTTP adapter options, and app handler wiring.
+  - `internal/httpapi`: Chi REST router, generated OpenAPI route registration, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, JSON API error mapping, REST DTO models subpackage, and generated OpenAPI contract subpackage.
   - `internal/services`: app-owned service package family. `accounts`, `categories`, `tags`, `members`, `exchangerates`, `creditlimits`, and `transactions` own their domain types, validation, use cases, and repository interfaces; `journalrecords` and `recordbulk` remain target skeletons.
   - `internal/store`: DuckDB connection, migration, transaction helper, repository implementations, account/category/tag/member/credit-limit-history/exchange-rate/transaction and record bulk persistence, and test database helpers.
   - `internal/apptest`: in-process app boundary test client that constructs apps through `internal/runtime`.
@@ -125,7 +127,7 @@
   - Source: `api/openapi.yaml`.
   - Generator config: `api/oapi-codegen.yaml`.
   - Generated output: `internal/httpapi/openapi/openapi.gen.go`.
-  - `oapi-codegen` remains the REST contract generator.
+  - `oapi-codegen` remains the REST contract generator for models, the embedded spec, Chi server contracts, and strict-server operation contracts.
   - Generated-file policy: `docs/generated-files.md`.
   - API decimal values are JSON strings, not JSON numbers; decimal schemas match DuckDB `DECIMAL(18,8)` with at most 10 integer digits and 8 fractional digits.
   - Decimal responses are read from DuckDB `DECIMAL(18,8)` values and may use DuckDB-normalized scale.
@@ -140,12 +142,17 @@
   - `mina --version` prints the development version.
   - `mina serve --db PATH` starts the REST API server with an explicit database path.
   - `mina serve` supports `--host`, `--port`, `--create`, and `--migrate` flags for listener binding and database open/migration policy.
+  - `mina serve` writes access logs to stderr by default.
+  - `mina serve --access-log PATH` writes access logs to the selected file instead of stderr.
+  - `mina serve --quiet` disables access logs while preserving startup output and errors.
+  - `mina serve` rejects `--quiet` combined with `--access-log`.
   - `mina migrate --db PATH` applies database migrations without starting an HTTP listener.
   - `mina migrate` supports `--create` to create a missing database file before applying migrations.
   - `--create` must be supplied to create a missing database file; otherwise missing database paths are rejected before opening DuckDB.
   - `--migrate=false` opens an existing database without applying migrations and is rejected when combined with creation of a missing database.
   - `GET /health` returns `{"status":"ok"}`.
   - Missing routes and unsupported methods return the stable `{"error":{"code","message"}}` JSON envelope.
+  - The REST router applies request IDs, real IP handling, panic recovery, a 30-second local API timeout, and configured access logging through Chi-compatible middleware.
 - Developer recipes are owned by `Justfile`:
   - `just fmt`: format Go packages.
   - `just lint`: run Go linting.

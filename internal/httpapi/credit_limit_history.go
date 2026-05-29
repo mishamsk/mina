@@ -139,13 +139,3 @@ func parseAccountCreditLimitHistoryPath(w http.ResponseWriter, r *http.Request) 
 
 	return id, true
 }
-
-func accountCreditLimitHistoryPath(path string) bool {
-	rawID := strings.TrimPrefix(path, "/accounts/")
-	if rawID == path || !strings.HasSuffix(rawID, accountCreditLimitHistorySuffix) {
-		return false
-	}
-	rawID = strings.TrimSuffix(rawID, accountCreditLimitHistorySuffix)
-
-	return rawID != "" && !strings.Contains(rawID, "/")
-}

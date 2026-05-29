@@ -29,7 +29,7 @@ func TestGeneratedChiRequestErrorsUseMinaEnvelope(t *testing.T) {
 
 	handler.ServeHTTP(response, request)
 
-	assertMinaError(t, response, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid request")
+	assertMinaError(t, response, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "category_id must be a positive integer")
 }
 
 func generatedStrictHandler(deps Dependencies) http.Handler {

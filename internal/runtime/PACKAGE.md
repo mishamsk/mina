@@ -2,7 +2,7 @@
 
 ## Purpose
 
-- Owns process-local configuration and manual app composition.
+- Owns process-local configuration and manual app composition, including HTTP adapter options.
 - Applies database open/create/migrate policy before adapters are started.
 
 ## Implicit Contracts
@@ -12,7 +12,7 @@
 
 ## Boundaries
 
-- Owns: process configuration, database lifecycle policy, app composition, and mode-ready runtime values.
+- Owns: process configuration, database lifecycle policy, HTTP adapter configuration, app composition, and mode-ready runtime values.
 - Does not own: SQL statements, domain validation, REST DTO mapping, or CLI command help.
 
 ## Testing Notes

@@ -14,13 +14,80 @@ import (
 
 func TestRESTSmokeProcess(t *testing.T) {
 	dbPath := t.TempDir() + "/mina.db"
-	cmd := minaHelperCommand(t, "serve", "--db", dbPath, "--create", "--migrate", "--host", "127.0.0.1", "--port", "0")
+	process := startRESTProcess(t, "serve", "--db", dbPath, "--create", "--migrate", "--host", "127.0.0.1", "--port", "0")
+	defer process.stop(t)
+
+	client := http.Client{Timeout: 5 * time.Second}
+	assertHealthOK(t, client, process.baseURL, process.stderr)
+	assertCategoriesEmpty(t, client, process.baseURL, process.stderr)
+}
+
+func TestRESTSmokeProcessAccessLogModes(t *testing.T) {
+	t.Run("default stderr", func(t *testing.T) {
+		dbPath := t.TempDir() + "/mina.db"
+		process := startRESTProcess(t, "serve", "--db", dbPath, "--create", "--migrate", "--host", "127.0.0.1", "--port", "0")
+		client := http.Client{Timeout: 5 * time.Second}
+
+		assertHealthOK(t, client, process.baseURL, process.stderr)
+		process.stop(t)
+
+		if entry := process.stderr.String(); !strings.Contains(entry, "GET /health 200") {
+			t.Fatalf("stderr access log = %q, want health access log", entry)
+		}
+	})
+
+	t.Run("quiet", func(t *testing.T) {
+		dbPath := t.TempDir() + "/mina.db"
+		process := startRESTProcess(t, "serve", "--db", dbPath, "--create", "--migrate", "--host", "127.0.0.1", "--port", "0", "--quiet")
+		client := http.Client{Timeout: 5 * time.Second}
+
+		assertHealthOK(t, client, process.baseURL, process.stderr)
+		process.stop(t)
+
+		if process.stderr.Len() != 0 {
+			t.Fatalf("stderr = %q, want no access logs in quiet mode", process.stderr.String())
+		}
+	})
+
+	t.Run("file", func(t *testing.T) {
+		tempDir := t.TempDir()
+		dbPath := tempDir + "/mina.db"
+		logPath := tempDir + "/access.log"
+		process := startRESTProcess(t, "serve", "--db", dbPath, "--create", "--migrate", "--host", "127.0.0.1", "--port", "0", "--access-log", logPath)
+		client := http.Client{Timeout: 5 * time.Second}
+
+		assertHealthOK(t, client, process.baseURL, process.stderr)
+		process.stop(t)
+
+		if process.stderr.Len() != 0 {
+			t.Fatalf("stderr = %q, want access logs redirected to file", process.stderr.String())
+		}
+		logBytes, err := os.ReadFile(logPath)
+		if err != nil {
+			t.Fatalf("read access log: %v", err)
+		}
+		if entry := string(logBytes); !strings.Contains(entry, "GET /health 200") {
+			t.Fatalf("file access log = %q, want health access log", entry)
+		}
+	})
+}
+
+type restProcess struct {
+	cmd     *exec.Cmd
+	baseURL string
+	stderr  *bytes.Buffer
+}
+
+func startRESTProcess(t *testing.T, args ...string) *restProcess {
+	t.Helper()
+
+	cmd := minaHelperCommand(t, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("stdout pipe: %v", err)
 	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	stderr := &bytes.Buffer{}
+	cmd.Stderr = stderr
 
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("start mina helper: %v", err)
@@ -63,7 +130,36 @@ func TestRESTSmokeProcess(t *testing.T) {
 	}
 	baseURL := strings.TrimPrefix(line, "listening ")
 
-	client := http.Client{Timeout: 5 * time.Second}
+	return &restProcess{
+		cmd:     cmd,
+		baseURL: baseURL,
+		stderr:  stderr,
+	}
+}
+
+func (p *restProcess) stop(t *testing.T) {
+	t.Helper()
+
+	if p.cmd.ProcessState != nil && p.cmd.ProcessState.Exited() {
+		return
+	}
+	_ = p.cmd.Process.Signal(os.Interrupt)
+	done := make(chan struct{})
+	go func() {
+		_ = p.cmd.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		_ = p.cmd.Process.Kill()
+		<-done
+	}
+}
+
+func assertHealthOK(t *testing.T, client http.Client, baseURL string, stderr *bytes.Buffer) {
+	t.Helper()
+
 	response, err := client.Get(baseURL + "/health")
 	if err != nil {
 		t.Fatalf("GET /health: %v; stderr: %s", err, stderr.String())
@@ -85,6 +181,10 @@ func TestRESTSmokeProcess(t *testing.T) {
 	if body.Status != "ok" {
 		t.Fatalf("health status body = %q, want ok", body.Status)
 	}
+}
+
+func assertCategoriesEmpty(t *testing.T, client http.Client, baseURL string, stderr *bytes.Buffer) {
+	t.Helper()
 
 	categoryResponse, err := client.Get(baseURL + "/categories")
 	if err != nil {

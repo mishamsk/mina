@@ -311,25 +311,6 @@ func parseAccountRecordsPath(w http.ResponseWriter, r *http.Request) (int64, boo
 	return id, true
 }
 
-func accountRecordsPath(path string) bool {
-	rawID := strings.TrimPrefix(path, "/accounts/")
-	if rawID == path || !strings.HasSuffix(rawID, "/records") {
-		return false
-	}
-	rawID = strings.TrimSuffix(rawID, "/records")
-
-	return rawID != "" && !strings.Contains(rawID, "/")
-}
-
-func recordBulkOperationPath(path string) bool {
-	switch path {
-	case "/records/bulk/category", "/records/bulk/tags", "/records/bulk/account", "/records/bulk/status":
-		return true
-	default:
-		return false
-	}
-}
-
 func transactionInput(initiatedDate string, records []models.CreateJournalRecordRequest) transactions.CreateInput {
 	return transactions.CreateInput{
 		InitiatedDate: initiatedDate,

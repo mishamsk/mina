@@ -57,3 +57,20 @@ func TestRunRejectsMissingServeDatabasePath(t *testing.T) {
 		t.Fatalf("stderr = %q, want missing database path error", stderr.String())
 	}
 }
+
+func TestRunRejectsIncompatibleAccessLogFlags(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run([]string{"serve", "--db", "mina.db", "--quiet", "--access-log", "access.log"}, &stdout, &stderr)
+
+	if code != 2 {
+		t.Fatalf("run() exit code = %d, want 2", code)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want empty", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "--quiet cannot be combined with --access-log") {
+		t.Fatalf("stderr = %q, want incompatible access log flag error", stderr.String())
+	}
+}

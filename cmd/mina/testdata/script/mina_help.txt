@@ -15,6 +15,8 @@ stdout '--host'
 stdout '--port'
 stdout '--create'
 stdout '--migrate'
+stdout '--access-log'
+stdout '--quiet'
 ! stderr .
 
 exec mina serve --help
@@ -24,6 +26,8 @@ stdout '--host'
 stdout '--port'
 stdout '--create'
 stdout '--migrate'
+stdout '--access-log'
+stdout '--quiet'
 ! stderr .
 
 exec mina migrate --help
