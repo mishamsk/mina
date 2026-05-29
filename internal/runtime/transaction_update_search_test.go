@@ -200,6 +200,14 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	if invalidDecimal.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid decimal filter status = %d, want %d; body %s", invalidDecimal.StatusCode, http.StatusBadRequest, invalidDecimal.RawBody)
 	}
+	invalidPostingStatus := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/records?posting_status=unknown", nil)
+	if invalidPostingStatus.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid posting status filter status = %d, want %d; body %s", invalidPostingStatus.StatusCode, http.StatusBadRequest, invalidPostingStatus.RawBody)
+	}
+	invalidReconciliationStatus := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/records?reconciliation_status=unknown", nil)
+	if invalidReconciliationStatus.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid reconciliation status filter status = %d, want %d; body %s", invalidReconciliationStatus.StatusCode, http.StatusBadRequest, invalidReconciliationStatus.RawBody)
+	}
 	accountIDOnAccountView := apptest.Decode[models.ErrorResponse](client, http.MethodGet, accountRecordsPath(refs.CheckingAccountID)+"?account_id="+formatID(refs.SavingsAccountID), nil)
 	if accountIDOnAccountView.StatusCode != http.StatusBadRequest {
 		t.Fatalf("account_id on account view status = %d, want %d; body %s", accountIDOnAccountView.StatusCode, http.StatusBadRequest, accountIDOnAccountView.RawBody)

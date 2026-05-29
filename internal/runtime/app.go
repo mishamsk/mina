@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"mina.local/mina/internal/controllers"
 	"mina.local/mina/internal/httpapi"
 	"mina.local/mina/internal/services/accounts"
 	"mina.local/mina/internal/services/categories"
@@ -17,6 +16,7 @@ import (
 	"mina.local/mina/internal/services/exchangerates"
 	"mina.local/mina/internal/services/members"
 	"mina.local/mina/internal/services/tags"
+	"mina.local/mina/internal/services/transactions"
 	"mina.local/mina/internal/store"
 )
 
@@ -50,15 +50,14 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		}
 	}
 
-	controllerSet := controllers.New(db)
 	handler := httpapi.New(httpapi.Dependencies{
-		Controllers:   controllerSet,
 		Categories:    categories.NewService(store.NewCategoryStore(db)),
 		Tags:          tags.NewService(store.NewTagStore(db)),
 		Members:       members.NewService(store.NewMemberStore(db)),
 		Accounts:      accounts.NewService(store.NewAccountStore(db)),
 		CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(db)),
 		ExchangeRates: exchangerates.NewService(store.NewExchangeRateStore(db)),
+		Transactions:  transactions.NewService(store.NewTransactionStore(db)),
 	})
 
 	return &App{

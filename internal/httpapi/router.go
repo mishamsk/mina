@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strings"
 
-	"mina.local/mina/internal/controllers"
 	"mina.local/mina/internal/models"
 	"mina.local/mina/internal/services/accounts"
 	"mina.local/mina/internal/services/categories"
@@ -12,17 +11,18 @@ import (
 	"mina.local/mina/internal/services/exchangerates"
 	"mina.local/mina/internal/services/members"
 	"mina.local/mina/internal/services/tags"
+	"mina.local/mina/internal/services/transactions"
 )
 
 // Dependencies are router inputs owned by higher-level composition.
 type Dependencies struct {
-	Controllers   *controllers.Controllers
 	Categories    *categories.Service
 	Tags          *tags.Service
 	Members       *members.Service
 	Accounts      *accounts.Service
 	CreditLimits  *creditlimits.Service
 	ExchangeRates *exchangerates.Service
+	Transactions  *transactions.Service
 }
 
 // New builds the REST API handler tree.

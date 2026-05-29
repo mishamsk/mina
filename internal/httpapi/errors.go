@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 
-	"mina.local/mina/internal/controllers"
 	"mina.local/mina/internal/models"
 	"mina.local/mina/internal/services"
 )
@@ -26,13 +25,8 @@ func WriteAPIError(w http.ResponseWriter, status int, code models.ErrorCode, mes
 	}
 }
 
-// WriteControllerError maps controller errors to stable JSON API errors.
+// WriteControllerError maps use-case errors to stable JSON API errors.
 func WriteControllerError(w http.ResponseWriter, err error) {
-	var controllerErr *controllers.Error
-	if errors.As(err, &controllerErr) {
-		WriteAPIError(w, statusForCode(controllerErr.Code), controllerErr.Code, controllerErr.Message)
-		return
-	}
 	var serviceErr *services.Error
 	if errors.As(err, &serviceErr) {
 		code := modelErrorCode(serviceErr.Code)

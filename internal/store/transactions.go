@@ -8,7 +8,8 @@ import (
 	"math/big"
 	"strings"
 
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/services"
+	"mina.local/mina/internal/services/transactions"
 )
 
 // TransactionStore persists transactions and journal records.
@@ -16,26 +17,7 @@ type TransactionStore struct {
 	db *sql.DB
 }
 
-// RecordSearchOptions controls journal record search filters.
-type RecordSearchOptions struct {
-	AccountID            *int64
-	CategoryID           *int64
-	MemberID             *int64
-	TagID                *int64
-	PostingStatus        *models.PostingStatus
-	ReconciliationStatus *models.ReconciliationStatus
-	AmountMin            *string
-	AmountMax            *string
-	AmountUSDMin         *string
-	AmountUSDMax         *string
-	InitiatedDateFrom    *string
-	InitiatedDateTo      *string
-	PendingDateFrom      *string
-	PendingDateTo        *string
-	PostedDateFrom       *string
-	PostedDateTo         *string
-	MemoContains         *string
-}
+var _ transactions.Repository = (*TransactionStore)(nil)
 
 // NewTransactionStore creates a transaction store using db.
 func NewTransactionStore(db *sql.DB) *TransactionStore {
@@ -43,8 +25,8 @@ func NewTransactionStore(db *sql.DB) *TransactionStore {
 }
 
 // Create persists a transaction and all journal records atomically.
-func (s *TransactionStore) Create(ctx context.Context, req models.CreateTransactionRequest) (models.Transaction, error) {
-	var transaction models.Transaction
+func (s *TransactionStore) Create(ctx context.Context, req transactions.CreateInput) (transactions.Transaction, error) {
+	var transaction transactions.Transaction
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
 		if err := validateTransactionReferences(ctx, tx, req); err != nil {
 			return err
@@ -74,15 +56,15 @@ RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
 		return nil
 	})
 	if err != nil {
-		return models.Transaction{}, err
+		return transactions.Transaction{}, err
 	}
 
 	return transaction, nil
 }
 
 // Replace atomically replaces a transaction's metadata and active journal records.
-func (s *TransactionStore) Replace(ctx context.Context, id int64, req models.UpdateTransactionRequest) (models.Transaction, error) {
-	var transaction models.Transaction
+func (s *TransactionStore) Replace(ctx context.Context, id int64, req transactions.CreateInput) (transactions.Transaction, error) {
+	var transaction transactions.Transaction
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
@@ -96,15 +78,15 @@ RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
 		var err error
 		transaction, err = scanTransaction(row)
 		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNotFound
+			return services.ErrNotFound
 		}
 		if err != nil {
 			return fmt.Errorf("update transaction: %w", err)
 		}
 
-		if err := validateTransactionReferences(ctx, tx, models.CreateTransactionRequest(req)); err != nil {
-			if errors.Is(err, ErrNotFound) {
-				return fmt.Errorf("%w: %v", ErrInvalidReference, err)
+		if err := validateTransactionReferences(ctx, tx, req); err != nil {
+			if errors.Is(err, services.ErrNotFound) {
+				return fmt.Errorf("%w: %v", services.ErrInvalidReference, err)
 			}
 			return err
 		}
@@ -131,14 +113,14 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		return nil
 	})
 	if err != nil {
-		return models.Transaction{}, err
+		return transactions.Transaction{}, err
 	}
 
 	return transaction, nil
 }
 
 // Get returns a transaction with nested journal records.
-func (s *TransactionStore) Get(ctx context.Context, id int64) (models.Transaction, error) {
+func (s *TransactionStore) Get(ctx context.Context, id int64) (transactions.Transaction, error) {
 	transaction, err := scanTransaction(s.db.QueryRowContext(
 		ctx,
 		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
@@ -147,15 +129,15 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		id,
 	))
 	if errors.Is(err, sql.ErrNoRows) {
-		return models.Transaction{}, ErrNotFound
+		return transactions.Transaction{}, services.ErrNotFound
 	}
 	if err != nil {
-		return models.Transaction{}, fmt.Errorf("get transaction: %w", err)
+		return transactions.Transaction{}, fmt.Errorf("get transaction: %w", err)
 	}
 
 	records, err := s.recordsByTransactionIDs(ctx, []int64{id})
 	if err != nil {
-		return models.Transaction{}, err
+		return transactions.Transaction{}, err
 	}
 	transaction.Records = records[id]
 
@@ -163,7 +145,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 }
 
 // List returns transactions with nested journal records in deterministic date order.
-func (s *TransactionStore) List(ctx context.Context) ([]models.Transaction, error) {
+func (s *TransactionStore) List(ctx context.Context) ([]transactions.Transaction, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
@@ -175,7 +157,7 @@ ORDER BY initiated_date ASC, transaction_id ASC`,
 		return nil, fmt.Errorf("list transactions: %w", err)
 	}
 
-	transactions := []models.Transaction{}
+	transactions := []transactions.Transaction{}
 	transactionIDs := []int64{}
 	for rows.Next() {
 		transaction, err := scanTransaction(rows)
@@ -224,7 +206,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			return fmt.Errorf("read tombstone affected rows: %w", err)
 		}
 		if affected == 0 {
-			return ErrNotFound
+			return services.ErrNotFound
 		}
 
 		if _, err := tx.ExecContext(
@@ -243,7 +225,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 }
 
 // SearchRecords returns active journal records matching filters.
-func (s *TransactionStore) SearchRecords(ctx context.Context, opts RecordSearchOptions) ([]models.JournalRecord, error) {
+func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.RecordSearchOptions) ([]transactions.JournalRecord, error) {
 	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
 	jr.created_at, jr.updated_at, jr.tombstoned_at
@@ -310,7 +292,7 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 		return nil, fmt.Errorf("search journal records: %w", err)
 	}
 
-	records := []models.JournalRecord{}
+	records := []transactions.JournalRecord{}
 	for rows.Next() {
 		record, err := scanJournalRecord(rows)
 		if err != nil {
@@ -357,7 +339,7 @@ func (s *TransactionStore) BulkCategorize(ctx context.Context, recordIDs []int64
 			return err
 		}
 		if !exists {
-			return ErrInvalidReference
+			return services.ErrInvalidReference
 		}
 
 		args := append([]any{categoryID}, int64Args(recordIDs)...)
@@ -392,7 +374,7 @@ func (s *TransactionStore) BulkReassignAccount(ctx context.Context, recordIDs []
 			return err
 		}
 		if !exists {
-			return ErrInvalidReference
+			return services.ErrInvalidReference
 		}
 
 		args := append([]any{accountID}, int64Args(recordIDs)...)
@@ -475,8 +457,8 @@ WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
 func (s *TransactionStore) BulkUpdateStatuses(
 	ctx context.Context,
 	recordIDs []int64,
-	postingStatus *models.PostingStatus,
-	reconciliationStatus *models.ReconciliationStatus,
+	postingStatus *transactions.PostingStatus,
+	reconciliationStatus *transactions.ReconciliationStatus,
 ) (int, error) {
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
 		if err := validateActiveJournalRecords(ctx, tx, recordIDs); err != nil {
@@ -517,8 +499,8 @@ type transactionScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanTransaction(scanner transactionScanner) (models.Transaction, error) {
-	var transaction models.Transaction
+func scanTransaction(scanner transactionScanner) (transactions.Transaction, error) {
+	var transaction transactions.Transaction
 	var tombstonedAt sql.NullString
 	if err := scanner.Scan(
 		&transaction.ID,
@@ -526,17 +508,17 @@ func scanTransaction(scanner transactionScanner) (models.Transaction, error) {
 		&transaction.CreatedAt,
 		&tombstonedAt,
 	); err != nil {
-		return models.Transaction{}, err
+		return transactions.Transaction{}, err
 	}
 	if tombstonedAt.Valid {
 		transaction.TombstonedAt = &tombstonedAt.String
 	}
-	transaction.Records = []models.JournalRecord{}
+	transaction.Records = []transactions.JournalRecord{}
 
 	return transaction, nil
 }
 
-func insertJournalRecord(ctx context.Context, tx *sql.Tx, transactionID int64, req models.CreateJournalRecordRequest) (models.JournalRecord, error) {
+func insertJournalRecord(ctx context.Context, tx *sql.Tx, transactionID int64, req transactions.JournalRecordInput) (transactions.JournalRecord, error) {
 	row := tx.QueryRowContext(
 		ctx,
 		`INSERT INTO journal_record (
@@ -566,7 +548,7 @@ RETURNING record_id, transaction_id, account_id, member_id, currency, amount, am
 
 	record, err := scanJournalRecord(row)
 	if err != nil {
-		return models.JournalRecord{}, fmt.Errorf("insert journal record: %w", err)
+		return transactions.JournalRecord{}, fmt.Errorf("insert journal record: %w", err)
 	}
 	for _, tagID := range req.TagIDs {
 		if _, err := tx.ExecContext(
@@ -575,7 +557,7 @@ RETURNING record_id, transaction_id, account_id, member_id, currency, amount, am
 			record.ID,
 			tagID,
 		); err != nil {
-			return models.JournalRecord{}, fmt.Errorf("insert journal record tag: %w", err)
+			return transactions.JournalRecord{}, fmt.Errorf("insert journal record tag: %w", err)
 		}
 	}
 	record.TagIDs = append([]int64{}, req.TagIDs...)
@@ -587,8 +569,8 @@ type journalRecordScanner interface {
 	Scan(dest ...any) error
 }
 
-func scanJournalRecord(scanner journalRecordScanner) (models.JournalRecord, error) {
-	var record models.JournalRecord
+func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord, error) {
+	var record transactions.JournalRecord
 	var memberID sql.NullInt64
 	var memo sql.NullString
 	var pendingDate sql.NullString
@@ -617,7 +599,7 @@ func scanJournalRecord(scanner journalRecordScanner) (models.JournalRecord, erro
 		&record.UpdatedAt,
 		&tombstonedAt,
 	); err != nil {
-		return models.JournalRecord{}, err
+		return transactions.JournalRecord{}, err
 	}
 	if memberID.Valid {
 		record.MemberID = &memberID.Int64
@@ -645,10 +627,10 @@ func scanJournalRecord(scanner journalRecordScanner) (models.JournalRecord, erro
 	return record, nil
 }
 
-func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transactionIDs []int64) (map[int64][]models.JournalRecord, error) {
-	recordsByTransactionID := map[int64][]models.JournalRecord{}
+func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transactionIDs []int64) (map[int64][]transactions.JournalRecord, error) {
+	recordsByTransactionID := map[int64][]transactions.JournalRecord{}
 	for _, id := range transactionIDs {
-		recordsByTransactionID[id] = []models.JournalRecord{}
+		recordsByTransactionID[id] = []transactions.JournalRecord{}
 	}
 	if len(transactionIDs) == 0 {
 		return recordsByTransactionID, nil
@@ -669,7 +651,7 @@ ORDER BY record_id ASC`,
 			return nil, fmt.Errorf("list journal records: %w", err)
 		}
 
-		transactionRecords := []models.JournalRecord{}
+		transactionRecords := []transactions.JournalRecord{}
 		for rows.Next() {
 			record, err := scanJournalRecord(rows)
 			if err != nil {
@@ -734,14 +716,14 @@ ORDER BY tag_id ASC`,
 	return tagIDs, nil
 }
 
-func validateTransactionReferences(ctx context.Context, tx *sql.Tx, req models.CreateTransactionRequest) error {
+func validateTransactionReferences(ctx context.Context, tx *sql.Tx, req transactions.CreateInput) error {
 	for _, record := range req.Records {
 		exists, err := activeAccountExists(ctx, tx, record.AccountID)
 		if err != nil {
 			return err
 		}
 		if !exists {
-			return fmt.Errorf("%w: active account not found", ErrNotFound)
+			return fmt.Errorf("%w: active account not found", services.ErrNotFound)
 		}
 
 		exists, err = activeCategoryExists(ctx, tx, record.CategoryID)
@@ -749,7 +731,7 @@ func validateTransactionReferences(ctx context.Context, tx *sql.Tx, req models.C
 			return err
 		}
 		if !exists {
-			return fmt.Errorf("%w: active category not found", ErrNotFound)
+			return fmt.Errorf("%w: active category not found", services.ErrNotFound)
 		}
 
 		if record.MemberID != nil {
@@ -758,7 +740,7 @@ func validateTransactionReferences(ctx context.Context, tx *sql.Tx, req models.C
 				return err
 			}
 			if !exists {
-				return fmt.Errorf("%w: active member not found", ErrNotFound)
+				return fmt.Errorf("%w: active member not found", services.ErrNotFound)
 			}
 		}
 
@@ -768,7 +750,7 @@ func validateTransactionReferences(ctx context.Context, tx *sql.Tx, req models.C
 				return err
 			}
 			if !exists {
-				return fmt.Errorf("%w: active tag not found", ErrNotFound)
+				return fmt.Errorf("%w: active tag not found", services.ErrNotFound)
 			}
 		}
 	}
@@ -778,7 +760,7 @@ func validateTransactionReferences(ctx context.Context, tx *sql.Tx, req models.C
 
 func validateActiveJournalRecords(ctx context.Context, queryer rowQuerier, recordIDs []int64) error {
 	if len(recordIDs) == 0 {
-		return ErrInvalidReference
+		return services.ErrInvalidReference
 	}
 
 	var count int
@@ -796,7 +778,7 @@ WHERE jr.record_id IN (`+placeholders(len(recordIDs))+`)
 		return fmt.Errorf("check active journal records: %w", err)
 	}
 	if count != len(recordIDs) {
-		return ErrInvalidReference
+		return services.ErrInvalidReference
 	}
 
 	return nil
@@ -820,7 +802,7 @@ WHERE tag_id IN (`+placeholders(len(tagIDs))+`)
 		return fmt.Errorf("check active tags: %w", err)
 	}
 	if count != len(tagIDs) {
-		return ErrInvalidReference
+		return services.ErrInvalidReference
 	}
 
 	return nil
@@ -885,7 +867,7 @@ func escapeLikePattern(value string) string {
 	return value
 }
 
-func recordMatchesAmountRanges(record models.JournalRecord, opts RecordSearchOptions) (bool, error) {
+func recordMatchesAmountRanges(record transactions.JournalRecord, opts transactions.RecordSearchOptions) (bool, error) {
 	matches, err := decimalStringInRange(record.Amount, opts.AmountMin, opts.AmountMax)
 	if err != nil || !matches {
 		return matches, err

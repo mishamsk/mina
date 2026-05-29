@@ -7,6 +7,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrConflict identifies a repository uniqueness or state conflict.
 	ErrConflict = errors.New("conflict")
+	// ErrInvalidReference identifies a missing or inactive referenced row.
+	ErrInvalidReference = errors.New("invalid reference")
 )
 
 // ErrorCode identifies app-layer use-case failures.

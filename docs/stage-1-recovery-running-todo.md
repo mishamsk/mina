@@ -119,23 +119,23 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 7: Refactor transaction, journal record, search, and bulk services
-- [ ] Create app-owned transaction and journal record packages, or one transaction package with record-owned subtypes, matching the architecture decision.
-- [ ] Move transaction validation, balance checks, reference validation, full replacement, tombstone delete, record search, account-record search, and bulk record operations out of the old controller package.
-- [ ] Keep source, posting status, reconciliation status, date, amount, USD amount, tag, category, member, and account rules in the service layer.
-- [ ] Keep HTTP query parsing, HTTP status mapping, and OpenAPI DTO conversion in `internal/httpapi`.
-- [ ] Make `internal/store` implement transaction, record search, and bulk operation repositories.
-- [ ] Ensure multi-row changes remain atomic through store-owned transaction helpers.
-- [ ] Preserve current REST behavior for transaction create/read/list/update/delete, record search, account-record search, and all bulk operations.
-- [ ] Update boundary tests for balance checks, invalid references, filter allowlists, bulk all-or-nothing behavior, and read-after-write scenarios.
-- [ ] Remove replaced code from the old `internal/controllers` and `internal/models` packages when no longer imported.
-- [ ] Update package docs and `PROJECT_STATE.md`.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Create app-owned transaction and journal record packages, or one transaction package with record-owned subtypes, matching the architecture decision.
+- [x] Move transaction validation, balance checks, reference validation, full replacement, tombstone delete, record search, account-record search, and bulk record operations out of the old controller package.
+- [x] Keep source, posting status, reconciliation status, date, amount, USD amount, tag, category, member, and account rules in the service layer.
+- [x] Keep HTTP query parsing, HTTP status mapping, and OpenAPI DTO conversion in `internal/httpapi`.
+- [x] Make `internal/store` implement transaction, record search, and bulk operation repositories.
+- [x] Ensure multi-row changes remain atomic through store-owned transaction helpers.
+- [x] Preserve current REST behavior for transaction create/read/list/update/delete, record search, account-record search, and all bulk operations.
+- [x] Update boundary tests for balance checks, invalid references, filter allowlists, bulk all-or-nothing behavior, and read-after-write scenarios.
+- [x] Remove replaced code from the old `internal/controllers` and `internal/models` packages when no longer imported.
+- [x] Update package docs and `PROJECT_STATE.md`.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 8: Replace SQLite with DuckDB connection and migrations
 - [ ] Remove SQLite driver usage and SQLite-specific error handling.

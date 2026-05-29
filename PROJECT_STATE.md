@@ -13,12 +13,11 @@
   - No app-level decimal package is selected yet; decimal handling remains string-based until a service or DuckDB mapping requires exact arithmetic.
 - Package inventory:
   - `cmd/mina`: Cobra CLI entrypoint with help/version output, `serve`, and `migrate` commands.
-  - `internal/runtime`: process config structs and validation, database open/create/migrate policy, controller/store composition, and app handler wiring.
+  - `internal/runtime`: process config structs and validation, database open/create/migrate policy, service/store composition, and app handler wiring.
   - `internal/httpapi`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, JSON API error mapping, and generated OpenAPI contract subpackage.
-  - `internal/services`: app-owned service package family. `accounts`, `categories`, `tags`, `members`, `exchangerates`, and `creditlimits` own their domain types, validation, use cases, and repository interfaces; `transactions`, `journalrecords`, and `recordbulk` are target skeletons.
+  - `internal/services`: app-owned service package family. `accounts`, `categories`, `tags`, `members`, `exchangerates`, `creditlimits`, and `transactions` own their domain types, validation, use cases, and repository interfaces; `journalrecords` and `recordbulk` remain target skeletons.
   - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate/transaction data shapes and stable API error response models.
-  - `internal/store`: SQLite connection, migration, transaction helper, repository implementations, account/category/tag/member/credit-limit-history/exchange-rate/transaction persistence, and test database helpers.
-  - `internal/controllers`: temporary controller registry plus transaction use cases and validation.
+  - `internal/store`: SQLite connection, migration, transaction helper, repository implementations, account/category/tag/member/credit-limit-history/exchange-rate/transaction and record bulk persistence, and test database helpers.
   - `internal/apptest`: in-process app boundary test client that constructs apps through `internal/runtime`.
 - Database behavior:
   - Local accounting state uses SQLite through `modernc.org/sqlite` v1.50.1.
