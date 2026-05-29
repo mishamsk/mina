@@ -9,13 +9,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"mina.local/mina/internal/app"
+	"mina.local/mina/internal/runtime"
 )
 
 // Client sends typed JSON requests through an in-process app handler.
 type Client struct {
 	t   *testing.T
-	app *app.App
+	app *runtime.App
 }
 
 // Response is a typed JSON response captured from the app handler.
@@ -31,7 +31,7 @@ func New(t *testing.T) *Client {
 	t.Helper()
 
 	path := t.TempDir() + "/mina.db"
-	appInstance, err := app.New(context.Background(), app.Config{
+	appInstance, err := runtime.New(context.Background(), runtime.Config{
 		DatabasePath:    path,
 		CreateIfMissing: true,
 		ApplyMigrations: true,
@@ -52,7 +52,7 @@ func New(t *testing.T) *Client {
 }
 
 // App returns the composed app used by this client.
-func (c *Client) App() *app.App {
+func (c *Client) App() *runtime.App {
 	return c.app
 }
 

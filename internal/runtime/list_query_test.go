@@ -1,4 +1,4 @@
-package app_test
+package runtime_test
 
 import (
 	"net/http"

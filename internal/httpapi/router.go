@@ -1,4 +1,4 @@
-package routers
+package httpapi
 
 import (
 	"net/http"

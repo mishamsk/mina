@@ -13,16 +13,13 @@
   - No app-level decimal package is selected yet; decimal handling remains string-based until a service or DuckDB mapping requires exact arithmetic.
 - Package inventory:
   - `cmd/mina`: Cobra CLI entrypoint with help/version output, `serve`, and `migrate` commands.
-  - `internal/runtime`: target composition-root skeleton with process config structs and validation for database lifecycle policy.
-  - `internal/httpapi`: target REST adapter skeleton for route registration, HTTP mapping, and OpenAPI DTO conversion.
+  - `internal/runtime`: process config structs and validation, database open/create/migrate policy, controller/store composition, and app handler wiring.
+  - `internal/httpapi`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, JSON API error mapping, and generated OpenAPI contract subpackage.
   - `internal/services`: target app-owned service package family with domain packages `accounts`, `categories`, `tags`, `members`, `exchangerates`, `creditlimits`, `transactions`, `journalrecords`, and `recordbulk`.
   - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate/transaction data shapes and stable API error response models.
   - `internal/store`: SQLite connection, migration, transaction helper, account/category/tag/member/credit-limit-history/exchange-rate/transaction persistence, and test database helpers.
   - `internal/controllers`: account/category/tag/member/credit-limit-history/exchange-rate/transaction use cases and validation.
-  - `internal/routers`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, and JSON API error mapping.
-  - `internal/app`: process composition for config, database open/create/migrate policy, controllers, and routers.
-  - `internal/apptest`: in-process app boundary test client.
-  - `internal/openapi`: generated OpenAPI contract package.
+  - `internal/apptest`: in-process app boundary test client that constructs apps through `internal/runtime`.
 - Database behavior:
   - Local accounting state uses SQLite through `modernc.org/sqlite` v1.50.1.
   - App composition requires an explicit database path.
@@ -122,7 +119,7 @@
 - OpenAPI contract:
   - Source: `api/openapi.yaml`.
   - Generator config: `api/oapi-codegen.yaml`.
-  - Generated output: `internal/openapi/openapi.gen.go`.
+  - Generated output: `internal/httpapi/openapi/openapi.gen.go`.
   - `oapi-codegen` remains the REST contract generator.
   - Generated-file policy: `docs/generated-files.md`.
 - CLI and REST behavior:

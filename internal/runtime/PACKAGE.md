@@ -12,7 +12,7 @@
 
 ## Boundaries
 
-- Owns: process configuration, database lifecycle policy, listener startup wiring, and mode composition.
+- Owns: process configuration, database lifecycle policy, app composition, and mode-ready runtime values.
 - Does not own: SQL statements, domain validation, REST DTO mapping, or CLI command help.
 
 ## Testing Notes

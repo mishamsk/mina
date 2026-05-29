@@ -1,4 +1,4 @@
-package app
+package runtime
 
 import (
 	"context"
@@ -10,13 +10,9 @@ import (
 	"path/filepath"
 
 	"mina.local/mina/internal/controllers"
-	"mina.local/mina/internal/routers"
-	"mina.local/mina/internal/runtime"
+	"mina.local/mina/internal/httpapi"
 	"mina.local/mina/internal/store"
 )
-
-// Config controls process-local app composition.
-type Config = runtime.Config
 
 // App is a composed in-process Mina application.
 type App struct {
@@ -49,7 +45,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	}
 
 	controllerSet := controllers.New(db)
-	handler := routers.New(routers.Dependencies{Controllers: controllerSet})
+	handler := httpapi.New(httpapi.Dependencies{Controllers: controllerSet})
 
 	return &App{
 		db:      db,

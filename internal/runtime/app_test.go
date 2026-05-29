@@ -1,4 +1,4 @@
-package app_test
+package runtime_test
 
 import (
 	"context"
@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mina.local/mina/internal/app"
 	"mina.local/mina/internal/apptest"
 	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/runtime"
 	"mina.local/mina/internal/store"
 )
 
@@ -16,7 +16,7 @@ func TestNewCreatesAndMigratesDatabase(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "nested", "mina.db")
 
-	appInstance, err := app.New(ctx, app.Config{
+	appInstance, err := runtime.New(ctx, runtime.Config{
 		DatabasePath:    path,
 		CreateIfMissing: true,
 		ApplyMigrations: true,
@@ -40,7 +40,7 @@ func TestNewCreatesAndMigratesDatabase(t *testing.T) {
 }
 
 func TestNewRequiresExistingDatabaseWhenCreateDisabled(t *testing.T) {
-	_, err := app.New(context.Background(), app.Config{
+	_, err := runtime.New(context.Background(), runtime.Config{
 		DatabasePath:    filepath.Join(t.TempDir(), "missing.db"),
 		CreateIfMissing: false,
 		ApplyMigrations: true,

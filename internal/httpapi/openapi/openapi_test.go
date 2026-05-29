@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"mina.local/mina/internal/openapi"
+	"mina.local/mina/internal/httpapi/openapi"
 )
 
 func TestGeneratedOpenAPISpecLoadsAndValidates(t *testing.T) {

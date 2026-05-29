@@ -15,7 +15,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"mina.local/mina/internal/app"
 	"mina.local/mina/internal/runtime"
 )
 
@@ -187,7 +186,7 @@ func serve(stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	appInstance, err := app.New(ctx, app.Config{
+	appInstance, err := runtime.New(ctx, runtime.Config{
 		DatabasePath:    cfg.DatabasePath,
 		CreateIfMissing: cfg.CreateIfMissing,
 		ApplyMigrations: cfg.ApplyMigrations,
@@ -228,7 +227,7 @@ func serve(stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig) error {
 
 func migrate(stderr io.Writer, cfg runtime.Config) error {
 	ctx := context.Background()
-	appInstance, err := app.New(ctx, app.Config{
+	appInstance, err := runtime.New(ctx, runtime.Config{
 		DatabasePath:    cfg.DatabasePath,
 		CreateIfMissing: cfg.CreateIfMissing,
 		ApplyMigrations: true,

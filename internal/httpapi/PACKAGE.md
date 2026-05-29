@@ -3,6 +3,7 @@
 ## Purpose
 
 - Owns REST route registration, HTTP request parsing, response encoding, and OpenAPI DTO mapping.
+- Contains the adapter-owned generated OpenAPI contract subpackage.
 
 ## Implicit Contracts
 

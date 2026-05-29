@@ -66,23 +66,23 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 4: Move composition and REST adapter packages
-- [ ] Move `internal/app` composition responsibilities to `internal/runtime`.
-- [ ] Move REST handlers from `internal/routers` to `internal/httpapi`.
-- [ ] Move generated OpenAPI code from `internal/openapi` into the REST adapter package, or into a REST-adapter-owned subpackage if that keeps generated DTOs isolated.
-- [ ] Move the OpenAPI source and generator config into the REST adapter path if required by the architecture decision, and update `just openapi`.
-- [ ] Keep `internal/apptest` as a boundary test helper that constructs the app through `internal/runtime`.
-- [ ] Ensure only `cmd/mina` and tests import `internal/runtime`.
-- [ ] Ensure `internal/httpapi` does not open databases, parse CLI flags, or contain domain decisions.
-- [ ] Update generated-file docs and package docs after the move.
-- [ ] Update `PROJECT_STATE.md` with the new runtime and REST package inventory.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just openapi` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Move `internal/app` composition responsibilities to `internal/runtime`.
+- [x] Move REST handlers from `internal/routers` to `internal/httpapi`.
+- [x] Move generated OpenAPI code from `internal/openapi` into the REST adapter package, or into a REST-adapter-owned subpackage if that keeps generated DTOs isolated.
+- [x] Move the OpenAPI source and generator config into the REST adapter path if required by the architecture decision, and update `just openapi`.
+- [x] Keep `internal/apptest` as a boundary test helper that constructs the app through `internal/runtime`.
+- [x] Ensure only `cmd/mina` and tests import `internal/runtime`.
+- [x] Ensure `internal/httpapi` does not open databases, parse CLI flags, or contain domain decisions.
+- [x] Update generated-file docs and package docs after the move.
+- [x] Update `PROJECT_STATE.md` with the new runtime and REST package inventory.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just openapi` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 5: Refactor category, tag, and member into service packages
 - [ ] Create app-owned packages for categories, tags, and members with domain types, `Service`, and repository interfaces.
