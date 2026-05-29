@@ -29,23 +29,23 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Required docs updated
 
 ### Commit 2: Add target package skeleton and dependency decisions
-- [ ] Add or update package docs for `internal/runtime`, `internal/httpapi`, `internal/store`, and the app-owned service package pattern.
-- [ ] Choose the concrete service package names for Stage 1 domains: accounts, categories, tags, members, exchange rates, credit limit history, transactions, journal records, and bulk record operations.
-- [ ] Add direct dependencies for common boundaries instead of ad hoc code:
-  - [ ] `github.com/spf13/cobra` for CLI parsing.
-  - [ ] `github.com/duckdb/duckdb-go/v2` for the DuckDB `database/sql` driver.
-  - [ ] A decimal package only if needed for exact service-layer arithmetic and DuckDB `DECIMAL(18,8)` mapping.
-- [ ] Decide whether query generation is viable for the required DuckDB SQL. If it is viable, add store-owned query generation paths; if not, document the manual store mapping policy in `internal/store/PACKAGE.md`.
-- [ ] Keep `oapi-codegen` as the REST contract generator unless a specific REST generation problem is identified.
-- [ ] Update `docs/generated-files.md` for any moved or newly generated files.
-- [ ] Update `PROJECT_STATE.md` with the new dependency and package direction.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Add or update package docs for `internal/runtime`, `internal/httpapi`, `internal/store`, and the app-owned service package pattern.
+- [x] Choose the concrete service package names for Stage 1 domains: accounts, categories, tags, members, exchange rates, credit limit history, transactions, journal records, and bulk record operations.
+- [x] Add direct dependencies for common boundaries instead of ad hoc code:
+  - [x] `github.com/spf13/cobra` for CLI parsing.
+  - [x] `github.com/duckdb/duckdb-go/v2` for the DuckDB `database/sql` driver.
+  - [x] A decimal package only if needed for exact service-layer arithmetic and DuckDB `DECIMAL(18,8)` mapping.
+- [x] Decide whether query generation is viable for the required DuckDB SQL. If it is viable, add store-owned query generation paths; if not, document the manual store mapping policy in `internal/store/PACKAGE.md`.
+- [x] Keep `oapi-codegen` as the REST contract generator unless a specific REST generation problem is identified.
+- [x] Update `docs/generated-files.md` for any moved or newly generated files.
+- [x] Update `PROJECT_STATE.md` with the new dependency and package direction.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 3: Replace CLI parsing with Cobra
 - [ ] Rebuild `cmd/mina` around a Cobra root command.

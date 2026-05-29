@@ -2,17 +2,19 @@
 
 ## Purpose
 
-- Owns database connection helpers, migrations, and transaction boundaries.
+- Owns database connection helpers, migrations, query code, repository implementations, and transaction boundaries.
 
 ## Implicit Contracts
 
 - Migrations are upgrade-only and recorded in `schema_version`.
-- SQLite foreign key enforcement is enabled when opening a database handle through `Open`.
+- Store code owns DB-facing row types and conversion between app service types and database column values.
+- Query generation is not selected for Stage 1 recovery because the required DuckDB SQL features are not yet proven against a repo-owned generator. Manual query code must keep user values parameter-bound and dynamic identifiers selected from store-owned allowlists.
+- Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
 
 ## Boundaries
 
-- Owns: SQL execution helpers and durable schema versioning.
-- Does not own: process configuration, HTTP behavior, or domain validation.
+- Owns: SQL execution helpers, durable schema versioning, migrations, transactions, row types, and app-to-DB type conversion.
+- Does not own: process configuration, HTTP behavior, REST DTOs, or domain validation.
 
 ## Testing Notes
 

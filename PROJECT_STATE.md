@@ -7,8 +7,15 @@
   - `golangci-lint` v2.12.2 is pinned as a Go module tool.
   - `oapi-codegen` v2.7.0 is pinned as a Go module tool.
   - `testscript` v1.14.1 supports CLI smoke scripts.
+- Direct dependencies staged for the recovery refactor:
+  - `github.com/spf13/cobra` v1.10.2 for CLI parsing.
+  - `github.com/duckdb/duckdb-go/v2` v2.10503.1 for the DuckDB `database/sql` driver.
+  - No app-level decimal package is selected yet; decimal handling remains string-based until a service or DuckDB mapping requires exact arithmetic.
 - Package inventory:
   - `cmd/mina`: CLI entrypoint with help/version output and the local REST API server.
+  - `internal/runtime`: target composition-root skeleton for config, database lifecycle policy, and mode wiring.
+  - `internal/httpapi`: target REST adapter skeleton for route registration, HTTP mapping, and OpenAPI DTO conversion.
+  - `internal/services`: target app-owned service package family with domain packages `accounts`, `categories`, `tags`, `members`, `exchangerates`, `creditlimits`, `transactions`, `journalrecords`, and `recordbulk`.
   - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate/transaction data shapes and stable API error response models.
   - `internal/store`: SQLite connection, migration, transaction helper, account/category/tag/member/credit-limit-history/exchange-rate/transaction persistence, and test database helpers.
   - `internal/controllers`: account/category/tag/member/credit-limit-history/exchange-rate/transaction use cases and validation.
@@ -116,6 +123,7 @@
   - Source: `api/openapi.yaml`.
   - Generator config: `api/oapi-codegen.yaml`.
   - Generated output: `internal/openapi/openapi.gen.go`.
+  - `oapi-codegen` remains the REST contract generator.
   - Generated-file policy: `docs/generated-files.md`.
 - CLI and REST behavior:
   - `mina --help` prints command usage.
