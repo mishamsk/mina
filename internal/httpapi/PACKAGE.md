@@ -2,9 +2,9 @@
 
 ## Purpose
 
-- Owns Chi route registration, HTTP request parsing, response encoding, REST DTOs, and OpenAPI DTO mapping.
+- Owns Chi route registration, HTTP request parsing, response encoding, and OpenAPI DTO mapping.
 - Contains the adapter-owned generated OpenAPI contract subpackage.
-  DTO structs live in the adapter-owned `models` subpackage.
+  REST DTO structs are generated from `api/openapi.yaml` in `internal/httpapi/openapi`.
 
 ## Implicit Contracts
 
@@ -15,7 +15,7 @@
 
 ## Boundaries
 
-- Owns: HTTP status mapping, transport DTO conversion, REST query parsing, REST DTO models, router middleware, and generated OpenAPI code if colocated.
+- Owns: HTTP status mapping, transport DTO conversion, REST query parsing, router middleware, and generated OpenAPI code if colocated.
 - Does not own: database opening, CLI parsing, SQL execution, or service-layer decisions.
 
 ## Testing Notes

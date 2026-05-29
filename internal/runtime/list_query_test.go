@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"mina.local/mina/internal/apptest"
-	"mina.local/mina/internal/httpapi/models"
+	models "mina.local/mina/internal/httpapi/openapi"
 )
 
 func TestSharedListQueryRejectsUnsupportedFiltersAndSorts(t *testing.T) {
@@ -44,25 +44,25 @@ func TestSharedListQueryHiddenDefaultAndPagination(t *testing.T) {
 	if defaultList.StatusCode != http.StatusOK {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode, http.StatusOK, defaultList.RawBody)
 	}
-	assertCategoryIDs(t, defaultList.Body.Categories, []int64{alpha.ID, beta.ID, gamma.ID})
+	assertCategoryIDs(t, defaultList.Body.Categories, []int64{alpha.CategoryId, beta.CategoryId, gamma.CategoryId})
 
 	withHidden := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories?include_hidden=true", nil)
 	if withHidden.StatusCode != http.StatusOK {
 		t.Fatalf("with hidden status = %d, want %d; body %s", withHidden.StatusCode, http.StatusOK, withHidden.RawBody)
 	}
-	assertCategoryIDs(t, withHidden.Body.Categories, []int64{alpha.ID, beta.ID, gamma.ID, hidden.ID})
+	assertCategoryIDs(t, withHidden.Body.Categories, []int64{alpha.CategoryId, beta.CategoryId, gamma.CategoryId, hidden.CategoryId})
 
 	page := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories?sort=fqn&limit=2&offset=1", nil)
 	if page.StatusCode != http.StatusOK {
 		t.Fatalf("page status = %d, want %d; body %s", page.StatusCode, http.StatusOK, page.RawBody)
 	}
-	assertCategoryIDs(t, page.Body.Categories, []int64{beta.ID, gamma.ID})
+	assertCategoryIDs(t, page.Body.Categories, []int64{beta.CategoryId, gamma.CategoryId})
 
 	descPage := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories?sort=fqn&sort_dir=desc&limit=2", nil)
 	if descPage.StatusCode != http.StatusOK {
 		t.Fatalf("desc page status = %d, want %d; body %s", descPage.StatusCode, http.StatusOK, descPage.RawBody)
 	}
-	assertCategoryIDs(t, descPage.Body.Categories, []int64{gamma.ID, beta.ID})
+	assertCategoryIDs(t, descPage.Body.Categories, []int64{gamma.CategoryId, beta.CategoryId})
 }
 
 func TestSharedListQueryCompositeSortDirection(t *testing.T) {
@@ -76,14 +76,14 @@ func TestSharedListQueryCompositeSortDirection(t *testing.T) {
 	if desc.StatusCode != http.StatusOK {
 		t.Fatalf("exchange rate desc status = %d, want %d; body %s", desc.StatusCode, http.StatusOK, desc.RawBody)
 	}
-	assertExchangeRateIDs(t, desc.Body.ExchangeRates, []int64{gbpEarly.ID, eurLate.ID, eurEarly.ID})
+	assertExchangeRateIDs(t, desc.Body.ExchangeRates, []int64{gbpEarly.ExchangeRateId, eurLate.ExchangeRateId, eurEarly.ExchangeRateId})
 }
 
 func createListQueryCategory(t *testing.T, client *apptest.Client, fqn string, hidden bool) models.Category {
 	t.Helper()
 
 	category := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
-		FQN:      fqn,
+		Fqn:      fqn,
 		IsHidden: boolPtr(hidden),
 	})
 	if category.StatusCode != http.StatusCreated {

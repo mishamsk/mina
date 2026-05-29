@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"mina.local/mina/internal/apptest"
-	"mina.local/mina/internal/httpapi/models"
+	models "mina.local/mina/internal/httpapi/openapi"
 )
 
 func TestTransactionReplaceBoundary(t *testing.T) {
@@ -21,12 +21,12 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 	oldRecordIDs := recordIDs(created.Body.Records)
 
 	replacement := replacementTransactionRequest(refs)
-	updated := apptest.Decode[models.Transaction](client, http.MethodPut, transactionPath(created.Body.ID), replacement)
+	updated := apptest.Decode[models.Transaction](client, http.MethodPut, transactionPath(created.Body.TransactionId), replacement)
 	if updated.StatusCode != http.StatusOK {
 		t.Fatalf("replace status = %d, want %d; body %s", updated.StatusCode, http.StatusOK, updated.RawBody)
 	}
-	if updated.Body.ID != created.Body.ID {
-		t.Fatalf("replaced transaction id = %d, want %d", updated.Body.ID, created.Body.ID)
+	if updated.Body.TransactionId != created.Body.TransactionId {
+		t.Fatalf("replaced transaction id = %d, want %d", updated.Body.TransactionId, created.Body.TransactionId)
 	}
 	if updated.Body.InitiatedDate != "2024-03-12" {
 		t.Fatalf("replaced initiated_date = %q, want 2024-03-12", updated.Body.InitiatedDate)
@@ -43,13 +43,13 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 	assertRecordIDs(t, search.Body.Records, recordIDs(updated.Body.Records))
 
 	imbalanced := replacement
-	imbalanced.Records[1].AmountUSD = "19.00"
-	rejected := apptest.Decode[models.ErrorResponse](client, http.MethodPut, transactionPath(created.Body.ID), imbalanced)
+	imbalanced.Records[1].AmountUsd = "19.00"
+	rejected := apptest.Decode[models.ErrorResponse](client, http.MethodPut, transactionPath(created.Body.TransactionId), imbalanced)
 	if rejected.StatusCode != http.StatusBadRequest {
 		t.Fatalf("imbalanced replace status = %d, want %d; body %s", rejected.StatusCode, http.StatusBadRequest, rejected.RawBody)
 	}
 
-	read := apptest.Decode[models.Transaction](client, http.MethodGet, transactionPath(created.Body.ID), nil)
+	read := apptest.Decode[models.Transaction](client, http.MethodGet, transactionPath(created.Body.TransactionId), nil)
 	if read.StatusCode != http.StatusOK {
 		t.Fatalf("read after rejected replace status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
 	}
@@ -68,12 +68,12 @@ func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
 		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
 	}
 
-	deleted := apptest.Decode[struct{}](client, http.MethodDelete, transactionPath(created.Body.ID), nil)
+	deleted := apptest.Decode[struct{}](client, http.MethodDelete, transactionPath(created.Body.TransactionId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
 
-	read := apptest.Decode[models.ErrorResponse](client, http.MethodGet, transactionPath(created.Body.ID), nil)
+	read := apptest.Decode[models.ErrorResponse](client, http.MethodGet, transactionPath(created.Body.TransactionId), nil)
 	if read.StatusCode != http.StatusNotFound {
 		t.Fatalf("read tombstoned transaction status = %d, want %d; body %s", read.StatusCode, http.StatusNotFound, read.RawBody)
 	}
@@ -94,7 +94,7 @@ func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
 		t.Fatalf("record count after delete = %d, want 0; body %+v", len(records.Body.Records), records.Body)
 	}
 
-	secondDelete := apptest.Decode[models.ErrorResponse](client, http.MethodDelete, transactionPath(created.Body.ID), nil)
+	secondDelete := apptest.Decode[models.ErrorResponse](client, http.MethodDelete, transactionPath(created.Body.TransactionId), nil)
 	if secondDelete.StatusCode != http.StatusNotFound {
 		t.Fatalf("second delete status = %d, want %d; body %s", secondDelete.StatusCode, http.StatusNotFound, secondDelete.RawBody)
 	}
@@ -114,28 +114,28 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		InitiatedDate: "2024-04-01",
 		Records: []models.CreateJournalRecordRequest{
 			{
-				AccountID:            refs.SavingsAccountID,
-				MemberID:             &refs.SecondMemberID,
+				AccountId:            refs.SavingsAccountId,
+				MemberId:             &refs.SecondMemberId,
 				Currency:             "USD",
 				Amount:               "-50.00",
-				AmountUSD:            "-50.00",
-				CategoryID:           refs.SecondCategoryID,
-				TagIDs:               []int64{refs.SecondTagID},
+				AmountUsd:            "-50.00",
+				CategoryId:           refs.SecondCategoryId,
+				TagIds:               int64SlicePtr(refs.SecondTagId),
 				Memo:                 stringPtr("Rent"),
 				PendingDate:          stringPtr("2024-04-01"),
-				PostingStatus:        models.PostingStatusPending,
-				ReconciliationStatus: models.ReconciliationStatusUnreconciled,
-				Source:               models.SourceManual,
+				PostingStatus:        models.Pending,
+				ReconciliationStatus: models.Unreconciled,
+				Source:               models.Manual,
 			},
 			{
-				AccountID:            refs.MerchantAccountID,
+				AccountId:            refs.MerchantAccountId,
 				Currency:             "USD",
 				Amount:               "50.00",
-				AmountUSD:            "50.00",
-				CategoryID:           refs.SecondCategoryID,
-				PostingStatus:        models.PostingStatusPending,
-				ReconciliationStatus: models.ReconciliationStatusUnreconciled,
-				Source:               models.SourceManual,
+				AmountUsd:            "50.00",
+				CategoryId:           refs.SecondCategoryId,
+				PostingStatus:        models.Pending,
+				ReconciliationStatus: models.Unreconciled,
+				Source:               models.Manual,
 			},
 		},
 	}
@@ -154,24 +154,24 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		path string
 		want []int64
 	}{
-		{name: "account", path: "/records?account_id=" + formatID(refs.CheckingAccountID), want: []int64{firstDebit.ID}},
-		{name: "category", path: "/records?category_id=" + formatID(refs.CategoryID), want: []int64{firstDebit.ID, firstCredit.ID}},
-		{name: "tag", path: "/records?tag_id=" + formatID(refs.TagID), want: []int64{firstDebit.ID}},
-		{name: "member", path: "/records?member_id=" + formatID(refs.MemberID), want: []int64{firstDebit.ID}},
-		{name: "posting status", path: "/records?posting_status=pending", want: []int64{secondDebit.ID, secondCredit.ID}},
-		{name: "reconciliation status", path: "/records?reconciliation_status=unreconciled", want: []int64{secondDebit.ID, secondCredit.ID}},
-		{name: "amount min", path: "/records?amount_min=40.00", want: []int64{secondCredit.ID}},
-		{name: "amount max", path: "/records?amount_max=-40.00", want: []int64{secondDebit.ID}},
-		{name: "amount usd min", path: "/records?amount_usd_min=40.00", want: []int64{secondCredit.ID}},
-		{name: "amount usd max", path: "/records?amount_usd_max=-40.00", want: []int64{secondDebit.ID}},
-		{name: "initiated from", path: "/records?initiated_date_from=2024-04-01", want: []int64{secondDebit.ID, secondCredit.ID}},
-		{name: "initiated to", path: "/records?initiated_date_to=2024-03-31", want: []int64{firstDebit.ID, firstCredit.ID}},
-		{name: "pending from", path: "/records?pending_date_from=2024-04-01", want: []int64{secondDebit.ID}},
-		{name: "pending to", path: "/records?pending_date_to=2024-03-31", want: []int64{firstDebit.ID}},
-		{name: "posted from", path: "/records?posted_date_from=2024-03-11", want: []int64{firstDebit.ID}},
-		{name: "posted to", path: "/records?posted_date_to=2024-03-11", want: []int64{firstDebit.ID}},
-		{name: "memo", path: "/records?memo_contains=" + url.QueryEscape("unc"), want: []int64{firstDebit.ID}},
-		{name: "combined", path: "/records?category_id=" + formatID(refs.CategoryID) + "&tag_id=" + formatID(refs.TagID) + "&memo_contains=Lunch", want: []int64{firstDebit.ID}},
+		{name: "account", path: "/records?account_id=" + formatID(refs.CheckingAccountId), want: []int64{firstDebit.RecordId}},
+		{name: "category", path: "/records?category_id=" + formatID(refs.CategoryId), want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
+		{name: "tag", path: "/records?tag_id=" + formatID(refs.TagId), want: []int64{firstDebit.RecordId}},
+		{name: "member", path: "/records?member_id=" + formatID(refs.MemberId), want: []int64{firstDebit.RecordId}},
+		{name: "posting status", path: "/records?posting_status=pending", want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "reconciliation status", path: "/records?reconciliation_status=unreconciled", want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "amount min", path: "/records?amount_min=40.00", want: []int64{secondCredit.RecordId}},
+		{name: "amount max", path: "/records?amount_max=-40.00", want: []int64{secondDebit.RecordId}},
+		{name: "amount usd min", path: "/records?amount_usd_min=40.00", want: []int64{secondCredit.RecordId}},
+		{name: "amount usd max", path: "/records?amount_usd_max=-40.00", want: []int64{secondDebit.RecordId}},
+		{name: "initiated from", path: "/records?initiated_date_from=2024-04-01", want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "initiated to", path: "/records?initiated_date_to=2024-03-31", want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
+		{name: "pending from", path: "/records?pending_date_from=2024-04-01", want: []int64{secondDebit.RecordId}},
+		{name: "pending to", path: "/records?pending_date_to=2024-03-31", want: []int64{firstDebit.RecordId}},
+		{name: "posted from", path: "/records?posted_date_from=2024-03-11", want: []int64{firstDebit.RecordId}},
+		{name: "posted to", path: "/records?posted_date_to=2024-03-11", want: []int64{firstDebit.RecordId}},
+		{name: "memo", path: "/records?memo_contains=" + url.QueryEscape("unc"), want: []int64{firstDebit.RecordId}},
+		{name: "combined", path: "/records?category_id=" + formatID(refs.CategoryId) + "&tag_id=" + formatID(refs.TagId) + "&memo_contains=Lunch", want: []int64{firstDebit.RecordId}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -183,13 +183,13 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		})
 	}
 
-	accountRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, accountRecordsPath(refs.CheckingAccountID), nil)
+	accountRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, accountRecordsPath(refs.CheckingAccountId), nil)
 	if accountRecords.StatusCode != http.StatusOK {
 		t.Fatalf("account records status = %d, want %d; body %s", accountRecords.StatusCode, http.StatusOK, accountRecords.RawBody)
 	}
-	assertRecordIDs(t, accountRecords.Body.Records, []int64{firstDebit.ID})
-	if accountRecords.Body.Records[0].TransactionID != first.Body.ID {
-		t.Fatalf("account record transaction_id = %d, want %d", accountRecords.Body.Records[0].TransactionID, first.Body.ID)
+	assertRecordIDs(t, accountRecords.Body.Records, []int64{firstDebit.RecordId})
+	if accountRecords.Body.Records[0].TransactionId != first.Body.TransactionId {
+		t.Fatalf("account record transaction_id = %d, want %d", accountRecords.Body.Records[0].TransactionId, first.Body.TransactionId)
 	}
 
 	unsupported := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/records?bad=1", nil)
@@ -208,7 +208,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	if invalidReconciliationStatus.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid reconciliation status filter status = %d, want %d; body %s", invalidReconciliationStatus.StatusCode, http.StatusBadRequest, invalidReconciliationStatus.RawBody)
 	}
-	accountIDOnAccountView := apptest.Decode[models.ErrorResponse](client, http.MethodGet, accountRecordsPath(refs.CheckingAccountID)+"?account_id="+formatID(refs.SavingsAccountID), nil)
+	accountIDOnAccountView := apptest.Decode[models.ErrorResponse](client, http.MethodGet, accountRecordsPath(refs.CheckingAccountId)+"?account_id="+formatID(refs.SavingsAccountId), nil)
 	if accountIDOnAccountView.StatusCode != http.StatusBadRequest {
 		t.Fatalf("account_id on account view status = %d, want %d; body %s", accountIDOnAccountView.StatusCode, http.StatusBadRequest, accountIDOnAccountView.RawBody)
 	}
@@ -216,10 +216,10 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 
 type searchRefs struct {
 	transactionRefs
-	SavingsAccountID int64
-	SecondCategoryID int64
-	SecondTagID      int64
-	SecondMemberID   int64
+	SavingsAccountId int64
+	SecondCategoryId int64
+	SecondTagId      int64
+	SecondMemberId   int64
 }
 
 func createSearchRefs(t *testing.T, client *apptest.Client) searchRefs {
@@ -227,20 +227,20 @@ func createSearchRefs(t *testing.T, client *apptest.Client) searchRefs {
 
 	base := createTransactionRefs(t, client)
 	savings := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
-		FQN:      "savings:Emergency",
+		Fqn:      "savings:Emergency",
 		Currency: stringPtr("USD"),
 	})
 	if savings.StatusCode != http.StatusCreated {
 		t.Fatalf("savings account status = %d, want %d; body %s", savings.StatusCode, http.StatusCreated, savings.RawBody)
 	}
 	category := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
-		FQN: "Housing:Rent",
+		Fqn: "Housing:Rent",
 	})
 	if category.StatusCode != http.StatusCreated {
 		t.Fatalf("second category status = %d, want %d; body %s", category.StatusCode, http.StatusCreated, category.RawBody)
 	}
 	tag := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
-		FQN: "Recurring:Monthly",
+		Fqn: "Recurring:Monthly",
 	})
 	if tag.StatusCode != http.StatusCreated {
 		t.Fatalf("second tag status = %d, want %d; body %s", tag.StatusCode, http.StatusCreated, tag.RawBody)
@@ -254,10 +254,10 @@ func createSearchRefs(t *testing.T, client *apptest.Client) searchRefs {
 
 	return searchRefs{
 		transactionRefs:  base,
-		SavingsAccountID: savings.Body.ID,
-		SecondCategoryID: category.Body.ID,
-		SecondTagID:      tag.Body.ID,
-		SecondMemberID:   member.Body.ID,
+		SavingsAccountId: savings.Body.AccountId,
+		SecondCategoryId: category.Body.CategoryId,
+		SecondTagId:      tag.Body.TagId,
+		SecondMemberId:   member.Body.MemberId,
 	}
 }
 
@@ -266,29 +266,29 @@ func replacementTransactionRequest(refs transactionRefs) models.UpdateTransactio
 		InitiatedDate: "2024-03-12",
 		Records: []models.CreateJournalRecordRequest{
 			{
-				AccountID:            refs.CheckingAccountID,
-				MemberID:             &refs.MemberID,
+				AccountId:            refs.CheckingAccountId,
+				MemberId:             &refs.MemberId,
 				Currency:             "USD",
 				Amount:               "-20.00",
-				AmountUSD:            "-20.00",
-				CategoryID:           refs.CategoryID,
-				TagIDs:               []int64{refs.TagID},
+				AmountUsd:            "-20.00",
+				CategoryId:           refs.CategoryId,
+				TagIds:               int64SlicePtr(refs.TagId),
 				Memo:                 stringPtr("Replacement"),
 				PendingDate:          stringPtr("2024-03-12"),
 				PostedDate:           stringPtr("2024-03-13"),
-				PostingStatus:        models.PostingStatusPosted,
-				ReconciliationStatus: models.ReconciliationStatusReconciled,
-				Source:               models.SourceManual,
+				PostingStatus:        models.Posted,
+				ReconciliationStatus: models.Reconciled,
+				Source:               models.Manual,
 			},
 			{
-				AccountID:            refs.MerchantAccountID,
+				AccountId:            refs.MerchantAccountId,
 				Currency:             "USD",
 				Amount:               "20.00",
-				AmountUSD:            "20.00",
-				CategoryID:           refs.CategoryID,
-				PostingStatus:        models.PostingStatusPosted,
-				ReconciliationStatus: models.ReconciliationStatusReconciled,
-				Source:               models.SourceManual,
+				AmountUsd:            "20.00",
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        models.Posted,
+				ReconciliationStatus: models.Reconciled,
+				Source:               models.Manual,
 			},
 		},
 	}
@@ -305,7 +305,7 @@ func formatID(id int64) string {
 func recordIDs(records []models.JournalRecord) []int64 {
 	ids := make([]int64, 0, len(records))
 	for _, record := range records {
-		ids = append(ids, record.ID)
+		ids = append(ids, record.RecordId)
 	}
 
 	return ids
@@ -325,8 +325,8 @@ func assertNoRecordIDs(t *testing.T, records []models.JournalRecord, blocked []i
 		blockedSet[id] = struct{}{}
 	}
 	for _, record := range records {
-		if _, ok := blockedSet[record.ID]; ok {
-			t.Fatalf("record id %d unexpectedly reused from tombstoned records %+v", record.ID, blocked)
+		if _, ok := blockedSet[record.RecordId]; ok {
+			t.Fatalf("record id %d unexpectedly reused from tombstoned records %+v", record.RecordId, blocked)
 		}
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"mina.local/mina/internal/httpapi/models"
 	"mina.local/mina/internal/httpapi/openapi"
 )
 
@@ -33,7 +32,7 @@ func strictHTTPServerOptions() openapi.StrictHTTPServerOptions {
 }
 
 func generatedRequestErrorHandler(w http.ResponseWriter, r *http.Request, err error) {
-	WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, generatedRequestErrorMessage(r, err))
+	WriteAPIError(w, http.StatusBadRequest, openapi.APIErrorCodeInvalidRequest, generatedRequestErrorMessage(r, err))
 }
 
 func generatedResponseErrorHandler(w http.ResponseWriter, _ *http.Request, err error) {

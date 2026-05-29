@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"mina.local/mina/internal/httpapi/models"
 	"mina.local/mina/internal/services"
 	"mina.local/mina/internal/services/transactions"
 )
@@ -37,10 +36,10 @@ func parseListQueryForStrict(r *http.Request, contract listQueryContract) (parse
 	}
 
 	parsed := parsedListQuery{
-		Filters: map[models.FilterKey]string{},
-		List: models.ListOptions{
+		Filters: map[filterKey]string{},
+		List: parsedListOptions{
 			SortKey:       contract.DefaultSortKey,
-			SortDirection: models.SortDirectionAsc,
+			SortDirection: sortDirectionAsc,
 		},
 	}
 
@@ -60,16 +59,16 @@ func parseListQueryForStrict(r *http.Request, contract listQueryContract) (parse
 	}
 
 	if values, ok := query["sort"]; ok {
-		sortKey := models.SortKey(values[0])
+		sortKey := sortKey(values[0])
 		if _, ok := contract.SortKeys[sortKey]; !ok {
 			return parsedListQuery{}, services.InvalidRequest("unsupported sort key")
 		}
 		parsed.List.SortKey = sortKey
 	}
 	if values, ok := query["sort_dir"]; ok {
-		switch models.SortDirection(values[0]) {
-		case models.SortDirectionAsc, models.SortDirectionDesc:
-			parsed.List.SortDirection = models.SortDirection(values[0])
+		switch sortDirection(values[0]) {
+		case sortDirectionAsc, sortDirectionDesc:
+			parsed.List.SortDirection = sortDirection(values[0])
 		default:
 			return parsedListQuery{}, services.InvalidRequest("sort_dir must be asc or desc")
 		}
@@ -113,29 +112,29 @@ func parseStrictListInt(name string, raw string, min int, max int) (int, error) 
 
 func parseRecordSearchOptionsForStrict(r *http.Request, allowAccountID bool) (transactions.RecordSearchOptions, error) {
 	query := r.URL.Query()
-	allowed := map[models.FilterKey]struct{}{
-		models.FilterKeyAmountMax:            {},
-		models.FilterKeyAmountMin:            {},
-		models.FilterKeyAmountUSDMax:         {},
-		models.FilterKeyAmountUSDMin:         {},
-		models.FilterKeyCategoryID:           {},
-		models.FilterKeyInitiatedDateFrom:    {},
-		models.FilterKeyInitiatedDateTo:      {},
-		models.FilterKeyMemberID:             {},
-		models.FilterKeyMemoContains:         {},
-		models.FilterKeyPendingDateFrom:      {},
-		models.FilterKeyPendingDateTo:        {},
-		models.FilterKeyPostedDateFrom:       {},
-		models.FilterKeyPostedDateTo:         {},
-		models.FilterKeyPostingStatus:        {},
-		models.FilterKeyReconciliationStatus: {},
-		models.FilterKeyTagID:                {},
+	allowed := map[filterKey]struct{}{
+		filterKeyAmountMax:            {},
+		filterKeyAmountMin:            {},
+		filterKeyAmountUSDMax:         {},
+		filterKeyAmountUSDMin:         {},
+		filterKeyCategoryID:           {},
+		filterKeyInitiatedDateFrom:    {},
+		filterKeyInitiatedDateTo:      {},
+		filterKeyMemberID:             {},
+		filterKeyMemoContains:         {},
+		filterKeyPendingDateFrom:      {},
+		filterKeyPendingDateTo:        {},
+		filterKeyPostedDateFrom:       {},
+		filterKeyPostedDateTo:         {},
+		filterKeyPostingStatus:        {},
+		filterKeyReconciliationStatus: {},
+		filterKeyTagID:                {},
 	}
 	if allowAccountID {
-		allowed[models.FilterKeyAccountID] = struct{}{}
+		allowed[filterKeyAccountID] = struct{}{}
 	}
 	for name, values := range query {
-		if _, ok := allowed[models.FilterKey(name)]; !ok {
+		if _, ok := allowed[filterKey(name)]; !ok {
 			return transactions.RecordSearchOptions{}, services.InvalidRequest("unsupported record filter")
 		}
 		if len(values) != 1 || values[0] == "" {
@@ -144,34 +143,34 @@ func parseRecordSearchOptionsForStrict(r *http.Request, allowAccountID bool) (tr
 	}
 
 	opts := transactions.RecordSearchOptions{}
-	if err := setStrictInt64Filter(query, models.FilterKeyAccountID, &opts.AccountID); err != nil {
+	if err := setStrictInt64Filter(query, filterKeyAccountID, &opts.AccountID); err != nil {
 		return transactions.RecordSearchOptions{}, err
 	}
-	if err := setStrictInt64Filter(query, models.FilterKeyCategoryID, &opts.CategoryID); err != nil {
+	if err := setStrictInt64Filter(query, filterKeyCategoryID, &opts.CategoryID); err != nil {
 		return transactions.RecordSearchOptions{}, err
 	}
-	if err := setStrictInt64Filter(query, models.FilterKeyMemberID, &opts.MemberID); err != nil {
+	if err := setStrictInt64Filter(query, filterKeyMemberID, &opts.MemberID); err != nil {
 		return transactions.RecordSearchOptions{}, err
 	}
-	if err := setStrictInt64Filter(query, models.FilterKeyTagID, &opts.TagID); err != nil {
+	if err := setStrictInt64Filter(query, filterKeyTagID, &opts.TagID); err != nil {
 		return transactions.RecordSearchOptions{}, err
 	}
-	setStringFilter(query, models.FilterKeyAmountMin, &opts.AmountMin)
-	setStringFilter(query, models.FilterKeyAmountMax, &opts.AmountMax)
-	setStringFilter(query, models.FilterKeyAmountUSDMin, &opts.AmountUSDMin)
-	setStringFilter(query, models.FilterKeyAmountUSDMax, &opts.AmountUSDMax)
-	setStringFilter(query, models.FilterKeyInitiatedDateFrom, &opts.InitiatedDateFrom)
-	setStringFilter(query, models.FilterKeyInitiatedDateTo, &opts.InitiatedDateTo)
-	setStringFilter(query, models.FilterKeyPendingDateFrom, &opts.PendingDateFrom)
-	setStringFilter(query, models.FilterKeyPendingDateTo, &opts.PendingDateTo)
-	setStringFilter(query, models.FilterKeyPostedDateFrom, &opts.PostedDateFrom)
-	setStringFilter(query, models.FilterKeyPostedDateTo, &opts.PostedDateTo)
-	setStringFilter(query, models.FilterKeyMemoContains, &opts.MemoContains)
-	if values, ok := query[string(models.FilterKeyPostingStatus)]; ok {
+	setStringFilter(query, filterKeyAmountMin, &opts.AmountMin)
+	setStringFilter(query, filterKeyAmountMax, &opts.AmountMax)
+	setStringFilter(query, filterKeyAmountUSDMin, &opts.AmountUSDMin)
+	setStringFilter(query, filterKeyAmountUSDMax, &opts.AmountUSDMax)
+	setStringFilter(query, filterKeyInitiatedDateFrom, &opts.InitiatedDateFrom)
+	setStringFilter(query, filterKeyInitiatedDateTo, &opts.InitiatedDateTo)
+	setStringFilter(query, filterKeyPendingDateFrom, &opts.PendingDateFrom)
+	setStringFilter(query, filterKeyPendingDateTo, &opts.PendingDateTo)
+	setStringFilter(query, filterKeyPostedDateFrom, &opts.PostedDateFrom)
+	setStringFilter(query, filterKeyPostedDateTo, &opts.PostedDateTo)
+	setStringFilter(query, filterKeyMemoContains, &opts.MemoContains)
+	if values, ok := query[string(filterKeyPostingStatus)]; ok {
 		value := transactions.PostingStatus(values[0])
 		opts.PostingStatus = &value
 	}
-	if values, ok := query[string(models.FilterKeyReconciliationStatus)]; ok {
+	if values, ok := query[string(filterKeyReconciliationStatus)]; ok {
 		value := transactions.ReconciliationStatus(values[0])
 		opts.ReconciliationStatus = &value
 	}
@@ -179,7 +178,7 @@ func parseRecordSearchOptionsForStrict(r *http.Request, allowAccountID bool) (tr
 	return opts, nil
 }
 
-func setStrictInt64Filter(query map[string][]string, name models.FilterKey, dst **int64) error {
+func setStrictInt64Filter(query map[string][]string, name filterKey, dst **int64) error {
 	key := string(name)
 	values, ok := query[key]
 	if !ok {
@@ -194,7 +193,7 @@ func setStrictInt64Filter(query map[string][]string, name models.FilterKey, dst 
 	return nil
 }
 
-func setStringFilter(query map[string][]string, name models.FilterKey, dst **string) {
+func setStringFilter(query map[string][]string, name filterKey, dst **string) {
 	if values, ok := query[string(name)]; ok {
 		*dst = &values[0]
 	}

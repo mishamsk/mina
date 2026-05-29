@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 
-	"mina.local/mina/internal/httpapi/models"
 	"mina.local/mina/internal/httpapi/openapi"
 	"mina.local/mina/internal/services"
 	"mina.local/mina/internal/services/creditlimits"
@@ -86,9 +85,9 @@ func (s *strictServer) ListExchangeRates(ctx context.Context, _ openapi.ListExch
 	}
 
 	rates, err := s.deps.ExchangeRates.List(ctx, exchangerates.ListOptions{
-		FromCurrency:      optionalFilter(query.Filters, models.FilterKeyFromCurrency),
-		ToCurrency:        optionalFilter(query.Filters, models.FilterKeyToCurrency),
-		EffectiveDate:     optionalFilter(query.Filters, models.FilterKeyEffectiveDate),
+		FromCurrency:      optionalFilter(query.Filters, filterKeyFromCurrency),
+		ToCurrency:        optionalFilter(query.Filters, filterKeyToCurrency),
+		EffectiveDate:     optionalFilter(query.Filters, filterKeyEffectiveDate),
 		IncludeTombstoned: query.IncludeTombstoned,
 		List:              serviceListOptions(query.List),
 	})
@@ -154,7 +153,7 @@ func (s *strictServer) UpdateExchangeRate(ctx context.Context, request openapi.U
 	return openapi.UpdateExchangeRate200JSONResponse(exchangeRateAPIResponse(rate)), nil
 }
 
-func optionalFilter(filters map[models.FilterKey]string, key models.FilterKey) *string {
+func optionalFilter(filters map[filterKey]string, key filterKey) *string {
 	value, ok := filters[key]
 	if !ok {
 		return nil
@@ -166,30 +165,30 @@ func optionalFilter(filters map[models.FilterKey]string, key models.FilterKey) *
 func creditLimitHistoryListContract() listQueryContract {
 	return listQueryContract{
 		AllowTombstoned: true,
-		SortKeys: map[models.SortKey]struct{}{
-			models.SortKeyCreatedAt:     {},
-			models.SortKeyEffectiveDate: {},
+		SortKeys: map[sortKey]struct{}{
+			sortKeyCreatedAt:     {},
+			sortKeyEffectiveDate: {},
 		},
-		DefaultSortKey: models.SortKeyEffectiveDate,
+		DefaultSortKey: sortKeyEffectiveDate,
 	}
 }
 
 func exchangeRateListContract() listQueryContract {
 	return listQueryContract{
 		AllowTombstoned: true,
-		FilterKeys: map[models.FilterKey]struct{}{
-			models.FilterKeyFromCurrency:  {},
-			models.FilterKeyToCurrency:    {},
-			models.FilterKeyEffectiveDate: {},
+		FilterKeys: map[filterKey]struct{}{
+			filterKeyFromCurrency:  {},
+			filterKeyToCurrency:    {},
+			filterKeyEffectiveDate: {},
 		},
-		SortKeys: map[models.SortKey]struct{}{
-			models.SortKeyCreatedAt:     {},
-			models.SortKeyCurrencyPair:  {},
-			models.SortKeyEffectiveDate: {},
-			models.SortKeyFromCurrency:  {},
-			models.SortKeyToCurrency:    {},
+		SortKeys: map[sortKey]struct{}{
+			sortKeyCreatedAt:     {},
+			sortKeyCurrencyPair:  {},
+			sortKeyEffectiveDate: {},
+			sortKeyFromCurrency:  {},
+			sortKeyToCurrency:    {},
 		},
-		DefaultSortKey: models.SortKeyCurrencyPair,
+		DefaultSortKey: sortKeyCurrencyPair,
 	}
 }
 

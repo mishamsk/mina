@@ -7,8 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"mina.local/mina/internal/httpapi/models"
-	"mina.local/mina/internal/httpapi/openapi"
+	models "mina.local/mina/internal/httpapi/openapi"
 )
 
 func TestGeneratedStrictServerRequestErrorsUseMinaEnvelope(t *testing.T) {
@@ -19,7 +18,7 @@ func TestGeneratedStrictServerRequestErrorsUseMinaEnvelope(t *testing.T) {
 
 	handler.ServeHTTP(response, request)
 
-	assertMinaError(t, response, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid JSON request body")
+	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
 }
 
 func TestGeneratedChiRequestErrorsUseMinaEnvelope(t *testing.T) {
@@ -29,15 +28,15 @@ func TestGeneratedChiRequestErrorsUseMinaEnvelope(t *testing.T) {
 
 	handler.ServeHTTP(response, request)
 
-	assertMinaError(t, response, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "category_id must be a positive integer")
+	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "category_id must be a positive integer")
 }
 
 func generatedStrictHandler(deps Dependencies) http.Handler {
-	strict := openapi.NewStrictHandlerWithOptions(newStrictServer(deps), nil, strictHTTPServerOptions())
-	return openapi.HandlerWithOptions(strict, generatedChiServerOptions())
+	strict := models.NewStrictHandlerWithOptions(newStrictServer(deps), nil, strictHTTPServerOptions())
+	return models.HandlerWithOptions(strict, generatedChiServerOptions())
 }
 
-func assertMinaError(t *testing.T, response *httptest.ResponseRecorder, status int, code models.ErrorCode, message string) {
+func assertMinaError(t *testing.T, response *httptest.ResponseRecorder, status int, code models.APIErrorCode, message string) {
 	t.Helper()
 
 	if response.Code != status {

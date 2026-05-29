@@ -5,17 +5,17 @@ import (
 	"errors"
 	"net/http"
 
-	"mina.local/mina/internal/httpapi/models"
+	"mina.local/mina/internal/httpapi/openapi"
 	"mina.local/mina/internal/services"
 )
 
 // WriteAPIError writes a stable JSON API error response.
-func WriteAPIError(w http.ResponseWriter, status int, code models.ErrorCode, message string) {
+func WriteAPIError(w http.ResponseWriter, status int, code openapi.APIErrorCode, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
-	response := models.ErrorResponse{
-		Error: models.APIError{
+	response := openapi.ErrorResponse{
+		Error: openapi.APIError{
 			Code:    code,
 			Message: message,
 		},
@@ -34,31 +34,31 @@ func WriteControllerError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	WriteAPIError(w, http.StatusInternalServerError, models.ErrorCodeInternal, "internal server error")
+	WriteAPIError(w, http.StatusInternalServerError, openapi.APIErrorCodeInternalError, "internal server error")
 }
 
-func modelErrorCode(code services.ErrorCode) models.ErrorCode {
+func modelErrorCode(code services.ErrorCode) openapi.APIErrorCode {
 	switch code {
 	case services.ErrorCodeInvalidRequest:
-		return models.ErrorCodeInvalidRequest
+		return openapi.APIErrorCodeInvalidRequest
 	case services.ErrorCodeNotFound:
-		return models.ErrorCodeNotFound
+		return openapi.APIErrorCodeNotFound
 	case services.ErrorCodeConflict:
-		return models.ErrorCodeConflict
+		return openapi.APIErrorCodeConflict
 	default:
-		return models.ErrorCodeInternal
+		return openapi.APIErrorCodeInternalError
 	}
 }
 
-func statusForCode(code models.ErrorCode) int {
+func statusForCode(code openapi.APIErrorCode) int {
 	switch code {
-	case models.ErrorCodeInvalidRequest:
+	case openapi.APIErrorCodeInvalidRequest:
 		return http.StatusBadRequest
-	case models.ErrorCodeNotFound:
+	case openapi.APIErrorCodeNotFound:
 		return http.StatusNotFound
-	case models.ErrorCodeMethodNotAllowed:
+	case openapi.APIErrorCodeMethodNotAllowed:
 		return http.StatusMethodNotAllowed
-	case models.ErrorCodeConflict:
+	case openapi.APIErrorCodeConflict:
 		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError

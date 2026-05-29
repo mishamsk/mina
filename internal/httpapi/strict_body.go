@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"mina.local/mina/internal/httpapi/models"
+	"mina.local/mina/internal/httpapi/openapi"
 )
 
 const accountCreditLimitHistorySuffix = "/credit-limit-history"
@@ -33,14 +33,14 @@ func strictJSONBodyValidator(next http.Handler) http.Handler {
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid JSON request body")
+			WriteAPIError(w, http.StatusBadRequest, openapi.APIErrorCodeInvalidRequest, "invalid JSON request body")
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(body))
 
 		fields, valid := validateStrictJSONBody(body, allowed)
 		if !valid {
-			WriteAPIError(w, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid JSON request body")
+			WriteAPIError(w, http.StatusBadRequest, openapi.APIErrorCodeInvalidRequest, "invalid JSON request body")
 			return
 		}
 

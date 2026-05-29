@@ -64,19 +64,19 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
   - [x] Required docs updated
 
 ### Commit 4: Replace redundant manual parsing and routing code
-- [ ] Remove manual route registration helpers made redundant by generated registration.
-- [ ] Remove `routeExistsWithDifferentMethod` if generated/Chi routing plus custom not-found/method-not-allowed handlers fully preserve behavior.
-- [ ] Replace manual path ID parsing with generated path parameters.
-- [ ] Replace manual query parsing where generated request objects cover the same contract.
-- [ ] Keep app-owned parsing helpers only for behavior not covered by generated code, such as strict list allowlists or stable Mina-specific error messages.
-- [ ] Remove duplicate REST DTO definitions if generated OpenAPI models can own the same shapes without weakening package boundaries.
-- [ ] Update tests to assert behavior through the public HTTP boundary rather than helper internals.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Remove manual route registration helpers made redundant by generated registration.
+- [x] Remove `routeExistsWithDifferentMethod` if generated/Chi routing plus custom not-found/method-not-allowed handlers fully preserve behavior.
+- [x] Replace manual path ID parsing with generated path parameters.
+- [x] Replace manual query parsing where generated request objects cover the same contract.
+- [x] Keep app-owned parsing helpers only for behavior not covered by generated code, such as strict list allowlists or stable Mina-specific error messages.
+- [x] Remove duplicate REST DTO definitions if generated OpenAPI models can own the same shapes without weakening package boundaries.
+- [x] Update tests to assert behavior through the public HTTP boundary rather than helper internals.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 5: Add OpenAPI request validation if it fits Mina errors
 - [ ] Evaluate `github.com/oapi-codegen/nethttp-middleware` against Mina's stable JSON error envelope.

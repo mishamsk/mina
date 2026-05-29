@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"mina.local/mina/internal/apptest"
-	"mina.local/mina/internal/httpapi/models"
+	models "mina.local/mina/internal/httpapi/openapi"
 )
 
 func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
@@ -48,33 +48,33 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("other create status = %d, want %d; body %s", other.StatusCode, http.StatusCreated, other.RawBody)
 	}
 
-	read := apptest.Decode[models.ExchangeRate](client, http.MethodGet, exchangeRatePath(later.Body.ID), nil)
+	read := apptest.Decode[models.ExchangeRate](client, http.MethodGet, exchangeRatePath(later.Body.ExchangeRateId), nil)
 	if read.StatusCode != http.StatusOK {
 		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
 	}
-	if read.Body.ID != later.Body.ID {
-		t.Fatalf("read id = %d, want %d", read.Body.ID, later.Body.ID)
+	if read.Body.ExchangeRateId != later.Body.ExchangeRateId {
+		t.Fatalf("read id = %d, want %d", read.Body.ExchangeRateId, later.Body.ExchangeRateId)
 	}
 
 	defaultList := apptest.Decode[models.ExchangeRateListResponse](client, http.MethodGet, "/exchange-rates", nil)
 	if defaultList.StatusCode != http.StatusOK {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode, http.StatusOK, defaultList.RawBody)
 	}
-	assertExchangeRateIDs(t, defaultList.Body.ExchangeRates, []int64{earlier.Body.ID, later.Body.ID, other.Body.ID})
+	assertExchangeRateIDs(t, defaultList.Body.ExchangeRates, []int64{earlier.Body.ExchangeRateId, later.Body.ExchangeRateId, other.Body.ExchangeRateId})
 
 	filteredPair := apptest.Decode[models.ExchangeRateListResponse](client, http.MethodGet, "/exchange-rates?from_currency=EUR&to_currency=USD", nil)
 	if filteredPair.StatusCode != http.StatusOK {
 		t.Fatalf("filtered pair status = %d, want %d; body %s", filteredPair.StatusCode, http.StatusOK, filteredPair.RawBody)
 	}
-	assertExchangeRateIDs(t, filteredPair.Body.ExchangeRates, []int64{earlier.Body.ID, later.Body.ID})
+	assertExchangeRateIDs(t, filteredPair.Body.ExchangeRates, []int64{earlier.Body.ExchangeRateId, later.Body.ExchangeRateId})
 
 	filteredDate := apptest.Decode[models.ExchangeRateListResponse](client, http.MethodGet, "/exchange-rates?from_currency=EUR&to_currency=USD&effective_date=2024-02-01", nil)
 	if filteredDate.StatusCode != http.StatusOK {
 		t.Fatalf("filtered date status = %d, want %d; body %s", filteredDate.StatusCode, http.StatusOK, filteredDate.RawBody)
 	}
-	assertExchangeRateIDs(t, filteredDate.Body.ExchangeRates, []int64{later.Body.ID})
+	assertExchangeRateIDs(t, filteredDate.Body.ExchangeRates, []int64{later.Body.ExchangeRateId})
 
-	updated := apptest.Decode[models.ExchangeRate](client, http.MethodPatch, exchangeRatePath(later.Body.ID), models.UpdateExchangeRateRequest{
+	updated := apptest.Decode[models.ExchangeRate](client, http.MethodPatch, exchangeRatePath(later.Body.ExchangeRateId), models.UpdateExchangeRateRequest{
 		Rate: "1.09000000",
 	})
 	if updated.StatusCode != http.StatusOK {
@@ -84,17 +84,17 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("updated rate = %q, want 1.09000000", updated.Body.Rate)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, exchangeRatePath(earlier.Body.ID), nil)
+	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, exchangeRatePath(earlier.Body.ExchangeRateId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
 
-	missing := apptest.Decode[models.ErrorResponse](client, http.MethodGet, exchangeRatePath(earlier.Body.ID), nil)
+	missing := apptest.Decode[models.ErrorResponse](client, http.MethodGet, exchangeRatePath(earlier.Body.ExchangeRateId), nil)
 	if missing.StatusCode != http.StatusNotFound {
 		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode, http.StatusNotFound, missing.RawBody)
 	}
 
-	deletedRead := apptest.Decode[models.ExchangeRate](client, http.MethodGet, exchangeRatePath(earlier.Body.ID)+"?include_tombstoned=true", nil)
+	deletedRead := apptest.Decode[models.ExchangeRate](client, http.MethodGet, exchangeRatePath(earlier.Body.ExchangeRateId)+"?include_tombstoned=true", nil)
 	if deletedRead.StatusCode != http.StatusOK {
 		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode, http.StatusOK, deletedRead.RawBody)
 	}
@@ -106,7 +106,7 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if withTombstones.StatusCode != http.StatusOK {
 		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode, http.StatusOK, withTombstones.RawBody)
 	}
-	assertExchangeRateIDs(t, withTombstones.Body.ExchangeRates, []int64{earlier.Body.ID, later.Body.ID})
+	assertExchangeRateIDs(t, withTombstones.Body.ExchangeRates, []int64{earlier.Body.ExchangeRateId, later.Body.ExchangeRateId})
 }
 
 func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
@@ -131,11 +131,11 @@ func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
 	if duplicate.StatusCode != http.StatusConflict {
 		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode, http.StatusConflict, duplicate.RawBody)
 	}
-	if duplicate.Body.Error.Code != models.ErrorCodeConflict {
-		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.ErrorCodeConflict)
+	if duplicate.Body.Error.Code != models.APIErrorCodeConflict {
+		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, exchangeRatePath(first.Body.ID), nil)
+	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, exchangeRatePath(first.Body.ExchangeRateId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -247,8 +247,8 @@ func assertExchangeRateIDs(t *testing.T, rates []models.ExchangeRate, want []int
 		t.Fatalf("exchange rate count = %d, want %d; rates = %+v", len(rates), len(want), rates)
 	}
 	for i, rate := range rates {
-		if rate.ID != want[i] {
-			t.Fatalf("exchange rate id at %d = %d, want %d; rates = %+v", i, rate.ID, want[i], rates)
+		if rate.ExchangeRateId != want[i] {
+			t.Fatalf("exchange rate id at %d = %d, want %d; rates = %+v", i, rate.ExchangeRateId, want[i], rates)
 		}
 	}
 }

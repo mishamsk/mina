@@ -6,14 +6,14 @@ import (
 	"testing"
 
 	"mina.local/mina/internal/apptest"
-	"mina.local/mina/internal/httpapi/models"
+	models "mina.local/mina/internal/httpapi/openapi"
 )
 
 func TestHierarchyRootResponsesEncodeNullParentFQN(t *testing.T) {
 	client := apptest.New(t)
 
 	account := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
-		FQN:      "cash",
+		Fqn:      "cash",
 		Currency: stringPtr("USD"),
 	})
 	if account.StatusCode != http.StatusCreated {
@@ -22,7 +22,7 @@ func TestHierarchyRootResponsesEncodeNullParentFQN(t *testing.T) {
 	assertRawParentFQNNull(t, account.RawBody)
 
 	category := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
-		FQN: "Food",
+		Fqn: "Food",
 	})
 	if category.StatusCode != http.StatusCreated {
 		t.Fatalf("category create status = %d, want %d; body %s", category.StatusCode, http.StatusCreated, category.RawBody)
@@ -30,7 +30,7 @@ func TestHierarchyRootResponsesEncodeNullParentFQN(t *testing.T) {
 	assertRawParentFQNNull(t, category.RawBody)
 
 	tag := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
-		FQN: "Trips",
+		Fqn: "Trips",
 	})
 	if tag.StatusCode != http.StatusCreated {
 		t.Fatalf("tag create status = %d, want %d; body %s", tag.StatusCode, http.StatusCreated, tag.RawBody)

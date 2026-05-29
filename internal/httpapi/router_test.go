@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"mina.local/mina/internal/httpapi/models"
+	models "mina.local/mina/internal/httpapi/openapi"
 )
 
 func TestRouterWritesAccessLogWhenConfigured(t *testing.T) {
@@ -34,11 +34,11 @@ func TestRouterMethodAndRouteErrorsUseMinaEnvelope(t *testing.T) {
 
 	methodResponse := httptest.NewRecorder()
 	handler.ServeHTTP(methodResponse, httptest.NewRequest(http.MethodPost, "/health", nil))
-	assertMinaError(t, methodResponse, http.StatusMethodNotAllowed, models.ErrorCodeMethodNotAllowed, "method not allowed")
+	assertMinaError(t, methodResponse, http.StatusMethodNotAllowed, models.APIErrorCodeMethodNotAllowed, "method not allowed")
 
 	routeResponse := httptest.NewRecorder()
 	handler.ServeHTTP(routeResponse, httptest.NewRequest(http.MethodGet, "/missing", nil))
-	assertMinaError(t, routeResponse, http.StatusNotFound, models.ErrorCodeNotFound, "route not found")
+	assertMinaError(t, routeResponse, http.StatusNotFound, models.APIErrorCodeNotFound, "route not found")
 }
 
 func TestRouterGeneratedBindingErrorsKeepExistingMinaMessages(t *testing.T) {
@@ -46,27 +46,27 @@ func TestRouterGeneratedBindingErrorsKeepExistingMinaMessages(t *testing.T) {
 
 	boolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(boolResponse, httptest.NewRequest(http.MethodGet, "/categories?include_hidden=maybe", nil))
-	assertMinaError(t, boolResponse, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "include_hidden must be a boolean")
+	assertMinaError(t, boolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "include_hidden must be a boolean")
 
 	emptyBoolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(emptyBoolResponse, httptest.NewRequest(http.MethodGet, "/categories?include_hidden=", nil))
-	assertMinaError(t, emptyBoolResponse, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "include_hidden must have one non-empty value")
+	assertMinaError(t, emptyBoolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "include_hidden must have one non-empty value")
 
 	duplicateBoolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(duplicateBoolResponse, httptest.NewRequest(http.MethodGet, "/categories?include_hidden=true&include_hidden=false", nil))
-	assertMinaError(t, duplicateBoolResponse, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "include_hidden must have one non-empty value")
+	assertMinaError(t, duplicateBoolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "include_hidden must have one non-empty value")
 
 	emptyGetBoolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(emptyGetBoolResponse, httptest.NewRequest(http.MethodGet, "/categories/1?include_tombstoned=", nil))
-	assertMinaError(t, emptyGetBoolResponse, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "include_tombstoned must be a boolean")
+	assertMinaError(t, emptyGetBoolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "include_tombstoned must be a boolean")
 
 	emptyLimitResponse := httptest.NewRecorder()
 	handler.ServeHTTP(emptyLimitResponse, httptest.NewRequest(http.MethodGet, "/categories?limit=", nil))
-	assertMinaError(t, emptyLimitResponse, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "limit must have one non-empty value")
+	assertMinaError(t, emptyLimitResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "limit must have one non-empty value")
 
 	idResponse := httptest.NewRecorder()
 	handler.ServeHTTP(idResponse, httptest.NewRequest(http.MethodGet, "/accounts/not-an-id/records", nil))
-	assertMinaError(t, idResponse, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "account_id must be a positive integer")
+	assertMinaError(t, idResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "account_id must be a positive integer")
 }
 
 func TestRouterStrictJSONValidationRejectsNullRequiredBool(t *testing.T) {
@@ -77,7 +77,7 @@ func TestRouterStrictJSONValidationRejectsNullRequiredBool(t *testing.T) {
 
 	handler.ServeHTTP(response, request)
 
-	assertMinaError(t, response, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "is_hidden is required")
+	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "is_hidden is required")
 }
 
 func TestRouterStrictJSONValidationRejectsNestedUnknownFields(t *testing.T) {
@@ -89,7 +89,7 @@ func TestRouterStrictJSONValidationRejectsNestedUnknownFields(t *testing.T) {
 
 	handler.ServeHTTP(response, request)
 
-	assertMinaError(t, response, http.StatusBadRequest, models.ErrorCodeInvalidRequest, "invalid JSON request body")
+	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
 }
 
 func TestRouterRecoversPanicsWithMinaEnvelope(t *testing.T) {
@@ -102,7 +102,7 @@ func TestRouterRecoversPanicsWithMinaEnvelope(t *testing.T) {
 
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/panic", nil))
 
-	assertMinaError(t, response, http.StatusInternalServerError, models.ErrorCodeInternal, "internal server error")
+	assertMinaError(t, response, http.StatusInternalServerError, models.APIErrorCodeInternalError, "internal server error")
 }
 
 func TestRouterTimeoutCancelsRequest(t *testing.T) {
@@ -115,5 +115,5 @@ func TestRouterTimeoutCancelsRequest(t *testing.T) {
 
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/slow", nil))
 
-	assertMinaError(t, response, http.StatusGatewayTimeout, models.ErrorCodeInternal, "request timed out")
+	assertMinaError(t, response, http.StatusGatewayTimeout, models.APIErrorCodeInternalError, "request timed out")
 }

@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 
-	"mina.local/mina/internal/httpapi/models"
 	"mina.local/mina/internal/httpapi/openapi"
 	"mina.local/mina/internal/services"
 	"mina.local/mina/internal/services/accounts"
@@ -331,24 +330,24 @@ func hierarchyListContract() listQueryContract {
 	return listQueryContract{
 		AllowHidden:     true,
 		AllowTombstoned: true,
-		SortKeys: map[models.SortKey]struct{}{
-			models.SortKeyCreatedAt: {},
-			models.SortKeyFQN:       {},
-			models.SortKeyUpdatedAt: {},
+		SortKeys: map[sortKey]struct{}{
+			sortKeyCreatedAt: {},
+			sortKeyFQN:       {},
+			sortKeyUpdatedAt: {},
 		},
-		DefaultSortKey: models.SortKeyFQN,
+		DefaultSortKey: sortKeyFQN,
 	}
 }
 
 func memberListContract() listQueryContract {
 	return listQueryContract{
 		AllowTombstoned: true,
-		SortKeys: map[models.SortKey]struct{}{
-			models.SortKeyCreatedAt: {},
-			models.SortKeyName:      {},
-			models.SortKeyUpdatedAt: {},
+		SortKeys: map[sortKey]struct{}{
+			sortKeyCreatedAt: {},
+			sortKeyName:      {},
+			sortKeyUpdatedAt: {},
 		},
-		DefaultSortKey: models.SortKeyName,
+		DefaultSortKey: sortKeyName,
 	}
 }
 

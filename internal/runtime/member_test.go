@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"mina.local/mina/internal/apptest"
-	"mina.local/mina/internal/httpapi/models"
+	models "mina.local/mina/internal/httpapi/openapi"
 )
 
 func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
@@ -22,12 +22,12 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("created name = %q, want Alex", created.Body.Name)
 	}
 
-	read := apptest.Decode[models.Member](client, http.MethodGet, memberPath(created.Body.ID), nil)
+	read := apptest.Decode[models.Member](client, http.MethodGet, memberPath(created.Body.MemberId), nil)
 	if read.StatusCode != http.StatusOK {
 		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
 	}
-	if read.Body.ID != created.Body.ID {
-		t.Fatalf("read member id = %d, want %d", read.Body.ID, created.Body.ID)
+	if read.Body.MemberId != created.Body.MemberId {
+		t.Fatalf("read member id = %d, want %d", read.Body.MemberId, created.Body.MemberId)
 	}
 
 	second := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
@@ -41,9 +41,9 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if defaultList.StatusCode != http.StatusOK {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode, http.StatusOK, defaultList.RawBody)
 	}
-	assertMemberIDs(t, defaultList.Body.Members, []int64{created.Body.ID, second.Body.ID})
+	assertMemberIDs(t, defaultList.Body.Members, []int64{created.Body.MemberId, second.Body.MemberId})
 
-	updated := apptest.Decode[models.Member](client, http.MethodPatch, memberPath(created.Body.ID), models.UpdateMemberRequest{
+	updated := apptest.Decode[models.Member](client, http.MethodPatch, memberPath(created.Body.MemberId), models.UpdateMemberRequest{
 		Name: "Casey",
 	})
 	if updated.StatusCode != http.StatusOK {
@@ -53,12 +53,12 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("updated name = %q, want Casey", updated.Body.Name)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, memberPath(second.Body.ID), nil)
+	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, memberPath(second.Body.MemberId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
 
-	missing := apptest.Decode[models.ErrorResponse](client, http.MethodGet, memberPath(second.Body.ID), nil)
+	missing := apptest.Decode[models.ErrorResponse](client, http.MethodGet, memberPath(second.Body.MemberId), nil)
 	if missing.StatusCode != http.StatusNotFound {
 		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode, http.StatusNotFound, missing.RawBody)
 	}
@@ -67,9 +67,9 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if defaultAfterDelete.StatusCode != http.StatusOK {
 		t.Fatalf("default after delete status = %d, want %d; body %s", defaultAfterDelete.StatusCode, http.StatusOK, defaultAfterDelete.RawBody)
 	}
-	assertMemberIDs(t, defaultAfterDelete.Body.Members, []int64{created.Body.ID})
+	assertMemberIDs(t, defaultAfterDelete.Body.Members, []int64{created.Body.MemberId})
 
-	deletedRead := apptest.Decode[models.Member](client, http.MethodGet, memberPath(second.Body.ID)+"?include_tombstoned=true", nil)
+	deletedRead := apptest.Decode[models.Member](client, http.MethodGet, memberPath(second.Body.MemberId)+"?include_tombstoned=true", nil)
 	if deletedRead.StatusCode != http.StatusOK {
 		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode, http.StatusOK, deletedRead.RawBody)
 	}
@@ -81,7 +81,7 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if withTombstones.StatusCode != http.StatusOK {
 		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode, http.StatusOK, withTombstones.RawBody)
 	}
-	assertMemberIDs(t, withTombstones.Body.Members, []int64{second.Body.ID, created.Body.ID})
+	assertMemberIDs(t, withTombstones.Body.Members, []int64{second.Body.MemberId, created.Body.MemberId})
 	if withTombstones.Body.Members[0].TombstonedAt == nil {
 		t.Fatal("deleted member tombstoned_at = nil, want timestamp")
 	}
@@ -103,8 +103,8 @@ func TestMemberRejectsDuplicateActiveName(t *testing.T) {
 	if duplicate.StatusCode != http.StatusConflict {
 		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode, http.StatusConflict, duplicate.RawBody)
 	}
-	if duplicate.Body.Error.Code != models.ErrorCodeConflict {
-		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.ErrorCodeConflict)
+	if duplicate.Body.Error.Code != models.APIErrorCodeConflict {
+		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
 	}
 
 	second := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
@@ -114,14 +114,14 @@ func TestMemberRejectsDuplicateActiveName(t *testing.T) {
 		t.Fatalf("second create status = %d, want %d; body %s", second.StatusCode, http.StatusCreated, second.RawBody)
 	}
 
-	duplicateUpdate := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, memberPath(second.Body.ID), models.UpdateMemberRequest{
+	duplicateUpdate := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, memberPath(second.Body.MemberId), models.UpdateMemberRequest{
 		Name: "Alex",
 	})
 	if duplicateUpdate.StatusCode != http.StatusConflict {
 		t.Fatalf("duplicate update status = %d, want %d; body %s", duplicateUpdate.StatusCode, http.StatusConflict, duplicateUpdate.RawBody)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, memberPath(first.Body.ID), nil)
+	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, memberPath(first.Body.MemberId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -143,8 +143,8 @@ func TestMemberValidationErrors(t *testing.T) {
 	if blank.StatusCode != http.StatusBadRequest {
 		t.Fatalf("blank status = %d, want %d; body %s", blank.StatusCode, http.StatusBadRequest, blank.RawBody)
 	}
-	if blank.Body.Error.Code != models.ErrorCodeInvalidRequest {
-		t.Fatalf("blank code = %q, want %q", blank.Body.Error.Code, models.ErrorCodeInvalidRequest)
+	if blank.Body.Error.Code != models.APIErrorCodeInvalidRequest {
+		t.Fatalf("blank code = %q, want %q", blank.Body.Error.Code, models.APIErrorCodeInvalidRequest)
 	}
 
 	whitespace := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, "/members/1", models.UpdateMemberRequest{
@@ -184,8 +184,8 @@ func assertMemberIDs(t *testing.T, members []models.Member, want []int64) {
 		t.Fatalf("member count = %d, want %d; members = %+v", len(members), len(want), members)
 	}
 	for i, member := range members {
-		if member.ID != want[i] {
-			t.Fatalf("member id at %d = %d, want %d; members = %+v", i, member.ID, want[i], members)
+		if member.MemberId != want[i] {
+			t.Fatalf("member id at %d = %d, want %d; members = %+v", i, member.MemberId, want[i], members)
 		}
 	}
 }

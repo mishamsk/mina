@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	"mina.local/mina/internal/httpapi/models"
+	"mina.local/mina/internal/httpapi/openapi"
 )
 
 func accessLogger(out io.Writer) func(http.Handler) http.Handler {
@@ -42,11 +42,11 @@ func panicErrorEnvelope(next http.Handler) http.Handler {
 		buffered := newBufferedResponseWriter()
 		next.ServeHTTP(buffered, r)
 		if buffered.body.Len() == 0 && buffered.status == http.StatusInternalServerError {
-			WriteAPIError(w, http.StatusInternalServerError, models.ErrorCodeInternal, "internal server error")
+			WriteAPIError(w, http.StatusInternalServerError, openapi.APIErrorCodeInternalError, "internal server error")
 			return
 		}
 		if buffered.body.Len() == 0 && buffered.status == http.StatusGatewayTimeout {
-			WriteAPIError(w, http.StatusGatewayTimeout, models.ErrorCodeInternal, "request timed out")
+			WriteAPIError(w, http.StatusGatewayTimeout, openapi.APIErrorCodeInternalError, "request timed out")
 			return
 		}
 

@@ -8,7 +8,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"mina.local/mina/internal/httpapi/models"
 	"mina.local/mina/internal/httpapi/openapi"
 	"mina.local/mina/internal/services/accounts"
 	"mina.local/mina/internal/services/categories"
@@ -48,10 +47,10 @@ func NewWithOptions(deps Dependencies, opts Options) http.Handler {
 	router := chi.NewRouter()
 	applyMiddleware(router, opts)
 	router.NotFound(func(w http.ResponseWriter, _ *http.Request) {
-		WriteAPIError(w, http.StatusNotFound, models.ErrorCodeNotFound, "route not found")
+		WriteAPIError(w, http.StatusNotFound, openapi.APIErrorCodeNotFound, "route not found")
 	})
 	router.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
-		WriteAPIError(w, http.StatusMethodNotAllowed, models.ErrorCodeMethodNotAllowed, "method not allowed")
+		WriteAPIError(w, http.StatusMethodNotAllowed, openapi.APIErrorCodeMethodNotAllowed, "method not allowed")
 	})
 
 	strict := openapi.NewStrictHandlerWithOptions(

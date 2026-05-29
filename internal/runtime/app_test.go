@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"mina.local/mina/internal/apptest"
-	"mina.local/mina/internal/httpapi/models"
+	models "mina.local/mina/internal/httpapi/openapi"
 	"mina.local/mina/internal/runtime"
 	"mina.local/mina/internal/store"
 )
@@ -67,15 +67,15 @@ func TestBoundaryHealthAndJSONErrorResponses(t *testing.T) {
 	if missing.StatusCode != http.StatusNotFound {
 		t.Fatalf("missing status = %d, want %d", missing.StatusCode, http.StatusNotFound)
 	}
-	if missing.Body.Error.Code != models.ErrorCodeNotFound {
-		t.Fatalf("missing error code = %q, want %q", missing.Body.Error.Code, models.ErrorCodeNotFound)
+	if missing.Body.Error.Code != models.APIErrorCodeNotFound {
+		t.Fatalf("missing error code = %q, want %q", missing.Body.Error.Code, models.APIErrorCodeNotFound)
 	}
 
 	method := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/health", nil)
 	if method.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("method status = %d, want %d", method.StatusCode, http.StatusMethodNotAllowed)
 	}
-	if method.Body.Error.Code != models.ErrorCodeMethodNotAllowed {
-		t.Fatalf("method error code = %q, want %q", method.Body.Error.Code, models.ErrorCodeMethodNotAllowed)
+	if method.Body.Error.Code != models.APIErrorCodeMethodNotAllowed {
+		t.Fatalf("method error code = %q, want %q", method.Body.Error.Code, models.APIErrorCodeMethodNotAllowed)
 	}
 }
