@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/httpapi/models"
 )
 
 func parseBoolQuery(w http.ResponseWriter, r *http.Request, name string) (bool, bool) {

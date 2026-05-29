@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/httpapi/models"
 	"mina.local/mina/internal/services"
 )
 

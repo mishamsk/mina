@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/httpapi/models"
 	"mina.local/mina/internal/services/accounts"
 	"mina.local/mina/internal/services/categories"
 	"mina.local/mina/internal/services/creditlimits"

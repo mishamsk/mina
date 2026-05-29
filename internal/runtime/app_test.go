@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"mina.local/mina/internal/apptest"
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/httpapi/models"
 	"mina.local/mina/internal/runtime"
 	"mina.local/mina/internal/store"
 )

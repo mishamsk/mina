@@ -2,8 +2,9 @@
 
 ## Purpose
 
-- Owns REST route registration, HTTP request parsing, response encoding, and OpenAPI DTO mapping.
+- Owns REST route registration, HTTP request parsing, response encoding, REST DTOs, and OpenAPI DTO mapping.
 - Contains the adapter-owned generated OpenAPI contract subpackage.
+  DTO structs live in the adapter-owned `models` subpackage.
 
 ## Implicit Contracts
 
@@ -12,7 +13,7 @@
 
 ## Boundaries
 
-- Owns: HTTP status mapping, transport DTO conversion, REST query parsing, and generated OpenAPI code if colocated.
+- Owns: HTTP status mapping, transport DTO conversion, REST query parsing, REST DTO models, and generated OpenAPI code if colocated.
 - Does not own: database opening, CLI parsing, SQL execution, or service-layer decisions.
 
 ## Testing Notes

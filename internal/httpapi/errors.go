@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"mina.local/mina/internal/models"
+	"mina.local/mina/internal/httpapi/models"
 	"mina.local/mina/internal/services"
 )
 

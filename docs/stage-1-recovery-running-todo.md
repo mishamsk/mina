@@ -201,22 +201,22 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 11: Add import-boundary enforcement and remove legacy packages
-- [ ] Add an import-boundary test or lint configuration owned by `just` to protect the architecture rules.
-- [ ] Enforce that service packages do not import `internal/httpapi`, generated OpenAPI code, `internal/store`, `database/sql`, Cobra, or process I/O packages.
-- [ ] Enforce that `internal/store` does not import `internal/httpapi`, generated OpenAPI code, Cobra, or runtime composition.
-- [ ] Enforce that only `cmd/mina`, tests, and explicit boundary helpers import `internal/runtime`.
-- [ ] Delete obsolete `internal/models`, `internal/controllers`, `internal/routers`, `internal/app`, and `internal/openapi` packages after all imports are gone.
-- [ ] Remove SQLite dependencies from `go.mod` and `go.sum`.
-- [ ] Run `go mod tidy` through a `just` recipe if one exists, or add a `Justfile` recipe before using it.
-- [ ] Update package docs, generated-file docs, and `PROJECT_STATE.md`.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just lint` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Add an import-boundary test or lint configuration owned by `just` to protect the architecture rules.
+- [x] Enforce that service packages do not import `internal/httpapi`, generated OpenAPI code, `internal/store`, `database/sql`, Cobra, or process I/O packages.
+- [x] Enforce that `internal/store` does not import `internal/httpapi`, generated OpenAPI code, Cobra, or runtime composition.
+- [x] Enforce that only `cmd/mina`, tests, and explicit boundary helpers import `internal/runtime`.
+- [x] Delete obsolete `internal/models`, `internal/controllers`, `internal/routers`, `internal/app`, and `internal/openapi` packages after all imports are gone.
+- [x] Remove SQLite dependencies from `go.mod` and `go.sum`.
+- [x] Run `go mod tidy` through a `just` recipe if one exists, or add a `Justfile` recipe before using it.
+- [x] Update package docs, generated-file docs, and `PROJECT_STATE.md`.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just lint` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 12: Run full recovery verification
 - [ ] Run the complete Stage 1 boundary suite against DuckDB.
