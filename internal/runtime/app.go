@@ -50,6 +50,11 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		}
 	}
 
+	return NewWithDB(db, cfg.HTTP), nil
+}
+
+// NewWithDB wires the REST handler around an already-opened migrated database.
+func NewWithDB(db *sql.DB, httpConfig HTTPConfig) *App {
 	handler := httpapi.NewWithOptions(httpapi.Dependencies{
 		Categories:    categories.NewService(store.NewCategoryStore(db)),
 		Tags:          tags.NewService(store.NewTagStore(db)),
@@ -59,14 +64,14 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		ExchangeRates: exchangerates.NewService(store.NewExchangeRateStore(db)),
 		Transactions:  transactions.NewService(store.NewTransactionStore(db)),
 	}, httpapi.Options{
-		AccessLog: cfg.HTTP.AccessLog,
-		Timeout:   cfg.HTTP.Timeout,
+		AccessLog: httpConfig.AccessLog,
+		Timeout:   httpConfig.Timeout,
 	})
 
 	return &App{
 		db:      db,
 		handler: handler,
-	}, nil
+	}
 }
 
 // DB returns the opened database handle.

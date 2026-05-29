@@ -3,19 +3,23 @@ package apptest
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"mina.local/mina/internal/runtime"
+	"mina.local/mina/internal/store"
 )
 
 // Client sends typed JSON requests through an in-process app handler.
 type Client struct {
-	t   *testing.T
-	app *runtime.App
+	t      *testing.T
+	app    *runtime.App
+	schema string
 }
 
 // Response is a typed JSON response captured from the app handler.
@@ -26,19 +30,32 @@ type Response[T any] struct {
 	RawBody    []byte
 }
 
-// New creates an in-process app backed by a migrated temporary database.
+// Persistence exposes direct DB assertions for the narrow persistence-check tier.
+type Persistence struct {
+	t      *testing.T
+	db     *sql.DB
+	schema string
+}
+
+// New creates an in-process app backed by migrated in-memory DuckDB state.
 func New(t *testing.T) *Client {
 	t.Helper()
 
-	path := t.TempDir() + "/mina.db"
-	appInstance, err := runtime.New(context.Background(), runtime.Config{
-		DatabasePath:    path,
-		CreateIfMissing: true,
-		ApplyMigrations: true,
-	})
+	ctx := context.Background()
+	db, err := store.OpenInMemory(ctx)
 	if err != nil {
-		t.Fatalf("create test app: %v", err)
+		t.Fatalf("open in-memory test database: %v", err)
 	}
+
+	schema := testSchemaName(t)
+	if err := store.UseSchema(ctx, db, schema); err != nil {
+		t.Fatalf("prepare test schema: %v", err)
+	}
+	if err := store.Migrate(ctx, db); err != nil {
+		t.Fatalf("migrate test schema: %v", err)
+	}
+
+	appInstance := runtime.NewWithDB(db, runtime.HTTPConfig{})
 	t.Cleanup(func() {
 		if err := appInstance.Close(); err != nil {
 			t.Fatalf("close test app: %v", err)
@@ -46,14 +63,19 @@ func New(t *testing.T) *Client {
 	})
 
 	return &Client{
-		t:   t,
-		app: appInstance,
+		t:      t,
+		app:    appInstance,
+		schema: schema,
 	}
 }
 
-// App returns the composed app used by this client.
-func (c *Client) App() *runtime.App {
-	return c.app
+// Persistence returns the direct database assertion helper.
+func (c *Client) Persistence() *Persistence {
+	return &Persistence{
+		t:      c.t,
+		db:     c.app.DB(),
+		schema: c.schema,
+	}
 }
 
 // JSON sends a JSON request and decodes the JSON response into T.
@@ -125,4 +147,36 @@ func (c *Client) do(method string, path string, body any) Response[struct{}] {
 		Header:     result.Header.Clone(),
 		RawBody:    rawBody,
 	}
+}
+
+// QueryRowContext runs a direct SQL query against the test database.
+func (p *Persistence) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	p.t.Helper()
+
+	return p.db.QueryRowContext(ctx, query, args...)
+}
+
+// Schema returns the current per-test accounting schema name.
+func (p *Persistence) Schema() string {
+	return p.schema
+}
+
+func testSchemaName(t *testing.T) string {
+	t.Helper()
+
+	name := strings.ToLower(t.Name())
+	var builder strings.Builder
+	builder.WriteString("test_")
+	for _, char := range name {
+		switch {
+		case char >= 'a' && char <= 'z':
+			builder.WriteRune(char)
+		case char >= '0' && char <= '9':
+			builder.WriteRune(char)
+		default:
+			builder.WriteByte('_')
+		}
+	}
+
+	return builder.String()
 }

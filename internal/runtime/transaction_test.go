@@ -95,7 +95,7 @@ func TestTransactionDuckDBMappingsBoundary(t *testing.T) {
 	var dbUpdatedAt string
 	var dbAmount string
 	var hasTag bool
-	if err := client.App().DB().QueryRowContext(
+	if err := client.Persistence().QueryRowContext(
 		t.Context(),
 		`SELECT CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR),
 	CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(updated_at AS VARCHAR), CAST(amount AS VARCHAR),

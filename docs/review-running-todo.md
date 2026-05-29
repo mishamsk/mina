@@ -70,17 +70,17 @@ This plan addresses every item in `docs/review.md`. Start with the durable docs 
   - [x] Required docs updated
 
 ### Commit 5: Build the in-process scenario test harness
-- [ ] Extend the test harness so normal tests use in-memory DuckDB, per-test schemas, and an in-process typed client that bypasses CLI and network. (`docs/review.md`: `docs/architecture.md:101`)
-- [ ] Add reusable scenario builders for common fixtures so tests read as high-level user workflows instead of setup boilerplate. (`docs/review.md`: `docs/architecture.md:101`)
-- [ ] Add a supported helper for the narrow persistence-check tier where a test creates through the client and asserts attached database state directly. (`docs/review.md`: `docs/architecture.md:101`)
-- [ ] Keep all other scenario setup and assertions routed through the client. (`docs/review.md`: `docs/architecture.md:101`)
-- [ ] Ensure the harness hides implementation details such as repository methods, SQL construction, router internals, and service-private helpers from ordinary behavior tests. (`docs/review.md`: `docs/architecture.md:101`)
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test` passes
-  - [ ] The non-default testscript integration recipe passes if touched behavior can affect CLI or real-network REST behavior
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Extend the test harness so normal tests use in-memory DuckDB, per-test schemas, and an in-process typed client that bypasses CLI and network. (`docs/review.md`: `docs/architecture.md:101`)
+- [x] Add reusable scenario builders for common fixtures so tests read as high-level user workflows instead of setup boilerplate. (`docs/review.md`: `docs/architecture.md:101`)
+- [x] Add a supported helper for the narrow persistence-check tier where a test creates through the client and asserts attached database state directly. (`docs/review.md`: `docs/architecture.md:101`)
+- [x] Keep all other scenario setup and assertions routed through the client. (`docs/review.md`: `docs/architecture.md:101`)
+- [x] Ensure the harness hides implementation details such as repository methods, SQL construction, router internals, and service-private helpers from ordinary behavior tests. (`docs/review.md`: `docs/architecture.md:101`)
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test` passes
+  - [x] The non-default testscript integration recipe passes if touched behavior can affect CLI or real-network REST behavior
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 6: Refactor current tests to the corrected policy
 - [ ] Refactor existing normal tests onto the in-process scenario harness.
