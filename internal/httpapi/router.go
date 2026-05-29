@@ -73,8 +73,6 @@ func applyMiddleware(router chi.Router, opts Options) {
 	}
 
 	router.Use(middleware.RequestID)
-	//nolint:staticcheck // The Stage 1 migration explicitly keeps Chi RealIP in the baseline local API stack.
-	router.Use(middleware.RealIP)
 	if opts.AccessLog != nil {
 		router.Use(accessLogger(opts.AccessLog))
 	}
