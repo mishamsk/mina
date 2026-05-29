@@ -79,18 +79,18 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
   - [x] Required docs updated
 
 ### Commit 5: Add OpenAPI request validation if it fits Mina errors
-- [ ] Evaluate `github.com/oapi-codegen/nethttp-middleware` against Mina's stable JSON error envelope.
-- [ ] Add request validation middleware only if unsupported parameters, malformed parameters, invalid JSON shapes, and missing bodies can still return stable Mina errors.
-- [ ] If validation middleware is adopted, place it after request ID and access logging setup but before generated operation handlers.
-- [ ] Keep service-layer validation as the source of domain rules even when OpenAPI request validation rejects transport-shape errors earlier.
-- [ ] Add boundary tests for OpenAPI-enforced request failures that would otherwise drift from the contract.
-- [ ] Document any validation ownership split in `internal/httpapi/PACKAGE.md`.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Evaluate `github.com/oapi-codegen/nethttp-middleware` against Mina's stable JSON error envelope.
+- [x] Add request validation middleware only if unsupported parameters, malformed parameters, invalid JSON shapes, and missing bodies can still return stable Mina errors.
+- [x] If validation middleware is adopted, place it after request ID and access logging setup but before generated operation handlers.
+- [x] Keep service-layer validation as the source of domain rules even when OpenAPI request validation rejects transport-shape errors earlier.
+- [x] Add boundary tests for OpenAPI-enforced request failures that would otherwise drift from the contract.
+- [x] Document any validation ownership split in `internal/httpapi/PACKAGE.md`.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 6: Finish cleanup and contract verification
 - [ ] Audit all REST endpoints against `api/openapi.yaml` and generated operation coverage.

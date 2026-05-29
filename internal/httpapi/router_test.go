@@ -92,6 +92,17 @@ func TestRouterStrictJSONValidationRejectsNestedUnknownFields(t *testing.T) {
 	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
 }
 
+func TestRouterGeneratedBodyBindingErrorsKeepMinaEnvelope(t *testing.T) {
+	handler := New(Dependencies{})
+	request := httptest.NewRequest(http.MethodPost, "/members", strings.NewReader(`{"name":123}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
+}
+
 func TestRouterRecoversPanicsWithMinaEnvelope(t *testing.T) {
 	router := chi.NewRouter()
 	applyMiddleware(router, Options{})
