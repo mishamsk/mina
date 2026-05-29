@@ -23,8 +23,8 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 	if later.Body.AccountID != account.ID {
 		t.Fatalf("later account_id = %d, want %d", later.Body.AccountID, account.ID)
 	}
-	if later.Body.CreditLimit != "5000.00" {
-		t.Fatalf("later credit_limit = %q, want 5000.00", later.Body.CreditLimit)
+	if later.Body.CreditLimit != "5000.00000000" {
+		t.Fatalf("later credit_limit = %q, want 5000.00000000", later.Body.CreditLimit)
 	}
 
 	earlier := apptest.Decode[models.CreditLimitHistory](client, http.MethodPost, accountCreditLimitHistoryPath(account.ID), models.CreateCreditLimitHistoryRequest{
@@ -159,6 +159,14 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 	})
 	if tooManyDigits.StatusCode != http.StatusBadRequest {
 		t.Fatalf("too many digits status = %d, want %d; body %s", tooManyDigits.StatusCode, http.StatusBadRequest, tooManyDigits.RawBody)
+	}
+
+	tooManyIntegerDigits := apptest.Decode[models.ErrorResponse](client, http.MethodPost, accountCreditLimitHistoryPath(account.ID), models.CreateCreditLimitHistoryRequest{
+		CreditLimit:   "12345678901",
+		EffectiveDate: "2024-01-01",
+	})
+	if tooManyIntegerDigits.StatusCode != http.StatusBadRequest {
+		t.Fatalf("too many integer digits status = %d, want %d; body %s", tooManyIntegerDigits.StatusCode, http.StatusBadRequest, tooManyIntegerDigits.RawBody)
 	}
 
 	badQuery := apptest.Decode[models.ErrorResponse](client, http.MethodGet, accountCreditLimitHistoryPath(account.ID)+"?include_tombstoned=", nil)

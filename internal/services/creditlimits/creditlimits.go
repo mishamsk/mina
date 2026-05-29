@@ -148,6 +148,9 @@ func validateCreditLimit(creditLimit string) error {
 	if len(parts) == 2 && (parts[1] == "" || len(parts[1]) > 8) {
 		return services.InvalidRequest("credit_limit must be a non-negative decimal with at most 8 fractional digits")
 	}
+	if len(parts[0]) > 10 {
+		return services.InvalidRequest("credit_limit must have at most 10 integer digits")
+	}
 
 	digitCount := 0
 	for _, part := range parts {

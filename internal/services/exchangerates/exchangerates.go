@@ -185,6 +185,9 @@ func validatePositiveDecimal(name string, value string) error {
 	if len(parts) == 2 && (parts[1] == "" || len(parts[1]) > 8) {
 		return services.InvalidRequest(name + " must be a positive decimal with at most 8 fractional digits")
 	}
+	if len(parts[0]) > 10 {
+		return services.InvalidRequest(name + " must have at most 10 integer digits")
+	}
 
 	digitCount := 0
 	hasNonZero := false

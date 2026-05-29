@@ -46,7 +46,7 @@ func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, i
 			ctx,
 			`INSERT INTO credit_limit_history (account_id, credit_limit, effective_date)
 VALUES (?, ?, ?)
-RETURNING credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at`,
+RETURNING credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
 			accountID,
 			input.CreditLimit,
 			input.EffectiveDate,
@@ -70,7 +70,7 @@ RETURNING credit_limit_history_id, account_id, credit_limit, effective_date, cre
 
 // Get returns a credit limit history entry by ID.
 func (s *CreditLimitHistoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (creditlimits.CreditLimitHistory, error) {
-	query := `SELECT credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at
+	query := `SELECT credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
 FROM credit_limit_history
 WHERE credit_limit_history_id = ?`
 	args := []any{id}
@@ -99,7 +99,7 @@ func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID i
 		return nil, services.ErrNotFound
 	}
 
-	query := `SELECT credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at
+	query := `SELECT credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
 FROM credit_limit_history
 WHERE account_id = ?`
 	args := []any{accountID}
@@ -139,7 +139,7 @@ func (s *CreditLimitHistoryStore) Tombstone(ctx context.Context, id int64) error
 	result, err := s.db.ExecContext(
 		ctx,
 		`UPDATE credit_limit_history
-SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET tombstoned_at = CURRENT_TIMESTAMP
 WHERE credit_limit_history_id = ? AND tombstoned_at IS NULL`,
 		id,
 	)

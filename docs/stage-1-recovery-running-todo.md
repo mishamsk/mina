@@ -138,28 +138,28 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 8: Replace SQLite with DuckDB connection and migrations
-- [ ] Remove SQLite driver usage and SQLite-specific error handling.
-- [ ] Implement `store.Open` with the DuckDB driver and a portable file database path.
-- [ ] Replace SQLite schema-version detection with DuckDB-compatible catalog checks.
-- [ ] Rewrite migrations in DuckDB SQL and align them with `docs/phase-1-data-model.md`.
-- [ ] Add the global `primary_key_gen_seq` sequence and use it for primary keys.
-- [ ] Add DuckDB enum types for `posting_status`, `reconciliation_status`, and `source`.
-- [ ] Add all data-model tables: `category`, `tag`, `member`, `account`, `transaction`, `journal_record`, `exchange_rate`, `budget`, and `credit_limit_history`.
-- [ ] Use DuckDB column types from the data model: `BOOLEAN`, `DATE`, `TIMESTAMP`, `DECIMAL(18,8)`, generated virtual columns, and `INTEGER[]` tag arrays.
-- [ ] Remove SQLite-only schema constructs: `AUTOINCREMENT`, `strftime` timestamp defaults, `sqlite_master`, text-backed decimals/dates/timestamps, and the `journal_record_tag` table.
-- [ ] Validate DuckDB behavior for the `transaction` table name and use the least invasive quoting strategy if the engine requires it.
-- [ ] Validate active uniqueness semantics for tombstoned rows. If `UNIQUE(..., tombstoned_at)` does not enforce active uniqueness with `NULL`, enforce the product rule in a DuckDB-supported way and document the durable choice.
-- [ ] Reconcile data-model/product-contract conflicts before coding around them, especially `journal_record.category_id` nullability versus the business rule that each record has one category.
-- [ ] Keep schema support for `budget` even if no Stage 1 REST endpoint is added.
-- [ ] Update migration tests to run against temporary DuckDB databases.
-- [ ] Update `PROJECT_STATE.md` with DuckDB database behavior and schema version.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Remove SQLite driver usage and SQLite-specific error handling.
+- [x] Implement `store.Open` with the DuckDB driver and a portable file database path.
+- [x] Replace SQLite schema-version detection with DuckDB-compatible catalog checks.
+- [x] Rewrite migrations in DuckDB SQL and align them with `docs/phase-1-data-model.md`.
+- [x] Add the global `primary_key_gen_seq` sequence and use it for primary keys.
+- [x] Add DuckDB enum types for `posting_status`, `reconciliation_status`, and `source`.
+- [x] Add all data-model tables: `category`, `tag`, `member`, `account`, `transaction`, `journal_record`, `exchange_rate`, `budget`, and `credit_limit_history`.
+- [x] Use DuckDB column types from the data model: `BOOLEAN`, `DATE`, `TIMESTAMP`, `DECIMAL(18,8)`, generated virtual columns, and `INTEGER[]` tag arrays.
+- [x] Remove SQLite-only schema constructs: `AUTOINCREMENT`, `strftime` timestamp defaults, `sqlite_master`, text-backed decimals/dates/timestamps, and the `journal_record_tag` table.
+- [x] Validate DuckDB behavior for the `transaction` table name and use the least invasive quoting strategy if the engine requires it.
+- [x] Validate active uniqueness semantics for tombstoned rows. If `UNIQUE(..., tombstoned_at)` does not enforce active uniqueness with `NULL`, enforce the product rule in a DuckDB-supported way and document the durable choice.
+- [x] Reconcile data-model/product-contract conflicts before coding around them, especially `journal_record.category_id` nullability versus the business rule that each record has one category.
+- [x] Keep schema support for `budget` even if no Stage 1 REST endpoint is added.
+- [x] Update migration tests to run against temporary DuckDB databases.
+- [x] Update `PROJECT_STATE.md` with DuckDB database behavior and schema version.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 9: Align store queries and DB-facing type mappings with DuckDB
 - [ ] Update all repository implementations to use DuckDB-compatible SQL.

@@ -126,7 +126,7 @@ func (s *TagStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (t
 	row := s.db.QueryRowContext(
 		ctx,
 		`UPDATE tag
-SET is_hidden = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
 WHERE tag_id = ? AND tombstoned_at IS NULL
 RETURNING tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
 		isHidden,
@@ -148,8 +148,8 @@ func (s *TagStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.ExecContext(
 		ctx,
 		`UPDATE tag
-SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET tombstoned_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
 WHERE tag_id = ? AND tombstoned_at IS NULL`,
 		id,
 	)

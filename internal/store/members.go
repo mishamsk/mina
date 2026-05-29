@@ -118,24 +118,43 @@ WHERE 1 = 1`
 
 // UpdateName updates a member's name.
 func (s *MemberStore) UpdateName(ctx context.Context, id int64, name string) (members.Member, error) {
-	row := s.db.QueryRowContext(
-		ctx,
-		`UPDATE member
-SET name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+	var member members.Member
+	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
+		exists, err := activeMemberNameExistsForOtherID(ctx, tx, id, name)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return fmt.Errorf("%w: active member name already exists", services.ErrConflict)
+		}
+
+		row := tx.QueryRowContext(
+			ctx,
+			`UPDATE member
+SET name = ?, updated_at = CURRENT_TIMESTAMP
 WHERE member_id = ? AND tombstoned_at IS NULL
 RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
-		name,
-		id,
-	)
-	member, err := scanMember(row)
+			name,
+			id,
+		)
+		member, err = scanMember(row)
+		if errors.Is(err, sql.ErrNoRows) {
+			return services.ErrNotFound
+		}
+		if err != nil {
+			if isUniqueConstraintError(err) {
+				return fmt.Errorf("%w: active member name already exists", services.ErrConflict)
+			}
+			return fmt.Errorf("update member name: %w", err)
+		}
+
+		return nil
+	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return members.Member{}, services.ErrNotFound
 	}
 	if err != nil {
-		if isUniqueConstraintError(err) {
-			return members.Member{}, fmt.Errorf("%w: active member name already exists", services.ErrConflict)
-		}
-		return members.Member{}, fmt.Errorf("update member name: %w", err)
+		return members.Member{}, err
 	}
 
 	return member, nil
@@ -146,8 +165,8 @@ func (s *MemberStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.ExecContext(
 		ctx,
 		`UPDATE member
-SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET tombstoned_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
 WHERE member_id = ? AND tombstoned_at IS NULL`,
 		id,
 	)
@@ -201,6 +220,27 @@ func memberNameExists(ctx context.Context, tx *sql.Tx, name string) (bool, error
 	}
 	if err != nil {
 		return false, fmt.Errorf("check member name: %w", err)
+	}
+
+	return true, nil
+}
+
+func activeMemberNameExistsForOtherID(ctx context.Context, tx *sql.Tx, id int64, name string) (bool, error) {
+	var otherID int64
+	err := tx.QueryRowContext(
+		ctx,
+		`SELECT member_id
+FROM member
+WHERE name = ? AND member_id <> ? AND tombstoned_at IS NULL
+LIMIT 1`,
+		name,
+		id,
+	).Scan(&otherID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check active member name for other id: %w", err)
 	}
 
 	return true, nil

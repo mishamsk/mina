@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 
 	"mina.local/mina/internal/services"
@@ -36,7 +37,7 @@ func (s *TransactionStore) Create(ctx context.Context, req transactions.CreateIn
 			ctx,
 			`INSERT INTO "transaction" (initiated_date)
 VALUES (?)
-RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
+RETURNING transaction_id, CAST(initiated_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
 			req.InitiatedDate,
 		)
 		var err error
@@ -71,7 +72,7 @@ func (s *TransactionStore) Replace(ctx context.Context, id int64, req transactio
 			`UPDATE "transaction"
 SET initiated_date = ?
 WHERE transaction_id = ? AND tombstoned_at IS NULL
-RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
+RETURNING transaction_id, CAST(initiated_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
 			req.InitiatedDate,
 			id,
 		)
@@ -94,8 +95,8 @@ RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
 		if _, err := tx.ExecContext(
 			ctx,
 			`UPDATE journal_record
-SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET tombstoned_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			id,
 		); err != nil {
@@ -123,7 +124,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 func (s *TransactionStore) Get(ctx context.Context, id int64) (transactions.Transaction, error) {
 	transaction, err := scanTransaction(s.db.QueryRowContext(
 		ctx,
-		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
+		`SELECT transaction_id, CAST(initiated_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
 FROM "transaction"
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		id,
@@ -148,7 +149,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 func (s *TransactionStore) List(ctx context.Context) ([]transactions.Transaction, error) {
 	rows, err := s.db.QueryContext(
 		ctx,
-		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
+		`SELECT transaction_id, CAST(initiated_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
 FROM "transaction"
 WHERE tombstoned_at IS NULL
 ORDER BY initiated_date ASC, transaction_id ASC`,
@@ -194,7 +195,7 @@ func (s *TransactionStore) Tombstone(ctx context.Context, id int64) error {
 		result, err := tx.ExecContext(
 			ctx,
 			`UPDATE "transaction"
-SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET tombstoned_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			id,
 		)
@@ -212,8 +213,8 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		if _, err := tx.ExecContext(
 			ctx,
 			`UPDATE journal_record
-SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET tombstoned_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			id,
 		); err != nil {
@@ -226,9 +227,9 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 
 // SearchRecords returns active journal records matching filters.
 func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.RecordSearchOptions) ([]transactions.JournalRecord, error) {
-	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
-	jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	jr.created_at, jr.updated_at, jr.tombstoned_at
+	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, CAST(jr.amount AS VARCHAR), CAST(jr.amount_usd AS VARCHAR), jr.category_id,
+	jr.memo, CAST(jr.pending_date AS VARCHAR), CAST(jr.posted_date AS VARCHAR), CAST(jr.posting_status AS VARCHAR), CAST(jr.reconciliation_status AS VARCHAR), CAST(jr.source AS VARCHAR), jr.external_id, jr.external_system,
+	CAST(jr.created_at AS VARCHAR), CAST(jr.updated_at AS VARCHAR), CAST(jr.tombstoned_at AS VARCHAR)
 FROM journal_record jr
 JOIN "transaction" tx ON tx.transaction_id = jr.transaction_id
 WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
@@ -246,16 +247,16 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 		args = append(args, *opts.MemberID)
 	}
 	if opts.TagID != nil {
-		query += " AND EXISTS (SELECT 1 FROM journal_record_tag jrt WHERE jrt.record_id = jr.record_id AND jrt.tag_id = ?)"
+		query += " AND list_contains(jr.tag_ids, ?)"
 		args = append(args, *opts.TagID)
 	}
 	if opts.PostingStatus != nil {
-		query += " AND jr.posting_status = ?"
-		args = append(args, *opts.PostingStatus)
+		query += " AND jr.posting_status = CAST(? AS posting_status)"
+		args = append(args, enumValue(*opts.PostingStatus))
 	}
 	if opts.ReconciliationStatus != nil {
-		query += " AND jr.reconciliation_status = ?"
-		args = append(args, *opts.ReconciliationStatus)
+		query += " AND jr.reconciliation_status = CAST(? AS reconciliation_status)"
+		args = append(args, enumValue(*opts.ReconciliationStatus))
 	}
 	if opts.InitiatedDateFrom != nil {
 		query += " AND tx.initiated_date >= ?"
@@ -347,7 +348,7 @@ func (s *TransactionStore) BulkCategorize(ctx context.Context, recordIDs []int64
 			ctx,
 			`UPDATE journal_record
 SET category_id = ?,
-    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    updated_at = CURRENT_TIMESTAMP
 WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
 			args...,
 		); err != nil {
@@ -382,7 +383,7 @@ func (s *TransactionStore) BulkReassignAccount(ctx context.Context, recordIDs []
 			ctx,
 			`UPDATE journal_record
 SET account_id = ?,
-    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    updated_at = CURRENT_TIMESTAMP
 WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
 			args...,
 		); err != nil {
@@ -409,39 +410,23 @@ func (s *TransactionStore) BulkUpdateTags(ctx context.Context, recordIDs []int64
 		}
 
 		for _, recordID := range recordIDs {
-			for _, tagID := range addTagIDs {
-				if _, err := tx.ExecContext(
-					ctx,
-					"INSERT OR IGNORE INTO journal_record_tag (record_id, tag_id) VALUES (?, ?)",
-					recordID,
-					tagID,
-				); err != nil {
-					return fmt.Errorf("bulk add journal record tag: %w", err)
-				}
+			tagIDs, err := tagIDsByRecordID(ctx, tx, recordID)
+			if err != nil {
+				return err
 			}
-		}
-
-		if len(removeTagIDs) > 0 {
-			args := append(int64Args(recordIDs), int64Args(removeTagIDs)...)
+			tagIDs = updatedTagIDs(tagIDs, addTagIDs, removeTagIDs)
+			tagListExpr, tagListArgs := tagListExpression(tagIDs)
+			args := append(tagListArgs, recordID)
 			if _, err := tx.ExecContext(
 				ctx,
-				`DELETE FROM journal_record_tag
-WHERE record_id IN (`+placeholders(len(recordIDs))+`)
-  AND tag_id IN (`+placeholders(len(removeTagIDs))+`)`,
+				`UPDATE journal_record
+SET tag_ids = `+tagListExpr+`,
+    updated_at = CURRENT_TIMESTAMP
+WHERE record_id = ?`,
 				args...,
 			); err != nil {
-				return fmt.Errorf("bulk remove journal record tags: %w", err)
+				return fmt.Errorf("bulk update journal record tags: %w", err)
 			}
-		}
-
-		if _, err := tx.ExecContext(
-			ctx,
-			`UPDATE journal_record
-SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
-			int64Args(recordIDs)...,
-		); err != nil {
-			return fmt.Errorf("bulk update journal record tag timestamps: %w", err)
 		}
 
 		return nil
@@ -468,14 +453,14 @@ func (s *TransactionStore) BulkUpdateStatuses(
 		setClauses := []string{}
 		args := []any{}
 		if postingStatus != nil {
-			setClauses = append(setClauses, "posting_status = ?")
-			args = append(args, *postingStatus)
+			setClauses = append(setClauses, "posting_status = CAST(? AS posting_status)")
+			args = append(args, enumValue(*postingStatus))
 		}
 		if reconciliationStatus != nil {
-			setClauses = append(setClauses, "reconciliation_status = ?")
-			args = append(args, *reconciliationStatus)
+			setClauses = append(setClauses, "reconciliation_status = CAST(? AS reconciliation_status)")
+			args = append(args, enumValue(*reconciliationStatus))
 		}
-		setClauses = append(setClauses, "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")
+		setClauses = append(setClauses, "updated_at = CURRENT_TIMESTAMP")
 		args = append(args, int64Args(recordIDs)...)
 
 		if _, err := tx.ExecContext(
@@ -519,16 +504,8 @@ func scanTransaction(scanner transactionScanner) (transactions.Transaction, erro
 }
 
 func insertJournalRecord(ctx context.Context, tx *sql.Tx, transactionID int64, req transactions.JournalRecordInput) (transactions.JournalRecord, error) {
-	row := tx.QueryRowContext(
-		ctx,
-		`INSERT INTO journal_record (
-	transaction_id, account_id, member_id, currency, amount, amount_usd, category_id, memo,
-	pending_date, posted_date, posting_status, reconciliation_status, source, external_id, external_system
-)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING record_id, transaction_id, account_id, member_id, currency, amount, amount_usd, category_id,
-	memo, pending_date, posted_date, posting_status, reconciliation_status, source, external_id, external_system,
-	created_at, updated_at, tombstoned_at`,
+	tagListExpr, tagListArgs := tagListExpression(req.TagIDs)
+	args := []any{
 		transactionID,
 		req.AccountID,
 		req.MemberID,
@@ -536,29 +513,35 @@ RETURNING record_id, transaction_id, account_id, member_id, currency, amount, am
 		req.Amount,
 		req.AmountUSD,
 		req.CategoryID,
+	}
+	args = append(args, tagListArgs...)
+	args = append(args,
 		req.Memo,
 		req.PendingDate,
 		req.PostedDate,
-		req.PostingStatus,
-		req.ReconciliationStatus,
-		req.Source,
+		enumValue(req.PostingStatus),
+		enumValue(req.ReconciliationStatus),
+		enumValue(req.Source),
 		req.ExternalID,
 		req.ExternalSystem,
+	)
+
+	row := tx.QueryRowContext(
+		ctx,
+		`INSERT INTO journal_record (
+	transaction_id, account_id, member_id, currency, amount, amount_usd, category_id, tag_ids, memo,
+	pending_date, posted_date, posting_status, reconciliation_status, source, external_id, external_system
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, ?, ?, CAST(? AS posting_status), CAST(? AS reconciliation_status), CAST(? AS source), ?, ?)
+RETURNING record_id, transaction_id, account_id, member_id, currency, CAST(amount AS VARCHAR), CAST(amount_usd AS VARCHAR), category_id,
+	memo, CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR), external_id, external_system,
+	CAST(created_at AS VARCHAR), CAST(updated_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
+		args...,
 	)
 
 	record, err := scanJournalRecord(row)
 	if err != nil {
 		return transactions.JournalRecord{}, fmt.Errorf("insert journal record: %w", err)
-	}
-	for _, tagID := range req.TagIDs {
-		if _, err := tx.ExecContext(
-			ctx,
-			"INSERT INTO journal_record_tag (record_id, tag_id) VALUES (?, ?)",
-			record.ID,
-			tagID,
-		); err != nil {
-			return transactions.JournalRecord{}, fmt.Errorf("insert journal record tag: %w", err)
-		}
 	}
 	record.TagIDs = append([]int64{}, req.TagIDs...)
 
@@ -622,6 +605,9 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	if tombstonedAt.Valid {
 		record.TombstonedAt = &tombstonedAt.String
 	}
+	record.PostingStatus = transactions.PostingStatus(strings.ToLower(string(record.PostingStatus)))
+	record.ReconciliationStatus = transactions.ReconciliationStatus(strings.ToLower(string(record.ReconciliationStatus)))
+	record.Source = transactions.Source(strings.ToLower(string(record.Source)))
 	record.TagIDs = []int64{}
 
 	return record, nil
@@ -639,9 +625,9 @@ func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transact
 	for _, transactionID := range transactionIDs {
 		rows, err := s.db.QueryContext(
 			ctx,
-			`SELECT record_id, transaction_id, account_id, member_id, currency, amount, amount_usd, category_id,
-	memo, pending_date, posted_date, posting_status, reconciliation_status, source, external_id, external_system,
-	created_at, updated_at, tombstoned_at
+			`SELECT record_id, transaction_id, account_id, member_id, currency, CAST(amount AS VARCHAR), CAST(amount_usd AS VARCHAR), category_id,
+	memo, CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR), external_id, external_system,
+	CAST(created_at AS VARCHAR), CAST(updated_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
 FROM journal_record
 WHERE transaction_id = ? AND tombstoned_at IS NULL
 ORDER BY record_id ASC`,
@@ -683,10 +669,18 @@ ORDER BY record_id ASC`,
 }
 
 func (s *TransactionStore) tagIDsByRecordID(ctx context.Context, recordID int64) ([]int64, error) {
-	rows, err := s.db.QueryContext(
+	return tagIDsByRecordID(ctx, s.db, recordID)
+}
+
+type rowsQuerier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+func tagIDsByRecordID(ctx context.Context, queryer rowsQuerier, recordID int64) ([]int64, error) {
+	rows, err := queryer.QueryContext(
 		ctx,
-		`SELECT tag_id
-FROM journal_record_tag
+		`SELECT unnest(tag_ids) AS tag_id
+FROM journal_record
 WHERE record_id = ?
 ORDER BY tag_id ASC`,
 		recordID,
@@ -806,6 +800,41 @@ WHERE tag_id IN (`+placeholders(len(tagIDs))+`)
 	}
 
 	return nil
+}
+
+func tagListExpression(tagIDs []int64) (string, []any) {
+	if len(tagIDs) == 0 {
+		return "CAST([] AS INTEGER[])", nil
+	}
+
+	return "CAST([" + placeholders(len(tagIDs)) + "] AS INTEGER[])", int64Args(tagIDs)
+}
+
+func updatedTagIDs(current []int64, add []int64, remove []int64) []int64 {
+	selected := map[int64]struct{}{}
+	for _, tagID := range current {
+		selected[tagID] = struct{}{}
+	}
+	for _, tagID := range add {
+		selected[tagID] = struct{}{}
+	}
+	for _, tagID := range remove {
+		delete(selected, tagID)
+	}
+
+	next := make([]int64, 0, len(selected))
+	for tagID := range selected {
+		next = append(next, tagID)
+	}
+	sort.Slice(next, func(i int, j int) bool {
+		return next[i] < next[j]
+	})
+
+	return next
+}
+
+func enumValue(value any) string {
+	return strings.ToUpper(fmt.Sprint(value))
 }
 
 func activeCategoryExists(ctx context.Context, queryer rowQuerier, categoryID int64) (bool, error) {

@@ -622,6 +622,9 @@ func parseSignedDecimal(value string) (*big.Int, error) {
 	if len(parts) == 2 && (parts[1] == "" || len(parts[1]) > 8) {
 		return nil, errors.New("invalid decimal")
 	}
+	if len(parts[0]) > 10 {
+		return nil, errors.New("invalid decimal")
+	}
 
 	digitCount := 0
 	digits := parts[0]

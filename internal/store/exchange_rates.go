@@ -38,7 +38,7 @@ func (s *ExchangeRateStore) Create(ctx context.Context, input exchangerates.Crea
 			ctx,
 			`INSERT INTO exchange_rate (from_currency, to_currency, rate, effective_date)
 VALUES (?, ?, ?, ?)
-RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at`,
+RETURNING exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
 			input.FromCurrency,
 			input.ToCurrency,
 			input.Rate,
@@ -63,7 +63,7 @@ RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, cr
 
 // Get returns an exchange rate by ID.
 func (s *ExchangeRateStore) Get(ctx context.Context, id int64, includeTombstoned bool) (exchangerates.ExchangeRate, error) {
-	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
+	query := `SELECT exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
 FROM exchange_rate
 WHERE exchange_rate_id = ?`
 	args := []any{id}
@@ -84,7 +84,7 @@ WHERE exchange_rate_id = ?`
 
 // List returns exchange rates using explicit filters and deterministic ordering.
 func (s *ExchangeRateStore) List(ctx context.Context, opts exchangerates.ListOptions) ([]exchangerates.ExchangeRate, error) {
-	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
+	query := `SELECT exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
 FROM exchange_rate
 WHERE 1 = 1`
 	args := []any{}
@@ -138,7 +138,7 @@ func (s *ExchangeRateStore) UpdateRate(ctx context.Context, id int64, rate strin
 		`UPDATE exchange_rate
 SET rate = ?
 WHERE exchange_rate_id = ? AND tombstoned_at IS NULL
-RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at`,
+RETURNING exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
 		rate,
 		id,
 	)
@@ -158,7 +158,7 @@ func (s *ExchangeRateStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.ExecContext(
 		ctx,
 		`UPDATE exchange_rate
-SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET tombstoned_at = CURRENT_TIMESTAMP
 WHERE exchange_rate_id = ? AND tombstoned_at IS NULL`,
 		id,
 	)

@@ -87,13 +87,17 @@ CREATE TABLE member (
     member_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
     name TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    tombstoned_at TIMESTAMP
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tombstoned_at TIMESTAMP,
+
+    UNIQUE(name, tombstoned_at)
 );
 
 -- Account table with FQN hierarchy and virtual columns
 CREATE TABLE account (
     account_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
     fqn TEXT NOT NULL,
+    is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
     currency TEXT,
     external_id TEXT,
     external_system TEXT,
@@ -125,7 +129,7 @@ CREATE TABLE account (
 );
 
 -- Transaction table for double-entry transaction metadata
-CREATE TABLE transaction (
+CREATE TABLE "transaction" (
     transaction_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
     initiated_date DATE NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -135,15 +139,15 @@ CREATE TABLE transaction (
 -- Journal record table for individual debit/credit entries
 CREATE TABLE journal_record (
     record_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
-    transaction_id INTEGER NOT NULL REFERENCES transaction(transaction_id),
-    account_id INTEGER NOT NULL REFERENCES account(account_id),
-    member_id INTEGER REFERENCES member(member_id),
+    transaction_id INTEGER NOT NULL,
+    account_id INTEGER NOT NULL,
+    member_id INTEGER,
 
     currency TEXT NOT NULL,
     amount DECIMAL(18,8) NOT NULL,
     amount_usd DECIMAL(18,8) NOT NULL,
 
-    category_id INTEGER,
+    category_id INTEGER NOT NULL,
     tag_ids INTEGER[] NOT NULL DEFAULT [],
 
     memo TEXT,
@@ -193,7 +197,7 @@ CREATE TABLE budget (
 -- Credit limit history table for tracking limit changes over time
 CREATE TABLE credit_limit_history (
     credit_limit_history_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
-    account_id INTEGER NOT NULL REFERENCES account(account_id),
+    account_id INTEGER NOT NULL,
     credit_limit DECIMAL(18,8) NOT NULL,
     effective_date DATE NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -201,6 +205,29 @@ CREATE TABLE credit_limit_history (
 
     UNIQUE(account_id, effective_date, tombstoned_at)
 );
+
+-- Active-row uniqueness uses expression indexes because DuckDB treats NULL values
+-- as distinct inside UNIQUE constraints.
+CREATE UNIQUE INDEX category_active_fqn_unique
+ON category ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));
+
+CREATE UNIQUE INDEX tag_active_fqn_unique
+ON tag ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));
+
+CREATE UNIQUE INDEX member_active_name_unique
+ON member ((CASE WHEN tombstoned_at IS NULL THEN name ELSE NULL END));
+
+CREATE UNIQUE INDEX account_active_fqn_unique
+ON account ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));
+
+CREATE UNIQUE INDEX credit_limit_history_active_account_date_unique
+ON credit_limit_history ((CASE WHEN tombstoned_at IS NULL THEN CAST(account_id AS VARCHAR) || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));
+
+CREATE UNIQUE INDEX exchange_rate_active_pair_date_unique
+ON exchange_rate ((CASE WHEN tombstoned_at IS NULL THEN from_currency || ':' || to_currency || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));
+
+CREATE UNIQUE INDEX budget_active_category_month_unique
+ON budget ((CASE WHEN tombstoned_at IS NULL THEN category_fqn || ':' || CAST(month AS VARCHAR) ELSE NULL END));
 ```
 
 ## Hierarchical Names Encoding

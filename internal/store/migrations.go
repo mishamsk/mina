@@ -17,12 +17,18 @@ type Migration struct {
 var migrations = []Migration{
 	{
 		Version: 1,
-		Name:    "create_schema_version",
+		Name:    "create_schema_primitives",
 		SQL: `
-CREATE TABLE IF NOT EXISTS schema_version (
+CREATE SEQUENCE primary_key_gen_seq START 1;
+
+CREATE TYPE posting_status AS ENUM ('PENDING', 'POSTED', 'CANCELLED');
+CREATE TYPE reconciliation_status AS ENUM ('RECONCILED', 'UNRECONCILED');
+CREATE TYPE source AS ENUM ('MANUAL', 'IMPORTED', 'RECURRING_TEMPLATE');
+
+CREATE TABLE schema_version (
 	version INTEGER PRIMARY KEY,
 	name TEXT NOT NULL,
-	applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+	applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );`,
 	},
 	{
@@ -30,150 +36,176 @@ CREATE TABLE IF NOT EXISTS schema_version (
 		Name:    "create_category",
 		SQL: `
 CREATE TABLE category (
-	category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	category_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
 	fqn TEXT NOT NULL,
-	is_hidden INTEGER NOT NULL DEFAULT 0,
-	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	tombstoned_at TEXT
+	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	tombstoned_at TIMESTAMP,
+	parent_fqn TEXT GENERATED ALWAYS AS (
+		CASE WHEN instr(fqn, ':') > 0 THEN regexp_replace(fqn, ':[^:]+$', '') ELSE NULL END
+	) VIRTUAL,
+	name TEXT GENERATED ALWAYS AS (regexp_extract(fqn, '[^:]+$')) VIRTUAL,
+	level INTEGER GENERATED ALWAYS AS (array_length(string_split(fqn, ':')) - 1) VIRTUAL,
+	UNIQUE(fqn, tombstoned_at)
 );
 
 CREATE UNIQUE INDEX category_active_fqn_unique
-ON category(fqn)
-WHERE tombstoned_at IS NULL;`,
+ON category ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`,
 	},
 	{
 		Version: 3,
 		Name:    "create_tag",
 		SQL: `
 CREATE TABLE tag (
-	tag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	tag_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
 	fqn TEXT NOT NULL,
-	is_hidden INTEGER NOT NULL DEFAULT 0,
-	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	tombstoned_at TEXT
+	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	tombstoned_at TIMESTAMP,
+	parent_fqn TEXT GENERATED ALWAYS AS (
+		CASE WHEN instr(fqn, ':') > 0 THEN regexp_replace(fqn, ':[^:]+$', '') ELSE NULL END
+	) VIRTUAL,
+	name TEXT GENERATED ALWAYS AS (regexp_extract(fqn, '[^:]+$')) VIRTUAL,
+	level INTEGER GENERATED ALWAYS AS (array_length(string_split(fqn, ':')) - 1) VIRTUAL,
+	UNIQUE(fqn, tombstoned_at)
 );
 
 CREATE UNIQUE INDEX tag_active_fqn_unique
-ON tag(fqn)
-WHERE tombstoned_at IS NULL;`,
+ON tag ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`,
 	},
 	{
 		Version: 4,
 		Name:    "create_member",
 		SQL: `
 CREATE TABLE member (
-	member_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	member_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
 	name TEXT NOT NULL,
-	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	tombstoned_at TEXT
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	tombstoned_at TIMESTAMP,
+	UNIQUE(name, tombstoned_at)
 );
 
 CREATE UNIQUE INDEX member_active_name_unique
-ON member(name)
-WHERE tombstoned_at IS NULL;`,
+ON member ((CASE WHEN tombstoned_at IS NULL THEN name ELSE NULL END));`,
 	},
 	{
 		Version: 5,
 		Name:    "create_account",
 		SQL: `
 CREATE TABLE account (
-	account_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	account_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
 	fqn TEXT NOT NULL,
-	is_hidden INTEGER NOT NULL DEFAULT 0,
+	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
 	currency TEXT,
 	external_id TEXT,
 	external_system TEXT,
-	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	tombstoned_at TEXT
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	tombstoned_at TIMESTAMP,
+	kind TEXT GENERATED ALWAYS AS (regexp_extract(fqn, '^[^:]+')) VIRTUAL,
+	parent_fqn TEXT GENERATED ALWAYS AS (
+		CASE WHEN instr(fqn, ':') > 0 THEN regexp_replace(fqn, ':[^:]+$', '') ELSE NULL END
+	) VIRTUAL,
+	name TEXT GENERATED ALWAYS AS (regexp_extract(fqn, '[^:]+$')) VIRTUAL,
+	level INTEGER GENERATED ALWAYS AS (array_length(string_split(fqn, ':')) - 1) VIRTUAL,
+	UNIQUE(fqn, tombstoned_at)
 );
 
 CREATE UNIQUE INDEX account_active_fqn_unique
-ON account(fqn)
-WHERE tombstoned_at IS NULL;`,
+ON account ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`,
 	},
 	{
 		Version: 6,
 		Name:    "create_credit_limit_history",
 		SQL: `
 CREATE TABLE credit_limit_history (
-	credit_limit_history_id INTEGER PRIMARY KEY AUTOINCREMENT,
-	account_id INTEGER NOT NULL REFERENCES account(account_id),
-	credit_limit TEXT NOT NULL,
-	effective_date TEXT NOT NULL,
-	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	tombstoned_at TEXT
+	credit_limit_history_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+	account_id INTEGER NOT NULL,
+	credit_limit DECIMAL(18,8) NOT NULL,
+	effective_date DATE NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	tombstoned_at TIMESTAMP,
+	UNIQUE(account_id, effective_date, tombstoned_at)
 );
 
 CREATE UNIQUE INDEX credit_limit_history_active_account_date_unique
-ON credit_limit_history(account_id, effective_date)
-WHERE tombstoned_at IS NULL;`,
+ON credit_limit_history ((CASE WHEN tombstoned_at IS NULL THEN CAST(account_id AS VARCHAR) || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));`,
 	},
 	{
 		Version: 7,
 		Name:    "create_exchange_rate",
 		SQL: `
 CREATE TABLE exchange_rate (
-	exchange_rate_id INTEGER PRIMARY KEY AUTOINCREMENT,
+	exchange_rate_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
 	from_currency TEXT NOT NULL,
 	to_currency TEXT NOT NULL,
-	rate TEXT NOT NULL,
-	effective_date TEXT NOT NULL,
-	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	tombstoned_at TEXT
+	rate DECIMAL(18,8) NOT NULL,
+	effective_date DATE NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	tombstoned_at TIMESTAMP,
+	UNIQUE(from_currency, to_currency, effective_date, tombstoned_at)
 );
 
 CREATE UNIQUE INDEX exchange_rate_active_pair_date_unique
-ON exchange_rate(from_currency, to_currency, effective_date)
-WHERE tombstoned_at IS NULL;`,
+ON exchange_rate ((CASE WHEN tombstoned_at IS NULL THEN from_currency || ':' || to_currency || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));`,
 	},
 	{
 		Version: 8,
 		Name:    "create_transaction_and_journal_record",
 		SQL: `
 CREATE TABLE "transaction" (
-	transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-	initiated_date TEXT NOT NULL,
-	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	tombstoned_at TEXT
+	transaction_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+	initiated_date DATE NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	tombstoned_at TIMESTAMP
 );
 
 CREATE TABLE journal_record (
-	record_id INTEGER PRIMARY KEY AUTOINCREMENT,
-	transaction_id INTEGER NOT NULL REFERENCES "transaction"(transaction_id),
-	account_id INTEGER NOT NULL REFERENCES account(account_id),
-	member_id INTEGER REFERENCES member(member_id),
+	record_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+	transaction_id INTEGER NOT NULL,
+	account_id INTEGER NOT NULL,
+	member_id INTEGER,
 	currency TEXT NOT NULL,
-	amount TEXT NOT NULL,
-	amount_usd TEXT NOT NULL,
-	category_id INTEGER NOT NULL REFERENCES category(category_id),
+	amount DECIMAL(18,8) NOT NULL,
+	amount_usd DECIMAL(18,8) NOT NULL,
+	category_id INTEGER NOT NULL,
+	tag_ids INTEGER[] NOT NULL DEFAULT [],
 	memo TEXT,
-	pending_date TEXT,
-	posted_date TEXT,
-	posting_status TEXT NOT NULL,
-	reconciliation_status TEXT NOT NULL,
-	source TEXT NOT NULL,
+	pending_date DATE,
+	posted_date DATE,
+	posting_status posting_status NOT NULL,
+	reconciliation_status reconciliation_status NOT NULL DEFAULT 'RECONCILED',
+	source source NOT NULL,
 	external_id TEXT,
 	external_system TEXT,
-	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-	tombstoned_at TEXT
-);
-
-CREATE TABLE journal_record_tag (
-	record_id INTEGER NOT NULL REFERENCES journal_record(record_id) ON DELETE CASCADE,
-	tag_id INTEGER NOT NULL REFERENCES tag(tag_id),
-	PRIMARY KEY(record_id, tag_id)
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	tombstoned_at TIMESTAMP
 );
 
 CREATE INDEX journal_record_transaction_id_idx
-ON journal_record(transaction_id);
+ON journal_record(transaction_id);`,
+	},
+	{
+		Version: 9,
+		Name:    "create_budget",
+		SQL: `
+CREATE TABLE budget (
+	budget_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+	category_fqn TEXT NOT NULL,
+	month DATE NOT NULL,
+	amount DECIMAL(18,8) NOT NULL,
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	tombstoned_at TIMESTAMP,
+	UNIQUE(category_fqn, month, tombstoned_at)
+);
 
-CREATE INDEX journal_record_tag_record_id_idx
-ON journal_record_tag(record_id);`,
+CREATE UNIQUE INDEX budget_active_category_month_unique
+ON budget ((CASE WHEN tombstoned_at IS NULL THEN category_fqn || ':' || CAST(month AS VARCHAR) ELSE NULL END));`,
 	},
 }
 
@@ -247,11 +279,15 @@ func applyMigration(ctx context.Context, db *sql.DB, migration Migration) error 
 }
 
 func schemaVersionTableExists(ctx context.Context, db *sql.DB) (bool, error) {
-	var name string
+	var tableName string
 	err := db.QueryRowContext(
 		ctx,
-		"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_version'",
-	).Scan(&name)
+		`SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = current_schema()
+  AND table_name = 'schema_version'
+LIMIT 1`,
+	).Scan(&tableName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}

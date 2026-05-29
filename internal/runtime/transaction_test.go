@@ -137,6 +137,13 @@ func TestTransactionValidationErrors(t *testing.T) {
 		t.Fatalf("invalid date status = %d, want %d; body %s", invalidDateResponse.StatusCode, http.StatusBadRequest, invalidDateResponse.RawBody)
 	}
 
+	tooManyIntegerDigits := balancedTransactionRequest(refs)
+	tooManyIntegerDigits.Records[0].Amount = "-12345678901"
+	tooManyIntegerDigitsResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", tooManyIntegerDigits)
+	if tooManyIntegerDigitsResponse.StatusCode != http.StatusBadRequest {
+		t.Fatalf("too many integer digits status = %d, want %d; body %s", tooManyIntegerDigitsResponse.StatusCode, http.StatusBadRequest, tooManyIntegerDigitsResponse.RawBody)
+	}
+
 	unsupportedListQuery := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/transactions?limit=1", nil)
 	if unsupportedListQuery.StatusCode != http.StatusBadRequest {
 		t.Fatalf("unsupported list query status = %d, want %d; body %s", unsupportedListQuery.StatusCode, http.StatusBadRequest, unsupportedListQuery.RawBody)

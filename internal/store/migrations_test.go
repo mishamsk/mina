@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	"mina.local/mina/internal/store"
@@ -57,5 +58,100 @@ func TestWithTxCommitsAndRollsBack(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("probe row count = %d, want 1", count)
+	}
+}
+
+func TestMigrateCreatesDuckDBPhaseOneSchema(t *testing.T) {
+	ctx := context.Background()
+	db, _ := storetest.OpenMigrated(t, ctx)
+
+	assertTableExists(t, ctx, db, "budget")
+	assertTableExists(t, ctx, db, "journal_record")
+	assertTableMissing(t, ctx, db, "journal_record_tag")
+
+	assertColumnType(t, ctx, db, "journal_record", "tag_ids", "INTEGER[]")
+	assertColumnType(t, ctx, db, "journal_record", "amount", "DECIMAL(18,8)")
+	assertColumnType(t, ctx, db, "journal_record", "amount_usd", "DECIMAL(18,8)")
+	assertColumnType(t, ctx, db, "journal_record", "pending_date", "DATE")
+	assertColumnType(t, ctx, db, "journal_record", "created_at", "TIMESTAMP")
+
+	var transactionID int64
+	if err := db.QueryRowContext(
+		ctx,
+		`INSERT INTO "transaction" (initiated_date) VALUES (?) RETURNING transaction_id`,
+		"2024-01-01",
+	).Scan(&transactionID); err != nil {
+		t.Fatalf("insert quoted transaction table: %v", err)
+	}
+	if transactionID <= 0 {
+		t.Fatalf("transaction_id = %d, want positive", transactionID)
+	}
+
+	if _, err := db.ExecContext(ctx, "INSERT INTO category (fqn) VALUES (?)", "Food:Dining"); err != nil {
+		t.Fatalf("insert active category: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO category (fqn) VALUES (?)", "Food:Dining"); err == nil {
+		t.Fatalf("insert duplicate active category succeeded, want active uniqueness error")
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE category SET tombstoned_at = CURRENT_TIMESTAMP WHERE fqn = ?", "Food:Dining"); err != nil {
+		t.Fatalf("tombstone category: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO category (fqn) VALUES (?)", "Food:Dining"); err != nil {
+		t.Fatalf("recreate tombstoned category fqn: %v", err)
+	}
+}
+
+func assertTableExists(t *testing.T, ctx context.Context, db *sql.DB, tableName string) {
+	t.Helper()
+
+	if !tableExists(t, ctx, db, tableName) {
+		t.Fatalf("table %s does not exist", tableName)
+	}
+}
+
+func assertTableMissing(t *testing.T, ctx context.Context, db *sql.DB, tableName string) {
+	t.Helper()
+
+	if tableExists(t, ctx, db, tableName) {
+		t.Fatalf("table %s exists, want missing", tableName)
+	}
+}
+
+func tableExists(t *testing.T, ctx context.Context, db *sql.DB, tableName string) bool {
+	t.Helper()
+
+	var count int
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*)
+FROM information_schema.tables
+WHERE table_schema = current_schema()
+  AND table_name = ?`,
+		tableName,
+	).Scan(&count); err != nil {
+		t.Fatalf("check table %s: %v", tableName, err)
+	}
+
+	return count == 1
+}
+
+func assertColumnType(t *testing.T, ctx context.Context, db *sql.DB, tableName string, columnName string, want string) {
+	t.Helper()
+
+	var dataType string
+	if err := db.QueryRowContext(
+		ctx,
+		`SELECT data_type
+FROM information_schema.columns
+WHERE table_schema = current_schema()
+  AND table_name = ?
+  AND column_name = ?`,
+		tableName,
+		columnName,
+	).Scan(&dataType); err != nil {
+		t.Fatalf("read %s.%s type: %v", tableName, columnName, err)
+	}
+	if !strings.EqualFold(dataType, want) {
+		t.Fatalf("%s.%s data_type = %q, want %q", tableName, columnName, dataType, want)
 	}
 }

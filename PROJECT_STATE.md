@@ -10,27 +10,27 @@
 - Direct dependencies staged for the recovery refactor:
   - `github.com/spf13/cobra` v1.10.2 for CLI parsing.
   - `github.com/duckdb/duckdb-go/v2` v2.10503.1 for the DuckDB `database/sql` driver.
-  - No app-level decimal package is selected yet; decimal handling remains string-based until a service or DuckDB mapping requires exact arithmetic.
+  - Decimal API inputs remain strings at service/HTTP boundaries; store persistence uses DuckDB `DECIMAL(18,8)` columns.
 - Package inventory:
   - `cmd/mina`: Cobra CLI entrypoint with help/version output, `serve`, and `migrate` commands.
   - `internal/runtime`: process config structs and validation, database open/create/migrate policy, service/store composition, and app handler wiring.
   - `internal/httpapi`: REST handler tree, health endpoint, account/category/tag/member/credit-limit-history/exchange-rate/transaction/record routes, JSON API error mapping, and generated OpenAPI contract subpackage.
   - `internal/services`: app-owned service package family. `accounts`, `categories`, `tags`, `members`, `exchangerates`, `creditlimits`, and `transactions` own their domain types, validation, use cases, and repository interfaces; `journalrecords` and `recordbulk` remain target skeletons.
   - `internal/models`: account/category/tag/member/credit-limit-history/exchange-rate/transaction data shapes and stable API error response models.
-  - `internal/store`: SQLite connection, migration, transaction helper, repository implementations, account/category/tag/member/credit-limit-history/exchange-rate/transaction and record bulk persistence, and test database helpers.
+  - `internal/store`: DuckDB connection, migration, transaction helper, repository implementations, account/category/tag/member/credit-limit-history/exchange-rate/transaction and record bulk persistence, and test database helpers.
   - `internal/apptest`: in-process app boundary test client that constructs apps through `internal/runtime`.
 - Database behavior:
-  - Local accounting state uses SQLite through `modernc.org/sqlite` v1.50.1.
+  - Local accounting state uses DuckDB through `github.com/duckdb/duckdb-go/v2` v2.10503.1.
   - App composition requires an explicit database path.
   - App composition can create a missing database file only when `CreateIfMissing` is true.
   - Migrations are upgrade-only and recorded in `schema_version`.
-  - Current schema version: `8`.
+  - Current schema version: `9`.
 - Transaction behavior:
   - `POST /transactions` creates a transaction and its journal records atomically.
   - Transactions require `initiated_date` in `YYYY-MM-DD` calendar-date format and at least two records.
   - Journal records validate active account, category, optional member, and tag references.
   - Journal record `currency` must be a three-letter uppercase code.
-  - Journal record `amount` and `amount_usd` are stored as non-zero decimal strings with at most 18 digits and 8 fractional digits.
+  - Journal record `amount` and `amount_usd` are accepted as non-zero decimal strings with at most 10 integer digits and 8 fractional digits and persisted as DuckDB `DECIMAL(18,8)`.
   - Transaction records must balance to zero by `amount_usd`.
   - Supported posting statuses are `pending`, `posted`, and `cancelled`.
   - Supported reconciliation statuses are `reconciled` and `unreconciled`.
@@ -63,7 +63,7 @@
   - `PATCH /exchange-rates/{exchange_rate_id}` updates the rate value for active exchange rates.
   - `DELETE /exchange-rates/{exchange_rate_id}` tombstones exchange rates.
   - Currency codes must be three-letter uppercase codes.
-  - `rate` is stored as a positive decimal string with at most 18 digits and 8 fractional digits.
+  - `rate` is accepted as a positive decimal string with at most 10 integer digits and 8 fractional digits and persisted as DuckDB `DECIMAL(18,8)`.
   - `effective_date` must use `YYYY-MM-DD` calendar-date format.
   - Active exchange rates must be unique per currency pair and effective date; tombstoned rows do not block recreation.
 - Credit limit history behavior:
@@ -72,7 +72,7 @@
   - `GET /credit-limit-history/{credit_limit_history_id}` reads non-tombstoned credit limit history entries by default.
   - `include_tombstoned=true` includes tombstoned credit limit history entries in get/list responses.
   - `DELETE /credit-limit-history/{credit_limit_history_id}` tombstones credit limit history entries.
-  - `credit_limit` is stored as a non-negative decimal string with at most 18 digits and 8 fractional digits.
+  - `credit_limit` is accepted as a non-negative decimal string with at most 10 integer digits and 8 fractional digits and persisted as DuckDB `DECIMAL(18,8)`.
   - `effective_date` must use `YYYY-MM-DD` calendar-date format.
   - Active credit limit history entries must be unique per account and effective date; tombstoned rows do not block recreation.
 - Account behavior:
@@ -128,7 +128,7 @@
   - `mina serve` supports `--host`, `--port`, `--create`, and `--migrate` flags for listener binding and database open/migration policy.
   - `mina migrate --db PATH` applies database migrations without starting an HTTP listener.
   - `mina migrate` supports `--create` to create a missing database file before applying migrations.
-  - `--create` must be supplied to create a missing database file; otherwise missing database paths are rejected before opening SQLite.
+  - `--create` must be supplied to create a missing database file; otherwise missing database paths are rejected before opening DuckDB.
   - `--migrate=false` opens an existing database without applying migrations and is rejected when combined with creation of a missing database.
   - `GET /health` returns `{"status":"ok"}`.
   - Missing routes and unsupported methods return the stable `{"error":{"code","message"}}` JSON envelope.

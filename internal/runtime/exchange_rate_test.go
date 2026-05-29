@@ -184,6 +184,16 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 		t.Fatalf("negative rate status = %d, want %d; body %s", negativeRate.StatusCode, http.StatusBadRequest, negativeRate.RawBody)
 	}
 
+	tooManyIntegerDigits := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/exchange-rates", models.CreateExchangeRateRequest{
+		FromCurrency:  "EUR",
+		ToCurrency:    "USD",
+		Rate:          "12345678901",
+		EffectiveDate: "2024-02-01",
+	})
+	if tooManyIntegerDigits.StatusCode != http.StatusBadRequest {
+		t.Fatalf("too many integer digits status = %d, want %d; body %s", tooManyIntegerDigits.StatusCode, http.StatusBadRequest, tooManyIntegerDigits.RawBody)
+	}
+
 	invalidDate := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/exchange-rates", models.CreateExchangeRateRequest{
 		FromCurrency:  "EUR",
 		ToCurrency:    "USD",

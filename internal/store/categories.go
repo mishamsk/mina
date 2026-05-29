@@ -126,7 +126,7 @@ func (s *CategoryStore) UpdateHidden(ctx context.Context, id int64, isHidden boo
 	row := s.db.QueryRowContext(
 		ctx,
 		`UPDATE category
-SET is_hidden = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
 WHERE category_id = ? AND tombstoned_at IS NULL
 RETURNING category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
 		isHidden,
@@ -148,8 +148,8 @@ func (s *CategoryStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.ExecContext(
 		ctx,
 		`UPDATE category
-SET tombstoned_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
-    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+SET tombstoned_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
 WHERE category_id = ? AND tombstoned_at IS NULL`,
 		id,
 	)
