@@ -56,18 +56,18 @@ This plan addresses every item in `docs/review.md`. Start with the durable docs 
   - [x] Required docs updated
 
 ### Commit 4: Move end-to-end coverage fully under testscript
-- [ ] Inventory current process-level CLI and REST tests and classify them as testscript end-to-end coverage or in-process tests.
-- [ ] Convert real-network REST API coverage to testscript instead of `go test ./cmd/mina -run TestRESTSmokeProcess`. (`docs/review.md`: `Justfile:31`)
-- [ ] Keep CLI process behavior coverage in testscript and ensure it is run only by the non-default integration recipe. (`docs/review.md`: `docs/architecture.md:101`)
-- [ ] Ensure default `just test` excludes all testscript end-to-end suites. (`docs/review.md`: `Justfile:19`)
-- [ ] Remove or rewrite obsolete Go test wrappers that only existed to invoke process smoke tests outside testscript.
-- [ ] Update package docs or `PROJECT_STATE.md` only if durable workflow shape changes after the recipe split.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test` passes without running testscript suites
-  - [ ] The non-default testscript integration recipe passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Inventory current process-level CLI and REST tests and classify them as testscript end-to-end coverage or in-process tests.
+- [x] Convert real-network REST API coverage to testscript instead of `go test ./cmd/mina -run TestRESTSmokeProcess`. (`docs/review.md`: `Justfile:31`)
+- [x] Keep CLI process behavior coverage in testscript and ensure it is run only by the non-default integration recipe. (`docs/review.md`: `docs/architecture.md:101`)
+- [x] Ensure default `just test` excludes all testscript end-to-end suites. (`docs/review.md`: `Justfile:19`)
+- [x] Remove or rewrite obsolete Go test wrappers that only existed to invoke process smoke tests outside testscript.
+- [x] Update package docs or `PROJECT_STATE.md` only if durable workflow shape changes after the recipe split.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test` passes without running testscript suites
+  - [x] The non-default testscript integration recipe passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 5: Build the in-process scenario test harness
 - [ ] Extend the test harness so normal tests use in-memory DuckDB, per-test schemas, and an in-process typed client that bypasses CLI and network. (`docs/review.md`: `docs/architecture.md:101`)
