@@ -126,6 +126,14 @@
   - Generated output: `internal/httpapi/openapi/openapi.gen.go`.
   - `oapi-codegen` remains the REST contract generator.
   - Generated-file policy: `docs/generated-files.md`.
+  - API decimal values are JSON strings, not JSON numbers; decimal schemas match DuckDB `DECIMAL(18,8)` with at most 10 integer digits and 8 fractional digits.
+  - Decimal responses are read from DuckDB `DECIMAL(18,8)` values and may use DuckDB-normalized scale.
+  - API enum values are lowercase; DuckDB enum values are uppercase and mapped in the store before HTTP responses are built.
+  - API date values are `YYYY-MM-DD` strings backed by DuckDB `DATE` columns.
+  - API timestamp values are strings read from DuckDB `TIMESTAMP` columns.
+  - The stable JSON error envelope is `{"error":{"code","message"}}`.
+  - Stage 1 transaction creation accepts only `source: "manual"`; the broader data-model `source` enum values are reserved for later import/recurring stages.
+  - `budget` exists in the DuckDB schema for the Phase 1 data model and has no Stage 1 REST API.
 - CLI and REST behavior:
   - `mina --help` and `mina help` print command usage.
   - `mina --version` prints the development version.

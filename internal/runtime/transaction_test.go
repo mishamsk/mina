@@ -81,6 +81,9 @@ func TestTransactionDuckDBMappingsBoundary(t *testing.T) {
 	if record.PostedDate == nil || *record.PostedDate != "2024-03-11" {
 		t.Fatalf("posted_date = %v, want 2024-03-11", record.PostedDate)
 	}
+	if record.Amount != "-12.34000000" || record.AmountUSD != "-12.34000000" {
+		t.Fatalf("amounts = %q/%q, want -12.34000000/-12.34000000", record.Amount, record.AmountUSD)
+	}
 	assertInt64s(t, record.TagIDs, []int64{refs.TagID})
 
 	var dbPostingStatus string
@@ -89,18 +92,19 @@ func TestTransactionDuckDBMappingsBoundary(t *testing.T) {
 	var dbPendingDate string
 	var dbPostedDate string
 	var dbCreatedAt string
+	var dbUpdatedAt string
 	var dbAmount string
 	var hasTag bool
 	if err := client.App().DB().QueryRowContext(
 		t.Context(),
 		`SELECT CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR),
-	CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(amount AS VARCHAR),
+	CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(updated_at AS VARCHAR), CAST(amount AS VARCHAR),
 	list_contains(tag_ids, ?)
 FROM journal_record
 WHERE record_id = ?`,
 		refs.TagID,
 		record.ID,
-	).Scan(&dbPostingStatus, &dbReconciliationStatus, &dbSource, &dbPendingDate, &dbPostedDate, &dbCreatedAt, &dbAmount, &hasTag); err != nil {
+	).Scan(&dbPostingStatus, &dbReconciliationStatus, &dbSource, &dbPendingDate, &dbPostedDate, &dbCreatedAt, &dbUpdatedAt, &dbAmount, &hasTag); err != nil {
 		t.Fatalf("read db-backed transaction mapping: %v", err)
 	}
 	if dbPostingStatus != "POSTED" || dbReconciliationStatus != "RECONCILED" || dbSource != "MANUAL" {
@@ -108,6 +112,9 @@ WHERE record_id = ?`,
 	}
 	if dbPendingDate != "2024-03-10" || dbPostedDate != "2024-03-11" {
 		t.Fatalf("db dates = %q/%q, want 2024-03-10/2024-03-11", dbPendingDate, dbPostedDate)
+	}
+	if record.CreatedAt != dbCreatedAt || record.UpdatedAt != dbUpdatedAt {
+		t.Fatalf("api timestamps = %q/%q, want db timestamps %q/%q", record.CreatedAt, record.UpdatedAt, dbCreatedAt, dbUpdatedAt)
 	}
 	if dbCreatedAt == "" || dbAmount != "-12.34000000" || !hasTag {
 		t.Fatalf("db timestamp/decimal/tag = %q/%q/%v, want timestamp/-12.34000000/true", dbCreatedAt, dbAmount, hasTag)

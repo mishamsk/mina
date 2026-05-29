@@ -180,25 +180,25 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 10: Align API DTO mapping with service and DuckDB types
-- [ ] Audit every OpenAPI schema against app-owned service types and the DuckDB data model.
-- [ ] Keep the stable JSON error envelope.
-- [ ] Keep external decimal JSON representation stable unless the REST contract is intentionally changed.
-- [ ] Explicitly map REST enum casing to service and DuckDB enum casing. Do not let DB enum strings leak accidentally through HTTP responses.
-- [ ] Explicitly map REST date strings to service date types and DuckDB `DATE`.
-- [ ] Explicitly map timestamps returned by the API from DuckDB `TIMESTAMP`.
-- [ ] Confirm Stage 1 API support for `source`: schema supports all data-model enum values, but REST validation may remain `manual` only if the business requirements still limit Stage 1 creation to manual source.
-- [ ] Confirm `budget` remains schema-only or add REST contract work if the product docs require a Stage 1 budget API.
-- [ ] Regenerate OpenAPI artifacts when API schemas or generated package paths change.
-- [ ] Update API boundary tests for all DTO/type conversions.
-- [ ] Update `PROJECT_STATE.md` with confirmed API contracts.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just openapi` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Audit every OpenAPI schema against app-owned service types and the DuckDB data model.
+- [x] Keep the stable JSON error envelope.
+- [x] Keep external decimal JSON representation stable unless the REST contract is intentionally changed.
+- [x] Explicitly map REST enum casing to service and DuckDB enum casing. Do not let DB enum strings leak accidentally through HTTP responses.
+- [x] Explicitly map REST date strings to service date types and DuckDB `DATE`.
+- [x] Explicitly map timestamps returned by the API from DuckDB `TIMESTAMP`.
+- [x] Confirm Stage 1 API support for `source`: schema supports all data-model enum values, but REST validation may remain `manual` only if the business requirements still limit Stage 1 creation to manual source.
+- [x] Confirm `budget` remains schema-only or add REST contract work if the product docs require a Stage 1 budget API.
+- [x] Regenerate OpenAPI artifacts when API schemas or generated package paths change.
+- [x] Update API boundary tests for all DTO/type conversions.
+- [x] Update `PROJECT_STATE.md` with confirmed API contracts.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just openapi` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 11: Add import-boundary enforcement and remove legacy packages
 - [ ] Add an import-boundary test or lint configuration owned by `just` to protect the architecture rules.

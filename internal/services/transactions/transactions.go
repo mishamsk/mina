@@ -394,11 +394,11 @@ func validateJournalRecord(index int, record JournalRecordInput) (*big.Int, erro
 	}
 	amount, err := parseSignedDecimal(record.Amount)
 	if err != nil || amount.Sign() == 0 {
-		return nil, services.InvalidRequest(indexedField(index, "amount") + " must be a non-zero decimal with at most 18 digits and 8 fractional digits")
+		return nil, services.InvalidRequest(indexedField(index, "amount") + " must be a non-zero decimal with at most 10 integer digits and 8 fractional digits")
 	}
 	amountUSD, err := parseSignedDecimal(record.AmountUSD)
 	if err != nil || amountUSD.Sign() == 0 {
-		return nil, services.InvalidRequest(indexedField(index, "amount_usd") + " must be a non-zero decimal with at most 18 digits and 8 fractional digits")
+		return nil, services.InvalidRequest(indexedField(index, "amount_usd") + " must be a non-zero decimal with at most 10 integer digits and 8 fractional digits")
 	}
 	if err := validateOptionalDate(indexedField(index, "pending_date"), record.PendingDate); err != nil {
 		return nil, err
@@ -473,7 +473,7 @@ func validateRecordSearchOptions(opts RecordSearchOptions) error {
 			continue
 		}
 		if _, err := parseSignedDecimal(*value); err != nil {
-			return services.InvalidRequest(name + " must be a decimal with at most 18 digits and 8 fractional digits")
+			return services.InvalidRequest(name + " must be a decimal with at most 10 integer digits and 8 fractional digits")
 		}
 	}
 

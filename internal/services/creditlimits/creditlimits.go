@@ -162,7 +162,7 @@ func validateCreditLimit(creditLimit string) error {
 		}
 	}
 	if digitCount > 18 {
-		return services.InvalidRequest("credit_limit must have at most 18 digits")
+		return services.InvalidRequest("credit_limit must have at most 10 integer digits and 8 fractional digits")
 	}
 
 	return nil

@@ -203,7 +203,7 @@ func validatePositiveDecimal(name string, value string) error {
 		}
 	}
 	if digitCount > 18 {
-		return services.InvalidRequest(name + " must have at most 18 digits")
+		return services.InvalidRequest(name + " must have at most 10 integer digits and 8 fractional digits")
 	}
 	if !hasNonZero {
 		return services.InvalidRequest(name + " must be greater than zero")
