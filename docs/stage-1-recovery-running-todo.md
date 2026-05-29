@@ -7,26 +7,26 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
 ## Tasks
 
 ### Commit 1: Correct the architecture map
-- [ ] Update `docs/architecture.md` as a standalone architecture commit before code refactors.
-- [ ] Specify DuckDB as the required persistent database engine and DuckDB SQL as the schema/query dialect.
-- [ ] Make `docs/phase-1-data-model.md` the source of truth for persistent tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
-- [ ] Replace the horizontal `models`/`controllers`/`routers`/`app` layering description with the target Go package boundaries:
+- [x] Update `docs/architecture.md` as a standalone architecture commit before code refactors.
+- [x] Specify DuckDB as the required persistent database engine and DuckDB SQL as the schema/query dialect.
+- [x] Make `docs/phase-1-data-model.md` the source of truth for persistent tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
+- [x] Replace the horizontal `models`/`controllers`/`routers`/`app` layering description with the target Go package boundaries:
   - `cmd/mina`: one binary and CLI command tree.
   - `internal/runtime`: config and manual composition root.
   - `internal/httpapi`: REST/OpenAPI adapter and HTTP DTO mapping.
   - app-owned service packages: domain types, validation, use cases, and repository interfaces.
   - `internal/store`: DuckDB open/migrate/query code and repository implementations.
   - future `internal/tui` and `internal/background` adapters only when their stages require them.
-- [ ] Document that app service packages must not import HTTP, OpenAPI, TUI, scheduler, SQL, generated DB, or process I/O packages.
-- [ ] Document that `internal/store` owns DB-facing row types, generated query code if used, migrations, transactions, DuckDB-specific error mapping, and app-to-DB type conversion.
-- [ ] Document that Cobra owns CLI parsing and command help; no new hand-rolled flag parser.
-- [ ] Keep Stage 1 UI scope unchanged: no TUI or web UI implementation.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Document that app service packages must not import HTTP, OpenAPI, TUI, scheduler, SQL, generated DB, or process I/O packages.
+- [x] Document that `internal/store` owns DB-facing row types, generated query code if used, migrations, transactions, DuckDB-specific error mapping, and app-to-DB type conversion.
+- [x] Document that Cobra owns CLI parsing and command help; no new hand-rolled flag parser.
+- [x] Keep Stage 1 UI scope unchanged: no TUI or web UI implementation.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 2: Add target package skeleton and dependency decisions
 - [ ] Add or update package docs for `internal/runtime`, `internal/httpapi`, `internal/store`, and the app-owned service package pattern.

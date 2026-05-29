@@ -11,20 +11,19 @@ Mina is a local-first personal finance system for one household.
 The active scope is Phase 1 Stage 1:
 
 - Go application.
-- Single local process.
+- One `cmd/mina` binary.
 - REST API only.
-- No UI.
+- No TUI or web UI implementation.
 - Portable accounting state in one local DuckDB database file.
 
 ## Core Terms
 
 - Database file: portable accounting state. It must be usable without local config.
 - Local config: operational settings such as default database path, host, and port.
-- Model: data shape and API/domain structs. Models are data-focused.
-- Store: migrations, SQL, transactions, and database access helpers.
-- Controller: domain use case. Owns validation and double-entry checks.
-- Router: HTTP route and request/response mapping.
-- App: in-process composition of routers, controllers, stores, config, and database handles.
+- Service package: app-owned domain types, validation, use cases, and repository interfaces.
+- Store: DuckDB open/migrate/query code and repository implementations.
+- HTTP API: REST/OpenAPI adapter, HTTP request/response mapping, and status mapping.
+- Runtime: in-process composition of config, database handles, stores, services, HTTP adapters, and listeners.
 - Boundary scenario test: test that drives public behavior through an app or CLI/API boundary.
 
 ## Where To Look
@@ -34,32 +33,37 @@ The active scope is Phase 1 Stage 1:
 - Current implementation inventory: `PROJECT_STATE.md`.
 - Running work checklist template: `docs/running_todo_template.md`.
 
-## Layering
+## Package Boundaries
 
-Imports and runtime knowledge flow downward. Composition may import every layer.
-Lower layers must not import higher layers.
+Imports and runtime knowledge flow inward toward app-owned service packages. Composition may import every layer.
 
-1. Models and shared contracts.
-2. Store: database connection use, migrations, query helpers, and transactions.
-3. Controllers: domain use cases, validation, and orchestration.
-4. Routers: REST endpoints, DTO mapping, HTTP status mapping, and request parsing.
-5. CLI and app composition: config, database open/create, server startup, logging, and process I/O.
+- `cmd/mina`: one binary and Cobra command tree. Cobra owns CLI parsing and command help. Do not add a new hand-rolled flag parser.
+- `internal/runtime`: config, open/create/migrate policy, and manual composition root.
+- `internal/httpapi`: REST/OpenAPI adapter, generated REST contract code if colocated, HTTP DTO mapping, route registration, request parsing, and HTTP status/error mapping.
+- App-owned service packages: domain types, validation, use cases, and repository interfaces for Stage 1 capabilities.
+- `internal/store`: DuckDB driver access, migrations, transactions, query code, and repository implementations.
+- Future adapters such as `internal/tui` and `internal/background`: added only when their stages require them.
 
 Rules:
 
-- Routers call controllers. Routers do not contain domain decisions.
-- Controllers call stores. Controllers do not build HTTP responses.
-- Stores own SQL. Stores do not know HTTP, CLI flags, or process config.
-- Models do not open files, run SQL, parse flags, or start servers.
+- Service packages must not import HTTP, OpenAPI, TUI, scheduler, SQL, generated DB, Cobra, process I/O, or runtime composition packages.
+- Service packages own domain validation and use-case decisions.
+- `internal/httpapi` calls services and maps transport DTOs. It does not open databases, parse CLI flags, own SQL, or make domain decisions.
+- `internal/store` owns DB-facing row types, generated query code if used, migrations, transactions, DuckDB-specific error mapping, and app-to-DB type conversion.
+- `internal/store` does not know HTTP, OpenAPI, Cobra, or runtime composition.
+- `internal/runtime` wires concrete implementations manually. Avoid hidden global state for database handles, config, clocks, listeners, or services.
 - Shared contracts belong at the lowest layer that can own them.
 
 ## Persistent State
 
-- Accounting state lives in an attached DuckDB database file.
+- Accounting state lives in one DuckDB database file.
+- DuckDB is the required persistent database engine.
+- DuckDB SQL is the schema and query dialect.
+- `docs/phase-1-data-model.md` is the source of truth for persistent tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
 - Local config is operational state only.
 - Config must not be required to interpret the accounting database.
 - The selected database path comes from explicit CLI input or local config.
-- Operational caches, if added, must be rebuildable and reside in app main in-memory DuckDB database to which persistent accounting databases is attached. 
+- Operational caches, if added, must be rebuildable and reside outside the portable accounting state unless explicitly documented.
 - Exports are explicit user actions.
 
 ## REST API
@@ -75,7 +79,8 @@ Rules:
 
 - Migrations are versioned and upgrade-only.
 - The database stores its schema version.
-- Database open/create/migrate policy belongs to app composition.
+- Database open/create/migrate policy belongs to `internal/runtime`.
+- DuckDB open, migration, query, and transaction code belongs to `internal/store`.
 - Query helpers operate on provided database handles.
 - Database transactions wrap multi-row domain changes.
 - Double-entry transactions must be persisted atomically.
@@ -83,9 +88,10 @@ Rules:
 ## Hard Rules
 
 - No UI work in Phase 1 Stage 1.
-- No hidden global state for database handles, config, clocks, or listeners.
-- No direct SQL in routers.
-- No HTTP concerns in stores or models.
+- No hand-rolled CLI parser; use Cobra and pflag through `cmd/mina`.
+- No hidden global state for database handles, config, clocks, listeners, or services.
+- No direct SQL in HTTP adapters, runtime composition, or service packages.
+- No HTTP concerns in store or service packages.
 - No domain validation hidden in transport mapping.
 - No string-built SQL with user input.
 - No reporting features in Phase 1 Stage 1 unless scope changes.
@@ -102,7 +108,7 @@ Mina tests behavior at boundaries. Do not build a unit-test suite around private
 - In-memory tests should use a fresh temporary database or isolated in-memory database.
 - Scenario shape: perform an action, then read through another public path and assert persisted behavior.
 - Example: add a transaction, then list transactions and verify it is returned.
-- Do not mock controllers or stores for normal behavior tests.
+- Do not mock controllers, services, or stores for normal behavior tests.
 - Keep a small number of true process tests.
 - True process tests cover CLI behavior and real JSON REST behavior.
 - True process tests are not required on every commit.
