@@ -15,7 +15,7 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
 - [x] Add a compile-time assertion that the `internal/httpapi` server implementation satisfies the generated strict-server interface.
 - [x] Add a compile-only implementation stub or test fixture if needed to make missing operation coverage fail at compile time.
 - [x] Document the generated server output in `docs/generated-files.md`.
-- [ ] Verification
+- [x] Verification
   - [x] `just fmt` passes
   - [x] `just openapi` passes
   - [x] `just test-boundary` passes for touched behavior
@@ -41,7 +41,7 @@ Stage 1 remains REST API only. Keep `api/openapi.yaml` as the REST contract sour
 - [x] Preserve current process behavior for `mina serve` and in-process boundary tests.
 - [x] Add or update tests for panic recovery, access logging mode selection, quiet mode, access-log file output, timeout behavior if externally observable, and route method handling.
 - [x] Update `PROJECT_STATE.md` with the router dependency, middleware behavior, and access log behavior.
-- [ ] Verification
+- [x] Verification
   - [x] `just fmt` passes
   - [x] `just test-boundary` passes for touched behavior
   - [x] `just test` passes
