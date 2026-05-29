@@ -14,7 +14,7 @@ The active scope is Phase 1 Stage 1:
 - Single local process.
 - REST API only.
 - No UI.
-- Portable accounting state in one local database file.
+- Portable accounting state in one local DuckDB database file.
 
 ## Core Terms
 
@@ -55,11 +55,11 @@ Rules:
 
 ## Persistent State
 
-- Accounting state lives in the database file.
+- Accounting state lives in an attached DuckDB database file.
 - Local config is operational state only.
 - Config must not be required to interpret the accounting database.
 - The selected database path comes from explicit CLI input or local config.
-- Operational caches, if added, must be rebuildable.
+- Operational caches, if added, must be rebuildable and reside in app main in-memory DuckDB database to which persistent accounting databases is attached. 
 - Exports are explicit user actions.
 
 ## REST API
