@@ -38,7 +38,7 @@ func (s *AccountStore) Create(ctx context.Context, input accounts.CreateInput) (
 			ctx,
 			`INSERT INTO account (fqn, is_hidden, currency, external_id, external_system)
 VALUES (?, ?, ?, ?, ?)
-RETURNING account_id, fqn, is_hidden, currency, external_id, external_system, created_at, updated_at, tombstoned_at`,
+RETURNING account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 			input.IsHidden,
 			input.Currency,
@@ -64,7 +64,7 @@ RETURNING account_id, fqn, is_hidden, currency, external_id, external_system, cr
 
 // Get returns an account by ID.
 func (s *AccountStore) Get(ctx context.Context, id int64, includeTombstoned bool) (accounts.Account, error) {
-	query := `SELECT account_id, fqn, is_hidden, currency, external_id, external_system, created_at, updated_at, tombstoned_at
+	query := `SELECT account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM account
 WHERE account_id = ?`
 	args := []any{id}
@@ -85,7 +85,7 @@ WHERE account_id = ?`
 
 // List returns accounts in deterministic hierarchy order.
 func (s *AccountStore) List(ctx context.Context, opts accounts.ListOptions) ([]accounts.Account, error) {
-	query := `SELECT account_id, fqn, is_hidden, currency, external_id, external_system, created_at, updated_at, tombstoned_at
+	query := `SELECT account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM account
 WHERE 1 = 1`
 	args := []any{}
@@ -133,7 +133,7 @@ SET is_hidden = ?,
     external_system = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE account_id = ? AND tombstoned_at IS NULL
-RETURNING account_id, fqn, is_hidden, currency, external_id, external_system, created_at, updated_at, tombstoned_at`,
+RETURNING account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 		*input.IsHidden,
 		input.ExternalID,
 		input.ExternalSystem,
@@ -184,14 +184,19 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	var currency sql.NullString
 	var externalID sql.NullString
 	var externalSystem sql.NullString
+	var parentFQN sql.NullString
 	var tombstonedAt sql.NullString
 	if err := scanner.Scan(
 		&account.ID,
 		&account.FQN,
+		&account.Kind,
 		&account.IsHidden,
 		&currency,
 		&externalID,
 		&externalSystem,
+		&parentFQN,
+		&account.Name,
+		&account.Level,
 		&account.CreatedAt,
 		&account.UpdatedAt,
 		&tombstonedAt,
@@ -206,6 +211,9 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	}
 	if externalSystem.Valid {
 		account.ExternalSystem = &externalSystem.String
+	}
+	if parentFQN.Valid {
+		account.ParentFQN = &parentFQN.String
 	}
 	if tombstonedAt.Valid {
 		account.TombstonedAt = &tombstonedAt.String

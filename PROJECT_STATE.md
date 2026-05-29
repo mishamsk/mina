@@ -55,6 +55,11 @@
   - Dynamic SQL sort identifiers are selected from store-owned allowlists; user values use parameter binding.
   - `limit` is optional and must be between `1` and `500`; `offset` is optional and must be non-negative.
   - Default list responses remain unpaginated and use deterministic endpoint-specific ordering.
+- Store mapping behavior:
+  - Account, category, and tag hierarchy fields are DuckDB generated virtual columns and are read through repository queries.
+  - Journal record tags are persisted as `journal_record.tag_ids INTEGER[]`; there is no journal record tag join table.
+  - DuckDB enum values are stored uppercase and mapped back to lowercase service/API values before responses leave the store.
+  - Active uniqueness is enforced by DuckDB expression indexes for non-tombstoned rows and by repository prechecks for stable API conflict messages.
 - Exchange rate behavior:
   - `POST /exchange-rates` creates historical exchange rates.
   - `GET /exchange-rates/{exchange_rate_id}` reads non-tombstoned exchange rates by default.

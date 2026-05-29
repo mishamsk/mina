@@ -87,7 +87,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Account, error
 		return Account{}, err
 	}
 
-	return withHierarchy(account), nil
+	return account, nil
 }
 
 // Get returns an account by ID.
@@ -104,20 +104,12 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ac
 		return Account{}, err
 	}
 
-	return withHierarchy(account), nil
+	return account, nil
 }
 
 // List returns accounts using default visibility rules unless explicitly overridden.
 func (s *Service) List(ctx context.Context, opts ListOptions) ([]Account, error) {
-	accounts, err := s.repo.List(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-	for index := range accounts {
-		accounts[index] = withHierarchy(accounts[index])
-	}
-
-	return accounts, nil
+	return s.repo.List(ctx, opts)
 }
 
 // UpdateMutable validates and updates account mutable fields.
@@ -140,7 +132,7 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 		return Account{}, err
 	}
 
-	return withHierarchy(account), nil
+	return account, nil
 }
 
 // Delete tombstones an account.
@@ -172,25 +164,6 @@ func validateFQN(fqn string) error {
 	}
 
 	return nil
-}
-
-func withHierarchy(account Account) Account {
-	account.ParentFQN, account.Name, account.Level = hierarchyFields(account.FQN)
-	account.Kind = strings.Split(account.FQN, ":")[0]
-
-	return account
-}
-
-func hierarchyFields(fqn string) (*string, string, int) {
-	segments := strings.Split(fqn, ":")
-	name := segments[len(segments)-1]
-	level := len(segments) - 1
-	if len(segments) == 1 {
-		return nil, name, level
-	}
-	parent := strings.Join(segments[:len(segments)-1], ":")
-
-	return &parent, name, level
 }
 
 func validateCurrency(currency *string) error {

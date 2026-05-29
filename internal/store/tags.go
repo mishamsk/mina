@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"mina.local/mina/internal/models"
 	"mina.local/mina/internal/services"
 	"mina.local/mina/internal/services/tags"
 )
@@ -39,7 +38,7 @@ func (s *TagStore) Create(ctx context.Context, input tags.CreateInput) (tags.Tag
 			ctx,
 			`INSERT INTO tag (fqn, is_hidden)
 VALUES (?, ?)
-RETURNING tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
+RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 			input.IsHidden,
 		)
@@ -62,7 +61,7 @@ RETURNING tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
 
 // Get returns a tag by ID.
 func (s *TagStore) Get(ctx context.Context, id int64, includeTombstoned bool) (tags.Tag, error) {
-	query := `SELECT tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
+	query := `SELECT tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM tag
 WHERE tag_id = ?`
 	args := []any{id}
@@ -83,7 +82,7 @@ WHERE tag_id = ?`
 
 // List returns tags in deterministic hierarchy order.
 func (s *TagStore) List(ctx context.Context, opts tags.ListOptions) ([]tags.Tag, error) {
-	query := `SELECT tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
+	query := `SELECT tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM tag
 WHERE 1 = 1`
 	args := []any{}
@@ -128,7 +127,7 @@ func (s *TagStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (t
 		`UPDATE tag
 SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
 WHERE tag_id = ? AND tombstoned_at IS NULL
-RETURNING tag_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
+RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 		isHidden,
 		id,
 	)
@@ -174,22 +173,28 @@ type tagScanner interface {
 
 func scanTag(scanner tagScanner) (tags.Tag, error) {
 	var tag tags.Tag
+	var parentFQN sql.NullString
 	var tombstonedAt sql.NullString
 	if err := scanner.Scan(
 		&tag.ID,
 		&tag.FQN,
 		&tag.IsHidden,
+		&parentFQN,
+		&tag.Name,
+		&tag.Level,
 		&tag.CreatedAt,
 		&tag.UpdatedAt,
 		&tombstonedAt,
 	); err != nil {
 		return tags.Tag{}, err
 	}
+	if parentFQN.Valid {
+		tag.ParentFQN = &parentFQN.String
+	}
 	if tombstonedAt.Valid {
 		tag.TombstonedAt = &tombstonedAt.String
 	}
 
-	tag.ParentFQN, tag.Name, tag.Level = models.HierarchyFields(tag.FQN)
 	return tag, nil
 }
 

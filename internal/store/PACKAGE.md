@@ -12,6 +12,7 @@
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
 - Active-reference checks are repository-owned instead of DuckDB foreign keys for mutable/tombstoned parent rows.
 - Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; repositories also pre-check active uniqueness to return stable conflict messages.
+- Account, category, and tag hierarchy fields are read from DuckDB generated virtual columns.
 
 ## Boundaries
 

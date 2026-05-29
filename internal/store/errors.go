@@ -3,6 +3,8 @@ package store
 import (
 	"errors"
 	"strings"
+
+	duckdb "github.com/duckdb/duckdb-go/v2"
 )
 
 var (
@@ -15,5 +17,23 @@ var (
 )
 
 func isUniqueConstraintError(err error) bool {
-	return strings.Contains(strings.ToLower(err.Error()), "constraint")
+	if !isDuckDBConstraintError(err) {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+
+	return strings.Contains(message, "unique") || strings.Contains(message, "duplicate")
+}
+
+func isForeignKeyConstraintError(err error) bool {
+	if !isDuckDBConstraintError(err) {
+		return false
+	}
+
+	return strings.Contains(strings.ToLower(err.Error()), "foreign key")
+}
+
+func isDuckDBConstraintError(err error) bool {
+	var duckErr *duckdb.Error
+	return errors.As(err, &duckErr) && duckErr.Type == duckdb.ErrorTypeConstraint
 }

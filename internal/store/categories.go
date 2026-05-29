@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"mina.local/mina/internal/models"
 	"mina.local/mina/internal/services"
 	"mina.local/mina/internal/services/categories"
 )
@@ -39,7 +38,7 @@ func (s *CategoryStore) Create(ctx context.Context, input categories.CreateInput
 			ctx,
 			`INSERT INTO category (fqn, is_hidden)
 VALUES (?, ?)
-RETURNING category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
+RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 			input.IsHidden,
 		)
@@ -62,7 +61,7 @@ RETURNING category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
 
 // Get returns a category by ID.
 func (s *CategoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (categories.Category, error) {
-	query := `SELECT category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
+	query := `SELECT category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM category
 WHERE category_id = ?`
 	args := []any{id}
@@ -83,7 +82,7 @@ WHERE category_id = ?`
 
 // List returns categories in deterministic hierarchy order.
 func (s *CategoryStore) List(ctx context.Context, opts categories.ListOptions) ([]categories.Category, error) {
-	query := `SELECT category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at
+	query := `SELECT category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM category
 WHERE 1 = 1`
 	args := []any{}
@@ -128,7 +127,7 @@ func (s *CategoryStore) UpdateHidden(ctx context.Context, id int64, isHidden boo
 		`UPDATE category
 SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
 WHERE category_id = ? AND tombstoned_at IS NULL
-RETURNING category_id, fqn, is_hidden, created_at, updated_at, tombstoned_at`,
+RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 		isHidden,
 		id,
 	)
@@ -174,22 +173,28 @@ type categoryScanner interface {
 
 func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	var category categories.Category
+	var parentFQN sql.NullString
 	var tombstonedAt sql.NullString
 	if err := scanner.Scan(
 		&category.ID,
 		&category.FQN,
 		&category.IsHidden,
+		&parentFQN,
+		&category.Name,
+		&category.Level,
 		&category.CreatedAt,
 		&category.UpdatedAt,
 		&tombstonedAt,
 	); err != nil {
 		return categories.Category{}, err
 	}
+	if parentFQN.Valid {
+		category.ParentFQN = &parentFQN.String
+	}
 	if tombstonedAt.Valid {
 		category.TombstonedAt = &tombstonedAt.String
 	}
 
-	category.ParentFQN, category.Name, category.Level = models.HierarchyFields(category.FQN)
 	return category, nil
 }
 

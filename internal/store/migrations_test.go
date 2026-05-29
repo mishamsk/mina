@@ -74,6 +74,7 @@ func TestMigrateCreatesDuckDBPhaseOneSchema(t *testing.T) {
 	assertColumnType(t, ctx, db, "journal_record", "amount_usd", "DECIMAL(18,8)")
 	assertColumnType(t, ctx, db, "journal_record", "pending_date", "DATE")
 	assertColumnType(t, ctx, db, "journal_record", "created_at", "TIMESTAMP")
+	assertColumnType(t, ctx, db, "journal_record", "posting_status", "ENUM('PENDING', 'POSTED', 'CANCELLED')")
 
 	var transactionID int64
 	if err := db.QueryRowContext(
@@ -89,6 +90,19 @@ func TestMigrateCreatesDuckDBPhaseOneSchema(t *testing.T) {
 
 	if _, err := db.ExecContext(ctx, "INSERT INTO category (fqn) VALUES (?)", "Food:Dining"); err != nil {
 		t.Fatalf("insert active category: %v", err)
+	}
+	var parentFQN string
+	var name string
+	var level int
+	if err := db.QueryRowContext(
+		ctx,
+		"SELECT parent_fqn, name, level FROM category WHERE fqn = ?",
+		"Food:Dining",
+	).Scan(&parentFQN, &name, &level); err != nil {
+		t.Fatalf("read generated category hierarchy: %v", err)
+	}
+	if parentFQN != "Food" || name != "Dining" || level != 1 {
+		t.Fatalf("generated category hierarchy = %q/%q/%d, want Food/Dining/1", parentFQN, name, level)
 	}
 	if _, err := db.ExecContext(ctx, "INSERT INTO category (fqn) VALUES (?)", "Food:Dining"); err == nil {
 		t.Fatalf("insert duplicate active category succeeded, want active uniqueness error")

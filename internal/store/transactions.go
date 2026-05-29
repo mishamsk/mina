@@ -541,6 +541,9 @@ RETURNING record_id, transaction_id, account_id, member_id, currency, CAST(amoun
 
 	record, err := scanJournalRecord(row)
 	if err != nil {
+		if isForeignKeyConstraintError(err) {
+			return transactions.JournalRecord{}, services.ErrInvalidReference
+		}
 		return transactions.JournalRecord{}, fmt.Errorf("insert journal record: %w", err)
 	}
 	record.TagIDs = append([]int64{}, req.TagIDs...)

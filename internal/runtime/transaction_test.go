@@ -57,6 +57,63 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	}
 }
 
+func TestTransactionDuckDBMappingsBoundary(t *testing.T) {
+	client := apptest.New(t)
+	refs := createTransactionRefs(t, client)
+
+	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs))
+	if created.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	}
+	record := created.Body.Records[0]
+	if record.PostingStatus != models.PostingStatusPosted {
+		t.Fatalf("posting_status = %q, want %q", record.PostingStatus, models.PostingStatusPosted)
+	}
+	if record.ReconciliationStatus != models.ReconciliationStatusReconciled {
+		t.Fatalf("reconciliation_status = %q, want %q", record.ReconciliationStatus, models.ReconciliationStatusReconciled)
+	}
+	if record.Source != models.SourceManual {
+		t.Fatalf("source = %q, want %q", record.Source, models.SourceManual)
+	}
+	if record.PendingDate == nil || *record.PendingDate != "2024-03-10" {
+		t.Fatalf("pending_date = %v, want 2024-03-10", record.PendingDate)
+	}
+	if record.PostedDate == nil || *record.PostedDate != "2024-03-11" {
+		t.Fatalf("posted_date = %v, want 2024-03-11", record.PostedDate)
+	}
+	assertInt64s(t, record.TagIDs, []int64{refs.TagID})
+
+	var dbPostingStatus string
+	var dbReconciliationStatus string
+	var dbSource string
+	var dbPendingDate string
+	var dbPostedDate string
+	var dbCreatedAt string
+	var dbAmount string
+	var hasTag bool
+	if err := client.App().DB().QueryRowContext(
+		t.Context(),
+		`SELECT CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR),
+	CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(amount AS VARCHAR),
+	list_contains(tag_ids, ?)
+FROM journal_record
+WHERE record_id = ?`,
+		refs.TagID,
+		record.ID,
+	).Scan(&dbPostingStatus, &dbReconciliationStatus, &dbSource, &dbPendingDate, &dbPostedDate, &dbCreatedAt, &dbAmount, &hasTag); err != nil {
+		t.Fatalf("read db-backed transaction mapping: %v", err)
+	}
+	if dbPostingStatus != "POSTED" || dbReconciliationStatus != "RECONCILED" || dbSource != "MANUAL" {
+		t.Fatalf("db enum values = %q/%q/%q, want POSTED/RECONCILED/MANUAL", dbPostingStatus, dbReconciliationStatus, dbSource)
+	}
+	if dbPendingDate != "2024-03-10" || dbPostedDate != "2024-03-11" {
+		t.Fatalf("db dates = %q/%q, want 2024-03-10/2024-03-11", dbPendingDate, dbPostedDate)
+	}
+	if dbCreatedAt == "" || dbAmount != "-12.34000000" || !hasTag {
+		t.Fatalf("db timestamp/decimal/tag = %q/%q/%v, want timestamp/-12.34000000/true", dbCreatedAt, dbAmount, hasTag)
+	}
+}
+
 func TestTransactionRejectsImbalanceAndDoesNotPersist(t *testing.T) {
 	client := apptest.New(t)
 	refs := createTransactionRefs(t, client)

@@ -162,22 +162,22 @@ Stage 1 remains REST API only. The target implementation is one `cmd/mina` binar
   - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 9: Align store queries and DB-facing type mappings with DuckDB
-- [ ] Update all repository implementations to use DuckDB-compatible SQL.
-- [ ] Map DuckDB `DATE`, `TIMESTAMP`, `BOOLEAN`, `DECIMAL(18,8)`, enum, sequence-generated ID, and `INTEGER[]` values to app-owned service types.
-- [ ] Replace Go-derived hierarchy output with reads from DuckDB generated virtual columns where the schema owns those fields.
-- [ ] Replace join-table tag persistence with `journal_record.tag_ids INTEGER[]` reads and writes.
-- [ ] Keep user-provided SQL values parameter-bound and keep dynamic identifiers selected from store-owned allowlists.
-- [ ] Replace SQLite constraint detection with DuckDB-specific constraint and foreign-key error mapping.
-- [ ] Preserve active/tombstoned filtering and deterministic ordering for all list/search endpoints.
-- [ ] Add store and boundary tests for DuckDB decimal precision, enum casing, generated columns, tag arrays, uniqueness, foreign keys, and date/timestamp scans.
-- [ ] Update `PROJECT_STATE.md` with any behavior or durable state changes.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test-boundary` passes for touched behavior
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
-  - [ ] Post-commit `/review` subagent run and fixes applied
+- [x] Update all repository implementations to use DuckDB-compatible SQL.
+- [x] Map DuckDB `DATE`, `TIMESTAMP`, `BOOLEAN`, `DECIMAL(18,8)`, enum, sequence-generated ID, and `INTEGER[]` values to app-owned service types.
+- [x] Replace Go-derived hierarchy output with reads from DuckDB generated virtual columns where the schema owns those fields.
+- [x] Replace join-table tag persistence with `journal_record.tag_ids INTEGER[]` reads and writes.
+- [x] Keep user-provided SQL values parameter-bound and keep dynamic identifiers selected from store-owned allowlists.
+- [x] Replace SQLite constraint detection with DuckDB-specific constraint and foreign-key error mapping.
+- [x] Preserve active/tombstoned filtering and deterministic ordering for all list/search endpoints.
+- [x] Add store and boundary tests for DuckDB decimal precision, enum casing, generated columns, tag arrays, uniqueness, foreign keys, and date/timestamp scans.
+- [x] Update `PROJECT_STATE.md` with any behavior or durable state changes.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test-boundary` passes for touched behavior
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
+  - [x] Post-commit `/review` subagent run and fixes applied
 
 ### Commit 10: Align API DTO mapping with service and DuckDB types
 - [ ] Audit every OpenAPI schema against app-owned service types and the DuckDB data model.
