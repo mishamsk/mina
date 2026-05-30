@@ -98,16 +98,18 @@ Rules:
 
 ## Testing
 
-Mina has two test classes: in-process high-level boundary tests and testscript-driven end-to-end integration tests. Do not build a unit-test suite around private helpers.
+Mina has exactly two app test classes: normal in-process app tests and testscript-driven end-to-end integration tests. Do not build a unit-test suite around private helpers.
 
-- Normal tests are in-process high-level boundary tests.
+- Normal in-process app tests live in `internal/apptest/runtime`.
 - Normal tests bypass CLI and network listeners.
 - Normal tests exercise app logic through an in-memory client, in-memory DuckDB, and per-test schemas.
+- `internal/apptest` owns reusable harness code for normal in-process app tests.
 - Normal tests should use reusable harness building blocks so test bodies read as user scenarios instead of setup boilerplate.
 - Basic persistence checks may create through the in-memory client and assert attached database state directly.
 - Other scenario tests should use the in-memory client for fixture setup and assertions.
 - Good tests are independent of implementation details such as SQL construction, router internals, repository methods, and private service helpers.
 - Do not mock controllers, services, or stores for normal behavior tests.
+- End-to-end integration tests live under the `cmd/mina` testscript integration suite.
 - End-to-end integration tests run only through testscript.
 - End-to-end integration tests are not run by default.
 - End-to-end integration tests own real-network REST tests, CLI tests, and later TUI tests.

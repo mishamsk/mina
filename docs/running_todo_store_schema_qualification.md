@@ -82,13 +82,13 @@ Normal in-process app tests move out of `internal/runtime` into one package dire
   - [x] Required docs updated
 
 ### Commit 6: Update Test Architecture Documentation
-- [ ] Update `docs/architecture.md` to state that Mina has exactly two app test classes.
-- [ ] Document that normal in-process app tests live in `internal/apptest/runtime`.
-- [ ] Document that end-to-end integration tests live under the `cmd/mina` testscript integration suite.
-- [ ] Document that `internal/apptest` owns reusable harness code for normal in-process app tests.
-- [ ] Remove or revise any architecture wording that implies normal in-process app tests belong in `internal/runtime`.
-- [ ] Verification
-  - [ ] Required docs updated
+- [x] Update `docs/architecture.md` to state that Mina has exactly two app test classes.
+- [x] Document that normal in-process app tests live in `internal/apptest/runtime`.
+- [x] Document that end-to-end integration tests live under the `cmd/mina` testscript integration suite.
+- [x] Document that `internal/apptest` owns reusable harness code for normal in-process app tests.
+- [x] Remove or revise any architecture wording that implies normal in-process app tests belong in `internal/runtime`.
+- [x] Verification
+  - [x] Required docs updated
 
 ## Deferred Verification
 
