@@ -1,4 +1,4 @@
-package architecture_test
+package runtime_test
 
 import (
 	"go/parser"
@@ -50,7 +50,7 @@ func repoRoot(t *testing.T) string {
 		t.Fatal("locate import-boundary test file")
 	}
 
-	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
+	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", ".."))
 }
 
 func collectGoFiles(t *testing.T, root string) []goFile {
