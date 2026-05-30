@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"mina.local/mina/internal/httpapi/openapi"
-	"mina.local/mina/internal/services"
 	"mina.local/mina/internal/services/transactions"
 )
 
@@ -18,9 +17,6 @@ func (s *strictServer) ListTransactions(ctx context.Context, _ openapi.ListTrans
 }
 
 func (s *strictServer) CreateTransaction(ctx context.Context, request openapi.CreateTransactionRequestObject) (openapi.CreateTransactionResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	transaction, err := s.deps.Transactions.Create(ctx, transactionAPIInput(request.Body.InitiatedDate, request.Body.Records))
 	if err != nil {
 		return nil, err
@@ -47,9 +43,6 @@ func (s *strictServer) GetTransaction(ctx context.Context, request openapi.GetTr
 }
 
 func (s *strictServer) ReplaceTransaction(ctx context.Context, request openapi.ReplaceTransactionRequestObject) (openapi.ReplaceTransactionResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	transaction, err := s.deps.Transactions.Replace(ctx, request.TransactionId, transactionAPIInput(request.Body.InitiatedDate, request.Body.Records))
 	if err != nil {
 		return nil, err
@@ -81,9 +74,6 @@ func (s *strictServer) SearchAccountJournalRecords(ctx context.Context, request 
 }
 
 func (s *strictServer) BulkCategorizeJournalRecords(ctx context.Context, request openapi.BulkCategorizeJournalRecordsRequestObject) (openapi.BulkCategorizeJournalRecordsResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	response, err := s.deps.Transactions.BulkCategorize(ctx, request.Body.RecordIds, request.Body.CategoryId)
 	if err != nil {
 		return nil, err
@@ -93,9 +83,6 @@ func (s *strictServer) BulkCategorizeJournalRecords(ctx context.Context, request
 }
 
 func (s *strictServer) BulkUpdateJournalRecordTags(ctx context.Context, request openapi.BulkUpdateJournalRecordTagsRequestObject) (openapi.BulkUpdateJournalRecordTagsResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	response, err := s.deps.Transactions.BulkUpdateTags(
 		ctx,
 		request.Body.RecordIds,
@@ -110,9 +97,6 @@ func (s *strictServer) BulkUpdateJournalRecordTags(ctx context.Context, request 
 }
 
 func (s *strictServer) BulkReassignJournalRecordAccount(ctx context.Context, request openapi.BulkReassignJournalRecordAccountRequestObject) (openapi.BulkReassignJournalRecordAccountResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	response, err := s.deps.Transactions.BulkReassignAccount(ctx, request.Body.RecordIds, request.Body.AccountId)
 	if err != nil {
 		return nil, err
@@ -122,9 +106,6 @@ func (s *strictServer) BulkReassignJournalRecordAccount(ctx context.Context, req
 }
 
 func (s *strictServer) BulkUpdateJournalRecordStatuses(ctx context.Context, request openapi.BulkUpdateJournalRecordStatusesRequestObject) (openapi.BulkUpdateJournalRecordStatusesResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	response, err := s.deps.Transactions.BulkUpdateStatuses(
 		ctx,
 		request.Body.RecordIds,

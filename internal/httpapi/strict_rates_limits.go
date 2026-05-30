@@ -29,9 +29,6 @@ func (s *strictServer) ListCreditLimitHistory(ctx context.Context, request opena
 }
 
 func (s *strictServer) CreateCreditLimitHistory(ctx context.Context, request openapi.CreateCreditLimitHistoryRequestObject) (openapi.CreateCreditLimitHistoryResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	history, err := s.deps.CreditLimits.Create(ctx, request.AccountId, creditlimits.CreateInput{
 		CreditLimit:   request.Body.CreditLimit,
 		EffectiveDate: request.Body.EffectiveDate,
@@ -83,9 +80,6 @@ func (s *strictServer) ListExchangeRates(ctx context.Context, request openapi.Li
 }
 
 func (s *strictServer) CreateExchangeRate(ctx context.Context, request openapi.CreateExchangeRateRequestObject) (openapi.CreateExchangeRateResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	rate, err := s.deps.ExchangeRates.Create(ctx, exchangerates.CreateInput{
 		FromCurrency:  request.Body.FromCurrency,
 		ToCurrency:    request.Body.ToCurrency,
@@ -117,9 +111,6 @@ func (s *strictServer) GetExchangeRate(ctx context.Context, request openapi.GetE
 }
 
 func (s *strictServer) UpdateExchangeRate(ctx context.Context, request openapi.UpdateExchangeRateRequestObject) (openapi.UpdateExchangeRateResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	rate, err := s.deps.ExchangeRates.UpdateRate(ctx, request.ExchangeRateId, exchangerates.UpdateInput{Rate: request.Body.Rate})
 	if err != nil {
 		return nil, err

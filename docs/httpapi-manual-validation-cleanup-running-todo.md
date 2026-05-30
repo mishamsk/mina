@@ -33,28 +33,28 @@ Keep the unknown-query-parameter guard unless it is replaced by an equivalent va
   - [x] Required docs updated
 
 ### Commit 2: Remove Redundant Required Body Guards
-- [ ] Confirm every strict method with `request.Body == nil` corresponds to an OpenAPI operation with `requestBody.required: true`.
-- [ ] Remove `request.Body == nil` guards from strict-server methods:
-  - [ ] `CreateAccount` and `UpdateAccount`.
-  - [ ] `CreateCategory` and `UpdateCategory`.
-  - [ ] `CreateMember` and `UpdateMember`.
-  - [ ] `CreateTag` and `UpdateTag`.
-  - [ ] `CreateCreditLimitHistory`.
-  - [ ] `CreateExchangeRate` and `UpdateExchangeRate`.
-  - [ ] `CreateTransaction` and `ReplaceTransaction`.
-  - [ ] `BulkCategorizeJournalRecords`.
-  - [ ] `BulkUpdateJournalRecordTags`.
-  - [ ] `BulkReassignJournalRecordAccount`.
-  - [ ] `BulkUpdateJournalRecordStatuses`.
-- [ ] Keep generated request error handling for malformed JSON, missing bodies, wrong body types, and validator failures.
-- [ ] Remove now-unused `services` imports from strict-handler files where applicable.
-- [ ] Update boundary test expectations only where they asserted handler-owned missing-body behavior.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test` passes
-  - [ ] `just test-integration` passes because JSON-over-HTTP behavior is touched
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Confirm every strict method with `request.Body == nil` corresponds to an OpenAPI operation with `requestBody.required: true`.
+- [x] Remove `request.Body == nil` guards from strict-server methods:
+  - [x] `CreateAccount` and `UpdateAccount`.
+  - [x] `CreateCategory` and `UpdateCategory`.
+  - [x] `CreateMember` and `UpdateMember`.
+  - [x] `CreateTag` and `UpdateTag`.
+  - [x] `CreateCreditLimitHistory`.
+  - [x] `CreateExchangeRate` and `UpdateExchangeRate`.
+  - [x] `CreateTransaction` and `ReplaceTransaction`.
+  - [x] `BulkCategorizeJournalRecords`.
+  - [x] `BulkUpdateJournalRecordTags`.
+  - [x] `BulkReassignJournalRecordAccount`.
+  - [x] `BulkUpdateJournalRecordStatuses`.
+- [x] Keep generated request error handling for malformed JSON, missing bodies, wrong body types, and validator failures.
+- [x] Remove now-unused `services` imports from strict-handler files where applicable.
+- [x] Update boundary test expectations only where they asserted handler-owned missing-body behavior.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test` passes
+  - [x] `just test-integration` passes because JSON-over-HTTP behavior is touched
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 3: Remove Bespoke Body Validation Message Shim
 - [ ] Remove `requiredBoolBodyCompatibilityMessage` from `internal/httpapi/middleware.go`.

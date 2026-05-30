@@ -32,9 +32,6 @@ func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAcc
 }
 
 func (s *strictServer) CreateAccount(ctx context.Context, request openapi.CreateAccountRequestObject) (openapi.CreateAccountResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	account, err := s.deps.Accounts.Create(ctx, accounts.CreateInput{
 		FQN:            request.Body.Fqn,
 		IsHidden:       request.Body.IsHidden != nil && *request.Body.IsHidden,
@@ -67,9 +64,6 @@ func (s *strictServer) GetAccount(ctx context.Context, request openapi.GetAccoun
 }
 
 func (s *strictServer) UpdateAccount(ctx context.Context, request openapi.UpdateAccountRequestObject) (openapi.UpdateAccountResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	isHidden := request.Body.IsHidden
 	account, err := s.deps.Accounts.UpdateMutable(ctx, request.AccountId, accounts.UpdateInput{
 		IsHidden:       &isHidden,
@@ -104,9 +98,6 @@ func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListC
 }
 
 func (s *strictServer) CreateCategory(ctx context.Context, request openapi.CreateCategoryRequestObject) (openapi.CreateCategoryResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	category, err := s.deps.Categories.Create(ctx, categories.CreateInput{
 		FQN:      request.Body.Fqn,
 		IsHidden: request.Body.IsHidden != nil && *request.Body.IsHidden,
@@ -136,9 +127,6 @@ func (s *strictServer) GetCategory(ctx context.Context, request openapi.GetCateg
 }
 
 func (s *strictServer) UpdateCategory(ctx context.Context, request openapi.UpdateCategoryRequestObject) (openapi.UpdateCategoryResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	isHidden := request.Body.IsHidden
 	category, err := s.deps.Categories.UpdateHidden(ctx, request.CategoryId, &isHidden)
 	if err != nil {
@@ -168,9 +156,6 @@ func (s *strictServer) ListMembers(ctx context.Context, request openapi.ListMemb
 }
 
 func (s *strictServer) CreateMember(ctx context.Context, request openapi.CreateMemberRequestObject) (openapi.CreateMemberResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	member, err := s.deps.Members.Create(ctx, members.CreateInput{Name: request.Body.Name})
 	if err != nil {
 		return nil, err
@@ -197,9 +182,6 @@ func (s *strictServer) GetMember(ctx context.Context, request openapi.GetMemberR
 }
 
 func (s *strictServer) UpdateMember(ctx context.Context, request openapi.UpdateMemberRequestObject) (openapi.UpdateMemberResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	member, err := s.deps.Members.UpdateName(ctx, request.MemberId, members.UpdateInput{Name: request.Body.Name})
 	if err != nil {
 		return nil, err
@@ -229,9 +211,6 @@ func (s *strictServer) ListTags(ctx context.Context, request openapi.ListTagsReq
 }
 
 func (s *strictServer) CreateTag(ctx context.Context, request openapi.CreateTagRequestObject) (openapi.CreateTagResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	tag, err := s.deps.Tags.Create(ctx, tags.CreateInput{
 		FQN:      request.Body.Fqn,
 		IsHidden: request.Body.IsHidden != nil && *request.Body.IsHidden,
@@ -261,9 +240,6 @@ func (s *strictServer) GetTag(ctx context.Context, request openapi.GetTagRequest
 }
 
 func (s *strictServer) UpdateTag(ctx context.Context, request openapi.UpdateTagRequestObject) (openapi.UpdateTagResponseObject, error) {
-	if request.Body == nil {
-		return nil, services.InvalidRequest("invalid JSON request body")
-	}
 	isHidden := request.Body.IsHidden
 	tag, err := s.deps.Tags.UpdateHidden(ctx, request.TagId, &isHidden)
 	if err != nil {

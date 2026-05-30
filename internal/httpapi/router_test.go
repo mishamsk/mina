@@ -128,6 +128,17 @@ func TestRouterOpenAPIValidationErrorsUseMinaEnvelope(t *testing.T) {
 	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
 }
 
+func TestRouterOpenAPIJSONValidationRejectsMissingRequiredBody(t *testing.T) {
+	handler := New(Dependencies{})
+	request := httptest.NewRequest(http.MethodPost, "/members", nil)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
+}
+
 func TestRouterOpenAPIQueryValidationRejectsUnsupportedQuery(t *testing.T) {
 	handler := New(Dependencies{})
 	response := httptest.NewRecorder()
