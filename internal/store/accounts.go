@@ -12,13 +12,13 @@ import (
 
 // AccountStore persists accounts.
 type AccountStore struct {
-	accounting *AccountingStore
+	accounting *AccountingDB
 }
 
 var _ accounts.Repository = (*AccountStore)(nil)
 
 // NewAccountStore creates an account store using accounting.
-func NewAccountStore(accounting *AccountingStore) *AccountStore {
+func NewAccountStore(accounting *AccountingDB) *AccountStore {
 	return &AccountStore{accounting: accounting}
 }
 
@@ -222,7 +222,7 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	return account, nil
 }
 
-func accountFQNExists(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, fqn string) (bool, error) {
+func accountFQNExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, fqn string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,

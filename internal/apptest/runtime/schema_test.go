@@ -13,7 +13,7 @@ func TestMigrateAppliesLatestSchemaVersion(t *testing.T) {
 	ctx := context.Background()
 	appInstance := newMigratedApp(t, ctx)
 
-	version, err := store.CurrentSchemaVersion(ctx, appInstance.AccountingStore())
+	version, err := store.CurrentSchemaVersion(ctx, appInstance.AccountingDB())
 	if err != nil {
 		t.Fatalf("current schema version: %v", err)
 	}
@@ -21,7 +21,7 @@ func TestMigrateAppliesLatestSchemaVersion(t *testing.T) {
 		t.Fatalf("schema version = %d, want %d", version, store.LatestSchemaVersion())
 	}
 
-	if err := store.Migrate(ctx, appInstance.AccountingStore()); err != nil {
+	if err := store.Migrate(ctx, appInstance.AccountingDB()); err != nil {
 		t.Fatalf("migrate again: %v", err)
 	}
 }

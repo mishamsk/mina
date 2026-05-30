@@ -22,7 +22,7 @@ import (
 
 // App is a composed in-process Mina application.
 type App struct {
-	accounting *store.AccountingStore
+	accounting *store.AccountingDB
 	handler    http.Handler
 }
 
@@ -43,11 +43,11 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		return nil, err
 	}
 
-	return NewWithStore(accounting, cfg.HTTP), nil
+	return NewWithAccountingDB(accounting, cfg.HTTP), nil
 }
 
-// NewWithStore wires the REST handler around an already-opened migrated accounting store.
-func NewWithStore(accounting *store.AccountingStore, httpConfig HTTPConfig) *App {
+// NewWithAccountingDB wires the REST handler around an already-opened migrated accounting database.
+func NewWithAccountingDB(accounting *store.AccountingDB, httpConfig HTTPConfig) *App {
 	handler := httpapi.NewWithOptions(httpapi.Dependencies{
 		Categories:    categories.NewService(store.NewCategoryStore(accounting)),
 		Tags:          tags.NewService(store.NewTagStore(accounting)),
@@ -77,8 +77,8 @@ func (a *App) AccountingLocation() store.AccountingLocation {
 	return a.accounting.Location()
 }
 
-// AccountingStore returns the initialized accounting store.
-func (a *App) AccountingStore() *store.AccountingStore {
+// AccountingDB returns the initialized accounting database handle.
+func (a *App) AccountingDB() *store.AccountingDB {
 	return a.accounting
 }
 

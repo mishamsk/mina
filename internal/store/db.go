@@ -27,7 +27,7 @@ func OpenInMemory(ctx context.Context) (*sql.DB, error) {
 }
 
 // AttachDatabase attaches a DuckDB database file as the accounting database.
-func AttachDatabase(ctx context.Context, accounting *AccountingStore, path string) error {
+func AttachDatabase(ctx context.Context, accounting *AccountingDB, path string) error {
 	if path == "" {
 		return errors.New("database path is required")
 	}
@@ -41,7 +41,7 @@ func AttachDatabase(ctx context.Context, accounting *AccountingStore, path strin
 }
 
 // PrepareAccountingLocation creates the accounting schema when needed.
-func PrepareAccountingLocation(ctx context.Context, accounting *AccountingStore) error {
+func PrepareAccountingLocation(ctx context.Context, accounting *AccountingDB) error {
 	schemaName := accounting.location.databaseIdentifier + "." + accounting.location.schemaIdentifier
 	if _, err := accounting.db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+schemaName); err != nil {
 		return fmt.Errorf("create accounting schema %s: %w", schemaName, err)

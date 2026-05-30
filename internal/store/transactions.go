@@ -15,13 +15,13 @@ import (
 
 // TransactionStore persists transactions and journal records.
 type TransactionStore struct {
-	accounting *AccountingStore
+	accounting *AccountingDB
 }
 
 var _ transactions.Repository = (*TransactionStore)(nil)
 
 // NewTransactionStore creates a transaction store using accounting.
-func NewTransactionStore(accounting *AccountingStore) *TransactionStore {
+func NewTransactionStore(accounting *AccountingDB) *TransactionStore {
 	return &TransactionStore{accounting: accounting}
 }
 
@@ -503,7 +503,7 @@ func scanTransaction(scanner transactionScanner) (transactions.Transaction, erro
 	return transaction, nil
 }
 
-func insertJournalRecord(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, transactionID int64, req transactions.JournalRecordInput) (transactions.JournalRecord, error) {
+func insertJournalRecord(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, transactionID int64, req transactions.JournalRecordInput) (transactions.JournalRecord, error) {
 	tagListExpr, tagListArgs := tagListExpression(req.TagIDs)
 	args := []any{
 		transactionID,
@@ -679,7 +679,7 @@ type rowsQuerier interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
-func tagIDsByRecordID(ctx context.Context, queryer rowsQuerier, accounting *AccountingStore, recordID int64) ([]int64, error) {
+func tagIDsByRecordID(ctx context.Context, queryer rowsQuerier, accounting *AccountingDB, recordID int64) ([]int64, error) {
 	rows, err := queryer.QueryContext(
 		ctx,
 		`SELECT unnest(tag_ids) AS tag_id
@@ -713,7 +713,7 @@ ORDER BY tag_id ASC`,
 	return tagIDs, nil
 }
 
-func validateTransactionReferences(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, req transactions.CreateInput) error {
+func validateTransactionReferences(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, req transactions.CreateInput) error {
 	for _, record := range req.Records {
 		exists, err := activeAccountExists(ctx, tx, accounting, record.AccountID)
 		if err != nil {
@@ -755,7 +755,7 @@ func validateTransactionReferences(ctx context.Context, tx *sql.Tx, accounting *
 	return nil
 }
 
-func validateActiveJournalRecords(ctx context.Context, queryer rowQuerier, accounting *AccountingStore, recordIDs []int64) error {
+func validateActiveJournalRecords(ctx context.Context, queryer rowQuerier, accounting *AccountingDB, recordIDs []int64) error {
 	if len(recordIDs) == 0 {
 		return services.ErrInvalidReference
 	}
@@ -781,7 +781,7 @@ WHERE jr.record_id IN (`+placeholders(len(recordIDs))+`)
 	return nil
 }
 
-func validateActiveTags(ctx context.Context, queryer rowQuerier, accounting *AccountingStore, tagIDs []int64) error {
+func validateActiveTags(ctx context.Context, queryer rowQuerier, accounting *AccountingDB, tagIDs []int64) error {
 	if len(tagIDs) == 0 {
 		return nil
 	}
@@ -840,7 +840,7 @@ func enumValue(value any) string {
 	return strings.ToUpper(fmt.Sprint(value))
 }
 
-func activeCategoryExists(ctx context.Context, queryer rowQuerier, accounting *AccountingStore, categoryID int64) (bool, error) {
+func activeCategoryExists(ctx context.Context, queryer rowQuerier, accounting *AccountingDB, categoryID int64) (bool, error) {
 	var id int64
 	err := queryer.QueryRowContext(
 		ctx,
@@ -857,7 +857,7 @@ func activeCategoryExists(ctx context.Context, queryer rowQuerier, accounting *A
 	return true, nil
 }
 
-func activeMemberExists(ctx context.Context, queryer rowQuerier, accounting *AccountingStore, memberID int64) (bool, error) {
+func activeMemberExists(ctx context.Context, queryer rowQuerier, accounting *AccountingDB, memberID int64) (bool, error) {
 	var id int64
 	err := queryer.QueryRowContext(
 		ctx,
@@ -874,7 +874,7 @@ func activeMemberExists(ctx context.Context, queryer rowQuerier, accounting *Acc
 	return true, nil
 }
 
-func activeTagExists(ctx context.Context, queryer rowQuerier, accounting *AccountingStore, tagID int64) (bool, error) {
+func activeTagExists(ctx context.Context, queryer rowQuerier, accounting *AccountingDB, tagID int64) (bool, error) {
 	var id int64
 	err := queryer.QueryRowContext(
 		ctx,

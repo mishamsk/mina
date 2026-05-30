@@ -254,7 +254,7 @@ func LatestSchemaVersion() int {
 }
 
 // CurrentSchemaVersion returns the highest applied database schema version.
-func CurrentSchemaVersion(ctx context.Context, accounting *AccountingStore) (int, error) {
+func CurrentSchemaVersion(ctx context.Context, accounting *AccountingDB) (int, error) {
 	exists, err := schemaVersionTableExists(ctx, accounting)
 	if err != nil {
 		return 0, err
@@ -273,7 +273,7 @@ func CurrentSchemaVersion(ctx context.Context, accounting *AccountingStore) (int
 }
 
 // Migrate applies all pending upgrade-only migrations.
-func Migrate(ctx context.Context, accounting *AccountingStore) error {
+func Migrate(ctx context.Context, accounting *AccountingDB) error {
 	if err := PrepareAccountingLocation(ctx, accounting); err != nil {
 		return err
 	}
@@ -299,7 +299,7 @@ func Migrate(ctx context.Context, accounting *AccountingStore) error {
 	return nil
 }
 
-func applyMigration(ctx context.Context, accounting *AccountingStore, migration Migration) error {
+func applyMigration(ctx context.Context, accounting *AccountingDB, migration Migration) error {
 	schemaVersion := accounting.location.mustQualifiedName("schema_version")
 	return WithTx(ctx, accounting.db, nil, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, migration.SQL(accounting.location)); err != nil {
@@ -319,7 +319,7 @@ func applyMigration(ctx context.Context, accounting *AccountingStore, migration 
 	})
 }
 
-func schemaVersionTableExists(ctx context.Context, accounting *AccountingStore) (bool, error) {
+func schemaVersionTableExists(ctx context.Context, accounting *AccountingDB) (bool, error) {
 	var tableName string
 	err := accounting.db.QueryRowContext(
 		ctx,

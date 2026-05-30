@@ -12,13 +12,13 @@ import (
 
 // ExchangeRateStore persists exchange rates.
 type ExchangeRateStore struct {
-	accounting *AccountingStore
+	accounting *AccountingDB
 }
 
 var _ exchangerates.Repository = (*ExchangeRateStore)(nil)
 
 // NewExchangeRateStore creates an exchange rate store using accounting.
-func NewExchangeRateStore(accounting *AccountingStore) *ExchangeRateStore {
+func NewExchangeRateStore(accounting *AccountingDB) *ExchangeRateStore {
 	return &ExchangeRateStore{accounting: accounting}
 }
 
@@ -202,7 +202,7 @@ func scanExchangeRate(scanner exchangeRateScanner) (exchangerates.ExchangeRate, 
 	return rate, nil
 }
 
-func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, fromCurrency string, toCurrency string, effectiveDate string) (bool, error) {
+func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, fromCurrency string, toCurrency string, effectiveDate string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,

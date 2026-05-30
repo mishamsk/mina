@@ -44,7 +44,7 @@ type Persistence struct {
 	location store.AccountingLocation
 }
 
-// WithConfig customizes the runtime config used to open the test app store.
+// WithConfig customizes the runtime config used to open the test app database.
 func WithConfig(config runtime.Config) Option {
 	return func(opts *clientOptions) {
 		opts.config = config
@@ -73,9 +73,9 @@ func New(t *testing.T, options ...Option) *Client {
 
 	accounting, err := store.OpenAccounting(ctx, opts.config.AccountingOpenRequest())
 	if err != nil {
-		t.Fatalf("open accounting test store: %v", err)
+		t.Fatalf("open accounting test database: %v", err)
 	}
-	appInstance := runtime.NewWithStore(accounting, opts.config.HTTP)
+	appInstance := runtime.NewWithAccountingDB(accounting, opts.config.HTTP)
 	t.Cleanup(func() {
 		if err := appInstance.Close(); err != nil {
 			t.Fatalf("close test app: %v", err)

@@ -12,13 +12,13 @@ import (
 
 // MemberStore persists household members.
 type MemberStore struct {
-	accounting *AccountingStore
+	accounting *AccountingDB
 }
 
 var _ members.Repository = (*MemberStore)(nil)
 
 // NewMemberStore creates a member store using accounting.
-func NewMemberStore(accounting *AccountingStore) *MemberStore {
+func NewMemberStore(accounting *AccountingDB) *MemberStore {
 	return &MemberStore{accounting: accounting}
 }
 
@@ -208,7 +208,7 @@ func scanMember(scanner memberScanner) (members.Member, error) {
 	return member, nil
 }
 
-func memberNameExists(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, name string) (bool, error) {
+func memberNameExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, name string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
@@ -225,7 +225,7 @@ func memberNameExists(ctx context.Context, tx *sql.Tx, accounting *AccountingSto
 	return true, nil
 }
 
-func activeMemberNameExistsForOtherID(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, id int64, name string) (bool, error) {
+func activeMemberNameExistsForOtherID(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, id int64, name string) (bool, error) {
 	var otherID int64
 	err := tx.QueryRowContext(
 		ctx,

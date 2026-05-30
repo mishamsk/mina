@@ -12,13 +12,13 @@ import (
 
 // CreditLimitHistoryStore persists account credit limit history.
 type CreditLimitHistoryStore struct {
-	accounting *AccountingStore
+	accounting *AccountingDB
 }
 
 var _ creditlimits.Repository = (*CreditLimitHistoryStore)(nil)
 
 // NewCreditLimitHistoryStore creates a credit limit history store using accounting.
-func NewCreditLimitHistoryStore(accounting *AccountingStore) *CreditLimitHistoryStore {
+func NewCreditLimitHistoryStore(accounting *AccountingDB) *CreditLimitHistoryStore {
 	return &CreditLimitHistoryStore{accounting: accounting}
 }
 
@@ -186,7 +186,7 @@ type rowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-func activeAccountExists(ctx context.Context, queryer rowQuerier, accounting *AccountingStore, accountID int64) (bool, error) {
+func activeAccountExists(ctx context.Context, queryer rowQuerier, accounting *AccountingDB, accountID int64) (bool, error) {
 	var id int64
 	err := queryer.QueryRowContext(
 		ctx,
@@ -203,7 +203,7 @@ func activeAccountExists(ctx context.Context, queryer rowQuerier, accounting *Ac
 	return true, nil
 }
 
-func activeCreditLimitHistoryExists(ctx context.Context, queryer rowQuerier, accounting *AccountingStore, accountID int64, effectiveDate string) (bool, error) {
+func activeCreditLimitHistoryExists(ctx context.Context, queryer rowQuerier, accounting *AccountingDB, accountID int64, effectiveDate string) (bool, error) {
 	var id int64
 	err := queryer.QueryRowContext(
 		ctx,

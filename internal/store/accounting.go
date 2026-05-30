@@ -6,28 +6,28 @@ import (
 	"fmt"
 )
 
-// AccountingOpenRequest describes how to open the accounting store.
+// AccountingOpenRequest describes how to open the accounting database handle.
 type AccountingOpenRequest struct {
 	Path     string
 	Location AccountingLocationConfig
 	Migrate  bool
 }
 
-// AccountingStore owns the DuckDB handle and selected accounting location.
-type AccountingStore struct {
+// AccountingDB owns the DuckDB handle and selected accounting location.
+type AccountingDB struct {
 	db       *sql.DB
 	location AccountingLocation
 }
 
-func newAccountingStore(db *sql.DB, location AccountingLocation) *AccountingStore {
-	return &AccountingStore{
+func newAccountingDB(db *sql.DB, location AccountingLocation) *AccountingDB {
+	return &AccountingDB{
 		db:       db,
 		location: location,
 	}
 }
 
 // OpenAccounting opens the process DuckDB handle and prepares the accounting location.
-func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*AccountingStore, error) {
+func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*AccountingDB, error) {
 	db, err := OpenInMemory(ctx)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,7 @@ func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*Accoun
 		}
 		return nil, err
 	}
-	accounting := newAccountingStore(db, location)
+	accounting := newAccountingDB(db, location)
 
 	if request.Path != "" {
 		if err := AttachDatabase(ctx, accounting, request.Path); err != nil {
@@ -60,17 +60,17 @@ func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*Accoun
 }
 
 // DB returns the opened DuckDB handle.
-func (s *AccountingStore) DB() *sql.DB {
+func (s *AccountingDB) DB() *sql.DB {
 	return s.db
 }
 
 // Location returns the database and schema holding accounting state.
-func (s *AccountingStore) Location() AccountingLocation {
+func (s *AccountingDB) Location() AccountingLocation {
 	return s.location
 }
 
-// Close releases database resources owned by the store.
-func (s *AccountingStore) Close() error {
+// Close releases database resources owned by the accounting database handle.
+func (s *AccountingDB) Close() error {
 	if s.db == nil {
 		return nil
 	}
@@ -78,7 +78,7 @@ func (s *AccountingStore) Close() error {
 	return s.db.Close()
 }
 
-func closeAccountingAfterError(accounting *AccountingStore, err error) error {
+func closeAccountingAfterError(accounting *AccountingDB, err error) error {
 	if closeErr := accounting.Close(); closeErr != nil {
 		return fmt.Errorf("%w; close database: %w", err, closeErr)
 	}

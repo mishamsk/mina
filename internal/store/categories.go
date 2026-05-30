@@ -12,13 +12,13 @@ import (
 
 // CategoryStore persists categories.
 type CategoryStore struct {
-	accounting *AccountingStore
+	accounting *AccountingDB
 }
 
 var _ categories.Repository = (*CategoryStore)(nil)
 
 // NewCategoryStore creates a category store using accounting.
-func NewCategoryStore(accounting *AccountingStore) *CategoryStore {
+func NewCategoryStore(accounting *AccountingDB) *CategoryStore {
 	return &CategoryStore{accounting: accounting}
 }
 
@@ -198,7 +198,7 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	return category, nil
 }
 
-func categoryFQNExists(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, fqn string) (bool, error) {
+func categoryFQNExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, fqn string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,

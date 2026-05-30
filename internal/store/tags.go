@@ -12,13 +12,13 @@ import (
 
 // TagStore persists tags.
 type TagStore struct {
-	accounting *AccountingStore
+	accounting *AccountingDB
 }
 
 var _ tags.Repository = (*TagStore)(nil)
 
 // NewTagStore creates a tag store using accounting.
-func NewTagStore(accounting *AccountingStore) *TagStore {
+func NewTagStore(accounting *AccountingDB) *TagStore {
 	return &TagStore{accounting: accounting}
 }
 
@@ -198,7 +198,7 @@ func scanTag(scanner tagScanner) (tags.Tag, error) {
 	return tag, nil
 }
 
-func tagFQNExists(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, fqn string) (bool, error) {
+func tagFQNExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, fqn string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
