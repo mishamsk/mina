@@ -51,21 +51,21 @@ Do not add private-helper unit tests. Verify through existing high-level runtime
   - [x] Required docs updated.
 
 ### Commit 3: Remove Redundant Strict JSON Body Validation
-- [ ] Verify OpenAPI request validation rejects unknown top-level JSON fields using existing `additionalProperties: false` schemas.
-- [ ] Verify OpenAPI request validation rejects unknown nested transaction record fields using the `CreateJournalRecordRequest` schema.
-- [ ] Verify OpenAPI request validation preserves required-field and required-null behavior for current request schemas.
-- [ ] Remove `strictJSONBodyValidator` from router middleware if OpenAPI validation covers the same transport rules.
-- [ ] Delete or shrink `strict_body.go` once no remaining JSON field-presence workaround is required.
-- [ ] Keep body decode error handling in strict generated handler options for malformed JSON and wrong body type errors emitted by generated binding.
-- [ ] Verification:
-  - [ ] Existing high-level runtime/API tests still pass with no new private-helper unit tests.
-  - [ ] Boundary coverage confirms unknown JSON fields and nested unknown record fields are rejected by OpenAPI validation.
-  - [ ] Boundary coverage confirms required `null` values are rejected with Mina's error envelope.
-  - [ ] `just fmt` passes.
-  - [ ] `just test` passes.
-  - [ ] `just test-integration` passes because JSON-over-HTTP behavior is touched.
-  - [ ] `just pre-commit` passes.
-  - [ ] Required docs updated.
+- [x] Verify OpenAPI request validation rejects unknown top-level JSON fields using existing `additionalProperties: false` schemas.
+- [x] Verify OpenAPI request validation rejects unknown nested transaction record fields using the `CreateJournalRecordRequest` schema.
+- [x] Verify OpenAPI request validation preserves required-field and required-null behavior for current request schemas.
+- [x] Remove `strictJSONBodyValidator` from router middleware if OpenAPI validation covers the same transport rules.
+- [x] Delete or shrink `strict_body.go` once no remaining JSON field-presence workaround is required.
+- [x] Keep body decode error handling in strict generated handler options for malformed JSON and wrong body type errors emitted by generated binding.
+- [x] Verification:
+  - [x] Existing high-level runtime/API tests still pass with no new private-helper unit tests.
+  - [x] Boundary coverage confirms unknown JSON fields and nested unknown record fields are rejected by OpenAPI validation.
+  - [x] Boundary coverage confirms required `null` values are rejected with Mina's error envelope.
+  - [x] `just fmt` passes.
+  - [x] `just test` passes.
+  - [x] `just test-integration` passes because JSON-over-HTTP behavior is touched.
+  - [x] `just pre-commit` passes.
+  - [x] Required docs updated.
 
 ### Commit 4: Expose OpenAPI Discovery Endpoints
 - [ ] Add `GET /openapi.json` served from `openapi.GetSpecJSON()`.

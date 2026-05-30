@@ -79,9 +79,6 @@ func (s *strictServer) UpdateAccount(ctx context.Context, request openapi.Update
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
 	}
-	if !requiredBoolJSONFieldPresent(ctx, "is_hidden") {
-		return nil, services.InvalidRequest("is_hidden is required")
-	}
 	isHidden := request.Body.IsHidden
 	account, err := s.deps.Accounts.UpdateMutable(ctx, request.AccountId, accounts.UpdateInput{
 		IsHidden:       &isHidden,
@@ -159,9 +156,6 @@ func (s *strictServer) UpdateCategory(ctx context.Context, request openapi.Updat
 	}
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
-	}
-	if !requiredBoolJSONFieldPresent(ctx, "is_hidden") {
-		return nil, services.InvalidRequest("is_hidden is required")
 	}
 	isHidden := request.Body.IsHidden
 	category, err := s.deps.Categories.UpdateHidden(ctx, request.CategoryId, &isHidden)
@@ -306,9 +300,6 @@ func (s *strictServer) UpdateTag(ctx context.Context, request openapi.UpdateTagR
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
 	}
-	if !requiredBoolJSONFieldPresent(ctx, "is_hidden") {
-		return nil, services.InvalidRequest("is_hidden is required")
-	}
 	isHidden := request.Body.IsHidden
 	tag, err := s.deps.Tags.UpdateHidden(ctx, request.TagId, &isHidden)
 	if err != nil {
@@ -320,10 +311,6 @@ func (s *strictServer) UpdateTag(ctx context.Context, request openapi.UpdateTagR
 
 func boolParam(value *bool) bool {
 	return value != nil && *value
-}
-
-func requiredBoolJSONFieldPresent(ctx context.Context, name string) bool {
-	return jsonFieldStateFromContext(ctx, name) == jsonFieldValue
 }
 
 func accountAPIResponse(account accounts.Account) openapi.Account {

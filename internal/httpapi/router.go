@@ -55,7 +55,6 @@ func NewWithOptions(deps Dependencies, opts Options) http.Handler {
 	})
 
 	router.Group(func(api chi.Router) {
-		api.Use(strictJSONBodyValidator)
 		api.Use(openAPIRequestValidationMiddleware(spec))
 
 		strict := openapi.NewStrictHandlerWithOptions(
