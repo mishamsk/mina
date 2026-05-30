@@ -2,7 +2,7 @@
 
 - Active scope: Phase 1 Stage 1 REST APIs in one Go `cmd/mina` binary.
 - Durable state target: portable DuckDB accounting state opened through runtime/store composition.
-- Default operator workflow: start the REST API with `mina serve --db PATH --create --migrate`, or apply migrations without serving with `mina migrate --db PATH --create`.
+- Default operator workflow: start the REST API with `mina serve --db PATH --create --migrate`, or apply migrations without serving with `mina migrate --db PATH --create`. `mina serve` may omit `--db` for ephemeral in-memory accounting state and emits a warning.
 - Implemented durable API capability groups:
   - Health checks and stable JSON error envelopes.
   - Account, category, tag, and household member CRUD/list flows.
@@ -12,6 +12,7 @@
   - Bulk journal-record category, tag, account, and status updates.
   - OpenAPI discovery through `GET /openapi.json`.
 - Implemented durable storage behavior:
+  - Runtime opens an in-memory DuckDB process database and selects either an attached accounting database file or the fixed in-memory accounting schema.
   - Upgrade-only DuckDB migrations with schema-version tracking.
   - Atomic double-entry transaction persistence and replacement.
   - Tombstone-aware reads and list defaults for applicable resources.

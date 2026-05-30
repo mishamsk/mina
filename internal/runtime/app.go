@@ -22,8 +22,9 @@ import (
 
 // App is a composed in-process Mina application.
 type App struct {
-	db      *sql.DB
-	handler http.Handler
+	db       *sql.DB
+	location store.AccountingLocation
+	handler  http.Handler
 }
 
 // New opens the configured database, applies migrations when requested, and wires the REST handler.
@@ -32,12 +33,39 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		return nil, err
 	}
 
-	if err := prepareDatabasePath(cfg.DatabasePath, cfg.CreateIfMissing); err != nil {
+	db, err := store.OpenInMemory(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	db, err := store.Open(ctx, cfg.DatabasePath)
-	if err != nil {
+	location := store.InMemoryAccountingLocation()
+	if cfg.DatabasePath != "" {
+		if err := prepareDatabasePath(cfg.DatabasePath, cfg.CreateIfMissing); err != nil {
+			if closeErr := db.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
+			}
+			return nil, err
+		}
+
+		location = store.AttachedDatabaseAccountingLocation()
+		if err := store.AttachDatabase(ctx, db, cfg.DatabasePath, location); err != nil {
+			if closeErr := db.Close(); closeErr != nil {
+				return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
+			}
+			return nil, err
+		}
+	}
+
+	if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
+		}
+		return nil, err
+	}
+	if err := store.SelectAccountingLocation(ctx, db, location); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
+		}
 		return nil, err
 	}
 
@@ -50,33 +78,39 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		}
 	}
 
-	return NewWithDB(db, cfg.HTTP), nil
+	return NewWithDB(db, location, cfg.HTTP), nil
 }
 
 // NewWithDB wires the REST handler around an already-opened migrated database.
-func NewWithDB(db *sql.DB, httpConfig HTTPConfig) *App {
+func NewWithDB(db *sql.DB, location store.AccountingLocation, httpConfig HTTPConfig) *App {
 	handler := httpapi.NewWithOptions(httpapi.Dependencies{
-		Categories:    categories.NewService(store.NewCategoryStore(db)),
-		Tags:          tags.NewService(store.NewTagStore(db)),
-		Members:       members.NewService(store.NewMemberStore(db)),
-		Accounts:      accounts.NewService(store.NewAccountStore(db)),
-		CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(db)),
-		ExchangeRates: exchangerates.NewService(store.NewExchangeRateStore(db)),
-		Transactions:  transactions.NewService(store.NewTransactionStore(db)),
+		Categories:    categories.NewService(store.NewCategoryStore(db, location)),
+		Tags:          tags.NewService(store.NewTagStore(db, location)),
+		Members:       members.NewService(store.NewMemberStore(db, location)),
+		Accounts:      accounts.NewService(store.NewAccountStore(db, location)),
+		CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(db, location)),
+		ExchangeRates: exchangerates.NewService(store.NewExchangeRateStore(db, location)),
+		Transactions:  transactions.NewService(store.NewTransactionStore(db, location)),
 	}, httpapi.Options{
 		AccessLog: httpConfig.AccessLog,
 		Timeout:   httpConfig.Timeout,
 	})
 
 	return &App{
-		db:      db,
-		handler: handler,
+		db:       db,
+		location: location,
+		handler:  handler,
 	}
 }
 
 // DB returns the opened database handle.
 func (a *App) DB() *sql.DB {
 	return a.db
+}
+
+// AccountingLocation returns the catalog and schema holding accounting state.
+func (a *App) AccountingLocation() store.AccountingLocation {
+	return a.location
 }
 
 // Handler returns the composed REST API handler.

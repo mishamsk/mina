@@ -12,14 +12,15 @@ import (
 
 // TagStore persists tags.
 type TagStore struct {
-	db *sql.DB
+	db       *sql.DB
+	location AccountingLocation
 }
 
 var _ tags.Repository = (*TagStore)(nil)
 
 // NewTagStore creates a tag store using db.
-func NewTagStore(db *sql.DB) *TagStore {
-	return &TagStore{db: db}
+func NewTagStore(db *sql.DB, location AccountingLocation) *TagStore {
+	return &TagStore{db: db, location: location}
 }
 
 // Create persists a new tag.

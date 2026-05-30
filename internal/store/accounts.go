@@ -12,14 +12,15 @@ import (
 
 // AccountStore persists accounts.
 type AccountStore struct {
-	db *sql.DB
+	db       *sql.DB
+	location AccountingLocation
 }
 
 var _ accounts.Repository = (*AccountStore)(nil)
 
 // NewAccountStore creates an account store using db.
-func NewAccountStore(db *sql.DB) *AccountStore {
-	return &AccountStore{db: db}
+func NewAccountStore(db *sql.DB, location AccountingLocation) *AccountStore {
+	return &AccountStore{db: db, location: location}
 }
 
 // Create persists a new account.

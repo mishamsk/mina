@@ -25,7 +25,10 @@ type HTTPConfig struct {
 // Validate checks database lifecycle settings before composition starts.
 func (c Config) Validate() error {
 	if c.DatabasePath == "" {
-		return errors.New("database path is required")
+		if !c.ApplyMigrations {
+			return errors.New("--migrate=false requires an existing database")
+		}
+		return nil
 	}
 	if c.CreateIfMissing && !c.ApplyMigrations {
 		if _, err := os.Stat(c.DatabasePath); errors.Is(err, os.ErrNotExist) {

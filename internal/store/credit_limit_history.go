@@ -12,14 +12,15 @@ import (
 
 // CreditLimitHistoryStore persists account credit limit history.
 type CreditLimitHistoryStore struct {
-	db *sql.DB
+	db       *sql.DB
+	location AccountingLocation
 }
 
 var _ creditlimits.Repository = (*CreditLimitHistoryStore)(nil)
 
 // NewCreditLimitHistoryStore creates a credit limit history store using db.
-func NewCreditLimitHistoryStore(db *sql.DB) *CreditLimitHistoryStore {
-	return &CreditLimitHistoryStore{db: db}
+func NewCreditLimitHistoryStore(db *sql.DB, location AccountingLocation) *CreditLimitHistoryStore {
+	return &CreditLimitHistoryStore{db: db, location: location}
 }
 
 // Create persists a new credit limit history entry for an active account.

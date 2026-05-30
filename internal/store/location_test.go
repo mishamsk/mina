@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/store"
@@ -128,5 +129,41 @@ func TestQualifiedAccountingObjectRoutesToLocation(t *testing.T) {
 	}
 	if secondValue != 2 {
 		t.Fatalf("second value = %d, want 2", secondValue)
+	}
+}
+
+func TestAttachDatabaseQuotesPathLiteral(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.OpenInMemory(ctx)
+	if err != nil {
+		t.Fatalf("open in-memory database: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Fatalf("close database: %v", err)
+		}
+	})
+
+	location := store.AccountingLocation{
+		Catalog: "quoted_path",
+		Schema:  "main",
+	}
+	path := filepath.Join(t.TempDir(), "mina's.db")
+	if err := store.AttachDatabase(ctx, db, path, location); err != nil {
+		t.Fatalf("attach database: %v", err)
+	}
+	if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
+		t.Fatalf("prepare accounting location: %v", err)
+	}
+	if err := store.SelectAccountingLocation(ctx, db, location); err != nil {
+		t.Fatalf("select accounting location: %v", err)
+	}
+
+	var currentDatabase string
+	if err := db.QueryRowContext(ctx, "SELECT current_database()").Scan(&currentDatabase); err != nil {
+		t.Fatalf("read current database: %v", err)
+	}
+	if currentDatabase != location.Catalog {
+		t.Fatalf("current database = %q, want %q", currentDatabase, location.Catalog)
 	}
 }

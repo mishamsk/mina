@@ -12,14 +12,15 @@ import (
 
 // CategoryStore persists categories.
 type CategoryStore struct {
-	db *sql.DB
+	db       *sql.DB
+	location AccountingLocation
 }
 
 var _ categories.Repository = (*CategoryStore)(nil)
 
 // NewCategoryStore creates a category store using db.
-func NewCategoryStore(db *sql.DB) *CategoryStore {
-	return &CategoryStore{db: db}
+func NewCategoryStore(db *sql.DB, location AccountingLocation) *CategoryStore {
+	return &CategoryStore{db: db, location: location}
 }
 
 // Create persists a new category.

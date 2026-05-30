@@ -12,6 +12,15 @@ stdout '\{"error":\{"code":"method_not_allowed","message":"method not allowed"\}
 kill -INT server
 wait server
 
+# The REST API can serve from an omitted database path for ephemeral sessions.
+freeport
+exec mina serve --host 127.0.0.1 --port $PORT &server&
+httpget http://127.0.0.1:$PORT/health
+stdout '"status":"ok"'
+kill -INT server
+wait server
+stderr 'warning: no --db provided; using ephemeral in-memory accounting state'
+
 # Access logs default to stderr.
 freeport
 exec mina serve --db $WORK/rest-default-log.db --create --migrate --host 127.0.0.1 --port $PORT &server&

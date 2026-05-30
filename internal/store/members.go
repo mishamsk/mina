@@ -12,14 +12,15 @@ import (
 
 // MemberStore persists household members.
 type MemberStore struct {
-	db *sql.DB
+	db       *sql.DB
+	location AccountingLocation
 }
 
 var _ members.Repository = (*MemberStore)(nil)
 
 // NewMemberStore creates a member store using db.
-func NewMemberStore(db *sql.DB) *MemberStore {
-	return &MemberStore{db: db}
+func NewMemberStore(db *sql.DB, location AccountingLocation) *MemberStore {
+	return &MemberStore{db: db, location: location}
 }
 
 // Create persists a new member.

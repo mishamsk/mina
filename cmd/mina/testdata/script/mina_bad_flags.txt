@@ -2,9 +2,9 @@
 ! exec mina serve --db $WORK/mina.db --port not-a-number
 stderr 'invalid value "not-a-number" for flag -port'
 
-# The serve command requires an explicit database path.
-! exec mina serve
-stderr 'serve requires --db'
+# Pathless serve cannot skip migrations because ephemeral state starts empty.
+! exec mina serve --migrate=false
+stderr '--migrate=false requires an existing database'
 
 # Access log redirection and quiet mode are mutually exclusive.
 ! exec mina serve --db $WORK/mina.db --quiet --access-log $WORK/access.log

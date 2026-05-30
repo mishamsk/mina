@@ -27,20 +27,20 @@ Normal in-process app tests move out of `internal/runtime` into one package dire
   - [x] Required docs updated
 
 ### Commit 2: Rework Runtime Database Opening
-- [ ] Change runtime startup to always open an in-memory DuckDB database first.
-- [ ] When `DatabasePath` is provided, attach that file as the accounting catalog.
-- [ ] When `DatabasePath` is not provided, create and use the fixed in-memory accounting schema.
-- [ ] Allow an omitted database path in configuration validation for serve and migrated in-process app construction.
-- [ ] Preserve create-if-missing behavior for provided accounting database paths.
-- [ ] Add an operator-visible warning path for serve mode when no accounting database path is provided.
-- [ ] Ensure runtime composition passes the accounting location into store constructors.
-- [ ] Update CLI integration coverage and normal in-process app tests for path-provided and path-omitted startup.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test` passes
-  - [ ] `just test-integration` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Change runtime startup to always open an in-memory DuckDB database first.
+- [x] When `DatabasePath` is provided, attach that file as the accounting catalog.
+- [x] When `DatabasePath` is not provided, create and use the fixed in-memory accounting schema.
+- [x] Allow an omitted database path in configuration validation for serve and migrated in-process app construction.
+- [x] Preserve create-if-missing behavior for provided accounting database paths.
+- [x] Add an operator-visible warning path for serve mode when no accounting database path is provided.
+- [x] Ensure runtime composition passes the accounting location into store constructors.
+- [x] Update CLI integration coverage and normal in-process app tests for path-provided and path-omitted startup.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test` passes
+  - [x] `just test-integration` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 3: Qualify Migrations And Store SQL
 - [ ] Update migrations to create schemas, sequences, enum types, tables, and indexes using the selected accounting location.

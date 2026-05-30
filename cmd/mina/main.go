@@ -107,9 +107,6 @@ func newServeCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		Args:         noPositionalArgs("serve"),
 		SilenceUsage: true,
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if cfg.DatabasePath == "" {
-				return errors.New("serve requires --db")
-			}
 			if err := cfg.Validate(); err != nil {
 				return err
 			}
@@ -187,6 +184,12 @@ func normalizeFlagError(err error) error {
 func serve(stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	if cfg.DatabasePath == "" {
+		if _, err := fmt.Fprintln(stderr, "warning: no --db provided; using ephemeral in-memory accounting state"); err != nil {
+			return err
+		}
+	}
 
 	accessLog, closeAccessLog, err := openAccessLog(stderr, cfg)
 	if err != nil {

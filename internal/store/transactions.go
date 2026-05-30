@@ -15,14 +15,15 @@ import (
 
 // TransactionStore persists transactions and journal records.
 type TransactionStore struct {
-	db *sql.DB
+	db       *sql.DB
+	location AccountingLocation
 }
 
 var _ transactions.Repository = (*TransactionStore)(nil)
 
 // NewTransactionStore creates a transaction store using db.
-func NewTransactionStore(db *sql.DB) *TransactionStore {
-	return &TransactionStore{db: db}
+func NewTransactionStore(db *sql.DB, location AccountingLocation) *TransactionStore {
+	return &TransactionStore{db: db, location: location}
 }
 
 // Create persists a transaction and all journal records atomically.

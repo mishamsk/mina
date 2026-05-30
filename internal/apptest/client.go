@@ -62,7 +62,7 @@ func New(t *testing.T) *Client {
 		t.Fatalf("migrate test schema: %v", err)
 	}
 
-	appInstance := runtime.NewWithDB(db, runtime.HTTPConfig{})
+	appInstance := runtime.NewWithDB(db, location, runtime.HTTPConfig{})
 	t.Cleanup(func() {
 		if err := appInstance.Close(); err != nil {
 			t.Fatalf("close test app: %v", err)

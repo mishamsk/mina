@@ -12,14 +12,15 @@ import (
 
 // ExchangeRateStore persists exchange rates.
 type ExchangeRateStore struct {
-	db *sql.DB
+	db       *sql.DB
+	location AccountingLocation
 }
 
 var _ exchangerates.Repository = (*ExchangeRateStore)(nil)
 
 // NewExchangeRateStore creates an exchange rate store using db.
-func NewExchangeRateStore(db *sql.DB) *ExchangeRateStore {
-	return &ExchangeRateStore{db: db}
+func NewExchangeRateStore(db *sql.DB, location AccountingLocation) *ExchangeRateStore {
+	return &ExchangeRateStore{db: db, location: location}
 }
 
 // Create persists a new exchange rate.
