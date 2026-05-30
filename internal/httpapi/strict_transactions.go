@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"slices"
 
 	"mina.local/mina/internal/httpapi/openapi"
 	"mina.local/mina/internal/services/transactions"
@@ -86,8 +87,8 @@ func (s *strictServer) BulkUpdateJournalRecordTags(ctx context.Context, request 
 	response, err := s.deps.Transactions.BulkUpdateTags(
 		ctx,
 		request.Body.RecordIds,
-		optionalInt64Slice(request.Body.AddTagIds),
-		optionalInt64Slice(request.Body.RemoveTagIds),
+		cloneOptionalInt64Slice(request.Body.AddTagIds),
+		cloneOptionalInt64Slice(request.Body.RemoveTagIds),
 	)
 	if err != nil {
 		return nil, err
@@ -196,7 +197,7 @@ func journalRecordAPIInputs(records []openapi.CreateJournalRecordRequest) []tran
 			Amount:               record.Amount,
 			AmountUSD:            record.AmountUsd,
 			CategoryID:           record.CategoryId,
-			TagIDs:               optionalInt64Slice(record.TagIds),
+			TagIDs:               cloneOptionalInt64Slice(record.TagIds),
 			Memo:                 record.Memo,
 			PendingDate:          record.PendingDate,
 			PostedDate:           record.PostedDate,
@@ -240,7 +241,7 @@ func journalRecordAPIResponse(record transactions.JournalRecord) openapi.Journal
 		Amount:               record.Amount,
 		AmountUsd:            record.AmountUSD,
 		CategoryId:           record.CategoryID,
-		TagIds:               append([]int64{}, record.TagIDs...),
+		TagIds:               cloneInt64Slice(record.TagIDs),
 		Memo:                 record.Memo,
 		PendingDate:          record.PendingDate,
 		PostedDate:           record.PostedDate,
@@ -266,17 +267,25 @@ func journalRecordAPIResponses(records []transactions.JournalRecord) []openapi.J
 
 func bulkRecordOperationAPIResponse(response transactions.BulkRecordOperationResponse) openapi.BulkRecordOperationResponse {
 	return openapi.BulkRecordOperationResponse{
-		RecordIds:    append([]int64{}, response.RecordIDs...),
+		RecordIds:    cloneInt64Slice(response.RecordIDs),
 		UpdatedCount: response.UpdatedCount,
 	}
 }
 
-func optionalInt64Slice(values *[]int64) []int64 {
+func cloneOptionalInt64Slice(values *[]int64) []int64 {
 	if values == nil {
 		return nil
 	}
 
-	return append([]int64{}, (*values)...)
+	return slices.Clone(*values)
+}
+
+func cloneInt64Slice(values []int64) []int64 {
+	if values == nil {
+		return []int64{}
+	}
+
+	return slices.Clone(values)
 }
 
 func transactionAPIPostingStatusPtr(status *openapi.PostingStatus) *transactions.PostingStatus {
