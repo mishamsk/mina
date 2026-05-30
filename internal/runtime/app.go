@@ -22,9 +22,8 @@ import (
 
 // App is a composed in-process Mina application.
 type App struct {
-	db       *sql.DB
-	location store.AccountingLocation
-	handler  http.Handler
+	accounting *store.AccountingStore
+	handler    http.Handler
 }
 
 // New opens the configured database, applies migrations when requested, and wires the REST handler.
@@ -76,6 +75,13 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 
 // NewWithDB wires the REST handler around an already-opened migrated database.
 func NewWithDB(db *sql.DB, location store.AccountingLocation, httpConfig HTTPConfig) *App {
+	return NewWithStore(store.NewAccountingStore(db, location), httpConfig)
+}
+
+// NewWithStore wires the REST handler around an already-opened migrated accounting store.
+func NewWithStore(accounting *store.AccountingStore, httpConfig HTTPConfig) *App {
+	db := accounting.DB()
+	location := accounting.Location()
 	handler := httpapi.NewWithOptions(httpapi.Dependencies{
 		Categories:    categories.NewService(store.NewCategoryStore(db, location)),
 		Tags:          tags.NewService(store.NewTagStore(db, location)),
@@ -90,20 +96,19 @@ func NewWithDB(db *sql.DB, location store.AccountingLocation, httpConfig HTTPCon
 	})
 
 	return &App{
-		db:       db,
-		location: location,
-		handler:  handler,
+		accounting: accounting,
+		handler:    handler,
 	}
 }
 
 // DB returns the opened database handle.
 func (a *App) DB() *sql.DB {
-	return a.db
+	return a.accounting.DB()
 }
 
 // AccountingLocation returns the database and schema holding accounting state.
 func (a *App) AccountingLocation() store.AccountingLocation {
-	return a.location
+	return a.accounting.Location()
 }
 
 // Handler returns the composed REST API handler.
@@ -113,11 +118,11 @@ func (a *App) Handler() http.Handler {
 
 // Close releases process resources owned by the app.
 func (a *App) Close() error {
-	if a.db == nil {
+	if a.accounting == nil {
 		return nil
 	}
 
-	return a.db.Close()
+	return a.accounting.Close()
 }
 
 func prepareDatabasePath(path string, createIfMissing bool) error {
