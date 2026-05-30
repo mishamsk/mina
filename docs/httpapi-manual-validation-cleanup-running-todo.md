@@ -84,17 +84,17 @@ Keep the unknown-query-parameter guard unless it is replaced by an equivalent va
   - [x] Required docs updated
 
 ### Commit 5: Reaudit HTTP API Boundary
-- [ ] Revisit all handwritten code in `internal/httpapi` after the cleanup.
-- [ ] Confirm strict-server methods remain limited to generated DTO mapping, service calls, response mapping, and service error/status handling.
-- [ ] Confirm no HTTP adapter code owns domain validation, SQL, persistence decisions, process configuration, or service-layer decisions.
-- [ ] Confirm no stale helpers, tests, imports, comments, package docs, or workaround paths remain from removed manual validation.
-- [ ] Confirm any remaining manual transport guard has a current reason that cannot be expressed through generated binding or OpenAPI request validation, and that the reason is documented near the code.
-- [ ] Verification
-  - [ ] `just fmt` passes if code changes are made
-  - [ ] `just test` passes if code changes are made
-  - [ ] `just test-integration` passes if JSON-over-HTTP behavior is touched
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Revisit all handwritten code in `internal/httpapi` after the cleanup.
+- [x] Confirm strict-server methods remain limited to generated DTO mapping, service calls, response mapping, and service error/status handling.
+- [x] Confirm no HTTP adapter code owns domain validation, SQL, persistence decisions, process configuration, or service-layer decisions.
+- [x] Confirm no stale helpers, tests, imports, comments, package docs, or workaround paths remain from removed manual validation.
+- [x] Confirm any remaining manual transport guard has a current reason that cannot be expressed through generated binding or OpenAPI request validation, and that the reason is documented near the code.
+- [x] Verification
+  - [x] `just fmt` passes if code changes are made
+  - [x] `just test` passes if code changes are made
+  - [x] `just test-integration` passes if JSON-over-HTTP behavior is touched
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ## Deferred Verification
 
