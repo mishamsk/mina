@@ -5,14 +5,13 @@ The active build scope is Phase 1 Stage 1: REST APIs only.
 
 ## Project Documentation
 
-- `docs/architecture.md`: mandatory read at the beginning of any work. It is the short evergreen map for layers, ownership, state, and testing rules. Update only for durable architecture changes.
+- `docs/architecture.md`: mandatory read at the beginning of any work. Never make changes to it, unless you are specifically instructed to edit this file.
 - `docs/business-requirements.md`: product scope. Read before changing user-visible behavior or API semantics.
-- `docs/phase-1-data-model.md`: source of truth for the Phase 1 data model. Read before changing persistence, API shapes, or domain behavior.
-- `PROJECT_STATE.md`: concise current implementation inventory. Read when checking what exists now. Update when behavior, durable state, default workflow shape, or operator-visible capability changes.
+- `PROJECT_STATE.md`: concise current implementation phase/stage state. Read when checking what exists now. Update only when progress against business requirements are made. Do not update on refactors and internal API chagnes.
 - Package/module docs: exported Go APIs that cross package boundaries must be documented in code. Add a short package markdown doc only for implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs. If there are no implicit contracts, say `No implicit contracts.` Use `docs/package_doc_template.md`.
-- Non-architecture docs must stay short. Prefer durable bullets. Link to owning docs instead of repeating details.
+- All docs must stay short. Prefer bullets, with one liners. Prefer replacing old statements to adding net new. Link to owning docs instead of repeating details.
 - Documentation is evergreen. Never keep history, migration notes, or references to previous doc/code states.
-- `docs/running_todo_template.md`: reusable template for active implementation checklists.
+- `docs/running_todo_template.md`: reusable template for active implementation checklists. Do not read.
 
 ## Infra & Dev Practices
 
@@ -21,19 +20,19 @@ The active build scope is Phase 1 Stage 1: REST APIs only.
 - Do not invoke `gofmt`, `go test`, `prek`, or other recipe internals directly unless debugging the recipe itself.
 - Run `just pre-commit` for configured pre-commit checks; the Justfile owns the details.
 - Write idiomatic Go. Keep dependencies small and explicit. Use package-level boundaries instead of generic abstraction layers until a real boundary exists.
+- Do not create redundant layers, and multiple defensive layers that do the same thing. E.g. if service does validation, do not repeat the same validation at other layers!
+- Do not recreate what project dependnecy already implements. Always prefer capabilities provided by the library!
 - Keep side effects isolated at explicit boundaries: filesystem, database, subprocesses, network listeners, clocks, and terminal I/O.
 - Keep model packages data-focused. Put validation, persistence, and transport mapping in owning packages.
-- Keep router/handler code thin. Domain behavior belongs in controllers/use-case packages.
+- Keep router/handler code thin. Domain behavior belongs in services/use-case packages.
 - Keep commits small and self-contained. Finish and verify one task before starting another.
 
 ## Development Workflow
 
 For every commit:
 
-- For code changes, run `just pre-commit` before committing.
-- For code changes, run `just test` for the default in-process test set once code exists.
-- For code changes that touch CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior once that recipe exists, run `just test-integration` before committing.
+- For code changes, run `just pre-commit`, `just test` during developement and before committing.
+- For code changes that touch CLI, real-network REST, process startup, JSON-over-HTTP behavior, run `just test-integration` before commit.
 - Do not run tests or broad validation for pure documentation changes, or for tooling/developer-recipe changes that do not touch application code.
-- For changes that alter durable behavior, API contracts, state, or ownership boundaries, update the relevant docs in the same commit.
-- Run `/review` in a subagent once after commit to trigger a review, and apply fixes
-  - For pure documentation changes, no reviewer subagent is required.
+- For changes that alter implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs update the relevant package docs in the same commit.
+- For code changes, run `/review` in a subagent once after commit to trigger a review, and apply fixes
