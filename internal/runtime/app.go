@@ -32,45 +32,25 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		return nil, err
 	}
 
-	db, err := store.OpenInMemory(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	location := store.InMemoryAccountingLocation()
 	if cfg.DatabasePath != "" {
 		if err := prepareDatabasePath(cfg.DatabasePath, cfg.CreateIfMissing); err != nil {
-			if closeErr := db.Close(); closeErr != nil {
-				return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
-			}
 			return nil, err
 		}
 
 		location = store.AttachedDatabaseAccountingLocation()
-		if err := store.AttachDatabase(ctx, db, cfg.DatabasePath, location); err != nil {
-			if closeErr := db.Close(); closeErr != nil {
-				return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
-			}
-			return nil, err
-		}
 	}
 
-	if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
-		if closeErr := db.Close(); closeErr != nil {
-			return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
-		}
+	accounting, err := store.OpenAccounting(ctx, store.AccountingOpenRequest{
+		Path:     cfg.DatabasePath,
+		Location: location,
+		Migrate:  cfg.ApplyMigrations,
+	})
+	if err != nil {
 		return nil, err
 	}
-	if cfg.ApplyMigrations {
-		if err := store.Migrate(ctx, db, location); err != nil {
-			if closeErr := db.Close(); closeErr != nil {
-				return nil, fmt.Errorf("migrate database: %w; close database: %w", err, closeErr)
-			}
-			return nil, fmt.Errorf("migrate database: %w", err)
-		}
-	}
 
-	return NewWithDB(db, location, cfg.HTTP), nil
+	return NewWithStore(accounting, cfg.HTTP), nil
 }
 
 // NewWithDB wires the REST handler around an already-opened migrated database.

@@ -1,6 +1,17 @@
 package store
 
-import "database/sql"
+import (
+	"context"
+	"database/sql"
+	"fmt"
+)
+
+// AccountingOpenRequest describes how to open the accounting store.
+type AccountingOpenRequest struct {
+	Path     string
+	Location AccountingLocation
+	Migrate  bool
+}
 
 // AccountingStore owns the DuckDB handle and selected accounting location.
 type AccountingStore struct {
@@ -14,6 +25,32 @@ func NewAccountingStore(db *sql.DB, location AccountingLocation) *AccountingStor
 		db:       db,
 		location: location,
 	}
+}
+
+// OpenAccounting opens the process DuckDB handle and prepares the accounting location.
+func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*AccountingStore, error) {
+	db, err := OpenInMemory(ctx)
+	if err != nil {
+		return nil, err
+	}
+	accounting := NewAccountingStore(db, request.Location)
+
+	if request.Path != "" {
+		if err := AttachDatabase(ctx, db, request.Path, request.Location); err != nil {
+			return nil, closeAccountingAfterError(accounting, err)
+		}
+	}
+
+	if err := PrepareAccountingLocation(ctx, db, request.Location); err != nil {
+		return nil, closeAccountingAfterError(accounting, err)
+	}
+	if request.Migrate {
+		if err := Migrate(ctx, db, request.Location); err != nil {
+			return nil, closeAccountingAfterError(accounting, fmt.Errorf("migrate database: %w", err))
+		}
+	}
+
+	return accounting, nil
 }
 
 // DB returns the opened DuckDB handle.
@@ -33,4 +70,12 @@ func (s *AccountingStore) Close() error {
 	}
 
 	return s.db.Close()
+}
+
+func closeAccountingAfterError(accounting *AccountingStore, err error) error {
+	if closeErr := accounting.Close(); closeErr != nil {
+		return fmt.Errorf("%w; close database: %w", err, closeErr)
+	}
+
+	return err
 }

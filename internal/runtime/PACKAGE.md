@@ -9,6 +9,7 @@
 
 - Runtime composition is the only place that wires concrete service, store, and adapter implementations.
 - App instances retain the initialized accounting store rather than separate database and location fields.
+- Runtime decides database lifecycle policy, then delegates DuckDB mechanics to store open helpers.
 - Runtime may import every app layer, but app service packages must not import runtime.
 
 ## Boundaries
