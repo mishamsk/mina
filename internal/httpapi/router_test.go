@@ -40,32 +40,32 @@ func TestRouterMethodAndRouteErrorsUseMinaEnvelope(t *testing.T) {
 	assertMinaError(t, routeResponse, http.StatusNotFound, models.APIErrorCodeNotFound, "route not found")
 }
 
-func TestRouterGeneratedBindingErrorsKeepExistingMinaMessages(t *testing.T) {
+func TestRouterGeneratedBindingErrorsUseParameterMetadataMessages(t *testing.T) {
 	handler := New(Dependencies{})
 
 	boolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(boolResponse, httptest.NewRequest(http.MethodGet, "/categories?include_hidden=maybe", nil))
-	assertMinaError(t, boolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "include_hidden must be a boolean")
+	assertMinaError(t, boolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `query parameter "include_hidden" has invalid type`)
 
 	emptyBoolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(emptyBoolResponse, httptest.NewRequest(http.MethodGet, "/categories?include_hidden=", nil))
-	assertMinaError(t, emptyBoolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "include_hidden must have one non-empty value")
+	assertMinaError(t, emptyBoolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `query parameter "include_hidden" must not be empty`)
 
 	duplicateBoolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(duplicateBoolResponse, httptest.NewRequest(http.MethodGet, "/categories?include_hidden=true&include_hidden=false", nil))
-	assertMinaError(t, duplicateBoolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "include_hidden must have one non-empty value")
+	assertMinaError(t, duplicateBoolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `query parameter "include_hidden" must be provided at most once`)
 
 	emptyGetBoolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(emptyGetBoolResponse, httptest.NewRequest(http.MethodGet, "/categories/1?include_tombstoned=", nil))
-	assertMinaError(t, emptyGetBoolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "include_tombstoned must be a boolean")
+	assertMinaError(t, emptyGetBoolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `query parameter "include_tombstoned" must not be empty`)
 
 	emptyLimitResponse := httptest.NewRecorder()
 	handler.ServeHTTP(emptyLimitResponse, httptest.NewRequest(http.MethodGet, "/categories?limit=", nil))
-	assertMinaError(t, emptyLimitResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "limit must have one non-empty value")
+	assertMinaError(t, emptyLimitResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `query parameter "limit" must not be empty`)
 
 	idResponse := httptest.NewRecorder()
 	handler.ServeHTTP(idResponse, httptest.NewRequest(http.MethodGet, "/accounts/not-an-id/records", nil))
-	assertMinaError(t, idResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "account_id must be a positive integer")
+	assertMinaError(t, idResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `path parameter "account_id" has invalid type`)
 }
 
 func TestRouterOpenAPIJSONValidationRejectsNullRequiredBool(t *testing.T) {

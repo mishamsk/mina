@@ -154,7 +154,7 @@ func openAPIValidationErrorMessage(r *http.Request, err error) string {
 			return "invalid JSON request body"
 		}
 		if requestErr.Parameter != nil {
-			return generatedParamErrorMessage(r, requestErr.Parameter.Name)
+			return openAPIParameterErrorMessage(r, requestErr)
 		}
 	}
 
