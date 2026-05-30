@@ -156,6 +156,23 @@ WHERE database_name = ?
 			if count != 1 {
 				t.Fatalf("schema_version table count = %d, want 1", count)
 			}
+
+			response := client.JSON(http.MethodPost, "/categories", map[string]any{
+				"fqn": "Food:Dining",
+			})
+			if response.StatusCode != http.StatusCreated {
+				t.Fatalf("create category status = %d, want %d; body %s", response.StatusCode, http.StatusCreated, response.RawBody)
+			}
+			if err := persistence.QueryRowContext(
+				context.Background(),
+				"SELECT COUNT(*) FROM "+persistence.QualifiedName("category")+" WHERE fqn = ?",
+				"Food:Dining",
+			).Scan(&count); err != nil {
+				t.Fatalf("count category in quoted schema: %v", err)
+			}
+			if count != 1 {
+				t.Fatalf("category count = %d, want 1", count)
+			}
 		})
 	}
 }
