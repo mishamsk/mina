@@ -11,20 +11,18 @@ import (
 	"mina.local/mina/internal/services/tags"
 )
 
-func (s *strictServer) ListAccounts(ctx context.Context, _ openapi.ListAccountsRequestObject) (openapi.ListAccountsResponseObject, error) {
-	r, err := requestFromStrictContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	query, err := parseListQueryForStrict(r, hierarchyListContract())
-	if err != nil {
-		return nil, err
-	}
-
+func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAccountsRequestObject) (openapi.ListAccountsResponseObject, error) {
+	params := request.Params
 	accountList, err := s.deps.Accounts.List(ctx, accounts.ListOptions{
-		IncludeHidden:     query.IncludeHidden,
-		IncludeTombstoned: query.IncludeTombstoned,
-		List:              serviceListOptions(query.List),
+		IncludeHidden:     boolParam(params.IncludeHidden),
+		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		List: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyFQN,
+		),
 	})
 	if err != nil {
 		return nil, err
@@ -97,20 +95,18 @@ func (s *strictServer) UpdateAccount(ctx context.Context, request openapi.Update
 	return openapi.UpdateAccount200JSONResponse(accountAPIResponse(account)), nil
 }
 
-func (s *strictServer) ListCategories(ctx context.Context, _ openapi.ListCategoriesRequestObject) (openapi.ListCategoriesResponseObject, error) {
-	r, err := requestFromStrictContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	query, err := parseListQueryForStrict(r, hierarchyListContract())
-	if err != nil {
-		return nil, err
-	}
-
+func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListCategoriesRequestObject) (openapi.ListCategoriesResponseObject, error) {
+	params := request.Params
 	categoryList, err := s.deps.Categories.List(ctx, categories.ListOptions{
-		IncludeHidden:     query.IncludeHidden,
-		IncludeTombstoned: query.IncludeTombstoned,
-		List:              serviceListOptions(query.List),
+		IncludeHidden:     boolParam(params.IncludeHidden),
+		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		List: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyFQN,
+		),
 	})
 	if err != nil {
 		return nil, err
@@ -176,19 +172,17 @@ func (s *strictServer) UpdateCategory(ctx context.Context, request openapi.Updat
 	return openapi.UpdateCategory200JSONResponse(categoryAPIResponse(category)), nil
 }
 
-func (s *strictServer) ListMembers(ctx context.Context, _ openapi.ListMembersRequestObject) (openapi.ListMembersResponseObject, error) {
-	r, err := requestFromStrictContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	query, err := parseListQueryForStrict(r, memberListContract())
-	if err != nil {
-		return nil, err
-	}
-
+func (s *strictServer) ListMembers(ctx context.Context, request openapi.ListMembersRequestObject) (openapi.ListMembersResponseObject, error) {
+	params := request.Params
 	memberList, err := s.deps.Members.List(ctx, members.ListOptions{
-		IncludeTombstoned: query.IncludeTombstoned,
-		List:              serviceListOptions(query.List),
+		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		List: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyName,
+		),
 	})
 	if err != nil {
 		return nil, err
@@ -247,20 +241,18 @@ func (s *strictServer) UpdateMember(ctx context.Context, request openapi.UpdateM
 	return openapi.UpdateMember200JSONResponse(memberAPIResponse(member)), nil
 }
 
-func (s *strictServer) ListTags(ctx context.Context, _ openapi.ListTagsRequestObject) (openapi.ListTagsResponseObject, error) {
-	r, err := requestFromStrictContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	query, err := parseListQueryForStrict(r, hierarchyListContract())
-	if err != nil {
-		return nil, err
-	}
-
+func (s *strictServer) ListTags(ctx context.Context, request openapi.ListTagsRequestObject) (openapi.ListTagsResponseObject, error) {
+	params := request.Params
 	tagList, err := s.deps.Tags.List(ctx, tags.ListOptions{
-		IncludeHidden:     query.IncludeHidden,
-		IncludeTombstoned: query.IncludeTombstoned,
-		List:              serviceListOptions(query.List),
+		IncludeHidden:     boolParam(params.IncludeHidden),
+		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		List: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyFQN,
+		),
 	})
 	if err != nil {
 		return nil, err
@@ -324,31 +316,6 @@ func (s *strictServer) UpdateTag(ctx context.Context, request openapi.UpdateTagR
 	}
 
 	return openapi.UpdateTag200JSONResponse(tagAPIResponse(tag)), nil
-}
-
-func hierarchyListContract() listQueryContract {
-	return listQueryContract{
-		AllowHidden:     true,
-		AllowTombstoned: true,
-		SortKeys: map[sortKey]struct{}{
-			sortKeyCreatedAt: {},
-			sortKeyFQN:       {},
-			sortKeyUpdatedAt: {},
-		},
-		DefaultSortKey: sortKeyFQN,
-	}
-}
-
-func memberListContract() listQueryContract {
-	return listQueryContract{
-		AllowTombstoned: true,
-		SortKeys: map[sortKey]struct{}{
-			sortKeyCreatedAt: {},
-			sortKeyName:      {},
-			sortKeyUpdatedAt: {},
-		},
-		DefaultSortKey: sortKeyName,
-	}
 }
 
 func boolParam(value *bool) bool {

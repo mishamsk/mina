@@ -28,27 +28,27 @@ Do not add private-helper unit tests. Verify through existing high-level runtime
   - [x] Required docs updated.
 
 ### Commit 2: Replace Raw Query Parsing With Generated Params
-- [ ] Refactor strict-server list handlers to use generated `request.Params` instead of `r.URL.Query()`.
-- [ ] Add small HTTP adapter helpers for converting generated optional params into service list options:
-  - [ ] Optional bool pointer to bool with false default.
-  - [ ] Optional sort enum pointer to default service sort key.
-  - [ ] Optional sort direction enum pointer to default ascending direction.
-  - [ ] Optional offset pointer to `0`.
-- [ ] Refactor exchange-rate list filters to use generated `request.Params`.
-- [ ] Refactor journal-record search filters to use generated `request.Params`.
-- [ ] Refactor `/accounts/{account_id}/records` so `request.AccountId` supplies the account filter and generated query params supply the remaining record filters.
-- [ ] Remove the strict request context middleware if raw `*http.Request` access is no longer needed by strict handlers.
-- [ ] Delete or shrink `strict_parse.go` once no strict handler needs direct raw query parsing.
-- [ ] Forbid new manual `r.URL.Query()` parsing in `internal/httpapi` unless a concrete uncovered transport rule requires it and is documented near the code.
-- [ ] Verification:
-  - [ ] Existing high-level runtime/API tests still pass with no new private-helper unit tests.
-  - [ ] Boundary coverage confirms unsupported query params are rejected by OpenAPI validation, not handwritten allowlists.
-  - [ ] Boundary coverage confirms duplicate scalar query params are rejected or explicitly accepted according to OpenAPI validator behavior.
-  - [ ] `just fmt` passes.
-  - [ ] `just test` passes.
-  - [ ] `just test-integration` passes because JSON-over-HTTP behavior is touched.
-  - [ ] `just pre-commit` passes.
-  - [ ] Required docs updated.
+- [x] Refactor strict-server list handlers to use generated `request.Params` instead of `r.URL.Query()`.
+- [x] Add small HTTP adapter helpers for converting generated optional params into service list options:
+  - [x] Optional bool pointer to bool with false default.
+  - [x] Optional sort enum pointer to default service sort key.
+  - [x] Optional sort direction enum pointer to default ascending direction.
+  - [x] Optional offset pointer to `0`.
+- [x] Refactor exchange-rate list filters to use generated `request.Params`.
+- [x] Refactor journal-record search filters to use generated `request.Params`.
+- [x] Refactor `/accounts/{account_id}/records` so `request.AccountId` supplies the account filter and generated query params supply the remaining record filters.
+- [x] Remove the strict request context middleware if raw `*http.Request` access is no longer needed by strict handlers.
+- [x] Delete or shrink `strict_parse.go` once no strict handler needs direct raw query parsing.
+- [x] Forbid new manual `r.URL.Query()` parsing in `internal/httpapi` unless a concrete uncovered transport rule requires it and is documented near the code.
+- [x] Verification:
+  - [x] Existing high-level runtime/API tests still pass with no new private-helper unit tests.
+  - [x] Boundary coverage confirms unsupported query params are rejected by OpenAPI validation, not handwritten allowlists.
+  - [x] Boundary coverage confirms duplicate scalar query params are rejected or explicitly accepted according to OpenAPI validator behavior.
+  - [x] `just fmt` passes.
+  - [x] `just test` passes.
+  - [x] `just test-integration` passes because JSON-over-HTTP behavior is touched.
+  - [x] `just pre-commit` passes.
+  - [x] Required docs updated.
 
 ### Commit 3: Remove Redundant Strict JSON Body Validation
 - [ ] Verify OpenAPI request validation rejects unknown top-level JSON fields using existing `additionalProperties: false` schemas.

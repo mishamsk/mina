@@ -13,18 +13,17 @@ func (s *strictServer) ListCreditLimitHistory(ctx context.Context, request opena
 	if err := positivePathID(request.AccountId, "account_id"); err != nil {
 		return nil, err
 	}
-	r, err := requestFromStrictContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	query, err := parseListQueryForStrict(r, creditLimitHistoryListContract())
-	if err != nil {
-		return nil, err
-	}
 
+	params := request.Params
 	history, err := s.deps.CreditLimits.ListByAccount(ctx, request.AccountId, creditlimits.ListOptions{
-		IncludeTombstoned: query.IncludeTombstoned,
-		List:              serviceListOptions(query.List),
+		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		List: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyEffectiveDate,
+		),
 	})
 	if err != nil {
 		return nil, err
@@ -74,22 +73,20 @@ func (s *strictServer) GetCreditLimitHistory(ctx context.Context, request openap
 	return openapi.GetCreditLimitHistory200JSONResponse(creditLimitHistoryAPIResponse(history)), nil
 }
 
-func (s *strictServer) ListExchangeRates(ctx context.Context, _ openapi.ListExchangeRatesRequestObject) (openapi.ListExchangeRatesResponseObject, error) {
-	r, err := requestFromStrictContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	query, err := parseListQueryForStrict(r, exchangeRateListContract())
-	if err != nil {
-		return nil, err
-	}
-
+func (s *strictServer) ListExchangeRates(ctx context.Context, request openapi.ListExchangeRatesRequestObject) (openapi.ListExchangeRatesResponseObject, error) {
+	params := request.Params
 	rates, err := s.deps.ExchangeRates.List(ctx, exchangerates.ListOptions{
-		FromCurrency:      optionalFilter(query.Filters, filterKeyFromCurrency),
-		ToCurrency:        optionalFilter(query.Filters, filterKeyToCurrency),
-		EffectiveDate:     optionalFilter(query.Filters, filterKeyEffectiveDate),
-		IncludeTombstoned: query.IncludeTombstoned,
-		List:              serviceListOptions(query.List),
+		FromCurrency:      params.FromCurrency,
+		ToCurrency:        params.ToCurrency,
+		EffectiveDate:     params.EffectiveDate,
+		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		List: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyCurrencyPair,
+		),
 	})
 	if err != nil {
 		return nil, err
@@ -151,45 +148,6 @@ func (s *strictServer) UpdateExchangeRate(ctx context.Context, request openapi.U
 	}
 
 	return openapi.UpdateExchangeRate200JSONResponse(exchangeRateAPIResponse(rate)), nil
-}
-
-func optionalFilter(filters map[filterKey]string, key filterKey) *string {
-	value, ok := filters[key]
-	if !ok {
-		return nil
-	}
-
-	return &value
-}
-
-func creditLimitHistoryListContract() listQueryContract {
-	return listQueryContract{
-		AllowTombstoned: true,
-		SortKeys: map[sortKey]struct{}{
-			sortKeyCreatedAt:     {},
-			sortKeyEffectiveDate: {},
-		},
-		DefaultSortKey: sortKeyEffectiveDate,
-	}
-}
-
-func exchangeRateListContract() listQueryContract {
-	return listQueryContract{
-		AllowTombstoned: true,
-		FilterKeys: map[filterKey]struct{}{
-			filterKeyFromCurrency:  {},
-			filterKeyToCurrency:    {},
-			filterKeyEffectiveDate: {},
-		},
-		SortKeys: map[sortKey]struct{}{
-			sortKeyCreatedAt:     {},
-			sortKeyCurrencyPair:  {},
-			sortKeyEffectiveDate: {},
-			sortKeyFromCurrency:  {},
-			sortKeyToCurrency:    {},
-		},
-		DefaultSortKey: sortKeyCurrencyPair,
-	}
 }
 
 func creditLimitHistoryAPIResponse(history creditlimits.CreditLimitHistory) openapi.CreditLimitHistory {

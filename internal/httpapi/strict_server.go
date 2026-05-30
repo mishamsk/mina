@@ -81,6 +81,9 @@ func generatedParamCardinalityErrorMessage(r *http.Request, name string) string 
 	return name + " must have one non-empty value"
 }
 
+// Generated binding reports type and cardinality failures through the same
+// error type, so this compatibility path inspects the raw query only to
+// preserve Mina's existing binding-error messages.
 func queryParamHasWrongCardinality(r *http.Request, name string) bool {
 	values, ok := r.URL.Query()[name]
 	return ok && (len(values) != 1 || values[0] == "")

@@ -9,14 +9,6 @@ import (
 )
 
 func (s *strictServer) ListTransactions(ctx context.Context, _ openapi.ListTransactionsRequestObject) (openapi.ListTransactionsResponseObject, error) {
-	r, err := requestFromStrictContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if len(r.URL.Query()) != 0 {
-		return nil, services.InvalidRequest("unsupported list query parameter")
-	}
-
 	transactionList, err := s.deps.Transactions.List(ctx)
 	if err != nil {
 		return nil, err
@@ -75,15 +67,8 @@ func (s *strictServer) ReplaceTransaction(ctx context.Context, request openapi.R
 	return openapi.ReplaceTransaction200JSONResponse(transactionAPIResponse(transaction)), nil
 }
 
-func (s *strictServer) SearchJournalRecords(ctx context.Context, _ openapi.SearchJournalRecordsRequestObject) (openapi.SearchJournalRecordsResponseObject, error) {
-	r, err := requestFromStrictContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	opts, err := parseRecordSearchOptionsForStrict(r, true)
-	if err != nil {
-		return nil, err
-	}
+func (s *strictServer) SearchJournalRecords(ctx context.Context, request openapi.SearchJournalRecordsRequestObject) (openapi.SearchJournalRecordsResponseObject, error) {
+	opts := recordSearchOptionsFromParams(request.Params)
 	records, err := s.deps.Transactions.SearchRecords(ctx, opts)
 	if err != nil {
 		return nil, err
@@ -96,14 +81,7 @@ func (s *strictServer) SearchAccountJournalRecords(ctx context.Context, request 
 	if err := positivePathID(request.AccountId, "account_id"); err != nil {
 		return nil, err
 	}
-	r, err := requestFromStrictContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	opts, err := parseRecordSearchOptionsForStrict(r, false)
-	if err != nil {
-		return nil, err
-	}
+	opts := recordSearchOptionsFromAccountParams(request.Params)
 	opts.AccountID = &request.AccountId
 
 	records, err := s.deps.Transactions.SearchRecords(ctx, opts)
@@ -170,6 +148,66 @@ func (s *strictServer) BulkUpdateJournalRecordStatuses(ctx context.Context, requ
 	}
 
 	return openapi.BulkUpdateJournalRecordStatuses200JSONResponse(bulkRecordOperationAPIResponse(response)), nil
+}
+
+func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) transactions.RecordSearchOptions {
+	opts := transactions.RecordSearchOptions{
+		AccountID:         params.AccountId,
+		CategoryID:        params.CategoryId,
+		MemberID:          params.MemberId,
+		TagID:             params.TagId,
+		AmountMin:         params.AmountMin,
+		AmountMax:         params.AmountMax,
+		AmountUSDMin:      params.AmountUsdMin,
+		AmountUSDMax:      params.AmountUsdMax,
+		InitiatedDateFrom: params.InitiatedDateFrom,
+		InitiatedDateTo:   params.InitiatedDateTo,
+		PendingDateFrom:   params.PendingDateFrom,
+		PendingDateTo:     params.PendingDateTo,
+		PostedDateFrom:    params.PostedDateFrom,
+		PostedDateTo:      params.PostedDateTo,
+		MemoContains:      params.MemoContains,
+	}
+	setRecordSearchStatuses(&opts, params.PostingStatus, params.ReconciliationStatus)
+
+	return opts
+}
+
+func recordSearchOptionsFromAccountParams(params openapi.SearchAccountJournalRecordsParams) transactions.RecordSearchOptions {
+	opts := transactions.RecordSearchOptions{
+		CategoryID:        params.CategoryId,
+		MemberID:          params.MemberId,
+		TagID:             params.TagId,
+		AmountMin:         params.AmountMin,
+		AmountMax:         params.AmountMax,
+		AmountUSDMin:      params.AmountUsdMin,
+		AmountUSDMax:      params.AmountUsdMax,
+		InitiatedDateFrom: params.InitiatedDateFrom,
+		InitiatedDateTo:   params.InitiatedDateTo,
+		PendingDateFrom:   params.PendingDateFrom,
+		PendingDateTo:     params.PendingDateTo,
+		PostedDateFrom:    params.PostedDateFrom,
+		PostedDateTo:      params.PostedDateTo,
+		MemoContains:      params.MemoContains,
+	}
+	setRecordSearchStatuses(&opts, params.PostingStatus, params.ReconciliationStatus)
+
+	return opts
+}
+
+func setRecordSearchStatuses(
+	opts *transactions.RecordSearchOptions,
+	postingStatus *openapi.PostingStatus,
+	reconciliationStatus *openapi.ReconciliationStatus,
+) {
+	if postingStatus != nil {
+		value := transactions.PostingStatus(*postingStatus)
+		opts.PostingStatus = &value
+	}
+	if reconciliationStatus != nil {
+		value := transactions.ReconciliationStatus(*reconciliationStatus)
+		opts.ReconciliationStatus = &value
+	}
 }
 
 func transactionAPIInput(initiatedDate string, records []openapi.CreateJournalRecordRequest) transactions.CreateInput {

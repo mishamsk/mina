@@ -113,6 +113,15 @@ func TestRouterOpenAPIValidationErrorsUseMinaEnvelope(t *testing.T) {
 	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
 }
 
+func TestRouterOpenAPIQueryValidationRejectsUnsupportedQuery(t *testing.T) {
+	handler := New(Dependencies{})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/members?include_hidden=true", nil))
+
+	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid request")
+}
+
 func TestRouterRecoversPanicsWithMinaEnvelope(t *testing.T) {
 	handler := New(Dependencies{})
 	registerTestGetRoute(t, handler, "/panic", func(http.ResponseWriter, *http.Request) {

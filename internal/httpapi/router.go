@@ -60,7 +60,7 @@ func NewWithOptions(deps Dependencies, opts Options) http.Handler {
 
 		strict := openapi.NewStrictHandlerWithOptions(
 			newStrictServer(deps),
-			[]openapi.StrictMiddlewareFunc{strictRequestContextMiddleware},
+			nil,
 			strictHTTPServerOptions(),
 		)
 		openapi.HandlerWithOptions(strict, openapi.ChiServerOptions{

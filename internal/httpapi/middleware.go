@@ -12,6 +12,8 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/getkin/kin-openapi/routers"
+	"github.com/getkin/kin-openapi/routers/gorillamux"
 	"github.com/go-chi/chi/v5/middleware"
 	openapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 
@@ -76,10 +78,55 @@ func mustOpenAPIValidationSpec() *openapi3.T {
 }
 
 func openAPIRequestValidationMiddleware(spec *openapi3.T) func(http.Handler) http.Handler {
-	return openapimiddleware.OapiRequestValidatorWithOptions(spec, &openapimiddleware.Options{
+	validator := openapimiddleware.OapiRequestValidatorWithOptions(spec, &openapimiddleware.Options{
 		ErrorHandlerWithOpts: openAPIValidationErrorHandler,
 		DoNotValidateServers: true,
 	})
+	queryValidator := openAPIQueryParameterValidationMiddleware(spec)
+
+	return func(next http.Handler) http.Handler {
+		return validator(queryValidator(next))
+	}
+}
+
+func openAPIQueryParameterValidationMiddleware(spec *openapi3.T) func(http.Handler) http.Handler {
+	router, err := gorillamux.NewRouter(spec)
+	if err != nil {
+		panic(fmt.Errorf("build OpenAPI router: %w", err))
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			route, _, err := router.FindRoute(r)
+			if err != nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// kin-openapi validates declared query parameters but intentionally
+			// ignores unknown query names, so Mina enforces the OpenAPI-declared
+			// query surface here before generated binding reaches handlers.
+			for name := range r.URL.Query() {
+				if !routeAllowsQueryParameter(route, name) {
+					WriteAPIError(w, http.StatusBadRequest, openapi.APIErrorCodeInvalidRequest, "invalid request")
+					return
+				}
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func routeAllowsQueryParameter(route *routers.Route, name string) bool {
+	if route.Operation != nil && route.Operation.Parameters.GetByInAndName("query", name) != nil {
+		return true
+	}
+	if route.PathItem != nil && route.PathItem.Parameters.GetByInAndName("query", name) != nil {
+		return true
+	}
+
+	return false
 }
 
 func openAPIValidationErrorHandler(
