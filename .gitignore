@@ -1,0 +1,13 @@
+# Local build outputs
+/mina
+/bin/
+/dist/
+/build/
+
+# Go test, coverage, and profiling artifacts
+*.test
+*.out
+*.prof
+*.pprof
+/coverage/
+coverage.*
