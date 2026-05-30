@@ -68,20 +68,19 @@ Do not add private-helper unit tests. Verify through existing high-level runtime
   - [x] Required docs updated.
 
 ### Commit 4: Expose OpenAPI Discovery Endpoints
-- [ ] Add `GET /openapi.json` served from `openapi.GetSpecJSON()`.
-- [ ] Ensure `/openapi.json` returns `application/json`.
-- [ ] Decide whether to add an interactive documentation endpoint:
-  - [ ] If included, add a minimal `/docs` or `/swagger` endpoint that references the served spec.
-  - [ ] If not included, document that API tools should use `/openapi.json`.
-- [ ] Ensure generated OpenAPI route registration remains the source of product API paths; discovery/docs endpoints are adapter-owned operational helpers.
-- [ ] Verification:
-  - [ ] Existing high-level runtime/API tests still pass with no new private-helper unit tests.
-  - [ ] Boundary coverage confirms `/openapi.json` returns the embedded spec.
-  - [ ] `just fmt` passes.
-  - [ ] `just test` passes.
-  - [ ] `just test-integration` passes because real-network REST/API discovery behavior is touched.
-  - [ ] `just pre-commit` passes.
-  - [ ] Required docs updated.
+- [x] Add `GET /openapi.json` served from `openapi.GetSpecJSON()`.
+- [x] Ensure `/openapi.json` returns `application/json`.
+- [x] Decide whether to add an interactive documentation endpoint:
+  - [x] Do not include an interactive documentation endpoint; document that API tools should use `/openapi.json`.
+- [x] Ensure generated OpenAPI route registration remains the source of product API paths; discovery/docs endpoints are adapter-owned operational helpers.
+- [x] Verification:
+  - [x] Existing high-level runtime/API tests still pass with no new private-helper unit tests.
+  - [x] Boundary coverage confirms `/openapi.json` returns the embedded spec.
+  - [x] `just fmt` passes.
+  - [x] `just test` passes.
+  - [x] `just test-integration` passes because real-network REST/API discovery behavior is touched.
+  - [x] `just pre-commit` passes.
+  - [x] Required docs updated.
 
 ### Commit 5: Tighten HTTP Adapter Documentation And Guardrails
 - [ ] Update `internal/httpapi/PACKAGE.md` to say OpenAPI request validation owns transport-schema validation.

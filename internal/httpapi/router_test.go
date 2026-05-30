@@ -133,6 +133,27 @@ func TestRouterOpenAPIQueryValidationRejectsUnsupportedQuery(t *testing.T) {
 	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid request")
 }
 
+func TestRouterServesEmbeddedOpenAPISpec(t *testing.T) {
+	handler := New(Dependencies{})
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/openapi.json", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Fatalf("content type = %q, want application/json", contentType)
+	}
+	want, err := models.GetSpecJSON()
+	if err != nil {
+		t.Fatalf("load embedded OpenAPI spec: %v", err)
+	}
+	if !bytes.Equal(response.Body.Bytes(), want) {
+		t.Fatal("/openapi.json body does not match embedded OpenAPI spec")
+	}
+}
+
 func TestRouterRecoversPanicsWithMinaEnvelope(t *testing.T) {
 	handler := New(Dependencies{})
 	registerTestGetRoute(t, handler, "/panic", func(http.ResponseWriter, *http.Request) {

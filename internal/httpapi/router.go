@@ -53,6 +53,7 @@ func NewWithOptions(deps Dependencies, opts Options) http.Handler {
 	router.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
 		WriteAPIError(w, http.StatusMethodNotAllowed, openapi.APIErrorCodeMethodNotAllowed, "method not allowed")
 	})
+	router.Get("/openapi.json", openAPIJSONHandler)
 
 	router.Group(func(api chi.Router) {
 		api.Use(openAPIRequestValidationMiddleware(spec))

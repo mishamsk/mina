@@ -10,6 +10,7 @@
   - Transaction creation, read, list, full replacement, and tombstone deletion with nested journal records.
   - Journal-record search and account-record search.
   - Bulk journal-record category, tag, account, and status updates.
+  - OpenAPI discovery through `GET /openapi.json`.
 - Implemented durable storage behavior:
   - Upgrade-only DuckDB migrations with schema-version tracking.
   - Atomic double-entry transaction persistence and replacement.
