@@ -71,17 +71,17 @@ Keep the unknown-query-parameter guard unless it is replaced by an equivalent va
   - [x] Required docs updated
 
 ### Commit 4: Tighten Architecture And HTTP Adapter Docs
-- [ ] Update `docs/architecture.md` with a concise evergreen statement that `internal/httpapi` uses generated OpenAPI routing/contracts, generated request binding, and OpenAPI request validation for transport-shape validation.
-- [ ] State in `docs/architecture.md` that strict-server implementations should only map generated OpenAPI request/response types to service types, call services, and map service errors/statuses.
-- [ ] Keep the architecture wording short and avoid endpoint examples, migration history, or implementation inventory.
-- [ ] Align `internal/httpapi/PACKAGE.md` with the final code after redundant manual validation is removed.
-- [ ] Confirm docs still distinguish transport validation in `internal/httpapi` from domain validation in service packages.
-- [ ] Verification
-  - [ ] `just fmt` is not required for docs-only changes
-  - [ ] `just test` is not required for docs-only changes
-  - [ ] `just test-integration` is not required for docs-only changes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Update `docs/architecture.md` with a concise evergreen statement that `internal/httpapi` uses generated OpenAPI routing/contracts, generated request binding, and OpenAPI request validation for transport-shape validation.
+- [x] State in `docs/architecture.md` that strict-server implementations should only map generated OpenAPI request/response types to service types, call services, and map service errors/statuses.
+- [x] Keep the architecture wording short and avoid endpoint examples, migration history, or implementation inventory.
+- [x] Align `internal/httpapi/PACKAGE.md` with the final code after redundant manual validation is removed.
+- [x] Confirm docs still distinguish transport validation in `internal/httpapi` from domain validation in service packages.
+- [x] Verification
+  - [x] `just fmt` is not required for docs-only changes
+  - [x] `just test` is not required for docs-only changes
+  - [x] `just test-integration` is not required for docs-only changes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 5: Reaudit HTTP API Boundary
 - [ ] Revisit all handwritten code in `internal/httpapi` after the cleanup.

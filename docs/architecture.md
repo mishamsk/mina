@@ -31,7 +31,7 @@ Imports and runtime knowledge flow inward toward app-owned service packages. Com
 
 - `cmd/mina`: one binary and Cobra command tree. Cobra owns CLI parsing and command help. Do not add a new hand-rolled flag parser.
 - `internal/runtime`: config, open/create/migrate policy, and manual composition root.
-- `internal/httpapi`: REST/OpenAPI adapter, generated REST contract code if colocated, HTTP DTO mapping, route registration, request parsing, and HTTP status/error mapping.
+- `internal/httpapi`: REST/OpenAPI adapter, generated REST contract code if colocated, generated route registration, generated request binding, OpenAPI request validation for transport shape, HTTP DTO mapping, and HTTP status/error mapping.
 - App-owned service packages: domain types, validation, use cases, and repository interfaces for Stage 1 capabilities.
 - `internal/store`: DuckDB driver access, migrations, transactions, query code, and repository implementations.
 - Future adapters such as `internal/tui` and `internal/background`: added only when their stages require them.
@@ -40,7 +40,8 @@ Rules:
 
 - Service packages must not import HTTP, OpenAPI, TUI, scheduler, SQL, generated DB, Cobra, process I/O, or runtime composition packages.
 - Service packages own domain validation and use-case decisions.
-- `internal/httpapi` calls services and maps transport DTOs. It does not open databases, parse CLI flags, own SQL, or make domain decisions.
+- `internal/httpapi` calls services and maps generated OpenAPI request/response DTOs. Strict-server implementations map generated OpenAPI request objects to service inputs, call services, and map service outputs, errors, and statuses to generated OpenAPI response objects.
+- `internal/httpapi` does not open databases, parse CLI flags, own SQL, make domain decisions, or duplicate service-owned domain validation.
 - `internal/store` owns DB-facing row types, generated query code if used, migrations, transactions, DuckDB-specific error mapping, and app-to-DB type conversion.
 - `internal/store` does not know HTTP, OpenAPI, Cobra, or runtime composition.
 - `internal/runtime` wires concrete implementations manually. Avoid hidden global state for database handles, config, clocks, listeners, or services.
