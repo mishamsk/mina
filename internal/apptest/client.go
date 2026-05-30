@@ -22,6 +22,13 @@ type Client struct {
 	location store.AccountingLocation
 }
 
+// Option customizes an in-process app test client.
+type Option func(*clientOptions)
+
+type clientOptions struct {
+	location store.AccountingLocationConfig
+}
+
 // Response is a typed JSON response captured from the app handler.
 type Response[T any] struct {
 	StatusCode int
@@ -37,18 +44,32 @@ type Persistence struct {
 	location store.AccountingLocation
 }
 
+// WithLocationConfig selects the accounting location config for the test app.
+func WithLocationConfig(location store.AccountingLocationConfig) Option {
+	return func(opts *clientOptions) {
+		opts.location = location
+	}
+}
+
 // New creates an in-process app backed by migrated in-memory DuckDB state.
-func New(t *testing.T) *Client {
+func New(t *testing.T, options ...Option) *Client {
 	t.Helper()
 
 	ctx := context.Background()
 	schema := testSchemaName(t)
-	accounting, err := store.OpenAccounting(ctx, store.AccountingOpenRequest{
-		Migrate: true,
-		Location: store.AccountingLocationConfig{
+	opts := clientOptions{
+		location: store.AccountingLocationConfig{
 			Database: store.InMemoryAccountingDatabase,
 			Schema:   schema,
 		},
+	}
+	for _, option := range options {
+		option(&opts)
+	}
+
+	accounting, err := store.OpenAccounting(ctx, store.AccountingOpenRequest{
+		Migrate:  true,
+		Location: opts.location,
 	})
 	if err != nil {
 		t.Fatalf("open accounting test store: %v", err)

@@ -19,8 +19,7 @@ type AccountingStore struct {
 	location AccountingLocation
 }
 
-// NewAccountingStore wraps an opened DuckDB handle and selected accounting location.
-func NewAccountingStore(db *sql.DB, location AccountingLocation) *AccountingStore {
+func newAccountingStore(db *sql.DB, location AccountingLocation) *AccountingStore {
 	return &AccountingStore{
 		db:       db,
 		location: location,
@@ -40,7 +39,7 @@ func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*Accoun
 		}
 		return nil, err
 	}
-	accounting := NewAccountingStore(db, location)
+	accounting := newAccountingStore(db, location)
 
 	if request.Path != "" {
 		if err := AttachDatabase(ctx, accounting, request.Path); err != nil {

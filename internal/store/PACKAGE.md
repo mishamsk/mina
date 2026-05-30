@@ -26,4 +26,4 @@
 
 ## Testing Notes
 
-- Store tests should use migrated temporary database files.
+- Normal app tests may inspect DuckDB state through `internal/apptest` persistence helpers.

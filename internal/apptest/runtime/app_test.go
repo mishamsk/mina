@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/runtime"
 	"github.com/mishamsk/mina/internal/store"
 )
@@ -118,6 +119,44 @@ func TestNewWithoutDatabasePathServesFromNonDefaultAccountingSchema(t *testing.T
 	}
 	if count != 1 {
 		t.Fatalf("category count in qualified location = %d, want 1", count)
+	}
+}
+
+func TestAppSupportsQuotedAccountingSchemaLocations(t *testing.T) {
+	tests := []struct {
+		name   string
+		schema string
+	}{
+		{name: "reserved word", schema: "select"},
+		{name: "unicode", schema: "mina_é"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := apptest.New(t, apptest.WithLocationConfig(store.AccountingLocationConfig{
+				Database: store.InMemoryAccountingDatabase,
+				Schema:   tt.schema,
+			}))
+			persistence := client.Persistence()
+			location := persistence.Location()
+
+			var count int
+			if err := persistence.QueryRowContext(
+				context.Background(),
+				`SELECT COUNT(*)
+FROM duckdb_tables()
+WHERE database_name = ?
+  AND schema_name = ?
+  AND table_name = 'schema_version'`,
+				location.Database(),
+				location.Schema(),
+			).Scan(&count); err != nil {
+				t.Fatalf("check schema version table: %v", err)
+			}
+			if count != 1 {
+				t.Fatalf("schema_version table count = %d, want 1", count)
+			}
+		})
 	}
 }
 
