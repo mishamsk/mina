@@ -10,10 +10,6 @@ import (
 )
 
 func (s *strictServer) ListCreditLimitHistory(ctx context.Context, request openapi.ListCreditLimitHistoryRequestObject) (openapi.ListCreditLimitHistoryResponseObject, error) {
-	if err := positivePathID(request.AccountId, "account_id"); err != nil {
-		return nil, err
-	}
-
 	params := request.Params
 	history, err := s.deps.CreditLimits.ListByAccount(ctx, request.AccountId, creditlimits.ListOptions{
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
@@ -33,9 +29,6 @@ func (s *strictServer) ListCreditLimitHistory(ctx context.Context, request opena
 }
 
 func (s *strictServer) CreateCreditLimitHistory(ctx context.Context, request openapi.CreateCreditLimitHistoryRequestObject) (openapi.CreateCreditLimitHistoryResponseObject, error) {
-	if err := positivePathID(request.AccountId, "account_id"); err != nil {
-		return nil, err
-	}
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
 	}
@@ -51,9 +44,6 @@ func (s *strictServer) CreateCreditLimitHistory(ctx context.Context, request ope
 }
 
 func (s *strictServer) DeleteCreditLimitHistory(ctx context.Context, request openapi.DeleteCreditLimitHistoryRequestObject) (openapi.DeleteCreditLimitHistoryResponseObject, error) {
-	if err := positivePathID(request.CreditLimitHistoryId, "credit_limit_history_id"); err != nil {
-		return nil, err
-	}
 	if err := s.deps.CreditLimits.Delete(ctx, request.CreditLimitHistoryId); err != nil {
 		return nil, err
 	}
@@ -62,9 +52,6 @@ func (s *strictServer) DeleteCreditLimitHistory(ctx context.Context, request ope
 }
 
 func (s *strictServer) GetCreditLimitHistory(ctx context.Context, request openapi.GetCreditLimitHistoryRequestObject) (openapi.GetCreditLimitHistoryResponseObject, error) {
-	if err := positivePathID(request.CreditLimitHistoryId, "credit_limit_history_id"); err != nil {
-		return nil, err
-	}
 	history, err := s.deps.CreditLimits.Get(ctx, request.CreditLimitHistoryId, boolParam(request.Params.IncludeTombstoned))
 	if err != nil {
 		return nil, err
@@ -113,9 +100,6 @@ func (s *strictServer) CreateExchangeRate(ctx context.Context, request openapi.C
 }
 
 func (s *strictServer) DeleteExchangeRate(ctx context.Context, request openapi.DeleteExchangeRateRequestObject) (openapi.DeleteExchangeRateResponseObject, error) {
-	if err := positivePathID(request.ExchangeRateId, "exchange_rate_id"); err != nil {
-		return nil, err
-	}
 	if err := s.deps.ExchangeRates.Delete(ctx, request.ExchangeRateId); err != nil {
 		return nil, err
 	}
@@ -124,9 +108,6 @@ func (s *strictServer) DeleteExchangeRate(ctx context.Context, request openapi.D
 }
 
 func (s *strictServer) GetExchangeRate(ctx context.Context, request openapi.GetExchangeRateRequestObject) (openapi.GetExchangeRateResponseObject, error) {
-	if err := positivePathID(request.ExchangeRateId, "exchange_rate_id"); err != nil {
-		return nil, err
-	}
 	rate, err := s.deps.ExchangeRates.Get(ctx, request.ExchangeRateId, boolParam(request.Params.IncludeTombstoned))
 	if err != nil {
 		return nil, err
@@ -136,9 +117,6 @@ func (s *strictServer) GetExchangeRate(ctx context.Context, request openapi.GetE
 }
 
 func (s *strictServer) UpdateExchangeRate(ctx context.Context, request openapi.UpdateExchangeRateRequestObject) (openapi.UpdateExchangeRateResponseObject, error) {
-	if err := positivePathID(request.ExchangeRateId, "exchange_rate_id"); err != nil {
-		return nil, err
-	}
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
 	}

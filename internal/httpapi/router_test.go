@@ -66,6 +66,10 @@ func TestRouterGeneratedBindingErrorsUseParameterMetadataMessages(t *testing.T) 
 	idResponse := httptest.NewRecorder()
 	handler.ServeHTTP(idResponse, httptest.NewRequest(http.MethodGet, "/accounts/not-an-id/records", nil))
 	assertMinaError(t, idResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `path parameter "account_id" has invalid type`)
+
+	minimumIDResponse := httptest.NewRecorder()
+	handler.ServeHTTP(minimumIDResponse, httptest.NewRequest(http.MethodGet, "/accounts/0/records", nil))
+	assertMinaError(t, minimumIDResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `path parameter "account_id" is invalid: number must be at least 1`)
 }
 
 func TestRouterOpenAPIJSONValidationRejectsNullRequiredBool(t *testing.T) {

@@ -30,9 +30,6 @@ func (s *strictServer) CreateTransaction(ctx context.Context, request openapi.Cr
 }
 
 func (s *strictServer) DeleteTransaction(ctx context.Context, request openapi.DeleteTransactionRequestObject) (openapi.DeleteTransactionResponseObject, error) {
-	if err := positivePathID(request.TransactionId, "transaction_id"); err != nil {
-		return nil, err
-	}
 	if err := s.deps.Transactions.Delete(ctx, request.TransactionId); err != nil {
 		return nil, err
 	}
@@ -41,9 +38,6 @@ func (s *strictServer) DeleteTransaction(ctx context.Context, request openapi.De
 }
 
 func (s *strictServer) GetTransaction(ctx context.Context, request openapi.GetTransactionRequestObject) (openapi.GetTransactionResponseObject, error) {
-	if err := positivePathID(request.TransactionId, "transaction_id"); err != nil {
-		return nil, err
-	}
 	transaction, err := s.deps.Transactions.Get(ctx, request.TransactionId)
 	if err != nil {
 		return nil, err
@@ -53,9 +47,6 @@ func (s *strictServer) GetTransaction(ctx context.Context, request openapi.GetTr
 }
 
 func (s *strictServer) ReplaceTransaction(ctx context.Context, request openapi.ReplaceTransactionRequestObject) (openapi.ReplaceTransactionResponseObject, error) {
-	if err := positivePathID(request.TransactionId, "transaction_id"); err != nil {
-		return nil, err
-	}
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
 	}
@@ -78,9 +69,6 @@ func (s *strictServer) SearchJournalRecords(ctx context.Context, request openapi
 }
 
 func (s *strictServer) SearchAccountJournalRecords(ctx context.Context, request openapi.SearchAccountJournalRecordsRequestObject) (openapi.SearchAccountJournalRecordsResponseObject, error) {
-	if err := positivePathID(request.AccountId, "account_id"); err != nil {
-		return nil, err
-	}
 	opts := recordSearchOptionsFromAccountParams(request.Params)
 	opts.AccountID = &request.AccountId
 

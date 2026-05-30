@@ -50,9 +50,6 @@ func (s *strictServer) CreateAccount(ctx context.Context, request openapi.Create
 }
 
 func (s *strictServer) DeleteAccount(ctx context.Context, request openapi.DeleteAccountRequestObject) (openapi.DeleteAccountResponseObject, error) {
-	if err := positivePathID(request.AccountId, "account_id"); err != nil {
-		return nil, err
-	}
 	if err := s.deps.Accounts.Delete(ctx, request.AccountId); err != nil {
 		return nil, err
 	}
@@ -61,9 +58,6 @@ func (s *strictServer) DeleteAccount(ctx context.Context, request openapi.Delete
 }
 
 func (s *strictServer) GetAccount(ctx context.Context, request openapi.GetAccountRequestObject) (openapi.GetAccountResponseObject, error) {
-	if err := positivePathID(request.AccountId, "account_id"); err != nil {
-		return nil, err
-	}
 	account, err := s.deps.Accounts.Get(ctx, request.AccountId, boolParam(request.Params.IncludeTombstoned))
 	if err != nil {
 		return nil, err
@@ -73,9 +67,6 @@ func (s *strictServer) GetAccount(ctx context.Context, request openapi.GetAccoun
 }
 
 func (s *strictServer) UpdateAccount(ctx context.Context, request openapi.UpdateAccountRequestObject) (openapi.UpdateAccountResponseObject, error) {
-	if err := positivePathID(request.AccountId, "account_id"); err != nil {
-		return nil, err
-	}
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
 	}
@@ -128,9 +119,6 @@ func (s *strictServer) CreateCategory(ctx context.Context, request openapi.Creat
 }
 
 func (s *strictServer) DeleteCategory(ctx context.Context, request openapi.DeleteCategoryRequestObject) (openapi.DeleteCategoryResponseObject, error) {
-	if err := positivePathID(request.CategoryId, "category_id"); err != nil {
-		return nil, err
-	}
 	if err := s.deps.Categories.Delete(ctx, request.CategoryId); err != nil {
 		return nil, err
 	}
@@ -139,9 +127,6 @@ func (s *strictServer) DeleteCategory(ctx context.Context, request openapi.Delet
 }
 
 func (s *strictServer) GetCategory(ctx context.Context, request openapi.GetCategoryRequestObject) (openapi.GetCategoryResponseObject, error) {
-	if err := positivePathID(request.CategoryId, "category_id"); err != nil {
-		return nil, err
-	}
 	category, err := s.deps.Categories.Get(ctx, request.CategoryId, boolParam(request.Params.IncludeTombstoned))
 	if err != nil {
 		return nil, err
@@ -151,9 +136,6 @@ func (s *strictServer) GetCategory(ctx context.Context, request openapi.GetCateg
 }
 
 func (s *strictServer) UpdateCategory(ctx context.Context, request openapi.UpdateCategoryRequestObject) (openapi.UpdateCategoryResponseObject, error) {
-	if err := positivePathID(request.CategoryId, "category_id"); err != nil {
-		return nil, err
-	}
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
 	}
@@ -198,9 +180,6 @@ func (s *strictServer) CreateMember(ctx context.Context, request openapi.CreateM
 }
 
 func (s *strictServer) DeleteMember(ctx context.Context, request openapi.DeleteMemberRequestObject) (openapi.DeleteMemberResponseObject, error) {
-	if err := positivePathID(request.MemberId, "member_id"); err != nil {
-		return nil, err
-	}
 	if err := s.deps.Members.Delete(ctx, request.MemberId); err != nil {
 		return nil, err
 	}
@@ -209,9 +188,6 @@ func (s *strictServer) DeleteMember(ctx context.Context, request openapi.DeleteM
 }
 
 func (s *strictServer) GetMember(ctx context.Context, request openapi.GetMemberRequestObject) (openapi.GetMemberResponseObject, error) {
-	if err := positivePathID(request.MemberId, "member_id"); err != nil {
-		return nil, err
-	}
 	member, err := s.deps.Members.Get(ctx, request.MemberId, boolParam(request.Params.IncludeTombstoned))
 	if err != nil {
 		return nil, err
@@ -221,9 +197,6 @@ func (s *strictServer) GetMember(ctx context.Context, request openapi.GetMemberR
 }
 
 func (s *strictServer) UpdateMember(ctx context.Context, request openapi.UpdateMemberRequestObject) (openapi.UpdateMemberResponseObject, error) {
-	if err := positivePathID(request.MemberId, "member_id"); err != nil {
-		return nil, err
-	}
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
 	}
@@ -271,9 +244,6 @@ func (s *strictServer) CreateTag(ctx context.Context, request openapi.CreateTagR
 }
 
 func (s *strictServer) DeleteTag(ctx context.Context, request openapi.DeleteTagRequestObject) (openapi.DeleteTagResponseObject, error) {
-	if err := positivePathID(request.TagId, "tag_id"); err != nil {
-		return nil, err
-	}
 	if err := s.deps.Tags.Delete(ctx, request.TagId); err != nil {
 		return nil, err
 	}
@@ -282,9 +252,6 @@ func (s *strictServer) DeleteTag(ctx context.Context, request openapi.DeleteTagR
 }
 
 func (s *strictServer) GetTag(ctx context.Context, request openapi.GetTagRequestObject) (openapi.GetTagResponseObject, error) {
-	if err := positivePathID(request.TagId, "tag_id"); err != nil {
-		return nil, err
-	}
 	tag, err := s.deps.Tags.Get(ctx, request.TagId, boolParam(request.Params.IncludeTombstoned))
 	if err != nil {
 		return nil, err
@@ -294,9 +261,6 @@ func (s *strictServer) GetTag(ctx context.Context, request openapi.GetTagRequest
 }
 
 func (s *strictServer) UpdateTag(ctx context.Context, request openapi.UpdateTagRequestObject) (openapi.UpdateTagResponseObject, error) {
-	if err := positivePathID(request.TagId, "tag_id"); err != nil {
-		return nil, err
-	}
 	if request.Body == nil {
 		return nil, services.InvalidRequest("invalid JSON request body")
 	}
