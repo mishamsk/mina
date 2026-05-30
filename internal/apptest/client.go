@@ -48,8 +48,15 @@ func New(t *testing.T) *Client {
 	}
 
 	schema := testSchemaName(t)
-	if err := store.UseSchema(ctx, db, schema); err != nil {
+	location := store.AccountingLocation{
+		Catalog: store.InMemoryAccountingCatalog,
+		Schema:  schema,
+	}
+	if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
 		t.Fatalf("prepare test schema: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "SET schema="+store.QuoteIdentifier(schema)); err != nil {
+		t.Fatalf("select test schema: %v", err)
 	}
 	if err := store.Migrate(ctx, db); err != nil {
 		t.Fatalf("migrate test schema: %v", err)
