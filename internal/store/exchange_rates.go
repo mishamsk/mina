@@ -27,7 +27,7 @@ func NewExchangeRateStore(db *sql.DB, location AccountingLocation) *ExchangeRate
 func (s *ExchangeRateStore) Create(ctx context.Context, input exchangerates.CreateInput) (exchangerates.ExchangeRate, error) {
 	var rate exchangerates.ExchangeRate
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := activeExchangeRateExists(ctx, tx, input.FromCurrency, input.ToCurrency, input.EffectiveDate)
+		exists, err := activeExchangeRateExists(ctx, tx, s.location, input.FromCurrency, input.ToCurrency, input.EffectiveDate)
 		if err != nil {
 			return err
 		}
@@ -37,7 +37,7 @@ func (s *ExchangeRateStore) Create(ctx context.Context, input exchangerates.Crea
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO exchange_rate (from_currency, to_currency, rate, effective_date)
+			`INSERT INTO `+s.location.mustQualifiedName("exchange_rate")+` (from_currency, to_currency, rate, effective_date)
 VALUES (?, ?, ?, ?)
 RETURNING exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
 			input.FromCurrency,
@@ -65,7 +65,7 @@ RETURNING exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), C
 // Get returns an exchange rate by ID.
 func (s *ExchangeRateStore) Get(ctx context.Context, id int64, includeTombstoned bool) (exchangerates.ExchangeRate, error) {
 	query := `SELECT exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
-FROM exchange_rate
+FROM ` + s.location.mustQualifiedName("exchange_rate") + `
 WHERE exchange_rate_id = ?`
 	args := []any{id}
 	if !includeTombstoned {
@@ -86,7 +86,7 @@ WHERE exchange_rate_id = ?`
 // List returns exchange rates using explicit filters and deterministic ordering.
 func (s *ExchangeRateStore) List(ctx context.Context, opts exchangerates.ListOptions) ([]exchangerates.ExchangeRate, error) {
 	query := `SELECT exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
-FROM exchange_rate
+FROM ` + s.location.mustQualifiedName("exchange_rate") + `
 WHERE 1 = 1`
 	args := []any{}
 	if opts.FromCurrency != nil {
@@ -136,7 +136,7 @@ WHERE 1 = 1`
 func (s *ExchangeRateStore) UpdateRate(ctx context.Context, id int64, rate string) (exchangerates.ExchangeRate, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`UPDATE exchange_rate
+		`UPDATE `+s.location.mustQualifiedName("exchange_rate")+`
 SET rate = ?
 WHERE exchange_rate_id = ? AND tombstoned_at IS NULL
 RETURNING exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
@@ -158,7 +158,7 @@ RETURNING exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), C
 func (s *ExchangeRateStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.ExecContext(
 		ctx,
-		`UPDATE exchange_rate
+		`UPDATE `+s.location.mustQualifiedName("exchange_rate")+`
 SET tombstoned_at = CURRENT_TIMESTAMP
 WHERE exchange_rate_id = ? AND tombstoned_at IS NULL`,
 		id,
@@ -203,12 +203,12 @@ func scanExchangeRate(scanner exchangeRateScanner) (exchangerates.ExchangeRate, 
 	return rate, nil
 }
 
-func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, fromCurrency string, toCurrency string, effectiveDate string) (bool, error) {
+func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, location AccountingLocation, fromCurrency string, toCurrency string, effectiveDate string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
 		`SELECT exchange_rate_id
-FROM exchange_rate
+FROM `+location.mustQualifiedName("exchange_rate")+`
 WHERE from_currency = ? AND to_currency = ? AND effective_date = ? AND tombstoned_at IS NULL
 LIMIT 1`,
 		fromCurrency,

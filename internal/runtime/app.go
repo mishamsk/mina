@@ -62,15 +62,8 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		}
 		return nil, err
 	}
-	if err := store.SelectAccountingLocation(ctx, db, location); err != nil {
-		if closeErr := db.Close(); closeErr != nil {
-			return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
-		}
-		return nil, err
-	}
-
 	if cfg.ApplyMigrations {
-		if err := store.Migrate(ctx, db); err != nil {
+		if err := store.Migrate(ctx, db, location); err != nil {
 			if closeErr := db.Close(); closeErr != nil {
 				return nil, fmt.Errorf("migrate database: %w; close database: %w", err, closeErr)
 			}

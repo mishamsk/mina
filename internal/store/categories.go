@@ -27,7 +27,7 @@ func NewCategoryStore(db *sql.DB, location AccountingLocation) *CategoryStore {
 func (s *CategoryStore) Create(ctx context.Context, input categories.CreateInput) (categories.Category, error) {
 	var category categories.Category
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := categoryFQNExists(ctx, tx, input.FQN)
+		exists, err := categoryFQNExists(ctx, tx, s.location, input.FQN)
 		if err != nil {
 			return err
 		}
@@ -37,7 +37,7 @@ func (s *CategoryStore) Create(ctx context.Context, input categories.CreateInput
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO category (fqn, is_hidden)
+			`INSERT INTO `+s.location.mustQualifiedName("category")+` (fqn, is_hidden)
 VALUES (?, ?)
 RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
@@ -63,7 +63,7 @@ RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, upda
 // Get returns a category by ID.
 func (s *CategoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (categories.Category, error) {
 	query := `SELECT category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM category
+FROM ` + s.location.mustQualifiedName("category") + `
 WHERE category_id = ?`
 	args := []any{id}
 	if !includeTombstoned {
@@ -84,7 +84,7 @@ WHERE category_id = ?`
 // List returns categories in deterministic hierarchy order.
 func (s *CategoryStore) List(ctx context.Context, opts categories.ListOptions) ([]categories.Category, error) {
 	query := `SELECT category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM category
+FROM ` + s.location.mustQualifiedName("category") + `
 WHERE 1 = 1`
 	args := []any{}
 	if !opts.IncludeHidden {
@@ -125,7 +125,7 @@ WHERE 1 = 1`
 func (s *CategoryStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (categories.Category, error) {
 	row := s.db.QueryRowContext(
 		ctx,
-		`UPDATE category
+		`UPDATE `+s.location.mustQualifiedName("category")+`
 SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
 WHERE category_id = ? AND tombstoned_at IS NULL
 RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
@@ -147,7 +147,7 @@ RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, upda
 func (s *CategoryStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.ExecContext(
 		ctx,
-		`UPDATE category
+		`UPDATE `+s.location.mustQualifiedName("category")+`
 SET tombstoned_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE category_id = ? AND tombstoned_at IS NULL`,
@@ -199,11 +199,11 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	return category, nil
 }
 
-func categoryFQNExists(ctx context.Context, tx *sql.Tx, fqn string) (bool, error) {
+func categoryFQNExists(ctx context.Context, tx *sql.Tx, location AccountingLocation, fqn string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
-		"SELECT category_id FROM category WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
+		"SELECT category_id FROM "+location.mustQualifiedName("category")+" WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
 		fqn,
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {

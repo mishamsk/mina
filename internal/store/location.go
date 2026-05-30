@@ -79,3 +79,23 @@ func (l AccountingLocation) QualifiedName(object string) (string, error) {
 		QuoteIdentifier(object),
 	}, "."), nil
 }
+
+func (l AccountingLocation) mustQualifiedName(object string) string {
+	name, err := l.QualifiedName(object)
+	if err != nil {
+		panic(err)
+	}
+
+	return name
+}
+
+func (l AccountingLocation) sequenceLiteral(sequence string) string {
+	if err := l.Validate(); err != nil {
+		panic(err)
+	}
+	if err := ValidateIdentifierName("sequence", sequence); err != nil {
+		panic(err)
+	}
+
+	return quoteStringLiteral(l.Catalog + "." + l.Schema + "." + sequence)
+}

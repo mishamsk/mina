@@ -5,38 +5,39 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Migration is one upgrade-only database schema change.
 type Migration struct {
 	Version int
 	Name    string
-	SQL     string
+	SQL     func(AccountingLocation) string
 }
 
 var migrations = []Migration{
 	{
 		Version: 1,
 		Name:    "create_schema_primitives",
-		SQL: `
-CREATE SEQUENCE primary_key_gen_seq START 1;
+		SQL: migrationSQL(`
+CREATE SEQUENCE {primary_key_gen_seq} START 1;
 
-CREATE TYPE posting_status AS ENUM ('PENDING', 'POSTED', 'CANCELLED');
-CREATE TYPE reconciliation_status AS ENUM ('RECONCILED', 'UNRECONCILED');
-CREATE TYPE source AS ENUM ('MANUAL', 'IMPORTED', 'RECURRING_TEMPLATE');
+CREATE TYPE {posting_status} AS ENUM ('PENDING', 'POSTED', 'CANCELLED');
+CREATE TYPE {reconciliation_status} AS ENUM ('RECONCILED', 'UNRECONCILED');
+CREATE TYPE {source} AS ENUM ('MANUAL', 'IMPORTED', 'RECURRING_TEMPLATE');
 
-CREATE TABLE schema_version (
+CREATE TABLE {schema_version} (
 	version INTEGER PRIMARY KEY,
 	name TEXT NOT NULL,
 	applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);`,
+);`),
 	},
 	{
 		Version: 2,
 		Name:    "create_category",
-		SQL: `
-CREATE TABLE category (
-	category_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+		SQL: migrationSQL(`
+CREATE TABLE {category} (
+	category_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
 	fqn TEXT NOT NULL,
 	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -50,15 +51,15 @@ CREATE TABLE category (
 	UNIQUE(fqn, tombstoned_at)
 );
 
-CREATE UNIQUE INDEX category_active_fqn_unique
-ON category ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`,
+CREATE UNIQUE INDEX {category_active_fqn_unique}
+ON {category} ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`),
 	},
 	{
 		Version: 3,
 		Name:    "create_tag",
-		SQL: `
-CREATE TABLE tag (
-	tag_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+		SQL: migrationSQL(`
+CREATE TABLE {tag} (
+	tag_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
 	fqn TEXT NOT NULL,
 	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -72,15 +73,15 @@ CREATE TABLE tag (
 	UNIQUE(fqn, tombstoned_at)
 );
 
-CREATE UNIQUE INDEX tag_active_fqn_unique
-ON tag ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`,
+CREATE UNIQUE INDEX {tag_active_fqn_unique}
+ON {tag} ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`),
 	},
 	{
 		Version: 4,
 		Name:    "create_member",
-		SQL: `
-CREATE TABLE member (
-	member_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+		SQL: migrationSQL(`
+CREATE TABLE {member} (
+	member_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
 	name TEXT NOT NULL,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -88,15 +89,15 @@ CREATE TABLE member (
 	UNIQUE(name, tombstoned_at)
 );
 
-CREATE UNIQUE INDEX member_active_name_unique
-ON member ((CASE WHEN tombstoned_at IS NULL THEN name ELSE NULL END));`,
+CREATE UNIQUE INDEX {member_active_name_unique}
+ON {member} ((CASE WHEN tombstoned_at IS NULL THEN name ELSE NULL END));`),
 	},
 	{
 		Version: 5,
 		Name:    "create_account",
-		SQL: `
-CREATE TABLE account (
-	account_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+		SQL: migrationSQL(`
+CREATE TABLE {account} (
+	account_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
 	fqn TEXT NOT NULL,
 	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
 	currency TEXT,
@@ -114,15 +115,15 @@ CREATE TABLE account (
 	UNIQUE(fqn, tombstoned_at)
 );
 
-CREATE UNIQUE INDEX account_active_fqn_unique
-ON account ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`,
+CREATE UNIQUE INDEX {account_active_fqn_unique}
+ON {account} ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`),
 	},
 	{
 		Version: 6,
 		Name:    "create_credit_limit_history",
-		SQL: `
-CREATE TABLE credit_limit_history (
-	credit_limit_history_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+		SQL: migrationSQL(`
+CREATE TABLE {credit_limit_history} (
+	credit_limit_history_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
 	account_id INTEGER NOT NULL,
 	credit_limit DECIMAL(18,8) NOT NULL,
 	effective_date DATE NOT NULL,
@@ -131,15 +132,15 @@ CREATE TABLE credit_limit_history (
 	UNIQUE(account_id, effective_date, tombstoned_at)
 );
 
-CREATE UNIQUE INDEX credit_limit_history_active_account_date_unique
-ON credit_limit_history ((CASE WHEN tombstoned_at IS NULL THEN CAST(account_id AS VARCHAR) || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));`,
+CREATE UNIQUE INDEX {credit_limit_history_active_account_date_unique}
+ON {credit_limit_history} ((CASE WHEN tombstoned_at IS NULL THEN CAST(account_id AS VARCHAR) || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));`),
 	},
 	{
 		Version: 7,
 		Name:    "create_exchange_rate",
-		SQL: `
-CREATE TABLE exchange_rate (
-	exchange_rate_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+		SQL: migrationSQL(`
+CREATE TABLE {exchange_rate} (
+	exchange_rate_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
 	from_currency TEXT NOT NULL,
 	to_currency TEXT NOT NULL,
 	rate DECIMAL(18,8) NOT NULL,
@@ -149,22 +150,22 @@ CREATE TABLE exchange_rate (
 	UNIQUE(from_currency, to_currency, effective_date, tombstoned_at)
 );
 
-CREATE UNIQUE INDEX exchange_rate_active_pair_date_unique
-ON exchange_rate ((CASE WHEN tombstoned_at IS NULL THEN from_currency || ':' || to_currency || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));`,
+CREATE UNIQUE INDEX {exchange_rate_active_pair_date_unique}
+ON {exchange_rate} ((CASE WHEN tombstoned_at IS NULL THEN from_currency || ':' || to_currency || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));`),
 	},
 	{
 		Version: 8,
 		Name:    "create_transaction_and_journal_record",
-		SQL: `
-CREATE TABLE "transaction" (
-	transaction_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+		SQL: migrationSQL(`
+CREATE TABLE {transaction} (
+	transaction_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
 	initiated_date DATE NOT NULL,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	tombstoned_at TIMESTAMP
 );
 
-CREATE TABLE journal_record (
-	record_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+CREATE TABLE {journal_record} (
+	record_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
 	transaction_id INTEGER NOT NULL,
 	account_id INTEGER NOT NULL,
 	member_id INTEGER,
@@ -176,9 +177,9 @@ CREATE TABLE journal_record (
 	memo TEXT,
 	pending_date DATE,
 	posted_date DATE,
-	posting_status posting_status NOT NULL,
-	reconciliation_status reconciliation_status NOT NULL DEFAULT 'RECONCILED',
-	source source NOT NULL,
+	posting_status {posting_status} NOT NULL,
+	reconciliation_status {reconciliation_status} NOT NULL DEFAULT 'RECONCILED',
+	source {source} NOT NULL,
 	external_id TEXT,
 	external_system TEXT,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -186,15 +187,15 @@ CREATE TABLE journal_record (
 	tombstoned_at TIMESTAMP
 );
 
-CREATE INDEX journal_record_transaction_id_idx
-ON journal_record(transaction_id);`,
+CREATE INDEX {journal_record_transaction_id_idx}
+ON {journal_record}(transaction_id);`),
 	},
 	{
 		Version: 9,
 		Name:    "create_budget",
-		SQL: `
-CREATE TABLE budget (
-	budget_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+		SQL: migrationSQL(`
+CREATE TABLE {budget} (
+	budget_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
 	category_fqn TEXT NOT NULL,
 	month DATE NOT NULL,
 	amount DECIMAL(18,8) NOT NULL,
@@ -204,9 +205,43 @@ CREATE TABLE budget (
 	UNIQUE(category_fqn, month, tombstoned_at)
 );
 
-CREATE UNIQUE INDEX budget_active_category_month_unique
-ON budget ((CASE WHEN tombstoned_at IS NULL THEN category_fqn || ':' || CAST(month AS VARCHAR) ELSE NULL END));`,
+CREATE UNIQUE INDEX {budget_active_category_month_unique}
+ON {budget} ((CASE WHEN tombstoned_at IS NULL THEN category_fqn || ':' || CAST(month AS VARCHAR) ELSE NULL END));`),
 	},
+}
+
+func migrationSQL(template string) func(AccountingLocation) string {
+	return func(location AccountingLocation) string {
+		replacements := []string{
+			"{primary_key_gen_seq}", location.mustQualifiedName("primary_key_gen_seq"),
+			"{primary_key_gen_seq_literal}", location.sequenceLiteral("primary_key_gen_seq"),
+			"{posting_status}", location.mustQualifiedName("posting_status"),
+			"{reconciliation_status}", location.mustQualifiedName("reconciliation_status"),
+			"{source}", location.mustQualifiedName("source"),
+			"{schema_version}", location.mustQualifiedName("schema_version"),
+			"{category}", location.mustQualifiedName("category"),
+			"{tag}", location.mustQualifiedName("tag"),
+			"{member}", location.mustQualifiedName("member"),
+			"{account}", location.mustQualifiedName("account"),
+			"{credit_limit_history}", location.mustQualifiedName("credit_limit_history"),
+			"{exchange_rate}", location.mustQualifiedName("exchange_rate"),
+			"{transaction}", location.mustQualifiedName("transaction"),
+			"{journal_record}", location.mustQualifiedName("journal_record"),
+			"{budget}", location.mustQualifiedName("budget"),
+			// DuckDB places indexes through the qualified ON table and rejects
+			// catalog-qualified index names in CREATE INDEX.
+			"{category_active_fqn_unique}", QuoteIdentifier("category_active_fqn_unique"),
+			"{tag_active_fqn_unique}", QuoteIdentifier("tag_active_fqn_unique"),
+			"{member_active_name_unique}", QuoteIdentifier("member_active_name_unique"),
+			"{account_active_fqn_unique}", QuoteIdentifier("account_active_fqn_unique"),
+			"{credit_limit_history_active_account_date_unique}", QuoteIdentifier("credit_limit_history_active_account_date_unique"),
+			"{exchange_rate_active_pair_date_unique}", QuoteIdentifier("exchange_rate_active_pair_date_unique"),
+			"{journal_record_transaction_id_idx}", QuoteIdentifier("journal_record_transaction_id_idx"),
+			"{budget_active_category_month_unique}", QuoteIdentifier("budget_active_category_month_unique"),
+		}
+
+		return strings.NewReplacer(replacements...).Replace(template)
+	}
 }
 
 // LatestSchemaVersion returns the highest schema version known to this binary.
@@ -219,8 +254,8 @@ func LatestSchemaVersion() int {
 }
 
 // CurrentSchemaVersion returns the highest applied database schema version.
-func CurrentSchemaVersion(ctx context.Context, db *sql.DB) (int, error) {
-	exists, err := schemaVersionTableExists(ctx, db)
+func CurrentSchemaVersion(ctx context.Context, db *sql.DB, location AccountingLocation) (int, error) {
+	exists, err := schemaVersionTableExists(ctx, db, location)
 	if err != nil {
 		return 0, err
 	}
@@ -228,8 +263,9 @@ func CurrentSchemaVersion(ctx context.Context, db *sql.DB) (int, error) {
 		return 0, nil
 	}
 
+	schemaVersion := location.mustQualifiedName("schema_version")
 	var version int
-	if err := db.QueryRowContext(ctx, "SELECT COALESCE(MAX(version), 0) FROM schema_version").Scan(&version); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT COALESCE(MAX(version), 0) FROM "+schemaVersion).Scan(&version); err != nil {
 		return 0, fmt.Errorf("read schema version: %w", err)
 	}
 
@@ -237,8 +273,12 @@ func CurrentSchemaVersion(ctx context.Context, db *sql.DB) (int, error) {
 }
 
 // Migrate applies all pending upgrade-only migrations.
-func Migrate(ctx context.Context, db *sql.DB) error {
-	current, err := CurrentSchemaVersion(ctx, db)
+func Migrate(ctx context.Context, db *sql.DB, location AccountingLocation) error {
+	if err := PrepareAccountingLocation(ctx, db, location); err != nil {
+		return err
+	}
+
+	current, err := CurrentSchemaVersion(ctx, db, location)
 	if err != nil {
 		return err
 	}
@@ -251,7 +291,7 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			continue
 		}
 
-		if err := applyMigration(ctx, db, migration); err != nil {
+		if err := applyMigration(ctx, db, location, migration); err != nil {
 			return err
 		}
 	}
@@ -259,15 +299,16 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-func applyMigration(ctx context.Context, db *sql.DB, migration Migration) error {
+func applyMigration(ctx context.Context, db *sql.DB, location AccountingLocation, migration Migration) error {
+	schemaVersion := location.mustQualifiedName("schema_version")
 	return WithTx(ctx, db, nil, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, migration.SQL); err != nil {
+		if _, err := tx.ExecContext(ctx, migration.SQL(location)); err != nil {
 			return fmt.Errorf("apply migration %d %s: %w", migration.Version, migration.Name, err)
 		}
 
 		if _, err := tx.ExecContext(
 			ctx,
-			"INSERT INTO schema_version(version, name) VALUES (?, ?)",
+			"INSERT INTO "+schemaVersion+"(version, name) VALUES (?, ?)",
 			migration.Version,
 			migration.Name,
 		); err != nil {
@@ -278,15 +319,18 @@ func applyMigration(ctx context.Context, db *sql.DB, migration Migration) error 
 	})
 }
 
-func schemaVersionTableExists(ctx context.Context, db *sql.DB) (bool, error) {
+func schemaVersionTableExists(ctx context.Context, db *sql.DB, location AccountingLocation) (bool, error) {
 	var tableName string
 	err := db.QueryRowContext(
 		ctx,
 		`SELECT table_name
 FROM information_schema.tables
-WHERE table_schema = current_schema()
+WHERE table_catalog = ?
+  AND table_schema = ?
   AND table_name = 'schema_version'
 LIMIT 1`,
+		location.Catalog,
+		location.Schema,
 	).Scan(&tableName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

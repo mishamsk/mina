@@ -14,7 +14,7 @@ func OpenMigrated(t *testing.T, ctx context.Context) (*sql.DB, string) {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "mina.db")
-	db, err := store.Open(ctx, path)
+	db, err := store.OpenInMemory(ctx)
 	if err != nil {
 		t.Fatalf("open temporary database: %v", err)
 	}
@@ -24,7 +24,11 @@ func OpenMigrated(t *testing.T, ctx context.Context) (*sql.DB, string) {
 		}
 	})
 
-	if err := store.Migrate(ctx, db); err != nil {
+	location := store.AttachedDatabaseAccountingLocation()
+	if err := store.AttachDatabase(ctx, db, path, location); err != nil {
+		t.Fatalf("attach temporary database: %v", err)
+	}
+	if err := store.Migrate(ctx, db, location); err != nil {
 		t.Fatalf("migrate temporary database: %v", err)
 	}
 

@@ -55,11 +55,11 @@ func New(t *testing.T) *Client {
 	if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
 		t.Fatalf("prepare test schema: %v", err)
 	}
-	if _, err := db.ExecContext(ctx, "SET schema="+store.QuoteIdentifier(schema)); err != nil {
-		t.Fatalf("select test schema: %v", err)
-	}
-	if err := store.Migrate(ctx, db); err != nil {
+	if err := store.Migrate(ctx, db, location); err != nil {
 		t.Fatalf("migrate test schema: %v", err)
+	}
+	if err := store.SelectAccountingLocation(ctx, db, location); err != nil {
+		t.Fatalf("select test schema: %v", err)
 	}
 
 	appInstance := runtime.NewWithDB(db, location, runtime.HTTPConfig{})

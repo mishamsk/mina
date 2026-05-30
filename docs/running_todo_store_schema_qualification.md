@@ -43,19 +43,19 @@ Normal in-process app tests move out of `internal/runtime` into one package dire
   - [x] Required docs updated
 
 ### Commit 3: Qualify Migrations And Store SQL
-- [ ] Update migrations to create schemas, sequences, enum types, tables, and indexes using the selected accounting location.
-- [ ] Update schema-version reads and writes to use the selected fully qualified location.
-- [ ] Update all repository constructors to require accounting location state.
-- [ ] Replace every unqualified accounting table, sequence, enum type, and index reference in store SQL with quoted three-part names.
-- [ ] Keep dynamic filter and sort allowlists typed; only object identifiers may be rendered into SQL.
-- [ ] Remove remaining production dependencies on `SET schema` for accounting behavior.
-- [ ] Add regression coverage proving the app can operate against a non-default accounting schema.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test` passes
-  - [ ] `just test-integration` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Update migrations to create schemas, sequences, enum types, tables, and indexes using the selected accounting location.
+- [x] Update schema-version reads and writes to use the selected fully qualified location.
+- [x] Update all repository constructors to require accounting location state.
+- [x] Replace every unqualified accounting table, sequence, and enum type reference in store SQL with quoted three-part names; define indexes with quoted names on qualified tables because DuckDB rejects qualified index names.
+- [x] Keep dynamic filter and sort allowlists typed; only object identifiers may be rendered into SQL.
+- [x] Remove remaining production dependencies on `SET schema` for accounting behavior.
+- [x] Add regression coverage proving the app can operate against a non-default accounting schema.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test` passes
+  - [x] `just test-integration` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 4: Keep Test Client Isolation Explicit
 - [ ] Keep one test-client surface that creates and migrates a unique accounting schema per test.

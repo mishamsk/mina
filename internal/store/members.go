@@ -27,7 +27,7 @@ func NewMemberStore(db *sql.DB, location AccountingLocation) *MemberStore {
 func (s *MemberStore) Create(ctx context.Context, input members.CreateInput) (members.Member, error) {
 	var member members.Member
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := memberNameExists(ctx, tx, input.Name)
+		exists, err := memberNameExists(ctx, tx, s.location, input.Name)
 		if err != nil {
 			return err
 		}
@@ -37,7 +37,7 @@ func (s *MemberStore) Create(ctx context.Context, input members.CreateInput) (me
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO member (name)
+			`INSERT INTO `+s.location.mustQualifiedName("member")+` (name)
 VALUES (?)
 RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
 			input.Name,
@@ -62,7 +62,7 @@ RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
 // Get returns a member by ID.
 func (s *MemberStore) Get(ctx context.Context, id int64, includeTombstoned bool) (members.Member, error) {
 	query := `SELECT member_id, name, created_at, updated_at, tombstoned_at
-FROM member
+FROM ` + s.location.mustQualifiedName("member") + `
 WHERE member_id = ?`
 	args := []any{id}
 	if !includeTombstoned {
@@ -83,7 +83,7 @@ WHERE member_id = ?`
 // List returns members in deterministic name order.
 func (s *MemberStore) List(ctx context.Context, opts members.ListOptions) ([]members.Member, error) {
 	query := `SELECT member_id, name, created_at, updated_at, tombstoned_at
-FROM member
+FROM ` + s.location.mustQualifiedName("member") + `
 WHERE 1 = 1`
 	args := []any{}
 	if !opts.IncludeTombstoned {
@@ -121,7 +121,7 @@ WHERE 1 = 1`
 func (s *MemberStore) UpdateName(ctx context.Context, id int64, name string) (members.Member, error) {
 	var member members.Member
 	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := activeMemberNameExistsForOtherID(ctx, tx, id, name)
+		exists, err := activeMemberNameExistsForOtherID(ctx, tx, s.location, id, name)
 		if err != nil {
 			return err
 		}
@@ -131,7 +131,7 @@ func (s *MemberStore) UpdateName(ctx context.Context, id int64, name string) (me
 
 		row := tx.QueryRowContext(
 			ctx,
-			`UPDATE member
+			`UPDATE `+s.location.mustQualifiedName("member")+`
 SET name = ?, updated_at = CURRENT_TIMESTAMP
 WHERE member_id = ? AND tombstoned_at IS NULL
 RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
@@ -165,7 +165,7 @@ RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
 func (s *MemberStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.ExecContext(
 		ctx,
-		`UPDATE member
+		`UPDATE `+s.location.mustQualifiedName("member")+`
 SET tombstoned_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE member_id = ? AND tombstoned_at IS NULL`,
@@ -209,11 +209,11 @@ func scanMember(scanner memberScanner) (members.Member, error) {
 	return member, nil
 }
 
-func memberNameExists(ctx context.Context, tx *sql.Tx, name string) (bool, error) {
+func memberNameExists(ctx context.Context, tx *sql.Tx, location AccountingLocation, name string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
-		"SELECT member_id FROM member WHERE name = ? AND tombstoned_at IS NULL LIMIT 1",
+		"SELECT member_id FROM "+location.mustQualifiedName("member")+" WHERE name = ? AND tombstoned_at IS NULL LIMIT 1",
 		name,
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -226,12 +226,12 @@ func memberNameExists(ctx context.Context, tx *sql.Tx, name string) (bool, error
 	return true, nil
 }
 
-func activeMemberNameExistsForOtherID(ctx context.Context, tx *sql.Tx, id int64, name string) (bool, error) {
+func activeMemberNameExistsForOtherID(ctx context.Context, tx *sql.Tx, location AccountingLocation, id int64, name string) (bool, error) {
 	var otherID int64
 	err := tx.QueryRowContext(
 		ctx,
 		`SELECT member_id
-FROM member
+FROM `+location.mustQualifiedName("member")+`
 WHERE name = ? AND member_id <> ? AND tombstoned_at IS NULL
 LIMIT 1`,
 		name,

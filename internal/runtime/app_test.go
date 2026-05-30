@@ -1,7 +1,11 @@
 package runtime_test
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,7 +39,7 @@ func TestNewCreatesAndMigratesDatabase(t *testing.T) {
 	}
 	assertSchemaVersionTableAtLocation(t, ctx, appInstance, store.AttachedDatabaseAccountingLocation())
 
-	version, err := store.CurrentSchemaVersion(ctx, appInstance.DB())
+	version, err := store.CurrentSchemaVersion(ctx, appInstance.DB(), appInstance.AccountingLocation())
 	if err != nil {
 		t.Fatalf("current schema version: %v", err)
 	}
@@ -63,12 +67,57 @@ func TestNewWithoutDatabasePathUsesEphemeralAccountingSchema(t *testing.T) {
 	}
 	assertSchemaVersionTableAtLocation(t, ctx, appInstance, store.InMemoryAccountingLocation())
 
-	version, err := store.CurrentSchemaVersion(ctx, appInstance.DB())
+	version, err := store.CurrentSchemaVersion(ctx, appInstance.DB(), appInstance.AccountingLocation())
 	if err != nil {
 		t.Fatalf("current schema version: %v", err)
 	}
 	if version != store.LatestSchemaVersion() {
 		t.Fatalf("schema version = %d, want %d", version, store.LatestSchemaVersion())
+	}
+}
+
+func TestNewWithoutDatabasePathServesFromNonDefaultAccountingSchema(t *testing.T) {
+	ctx := context.Background()
+
+	appInstance, err := runtime.New(ctx, runtime.Config{
+		ApplyMigrations: true,
+	})
+	if err != nil {
+		t.Fatalf("new app: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := appInstance.Close(); err != nil {
+			t.Fatalf("close app: %v", err)
+		}
+	})
+
+	request := httptest.NewRequest(http.MethodPost, "/categories", bytes.NewBufferString(`{"fqn":"Food:Dining"}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	appInstance.Handler().ServeHTTP(recorder, request)
+	response := recorder.Result()
+	body, readErr := io.ReadAll(response.Body)
+	closeErr := response.Body.Close()
+	if readErr != nil {
+		t.Fatalf("read response: %v", readErr)
+	}
+	if closeErr != nil {
+		t.Fatalf("close response: %v", closeErr)
+	}
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", response.StatusCode, http.StatusCreated, body)
+	}
+
+	categoryTable, err := appInstance.AccountingLocation().QualifiedName("category")
+	if err != nil {
+		t.Fatalf("qualify category: %v", err)
+	}
+	var count int
+	if err := appInstance.DB().QueryRowContext(ctx, "SELECT COUNT(*) FROM "+categoryTable+" WHERE fqn = ?", "Food:Dining").Scan(&count); err != nil {
+		t.Fatalf("count qualified categories: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("category count in qualified location = %d, want 1", count)
 	}
 }
 
