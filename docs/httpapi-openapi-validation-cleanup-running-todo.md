@@ -83,18 +83,18 @@ Do not add private-helper unit tests. Verify through existing high-level runtime
   - [x] Required docs updated.
 
 ### Commit 5: Tighten HTTP Adapter Documentation And Guardrails
-- [ ] Update `internal/httpapi/PACKAGE.md` to say OpenAPI request validation owns transport-schema validation.
-- [ ] Document that strict-server handlers should consume generated request objects and generated `request.Params`.
-- [ ] Document that direct raw query parsing in `internal/httpapi` is disallowed unless a specific rule cannot be expressed through OpenAPI validation or generated params.
-- [ ] Document the Mina error envelope mapping for generated binding errors, OpenAPI validation errors, and strict handler errors.
-- [ ] Update `PROJECT_STATE.md` only if operator-visible API discovery endpoints or durable REST behavior changed.
-- [ ] Verification:
-  - [ ] Existing high-level runtime/API tests still pass with no new private-helper unit tests.
-  - [ ] `just fmt` passes.
-  - [ ] `just test` passes.
-  - [ ] `just test-integration` passes if Commit 5 includes behavior changes; otherwise mark not relevant.
-  - [ ] `just pre-commit` passes.
-  - [ ] Required docs updated.
+- [x] Update `internal/httpapi/PACKAGE.md` to say OpenAPI request validation owns transport-schema validation.
+- [x] Document that strict-server handlers should consume generated request objects and generated `request.Params`.
+- [x] Document that direct raw query parsing in `internal/httpapi` is disallowed unless a specific rule cannot be expressed through OpenAPI validation or generated params.
+- [x] Document the Mina error envelope mapping for generated binding errors, OpenAPI validation errors, and strict handler errors.
+- [x] Update `PROJECT_STATE.md` only if operator-visible API discovery endpoints or durable REST behavior changed.
+- [x] Verification:
+  - [x] Existing high-level runtime/API tests still pass with no new private-helper unit tests.
+  - [x] `just fmt` passes.
+  - [x] `just test` passes.
+  - [x] Not relevant: Commit 5 includes documentation changes only, so `just test-integration` was not required.
+  - [x] `just pre-commit` passes.
+  - [x] Required docs updated.
 
 ## Deferred Verification
 

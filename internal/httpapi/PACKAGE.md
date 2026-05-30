@@ -15,12 +15,16 @@
 - `/openapi.json` is an adapter-owned discovery endpoint serving the embedded generated spec.
   API tools should use `/openapi.json`; no interactive documentation endpoint is served.
 - Generated request binding owns transport parsing for OpenAPI-declared path parameters, query parameter types/cardinality, and JSON body decoding.
-- The local strict JSON body validator owns Mina's unknown-field rejection and required-null checks until an OpenAPI validation middleware can preserve the same route, method, and error-message semantics.
+- OpenAPI request validation owns transport-schema validation, including declared query values, JSON schema validation, unknown JSON fields, and required non-null JSON fields.
+- Unknown query parameter names are rejected by an adapter guard derived from the matched OpenAPI operation because the upstream validator ignores undeclared query names.
+- Strict-server handlers consume generated request objects and generated `request.Params`.
+- Direct raw query parsing in `internal/httpapi` is disallowed unless a specific transport rule cannot be expressed through OpenAPI validation or generated params; document any exception near the code.
+- Generated binding errors, OpenAPI validation errors, and strict handler errors all map to Mina's stable JSON error envelope before responses leave the adapter.
 - HTTP handlers call service use cases; they do not own domain validation or SQL.
 
 ## Boundaries
 
-- Owns: HTTP status mapping, transport DTO conversion, REST query parsing, router middleware, and generated OpenAPI code if colocated.
+- Owns: HTTP status mapping, transport DTO conversion, REST query validation/mapping, router middleware, and generated OpenAPI code if colocated.
 - Does not own: database opening, CLI parsing, SQL execution, or service-layer decisions.
 
 ## Testing Notes
