@@ -9,7 +9,7 @@
 - Migrations are upgrade-only and recorded in `schema_version` in the selected accounting location.
 - The accounting store owns the DuckDB handle and selected accounting location.
 - Accounting open helpers perform DuckDB-specific open, attach, schema preparation, and migration calls.
-- Store constructors receive the accounting location and repository SQL qualifies accounting objects through that location.
+- Repository constructors receive the accounting store and qualify accounting objects through its location.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.
 - Query generation is not selected for Stage 1 recovery because the required DuckDB SQL features are not yet proven against a repo-owned generator. Manual query code must keep user values parameter-bound and dynamic identifiers selected from store-owned allowlists.

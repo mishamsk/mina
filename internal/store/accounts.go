@@ -12,22 +12,21 @@ import (
 
 // AccountStore persists accounts.
 type AccountStore struct {
-	db       *sql.DB
-	location AccountingLocation
+	accounting *AccountingStore
 }
 
 var _ accounts.Repository = (*AccountStore)(nil)
 
-// NewAccountStore creates an account store using db.
-func NewAccountStore(db *sql.DB, location AccountingLocation) *AccountStore {
-	return &AccountStore{db: db, location: location}
+// NewAccountStore creates an account store using accounting.
+func NewAccountStore(accounting *AccountingStore) *AccountStore {
+	return &AccountStore{accounting: accounting}
 }
 
 // Create persists a new account.
 func (s *AccountStore) Create(ctx context.Context, input accounts.CreateInput) (accounts.Account, error) {
 	var account accounts.Account
-	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := accountFQNExists(ctx, tx, s.location, input.FQN)
+	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+		exists, err := accountFQNExists(ctx, tx, s.accounting, input.FQN)
 		if err != nil {
 			return err
 		}
@@ -37,7 +36,7 @@ func (s *AccountStore) Create(ctx context.Context, input accounts.CreateInput) (
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.location.mustQualifiedName("account")+` (fqn, is_hidden, currency, external_id, external_system)
+			`INSERT INTO `+s.accounting.location.mustQualifiedName("account")+` (fqn, is_hidden, currency, external_id, external_system)
 VALUES (?, ?, ?, ?, ?)
 RETURNING account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
@@ -66,14 +65,14 @@ RETURNING account_id, fqn, kind, is_hidden, currency, external_id, external_syst
 // Get returns an account by ID.
 func (s *AccountStore) Get(ctx context.Context, id int64, includeTombstoned bool) (accounts.Account, error) {
 	query := `SELECT account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM ` + s.location.mustQualifiedName("account") + `
+FROM ` + s.accounting.location.mustQualifiedName("account") + `
 WHERE account_id = ?`
 	args := []any{id}
 	if !includeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
 
-	account, err := scanAccount(s.db.QueryRowContext(ctx, query, args...))
+	account, err := scanAccount(s.accounting.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return accounts.Account{}, services.ErrNotFound
 	}
@@ -87,7 +86,7 @@ WHERE account_id = ?`
 // List returns accounts in deterministic hierarchy order.
 func (s *AccountStore) List(ctx context.Context, opts accounts.ListOptions) ([]accounts.Account, error) {
 	query := `SELECT account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM ` + s.location.mustQualifiedName("account") + `
+FROM ` + s.accounting.location.mustQualifiedName("account") + `
 WHERE 1 = 1`
 	args := []any{}
 	if !opts.IncludeHidden {
@@ -98,7 +97,7 @@ WHERE 1 = 1`
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, accountSortColumns, services.SortKeyFQN, "account_id")
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.accounting.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}
@@ -126,9 +125,9 @@ WHERE 1 = 1`
 
 // UpdateMutable updates account hidden state and external identifiers.
 func (s *AccountStore) UpdateMutable(ctx context.Context, id int64, input accounts.UpdateInput) (accounts.Account, error) {
-	row := s.db.QueryRowContext(
+	row := s.accounting.db.QueryRowContext(
 		ctx,
-		`UPDATE `+s.location.mustQualifiedName("account")+`
+		`UPDATE `+s.accounting.location.mustQualifiedName("account")+`
 SET is_hidden = ?,
     external_id = ?,
     external_system = ?,
@@ -153,9 +152,9 @@ RETURNING account_id, fqn, kind, is_hidden, currency, external_id, external_syst
 
 // Tombstone marks an account deleted without removing its historical row.
 func (s *AccountStore) Tombstone(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(
+	result, err := s.accounting.db.ExecContext(
 		ctx,
-		`UPDATE `+s.location.mustQualifiedName("account")+`
+		`UPDATE `+s.accounting.location.mustQualifiedName("account")+`
 SET tombstoned_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE account_id = ? AND tombstoned_at IS NULL`,
@@ -223,11 +222,11 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	return account, nil
 }
 
-func accountFQNExists(ctx context.Context, tx *sql.Tx, location AccountingLocation, fqn string) (bool, error) {
+func accountFQNExists(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, fqn string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
-		"SELECT account_id FROM "+location.mustQualifiedName("account")+" WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
+		"SELECT account_id FROM "+accounting.location.mustQualifiedName("account")+" WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
 		fqn,
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {

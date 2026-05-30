@@ -39,7 +39,7 @@ func TestNewCreatesAndMigratesDatabase(t *testing.T) {
 	}
 	assertSchemaVersionTableAtLocation(t, ctx, appInstance, store.AttachedDatabaseAccountingLocation())
 
-	version, err := store.CurrentSchemaVersion(ctx, appInstance.DB(), appInstance.AccountingLocation())
+	version, err := store.CurrentSchemaVersion(ctx, appInstance.AccountingStore())
 	if err != nil {
 		t.Fatalf("current schema version: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestNewWithoutDatabasePathUsesEphemeralAccountingSchema(t *testing.T) {
 	}
 	assertSchemaVersionTableAtLocation(t, ctx, appInstance, store.InMemoryAccountingLocation())
 
-	version, err := store.CurrentSchemaVersion(ctx, appInstance.DB(), appInstance.AccountingLocation())
+	version, err := store.CurrentSchemaVersion(ctx, appInstance.AccountingStore())
 	if err != nil {
 		t.Fatalf("current schema version: %v", err)
 	}

@@ -13,10 +13,9 @@ import (
 
 func TestMigrateAppliesLatestSchemaVersion(t *testing.T) {
 	ctx := context.Background()
-	db, _ := storetest.OpenMigrated(t, ctx)
-	location := store.AttachedDatabaseAccountingLocation()
+	accounting, _ := storetest.OpenMigrated(t, ctx)
 
-	version, err := store.CurrentSchemaVersion(ctx, db, location)
+	version, err := store.CurrentSchemaVersion(ctx, accounting)
 	if err != nil {
 		t.Fatalf("current schema version: %v", err)
 	}
@@ -24,16 +23,16 @@ func TestMigrateAppliesLatestSchemaVersion(t *testing.T) {
 		t.Fatalf("schema version = %d, want %d", version, store.LatestSchemaVersion())
 	}
 
-	if err := store.Migrate(ctx, db, location); err != nil {
+	if err := store.Migrate(ctx, accounting); err != nil {
 		t.Fatalf("migrate again: %v", err)
 	}
 }
 
 func TestWithTxCommitsAndRollsBack(t *testing.T) {
 	ctx := context.Background()
-	db, _ := storetest.OpenMigrated(t, ctx)
-	location := store.AttachedDatabaseAccountingLocation()
-	txProbe := qualifiedName(t, location, "tx_probe")
+	accounting, _ := storetest.OpenMigrated(t, ctx)
+	txProbe := qualifiedName(t, accounting, "tx_probe")
+	db := accounting.DB()
 	if _, err := db.ExecContext(ctx, "CREATE TABLE "+txProbe+" (value TEXT NOT NULL)"); err != nil {
 		t.Fatalf("create probe table: %v", err)
 	}
@@ -66,22 +65,22 @@ func TestWithTxCommitsAndRollsBack(t *testing.T) {
 
 func TestMigrateCreatesDuckDBPhaseOneSchema(t *testing.T) {
 	ctx := context.Background()
-	db, _ := storetest.OpenMigrated(t, ctx)
-	location := store.AttachedDatabaseAccountingLocation()
+	accounting, _ := storetest.OpenMigrated(t, ctx)
+	db := accounting.DB()
 
-	assertTableExists(t, ctx, db, location, "budget")
-	assertTableExists(t, ctx, db, location, "journal_record")
-	assertTableMissing(t, ctx, db, location, "journal_record_tag")
+	assertTableExists(t, ctx, accounting, "budget")
+	assertTableExists(t, ctx, accounting, "journal_record")
+	assertTableMissing(t, ctx, accounting, "journal_record_tag")
 
-	assertColumnType(t, ctx, db, location, "journal_record", "tag_ids", "INTEGER[]")
-	assertColumnType(t, ctx, db, location, "journal_record", "amount", "DECIMAL(18,8)")
-	assertColumnType(t, ctx, db, location, "journal_record", "amount_usd", "DECIMAL(18,8)")
-	assertColumnType(t, ctx, db, location, "journal_record", "pending_date", "DATE")
-	assertColumnType(t, ctx, db, location, "journal_record", "created_at", "TIMESTAMP")
-	assertColumnType(t, ctx, db, location, "journal_record", "posting_status", "ENUM('PENDING', 'POSTED', 'CANCELLED')")
+	assertColumnType(t, ctx, accounting, "journal_record", "tag_ids", "INTEGER[]")
+	assertColumnType(t, ctx, accounting, "journal_record", "amount", "DECIMAL(18,8)")
+	assertColumnType(t, ctx, accounting, "journal_record", "amount_usd", "DECIMAL(18,8)")
+	assertColumnType(t, ctx, accounting, "journal_record", "pending_date", "DATE")
+	assertColumnType(t, ctx, accounting, "journal_record", "created_at", "TIMESTAMP")
+	assertColumnType(t, ctx, accounting, "journal_record", "posting_status", "ENUM('PENDING', 'POSTED', 'CANCELLED')")
 
 	var transactionID int64
-	transactionTable := qualifiedName(t, location, "transaction")
+	transactionTable := qualifiedName(t, accounting, "transaction")
 	if err := db.QueryRowContext(
 		ctx,
 		`INSERT INTO `+transactionTable+` (initiated_date) VALUES (?) RETURNING transaction_id`,
@@ -93,7 +92,7 @@ func TestMigrateCreatesDuckDBPhaseOneSchema(t *testing.T) {
 		t.Fatalf("transaction_id = %d, want positive", transactionID)
 	}
 
-	categoryTable := qualifiedName(t, location, "category")
+	categoryTable := qualifiedName(t, accounting, "category")
 	if _, err := db.ExecContext(ctx, "INSERT INTO "+categoryTable+" (fqn) VALUES (?)", "Food:Dining"); err != nil {
 		t.Fatalf("insert active category: %v", err)
 	}
@@ -121,27 +120,28 @@ func TestMigrateCreatesDuckDBPhaseOneSchema(t *testing.T) {
 	}
 }
 
-func assertTableExists(t *testing.T, ctx context.Context, db *sql.DB, location store.AccountingLocation, tableName string) {
+func assertTableExists(t *testing.T, ctx context.Context, accounting *store.AccountingStore, tableName string) {
 	t.Helper()
 
-	if !tableExists(t, ctx, db, location, tableName) {
+	if !tableExists(t, ctx, accounting, tableName) {
 		t.Fatalf("table %s does not exist", tableName)
 	}
 }
 
-func assertTableMissing(t *testing.T, ctx context.Context, db *sql.DB, location store.AccountingLocation, tableName string) {
+func assertTableMissing(t *testing.T, ctx context.Context, accounting *store.AccountingStore, tableName string) {
 	t.Helper()
 
-	if tableExists(t, ctx, db, location, tableName) {
+	if tableExists(t, ctx, accounting, tableName) {
 		t.Fatalf("table %s exists, want missing", tableName)
 	}
 }
 
-func tableExists(t *testing.T, ctx context.Context, db *sql.DB, location store.AccountingLocation, tableName string) bool {
+func tableExists(t *testing.T, ctx context.Context, accounting *store.AccountingStore, tableName string) bool {
 	t.Helper()
 
 	var count int
-	if err := db.QueryRowContext(
+	location := accounting.Location()
+	if err := accounting.DB().QueryRowContext(
 		ctx,
 		`SELECT COUNT(*)
 FROM duckdb_tables()
@@ -158,11 +158,12 @@ WHERE database_name = ?
 	return count == 1
 }
 
-func assertColumnType(t *testing.T, ctx context.Context, db *sql.DB, location store.AccountingLocation, tableName string, columnName string, want string) {
+func assertColumnType(t *testing.T, ctx context.Context, accounting *store.AccountingStore, tableName string, columnName string, want string) {
 	t.Helper()
 
 	var dataType string
-	if err := db.QueryRowContext(
+	location := accounting.Location()
+	if err := accounting.DB().QueryRowContext(
 		ctx,
 		`SELECT data_type
 FROM duckdb_columns()
@@ -182,10 +183,10 @@ WHERE database_name = ?
 	}
 }
 
-func qualifiedName(t *testing.T, location store.AccountingLocation, object string) string {
+func qualifiedName(t *testing.T, accounting *store.AccountingStore, object string) string {
 	t.Helper()
 
-	name, err := location.QualifiedName(object)
+	name, err := accounting.Location().QualifiedName(object)
 	if err != nil {
 		t.Fatalf("qualify %s: %v", object, err)
 	}

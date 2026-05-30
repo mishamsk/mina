@@ -53,23 +53,16 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	return NewWithStore(accounting, cfg.HTTP), nil
 }
 
-// NewWithDB wires the REST handler around an already-opened migrated database.
-func NewWithDB(db *sql.DB, location store.AccountingLocation, httpConfig HTTPConfig) *App {
-	return NewWithStore(store.NewAccountingStore(db, location), httpConfig)
-}
-
 // NewWithStore wires the REST handler around an already-opened migrated accounting store.
 func NewWithStore(accounting *store.AccountingStore, httpConfig HTTPConfig) *App {
-	db := accounting.DB()
-	location := accounting.Location()
 	handler := httpapi.NewWithOptions(httpapi.Dependencies{
-		Categories:    categories.NewService(store.NewCategoryStore(db, location)),
-		Tags:          tags.NewService(store.NewTagStore(db, location)),
-		Members:       members.NewService(store.NewMemberStore(db, location)),
-		Accounts:      accounts.NewService(store.NewAccountStore(db, location)),
-		CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(db, location)),
-		ExchangeRates: exchangerates.NewService(store.NewExchangeRateStore(db, location)),
-		Transactions:  transactions.NewService(store.NewTransactionStore(db, location)),
+		Categories:    categories.NewService(store.NewCategoryStore(accounting)),
+		Tags:          tags.NewService(store.NewTagStore(accounting)),
+		Members:       members.NewService(store.NewMemberStore(accounting)),
+		Accounts:      accounts.NewService(store.NewAccountStore(accounting)),
+		CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(accounting)),
+		ExchangeRates: exchangerates.NewService(store.NewExchangeRateStore(accounting)),
+		Transactions:  transactions.NewService(store.NewTransactionStore(accounting)),
 	}, httpapi.Options{
 		AccessLog: httpConfig.AccessLog,
 		Timeout:   httpConfig.Timeout,
@@ -89,6 +82,11 @@ func (a *App) DB() *sql.DB {
 // AccountingLocation returns the database and schema holding accounting state.
 func (a *App) AccountingLocation() store.AccountingLocation {
 	return a.accounting.Location()
+}
+
+// AccountingStore returns the initialized accounting store.
+func (a *App) AccountingStore() *store.AccountingStore {
+	return a.accounting
 }
 
 // Handler returns the composed REST API handler.

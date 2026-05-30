@@ -88,7 +88,8 @@ func TestQualifiedAccountingObjectRoutesToLocation(t *testing.T) {
 	first := store.AccountingLocation{Database: store.InMemoryAccountingDatabase, Schema: "route_one"}
 	second := store.AccountingLocation{Database: store.InMemoryAccountingDatabase, Schema: "route_two"}
 	for _, location := range []store.AccountingLocation{first, second} {
-		if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
+		accounting := store.NewAccountingStore(db, location)
+		if err := store.PrepareAccountingLocation(ctx, accounting); err != nil {
 			t.Fatalf("prepare %s.%s: %v", location.Database, location.Schema, err)
 		}
 		name, err := location.QualifiedName("probe")
@@ -148,11 +149,12 @@ func TestAttachDatabaseQuotesPathLiteral(t *testing.T) {
 		Database: "quoted_path",
 		Schema:   "main",
 	}
+	accounting := store.NewAccountingStore(db, location)
 	path := filepath.Join(t.TempDir(), "mina's.db")
-	if err := store.AttachDatabase(ctx, db, path, location); err != nil {
+	if err := store.AttachDatabase(ctx, accounting, path); err != nil {
 		t.Fatalf("attach database: %v", err)
 	}
-	if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
+	if err := store.PrepareAccountingLocation(ctx, accounting); err != nil {
 		t.Fatalf("prepare accounting location: %v", err)
 	}
 

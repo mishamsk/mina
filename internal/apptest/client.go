@@ -42,23 +42,18 @@ func New(t *testing.T) *Client {
 	t.Helper()
 
 	ctx := context.Background()
-	db, err := store.OpenInMemory(ctx)
-	if err != nil {
-		t.Fatalf("open in-memory test database: %v", err)
-	}
-
 	schema := testSchemaName(t)
-	location := store.AccountingLocation{
-		Database: store.InMemoryAccountingDatabase,
-		Schema:   schema,
+	accounting, err := store.OpenAccounting(ctx, store.AccountingOpenRequest{
+		Migrate: true,
+		Location: store.AccountingLocation{
+			Database: store.InMemoryAccountingDatabase,
+			Schema:   schema,
+		},
+	})
+	if err != nil {
+		t.Fatalf("open accounting test store: %v", err)
 	}
-	if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
-		t.Fatalf("prepare test schema: %v", err)
-	}
-	if err := store.Migrate(ctx, db, location); err != nil {
-		t.Fatalf("migrate test schema: %v", err)
-	}
-	appInstance := runtime.NewWithDB(db, location, runtime.HTTPConfig{})
+	appInstance := runtime.NewWithStore(accounting, runtime.HTTPConfig{})
 	t.Cleanup(func() {
 		if err := appInstance.Close(); err != nil {
 			t.Fatalf("close test app: %v", err)
@@ -68,7 +63,7 @@ func New(t *testing.T) *Client {
 	return &Client{
 		t:        t,
 		app:      appInstance,
-		location: location,
+		location: accounting.Location(),
 	}
 }
 

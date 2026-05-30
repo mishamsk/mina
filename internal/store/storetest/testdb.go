@@ -2,7 +2,6 @@ package storetest
 
 import (
 	"context"
-	"database/sql"
 	"path/filepath"
 	"testing"
 
@@ -10,27 +9,23 @@ import (
 )
 
 // OpenMigrated opens a migrated temporary database for boundary tests.
-func OpenMigrated(t *testing.T, ctx context.Context) (*sql.DB, string) {
+func OpenMigrated(t *testing.T, ctx context.Context) (*store.AccountingStore, string) {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "mina.db")
-	db, err := store.OpenInMemory(ctx)
+	accounting, err := store.OpenAccounting(ctx, store.AccountingOpenRequest{
+		Path:     path,
+		Location: store.AttachedDatabaseAccountingLocation(),
+		Migrate:  true,
+	})
 	if err != nil {
-		t.Fatalf("open temporary database: %v", err)
+		t.Fatalf("open temporary accounting store: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("close temporary database: %v", err)
+		if err := accounting.Close(); err != nil {
+			t.Fatalf("close temporary accounting store: %v", err)
 		}
 	})
 
-	location := store.AttachedDatabaseAccountingLocation()
-	if err := store.AttachDatabase(ctx, db, path, location); err != nil {
-		t.Fatalf("attach temporary database: %v", err)
-	}
-	if err := store.Migrate(ctx, db, location); err != nil {
-		t.Fatalf("migrate temporary database: %v", err)
-	}
-
-	return db, path
+	return accounting, path
 }

@@ -12,22 +12,21 @@ import (
 
 // CreditLimitHistoryStore persists account credit limit history.
 type CreditLimitHistoryStore struct {
-	db       *sql.DB
-	location AccountingLocation
+	accounting *AccountingStore
 }
 
 var _ creditlimits.Repository = (*CreditLimitHistoryStore)(nil)
 
-// NewCreditLimitHistoryStore creates a credit limit history store using db.
-func NewCreditLimitHistoryStore(db *sql.DB, location AccountingLocation) *CreditLimitHistoryStore {
-	return &CreditLimitHistoryStore{db: db, location: location}
+// NewCreditLimitHistoryStore creates a credit limit history store using accounting.
+func NewCreditLimitHistoryStore(accounting *AccountingStore) *CreditLimitHistoryStore {
+	return &CreditLimitHistoryStore{accounting: accounting}
 }
 
 // Create persists a new credit limit history entry for an active account.
 func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, input creditlimits.CreateInput) (creditlimits.CreditLimitHistory, error) {
 	var history creditlimits.CreditLimitHistory
-	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		accountExists, err := activeAccountExists(ctx, tx, s.location, accountID)
+	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+		accountExists, err := activeAccountExists(ctx, tx, s.accounting, accountID)
 		if err != nil {
 			return err
 		}
@@ -35,7 +34,7 @@ func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, i
 			return services.ErrNotFound
 		}
 
-		exists, err := activeCreditLimitHistoryExists(ctx, tx, s.location, accountID, input.EffectiveDate)
+		exists, err := activeCreditLimitHistoryExists(ctx, tx, s.accounting, accountID, input.EffectiveDate)
 		if err != nil {
 			return err
 		}
@@ -45,7 +44,7 @@ func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, i
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.location.mustQualifiedName("credit_limit_history")+` (account_id, credit_limit, effective_date)
+			`INSERT INTO `+s.accounting.location.mustQualifiedName("credit_limit_history")+` (account_id, credit_limit, effective_date)
 VALUES (?, ?, ?)
 RETURNING credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
 			accountID,
@@ -72,14 +71,14 @@ RETURNING credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CA
 // Get returns a credit limit history entry by ID.
 func (s *CreditLimitHistoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (creditlimits.CreditLimitHistory, error) {
 	query := `SELECT credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
-FROM ` + s.location.mustQualifiedName("credit_limit_history") + `
+FROM ` + s.accounting.location.mustQualifiedName("credit_limit_history") + `
 WHERE credit_limit_history_id = ?`
 	args := []any{id}
 	if !includeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
 
-	history, err := scanCreditLimitHistory(s.db.QueryRowContext(ctx, query, args...))
+	history, err := scanCreditLimitHistory(s.accounting.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return creditlimits.CreditLimitHistory{}, services.ErrNotFound
 	}
@@ -92,7 +91,7 @@ WHERE credit_limit_history_id = ?`
 
 // ListByAccount returns credit limit history for an active account in effective-date order.
 func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID int64, opts creditlimits.ListOptions) ([]creditlimits.CreditLimitHistory, error) {
-	accountExists, err := activeAccountExists(ctx, s.db, s.location, accountID)
+	accountExists, err := activeAccountExists(ctx, s.accounting.db, s.accounting, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +100,7 @@ func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID i
 	}
 
 	query := `SELECT credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
-FROM ` + s.location.mustQualifiedName("credit_limit_history") + `
+FROM ` + s.accounting.location.mustQualifiedName("credit_limit_history") + `
 WHERE account_id = ?`
 	args := []any{accountID}
 	if !opts.IncludeTombstoned {
@@ -109,7 +108,7 @@ WHERE account_id = ?`
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, creditLimitHistorySortColumns, services.SortKeyEffectiveDate, "credit_limit_history_id")
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.accounting.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list credit limit history: %w", err)
 	}
@@ -137,9 +136,9 @@ WHERE account_id = ?`
 
 // Tombstone marks a credit limit history entry deleted without removing its historical row.
 func (s *CreditLimitHistoryStore) Tombstone(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(
+	result, err := s.accounting.db.ExecContext(
 		ctx,
-		`UPDATE `+s.location.mustQualifiedName("credit_limit_history")+`
+		`UPDATE `+s.accounting.location.mustQualifiedName("credit_limit_history")+`
 SET tombstoned_at = CURRENT_TIMESTAMP
 WHERE credit_limit_history_id = ? AND tombstoned_at IS NULL`,
 		id,
@@ -187,11 +186,11 @@ type rowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-func activeAccountExists(ctx context.Context, queryer rowQuerier, location AccountingLocation, accountID int64) (bool, error) {
+func activeAccountExists(ctx context.Context, queryer rowQuerier, accounting *AccountingStore, accountID int64) (bool, error) {
 	var id int64
 	err := queryer.QueryRowContext(
 		ctx,
-		"SELECT account_id FROM "+location.mustQualifiedName("account")+" WHERE account_id = ? AND tombstoned_at IS NULL LIMIT 1",
+		"SELECT account_id FROM "+accounting.location.mustQualifiedName("account")+" WHERE account_id = ? AND tombstoned_at IS NULL LIMIT 1",
 		accountID,
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -204,12 +203,12 @@ func activeAccountExists(ctx context.Context, queryer rowQuerier, location Accou
 	return true, nil
 }
 
-func activeCreditLimitHistoryExists(ctx context.Context, queryer rowQuerier, location AccountingLocation, accountID int64, effectiveDate string) (bool, error) {
+func activeCreditLimitHistoryExists(ctx context.Context, queryer rowQuerier, accounting *AccountingStore, accountID int64, effectiveDate string) (bool, error) {
 	var id int64
 	err := queryer.QueryRowContext(
 		ctx,
 		`SELECT credit_limit_history_id
-FROM `+location.mustQualifiedName("credit_limit_history")+`
+FROM `+accounting.location.mustQualifiedName("credit_limit_history")+`
 WHERE account_id = ? AND effective_date = ? AND tombstoned_at IS NULL
 LIMIT 1`,
 		accountID,

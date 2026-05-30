@@ -12,22 +12,21 @@ import (
 
 // TagStore persists tags.
 type TagStore struct {
-	db       *sql.DB
-	location AccountingLocation
+	accounting *AccountingStore
 }
 
 var _ tags.Repository = (*TagStore)(nil)
 
-// NewTagStore creates a tag store using db.
-func NewTagStore(db *sql.DB, location AccountingLocation) *TagStore {
-	return &TagStore{db: db, location: location}
+// NewTagStore creates a tag store using accounting.
+func NewTagStore(accounting *AccountingStore) *TagStore {
+	return &TagStore{accounting: accounting}
 }
 
 // Create persists a new tag.
 func (s *TagStore) Create(ctx context.Context, input tags.CreateInput) (tags.Tag, error) {
 	var tag tags.Tag
-	err := WithTx(ctx, s.db, nil, func(tx *sql.Tx) error {
-		exists, err := tagFQNExists(ctx, tx, s.location, input.FQN)
+	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+		exists, err := tagFQNExists(ctx, tx, s.accounting, input.FQN)
 		if err != nil {
 			return err
 		}
@@ -37,7 +36,7 @@ func (s *TagStore) Create(ctx context.Context, input tags.CreateInput) (tags.Tag
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.location.mustQualifiedName("tag")+` (fqn, is_hidden)
+			`INSERT INTO `+s.accounting.location.mustQualifiedName("tag")+` (fqn, is_hidden)
 VALUES (?, ?)
 RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
@@ -63,14 +62,14 @@ RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_a
 // Get returns a tag by ID.
 func (s *TagStore) Get(ctx context.Context, id int64, includeTombstoned bool) (tags.Tag, error) {
 	query := `SELECT tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM ` + s.location.mustQualifiedName("tag") + `
+FROM ` + s.accounting.location.mustQualifiedName("tag") + `
 WHERE tag_id = ?`
 	args := []any{id}
 	if !includeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
 
-	tag, err := scanTag(s.db.QueryRowContext(ctx, query, args...))
+	tag, err := scanTag(s.accounting.db.QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return tags.Tag{}, services.ErrNotFound
 	}
@@ -84,7 +83,7 @@ WHERE tag_id = ?`
 // List returns tags in deterministic hierarchy order.
 func (s *TagStore) List(ctx context.Context, opts tags.ListOptions) ([]tags.Tag, error) {
 	query := `SELECT tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM ` + s.location.mustQualifiedName("tag") + `
+FROM ` + s.accounting.location.mustQualifiedName("tag") + `
 WHERE 1 = 1`
 	args := []any{}
 	if !opts.IncludeHidden {
@@ -95,7 +94,7 @@ WHERE 1 = 1`
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, tagSortColumns, services.SortKeyFQN, "tag_id")
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.accounting.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list tags: %w", err)
 	}
@@ -123,9 +122,9 @@ WHERE 1 = 1`
 
 // UpdateHidden updates a tag's hidden state.
 func (s *TagStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (tags.Tag, error) {
-	row := s.db.QueryRowContext(
+	row := s.accounting.db.QueryRowContext(
 		ctx,
-		`UPDATE `+s.location.mustQualifiedName("tag")+`
+		`UPDATE `+s.accounting.location.mustQualifiedName("tag")+`
 SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
 WHERE tag_id = ? AND tombstoned_at IS NULL
 RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
@@ -145,9 +144,9 @@ RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_a
 
 // Tombstone marks a tag deleted without removing its historical row.
 func (s *TagStore) Tombstone(ctx context.Context, id int64) error {
-	result, err := s.db.ExecContext(
+	result, err := s.accounting.db.ExecContext(
 		ctx,
-		`UPDATE `+s.location.mustQualifiedName("tag")+`
+		`UPDATE `+s.accounting.location.mustQualifiedName("tag")+`
 SET tombstoned_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE tag_id = ? AND tombstoned_at IS NULL`,
@@ -199,11 +198,11 @@ func scanTag(scanner tagScanner) (tags.Tag, error) {
 	return tag, nil
 }
 
-func tagFQNExists(ctx context.Context, tx *sql.Tx, location AccountingLocation, fqn string) (bool, error) {
+func tagFQNExists(ctx context.Context, tx *sql.Tx, accounting *AccountingStore, fqn string) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
-		"SELECT tag_id FROM "+location.mustQualifiedName("tag")+" WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
+		"SELECT tag_id FROM "+accounting.location.mustQualifiedName("tag")+" WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
 		fqn,
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {

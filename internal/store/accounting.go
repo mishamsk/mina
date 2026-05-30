@@ -36,16 +36,16 @@ func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*Accoun
 	accounting := NewAccountingStore(db, request.Location)
 
 	if request.Path != "" {
-		if err := AttachDatabase(ctx, db, request.Path, request.Location); err != nil {
+		if err := AttachDatabase(ctx, accounting, request.Path); err != nil {
 			return nil, closeAccountingAfterError(accounting, err)
 		}
 	}
 
-	if err := PrepareAccountingLocation(ctx, db, request.Location); err != nil {
+	if err := PrepareAccountingLocation(ctx, accounting); err != nil {
 		return nil, closeAccountingAfterError(accounting, err)
 	}
 	if request.Migrate {
-		if err := Migrate(ctx, db, request.Location); err != nil {
+		if err := Migrate(ctx, accounting); err != nil {
 			return nil, closeAccountingAfterError(accounting, fmt.Errorf("migrate database: %w", err))
 		}
 	}
