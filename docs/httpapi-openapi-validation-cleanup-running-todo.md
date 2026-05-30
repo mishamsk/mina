@@ -98,14 +98,14 @@ Do not add private-helper unit tests. Verify through existing high-level runtime
 
 ## Deferred Verification
 
-- [ ] `just test-integration` passes after the full cleanup because JSON-over-HTTP behavior, real-network REST behavior, and API discovery behavior are touched.
-- [ ] Manual smoke commands are run only if existing boundary/integration coverage leaves a concrete uncovered risk.
+- [x] `just test-integration` passes after the full cleanup because JSON-over-HTTP behavior, real-network REST behavior, and API discovery behavior are touched.
+- [x] Manual smoke commands are not relevant because boundary and integration coverage covers the changed behavior.
 
 ## Final Verification
 
-- [ ] `just init` passes on a clean checkout with required local tools available.
-- [ ] `just fmt` passes.
-- [ ] `just test` passes.
-- [ ] `just test-integration` passes.
-- [ ] `just pre-commit` passes.
-- [ ] Deferred verification completed or explicitly marked not relevant.
+- [x] `just init` passes on a clean checkout with required local tools available.
+- [x] `just fmt` passes.
+- [x] `just test` passes.
+- [x] `just test-integration` passes.
+- [x] `just pre-commit` passes.
+- [x] Deferred verification completed or explicitly marked not relevant.
