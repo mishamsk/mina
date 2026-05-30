@@ -98,14 +98,14 @@ Keep the unknown-query-parameter guard unless it is replaced by an equivalent va
 
 ## Deferred Verification
 
-- [ ] `just test-integration` passes after the code cleanup because JSON-over-HTTP behavior is touched.
-- [ ] Manual smoke commands are not required unless boundary or integration coverage does not cover a changed validation path.
+- [x] `just test-integration` passes after the code cleanup because JSON-over-HTTP behavior is touched.
+- [x] Manual smoke commands are not required unless boundary or integration coverage does not cover a changed validation path.
 
 ## Final Verification
 
-- [ ] `just init` passes on a clean checkout with required local tools available
-- [ ] `just fmt` passes
-- [ ] `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] Deferred verification completed or explicitly marked not relevant
+- [x] `just init` passes on a clean checkout with required local tools available
+- [x] `just fmt` passes
+- [x] `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] Deferred verification completed or explicitly marked not relevant
