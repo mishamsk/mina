@@ -101,7 +101,7 @@ func (a *App) DB() *sql.DB {
 	return a.db
 }
 
-// AccountingLocation returns the catalog and schema holding accounting state.
+// AccountingLocation returns the database and schema holding accounting state.
 func (a *App) AccountingLocation() store.AccountingLocation {
 	return a.location
 }

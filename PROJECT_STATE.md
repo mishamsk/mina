@@ -12,7 +12,7 @@
   - OpenAPI discovery through `GET /openapi.json`.
 - Implemented storage behavior:
   - Runtime opens an in-memory DuckDB process database and selects either an attached accounting database file or the fixed in-memory accounting schema.
-  - Store-owned accounting locations qualify migration and repository SQL against the selected catalog and schema.
+  - Store-owned accounting locations qualify migration and repository SQL against the selected database and schema.
   - Upgrade-only DuckDB migrations with schema-version tracking in the selected accounting location.
   - Atomic double-entry transaction persistence and replacement.
   - Tombstone-aware reads and list defaults for applicable resources.

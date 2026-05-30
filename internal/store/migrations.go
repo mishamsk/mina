@@ -229,7 +229,7 @@ func migrationSQL(template string) func(AccountingLocation) string {
 			"{journal_record}", location.mustQualifiedName("journal_record"),
 			"{budget}", location.mustQualifiedName("budget"),
 			// DuckDB places indexes through the qualified ON table and rejects
-			// catalog-qualified index names in CREATE INDEX.
+			// database-qualified index names in CREATE INDEX.
 			"{category_active_fqn_unique}", QuoteIdentifier("category_active_fqn_unique"),
 			"{tag_active_fqn_unique}", QuoteIdentifier("tag_active_fqn_unique"),
 			"{member_active_name_unique}", QuoteIdentifier("member_active_name_unique"),
@@ -324,12 +324,12 @@ func schemaVersionTableExists(ctx context.Context, db *sql.DB, location Accounti
 	err := db.QueryRowContext(
 		ctx,
 		`SELECT table_name
-FROM information_schema.tables
-WHERE table_catalog = ?
-  AND table_schema = ?
+FROM duckdb_tables()
+WHERE database_name = ?
+  AND schema_name = ?
   AND table_name = 'schema_version'
 LIMIT 1`,
-		location.Catalog,
+		location.Database,
 		location.Schema,
 	).Scan(&tableName)
 	if errors.Is(err, sql.ErrNoRows) {

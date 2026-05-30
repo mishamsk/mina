@@ -148,17 +148,17 @@ func assertSchemaVersionTableAtLocation(t *testing.T, ctx context.Context, appIn
 	err := appInstance.DB().QueryRowContext(
 		ctx,
 		`SELECT COUNT(*)
-FROM information_schema.tables
-WHERE table_catalog = ?
-  AND table_schema = ?
+FROM duckdb_tables()
+WHERE database_name = ?
+  AND schema_name = ?
   AND table_name = 'schema_version'`,
-		location.Catalog,
+		location.Database,
 		location.Schema,
 	).Scan(&count)
 	if err != nil {
 		t.Fatalf("check schema version table location: %v", err)
 	}
 	if count != 1 {
-		t.Fatalf("schema_version table count at %s.%s = %d, want 1", location.Catalog, location.Schema, count)
+		t.Fatalf("schema_version table count at %s.%s = %d, want 1", location.Database, location.Schema, count)
 	}
 }

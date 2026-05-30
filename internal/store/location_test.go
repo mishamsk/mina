@@ -17,39 +17,39 @@ func TestAccountingLocationValidation(t *testing.T) {
 		{
 			name: "valid",
 			location: store.AccountingLocation{
-				Catalog: "accounting",
-				Schema:  "mina_1",
+				Database: "accounting",
+				Schema:   "mina_1",
 			},
 		},
 		{
-			name: "empty catalog",
+			name: "empty database",
 			location: store.AccountingLocation{
-				Catalog: "",
-				Schema:  "main",
+				Database: "",
+				Schema:   "main",
 			},
 			wantErr: true,
 		},
 		{
 			name: "dot in schema",
 			location: store.AccountingLocation{
-				Catalog: "accounting",
-				Schema:  "bad.schema",
+				Database: "accounting",
+				Schema:   "bad.schema",
 			},
 			wantErr: true,
 		},
 		{
 			name: "digit prefix",
 			location: store.AccountingLocation{
-				Catalog: "1_accounting",
-				Schema:  "main",
+				Database: "1_accounting",
+				Schema:   "main",
 			},
 			wantErr: true,
 		},
 		{
 			name: "quoted payload",
 			location: store.AccountingLocation{
-				Catalog: "accounting",
-				Schema:  `main"`,
+				Database: "accounting",
+				Schema:   `main"`,
 			},
 			wantErr: true,
 		},
@@ -85,11 +85,11 @@ func TestQualifiedAccountingObjectRoutesToLocation(t *testing.T) {
 		}
 	})
 
-	first := store.AccountingLocation{Catalog: store.InMemoryAccountingCatalog, Schema: "route_one"}
-	second := store.AccountingLocation{Catalog: store.InMemoryAccountingCatalog, Schema: "route_two"}
+	first := store.AccountingLocation{Database: store.InMemoryAccountingDatabase, Schema: "route_one"}
+	second := store.AccountingLocation{Database: store.InMemoryAccountingDatabase, Schema: "route_two"}
 	for _, location := range []store.AccountingLocation{first, second} {
 		if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
-			t.Fatalf("prepare %s.%s: %v", location.Catalog, location.Schema, err)
+			t.Fatalf("prepare %s.%s: %v", location.Database, location.Schema, err)
 		}
 		name, err := location.QualifiedName("probe")
 		if err != nil {
@@ -145,8 +145,8 @@ func TestAttachDatabaseQuotesPathLiteral(t *testing.T) {
 	})
 
 	location := store.AccountingLocation{
-		Catalog: "quoted_path",
-		Schema:  "main",
+		Database: "quoted_path",
+		Schema:   "main",
 	}
 	path := filepath.Join(t.TempDir(), "mina's.db")
 	if err := store.AttachDatabase(ctx, db, path, location); err != nil {

@@ -8,7 +8,7 @@
 
 - Migrations are upgrade-only and recorded in `schema_version` in the selected accounting location.
 - Store constructors receive the accounting location and repository SQL qualifies accounting objects through that location.
-- DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects catalog-qualified index names in `CREATE INDEX`.
+- DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.
 - Query generation is not selected for Stage 1 recovery because the required DuckDB SQL features are not yet proven against a repo-owned generator. Manual query code must keep user values parameter-bound and dynamic identifiers selected from store-owned allowlists.
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.

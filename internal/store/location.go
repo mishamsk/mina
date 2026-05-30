@@ -8,39 +8,39 @@ import (
 
 // Fixed accounting-state locations owned by the store layer.
 const (
-	InMemoryAccountingCatalog = "memory"
-	InMemoryAccountingSchema  = "mina"
-	AttachedAccountingCatalog = "accounting"
-	AttachedAccountingSchema  = "main"
+	InMemoryAccountingDatabase = "memory"
+	InMemoryAccountingSchema   = "mina"
+	AttachedAccountingDatabase = "accounting"
+	AttachedAccountingSchema   = "main"
 )
 
 var identifierNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// AccountingLocation identifies the DuckDB catalog and schema that hold accounting state.
+// AccountingLocation identifies the DuckDB database and schema that hold accounting state.
 type AccountingLocation struct {
-	Catalog string
-	Schema  string
+	Database string
+	Schema   string
 }
 
 // InMemoryAccountingLocation returns the fixed in-memory accounting-state location.
 func InMemoryAccountingLocation() AccountingLocation {
 	return AccountingLocation{
-		Catalog: InMemoryAccountingCatalog,
-		Schema:  InMemoryAccountingSchema,
+		Database: InMemoryAccountingDatabase,
+		Schema:   InMemoryAccountingSchema,
 	}
 }
 
 // AttachedDatabaseAccountingLocation returns the fixed attached-database accounting-state location.
 func AttachedDatabaseAccountingLocation() AccountingLocation {
 	return AccountingLocation{
-		Catalog: AttachedAccountingCatalog,
-		Schema:  AttachedAccountingSchema,
+		Database: AttachedAccountingDatabase,
+		Schema:   AttachedAccountingSchema,
 	}
 }
 
 // Validate checks that the accounting location can be safely rendered as SQL identifiers.
 func (l AccountingLocation) Validate() error {
-	if err := ValidateIdentifierName("catalog", l.Catalog); err != nil {
+	if err := ValidateIdentifierName("database", l.Database); err != nil {
 		return err
 	}
 	if err := ValidateIdentifierName("schema", l.Schema); err != nil {
@@ -50,7 +50,7 @@ func (l AccountingLocation) Validate() error {
 	return nil
 }
 
-// ValidateIdentifierName checks a catalog, schema, or object name used in rendered SQL.
+// ValidateIdentifierName checks a database, schema, or object name used in rendered SQL.
 func ValidateIdentifierName(kind string, name string) error {
 	if !identifierNamePattern.MatchString(name) {
 		return fmt.Errorf("invalid %s identifier %q", kind, name)
@@ -74,7 +74,7 @@ func (l AccountingLocation) QualifiedName(object string) (string, error) {
 	}
 
 	return strings.Join([]string{
-		QuoteIdentifier(l.Catalog),
+		QuoteIdentifier(l.Database),
 		QuoteIdentifier(l.Schema),
 		QuoteIdentifier(object),
 	}, "."), nil
@@ -97,5 +97,5 @@ func (l AccountingLocation) sequenceLiteral(sequence string) string {
 		panic(err)
 	}
 
-	return quoteStringLiteral(l.Catalog + "." + l.Schema + "." + sequence)
+	return quoteStringLiteral(l.Database + "." + l.Schema + "." + sequence)
 }

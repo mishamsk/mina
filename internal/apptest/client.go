@@ -49,8 +49,8 @@ func New(t *testing.T) *Client {
 
 	schema := testSchemaName(t)
 	location := store.AccountingLocation{
-		Catalog: store.InMemoryAccountingCatalog,
-		Schema:  schema,
+		Database: store.InMemoryAccountingDatabase,
+		Schema:   schema,
 	}
 	if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
 		t.Fatalf("prepare test schema: %v", err)

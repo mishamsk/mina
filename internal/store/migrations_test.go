@@ -144,11 +144,11 @@ func tableExists(t *testing.T, ctx context.Context, db *sql.DB, location store.A
 	if err := db.QueryRowContext(
 		ctx,
 		`SELECT COUNT(*)
-FROM information_schema.tables
-WHERE table_catalog = ?
-  AND table_schema = ?
+FROM duckdb_tables()
+WHERE database_name = ?
+  AND schema_name = ?
   AND table_name = ?`,
-		location.Catalog,
+		location.Database,
 		location.Schema,
 		tableName,
 	).Scan(&count); err != nil {
@@ -165,12 +165,12 @@ func assertColumnType(t *testing.T, ctx context.Context, db *sql.DB, location st
 	if err := db.QueryRowContext(
 		ctx,
 		`SELECT data_type
-FROM information_schema.columns
-WHERE table_catalog = ?
-  AND table_schema = ?
+FROM duckdb_columns()
+WHERE database_name = ?
+  AND schema_name = ?
   AND table_name = ?
   AND column_name = ?`,
-		location.Catalog,
+		location.Database,
 		location.Schema,
 		tableName,
 		columnName,

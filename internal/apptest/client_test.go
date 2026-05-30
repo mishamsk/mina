@@ -18,11 +18,11 @@ func TestNewUsesPerTestInMemorySchema(t *testing.T) {
 	if err := persistence.QueryRowContext(
 		context.Background(),
 		`SELECT COUNT(*)
-FROM information_schema.tables
-WHERE table_catalog = ?
-  AND table_schema = ?
+FROM duckdb_tables()
+WHERE database_name = ?
+  AND schema_name = ?
   AND table_name = 'schema_version'`,
-		location.Catalog,
+		location.Database,
 		location.Schema,
 	).Scan(&count); err != nil {
 		t.Fatalf("count schema version tables: %v", err)

@@ -26,7 +26,7 @@ func OpenInMemory(ctx context.Context) (*sql.DB, error) {
 	return open(ctx, ":memory:")
 }
 
-// AttachDatabase attaches a DuckDB database file as the accounting catalog.
+// AttachDatabase attaches a DuckDB database file as the accounting database.
 func AttachDatabase(ctx context.Context, db *sql.DB, path string, location AccountingLocation) error {
 	if path == "" {
 		return errors.New("database path is required")
@@ -37,7 +37,7 @@ func AttachDatabase(ctx context.Context, db *sql.DB, path string, location Accou
 
 	// DuckDB does not accept bind parameters in ATTACH, so the file path is
 	// rendered as a SQL string literal with standard single-quote escaping.
-	if _, err := db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+QuoteIdentifier(location.Catalog)); err != nil {
+	if _, err := db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+QuoteIdentifier(location.Database)); err != nil {
 		return fmt.Errorf("attach accounting database %s: %w", path, err)
 	}
 
@@ -50,7 +50,7 @@ func PrepareAccountingLocation(ctx context.Context, db *sql.DB, location Account
 		return err
 	}
 
-	schemaName := QuoteIdentifier(location.Catalog) + "." + QuoteIdentifier(location.Schema)
+	schemaName := QuoteIdentifier(location.Database) + "." + QuoteIdentifier(location.Schema)
 	if _, err := db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+schemaName); err != nil {
 		return fmt.Errorf("create accounting schema %s: %w", schemaName, err)
 	}
