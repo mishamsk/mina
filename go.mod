@@ -1,4 +1,4 @@
-module mina.local/mina
+module github.com/mishamsk/mina
 
 go 1.25.0
 

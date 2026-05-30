@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"mina.local/mina/internal/services"
-	"mina.local/mina/internal/services/tags"
+	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/tags"
 )
 
 // TagStore persists tags.

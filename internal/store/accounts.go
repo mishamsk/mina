@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"mina.local/mina/internal/services"
-	"mina.local/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/accounts"
 )
 
 // AccountStore persists accounts.

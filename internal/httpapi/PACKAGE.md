@@ -1,4 +1,4 @@
-# mina.local/mina/internal/httpapi
+# github.com/mishamsk/mina/internal/httpapi
 
 ## Purpose
 

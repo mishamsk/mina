@@ -3,7 +3,7 @@ package apptest
 import (
 	"net/http"
 
-	models "mina.local/mina/internal/httpapi/openapi"
+	models "github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
 // Scenario creates common fixtures through the in-process API client.

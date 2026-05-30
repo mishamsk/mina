@@ -1,4 +1,4 @@
-# mina.local/mina/internal/services/members
+# github.com/mishamsk/mina/internal/services/members
 
 ## Purpose
 

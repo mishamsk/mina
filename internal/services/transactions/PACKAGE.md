@@ -1,4 +1,4 @@
-# mina.local/mina/internal/services/transactions
+# github.com/mishamsk/mina/internal/services/transactions
 
 ## Purpose
 

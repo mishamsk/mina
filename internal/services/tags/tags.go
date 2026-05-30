@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 // Tag is a hierarchical label used for flexible journal record grouping.

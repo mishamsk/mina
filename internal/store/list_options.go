@@ -1,7 +1,7 @@
 package store
 
 import (
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 func appendServiceListOrderAndPage(query string, args []any, opts services.ListOptions, allowedSorts map[services.SortKey][]string, defaultSort services.SortKey, tieBreaker string) (string, []any) {

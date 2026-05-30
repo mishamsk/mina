@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"mina.local/mina/internal/services"
-	"mina.local/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/creditlimits"
 )
 
 // CreditLimitHistoryStore persists account credit limit history.

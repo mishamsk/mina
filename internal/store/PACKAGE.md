@@ -1,4 +1,4 @@
-# mina.local/mina/internal/store
+# github.com/mishamsk/mina/internal/store
 
 ## Purpose
 

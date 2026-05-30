@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 // Category is a hierarchical category used to classify journal records.

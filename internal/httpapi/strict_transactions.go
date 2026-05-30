@@ -4,8 +4,8 @@ import (
 	"context"
 	"slices"
 
-	"mina.local/mina/internal/httpapi/openapi"
-	"mina.local/mina/internal/services/transactions"
+	"github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/services/transactions"
 )
 
 func (s *strictServer) ListTransactions(ctx context.Context, _ openapi.ListTransactionsRequestObject) (openapi.ListTransactionsResponseObject, error) {

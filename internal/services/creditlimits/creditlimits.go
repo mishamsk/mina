@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 // CreditLimitHistory is one historical credit limit entry for an account.

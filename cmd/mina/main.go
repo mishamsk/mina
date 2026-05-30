@@ -15,7 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"mina.local/mina/internal/runtime"
+	"github.com/mishamsk/mina/internal/runtime"
 )
 
 const version = "0.0.0-dev"

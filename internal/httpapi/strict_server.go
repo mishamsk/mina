@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"mina.local/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
 var _ openapi.StrictServerInterface = (*strictServer)(nil)

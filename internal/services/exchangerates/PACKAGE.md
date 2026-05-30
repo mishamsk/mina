@@ -1,4 +1,4 @@
-# mina.local/mina/internal/services/exchangerates
+# github.com/mishamsk/mina/internal/services/exchangerates
 
 ## Purpose
 

@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 func listOptionsFromParams[Sort ~string, SortDirection ~string](

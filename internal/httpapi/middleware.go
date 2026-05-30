@@ -16,7 +16,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	openapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 
-	"mina.local/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
 func accessLogger(out io.Writer) func(http.Handler) http.Handler {

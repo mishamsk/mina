@@ -3,10 +3,10 @@ package httpapi
 import (
 	"context"
 
-	"mina.local/mina/internal/httpapi/openapi"
-	"mina.local/mina/internal/services"
-	"mina.local/mina/internal/services/creditlimits"
-	"mina.local/mina/internal/services/exchangerates"
+	"github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/exchangerates"
 )
 
 func (s *strictServer) ListCreditLimitHistory(ctx context.Context, request openapi.ListCreditLimitHistoryRequestObject) (openapi.ListCreditLimitHistoryResponseObject, error) {

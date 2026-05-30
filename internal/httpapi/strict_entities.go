@@ -3,12 +3,12 @@ package httpapi
 import (
 	"context"
 
-	"mina.local/mina/internal/httpapi/openapi"
-	"mina.local/mina/internal/services"
-	"mina.local/mina/internal/services/accounts"
-	"mina.local/mina/internal/services/categories"
-	"mina.local/mina/internal/services/members"
-	"mina.local/mina/internal/services/tags"
+	"github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services/categories"
+	"github.com/mishamsk/mina/internal/services/members"
+	"github.com/mishamsk/mina/internal/services/tags"
 )
 
 func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAccountsRequestObject) (openapi.ListAccountsResponseObject, error) {

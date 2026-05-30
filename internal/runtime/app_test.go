@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mina.local/mina/internal/runtime"
-	"mina.local/mina/internal/store"
+	"github.com/mishamsk/mina/internal/runtime"
+	"github.com/mishamsk/mina/internal/store"
 )
 
 func TestNewCreatesAndMigratesDatabase(t *testing.T) {

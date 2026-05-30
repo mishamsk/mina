@@ -10,7 +10,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 
-	"mina.local/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
 func generatedBindingErrorMessage(r *http.Request, err error) string {

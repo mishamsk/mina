@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"mina.local/mina/internal/services"
-	"mina.local/mina/internal/services/transactions"
+	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/transactions"
 )
 
 // TransactionStore persists transactions and journal records.

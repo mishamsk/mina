@@ -5,8 +5,8 @@ import (
 	"errors"
 	"net/http"
 
-	"mina.local/mina/internal/httpapi/openapi"
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 // WriteAPIError writes a stable JSON API error response.

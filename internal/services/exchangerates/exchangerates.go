@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 // ExchangeRate is one historical currency conversion rate.

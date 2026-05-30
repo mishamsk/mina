@@ -3,7 +3,7 @@ package httpapi
 import (
 	"net/http"
 
-	"mina.local/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
 func openAPIJSONHandler(w http.ResponseWriter, _ *http.Request) {

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"mina.local/mina/internal/runtime"
-	"mina.local/mina/internal/store"
+	"github.com/mishamsk/mina/internal/runtime"
+	"github.com/mishamsk/mina/internal/store"
 )
 
 // Client sends typed JSON requests through an in-process app handler.

@@ -9,15 +9,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"mina.local/mina/internal/httpapi"
-	"mina.local/mina/internal/services/accounts"
-	"mina.local/mina/internal/services/categories"
-	"mina.local/mina/internal/services/creditlimits"
-	"mina.local/mina/internal/services/exchangerates"
-	"mina.local/mina/internal/services/members"
-	"mina.local/mina/internal/services/tags"
-	"mina.local/mina/internal/services/transactions"
-	"mina.local/mina/internal/store"
+	"github.com/mishamsk/mina/internal/httpapi"
+	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services/categories"
+	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/exchangerates"
+	"github.com/mishamsk/mina/internal/services/members"
+	"github.com/mishamsk/mina/internal/services/tags"
+	"github.com/mishamsk/mina/internal/services/transactions"
+	"github.com/mishamsk/mina/internal/store"
 )
 
 // App is a composed in-process Mina application.

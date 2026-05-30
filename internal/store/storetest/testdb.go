@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mina.local/mina/internal/store"
+	"github.com/mishamsk/mina/internal/store"
 )
 
 // OpenMigrated opens a migrated temporary database for boundary tests.

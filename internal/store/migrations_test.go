@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"mina.local/mina/internal/store"
-	"mina.local/mina/internal/store/storetest"
+	"github.com/mishamsk/mina/internal/store"
+	"github.com/mishamsk/mina/internal/store/storetest"
 )
 
 func TestMigrateAppliesLatestSchemaVersion(t *testing.T) {

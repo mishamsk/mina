@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-const modulePath = "mina.local/mina"
+const modulePath = "github.com/mishamsk/mina"
 
 type goFile struct {
 	relPath string

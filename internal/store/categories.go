@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"mina.local/mina/internal/services"
-	"mina.local/mina/internal/services/categories"
+	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/categories"
 )
 
 // CategoryStore persists categories.

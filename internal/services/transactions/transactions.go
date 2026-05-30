@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 // PostingStatus is a journal record posting lifecycle state.

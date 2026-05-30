@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 // Account is a hierarchical financial account or counterparty.

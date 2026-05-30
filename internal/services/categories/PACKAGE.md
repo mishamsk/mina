@@ -1,4 +1,4 @@
-# mina.local/mina/internal/services/categories
+# github.com/mishamsk/mina/internal/services/categories
 
 ## Purpose
 

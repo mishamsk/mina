@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"mina.local/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services"
 )
 
 // Member is a household member used for journal record attribution.

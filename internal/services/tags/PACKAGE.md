@@ -1,4 +1,4 @@
-# mina.local/mina/internal/services/tags
+# github.com/mishamsk/mina/internal/services/tags
 
 ## Purpose
 

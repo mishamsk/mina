@@ -1,4 +1,4 @@
-# mina.local/mina/internal/runtime
+# github.com/mishamsk/mina/internal/runtime
 
 ## Purpose
 

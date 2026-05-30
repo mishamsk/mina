@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	models "mina.local/mina/internal/httpapi/openapi"
+	models "github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
 func TestNewUsesPerTestInMemorySchema(t *testing.T) {

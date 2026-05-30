@@ -1,4 +1,4 @@
-# mina.local/mina/internal/services/creditlimits
+# github.com/mishamsk/mina/internal/services/creditlimits
 
 ## Purpose
 

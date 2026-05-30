@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"testing"
 
-	"mina.local/mina/internal/apptest"
-	models "mina.local/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/apptest"
+	models "github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
 func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {

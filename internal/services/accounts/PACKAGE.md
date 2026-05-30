@@ -1,4 +1,4 @@
-# mina.local/mina/internal/services/accounts
+# github.com/mishamsk/mina/internal/services/accounts
 
 ## Purpose
 
