@@ -27,7 +27,7 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 		t.Fatalf("bulk category status = %d, want %d; body %s", bulkCategory.StatusCode, http.StatusOK, bulkCategory.RawBody)
 	}
 	assertBulkResponse(t, bulkCategory.Body, []int64{firstRecordID})
-	categorized := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?category_id="+formatID(refs.SecondCategoryId), nil)
+	categorized := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?category_id="+apptest.FormatID(refs.SecondCategoryId), nil)
 	if categorized.StatusCode != http.StatusOK {
 		t.Fatalf("categorized search status = %d, want %d; body %s", categorized.StatusCode, http.StatusOK, categorized.RawBody)
 	}
@@ -35,19 +35,19 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 
 	bulkTags := apptest.Decode[models.BulkRecordOperationResponse](client, http.MethodPost, "/records/bulk/tags", models.BulkTagRecordsRequest{
 		RecordIds:    []int64{firstRecordID, secondRecordID},
-		AddTagIds:    int64SlicePtr(refs.SecondTagId),
-		RemoveTagIds: int64SlicePtr(refs.TagId),
+		AddTagIds:    apptest.Int64SlicePtr(refs.SecondTagId),
+		RemoveTagIds: apptest.Int64SlicePtr(refs.TagId),
 	})
 	if bulkTags.StatusCode != http.StatusOK {
 		t.Fatalf("bulk tags status = %d, want %d; body %s", bulkTags.StatusCode, http.StatusOK, bulkTags.RawBody)
 	}
 	assertBulkResponse(t, bulkTags.Body, []int64{firstRecordID, secondRecordID})
-	addedTag := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?tag_id="+formatID(refs.SecondTagId), nil)
+	addedTag := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?tag_id="+apptest.FormatID(refs.SecondTagId), nil)
 	if addedTag.StatusCode != http.StatusOK {
 		t.Fatalf("added tag search status = %d, want %d; body %s", addedTag.StatusCode, http.StatusOK, addedTag.RawBody)
 	}
 	assertRecordIDs(t, addedTag.Body.Records, []int64{firstRecordID, secondRecordID})
-	removedTag := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?tag_id="+formatID(refs.TagId), nil)
+	removedTag := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?tag_id="+apptest.FormatID(refs.TagId), nil)
 	if removedTag.StatusCode != http.StatusOK {
 		t.Fatalf("removed tag search status = %d, want %d; body %s", removedTag.StatusCode, http.StatusOK, removedTag.RawBody)
 	}
@@ -126,7 +126,7 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 
 	missingTag := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/tags", models.BulkTagRecordsRequest{
 		RecordIds: []int64{firstRecordID},
-		AddTagIds: int64SlicePtr(999),
+		AddTagIds: apptest.Int64SlicePtr(999),
 	})
 	if missingTag.StatusCode != http.StatusBadRequest {
 		t.Fatalf("missing tag status = %d, want %d; body %s", missingTag.StatusCode, http.StatusBadRequest, missingTag.RawBody)
@@ -141,8 +141,8 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 
 	overlappingTags := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/tags", models.BulkTagRecordsRequest{
 		RecordIds:    []int64{firstRecordID},
-		AddTagIds:    int64SlicePtr(refs.SecondTagId),
-		RemoveTagIds: int64SlicePtr(refs.SecondTagId),
+		AddTagIds:    apptest.Int64SlicePtr(refs.SecondTagId),
+		RemoveTagIds: apptest.Int64SlicePtr(refs.SecondTagId),
 	})
 	if overlappingTags.StatusCode != http.StatusBadRequest {
 		t.Fatalf("overlapping tag status = %d, want %d; body %s", overlappingTags.StatusCode, http.StatusBadRequest, overlappingTags.RawBody)
@@ -179,14 +179,14 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	if allOrNothing.StatusCode != http.StatusBadRequest {
 		t.Fatalf("all-or-nothing status = %d, want %d; body %s", allOrNothing.StatusCode, http.StatusBadRequest, allOrNothing.RawBody)
 	}
-	newCategoryRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?category_id="+formatID(refs.SecondCategoryId), nil)
+	newCategoryRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?category_id="+apptest.FormatID(refs.SecondCategoryId), nil)
 	if newCategoryRecords.StatusCode != http.StatusOK {
 		t.Fatalf("new category search status = %d, want %d; body %s", newCategoryRecords.StatusCode, http.StatusOK, newCategoryRecords.RawBody)
 	}
 	if len(newCategoryRecords.Body.Records) != 0 {
 		t.Fatalf("new category record count after rejected bulk update = %d, want 0; body %+v", len(newCategoryRecords.Body.Records), newCategoryRecords.Body)
 	}
-	originalCategoryRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?category_id="+formatID(refs.CategoryId), nil)
+	originalCategoryRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?category_id="+apptest.FormatID(refs.CategoryId), nil)
 	if originalCategoryRecords.StatusCode != http.StatusOK {
 		t.Fatalf("original category search status = %d, want %d; body %s", originalCategoryRecords.StatusCode, http.StatusOK, originalCategoryRecords.RawBody)
 	}

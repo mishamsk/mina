@@ -3,7 +3,6 @@ package runtime_test
 import (
 	"net/http"
 	"net/url"
-	"strconv"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -120,9 +119,9 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				Amount:               "-50.00",
 				AmountUsd:            "-50.00",
 				CategoryId:           refs.SecondCategoryId,
-				TagIds:               int64SlicePtr(refs.SecondTagId),
-				Memo:                 stringPtr("Rent"),
-				PendingDate:          stringPtr("2024-04-01"),
+				TagIds:               apptest.Int64SlicePtr(refs.SecondTagId),
+				Memo:                 apptest.StringPtr("Rent"),
+				PendingDate:          apptest.StringPtr("2024-04-01"),
 				PostingStatus:        models.Pending,
 				ReconciliationStatus: models.Unreconciled,
 				Source:               models.Manual,
@@ -154,10 +153,10 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		path string
 		want []int64
 	}{
-		{name: "account", path: "/records?account_id=" + formatID(refs.CheckingAccountId), want: []int64{firstDebit.RecordId}},
-		{name: "category", path: "/records?category_id=" + formatID(refs.CategoryId), want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
-		{name: "tag", path: "/records?tag_id=" + formatID(refs.TagId), want: []int64{firstDebit.RecordId}},
-		{name: "member", path: "/records?member_id=" + formatID(refs.MemberId), want: []int64{firstDebit.RecordId}},
+		{name: "account", path: "/records?account_id=" + apptest.FormatID(refs.CheckingAccountId), want: []int64{firstDebit.RecordId}},
+		{name: "category", path: "/records?category_id=" + apptest.FormatID(refs.CategoryId), want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
+		{name: "tag", path: "/records?tag_id=" + apptest.FormatID(refs.TagId), want: []int64{firstDebit.RecordId}},
+		{name: "member", path: "/records?member_id=" + apptest.FormatID(refs.MemberId), want: []int64{firstDebit.RecordId}},
 		{name: "posting status", path: "/records?posting_status=pending", want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
 		{name: "reconciliation status", path: "/records?reconciliation_status=unreconciled", want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
 		{name: "amount min", path: "/records?amount_min=40.00", want: []int64{secondCredit.RecordId}},
@@ -171,7 +170,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		{name: "posted from", path: "/records?posted_date_from=2024-03-11", want: []int64{firstDebit.RecordId}},
 		{name: "posted to", path: "/records?posted_date_to=2024-03-11", want: []int64{firstDebit.RecordId}},
 		{name: "memo", path: "/records?memo_contains=" + url.QueryEscape("unc"), want: []int64{firstDebit.RecordId}},
-		{name: "combined", path: "/records?category_id=" + formatID(refs.CategoryId) + "&tag_id=" + formatID(refs.TagId) + "&memo_contains=Lunch", want: []int64{firstDebit.RecordId}},
+		{name: "combined", path: "/records?category_id=" + apptest.FormatID(refs.CategoryId) + "&tag_id=" + apptest.FormatID(refs.TagId) + "&memo_contains=Lunch", want: []int64{firstDebit.RecordId}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -208,7 +207,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	if invalidReconciliationStatus.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid reconciliation status filter status = %d, want %d; body %s", invalidReconciliationStatus.StatusCode, http.StatusBadRequest, invalidReconciliationStatus.RawBody)
 	}
-	accountIDOnAccountView := apptest.Decode[models.ErrorResponse](client, http.MethodGet, accountRecordsPath(refs.CheckingAccountId)+"?account_id="+formatID(refs.SavingsAccountId), nil)
+	accountIDOnAccountView := apptest.Decode[models.ErrorResponse](client, http.MethodGet, accountRecordsPath(refs.CheckingAccountId)+"?account_id="+apptest.FormatID(refs.SavingsAccountId), nil)
 	if accountIDOnAccountView.StatusCode != http.StatusBadRequest {
 		t.Fatalf("account_id on account view status = %d, want %d; body %s", accountIDOnAccountView.StatusCode, http.StatusBadRequest, accountIDOnAccountView.RawBody)
 	}
@@ -252,10 +251,10 @@ func replacementTransactionRequest(refs transactionRefs) models.UpdateTransactio
 				Amount:               "-20.00",
 				AmountUsd:            "-20.00",
 				CategoryId:           refs.CategoryId,
-				TagIds:               int64SlicePtr(refs.TagId),
-				Memo:                 stringPtr("Replacement"),
-				PendingDate:          stringPtr("2024-03-12"),
-				PostedDate:           stringPtr("2024-03-13"),
+				TagIds:               apptest.Int64SlicePtr(refs.TagId),
+				Memo:                 apptest.StringPtr("Replacement"),
+				PendingDate:          apptest.StringPtr("2024-03-12"),
+				PostedDate:           apptest.StringPtr("2024-03-13"),
 				PostingStatus:        models.Posted,
 				ReconciliationStatus: models.Reconciled,
 				Source:               models.Manual,
@@ -275,11 +274,7 @@ func replacementTransactionRequest(refs transactionRefs) models.UpdateTransactio
 }
 
 func accountRecordsPath(accountID int64) string {
-	return "/accounts/" + formatID(accountID) + "/records"
-}
-
-func formatID(id int64) string {
-	return strconv.FormatInt(id, 10)
+	return apptest.IDPath("/accounts", accountID) + "/records"
 }
 
 func recordIDs(records []models.JournalRecord) []int64 {

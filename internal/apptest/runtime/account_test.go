@@ -2,7 +2,6 @@ package runtime_test
 
 import (
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -14,9 +13,9 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 
 	created := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:            "checking:Chase:Primary",
-		Currency:       stringPtr("USD"),
-		ExternalId:     stringPtr("acct-123"),
-		ExternalSystem: stringPtr("plaid"),
+		Currency:       apptest.StringPtr("USD"),
+		ExternalId:     apptest.StringPtr("acct-123"),
+		ExternalSystem: apptest.StringPtr("plaid"),
 	})
 	if created.StatusCode != http.StatusCreated {
 		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
@@ -36,8 +35,8 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 
 	hidden := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "credit:Amex:Blue",
-		IsHidden: boolPtr(true),
-		Currency: stringPtr("USD"),
+		IsHidden: apptest.BoolPtr(true),
+		Currency: apptest.StringPtr("USD"),
 	})
 	if hidden.StatusCode != http.StatusCreated {
 		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode, http.StatusCreated, hidden.RawBody)
@@ -57,8 +56,8 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 
 	updated := apptest.Decode[models.Account](client, http.MethodPatch, accountPath(created.Body.AccountId), models.UpdateAccountRequest{
 		IsHidden:       true,
-		ExternalId:     stringPtr("acct-456"),
-		ExternalSystem: stringPtr("manual"),
+		ExternalId:     apptest.StringPtr("acct-456"),
+		ExternalSystem: apptest.StringPtr("manual"),
 	})
 	if updated.StatusCode != http.StatusOK {
 		t.Fatalf("update status = %d, want %d; body %s", updated.StatusCode, http.StatusOK, updated.RawBody)
@@ -81,12 +80,12 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 
 	visibleDeleted := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "savings:Ally:Reserve",
-		Currency: stringPtr("USD"),
+		Currency: apptest.StringPtr("USD"),
 	})
 	if visibleDeleted.StatusCode != http.StatusCreated {
 		t.Fatalf("visible delete create status = %d, want %d; body %s", visibleDeleted.StatusCode, http.StatusCreated, visibleDeleted.RawBody)
 	}
-	visibleDelete := apptest.Decode[jsonBody](client, http.MethodDelete, accountPath(visibleDeleted.Body.AccountId), nil)
+	visibleDelete := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, accountPath(visibleDeleted.Body.AccountId), nil)
 	if visibleDelete.StatusCode != http.StatusNoContent {
 		t.Fatalf("visible delete status = %d, want %d; body %s", visibleDelete.StatusCode, http.StatusNoContent, visibleDelete.RawBody)
 	}
@@ -96,7 +95,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 	assertAccountIDs(t, defaultAfterVisibleDelete.Body.Accounts, nil)
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, accountPath(hidden.Body.AccountId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, accountPath(hidden.Body.AccountId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -126,7 +125,7 @@ func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 
 	first := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "cash:Wallet",
-		Currency: stringPtr("USD"),
+		Currency: apptest.StringPtr("USD"),
 	})
 	if first.StatusCode != http.StatusCreated {
 		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode, http.StatusCreated, first.RawBody)
@@ -134,7 +133,7 @@ func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 
 	duplicate := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "cash:Wallet",
-		Currency: stringPtr("USD"),
+		Currency: apptest.StringPtr("USD"),
 	})
 	if duplicate.StatusCode != http.StatusConflict {
 		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode, http.StatusConflict, duplicate.RawBody)
@@ -143,14 +142,14 @@ func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, accountPath(first.Body.AccountId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, accountPath(first.Body.AccountId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
 
 	recreated := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "cash:Wallet",
-		Currency: stringPtr("USD"),
+		Currency: apptest.StringPtr("USD"),
 	})
 	if recreated.StatusCode != http.StatusCreated {
 		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode, http.StatusCreated, recreated.RawBody)
@@ -162,7 +161,7 @@ func TestAccountValidationErrors(t *testing.T) {
 
 	invalidCurrency := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "checking:Chase",
-		Currency: stringPtr("usd"),
+		Currency: apptest.StringPtr("usd"),
 	})
 	if invalidCurrency.StatusCode != http.StatusBadRequest {
 		t.Fatalf("invalid currency status = %d, want %d; body %s", invalidCurrency.StatusCode, http.StatusBadRequest, invalidCurrency.RawBody)
@@ -173,7 +172,7 @@ func TestAccountValidationErrors(t *testing.T) {
 
 	nonASCIICurrency := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "checking:CreditUnion",
-		Currency: stringPtr("ÅB"),
+		Currency: apptest.StringPtr("ÅB"),
 	})
 	if nonASCIICurrency.StatusCode != http.StatusBadRequest {
 		t.Fatalf("non-ASCII currency status = %d, want %d; body %s", nonASCIICurrency.StatusCode, http.StatusBadRequest, nonASCIICurrency.RawBody)
@@ -181,7 +180,7 @@ func TestAccountValidationErrors(t *testing.T) {
 
 	missingExternalSystem := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:        "checking:Chase",
-		ExternalId: stringPtr("acct-123"),
+		ExternalId: apptest.StringPtr("acct-123"),
 	})
 	if missingExternalSystem.StatusCode != http.StatusBadRequest {
 		t.Fatalf("missing external system status = %d, want %d; body %s", missingExternalSystem.StatusCode, http.StatusBadRequest, missingExternalSystem.RawBody)
@@ -207,7 +206,7 @@ func TestAccountValidationErrors(t *testing.T) {
 }
 
 func accountPath(id int64) string {
-	return "/accounts/" + strconv.FormatInt(id, 10)
+	return apptest.IDPath("/accounts", id)
 }
 
 func assertAccountHierarchy(t *testing.T, account models.Account, kind string, parent string, name string, level int) {
@@ -238,8 +237,4 @@ func assertAccountIDs(t *testing.T, accounts []models.Account, want []int64) {
 			t.Fatalf("account id at %d = %d, want %d; accounts = %+v", i, account.AccountId, want[i], accounts)
 		}
 	}
-}
-
-func stringPtr(value string) *string {
-	return &value
 }

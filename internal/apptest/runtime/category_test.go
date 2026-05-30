@@ -2,7 +2,6 @@ package runtime_test
 
 import (
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -30,7 +29,7 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 
 	hidden := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
 		Fqn:      "Food:Groceries",
-		IsHidden: boolPtr(true),
+		IsHidden: apptest.BoolPtr(true),
 	})
 	if hidden.StatusCode != http.StatusCreated {
 		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode, http.StatusCreated, hidden.RawBody)
@@ -64,7 +63,7 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 	assertCategoryIDs(t, afterHide.Body.Categories, nil)
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, categoryPath(hidden.Body.CategoryId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, categoryPath(hidden.Body.CategoryId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -112,7 +111,7 @@ func TestCategoryRejectsDuplicateActiveFQN(t *testing.T) {
 		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, categoryPath(first.Body.CategoryId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, categoryPath(first.Body.CategoryId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -164,10 +163,8 @@ func TestCategoryValidationErrors(t *testing.T) {
 	}
 }
 
-type jsonBody struct{}
-
 func categoryPath(id int64) string {
-	return "/categories/" + strconv.FormatInt(id, 10)
+	return apptest.IDPath("/categories", id)
 }
 
 func assertCategoryHierarchy(t *testing.T, category models.Category, parent string, name string, level int) {
@@ -195,8 +192,4 @@ func assertCategoryIDs(t *testing.T, categories []models.Category, want []int64)
 			t.Fatalf("category id at %d = %d, want %d; categories = %+v", i, category.CategoryId, want[i], categories)
 		}
 	}
-}
-
-func boolPtr(value bool) *bool {
-	return &value
 }

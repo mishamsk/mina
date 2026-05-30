@@ -2,7 +2,6 @@ package runtime_test
 
 import (
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -30,7 +29,7 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 
 	hidden := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
 		Fqn:      "Trips:Planning",
-		IsHidden: boolPtr(true),
+		IsHidden: apptest.BoolPtr(true),
 	})
 	if hidden.StatusCode != http.StatusCreated {
 		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode, http.StatusCreated, hidden.RawBody)
@@ -70,7 +69,7 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if visibleDeleted.StatusCode != http.StatusCreated {
 		t.Fatalf("visible delete create status = %d, want %d; body %s", visibleDeleted.StatusCode, http.StatusCreated, visibleDeleted.RawBody)
 	}
-	visibleDelete := apptest.Decode[jsonBody](client, http.MethodDelete, tagPath(visibleDeleted.Body.TagId), nil)
+	visibleDelete := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, tagPath(visibleDeleted.Body.TagId), nil)
 	if visibleDelete.StatusCode != http.StatusNoContent {
 		t.Fatalf("visible delete status = %d, want %d; body %s", visibleDelete.StatusCode, http.StatusNoContent, visibleDelete.RawBody)
 	}
@@ -80,7 +79,7 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 	assertTagIDs(t, defaultAfterVisibleDelete.Body.Tags, nil)
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, tagPath(hidden.Body.TagId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, tagPath(hidden.Body.TagId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -128,7 +127,7 @@ func TestTagRejectsDuplicateActiveFQN(t *testing.T) {
 		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, tagPath(first.Body.TagId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, tagPath(first.Body.TagId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -186,7 +185,7 @@ func TestTagValidationErrors(t *testing.T) {
 }
 
 func tagPath(id int64) string {
-	return "/tags/" + strconv.FormatInt(id, 10)
+	return apptest.IDPath("/tags", id)
 }
 
 func assertTagHierarchy(t *testing.T, tag models.Tag, parent string, name string, level int) {

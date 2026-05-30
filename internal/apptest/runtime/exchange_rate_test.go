@@ -2,7 +2,6 @@ package runtime_test
 
 import (
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -84,7 +83,7 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("updated rate = %q, want 1.09000000", updated.Body.Rate)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, exchangeRatePath(earlier.Body.ExchangeRateId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, exchangeRatePath(earlier.Body.ExchangeRateId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -135,7 +134,7 @@ func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
 		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, exchangeRatePath(first.Body.ExchangeRateId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, exchangeRatePath(first.Body.ExchangeRateId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -237,7 +236,7 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 }
 
 func exchangeRatePath(id int64) string {
-	return "/exchange-rates/" + strconv.FormatInt(id, 10)
+	return apptest.IDPath("/exchange-rates", id)
 }
 
 func assertExchangeRateIDs(t *testing.T, rates []models.ExchangeRate, want []int64) {

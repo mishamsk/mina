@@ -2,7 +2,6 @@ package runtime_test
 
 import (
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -53,7 +52,7 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("updated name = %q, want Casey", updated.Body.Name)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, memberPath(second.Body.MemberId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, memberPath(second.Body.MemberId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -121,7 +120,7 @@ func TestMemberRejectsDuplicateActiveName(t *testing.T) {
 		t.Fatalf("duplicate update status = %d, want %d; body %s", duplicateUpdate.StatusCode, http.StatusConflict, duplicateUpdate.RawBody)
 	}
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, memberPath(first.Body.MemberId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, memberPath(first.Body.MemberId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -174,7 +173,7 @@ func TestMemberValidationErrors(t *testing.T) {
 }
 
 func memberPath(id int64) string {
-	return "/members/" + strconv.FormatInt(id, 10)
+	return apptest.IDPath("/members", id)
 }
 
 func assertMemberIDs(t *testing.T, members []models.Member, want []int64) {

@@ -19,6 +19,7 @@
   - Tombstone-aware reads and list defaults for applicable resources.
   - Store-owned allowlists for dynamic filtering and sorting.
 - Current test workflow:
-  - Default tests should be in-process high-level boundary tests through an in-memory client, in-memory DuckDB, and per-test schemas.
+  - Default normal app tests live under `internal/apptest/runtime` and run through an in-memory client, in-memory DuckDB, and per-test schemas.
+  - Reusable normal-test harness code lives in `internal/apptest`.
   - End-to-end CLI and real-network REST coverage belongs in the non-default `just test-integration` workflow.
   - Pre-commit runs light non-mutating checks, including OpenAPI validity and generated output freshness.

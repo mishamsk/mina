@@ -2,7 +2,6 @@ package runtime_test
 
 import (
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -168,7 +167,7 @@ func TestTransactionValidationErrors(t *testing.T) {
 	}
 
 	missingTag := balancedTransactionRequest(refs)
-	missingTag.Records[0].TagIds = int64SlicePtr(999)
+	missingTag.Records[0].TagIds = apptest.Int64SlicePtr(999)
 	missingTagResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", missingTag)
 	if missingTagResponse.StatusCode != http.StatusBadRequest {
 		t.Fatalf("missing tag status = %d, want %d; body %s", missingTagResponse.StatusCode, http.StatusBadRequest, missingTagResponse.RawBody)
@@ -248,10 +247,10 @@ func balancedTransactionRequest(refs transactionRefs) models.CreateTransactionRe
 				Amount:               "-12.34",
 				AmountUsd:            "-12.34",
 				CategoryId:           refs.CategoryId,
-				TagIds:               int64SlicePtr(refs.TagId),
-				Memo:                 stringPtr("Lunch"),
-				PendingDate:          stringPtr("2024-03-10"),
-				PostedDate:           stringPtr("2024-03-11"),
+				TagIds:               apptest.Int64SlicePtr(refs.TagId),
+				Memo:                 apptest.StringPtr("Lunch"),
+				PendingDate:          apptest.StringPtr("2024-03-10"),
+				PostedDate:           apptest.StringPtr("2024-03-11"),
 				PostingStatus:        models.Posted,
 				ReconciliationStatus: models.Reconciled,
 				Source:               models.Manual,
@@ -271,7 +270,7 @@ func balancedTransactionRequest(refs transactionRefs) models.CreateTransactionRe
 }
 
 func transactionPath(id int64) string {
-	return "/transactions/" + strconv.FormatInt(id, 10)
+	return apptest.IDPath("/transactions", id)
 }
 
 func assertInt64s(t *testing.T, got []int64, want []int64) {
@@ -285,9 +284,4 @@ func assertInt64s(t *testing.T, got []int64, want []int64) {
 			t.Fatalf("int64 slice at %d = %d, want %d; got %+v", i, got[i], want[i], got)
 		}
 	}
-}
-
-func int64SlicePtr(values ...int64) *[]int64 {
-	copied := append([]int64{}, values...)
-	return &copied
 }

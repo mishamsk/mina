@@ -2,7 +2,6 @@ package runtime_test
 
 import (
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -49,7 +48,7 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 	}
 	assertCreditLimitHistoryIDs(t, list.Body.CreditLimitHistory, []int64{earlier.Body.CreditLimitHistoryId, later.Body.CreditLimitHistoryId})
 
-	deleted := apptest.Decode[jsonBody](client, http.MethodDelete, creditLimitHistoryPath(earlier.Body.CreditLimitHistoryId), nil)
+	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, creditLimitHistoryPath(earlier.Body.CreditLimitHistoryId), nil)
 	if deleted.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
 	}
@@ -191,11 +190,11 @@ func createCreditLimitAccount(t *testing.T, client *apptest.Client) models.Accou
 }
 
 func creditLimitHistoryPath(id int64) string {
-	return "/credit-limit-history/" + strconv.FormatInt(id, 10)
+	return apptest.IDPath("/credit-limit-history", id)
 }
 
 func accountCreditLimitHistoryPath(accountID int64) string {
-	return "/accounts/" + strconv.FormatInt(accountID, 10) + "/credit-limit-history"
+	return apptest.IDPath("/accounts", accountID) + "/credit-limit-history"
 }
 
 func assertCreditLimitHistoryIDs(t *testing.T, history []models.CreditLimitHistory, want []int64) {

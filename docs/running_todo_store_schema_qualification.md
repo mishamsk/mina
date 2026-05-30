@@ -69,17 +69,17 @@ Normal in-process app tests move out of `internal/runtime` into one package dire
   - [x] Required docs updated
 
 ### Commit 5: Move Normal Tests Under Apptest Runtime
-- [ ] Create the `internal/apptest/runtime` package for normal in-process app tests.
-- [ ] Move current `internal/runtime/*_test.go` normal tests into `internal/apptest/runtime`.
-- [ ] Move basic reusable helpers into `internal/apptest`; candidates include ID formatting, typed pointer helpers, path builders, and common JSON response marker types.
-- [ ] Keep non-basic scenario helpers in `internal/apptest/runtime`; candidates include transaction fixture structs, balanced transaction request builders, search fixture builders, and assertion helpers tied to specific scenario files.
-- [ ] Avoid multiple scenario subpackages until helper boundaries are stable; Go packages cannot span directories, so each subfolder would require its own imports and shared-helper decisions.
-- [ ] Ensure `go test ./...` and `just test` discover and run the moved tests.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Create the `internal/apptest/runtime` package for normal in-process app tests.
+- [x] Move current `internal/runtime/*_test.go` normal tests into `internal/apptest/runtime`.
+- [x] Move basic reusable helpers into `internal/apptest`; candidates include ID formatting, typed pointer helpers, path builders, and common JSON response marker types.
+- [x] Keep non-basic scenario helpers in `internal/apptest/runtime`; candidates include transaction fixture structs, balanced transaction request builders, search fixture builders, and assertion helpers tied to specific scenario files.
+- [x] Avoid multiple scenario subpackages until helper boundaries are stable; Go packages cannot span directories, so each subfolder would require its own imports and shared-helper decisions.
+- [x] Ensure `go test ./...` and `just test` discover and run the moved tests.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 6: Update Test Architecture Documentation
 - [ ] Update `docs/architecture.md` to state that Mina has exactly two app test classes.
