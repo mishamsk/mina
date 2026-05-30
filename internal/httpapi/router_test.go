@@ -40,12 +40,12 @@ func TestRouterMethodAndRouteErrorsUseMinaEnvelope(t *testing.T) {
 	assertMinaError(t, routeResponse, http.StatusNotFound, models.APIErrorCodeNotFound, "route not found")
 }
 
-func TestRouterGeneratedBindingErrorsUseParameterMetadataMessages(t *testing.T) {
+func TestRouterParameterErrorsKeepPreciseParseMessages(t *testing.T) {
 	handler := New(Dependencies{})
 
 	boolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(boolResponse, httptest.NewRequest(http.MethodGet, "/categories?include_hidden=maybe", nil))
-	assertMinaError(t, boolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `query parameter "include_hidden" has invalid type`)
+	assertMinaError(t, boolResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `query parameter "include_hidden" is invalid: value maybe: an invalid boolean: invalid syntax`)
 
 	emptyBoolResponse := httptest.NewRecorder()
 	handler.ServeHTTP(emptyBoolResponse, httptest.NewRequest(http.MethodGet, "/categories?include_hidden=", nil))
@@ -65,7 +65,7 @@ func TestRouterGeneratedBindingErrorsUseParameterMetadataMessages(t *testing.T) 
 
 	idResponse := httptest.NewRecorder()
 	handler.ServeHTTP(idResponse, httptest.NewRequest(http.MethodGet, "/accounts/not-an-id/records", nil))
-	assertMinaError(t, idResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `path parameter "account_id" has invalid type`)
+	assertMinaError(t, idResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `path parameter "account_id" is invalid: value not-an-id: an invalid integer: invalid syntax`)
 
 	minimumIDResponse := httptest.NewRecorder()
 	handler.ServeHTTP(minimumIDResponse, httptest.NewRequest(http.MethodGet, "/accounts/0/records", nil))

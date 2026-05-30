@@ -75,13 +75,21 @@ func parameterFormatErrorMessage(location string, name string, err error) string
 		return label + " must be provided at most once"
 	case strings.Contains(message, `parsing "":`) || strings.Contains(message, "empty value"):
 		return label + " must not be empty"
-	case strings.Contains(message, "invalid syntax") ||
-		strings.Contains(message, "invalid boolean") ||
-		strings.Contains(message, "invalid integer") ||
-		strings.Contains(message, "invalid number"):
-		return label + " has invalid type"
+	case message != "":
+		return label + " is invalid: " + parameterErrorDetail(message)
 	default:
 		return label + " has invalid value"
+	}
+}
+
+func parameterErrorDetail(message string) string {
+	for {
+		trimmed := strings.TrimPrefix(message, "error binding string parameter: ")
+		trimmed = strings.TrimPrefix(trimmed, "error setting array element: ")
+		if trimmed == message {
+			return message
+		}
+		message = trimmed
 	}
 }
 
