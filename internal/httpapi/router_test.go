@@ -102,6 +102,17 @@ func TestRouterGeneratedBodyBindingErrorsKeepMinaEnvelope(t *testing.T) {
 	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
 }
 
+func TestRouterOpenAPIValidationErrorsUseMinaEnvelope(t *testing.T) {
+	handler := New(Dependencies{})
+	request := httptest.NewRequest(http.MethodPost, "/members", strings.NewReader(`{"name":"Ada"}`))
+	request.Header.Set("Content-Type", "text/plain")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
+}
+
 func TestRouterRecoversPanicsWithMinaEnvelope(t *testing.T) {
 	handler := New(Dependencies{})
 	registerTestGetRoute(t, handler, "/panic", func(http.ResponseWriter, *http.Request) {

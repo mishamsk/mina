@@ -45,6 +45,7 @@ func New(deps Dependencies) http.Handler {
 // NewWithOptions builds the REST API handler tree with explicit adapter options.
 func NewWithOptions(deps Dependencies, opts Options) http.Handler {
 	router := chi.NewRouter()
+	spec := mustOpenAPIValidationSpec()
 	applyMiddleware(router, opts)
 	router.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		WriteAPIError(w, http.StatusNotFound, openapi.APIErrorCodeNotFound, "route not found")
@@ -53,14 +54,19 @@ func NewWithOptions(deps Dependencies, opts Options) http.Handler {
 		WriteAPIError(w, http.StatusMethodNotAllowed, openapi.APIErrorCodeMethodNotAllowed, "method not allowed")
 	})
 
-	strict := openapi.NewStrictHandlerWithOptions(
-		newStrictServer(deps),
-		[]openapi.StrictMiddlewareFunc{strictRequestContextMiddleware},
-		strictHTTPServerOptions(),
-	)
-	openapi.HandlerWithOptions(strict, openapi.ChiServerOptions{
-		BaseRouter:       router,
-		ErrorHandlerFunc: generatedRequestErrorHandler,
+	router.Group(func(api chi.Router) {
+		api.Use(strictJSONBodyValidator)
+		api.Use(openAPIRequestValidationMiddleware(spec))
+
+		strict := openapi.NewStrictHandlerWithOptions(
+			newStrictServer(deps),
+			[]openapi.StrictMiddlewareFunc{strictRequestContextMiddleware},
+			strictHTTPServerOptions(),
+		)
+		openapi.HandlerWithOptions(strict, openapi.ChiServerOptions{
+			BaseRouter:       api,
+			ErrorHandlerFunc: generatedRequestErrorHandler,
+		})
 	})
 
 	return router
@@ -76,7 +82,6 @@ func applyMiddleware(router chi.Router, opts Options) {
 	if opts.AccessLog != nil {
 		router.Use(accessLogger(opts.AccessLog))
 	}
-	router.Use(strictJSONBodyValidator)
 	router.Use(panicErrorEnvelope)
 	router.Use(withRecoveryLogEntry)
 	router.Use(middleware.Recoverer)

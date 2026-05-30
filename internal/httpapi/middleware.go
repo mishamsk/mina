@@ -2,12 +2,18 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5/middleware"
+	openapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 
 	"mina.local/mina/internal/httpapi/openapi"
 )
@@ -58,6 +64,82 @@ func withRecoveryLogEntry(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, middleware.WithLogEntry(r, noopLogEntry{}))
 	})
+}
+
+func mustOpenAPIValidationSpec() *openapi3.T {
+	spec, err := openapi.GetSpec()
+	if err != nil {
+		panic(fmt.Errorf("load embedded OpenAPI spec: %w", err))
+	}
+
+	return spec
+}
+
+func openAPIRequestValidationMiddleware(spec *openapi3.T) func(http.Handler) http.Handler {
+	return openapimiddleware.OapiRequestValidatorWithOptions(spec, &openapimiddleware.Options{
+		ErrorHandlerWithOpts: openAPIValidationErrorHandler,
+		DoNotValidateServers: true,
+	})
+}
+
+func openAPIValidationErrorHandler(
+	_ context.Context,
+	err error,
+	w http.ResponseWriter,
+	r *http.Request,
+	opts openapimiddleware.ErrorHandlerOpts,
+) {
+	status := opts.StatusCode
+	if status == 0 || status >= http.StatusInternalServerError {
+		status = http.StatusBadRequest
+	}
+	WriteAPIError(w, status, openapi.APIErrorCodeInvalidRequest, openAPIValidationErrorMessage(r, err))
+}
+
+func openAPIValidationErrorMessage(r *http.Request, err error) string {
+	var requestErr *openapi3filter.RequestError
+	if errors.As(err, &requestErr) {
+		if requestErr.RequestBody != nil {
+			if message := requiredBoolBodyCompatibilityMessage(r); message != "" {
+				return message
+			}
+
+			return "invalid JSON request body"
+		}
+		if requestErr.Parameter != nil {
+			return generatedParamErrorMessage(r, requestErr.Parameter.Name)
+		}
+	}
+
+	return "invalid request"
+}
+
+func requiredBoolBodyCompatibilityMessage(r *http.Request) string {
+	if r.Method != http.MethodPatch {
+		return ""
+	}
+	if !resourceIDPath(r.URL.Path, "/accounts/") &&
+		!resourceIDPath(r.URL.Path, "/categories/") &&
+		!resourceIDPath(r.URL.Path, "/tags/") {
+		return ""
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return ""
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return ""
+	}
+	value, ok := raw["is_hidden"]
+	if !ok || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return "is_hidden is required"
+	}
+
+	return ""
 }
 
 type noopLogEntry struct{}
