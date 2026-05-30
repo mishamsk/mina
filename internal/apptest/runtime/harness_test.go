@@ -1,15 +1,16 @@
-package apptest
+package runtime_test
 
 import (
 	"context"
 	"net/http"
 	"testing"
 
+	"github.com/mishamsk/mina/internal/apptest"
 	models "github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
-func TestNewUsesPerTestInMemorySchema(t *testing.T) {
-	client := New(t)
+func TestAppTestClientUsesPerTestInMemorySchema(t *testing.T) {
+	client := apptest.New(t)
 	persistence := client.Persistence()
 
 	location := persistence.Location()
@@ -40,13 +41,13 @@ WHERE database_name = ?
 }
 
 func TestScenarioCreatesFixturesThroughClient(t *testing.T) {
-	client := New(t)
+	client := apptest.New(t)
 	scenario := client.Scenario()
 
 	refs := scenario.TransactionRefs()
 	transaction := scenario.BalancedTransaction(refs)
 
-	response := Decode[models.TransactionListResponse](client, http.MethodGet, "/transactions", nil)
+	response := apptest.Decode[models.TransactionListResponse](client, http.MethodGet, "/transactions", nil)
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("list transactions status = %d, want %d; body %s", response.StatusCode, http.StatusOK, response.RawBody)
 	}
