@@ -9,7 +9,7 @@ import (
 // AccountingOpenRequest describes how to open the accounting store.
 type AccountingOpenRequest struct {
 	Path     string
-	Location AccountingLocation
+	Location AccountingLocationConfig
 	Migrate  bool
 }
 
@@ -33,7 +33,14 @@ func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*Accoun
 	if err != nil {
 		return nil, err
 	}
-	accounting := NewAccountingStore(db, request.Location)
+	location, err := NewAccountingLocation(ctx, db, request.Location)
+	if err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
+		}
+		return nil, err
+	}
+	accounting := NewAccountingStore(db, location)
 
 	if request.Path != "" {
 		if err := AttachDatabase(ctx, accounting, request.Path); err != nil {

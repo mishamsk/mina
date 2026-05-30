@@ -45,7 +45,7 @@ func New(t *testing.T) *Client {
 	schema := testSchemaName(t)
 	accounting, err := store.OpenAccounting(ctx, store.AccountingOpenRequest{
 		Migrate: true,
-		Location: store.AccountingLocation{
+		Location: store.AccountingLocationConfig{
 			Database: store.InMemoryAccountingDatabase,
 			Schema:   schema,
 		},

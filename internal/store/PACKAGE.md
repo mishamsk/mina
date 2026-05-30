@@ -9,6 +9,7 @@
 - Migrations are upgrade-only and recorded in `schema_version` in the selected accounting location.
 - The accounting store owns the DuckDB handle and selected accounting location.
 - Accounting open helpers perform DuckDB-specific open, attach, schema preparation, and migration calls.
+- Accounting locations cache rendered database and schema identifiers resolved with DuckDB keyword metadata at open time.
 - Repository constructors receive the accounting store and qualify accounting objects through its location.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.

@@ -15,7 +15,7 @@ func OpenMigrated(t *testing.T, ctx context.Context) (*store.AccountingStore, st
 	path := filepath.Join(t.TempDir(), "mina.db")
 	accounting, err := store.OpenAccounting(ctx, store.AccountingOpenRequest{
 		Path:     path,
-		Location: store.AttachedDatabaseAccountingLocation(),
+		Location: store.AttachedDatabaseAccountingLocationConfig(),
 		Migrate:  true,
 	})
 	if err != nil {

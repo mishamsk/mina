@@ -329,8 +329,8 @@ WHERE database_name = ?
   AND schema_name = ?
   AND table_name = 'schema_version'
 LIMIT 1`,
-		accounting.location.Database,
-		accounting.location.Schema,
+		accounting.location.database,
+		accounting.location.schema,
 	).Scan(&tableName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

@@ -148,8 +148,8 @@ FROM duckdb_tables()
 WHERE database_name = ?
   AND schema_name = ?
   AND table_name = ?`,
-		location.Database,
-		location.Schema,
+		location.Database(),
+		location.Schema(),
 		tableName,
 	).Scan(&count); err != nil {
 		t.Fatalf("check table %s: %v", tableName, err)
@@ -171,8 +171,8 @@ WHERE database_name = ?
   AND schema_name = ?
   AND table_name = ?
   AND column_name = ?`,
-		location.Database,
-		location.Schema,
+		location.Database(),
+		location.Schema(),
 		tableName,
 		columnName,
 	).Scan(&dataType); err != nil {

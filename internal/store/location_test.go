@@ -11,19 +11,19 @@ import (
 func TestAccountingLocationValidation(t *testing.T) {
 	tests := []struct {
 		name     string
-		location store.AccountingLocation
+		location store.AccountingLocationConfig
 		wantErr  bool
 	}{
 		{
 			name: "valid",
-			location: store.AccountingLocation{
+			location: store.AccountingLocationConfig{
 				Database: "accounting",
 				Schema:   "mina_1",
 			},
 		},
 		{
 			name: "empty database",
-			location: store.AccountingLocation{
+			location: store.AccountingLocationConfig{
 				Database: "",
 				Schema:   "main",
 			},
@@ -31,35 +31,43 @@ func TestAccountingLocationValidation(t *testing.T) {
 		},
 		{
 			name: "dot in schema",
-			location: store.AccountingLocation{
+			location: store.AccountingLocationConfig{
 				Database: "accounting",
 				Schema:   "bad.schema",
 			},
-			wantErr: true,
 		},
 		{
 			name: "digit prefix",
-			location: store.AccountingLocation{
+			location: store.AccountingLocationConfig{
 				Database: "1_accounting",
 				Schema:   "main",
 			},
-			wantErr: true,
 		},
 		{
 			name: "quoted payload",
-			location: store.AccountingLocation{
+			location: store.AccountingLocationConfig{
 				Database: "accounting",
 				Schema:   `main"`,
 			},
-			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.location.Validate()
+			ctx := context.Background()
+			db, err := store.OpenInMemory(ctx)
+			if err != nil {
+				t.Fatalf("open in-memory database: %v", err)
+			}
+			t.Cleanup(func() {
+				if err := db.Close(); err != nil {
+					t.Fatalf("close database: %v", err)
+				}
+			})
+
+			_, err = store.NewAccountingLocation(ctx, db, tt.location)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("NewAccountingLocation() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -85,12 +93,17 @@ func TestQualifiedAccountingObjectRoutesToLocation(t *testing.T) {
 		}
 	})
 
-	first := store.AccountingLocation{Database: store.InMemoryAccountingDatabase, Schema: "route_one"}
-	second := store.AccountingLocation{Database: store.InMemoryAccountingDatabase, Schema: "route_two"}
-	for _, location := range []store.AccountingLocation{first, second} {
+	first := store.AccountingLocationConfig{Database: store.InMemoryAccountingDatabase, Schema: "route_one"}
+	second := store.AccountingLocationConfig{Database: store.InMemoryAccountingDatabase, Schema: "route_two"}
+	locations := []store.AccountingLocation{}
+	for _, config := range []store.AccountingLocationConfig{first, second} {
+		location, err := store.NewAccountingLocation(ctx, db, config)
+		if err != nil {
+			t.Fatalf("new location: %v", err)
+		}
 		accounting := store.NewAccountingStore(db, location)
 		if err := store.PrepareAccountingLocation(ctx, accounting); err != nil {
-			t.Fatalf("prepare %s.%s: %v", location.Database, location.Schema, err)
+			t.Fatalf("prepare %s.%s: %v", location.Database(), location.Schema(), err)
 		}
 		name, err := location.QualifiedName("probe")
 		if err != nil {
@@ -99,13 +112,16 @@ func TestQualifiedAccountingObjectRoutesToLocation(t *testing.T) {
 		if _, err := db.ExecContext(ctx, "CREATE TABLE "+name+" (value INTEGER NOT NULL)"); err != nil {
 			t.Fatalf("create %s: %v", name, err)
 		}
+		locations = append(locations, location)
 	}
 
-	firstProbe, err := first.QualifiedName("probe")
+	firstLocation := locations[0]
+	secondLocation := locations[1]
+	firstProbe, err := firstLocation.QualifiedName("probe")
 	if err != nil {
 		t.Fatalf("first qualified name: %v", err)
 	}
-	secondProbe, err := second.QualifiedName("probe")
+	secondProbe, err := secondLocation.QualifiedName("probe")
 	if err != nil {
 		t.Fatalf("second qualified name: %v", err)
 	}
@@ -145,9 +161,12 @@ func TestAttachDatabaseQuotesPathLiteral(t *testing.T) {
 		}
 	})
 
-	location := store.AccountingLocation{
+	location, err := store.NewAccountingLocation(ctx, db, store.AccountingLocationConfig{
 		Database: "quoted_path",
 		Schema:   "main",
+	})
+	if err != nil {
+		t.Fatalf("new accounting location: %v", err)
 	}
 	accounting := store.NewAccountingStore(db, location)
 	path := filepath.Join(t.TempDir(), "mina's.db")

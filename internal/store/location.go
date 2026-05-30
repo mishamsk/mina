@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"regexp"
 	"strings"
@@ -14,49 +16,75 @@ const (
 	AttachedAccountingSchema   = "main"
 )
 
-var identifierNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var unquotedIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// AccountingLocation identifies the DuckDB database and schema that hold accounting state.
-type AccountingLocation struct {
+// AccountingLocationConfig names the DuckDB database and schema that hold accounting state.
+type AccountingLocationConfig struct {
 	Database string
 	Schema   string
 }
 
-// InMemoryAccountingLocation returns the fixed in-memory accounting-state location.
-func InMemoryAccountingLocation() AccountingLocation {
-	return AccountingLocation{
+// AccountingLocation identifies the resolved DuckDB database and schema that hold accounting state.
+type AccountingLocation struct {
+	database           string
+	schema             string
+	databaseIdentifier string
+	schemaIdentifier   string
+}
+
+// InMemoryAccountingLocationConfig returns the fixed in-memory accounting-state location config.
+func InMemoryAccountingLocationConfig() AccountingLocationConfig {
+	return AccountingLocationConfig{
 		Database: InMemoryAccountingDatabase,
 		Schema:   InMemoryAccountingSchema,
 	}
 }
 
-// AttachedDatabaseAccountingLocation returns the fixed attached-database accounting-state location.
-func AttachedDatabaseAccountingLocation() AccountingLocation {
-	return AccountingLocation{
+// InMemoryAccountingLocation returns the fixed in-memory accounting-state location.
+func InMemoryAccountingLocation() AccountingLocation {
+	return staticAccountingLocation(InMemoryAccountingDatabase, InMemoryAccountingSchema)
+}
+
+// AttachedDatabaseAccountingLocationConfig returns the fixed attached-database accounting-state location config.
+func AttachedDatabaseAccountingLocationConfig() AccountingLocationConfig {
+	return AccountingLocationConfig{
 		Database: AttachedAccountingDatabase,
 		Schema:   AttachedAccountingSchema,
 	}
 }
 
-// Validate checks that the accounting location can be safely rendered as SQL identifiers.
-func (l AccountingLocation) Validate() error {
-	if err := ValidateIdentifierName("database", l.Database); err != nil {
-		return err
-	}
-	if err := ValidateIdentifierName("schema", l.Schema); err != nil {
-		return err
-	}
-
-	return nil
+// AttachedDatabaseAccountingLocation returns the fixed attached-database accounting-state location.
+func AttachedDatabaseAccountingLocation() AccountingLocation {
+	return staticAccountingLocation(AttachedAccountingDatabase, AttachedAccountingSchema)
 }
 
-// ValidateIdentifierName checks a database, schema, or object name used in rendered SQL.
-func ValidateIdentifierName(kind string, name string) error {
-	if !identifierNamePattern.MatchString(name) {
-		return fmt.Errorf("invalid %s identifier %q", kind, name)
+// NewAccountingLocation resolves SQL-safe identifier strings for an accounting location.
+func NewAccountingLocation(ctx context.Context, db *sql.DB, config AccountingLocationConfig) (AccountingLocation, error) {
+	databaseIdentifier, err := accountingIdentifier(ctx, db, "database", config.Database)
+	if err != nil {
+		return AccountingLocation{}, err
+	}
+	schemaIdentifier, err := accountingIdentifier(ctx, db, "schema", config.Schema)
+	if err != nil {
+		return AccountingLocation{}, err
 	}
 
-	return nil
+	return AccountingLocation{
+		database:           config.Database,
+		schema:             config.Schema,
+		databaseIdentifier: databaseIdentifier,
+		schemaIdentifier:   schemaIdentifier,
+	}, nil
+}
+
+// Database returns the DuckDB database name holding accounting state.
+func (l AccountingLocation) Database() string {
+	return l.database
+}
+
+// Schema returns the DuckDB schema name holding accounting state.
+func (l AccountingLocation) Schema() string {
+	return l.schema
 }
 
 // QuoteIdentifier quotes one DuckDB SQL identifier.
@@ -66,16 +94,9 @@ func QuoteIdentifier(identifier string) string {
 
 // QualifiedName returns a quoted three-part accounting object name.
 func (l AccountingLocation) QualifiedName(object string) (string, error) {
-	if err := l.Validate(); err != nil {
-		return "", err
-	}
-	if err := ValidateIdentifierName("object", object); err != nil {
-		return "", err
-	}
-
 	return strings.Join([]string{
-		QuoteIdentifier(l.Database),
-		QuoteIdentifier(l.Schema),
+		l.databaseIdentifier,
+		l.schemaIdentifier,
 		QuoteIdentifier(object),
 	}, "."), nil
 }
@@ -90,12 +111,58 @@ func (l AccountingLocation) mustQualifiedName(object string) string {
 }
 
 func (l AccountingLocation) sequenceLiteral(sequence string) string {
-	if err := l.Validate(); err != nil {
-		panic(err)
+	name := strings.Join([]string{
+		l.databaseIdentifier,
+		l.schemaIdentifier,
+		sequence,
+	}, ".")
+
+	return quoteStringLiteral(name)
+}
+
+func staticAccountingLocation(database string, schema string) AccountingLocation {
+	return AccountingLocation{
+		database:           database,
+		schema:             schema,
+		databaseIdentifier: database,
+		schemaIdentifier:   schema,
 	}
-	if err := ValidateIdentifierName("sequence", sequence); err != nil {
-		panic(err)
+}
+
+func accountingIdentifier(ctx context.Context, db *sql.DB, kind string, name string) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("%s identifier is required", kind)
+	}
+	if !unquotedIdentifierPattern.MatchString(name) {
+		return QuoteIdentifier(name), nil
 	}
 
-	return quoteStringLiteral(l.Database + "." + l.Schema + "." + sequence)
+	reserved, err := reservedKeyword(ctx, db, name)
+	if err != nil {
+		return "", err
+	}
+	if reserved {
+		return QuoteIdentifier(name), nil
+	}
+
+	return name, nil
+}
+
+func reservedKeyword(ctx context.Context, db *sql.DB, name string) (bool, error) {
+	var reserved bool
+	err := db.QueryRowContext(
+		ctx,
+		`SELECT EXISTS (
+	SELECT 1
+	FROM duckdb_keywords()
+	WHERE keyword_category = 'reserved'
+	  AND lower(keyword_name) = lower(?)
+)`,
+		name,
+	).Scan(&reserved)
+	if err != nil {
+		return false, fmt.Errorf("check DuckDB keyword %q: %w", name, err)
+	}
+
+	return reserved, nil
 }

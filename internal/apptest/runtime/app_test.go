@@ -152,13 +152,13 @@ FROM duckdb_tables()
 WHERE database_name = ?
   AND schema_name = ?
   AND table_name = 'schema_version'`,
-		location.Database,
-		location.Schema,
+		location.Database(),
+		location.Schema(),
 	).Scan(&count)
 	if err != nil {
 		t.Fatalf("check schema version table location: %v", err)
 	}
 	if count != 1 {
-		t.Fatalf("schema_version table count at %s.%s = %d, want 1", location.Database, location.Schema, count)
+		t.Fatalf("schema_version table count at %s.%s = %d, want 1", location.Database(), location.Schema(), count)
 	}
 }

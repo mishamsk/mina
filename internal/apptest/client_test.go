@@ -22,8 +22,8 @@ FROM duckdb_tables()
 WHERE database_name = ?
   AND schema_name = ?
   AND table_name = 'schema_version'`,
-		location.Database,
-		location.Schema,
+		location.Database(),
+		location.Schema(),
 	).Scan(&count); err != nil {
 		t.Fatalf("count schema version tables: %v", err)
 	}

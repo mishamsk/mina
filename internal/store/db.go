@@ -31,13 +31,9 @@ func AttachDatabase(ctx context.Context, accounting *AccountingStore, path strin
 	if path == "" {
 		return errors.New("database path is required")
 	}
-	if err := accounting.location.Validate(); err != nil {
-		return err
-	}
-
 	// DuckDB does not accept bind parameters in ATTACH, so the file path is
 	// rendered as a SQL string literal with standard single-quote escaping.
-	if _, err := accounting.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+QuoteIdentifier(accounting.location.Database)); err != nil {
+	if _, err := accounting.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+accounting.location.databaseIdentifier); err != nil {
 		return fmt.Errorf("attach accounting database %s: %w", path, err)
 	}
 
@@ -46,11 +42,7 @@ func AttachDatabase(ctx context.Context, accounting *AccountingStore, path strin
 
 // PrepareAccountingLocation creates the accounting schema when needed.
 func PrepareAccountingLocation(ctx context.Context, accounting *AccountingStore) error {
-	if err := accounting.location.Validate(); err != nil {
-		return err
-	}
-
-	schemaName := QuoteIdentifier(accounting.location.Database) + "." + QuoteIdentifier(accounting.location.Schema)
+	schemaName := accounting.location.databaseIdentifier + "." + accounting.location.schemaIdentifier
 	if _, err := accounting.db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+schemaName); err != nil {
 		return fmt.Errorf("create accounting schema %s: %w", schemaName, err)
 	}
