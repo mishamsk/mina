@@ -5,6 +5,10 @@ httpget http://127.0.0.1:$PORT/health
 stdout '"status":"ok"'
 httpget http://127.0.0.1:$PORT/categories
 stdout '"categories":\[\]'
+httpget -status 404 http://127.0.0.1:$PORT/missing
+stdout '\{"error":\{"code":"not_found","message":"route not found"\}\}'
+httpget -method POST -status 405 http://127.0.0.1:$PORT/health
+stdout '\{"error":\{"code":"method_not_allowed","message":"method not allowed"\}\}'
 kill -INT server
 wait server
 

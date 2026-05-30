@@ -2,12 +2,9 @@ package runtime_test
 
 import (
 	"context"
-	"net/http"
 	"path/filepath"
 	"testing"
 
-	"mina.local/mina/internal/apptest"
-	models "mina.local/mina/internal/httpapi/openapi"
 	"mina.local/mina/internal/runtime"
 	"mina.local/mina/internal/store"
 )
@@ -47,35 +44,5 @@ func TestNewRequiresExistingDatabaseWhenCreateDisabled(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("new app succeeded, want missing database error")
-	}
-}
-
-func TestBoundaryHealthAndJSONErrorResponses(t *testing.T) {
-	client := apptest.New(t)
-
-	health := apptest.Decode[struct {
-		Status string `json:"status"`
-	}](client, http.MethodGet, "/health", nil)
-	if health.StatusCode != http.StatusOK {
-		t.Fatalf("health status = %d, want %d", health.StatusCode, http.StatusOK)
-	}
-	if health.Body.Status != "ok" {
-		t.Fatalf("health body status = %q, want ok", health.Body.Status)
-	}
-
-	missing := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/missing", nil)
-	if missing.StatusCode != http.StatusNotFound {
-		t.Fatalf("missing status = %d, want %d", missing.StatusCode, http.StatusNotFound)
-	}
-	if missing.Body.Error.Code != models.APIErrorCodeNotFound {
-		t.Fatalf("missing error code = %q, want %q", missing.Body.Error.Code, models.APIErrorCodeNotFound)
-	}
-
-	method := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/health", nil)
-	if method.StatusCode != http.StatusMethodNotAllowed {
-		t.Fatalf("method status = %d, want %d", method.StatusCode, http.StatusMethodNotAllowed)
-	}
-	if method.Body.Error.Code != models.APIErrorCodeMethodNotAllowed {
-		t.Fatalf("method error code = %q, want %q", method.Body.Error.Code, models.APIErrorCodeMethodNotAllowed)
 	}
 }

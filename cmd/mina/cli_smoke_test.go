@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -57,8 +58,31 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 	if neg {
 		ts.Fatalf("httpget does not support negation")
 	}
+
+	method := http.MethodGet
+	status := http.StatusOK
+	for len(args) > 0 && args[0] != "" && args[0][0] == '-' {
+		switch args[0] {
+		case "-method":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpget [-method method] [-status status] url")
+			}
+			method = args[1]
+			args = args[2:]
+		case "-status":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpget [-method method] [-status status] url")
+			}
+			var err error
+			status, err = strconv.Atoi(args[1])
+			ts.Check(err)
+			args = args[2:]
+		default:
+			ts.Fatalf("unknown httpget flag %q", args[0])
+		}
+	}
 	if len(args) != 1 {
-		ts.Fatalf("usage: httpget url")
+		ts.Fatalf("usage: httpget [-method method] [-status status] url")
 	}
 
 	url := args[0]
@@ -66,14 +90,17 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 	deadline := time.Now().Add(5 * time.Second)
 	var lastErr error
 	for {
-		response, err := client.Get(url)
+		request, err := http.NewRequest(method, url, nil)
+		ts.Check(err)
+
+		response, err := client.Do(request)
 		if err == nil {
 			body, readErr := io.ReadAll(response.Body)
 			closeErr := response.Body.Close()
 			ts.Check(readErr)
 			ts.Check(closeErr)
-			if response.StatusCode != http.StatusOK {
-				ts.Fatalf("GET %s status = %d, want %d; body: %s", url, response.StatusCode, http.StatusOK, string(body))
+			if response.StatusCode != status {
+				ts.Fatalf("%s %s status = %d, want %d; body: %s", method, url, response.StatusCode, status, string(body))
 			}
 			_, err = ts.Stdout().Write(body)
 			ts.Check(err)
@@ -87,5 +114,5 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	ts.Fatalf("GET %s: %v", url, lastErr)
+	ts.Fatalf("%s %s: %v", method, url, lastErr)
 }
