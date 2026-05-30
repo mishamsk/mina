@@ -58,20 +58,6 @@ func PrepareAccountingLocation(ctx context.Context, db *sql.DB, location Account
 	return nil
 }
 
-// SelectAccountingLocation makes the accounting location current for legacy unqualified SQL.
-func SelectAccountingLocation(ctx context.Context, db *sql.DB, location AccountingLocation) error {
-	if err := location.Validate(); err != nil {
-		return err
-	}
-
-	sql := "USE " + QuoteIdentifier(location.Catalog) + "." + QuoteIdentifier(location.Schema)
-	if _, err := db.ExecContext(ctx, sql); err != nil {
-		return fmt.Errorf("select accounting location %s.%s: %w", location.Catalog, location.Schema, err)
-	}
-
-	return nil
-}
-
 func open(ctx context.Context, path string) (*sql.DB, error) {
 	db, err := sql.Open(duckDBDriverName, path)
 	if err != nil {

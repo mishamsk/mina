@@ -58,15 +58,15 @@ Normal in-process app tests move out of `internal/runtime` into one package dire
   - [x] Required docs updated
 
 ### Commit 4: Keep Test Client Isolation Explicit
-- [ ] Keep one test-client surface that creates and migrates a unique accounting schema per test.
-- [ ] After production store qualification is complete, remove any remaining test dependency on `SET schema`.
-- [ ] Keep direct persistence assertions scoped to the test client's accounting location.
-- [ ] Measure cold `just test` timing after the schema-qualification and isolation changes.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Keep one test-client surface that creates and migrates a unique accounting schema per test.
+- [x] After production store qualification is complete, remove any remaining test dependency on `SET schema`.
+- [x] Keep direct persistence assertions scoped to the test client's accounting location.
+- [x] Measure cold `just test` timing after the schema-qualification and isolation changes.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 5: Move Normal Tests Under Apptest Runtime
 - [ ] Create the `internal/apptest/runtime` package for normal in-process app tests.

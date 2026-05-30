@@ -12,16 +12,26 @@ func TestNewUsesPerTestInMemorySchema(t *testing.T) {
 	client := New(t)
 	persistence := client.Persistence()
 
-	var schema string
-	if err := persistence.QueryRowContext(context.Background(), "SELECT current_schema()").Scan(&schema); err != nil {
-		t.Fatalf("read current schema: %v", err)
-	}
-	if schema != persistence.Schema() {
-		t.Fatalf("current schema = %q, want %q", schema, persistence.Schema())
-	}
+	location := persistence.Location()
 
 	var count int
-	if err := persistence.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM schema_version").Scan(&count); err != nil {
+	if err := persistence.QueryRowContext(
+		context.Background(),
+		`SELECT COUNT(*)
+FROM information_schema.tables
+WHERE table_catalog = ?
+  AND table_schema = ?
+  AND table_name = 'schema_version'`,
+		location.Catalog,
+		location.Schema,
+	).Scan(&count); err != nil {
+		t.Fatalf("count schema version tables: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("schema_version table count = %d, want 1", count)
+	}
+
+	if err := persistence.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM "+persistence.QualifiedName("schema_version")).Scan(&count); err != nil {
 		t.Fatalf("count schema versions: %v", err)
 	}
 	if count == 0 {

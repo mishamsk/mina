@@ -95,12 +95,13 @@ func TestTransactionDuckDBMappingsBoundary(t *testing.T) {
 	var dbUpdatedAt string
 	var dbAmount string
 	var hasTag bool
-	if err := client.Persistence().QueryRowContext(
+	persistence := client.Persistence()
+	if err := persistence.QueryRowContext(
 		t.Context(),
 		`SELECT CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR),
 	CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(updated_at AS VARCHAR), CAST(amount AS VARCHAR),
 	list_contains(tag_ids, ?)
-FROM journal_record
+FROM `+persistence.QualifiedName("journal_record")+`
 WHERE record_id = ?`,
 		refs.TagId,
 		record.RecordId,

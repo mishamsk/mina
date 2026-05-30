@@ -17,9 +17,9 @@ import (
 
 // Client sends typed JSON requests through an in-process app handler.
 type Client struct {
-	t      *testing.T
-	app    *runtime.App
-	schema string
+	t        *testing.T
+	app      *runtime.App
+	location store.AccountingLocation
 }
 
 // Response is a typed JSON response captured from the app handler.
@@ -32,9 +32,9 @@ type Response[T any] struct {
 
 // Persistence exposes direct DB assertions for the narrow persistence-check tier.
 type Persistence struct {
-	t      *testing.T
-	db     *sql.DB
-	schema string
+	t        *testing.T
+	db       *sql.DB
+	location store.AccountingLocation
 }
 
 // New creates an in-process app backed by migrated in-memory DuckDB state.
@@ -58,10 +58,6 @@ func New(t *testing.T) *Client {
 	if err := store.Migrate(ctx, db, location); err != nil {
 		t.Fatalf("migrate test schema: %v", err)
 	}
-	if err := store.SelectAccountingLocation(ctx, db, location); err != nil {
-		t.Fatalf("select test schema: %v", err)
-	}
-
 	appInstance := runtime.NewWithDB(db, location, runtime.HTTPConfig{})
 	t.Cleanup(func() {
 		if err := appInstance.Close(); err != nil {
@@ -70,18 +66,18 @@ func New(t *testing.T) *Client {
 	})
 
 	return &Client{
-		t:      t,
-		app:    appInstance,
-		schema: schema,
+		t:        t,
+		app:      appInstance,
+		location: location,
 	}
 }
 
 // Persistence returns the direct database assertion helper.
 func (c *Client) Persistence() *Persistence {
 	return &Persistence{
-		t:      c.t,
-		db:     c.app.DB(),
-		schema: c.schema,
+		t:        c.t,
+		db:       c.app.DB(),
+		location: c.location,
 	}
 }
 
@@ -163,9 +159,21 @@ func (p *Persistence) QueryRowContext(ctx context.Context, query string, args ..
 	return p.db.QueryRowContext(ctx, query, args...)
 }
 
-// Schema returns the current per-test accounting schema name.
-func (p *Persistence) Schema() string {
-	return p.schema
+// Location returns the per-test accounting location.
+func (p *Persistence) Location() store.AccountingLocation {
+	return p.location
+}
+
+// QualifiedName returns a qualified object name in the per-test accounting location.
+func (p *Persistence) QualifiedName(object string) string {
+	p.t.Helper()
+
+	name, err := p.location.QualifiedName(object)
+	if err != nil {
+		p.t.Fatalf("qualify %s: %v", object, err)
+	}
+
+	return name
 }
 
 func testSchemaName(t *testing.T) string {

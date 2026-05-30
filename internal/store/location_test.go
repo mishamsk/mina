@@ -155,15 +155,23 @@ func TestAttachDatabaseQuotesPathLiteral(t *testing.T) {
 	if err := store.PrepareAccountingLocation(ctx, db, location); err != nil {
 		t.Fatalf("prepare accounting location: %v", err)
 	}
-	if err := store.SelectAccountingLocation(ctx, db, location); err != nil {
-		t.Fatalf("select accounting location: %v", err)
+
+	probe, err := location.QualifiedName("attach_probe")
+	if err != nil {
+		t.Fatalf("qualified probe name: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE TABLE "+probe+" (value INTEGER NOT NULL)"); err != nil {
+		t.Fatalf("create attached probe: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO "+probe+" VALUES (7)"); err != nil {
+		t.Fatalf("insert attached probe: %v", err)
 	}
 
-	var currentDatabase string
-	if err := db.QueryRowContext(ctx, "SELECT current_database()").Scan(&currentDatabase); err != nil {
-		t.Fatalf("read current database: %v", err)
+	var value int
+	if err := db.QueryRowContext(ctx, "SELECT value FROM "+probe).Scan(&value); err != nil {
+		t.Fatalf("read attached probe: %v", err)
 	}
-	if currentDatabase != location.Catalog {
-		t.Fatalf("current database = %q, want %q", currentDatabase, location.Catalog)
+	if value != 7 {
+		t.Fatalf("attached probe value = %d, want 7", value)
 	}
 }
