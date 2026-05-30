@@ -49,6 +49,35 @@ func TestNewCreatesAndMigratesDatabase(t *testing.T) {
 	}
 }
 
+func TestNewCreatesAttachedDatabaseWithConfiguredSchema(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "mina.db")
+
+	appInstance, err := runtime.New(ctx, runtime.Config{
+		DatabasePath:     path,
+		AccountingSchema: "select",
+		CreateIfMissing:  true,
+		ApplyMigrations:  true,
+	})
+	if err != nil {
+		t.Fatalf("new app: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := appInstance.Close(); err != nil {
+			t.Fatalf("close app: %v", err)
+		}
+	})
+
+	location := appInstance.AccountingLocation()
+	if location.Database() != store.AttachedAccountingDatabase {
+		t.Fatalf("accounting database = %q, want %q", location.Database(), store.AttachedAccountingDatabase)
+	}
+	if location.Schema() != "select" {
+		t.Fatalf("accounting schema = %q, want select", location.Schema())
+	}
+	assertSchemaVersionTableAtLocation(t, ctx, appInstance, location)
+}
+
 func TestNewWithoutDatabasePathUsesEphemeralAccountingSchema(t *testing.T) {
 	ctx := context.Background()
 
@@ -133,9 +162,8 @@ func TestAppSupportsQuotedAccountingSchemaLocations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := apptest.New(t, apptest.WithLocationConfig(store.AccountingLocationConfig{
-				Database: store.InMemoryAccountingDatabase,
-				Schema:   tt.schema,
+			client := apptest.New(t, apptest.WithConfig(runtime.Config{
+				AccountingSchema: tt.schema,
 			}))
 			persistence := client.Persistence()
 			location := persistence.Location()

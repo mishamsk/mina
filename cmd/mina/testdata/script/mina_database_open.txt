@@ -27,6 +27,10 @@ exec mina migrate --db $WORK/migrated.db --create
 ! stderr 'listen error:'
 exists $WORK/migrated.db
 
+# The migrate command accepts a custom accounting schema.
+exec mina migrate --db $WORK/quoted-schema.db --create --schema select
+exists $WORK/quoted-schema.db
+
 # The migrate command does not accept HTTP listener flags.
 ! exec mina migrate --db $WORK/migrated.db --host 127.0.0.1
 stderr 'unknown flag: --host'

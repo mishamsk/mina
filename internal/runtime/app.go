@@ -32,20 +32,13 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		return nil, err
 	}
 
-	location := store.InMemoryAccountingLocationConfig()
 	if cfg.DatabasePath != "" {
 		if err := prepareDatabasePath(cfg.DatabasePath, cfg.CreateIfMissing); err != nil {
 			return nil, err
 		}
-
-		location = store.AttachedDatabaseAccountingLocationConfig()
 	}
 
-	accounting, err := store.OpenAccounting(ctx, store.AccountingOpenRequest{
-		Path:     cfg.DatabasePath,
-		Location: location,
-		Migrate:  cfg.ApplyMigrations,
-	})
+	accounting, err := store.OpenAccounting(ctx, cfg.AccountingOpenRequest())
 	if err != nil {
 		return nil, err
 	}

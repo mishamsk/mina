@@ -119,6 +119,7 @@ func newServeCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&cfg.DatabasePath, "db", "", "path to the Mina database file")
+	cmd.Flags().StringVar(&cfg.AccountingSchema, "schema", "", "DuckDB schema for accounting state")
 	cmd.Flags().StringVar(&cfg.Host, "host", cfg.Host, "host interface for the REST API")
 	cmd.Flags().IntVar(&cfg.Port, "port", cfg.Port, "port for the REST API")
 	cmd.Flags().BoolVar(&cfg.CreateIfMissing, "create", false, "create the database file when it does not exist")
@@ -157,6 +158,7 @@ func newMigrateCommand(stderr io.Writer) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&cfg.DatabasePath, "db", "", "path to the Mina database file")
+	cmd.Flags().StringVar(&cfg.AccountingSchema, "schema", "", "DuckDB schema for accounting state")
 	cmd.Flags().BoolVar(&cfg.CreateIfMissing, "create", false, "create the database file when it does not exist")
 
 	return cmd
@@ -197,14 +199,11 @@ func serve(stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig) error {
 	}
 	defer closeAccessLog()
 
-	appInstance, err := runtime.New(ctx, runtime.Config{
-		DatabasePath:    cfg.DatabasePath,
-		CreateIfMissing: cfg.CreateIfMissing,
-		ApplyMigrations: cfg.ApplyMigrations,
-		HTTP: runtime.HTTPConfig{
-			AccessLog: accessLog,
-		},
-	})
+	appConfig := cfg.Config
+	appConfig.HTTP = runtime.HTTPConfig{
+		AccessLog: accessLog,
+	}
+	appInstance, err := runtime.New(ctx, appConfig)
 	if err != nil {
 		return fmt.Errorf("startup error: %w", err)
 	}
@@ -259,11 +258,7 @@ func openAccessLog(stderr io.Writer, cfg runtime.ServeConfig) (io.Writer, func()
 
 func migrate(stderr io.Writer, cfg runtime.Config) error {
 	ctx := context.Background()
-	appInstance, err := runtime.New(ctx, runtime.Config{
-		DatabasePath:    cfg.DatabasePath,
-		CreateIfMissing: cfg.CreateIfMissing,
-		ApplyMigrations: true,
-	})
+	appInstance, err := runtime.New(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("startup error: %w", err)
 	}

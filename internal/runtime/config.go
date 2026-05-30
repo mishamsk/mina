@@ -6,14 +6,17 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/mishamsk/mina/internal/store"
 )
 
 // Config controls process-local Mina database lifecycle policy.
 type Config struct {
-	DatabasePath    string
-	CreateIfMissing bool
-	ApplyMigrations bool
-	HTTP            HTTPConfig
+	DatabasePath     string
+	AccountingSchema string
+	CreateIfMissing  bool
+	ApplyMigrations  bool
+	HTTP             HTTPConfig
 }
 
 // HTTPConfig controls process-local HTTP adapter behavior.
@@ -39,6 +42,38 @@ func (c Config) Validate() error {
 	}
 
 	return nil
+}
+
+// AccountingOpenRequest returns the store request selected by runtime database policy.
+func (c Config) AccountingOpenRequest() store.AccountingOpenRequest {
+	return store.AccountingOpenRequest{
+		Path:     c.DatabasePath,
+		Location: c.AccountingLocationConfig(),
+		Migrate:  c.ApplyMigrations,
+	}
+}
+
+// AccountingLocationConfig returns the DuckDB accounting database and schema selected by runtime config.
+func (c Config) AccountingLocationConfig() store.AccountingLocationConfig {
+	if c.DatabasePath == "" {
+		return store.AccountingLocationConfig{
+			Database: store.InMemoryAccountingDatabase,
+			Schema:   c.accountingSchemaOrDefault(store.InMemoryAccountingSchema),
+		}
+	}
+
+	return store.AccountingLocationConfig{
+		Database: store.AttachedAccountingDatabase,
+		Schema:   c.accountingSchemaOrDefault(store.AttachedAccountingSchema),
+	}
+}
+
+func (c Config) accountingSchemaOrDefault(defaultSchema string) string {
+	if c.AccountingSchema != "" {
+		return c.AccountingSchema
+	}
+
+	return defaultSchema
 }
 
 // ServeConfig controls the local REST API listener and database policy.

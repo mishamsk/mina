@@ -20,6 +20,7 @@ stdout '--host'
 stdout '--port'
 stdout '--create'
 stdout '--migrate'
+stdout '--schema'
 stdout '--access-log'
 stdout '--quiet'
 ! stderr .
@@ -31,6 +32,7 @@ stdout '--host'
 stdout '--port'
 stdout '--create'
 stdout '--migrate'
+stdout '--schema'
 stdout '--access-log'
 stdout '--quiet'
 ! stderr .
@@ -39,6 +41,7 @@ exec mina migrate --help
 stdout 'Apply database migrations'
 stdout '--db'
 stdout '--create'
+stdout '--schema'
 ! stderr .
 
 # The minimal CLI prints a stable development version.

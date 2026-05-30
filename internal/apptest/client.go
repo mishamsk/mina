@@ -26,7 +26,7 @@ type Client struct {
 type Option func(*clientOptions)
 
 type clientOptions struct {
-	location store.AccountingLocationConfig
+	config runtime.Config
 }
 
 // Response is a typed JSON response captured from the app handler.
@@ -44,10 +44,10 @@ type Persistence struct {
 	location store.AccountingLocation
 }
 
-// WithLocationConfig selects the accounting location config for the test app.
-func WithLocationConfig(location store.AccountingLocationConfig) Option {
+// WithConfig customizes the runtime config used to open the test app store.
+func WithConfig(config runtime.Config) Option {
 	return func(opts *clientOptions) {
-		opts.location = location
+		opts.config = config
 	}
 }
 
@@ -58,23 +58,24 @@ func New(t *testing.T, options ...Option) *Client {
 	ctx := context.Background()
 	schema := testSchemaName(t)
 	opts := clientOptions{
-		location: store.AccountingLocationConfig{
-			Database: store.InMemoryAccountingDatabase,
-			Schema:   schema,
+		config: runtime.Config{
+			AccountingSchema: schema,
+			ApplyMigrations:  true,
 		},
 	}
 	for _, option := range options {
 		option(&opts)
 	}
+	if opts.config.AccountingSchema == "" {
+		opts.config.AccountingSchema = schema
+	}
+	opts.config.ApplyMigrations = true
 
-	accounting, err := store.OpenAccounting(ctx, store.AccountingOpenRequest{
-		Migrate:  true,
-		Location: opts.location,
-	})
+	accounting, err := store.OpenAccounting(ctx, opts.config.AccountingOpenRequest())
 	if err != nil {
 		t.Fatalf("open accounting test store: %v", err)
 	}
-	appInstance := runtime.NewWithStore(accounting, runtime.HTTPConfig{})
+	appInstance := runtime.NewWithStore(accounting, opts.config.HTTP)
 	t.Cleanup(func() {
 		if err := appInstance.Close(); err != nil {
 			t.Fatalf("close test app: %v", err)
