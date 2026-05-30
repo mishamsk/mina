@@ -1,9 +1,8 @@
 # Project State
 
 - Active scope: Phase 1 Stage 1 REST APIs in one Go `cmd/mina` binary.
-- Durable state target: portable DuckDB accounting state opened through runtime/store composition.
-- Default operator workflow: start the REST API with `mina serve --db PATH --create --migrate`, or apply migrations without serving with `mina migrate --db PATH --create`. `mina serve` may omit `--db` for ephemeral in-memory accounting state and emits a warning.
-- Implemented durable API capability groups:
+- Default operator workflow: start the REST API with `mina serve --db PATH --create --migrate`
+- Implemented API capability groups:
   - Health checks and stable JSON error envelopes.
   - Account, category, tag, and household member CRUD/list flows.
   - Exchange-rate and account credit-limit-history flows.
@@ -11,15 +10,10 @@
   - Journal-record search and account-record search.
   - Bulk journal-record category, tag, account, and status updates.
   - OpenAPI discovery through `GET /openapi.json`.
-- Implemented durable storage behavior:
+- Implemented storage behavior:
   - Runtime opens an in-memory DuckDB process database and selects either an attached accounting database file or the fixed in-memory accounting schema.
   - Store-owned accounting locations qualify migration and repository SQL against the selected catalog and schema.
   - Upgrade-only DuckDB migrations with schema-version tracking in the selected accounting location.
   - Atomic double-entry transaction persistence and replacement.
   - Tombstone-aware reads and list defaults for applicable resources.
   - Store-owned allowlists for dynamic filtering and sorting.
-- Current test workflow:
-  - Default normal app tests live under `internal/apptest/runtime` and run through an in-memory client, in-memory DuckDB, and per-test schemas.
-  - Reusable normal-test harness code lives in `internal/apptest`.
-  - End-to-end CLI and real-network REST coverage belongs in the non-default `just test-integration` workflow.
-  - Pre-commit runs light non-mutating checks, including OpenAPI validity and generated output freshness.
