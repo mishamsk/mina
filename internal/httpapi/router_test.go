@@ -72,7 +72,7 @@ func TestRouterGeneratedBindingErrorsUseParameterMetadataMessages(t *testing.T) 
 	assertMinaError(t, minimumIDResponse, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, `path parameter "account_id" is invalid: number must be at least 1`)
 }
 
-func TestRouterOpenAPIJSONValidationRejectsNullRequiredBool(t *testing.T) {
+func TestRouterOpenAPIJSONValidationRejectsNullRequiredBoolWithMinaEnvelope(t *testing.T) {
 	handler := New(Dependencies{})
 	request := httptest.NewRequest(http.MethodPatch, "/categories/1", strings.NewReader(`{"is_hidden":null}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -80,7 +80,7 @@ func TestRouterOpenAPIJSONValidationRejectsNullRequiredBool(t *testing.T) {
 
 	handler.ServeHTTP(response, request)
 
-	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "is_hidden is required")
+	assertMinaError(t, response, http.StatusBadRequest, models.APIErrorCodeInvalidRequest, "invalid JSON request body")
 }
 
 func TestRouterOpenAPIJSONValidationRejectsUnknownTopLevelFields(t *testing.T) {

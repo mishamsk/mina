@@ -57,18 +57,18 @@ Keep the unknown-query-parameter guard unless it is replaced by an equivalent va
   - [x] Required docs updated
 
 ### Commit 3: Remove Bespoke Body Validation Message Shim
-- [ ] Remove `requiredBoolBodyCompatibilityMessage` from `internal/httpapi/middleware.go`.
-- [ ] Remove the request-body reread/unmarshal path used only to detect `is_hidden: null`.
-- [ ] Let OpenAPI request validation own required non-null JSON field validation and message classification.
-- [ ] Remove or revise `TestRouterOpenAPIJSONValidationRejectsNullRequiredBool` so it asserts the stable Mina error envelope without depending on a field-specific handwritten message.
-- [ ] Remove now-unused imports from `internal/httpapi/middleware.go`.
-- [ ] Keep generic OpenAPI validation error mapping in place for invalid JSON body schema failures.
-- [ ] Verification
-  - [ ] `just fmt` passes
-  - [ ] `just test` passes
-  - [ ] `just test-integration` passes because JSON-over-HTTP behavior is touched
-  - [ ] `just pre-commit` passes
-  - [ ] Required docs updated
+- [x] Remove `requiredBoolBodyCompatibilityMessage` from `internal/httpapi/middleware.go`.
+- [x] Remove the request-body reread/unmarshal path used only to detect `is_hidden: null`.
+- [x] Let OpenAPI request validation own required non-null JSON field validation and message classification.
+- [x] Remove or revise `TestRouterOpenAPIJSONValidationRejectsNullRequiredBool` so it asserts the stable Mina error envelope without depending on a field-specific handwritten message.
+- [x] Remove now-unused imports from `internal/httpapi/middleware.go`.
+- [x] Keep generic OpenAPI validation error mapping in place for invalid JSON body schema failures.
+- [x] Verification
+  - [x] `just fmt` passes
+  - [x] `just test` passes
+  - [x] `just test-integration` passes because JSON-over-HTTP behavior is touched
+  - [x] `just pre-commit` passes
+  - [x] Required docs updated
 
 ### Commit 4: Tighten Architecture And HTTP Adapter Docs
 - [ ] Update `docs/architecture.md` with a concise evergreen statement that `internal/httpapi` uses generated OpenAPI routing/contracts, generated request binding, and OpenAPI request validation for transport-shape validation.

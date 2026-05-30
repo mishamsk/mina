@@ -3,7 +3,6 @@ package httpapi
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -147,10 +146,6 @@ func openAPIValidationErrorMessage(r *http.Request, err error) string {
 	var requestErr *openapi3filter.RequestError
 	if errors.As(err, &requestErr) {
 		if requestErr.RequestBody != nil {
-			if message := requiredBoolBodyCompatibilityMessage(r); message != "" {
-				return message
-			}
-
 			return "invalid JSON request body"
 		}
 		if requestErr.Parameter != nil {
@@ -159,34 +154,6 @@ func openAPIValidationErrorMessage(r *http.Request, err error) string {
 	}
 
 	return "invalid request"
-}
-
-func requiredBoolBodyCompatibilityMessage(r *http.Request) string {
-	if r.Method != http.MethodPatch {
-		return ""
-	}
-	if !resourceIDPath(r.URL.Path, "/accounts/") &&
-		!resourceIDPath(r.URL.Path, "/categories/") &&
-		!resourceIDPath(r.URL.Path, "/tags/") {
-		return ""
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return ""
-	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
-
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return ""
-	}
-	value, ok := raw["is_hidden"]
-	if !ok || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-		return "is_hidden is required"
-	}
-
-	return ""
 }
 
 type noopLogEntry struct{}

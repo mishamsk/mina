@@ -39,12 +39,3 @@ func generatedRequestErrorMessage(r *http.Request, err error) string {
 
 	return generatedBindingErrorMessage(r, err)
 }
-
-func resourceIDPath(path string, prefix string) bool {
-	rawID := strings.TrimPrefix(path, prefix)
-	if rawID == path || rawID == "" || strings.Contains(rawID, "/") {
-		return false
-	}
-
-	return true
-}
