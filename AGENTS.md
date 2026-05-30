@@ -30,9 +30,10 @@ The active build scope is Phase 1 Stage 1: REST APIs only.
 
 For every commit:
 
-- Run `just pre-commit` before committing.
-- Run `just test` for the default in-process test set once code exists.
-- Run `just test-integration` before committing changes that touch CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior once that recipe exists.
+- For code changes, run `just pre-commit` before committing.
+- For code changes, run `just test` for the default in-process test set once code exists.
+- For code changes that touch CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior once that recipe exists, run `just test-integration` before committing.
+- Do not run tests or broad validation for pure documentation changes, or for tooling/developer-recipe changes that do not touch application code.
 - For changes that alter durable behavior, API contracts, state, or ownership boundaries, update the relevant docs in the same commit.
 - Run `/review` in a subagent once after commit to trigger a review, and apply fixes
   - For pure documentation changes, no reviewer subagent is required.
