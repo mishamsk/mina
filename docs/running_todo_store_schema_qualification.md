@@ -92,14 +92,14 @@ Normal in-process app tests move out of `internal/runtime` into one package dire
 
 ## Deferred Verification
 
-- [ ] `just test-integration` passes after CLI, real-network REST, process startup, or JSON-over-HTTP behavior changes.
-- [ ] Manual smoke commands are run only when a concrete uncovered risk remains, and are added as explicit temporary commands or comments.
+- [x] `just test-integration` passes after CLI, real-network REST, process startup, or JSON-over-HTTP behavior changes.
+- [x] Manual smoke commands not relevant; no concrete uncovered risk remains beyond the testscript integration suite.
 
 ## Final Verification
 
-- [ ] `just init` passes on a clean checkout with required local tools available
-- [ ] `just fmt` passes
-- [ ] `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] Deferred verification completed or explicitly marked not relevant
+- [x] `just init` passes on a clean checkout with required local tools available
+- [x] `just fmt` passes
+- [x] `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] Deferred verification completed or explicitly marked not relevant
