@@ -5,3 +5,151 @@ run:
 
 linters:
   default: standard
+  enable:
+    - depguard
+  settings:
+    depguard:
+      rules:
+        cmd-delegates-to-runtime:
+          list-mode: lax
+          files:
+            - cmd/mina/*.go
+            - cmd/mina/**/*.go
+            - "**/cmd/mina/*.go"
+            - "**/cmd/mina/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/httpapi
+              desc: cmd/mina should delegate application behavior through internal/runtime
+            - pkg: github.com/mishamsk/mina/internal/services
+              desc: cmd/mina should delegate application behavior through internal/runtime
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: cmd/mina should delegate application behavior through internal/runtime
+        normal-app-test-boundaries:
+          list-mode: lax
+          files:
+            - internal/apptest/runtime/*_test.go
+            - internal/apptest/runtime/**/*_test.go
+            - "**/internal/apptest/runtime/*_test.go"
+            - "**/internal/apptest/runtime/**/*_test.go"
+          allow:
+            - github.com/mishamsk/mina/internal/apptest
+            - github.com/mishamsk/mina/internal/httpapi/openapi
+          deny:
+            - pkg: database/sql
+              desc: normal app tests should exercise persistence through apptest helpers
+            - pkg: github.com/duckdb/duckdb-go/v2
+              desc: normal app tests should not know the database driver
+            - pkg: github.com/mishamsk/mina
+              desc: normal app tests should exercise behavior through internal/apptest
+            - pkg: github.com/rogpeppe/go-internal/testscript
+              desc: testscript belongs only to the integration test driver
+            - pkg: net/http/httptest
+              desc: normal app tests should use the apptest client instead of raw handler tests
+        integration-test-boundaries:
+          list-mode: strict
+          files:
+            - cmd/mina/cli_smoke_test.go
+            - "**/cmd/mina/cli_smoke_test.go"
+          allow:
+            - github.com/rogpeppe/go-internal/testscript$
+            - io$
+            - net$
+            - net/http$
+            - os$
+            - strconv$
+            - testing$
+            - time$
+        service-boundaries:
+          list-mode: lax
+          files:
+            - internal/services/*.go
+            - internal/services/**/*.go
+            - "**/internal/services/*.go"
+            - "**/internal/services/**/*.go"
+          deny:
+            - pkg: database/sql
+              desc: service packages own domain behavior, not SQL access
+            - pkg: github.com/duckdb/duckdb-go/v2
+              desc: service packages must not know DuckDB
+            - pkg: github.com/mishamsk/mina/internal/httpapi
+              desc: service packages must not know REST/OpenAPI adapters
+            - pkg: github.com/mishamsk/mina/internal/runtime
+              desc: service packages must not know runtime composition
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: service packages must not know persistence implementations
+            - pkg: github.com/spf13/cobra
+              desc: service packages must not know CLI parsing
+            - pkg: github.com/spf13/pflag
+              desc: service packages must not know CLI flags
+            - pkg: net/http
+              desc: service packages must not know HTTP transport
+            - pkg: os
+              desc: service packages must not perform process I/O
+            - pkg: syscall
+              desc: service packages must not perform process I/O
+        store-boundaries:
+          list-mode: lax
+          files:
+            - internal/store/*.go
+            - internal/store/**/*.go
+            - "**/internal/store/*.go"
+            - "**/internal/store/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/httpapi
+              desc: store must not know REST/OpenAPI adapters
+            - pkg: github.com/mishamsk/mina/internal/runtime
+              desc: store must not know runtime composition
+            - pkg: github.com/spf13/cobra
+              desc: store must not know CLI parsing
+            - pkg: github.com/spf13/pflag
+              desc: store must not know CLI flags
+            - pkg: net/http
+              desc: store must not know HTTP transport
+        httpapi-boundaries:
+          list-mode: lax
+          files:
+            - internal/httpapi/*.go
+            - internal/httpapi/**/*.go
+            - "**/internal/httpapi/*.go"
+            - "**/internal/httpapi/**/*.go"
+          deny:
+            - pkg: database/sql
+              desc: HTTP adapters must not own SQL access
+            - pkg: github.com/duckdb/duckdb-go/v2
+              desc: HTTP adapters must not know DuckDB
+            - pkg: github.com/mishamsk/mina/internal/runtime
+              desc: HTTP adapters must not know runtime composition
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: HTTP adapters must not own persistence
+            - pkg: github.com/spf13/cobra
+              desc: HTTP adapters must not know CLI parsing
+            - pkg: github.com/spf13/pflag
+              desc: HTTP adapters must not know CLI flags
+            - pkg: os
+              desc: HTTP adapters must not perform process I/O
+        openapi-contract-boundaries:
+          list-mode: lax
+          files:
+            - internal/httpapi/openapi/*.go
+            - internal/httpapi/openapi/**/*.go
+            - "**/internal/httpapi/openapi/*.go"
+            - "**/internal/httpapi/openapi/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/services
+              desc: generated OpenAPI contract code must not know service packages
+        runtime-composition-only:
+          list-mode: lax
+          files:
+            - $all
+            - !$test
+            - "!cmd/mina/*.go"
+            - "!cmd/mina/**/*.go"
+            - "!**/cmd/mina/*.go"
+            - "!**/cmd/mina/**/*.go"
+            - "!internal/apptest/*.go"
+            - "!internal/apptest/**/*.go"
+            - "!**/internal/apptest/*.go"
+            - "!**/internal/apptest/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/runtime
+              desc: runtime composition may only be imported by cmd/mina and app-test helpers

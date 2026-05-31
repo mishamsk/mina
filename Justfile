@@ -19,6 +19,7 @@ fmt-check:
 
 lint:
     go tool golangci-lint run ./...
+    go run ./internal/tools/archlint
 
 openapi:
     go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml

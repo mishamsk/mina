@@ -19,6 +19,7 @@ The active build scope is Phase 1 Stage 1: REST APIs only.
 - The Justfile is the only owner of developer recipes. Run formatting, tests, checks, hooks, and scripts through `just`.
 - Do not invoke `gofmt`, `go test`, `prek`, or other recipe internals directly unless debugging the recipe itself.
 - Run `just pre-commit` for configured pre-commit checks; the Justfile owns the details.
+- Custom lint rules: import-boundary rules live in `.golangci.yml` depguard config; non-import architecture rules live in `internal/tools/archlint`.
 - Write idiomatic Go. Keep dependencies small and explicit. Use package-level boundaries instead of generic abstraction layers until a real boundary exists.
 - Do not create redundant layers, and multiple defensive layers that do the same thing. E.g. if service does validation, do not repeat the same validation at other layers!
 - Do not recreate what project dependnecy already implements. Always prefer capabilities provided by the library!
