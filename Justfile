@@ -146,8 +146,19 @@ test-integration:
 pre-commit:
     prek run --all-files
 
+review-loop goal branch_or_commit="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    branch_or_commit={{quote(branch_or_commit)}}
+    if [ -n "$branch_or_commit" ]; then
+        go run ./internal/tools/reviewloop {{quote(goal)}} "$branch_or_commit"
+    else
+        go run ./internal/tools/reviewloop {{quote(goal)}}
+    fi
+
 codex-goal plan_file:
-    command codex --dangerously-bypass-approvals-and-sandbox {{quote("/goal implement " + plan_file + ". Acceptance criteria - all checkboxes are ticked. Make sure you go commit by commit, task by task and never jump forward or skip any item.")}}
+    command codex --dangerously-bypass-approvals-and-sandbox {{quote("/goal implement " + plan_file + ". Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item.")}}
 
 rebase:
     command codex exec --dangerously-bypass-approvals-and-sandbox {{quote("$rebase")}}

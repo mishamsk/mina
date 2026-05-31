@@ -11,7 +11,7 @@ The active build scope is Phase 1 Stage 1: REST APIs only.
 - Package/module docs: exported Go APIs that cross package boundaries must be documented in code. Add a short package markdown doc only for implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs. If there are no implicit contracts, say `No implicit contracts.` Use `docs/package_doc_template.md`.
 - All docs must stay short. Prefer bullets, with one liners. Prefer replacing old statements to adding net new. Link to owning docs instead of repeating details.
 - Documentation is evergreen. Never keep history, migration notes, or references to previous doc/code states.
-- `docs/running_todo_template.md`: reusable template for active implementation checklists. Do not read.
+- `docs/plan_template.md`: reusable template for active implementation checklists. Do not read.
 
 ## Infra & Dev Practices
 
@@ -36,4 +36,6 @@ For every commit:
 - For code changes that touch CLI, real-network REST, process startup, JSON-over-HTTP behavior, run `just test-integration` before commit.
 - Do not run tests or broad validation for pure documentation changes, or for tooling/developer-recipe changes that do not touch application code.
 - For changes that alter implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs update the relevant package docs in the same commit.
-- For code changes, run `/review` in a subagent once after commit to trigger a review, and apply fixes
+
+At the end of you work run our review loop:
+- just review-loop "<short summary of the task/goal of the change>"
