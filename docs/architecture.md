@@ -14,8 +14,8 @@ Mina is a local-first personal finance system for one household.
 
 - Keep abstractions narrow. Add interfaces only at real boundaries.
 - No hidden global state.
-- No unit tests. When writing tests you must follow `## Testing` section below. This is non-negotiable
-- No breaching of pacakge boundaries. You must preserve boundaries `## Package Boundaries` below
+- No unit tests. When planning, writing or modifying tests you must first read and follow `docs/TESTING.md`. This is non-negotiable.
+- No breaching of package boundaries. You must preserve boundaries `## Package Boundaries` below
 
 ## Core Terms
 
@@ -76,25 +76,7 @@ Rules:
 
 ## Testing
 
-Mina has only two app test classes:
-- normal in-process end-2-end app tests in `internal/apptest/runtime` package
-- testscript-driven end-to-end integration tests in `cmd/mina/testdata/script` (driven by `cmd/mina/cli_smoke_test.go`)
-- No other tests. Never. This is not negotiable.
-
-### Test design
-
-- Normal tests bypass CLI and network listeners.
-- Normal tests exercise app logic through an in-memory client, in-memory DuckDB, and per-test schemas.
-- `internal/apptest` owns reusable harness code for normal in-process app tests.
-- Normal tests should use reusable harness building blocks so test bodies read as user scenarios instead of setup boilerplate.
-- Basic persistence checks may create through the in-memory client and assert attached database state directly.
-- Other scenario tests should use the in-memory client for fixture setup and assertions.
-- Good tests are independent of implementation details such as SQL construction, router internals, repository methods, and private service helpers.
-- Do not mock controllers, services, or stores.
-- End-to-end integration tests:
-  - run only through testscript.
-  - are not run by default.
-  - own real-network REST tests, CLI tests, and later TUI tests.
+- `docs/TESTING.md` owns test classes, test design rules, and integration-test scope.
 
 ## If Editing This File
 
