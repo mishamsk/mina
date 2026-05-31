@@ -22,25 +22,8 @@ const (
 	defaultServePort = 8080
 )
 
-type configScope string
-
-const (
-	sharedScope configScope = "shared"
-	serveScope  configScope = "serve"
-)
-
 // ConfigFileHelp documents the local config file path used by the loader.
 const ConfigFileHelp = "$XDG_CONFIG_PATH/mina/config.toml"
-
-// SharedHelp documents config sources common to all commands.
-func SharedHelp() string {
-	return buildHelp(sharedScope)
-}
-
-// ServeHelp documents serve-specific config sources.
-func ServeHelp() string {
-	return buildHelp(sharedScope, serveScope)
-}
 
 // Config contains source-loaded database lifecycle settings.
 type Config struct {
@@ -98,10 +81,10 @@ type ServeCLI struct {
 }
 
 type fileConfig struct {
-	DatabasePath     *string         `toml:"db" env:"MINA_DB" flag:"db" scope:"shared"`
-	AccountingSchema *string         `toml:"schema" env:"MINA_SCHEMA" flag:"schema" scope:"shared"`
-	AssumeYes        *bool           `toml:"yes" env:"MINA_YES" flag:"yes" scope:"shared"`
-	Serve            serveFileConfig `toml:"serve" scope:"serve"`
+	DatabasePath     *string         `toml:"db" env:"MINA_DB" flag:"db"`
+	AccountingSchema *string         `toml:"schema" env:"MINA_SCHEMA" flag:"schema"`
+	AssumeYes        *bool           `toml:"yes" env:"MINA_YES" flag:"yes"`
+	Serve            serveFileConfig `toml:"serve"`
 }
 
 type serveFileConfig struct {
@@ -302,7 +285,6 @@ type configField struct {
 	table string
 	env   string
 	flag  string
-	scope configScope
 	value reflect.Value
 }
 
@@ -320,23 +302,21 @@ func walkConfigFields(config any, visit func(configField) error) error {
 		value = value.Elem()
 	}
 
-	return walkConfigStruct(value, "", "", visit)
+	return walkConfigStruct(value, "", visit)
 }
 
 func walkConfigStruct(
 	value reflect.Value,
 	table string,
-	scope configScope,
 	visit func(configField) error,
 ) error {
 	valueType := value.Type()
 	for index := range value.NumField() {
 		structField := valueType.Field(index)
 		fieldValue := value.Field(index)
-		fieldScope := scopeFromTag(structField, scope)
 		fieldTable := tableFromTag(structField, table)
 		if fieldValue.Kind() == reflect.Struct {
-			if err := walkConfigStruct(fieldValue, fieldTable, fieldScope, visit); err != nil {
+			if err := walkConfigStruct(fieldValue, fieldTable, visit); err != nil {
 				return err
 			}
 			continue
@@ -351,7 +331,6 @@ func walkConfigStruct(
 			table: table,
 			env:   structField.Tag.Get("env"),
 			flag:  structField.Tag.Get("flag"),
-			scope: fieldScope,
 			value: fieldValue,
 		}
 		if field.key == "" {
@@ -375,15 +354,6 @@ func tableFromTag(field reflect.StructField, parent string) string {
 	}
 
 	return parent + "." + name
-}
-
-func scopeFromTag(field reflect.StructField, parent configScope) configScope {
-	scope := field.Tag.Get("scope")
-	if scope == "" {
-		return parent
-	}
-
-	return configScope(scope)
 }
 
 func tomlName(field reflect.StructField) string {
@@ -414,59 +384,6 @@ func parseEnvValue(name string, value string, valueType reflect.Type) (reflect.V
 	default:
 		return reflect.Value{}, fmt.Errorf("%s has unsupported config type %s", name, valueType)
 	}
-}
-
-func buildHelp(scopes ...configScope) string {
-	lines := []string{
-		"Config file: " + ConfigFileHelp + " or --config-file PATH",
-		"Config keys: " + strings.Join(configKeys(sharedScope), ", "),
-		"Environment: " + strings.Join(envVars(sharedScope), ", "),
-	}
-	if hasScope(scopes, serveScope) {
-		lines = append(
-			lines,
-			"Serve config keys: [serve] "+strings.Join(configKeys(serveScope), ", "),
-			"Serve environment: "+strings.Join(envVars(serveScope), ", "),
-		)
-	}
-	lines = append(lines, "Precedence: defaults < config file < environment < CLI flags")
-
-	return strings.Join(lines, "\n")
-}
-
-func configKeys(scope configScope) []string {
-	return metadataValues(scope, func(field configField) string {
-		return field.key
-	})
-}
-
-func envVars(scope configScope) []string {
-	return metadataValues(scope, func(field configField) string {
-		return field.env
-	})
-}
-
-func metadataValues(scope configScope, value func(configField) string) []string {
-	values := []string{}
-	_ = walkConfigFields(fileConfig{}, func(field configField) error {
-		if field.scope == scope {
-			values = append(values, value(field))
-		}
-
-		return nil
-	})
-
-	return values
-}
-
-func hasScope(scopes []configScope, scope configScope) bool {
-	for _, candidate := range scopes {
-		if candidate == scope {
-			return true
-		}
-	}
-
-	return false
 }
 
 func findConfigFieldByFlag(flag string) (configField, bool) {

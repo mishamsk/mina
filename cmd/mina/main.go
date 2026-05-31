@@ -109,7 +109,6 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 	cmd := &cobra.Command{
 		Use:          "serve",
 		Short:        "Serve the REST API",
-		Long:         "Serve the REST API.\n\n" + runtimeconfig.ServeHelp(),
 		Args:         noPositionalArgs("serve"),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -173,7 +172,6 @@ func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string
 	cmd := &cobra.Command{
 		Use:          "migrate",
 		Short:        "Apply database migrations",
-		Long:         "Apply database migrations.\n\n" + runtimeconfig.SharedHelp(),
 		Args:         noPositionalArgs("migrate"),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
