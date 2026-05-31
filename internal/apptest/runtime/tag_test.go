@@ -9,7 +9,7 @@ import (
 )
 
 func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	created := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
 		Fqn: "Trips:Vacation",
@@ -108,7 +108,7 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 }
 
 func TestTagRejectsDuplicateActiveFQN(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	first := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
 		Fqn: "Tax:Medical",
@@ -141,7 +141,7 @@ func TestTagRejectsDuplicateActiveFQN(t *testing.T) {
 }
 
 func TestTagValidationErrors(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	invalid := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/tags", models.CreateTagRequest{
 		Fqn: "Tax::Medical",

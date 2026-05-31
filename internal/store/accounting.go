@@ -25,6 +25,11 @@ func newAccountingDB(db *sql.DB, location AccountingLocation) *AccountingDB {
 	}
 }
 
+// NewAccountingDB wraps an existing DuckDB handle with an accounting location.
+func NewAccountingDB(db *sql.DB, location AccountingLocation) *AccountingDB {
+	return newAccountingDB(db, location)
+}
+
 // OpenAccounting opens the process DuckDB handle and prepares the accounting location.
 func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*AccountingDB, error) {
 	db, err := OpenInMemory(ctx)

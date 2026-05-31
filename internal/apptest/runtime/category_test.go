@@ -9,7 +9,7 @@ import (
 )
 
 func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	created := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
 		Fqn: "Food:Restaurants",
@@ -92,7 +92,7 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 }
 
 func TestCategoryRejectsDuplicateActiveFQN(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	first := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
 		Fqn: "Bills:Utilities",
@@ -125,7 +125,7 @@ func TestCategoryRejectsDuplicateActiveFQN(t *testing.T) {
 }
 
 func TestCategoryValidationErrors(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	invalid := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
 		Fqn: "Food::Restaurants",

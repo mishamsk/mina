@@ -9,7 +9,7 @@ import (
 )
 
 func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	created := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:            "checking:Chase:Primary",
@@ -121,7 +121,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 }
 
 func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	first := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "cash:Wallet",
@@ -157,7 +157,7 @@ func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 }
 
 func TestAccountValidationErrors(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	invalidCurrency := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "checking:Chase",

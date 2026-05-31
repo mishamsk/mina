@@ -10,7 +10,7 @@ import (
 )
 
 func TestTransactionReplaceBoundary(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 	refs := createTransactionRefs(t, client)
 
 	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs))
@@ -59,7 +59,7 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 }
 
 func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 	refs := createTransactionRefs(t, client)
 
 	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs))
@@ -100,7 +100,7 @@ func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
 }
 
 func TestRecordSearchFiltersBoundary(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 	refs := createSearchRefs(t, client)
 
 	firstReq := balancedTransactionRequest(refs.transactionRefs)

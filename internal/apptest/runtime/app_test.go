@@ -20,7 +20,7 @@ func TestNewMigratesExistingEmptyDatabaseAtConfiguredSchema(t *testing.T) {
 
 	// This single startup case covers persistent DB open, custom non-default
 	// schema selection, reserved-word schema quoting, and migration application.
-	client := apptest.New(t, apptest.WithConfig(runtime.Config{
+	client := newClient(t, apptest.WithConfig(runtime.Config{
 		DatabasePath:     path,
 		AccountingSchema: "select",
 	}))

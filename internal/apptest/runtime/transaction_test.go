@@ -9,7 +9,7 @@ import (
 )
 
 func TestTransactionCreateReadListBoundary(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 	refs := createTransactionRefs(t, client)
 
 	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs))
@@ -57,7 +57,7 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 }
 
 func TestTransactionDuckDBMappingsBoundary(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 	refs := createTransactionRefs(t, client)
 
 	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs))
@@ -122,7 +122,7 @@ WHERE record_id = ?`,
 }
 
 func TestTransactionRejectsImbalanceAndDoesNotPersist(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 	refs := createTransactionRefs(t, client)
 	req := balancedTransactionRequest(refs)
 	req.Records[1].AmountUsd = "11.00"
@@ -142,7 +142,7 @@ func TestTransactionRejectsImbalanceAndDoesNotPersist(t *testing.T) {
 }
 
 func TestTransactionValidationErrors(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 	refs := createTransactionRefs(t, client)
 
 	missingAccount := balancedTransactionRequest(refs)

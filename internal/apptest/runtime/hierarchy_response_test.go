@@ -10,7 +10,7 @@ import (
 )
 
 func TestHierarchyRootResponsesEncodeNullParentFQN(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 
 	account := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "cash",

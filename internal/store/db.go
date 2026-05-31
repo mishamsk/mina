@@ -40,6 +40,18 @@ func AttachDatabase(ctx context.Context, accounting *AccountingDB, path string) 
 	return nil
 }
 
+// DetachDatabase detaches the accounting database from the DuckDB handle.
+func DetachDatabase(ctx context.Context, accounting *AccountingDB) error {
+	if _, err := accounting.db.ExecContext(ctx, "USE memory.main"); err != nil {
+		return fmt.Errorf("select memory database before detach: %w", err)
+	}
+	if _, err := accounting.db.ExecContext(ctx, "DETACH "+QuoteIdentifier(accounting.location.database)); err != nil {
+		return fmt.Errorf("detach accounting database %s: %w", accounting.location.database, err)
+	}
+
+	return nil
+}
+
 // PrepareAccountingLocation creates the accounting schema when needed.
 func PrepareAccountingLocation(ctx context.Context, accounting *AccountingDB) error {
 	schemaName := accounting.location.databaseIdentifier + "." + accounting.location.schemaIdentifier

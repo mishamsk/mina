@@ -10,7 +10,7 @@ import (
 )
 
 func TestAppTestClientUsesPerTestInMemorySchema(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 	persistence := client.Persistence()
 
 	location := persistence.Location()
@@ -41,7 +41,7 @@ WHERE database_name = ?
 }
 
 func TestScenarioCreatesFixturesThroughClient(t *testing.T) {
-	client := apptest.New(t)
+	client := newClient(t)
 	scenario := client.Scenario()
 
 	refs := scenario.TransactionRefs()

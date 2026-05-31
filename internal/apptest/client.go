@@ -26,7 +26,8 @@ type Client struct {
 type Option func(*clientOptions)
 
 type clientOptions struct {
-	config runtime.Config
+	config    runtime.Config
+	processDB *sql.DB
 }
 
 // Response is a typed JSON response captured from the app handler.
@@ -51,6 +52,13 @@ func WithConfig(config runtime.Config) Option {
 	}
 }
 
+// WithProcessDB reuses an existing DuckDB process database for the test app.
+func WithProcessDB(db *sql.DB) Option {
+	return func(opts *clientOptions) {
+		opts.processDB = db
+	}
+}
+
 // New creates an in-process app backed by migrated in-memory DuckDB state.
 func New(t *testing.T, options ...Option) *Client {
 	t.Helper()
@@ -69,7 +77,13 @@ func New(t *testing.T, options ...Option) *Client {
 		opts.config.AccountingSchema = schema
 	}
 
-	appInstance, err := runtime.New(ctx, opts.config)
+	var appInstance *runtime.App
+	var err error
+	if opts.processDB != nil {
+		appInstance, err = runtime.NewWithProcessDB(ctx, opts.processDB, opts.config)
+	} else {
+		appInstance, err = runtime.New(ctx, opts.config)
+	}
 	if err != nil {
 		t.Fatalf("new test app: %v", err)
 	}
