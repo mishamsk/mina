@@ -18,6 +18,7 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -105,9 +106,15 @@ func lint(root string) ([]issue, error) {
 			switch entry.Name() {
 			case ".git", "build", "vendor":
 				return filepath.SkipDir
-			default:
-				return nil
 			}
+			ignored, err := topLevelGitIgnoredDir(root, path)
+			if err != nil {
+				return err
+			}
+			if ignored {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if !strings.HasSuffix(entry.Name(), "_test.go") {
 			return nil
@@ -130,6 +137,27 @@ func lint(root string) ([]issue, error) {
 	}
 
 	return issues, nil
+}
+
+func topLevelGitIgnoredDir(root string, path string) (bool, error) {
+	relPath, err := filepath.Rel(root, path)
+	if err != nil {
+		return false, err
+	}
+	relPath = filepath.ToSlash(relPath)
+	if relPath == "." || strings.Contains(relPath, "/") {
+		return false, nil
+	}
+
+	cmd := exec.Command("git", "-C", root, "check-ignore", "-q", "--", relPath)
+	err = cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fmt.Errorf("check git ignore for %s: %w", relPath, err)
 }
 
 func lintTestFile(path string, relPath string) ([]issue, error) {
