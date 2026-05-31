@@ -5,20 +5,6 @@ import "strconv"
 // EmptyJSON marks response bodies that tests do not inspect.
 type EmptyJSON struct{}
 
-// BoolPtr returns a pointer to value.
-//
-//go:fix inline
-func BoolPtr(value bool) *bool {
-	return new(value)
-}
-
-// StringPtr returns a pointer to value.
-//
-//go:fix inline
-func StringPtr(value string) *string {
-	return new(value)
-}
-
 // Int64SlicePtr returns a pointer to values.
 func Int64SlicePtr(values ...int64) *[]int64 {
 	copied := append([]int64{}, values...)
