@@ -105,21 +105,26 @@ func newVersionCommand(stdout io.Writer) *cobra.Command {
 
 func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, configFilePath *string) *cobra.Command {
 	var assumeYes bool
-	flagCfg := runtimeconfig.DefaultServeConfig()
+	sourceInfo := runtimeconfig.Sources()
+	flagCfg := runtimeconfig.DefaultConfig()
 	cmd := &cobra.Command{
 		Use:          "serve",
 		Short:        "Serve the REST API",
 		Args:         noPositionalArgs("serve"),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, commandCfg, err := runtimeconfig.LoadServe(
+			cfg, commandCfg, err := runtimeconfig.Load(
 				runtimeconfig.LoadOptions{ConfigFilePath: *configFilePath},
-				runtimeconfig.ServeCLI{
-					SharedCLI:     sharedCLI(cmd, flagCfg.Config, assumeYes),
-					Host:          cliValue(cmd, "host", flagCfg.Host),
-					Port:          cliValue(cmd, "port", flagCfg.Port),
-					AccessLogPath: cliValue(cmd, "access-log", flagCfg.AccessLogPath),
-					Quiet:         cliValue(cmd, "quiet", flagCfg.Quiet),
+				runtimeconfig.Overrides{
+					DatabasePath:     configOverride(cmd, "db", flagCfg.DatabasePath),
+					AccountingSchema: configOverride(cmd, "schema", flagCfg.AccountingSchema),
+					AssumeYes:        configOverride(cmd, "yes", assumeYes),
+					Serve: runtimeconfig.ServeOverrides{
+						Host:          configOverride(cmd, "host", flagCfg.Serve.Host),
+						Port:          configOverride(cmd, "port", flagCfg.Serve.Port),
+						AccessLogPath: configOverride(cmd, "access-log", flagCfg.Serve.AccessLogPath),
+						Quiet:         configOverride(cmd, "quiet", flagCfg.Serve.Quiet),
+					},
 				},
 			)
 			if err != nil {
@@ -137,28 +142,28 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+runtimeconfig.FlagSourceHelp("db"))
+	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sourceInfo.DatabasePath))
 	cmd.Flags().StringVar(
 		&flagCfg.AccountingSchema,
 		"schema",
 		"",
-		"DuckDB schema for accounting state "+runtimeconfig.FlagSourceHelp("schema"),
+		"DuckDB schema for accounting state "+sourceHelp(sourceInfo.AccountingSchema),
 	)
-	cmd.Flags().StringVar(&flagCfg.Host, "host", flagCfg.Host, "host interface for the REST API "+runtimeconfig.FlagSourceHelp("host"))
-	cmd.Flags().IntVar(&flagCfg.Port, "port", flagCfg.Port, "port for the REST API "+runtimeconfig.FlagSourceHelp("port"))
+	cmd.Flags().StringVar(&flagCfg.Serve.Host, "host", flagCfg.Serve.Host, "host interface for the REST API "+sourceHelp(sourceInfo.Serve.Host))
+	cmd.Flags().IntVar(&flagCfg.Serve.Port, "port", flagCfg.Serve.Port, "port for the REST API "+sourceHelp(sourceInfo.Serve.Port))
 	cmd.Flags().BoolVar(
 		&assumeYes,
 		"yes",
 		false,
-		"answer yes to database creation and migration prompts "+runtimeconfig.FlagSourceHelp("yes"),
+		"answer yes to database creation and migration prompts "+sourceHelp(sourceInfo.AssumeYes),
 	)
 	cmd.Flags().StringVar(
-		&flagCfg.AccessLogPath,
+		&flagCfg.Serve.AccessLogPath,
 		"access-log",
 		"",
-		"write access logs to a file instead of stderr "+runtimeconfig.FlagSourceHelp("access-log"),
+		"write access logs to a file instead of stderr "+sourceHelp(sourceInfo.Serve.AccessLogPath),
 	)
-	cmd.Flags().BoolVar(&flagCfg.Quiet, "quiet", false, "disable access logs "+runtimeconfig.FlagSourceHelp("quiet"))
+	cmd.Flags().BoolVar(&flagCfg.Serve.Quiet, "quiet", false, "disable access logs "+sourceHelp(sourceInfo.Serve.Quiet))
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
 	})
@@ -168,6 +173,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 
 func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string) *cobra.Command {
 	var assumeYes bool
+	sourceInfo := runtimeconfig.Sources()
 	flagCfg := runtimeconfig.Config{}
 	cmd := &cobra.Command{
 		Use:          "migrate",
@@ -175,9 +181,13 @@ func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string
 		Args:         noPositionalArgs("migrate"),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, commandCfg, err := runtimeconfig.LoadMigrate(
+			cfg, commandCfg, err := runtimeconfig.Load(
 				runtimeconfig.LoadOptions{ConfigFilePath: *configFilePath},
-				sharedCLI(cmd, flagCfg, assumeYes),
+				runtimeconfig.Overrides{
+					DatabasePath:     configOverride(cmd, "db", flagCfg.DatabasePath),
+					AccountingSchema: configOverride(cmd, "schema", flagCfg.AccountingSchema),
+					AssumeYes:        configOverride(cmd, "yes", assumeYes),
+				},
 			)
 			if err != nil {
 				return err
@@ -197,37 +207,33 @@ func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+runtimeconfig.FlagSourceHelp("db"))
+	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sourceInfo.DatabasePath))
 	cmd.Flags().StringVar(
 		&flagCfg.AccountingSchema,
 		"schema",
 		"",
-		"DuckDB schema for accounting state "+runtimeconfig.FlagSourceHelp("schema"),
+		"DuckDB schema for accounting state "+sourceHelp(sourceInfo.AccountingSchema),
 	)
 	cmd.Flags().BoolVar(
 		&assumeYes,
 		"yes",
 		false,
-		"answer yes to database creation and migration prompts "+runtimeconfig.FlagSourceHelp("yes"),
+		"answer yes to database creation and migration prompts "+sourceHelp(sourceInfo.AssumeYes),
 	)
 
 	return cmd
 }
 
-func sharedCLI(cmd *cobra.Command, cfg runtimeconfig.Config, assumeYes bool) runtimeconfig.SharedCLI {
-	return runtimeconfig.SharedCLI{
-		DatabasePath:     cliValue(cmd, "db", cfg.DatabasePath),
-		AccountingSchema: cliValue(cmd, "schema", cfg.AccountingSchema),
-		AssumeYes:        cliValue(cmd, "yes", assumeYes),
-	}
-}
-
-func cliValue[T any](cmd *cobra.Command, flag string, value T) runtimeconfig.Value[T] {
+func configOverride[T any](cmd *cobra.Command, flag string, value T) runtimeconfig.Override[T] {
 	if cmd.Flags().Changed(flag) {
 		return runtimeconfig.Set(value)
 	}
 
-	return runtimeconfig.Value[T]{}
+	return runtimeconfig.Override[T]{}
+}
+
+func sourceHelp(source runtimeconfig.Source) string {
+	return fmt.Sprintf("(config: %s; env: %s)", source.ConfigPath, source.EnvVar)
 }
 
 func runtimeConfig(cfg runtimeconfig.Config) runtime.Config {
@@ -237,13 +243,13 @@ func runtimeConfig(cfg runtimeconfig.Config) runtime.Config {
 	}
 }
 
-func runtimeServeConfig(cfg runtimeconfig.ServeConfig) runtime.ServeConfig {
+func runtimeServeConfig(cfg runtimeconfig.Config) runtime.ServeConfig {
 	return runtime.ServeConfig{
-		Config:        runtimeConfig(cfg.Config),
-		Host:          cfg.Host,
-		Port:          cfg.Port,
-		AccessLogPath: cfg.AccessLogPath,
-		Quiet:         cfg.Quiet,
+		Config:        runtimeConfig(cfg),
+		Host:          cfg.Serve.Host,
+		Port:          cfg.Serve.Port,
+		AccessLogPath: cfg.Serve.AccessLogPath,
+		Quiet:         cfg.Serve.Quiet,
 	}
 }
 

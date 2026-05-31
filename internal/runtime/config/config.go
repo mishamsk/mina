@@ -25,30 +25,30 @@ const (
 // ConfigFileHelp documents the local config file path used by the loader.
 const ConfigFileHelp = "$XDG_CONFIG_PATH/mina/config.toml"
 
-// Config contains source-loaded database lifecycle settings.
+// Config contains source-loaded process settings.
 type Config struct {
 	DatabasePath     string
 	AccountingSchema string
+	Serve            ServeConfig
 }
 
-// ServeConfig contains source-loaded REST listener and database settings.
+// ServeConfig contains source-loaded REST listener settings.
 type ServeConfig struct {
-	Config
 	Host          string
 	Port          int
 	AccessLogPath string
 	Quiet         bool
 }
 
-// Value is an optional command-line value.
-type Value[T any] struct {
+// Override is an optional caller-provided config value.
+type Override[T any] struct {
 	Val   T
 	IsSet bool
 }
 
-// Set returns an optional command-line value marked as explicitly provided.
-func Set[T any](value T) Value[T] {
-	return Value[T]{
+// Set returns an override marked as explicitly provided.
+func Set[T any](value T) Override[T] {
+	return Override[T]{
 		Val:   value,
 		IsSet: true,
 	}
@@ -64,34 +64,56 @@ type LoadOptions struct {
 	ConfigFilePath string
 }
 
-// SharedCLI contains explicit command-line values common to Mina commands.
-type SharedCLI struct {
-	DatabasePath     Value[string]
-	AccountingSchema Value[string]
-	AssumeYes        Value[bool]
+// Overrides contains explicit config values from higher-precedence callers.
+type Overrides struct {
+	DatabasePath     Override[string]
+	AccountingSchema Override[string]
+	AssumeYes        Override[bool]
+	Serve            ServeOverrides
 }
 
-// ServeCLI contains explicit command-line values for the serve command.
-type ServeCLI struct {
-	SharedCLI
-	Host          Value[string]
-	Port          Value[int]
-	AccessLogPath Value[string]
-	Quiet         Value[bool]
+// ServeOverrides contains explicit REST listener config values.
+type ServeOverrides struct {
+	Host          Override[string]
+	Port          Override[int]
+	AccessLogPath Override[string]
+	Quiet         Override[bool]
+}
+
+// Source describes where one config field may be loaded from.
+type Source struct {
+	ConfigPath string
+	EnvVar     string
+}
+
+// SourceInfo describes config file and environment sources by config field.
+type SourceInfo struct {
+	DatabasePath     Source
+	AccountingSchema Source
+	AssumeYes        Source
+	Serve            ServeSourceInfo
+}
+
+// ServeSourceInfo describes config file and environment sources for serve settings.
+type ServeSourceInfo struct {
+	Host          Source
+	Port          Source
+	AccessLogPath Source
+	Quiet         Source
 }
 
 type fileConfig struct {
-	DatabasePath     *string         `toml:"db" env:"MINA_DB" flag:"db"`
-	AccountingSchema *string         `toml:"schema" env:"MINA_SCHEMA" flag:"schema"`
-	AssumeYes        *bool           `toml:"yes" env:"MINA_YES" flag:"yes"`
+	DatabasePath     *string         `toml:"db" env:"MINA_DB"`
+	AccountingSchema *string         `toml:"schema" env:"MINA_SCHEMA"`
+	AssumeYes        *bool           `toml:"yes" env:"MINA_YES"`
 	Serve            serveFileConfig `toml:"serve"`
 }
 
 type serveFileConfig struct {
-	Host          *string `toml:"host" env:"MINA_HOST" flag:"host"`
-	Port          *int    `toml:"port" env:"MINA_PORT" flag:"port"`
-	AccessLogPath *string `toml:"access_log" env:"MINA_ACCESS_LOG" flag:"access-log"`
-	Quiet         *bool   `toml:"quiet" env:"MINA_QUIET" flag:"quiet"`
+	Host          *string `toml:"host" env:"MINA_HOST"`
+	Port          *int    `toml:"port" env:"MINA_PORT"`
+	AccessLogPath *string `toml:"access_log" env:"MINA_ACCESS_LOG"`
+	Quiet         *bool   `toml:"quiet" env:"MINA_QUIET"`
 }
 
 // DefaultServeConfig returns Mina's REST server defaults.
@@ -102,34 +124,31 @@ func DefaultServeConfig() ServeConfig {
 	}
 }
 
-// LoadServe returns the serve command config using Mina's source precedence.
-func LoadServe(opts LoadOptions, cli ServeCLI) (ServeConfig, CommandConfig, error) {
-	cfg := DefaultServeConfig()
-	commandCfg := CommandConfig{}
-
-	fileCfg, err := loadFileConfig(opts)
-	if err != nil {
-		return ServeConfig{}, CommandConfig{}, err
+// DefaultConfig returns Mina's process config defaults.
+func DefaultConfig() Config {
+	return Config{
+		Serve: DefaultServeConfig(),
 	}
-	applySharedFile(&cfg.Config, &commandCfg, fileCfg)
-	applyServeFile(&cfg, fileCfg)
-
-	envCfg, err := loadEnvConfig()
-	if err != nil {
-		return ServeConfig{}, CommandConfig{}, err
-	}
-	applySharedFile(&cfg.Config, &commandCfg, envCfg)
-	applyServeFile(&cfg, envCfg)
-
-	applySharedCLI(&cfg.Config, &commandCfg, cli.SharedCLI)
-	applyServeCLI(&cfg, cli)
-
-	return cfg, commandCfg, nil
 }
 
-// LoadMigrate returns the migrate command config using Mina's source precedence.
-func LoadMigrate(opts LoadOptions, cli SharedCLI) (Config, CommandConfig, error) {
-	cfg := Config{}
+// Sources returns config file and environment source metadata.
+func Sources() SourceInfo {
+	return SourceInfo{
+		DatabasePath:     sourceFor("db"),
+		AccountingSchema: sourceFor("schema"),
+		AssumeYes:        sourceFor("yes"),
+		Serve: ServeSourceInfo{
+			Host:          sourceFor("serve.host"),
+			Port:          sourceFor("serve.port"),
+			AccessLogPath: sourceFor("serve.access_log"),
+			Quiet:         sourceFor("serve.quiet"),
+		},
+	}
+}
+
+// Load returns process config using Mina's source precedence.
+func Load(opts LoadOptions, overrides Overrides) (Config, CommandConfig, error) {
+	cfg := DefaultConfig()
 	commandCfg := CommandConfig{}
 
 	fileCfg, err := loadFileConfig(opts)
@@ -137,26 +156,19 @@ func LoadMigrate(opts LoadOptions, cli SharedCLI) (Config, CommandConfig, error)
 		return Config{}, CommandConfig{}, err
 	}
 	applySharedFile(&cfg, &commandCfg, fileCfg)
+	applyServeFile(&cfg, fileCfg)
 
 	envCfg, err := loadEnvConfig()
 	if err != nil {
 		return Config{}, CommandConfig{}, err
 	}
 	applySharedFile(&cfg, &commandCfg, envCfg)
+	applyServeFile(&cfg, envCfg)
 
-	applySharedCLI(&cfg, &commandCfg, cli)
+	applyOverrides(&cfg, &commandCfg, overrides)
+	applyServeOverrides(&cfg, overrides.Serve)
 
 	return cfg, commandCfg, nil
-}
-
-// FlagSourceHelp returns a CLI help suffix for the config field bound to flag.
-func FlagSourceHelp(flag string) string {
-	field, ok := findConfigFieldByFlag(flag)
-	if !ok {
-		return ""
-	}
-
-	return fmt.Sprintf("(config: %s; env: %s)", field.configPath(), field.env)
 }
 
 func loadFileConfig(opts LoadOptions) (fileConfig, error) {
@@ -238,45 +250,45 @@ func applySharedFile(cfg *Config, commandCfg *CommandConfig, fileCfg fileConfig)
 	}
 }
 
-func applyServeFile(cfg *ServeConfig, fileCfg fileConfig) {
+func applyServeFile(cfg *Config, fileCfg fileConfig) {
 	if fileCfg.Serve.Host != nil {
-		cfg.Host = *fileCfg.Serve.Host
+		cfg.Serve.Host = *fileCfg.Serve.Host
 	}
 	if fileCfg.Serve.Port != nil {
-		cfg.Port = *fileCfg.Serve.Port
+		cfg.Serve.Port = *fileCfg.Serve.Port
 	}
 	if fileCfg.Serve.AccessLogPath != nil {
-		cfg.AccessLogPath = *fileCfg.Serve.AccessLogPath
+		cfg.Serve.AccessLogPath = *fileCfg.Serve.AccessLogPath
 	}
 	if fileCfg.Serve.Quiet != nil {
-		cfg.Quiet = *fileCfg.Serve.Quiet
+		cfg.Serve.Quiet = *fileCfg.Serve.Quiet
 	}
 }
 
-func applySharedCLI(cfg *Config, commandCfg *CommandConfig, cli SharedCLI) {
-	if cli.DatabasePath.IsSet {
-		cfg.DatabasePath = cli.DatabasePath.Val
+func applyOverrides(cfg *Config, commandCfg *CommandConfig, overrides Overrides) {
+	if overrides.DatabasePath.IsSet {
+		cfg.DatabasePath = overrides.DatabasePath.Val
 	}
-	if cli.AccountingSchema.IsSet {
-		cfg.AccountingSchema = cli.AccountingSchema.Val
+	if overrides.AccountingSchema.IsSet {
+		cfg.AccountingSchema = overrides.AccountingSchema.Val
 	}
-	if cli.AssumeYes.IsSet {
-		commandCfg.AssumeYes = cli.AssumeYes.Val
+	if overrides.AssumeYes.IsSet {
+		commandCfg.AssumeYes = overrides.AssumeYes.Val
 	}
 }
 
-func applyServeCLI(cfg *ServeConfig, cli ServeCLI) {
-	if cli.Host.IsSet {
-		cfg.Host = cli.Host.Val
+func applyServeOverrides(cfg *Config, overrides ServeOverrides) {
+	if overrides.Host.IsSet {
+		cfg.Serve.Host = overrides.Host.Val
 	}
-	if cli.Port.IsSet {
-		cfg.Port = cli.Port.Val
+	if overrides.Port.IsSet {
+		cfg.Serve.Port = overrides.Port.Val
 	}
-	if cli.AccessLogPath.IsSet {
-		cfg.AccessLogPath = cli.AccessLogPath.Val
+	if overrides.AccessLogPath.IsSet {
+		cfg.Serve.AccessLogPath = overrides.AccessLogPath.Val
 	}
-	if cli.Quiet.IsSet {
-		cfg.Quiet = cli.Quiet.Val
+	if overrides.Quiet.IsSet {
+		cfg.Serve.Quiet = overrides.Quiet.Val
 	}
 }
 
@@ -284,7 +296,6 @@ type configField struct {
 	key   string
 	table string
 	env   string
-	flag  string
 	value reflect.Value
 }
 
@@ -294,6 +305,22 @@ func (f configField) configPath() string {
 	}
 
 	return f.table + "." + f.key
+}
+
+func sourceFor(configPath string) Source {
+	var source Source
+	_ = walkConfigFields(fileConfig{}, func(field configField) error {
+		if field.configPath() == configPath {
+			source = Source{
+				ConfigPath: configPath,
+				EnvVar:     field.env,
+			}
+		}
+
+		return nil
+	})
+
+	return source
 }
 
 func walkConfigFields(config any, visit func(configField) error) error {
@@ -330,7 +357,6 @@ func walkConfigStruct(
 			key:   tomlName(structField),
 			table: table,
 			env:   structField.Tag.Get("env"),
-			flag:  structField.Tag.Get("flag"),
 			value: fieldValue,
 		}
 		if field.key == "" {
@@ -384,19 +410,4 @@ func parseEnvValue(name string, value string, valueType reflect.Type) (reflect.V
 	default:
 		return reflect.Value{}, fmt.Errorf("%s has unsupported config type %s", name, valueType)
 	}
-}
-
-func findConfigFieldByFlag(flag string) (configField, bool) {
-	var matched configField
-	found := false
-	_ = walkConfigFields(fileConfig{}, func(field configField) error {
-		if field.flag == flag {
-			matched = field
-			found = true
-		}
-
-		return nil
-	})
-
-	return matched, found
 }
