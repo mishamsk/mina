@@ -17,6 +17,9 @@ fmt:
 fmt-check:
     files="$(git ls-files '*.go' | while IFS= read -r file; do [ -f "$file" ] && gofmt -l "$file"; done)"; if [ -n "$files" ]; then printf 'Go files need formatting:\n%s\n' "$files" >&2; exit 1; fi
 
+fix:
+    go fix ./...
+
 lint:
     go tool golangci-lint run ./...
     go run ./internal/tools/archlint

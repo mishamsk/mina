@@ -157,7 +157,7 @@ func validateFQN(fqn string) error {
 	if strings.HasPrefix(fqn, ":") || strings.HasSuffix(fqn, ":") || strings.Contains(fqn, "::") {
 		return services.InvalidRequest("fqn must be colon-separated with non-empty segments")
 	}
-	for _, segment := range strings.Split(fqn, ":") {
+	for segment := range strings.SplitSeq(fqn, ":") {
 		if strings.TrimSpace(segment) != segment || segment == "" {
 			return services.InvalidRequest("fqn segments must be non-empty without leading or trailing whitespace")
 		}

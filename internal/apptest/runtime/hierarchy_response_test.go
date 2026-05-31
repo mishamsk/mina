@@ -14,7 +14,7 @@ func TestHierarchyRootResponsesEncodeNullParentFQN(t *testing.T) {
 
 	account := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
 		Fqn:      "cash",
-		Currency: apptest.StringPtr("USD"),
+		Currency: new("USD"),
 	})
 	if account.StatusCode != http.StatusCreated {
 		t.Fatalf("account create status = %d, want %d; body %s", account.StatusCode, http.StatusCreated, account.RawBody)

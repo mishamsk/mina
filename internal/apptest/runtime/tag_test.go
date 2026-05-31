@@ -29,7 +29,7 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 
 	hidden := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
 		Fqn:      "Trips:Planning",
-		IsHidden: apptest.BoolPtr(true),
+		IsHidden: new(true),
 	})
 	if hidden.StatusCode != http.StatusCreated {
 		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode, http.StatusCreated, hidden.RawBody)

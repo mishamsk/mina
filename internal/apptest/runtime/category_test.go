@@ -29,7 +29,7 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 
 	hidden := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
 		Fqn:      "Food:Groceries",
-		IsHidden: apptest.BoolPtr(true),
+		IsHidden: new(true),
 	})
 	if hidden.StatusCode != http.StatusCreated {
 		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode, http.StatusCreated, hidden.RawBody)

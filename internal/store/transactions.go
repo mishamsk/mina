@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/mishamsk/mina/internal/services"
@@ -829,9 +829,7 @@ func updatedTagIDs(current []int64, add []int64, remove []int64) []int64 {
 	for tagID := range selected {
 		next = append(next, tagID)
 	}
-	sort.Slice(next, func(i int, j int) bool {
-		return next[i] < next[j]
-	})
+	slices.Sort(next)
 
 	return next
 }

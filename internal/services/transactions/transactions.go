@@ -627,7 +627,8 @@ func parseSignedDecimal(value string) (*big.Int, error) {
 	}
 
 	digitCount := 0
-	digits := parts[0]
+	var digits strings.Builder
+	digits.WriteString(parts[0])
 	for i := range parts[0] {
 		if parts[0][i] < '0' || parts[0][i] > '9' {
 			return nil, errors.New("invalid decimal")
@@ -644,16 +645,16 @@ func parseSignedDecimal(value string) (*big.Int, error) {
 			}
 			digitCount++
 		}
-		digits += parts[1]
+		digits.WriteString(parts[1])
 	}
 	if digitCount > 18 {
 		return nil, errors.New("invalid decimal")
 	}
 	for ; fracDigits < 8; fracDigits++ {
-		digits += "0"
+		digits.WriteString("0")
 	}
 
-	scaled, ok := new(big.Int).SetString(digits, 10)
+	scaled, ok := new(big.Int).SetString(digits.String(), 10)
 	if !ok {
 		return nil, errors.New("invalid decimal")
 	}

@@ -158,9 +158,9 @@ func openAPIValidationErrorMessage(r *http.Request, err error) string {
 
 type noopLogEntry struct{}
 
-func (noopLogEntry) Write(int, int, http.Header, time.Duration, interface{}) {}
+func (noopLogEntry) Write(int, int, http.Header, time.Duration, any) {}
 
-func (noopLogEntry) Panic(interface{}, []byte) {}
+func (noopLogEntry) Panic(any, []byte) {}
 
 type bufferedResponseWriter struct {
 	header http.Header

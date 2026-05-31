@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -110,10 +111,8 @@ func generatedQueryValueMessage(r *http.Request, name string) (string, bool) {
 	}
 
 	label := parameterLabel("query", name)
-	for _, value := range values {
-		if value == "" {
-			return label + " must not be empty", true
-		}
+	if slices.Contains(values, "") {
+		return label + " must not be empty", true
 	}
 	if len(values) != 1 {
 		return label + " must be provided at most once", true

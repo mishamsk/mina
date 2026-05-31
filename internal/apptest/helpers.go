@@ -6,13 +6,17 @@ import "strconv"
 type EmptyJSON struct{}
 
 // BoolPtr returns a pointer to value.
+//
+//go:fix inline
 func BoolPtr(value bool) *bool {
-	return &value
+	return new(value)
 }
 
 // StringPtr returns a pointer to value.
+//
+//go:fix inline
 func StringPtr(value string) *string {
-	return &value
+	return new(value)
 }
 
 // Int64SlicePtr returns a pointer to values.
