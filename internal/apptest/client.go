@@ -5,15 +5,20 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	_ "github.com/duckdb/duckdb-go/v2"
+
 	"github.com/mishamsk/mina/internal/runtime"
 	"github.com/mishamsk/mina/internal/store"
 )
+
+const duckDBDriverName = "duckdb"
 
 // Client sends typed JSON requests through an in-process app handler.
 type Client struct {
@@ -27,7 +32,7 @@ type Option func(*clientOptions)
 
 type clientOptions struct {
 	config    runtime.Config
-	processDB *sql.DB
+	processDB *ProcessDB
 }
 
 // Response is a typed JSON response captured from the app handler.
@@ -45,15 +50,54 @@ type Persistence struct {
 	location store.AccountingLocation
 }
 
-// WithConfig customizes the runtime config used to open the test app database.
-func WithConfig(config runtime.Config) Option {
+// ProcessDB is a reusable in-memory DuckDB process handle for app tests.
+type ProcessDB struct {
+	db *sql.DB
+}
+
+// OpenProcessDB opens a reusable in-memory DuckDB process handle for app tests.
+func OpenProcessDB(ctx context.Context) (*ProcessDB, error) {
+	db, err := sql.Open(duckDBDriverName, ":memory:")
+	if err != nil {
+		return nil, fmt.Errorf("open in-memory duckdb process database: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+
+	if err := db.PingContext(ctx); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, fmt.Errorf("ping in-memory duckdb process database: %w; close database: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("ping in-memory duckdb process database: %w", err)
+	}
+
+	return &ProcessDB{db: db}, nil
+}
+
+// Close releases the reusable process database.
+func (db *ProcessDB) Close() error {
+	if db == nil || db.db == nil {
+		return nil
+	}
+
+	return db.db.Close()
+}
+
+// WithDatabasePath uses an attached DuckDB file as the app accounting database.
+func WithDatabasePath(path string) Option {
 	return func(opts *clientOptions) {
-		opts.config = config
+		opts.config.DatabasePath = path
+	}
+}
+
+// WithAccountingSchema customizes the accounting schema used by the test app.
+func WithAccountingSchema(schema string) Option {
+	return func(opts *clientOptions) {
+		opts.config.AccountingSchema = schema
 	}
 }
 
 // WithProcessDB reuses an existing DuckDB process database for the test app.
-func WithProcessDB(db *sql.DB) Option {
+func WithProcessDB(db *ProcessDB) Option {
 	return func(opts *clientOptions) {
 		opts.processDB = db
 	}
@@ -80,7 +124,7 @@ func New(t *testing.T, options ...Option) *Client {
 	var appInstance *runtime.App
 	var err error
 	if opts.processDB != nil {
-		appInstance, err = runtime.NewWithProcessDB(ctx, opts.processDB, opts.config)
+		appInstance, err = runtime.NewWithProcessDB(ctx, opts.processDB.db, opts.config)
 	} else {
 		appInstance, err = runtime.New(ctx, opts.config)
 	}
@@ -190,6 +234,61 @@ func (p *Persistence) QueryRowContext(ctx context.Context, query string, args ..
 // Location returns the per-test accounting location.
 func (p *Persistence) Location() store.AccountingLocation {
 	return p.location
+}
+
+// RequireAccountingSchema fails the test if the accounting schema is not want.
+func (p *Persistence) RequireAccountingSchema(want string) {
+	p.t.Helper()
+
+	if p.location.Schema() != want {
+		p.t.Fatalf("accounting schema = %q, want %q", p.location.Schema(), want)
+	}
+}
+
+// RequireTableExists fails the test unless tableName exists at the accounting location.
+func (p *Persistence) RequireTableExists(tableName string) {
+	p.t.Helper()
+
+	var count int
+	err := p.QueryRowContext(
+		context.Background(),
+		`SELECT COUNT(*)
+FROM duckdb_tables()
+WHERE database_name = ?
+  AND schema_name = ?
+  AND table_name = ?`,
+		p.location.Database(),
+		p.location.Schema(),
+		tableName,
+	).Scan(&count)
+	if err != nil {
+		p.t.Fatalf("check table %s location: %v", tableName, err)
+	}
+	if count != 1 {
+		p.t.Fatalf("%s table count at %s.%s = %d, want 1", tableName, p.location.Database(), p.location.Schema(), count)
+	}
+}
+
+// RequireMinimumTableCount fails the test unless at least minimum tables exist at the accounting location.
+func (p *Persistence) RequireMinimumTableCount(minimum int) {
+	p.t.Helper()
+
+	var count int
+	err := p.QueryRowContext(
+		context.Background(),
+		`SELECT COUNT(*)
+FROM duckdb_tables()
+WHERE database_name = ?
+  AND schema_name = ?`,
+		p.location.Database(),
+		p.location.Schema(),
+	).Scan(&count)
+	if err != nil {
+		p.t.Fatalf("count tables at location: %v", err)
+	}
+	if count < minimum {
+		p.t.Fatalf("table count at %s.%s = %d, want at least %d", p.location.Database(), p.location.Schema(), count, minimum)
+	}
 }
 
 // QualifiedName returns a qualified object name in the per-test accounting location.

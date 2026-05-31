@@ -2,18 +2,16 @@ package runtime_test
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-	"github.com/mishamsk/mina/internal/store"
 )
 
-var sharedProcessDB *sql.DB
+var sharedProcessDB *apptest.ProcessDB
 
 func TestMain(m *testing.M) {
-	db, err := store.OpenInMemory(context.Background())
+	db, err := apptest.OpenProcessDB(context.Background())
 	if err != nil {
 		panic(err)
 	}
