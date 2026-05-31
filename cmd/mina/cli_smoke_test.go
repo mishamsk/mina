@@ -3,6 +3,12 @@
 package main
 
 import (
+	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -11,13 +17,14 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/rogpeppe/go-internal/testscript"
 )
 
 func TestMain(m *testing.M) {
 	testscript.Main(m, map[string]func(){
 		"mina": func() {
-			os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+			os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 		},
 	})
 }
@@ -27,10 +34,98 @@ func TestIntegrationScripts(t *testing.T) {
 		Dir:                 "testdata/script",
 		RequireExplicitExec: true,
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
-			"freeport": testscriptFreePort,
-			"httpget":  testscriptHTTPGet,
+			"duckdbsnapshot": testscriptDuckDBSnapshot,
+			"duckdbtables":   testscriptDuckDBTables,
+			"duckdbtouch":    testscriptDuckDBTouch,
+			"freeport":       testscriptFreePort,
+			"httpget":        testscriptHTTPGet,
 		},
 	})
+}
+
+func testscriptDuckDBTouch(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("duckdbtouch does not support negation")
+	}
+	if len(args) != 1 {
+		ts.Fatalf("usage: duckdbtouch path")
+	}
+
+	db, err := sql.Open("duckdb", args[0])
+	ts.Check(err)
+	ts.Check(db.PingContext(context.Background()))
+	ts.Check(db.Close())
+}
+
+func testscriptDuckDBSnapshot(ts *testscript.TestScript, neg bool, args []string) {
+	if len(args) != 2 {
+		ts.Fatalf("usage: duckdbsnapshot path snapshot")
+	}
+
+	snapshot := duckDBFileSnapshot(ts, args[0])
+	if neg {
+		want := ts.ReadFile(args[1])
+		if snapshot == want {
+			ts.Fatalf("duckdb snapshot for %s did not change", args[0])
+		}
+		return
+	}
+
+	if _, err := os.Stat(args[1]); errors.Is(err, os.ErrNotExist) {
+		ts.Check(os.WriteFile(args[1], []byte(snapshot), 0o644))
+		return
+	} else if err != nil {
+		ts.Fatalf("stat snapshot %s: %v", args[1], err)
+	}
+
+	want := ts.ReadFile(args[1])
+	if snapshot != want {
+		ts.Fatalf("duckdb snapshot for %s changed:\ngot  %s\nwant %s", args[0], snapshot, want)
+	}
+}
+
+func duckDBFileSnapshot(ts *testscript.TestScript, path string) string {
+	info, err := os.Stat(path)
+	ts.Check(err)
+
+	file, err := os.Open(path)
+	ts.Check(err)
+	defer func() {
+		ts.Check(file.Close())
+	}()
+
+	sum := sha256.New()
+	_, err = io.Copy(sum, file)
+	ts.Check(err)
+
+	return fmt.Sprintf("%d %d %s\n", info.Size(), info.ModTime().UnixNano(), hex.EncodeToString(sum.Sum(nil)))
+}
+
+func testscriptDuckDBTables(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("duckdbtables does not support negation")
+	}
+	if len(args) != 2 {
+		ts.Fatalf("usage: duckdbtables path schema")
+	}
+
+	db, err := sql.Open("duckdb", args[0])
+	ts.Check(err)
+	defer func() {
+		ts.Check(db.Close())
+	}()
+
+	var count int
+	err = db.QueryRowContext(
+		context.Background(),
+		`SELECT COUNT(*)
+FROM duckdb_tables()
+WHERE schema_name = ?`,
+		args[1],
+	).Scan(&count)
+	ts.Check(err)
+	_, err = ts.Stdout().Write([]byte(strconv.Itoa(count) + "\n"))
+	ts.Check(err)
 }
 
 func testscriptFreePort(ts *testscript.TestScript, neg bool, args []string) {

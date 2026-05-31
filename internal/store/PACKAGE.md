@@ -2,13 +2,13 @@
 
 ## Purpose
 
-- Owns database connection helpers, migrations, query code, repository implementations, and transaction boundaries.
+- Owns database connection helpers, Goose migration wiring, query code, repository implementations, and transaction boundaries.
 
 ## Implicit Contracts
 
-- Migrations are upgrade-only and recorded in `schema_version` in the selected accounting location.
+- Migrations are upgrade-only Goose SQL files recorded in `schema_version` in the selected accounting location.
 - The accounting DB owns the DuckDB handle and selected accounting location.
-- Accounting open helpers perform DuckDB-specific open, attach, schema preparation, and migration calls.
+- Accounting open helpers perform DuckDB-specific open, attach, and schema preparation.
 - Accounting locations cache rendered database and schema identifiers resolved with DuckDB keyword metadata at open time.
 - Repository constructors receive the accounting DB and qualify accounting objects through its location.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
@@ -21,7 +21,7 @@
 
 ## Boundaries
 
-- Owns: SQL execution helpers, durable schema versioning, migrations, transactions, row types, and app-to-DB type conversion.
+- Owns: SQL execution helpers, migration wiring, transactions, row types, and app-to-DB type conversion.
 - Does not own: process configuration, HTTP behavior, REST DTOs, or domain validation.
 
 ## Testing Notes

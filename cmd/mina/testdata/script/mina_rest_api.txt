@@ -1,6 +1,6 @@
 # The REST API serves real JSON over a real local listener.
 freeport
-exec mina serve --db $WORK/rest.db --create --migrate --host 127.0.0.1 --port $PORT &server&
+exec mina serve --db $WORK/rest.db --yes --host 127.0.0.1 --port $PORT &server&
 httpget http://127.0.0.1:$PORT/health
 stdout '"status":"ok"'
 httpget http://127.0.0.1:$PORT/categories
@@ -23,7 +23,7 @@ stderr 'warning: no --db provided; using ephemeral in-memory accounting state'
 
 # Access logs default to stderr.
 freeport
-exec mina serve --db $WORK/rest-default-log.db --create --migrate --host 127.0.0.1 --port $PORT &server&
+exec mina serve --db $WORK/rest-default-log.db --yes --host 127.0.0.1 --port $PORT &server&
 httpget http://127.0.0.1:$PORT/health
 kill -INT server
 wait server
@@ -31,7 +31,7 @@ stderr 'GET /health 200'
 
 # Quiet mode disables access logs.
 freeport
-exec mina serve --db $WORK/rest-quiet.db --create --migrate --host 127.0.0.1 --port $PORT --quiet &server&
+exec mina serve --db $WORK/rest-quiet.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
 httpget http://127.0.0.1:$PORT/health
 kill -INT server
 wait server
@@ -39,7 +39,7 @@ wait server
 
 # Access logs can be redirected to a file.
 freeport
-exec mina serve --db $WORK/rest-file-log.db --create --migrate --host 127.0.0.1 --port $PORT --access-log $WORK/access.log &server&
+exec mina serve --db $WORK/rest-file-log.db --yes --host 127.0.0.1 --port $PORT --access-log $WORK/access.log &server&
 httpget http://127.0.0.1:$PORT/health
 kill -INT server
 wait server

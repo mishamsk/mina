@@ -26,14 +26,14 @@ type App struct {
 	handler    http.Handler
 }
 
-// New opens the configured database, applies migrations when requested, and wires the REST handler.
+// New opens the configured database, applies migrations, and wires the REST handler.
 func New(ctx context.Context, cfg Config) (*App, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
 	if cfg.DatabasePath != "" {
-		if err := prepareDatabasePath(cfg.DatabasePath, cfg.CreateIfMissing); err != nil {
+		if err := prepareDatabasePath(cfg.DatabasePath); err != nil {
 			return nil, err
 		}
 	}
@@ -42,8 +42,37 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := store.Migrate(ctx, accounting); err != nil {
+		return nil, closeAccountingAfterError(accounting, fmt.Errorf("migrate database: %w", err))
+	}
 
 	return NewWithAccountingDB(accounting, cfg.HTTP), nil
+}
+
+// HasPendingMigrations reports whether the configured accounting database would be migrated at startup.
+func HasPendingMigrations(ctx context.Context, cfg Config) (bool, error) {
+	if err := cfg.Validate(); err != nil {
+		return false, err
+	}
+	if cfg.DatabasePath != "" {
+		exists, err := databasePathExists(cfg.DatabasePath)
+		if err != nil {
+			return false, err
+		}
+		if !exists {
+			return true, nil
+		}
+	}
+
+	accounting, err := store.OpenAccounting(ctx, cfg.AccountingOpenRequest())
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		_ = accounting.Close()
+	}()
+
+	return store.HasPendingMigrations(ctx, accounting)
 }
 
 // NewWithAccountingDB wires the REST handler around an already-opened migrated accounting database.
@@ -96,16 +125,13 @@ func (a *App) Close() error {
 	return a.accounting.Close()
 }
 
-func prepareDatabasePath(path string, createIfMissing bool) error {
+func prepareDatabasePath(path string) error {
 	_, err := os.Stat(path)
 	if err == nil {
 		return nil
 	}
 	if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("stat database path: %w", err)
-	}
-	if !createIfMissing {
-		return fmt.Errorf("database path does not exist: %s", path)
 	}
 
 	parent := filepath.Dir(path)
@@ -117,4 +143,24 @@ func prepareDatabasePath(path string, createIfMissing bool) error {
 	}
 
 	return nil
+}
+
+func databasePathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("stat database path: %w", err)
+	}
+
+	return false, nil
+}
+
+func closeAccountingAfterError(accounting *store.AccountingDB, err error) error {
+	if closeErr := accounting.Close(); closeErr != nil {
+		return fmt.Errorf("%w; close database: %w", err, closeErr)
+	}
+
+	return err
 }

@@ -71,9 +71,9 @@ dev mode="": build
     : > "$stdout_log"
     : > "$stderr_log"
     if [ "$mode" = "-p" ]; then
-        nohup ./bin/mina serve --db "$db_path" --create --migrate --host 127.0.0.1 --port 8080 --access-log "$access_log" > "$stdout_log" 2> "$stderr_log" &
+        nohup ./bin/mina serve --db "$db_path" --yes --host 127.0.0.1 --port 8080 --access-log "$access_log" > "$stdout_log" 2> "$stderr_log" &
     else
-        nohup ./bin/mina serve --migrate --host 127.0.0.1 --port 8080 --access-log "$access_log" > "$stdout_log" 2> "$stderr_log" &
+        nohup ./bin/mina serve --host 127.0.0.1 --port 8080 --access-log "$access_log" > "$stdout_log" 2> "$stderr_log" &
     fi
     pid="$!"
     echo "$pid" > "$pid_file"

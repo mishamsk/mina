@@ -60,7 +60,6 @@ func New(t *testing.T, options ...Option) *Client {
 	opts := clientOptions{
 		config: runtime.Config{
 			AccountingSchema: schema,
-			ApplyMigrations:  true,
 		},
 	}
 	for _, option := range options {
@@ -69,13 +68,11 @@ func New(t *testing.T, options ...Option) *Client {
 	if opts.config.AccountingSchema == "" {
 		opts.config.AccountingSchema = schema
 	}
-	opts.config.ApplyMigrations = true
 
-	accounting, err := store.OpenAccounting(ctx, opts.config.AccountingOpenRequest())
+	appInstance, err := runtime.New(ctx, opts.config)
 	if err != nil {
-		t.Fatalf("open accounting test database: %v", err)
+		t.Fatalf("new test app: %v", err)
 	}
-	appInstance := runtime.NewWithAccountingDB(accounting, opts.config.HTTP)
 	t.Cleanup(func() {
 		if err := appInstance.Close(); err != nil {
 			t.Fatalf("close test app: %v", err)
@@ -85,7 +82,7 @@ func New(t *testing.T, options ...Option) *Client {
 	return &Client{
 		t:        t,
 		app:      appInstance,
-		location: accounting.Location(),
+		location: appInstance.AccountingLocation(),
 	}
 }
 

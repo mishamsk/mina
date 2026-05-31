@@ -1,0 +1,6 @@
+-- +goose Up
+CREATE SEQUENCE primary_key_gen_seq START 1;
+
+CREATE TYPE posting_status AS ENUM ('PENDING', 'POSTED', 'CANCELLED');
+CREATE TYPE reconciliation_status AS ENUM ('RECONCILED', 'UNRECONCILED');
+CREATE TYPE source AS ENUM ('MANUAL', 'IMPORTED', 'RECURRING_TEMPLATE');

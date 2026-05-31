@@ -1,20 +1,16 @@
-# Missing databases are rejected unless creation is explicit.
+# Missing databases require confirmation.
 ! exec mina serve --db $WORK/missing.db --host 192.0.2.1 --port 0
-stderr 'database path does not exist'
+stderr 'does not exist; create it?'
+stderr 'database creation not confirmed'
 ! exists $WORK/missing.db
 
-# Explicit creation happens before listener startup.
-! exec mina serve --db $WORK/created.db --create --host 192.0.2.1 --port 0
+# --yes creates and migrates missing databases without another prompt.
+! exec mina serve --db $WORK/created.db --yes --host 192.0.2.1 --port 0
 stderr 'listen error:'
 exists $WORK/created.db
 
-# New databases cannot be created without applying migrations.
-! exec mina serve --db $WORK/unmigrated.db --create --migrate=false --host 192.0.2.1 --port 0
-stderr '--migrate=false requires an existing database'
-! exists $WORK/unmigrated.db
-
-# Existing databases can be opened without applying migrations.
-! exec mina serve --db $WORK/created.db --migrate=false --host 192.0.2.1 --port 0
+# Existing databases are migrated before listener startup.
+! exec mina serve --db $WORK/created.db --yes --host 192.0.2.1 --port 0
 stderr 'listen error:'
 
 # Omitting --db serves from an ephemeral in-memory accounting schema with a warning.
@@ -23,14 +19,28 @@ stderr 'warning: no --db provided; using ephemeral in-memory accounting state'
 stderr 'listen error:'
 
 # The migrate command applies migrations without starting an HTTP listener.
-exec mina migrate --db $WORK/migrated.db --create
+exec mina migrate --db $WORK/migrated.db --yes
 ! stderr 'listen error:'
 exists $WORK/migrated.db
 
+# Existing empty databases are not migrated when migration confirmation is declined.
+duckdbtouch $WORK/needs-confirm.db
+duckdbsnapshot $WORK/needs-confirm.db $WORK/needs-confirm.snapshot
+stdin no.txt
+! exec mina migrate --db $WORK/needs-confirm.db
+stderr 'pending database migrations'
+stderr 'database migrations not confirmed'
+duckdbsnapshot $WORK/needs-confirm.db $WORK/needs-confirm.snapshot
+duckdbtables $WORK/needs-confirm.db main
+stdout '^0$'
+
 # The migrate command accepts a custom accounting schema.
-exec mina migrate --db $WORK/quoted-schema.db --create --schema select
+exec mina migrate --db $WORK/quoted-schema.db --schema select --yes
 exists $WORK/quoted-schema.db
 
 # The migrate command does not accept HTTP listener flags.
 ! exec mina migrate --db $WORK/migrated.db --host 127.0.0.1
 stderr 'unknown flag: --host'
+
+-- no.txt --
+n

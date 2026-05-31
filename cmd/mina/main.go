@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"os/signal"
 	"regexp"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -23,11 +25,11 @@ const version = "0.0.0-dev"
 var portFlagErrorPattern = regexp.MustCompile(`invalid argument "([^"]+)" for "--port" flag`)
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
 
-func run(args []string, stdout io.Writer, stderr io.Writer) int {
-	root := newRootCommand(stdout, stderr)
+func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	root := newRootCommand(stdin, stdout, stderr)
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
 		var runtimeErr *exitError
@@ -55,7 +57,7 @@ func (e *exitError) Error() string {
 	return e.err.Error()
 }
 
-func newRootCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "mina",
 		Short:         "Mina local-first personal finance API",
@@ -74,8 +76,8 @@ func newRootCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	})
 
 	root.AddCommand(newVersionCommand(stdout))
-	root.AddCommand(newServeCommand(stdout, stderr))
-	root.AddCommand(newMigrateCommand(stderr))
+	root.AddCommand(newServeCommand(stdin, stdout, stderr))
+	root.AddCommand(newMigrateCommand(stdin, stderr))
 
 	return root
 }
@@ -93,11 +95,9 @@ func newVersionCommand(stdout io.Writer) *cobra.Command {
 	}
 }
 
-func newServeCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+	var assumeYes bool
 	cfg := runtime.ServeConfig{
-		Config: runtime.Config{
-			ApplyMigrations: true,
-		},
 		Host: "127.0.0.1",
 		Port: 8080,
 	}
@@ -111,7 +111,7 @@ func newServeCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
 				return err
 			}
 
-			if err := serve(stdout, stderr, cfg); err != nil {
+			if err := serve(stdin, stdout, stderr, cfg, assumeYes); err != nil {
 				return &exitError{code: 1, err: err}
 			}
 
@@ -122,8 +122,7 @@ func newServeCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	cmd.Flags().StringVar(&cfg.AccountingSchema, "schema", "", "DuckDB schema for accounting state")
 	cmd.Flags().StringVar(&cfg.Host, "host", cfg.Host, "host interface for the REST API")
 	cmd.Flags().IntVar(&cfg.Port, "port", cfg.Port, "port for the REST API")
-	cmd.Flags().BoolVar(&cfg.CreateIfMissing, "create", false, "create the database file when it does not exist")
-	cmd.Flags().BoolVar(&cfg.ApplyMigrations, "migrate", cfg.ApplyMigrations, "apply database migrations before serving")
+	cmd.Flags().BoolVar(&assumeYes, "yes", false, "answer yes to database creation and migration prompts")
 	cmd.Flags().StringVar(&cfg.AccessLogPath, "access-log", "", "write access logs to a file instead of stderr")
 	cmd.Flags().BoolVar(&cfg.Quiet, "quiet", false, "disable access logs")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
@@ -133,10 +132,9 @@ func newServeCommand(stdout io.Writer, stderr io.Writer) *cobra.Command {
 	return cmd
 }
 
-func newMigrateCommand(stderr io.Writer) *cobra.Command {
-	cfg := runtime.Config{
-		ApplyMigrations: true,
-	}
+func newMigrateCommand(stdin io.Reader, stderr io.Writer) *cobra.Command {
+	var assumeYes bool
+	cfg := runtime.Config{}
 	cmd := &cobra.Command{
 		Use:          "migrate",
 		Short:        "Apply database migrations",
@@ -150,7 +148,7 @@ func newMigrateCommand(stderr io.Writer) *cobra.Command {
 				return err
 			}
 
-			if err := migrate(stderr, cfg); err != nil {
+			if err := migrate(stdin, stderr, cfg, assumeYes); err != nil {
 				return &exitError{code: 1, err: err}
 			}
 
@@ -159,7 +157,7 @@ func newMigrateCommand(stderr io.Writer) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&cfg.DatabasePath, "db", "", "path to the Mina database file")
 	cmd.Flags().StringVar(&cfg.AccountingSchema, "schema", "", "DuckDB schema for accounting state")
-	cmd.Flags().BoolVar(&cfg.CreateIfMissing, "create", false, "create the database file when it does not exist")
+	cmd.Flags().BoolVar(&assumeYes, "yes", false, "answer yes to database creation and migration prompts")
 
 	return cmd
 }
@@ -183,7 +181,7 @@ func normalizeFlagError(err error) error {
 	return err
 }
 
-func serve(stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig) error {
+func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig, assumeYes bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -202,6 +200,15 @@ func serve(stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig) error {
 	appConfig := cfg.Config
 	appConfig.HTTP = runtime.HTTPConfig{
 		AccessLog: accessLog,
+	}
+	created, err := confirmDatabaseCreation(stdin, stderr, appConfig, assumeYes)
+	if err != nil {
+		return err
+	}
+	if !created {
+		if err := confirmPendingMigrations(ctx, stdin, stderr, appConfig, assumeYes); err != nil {
+			return err
+		}
 	}
 	appInstance, err := runtime.New(ctx, appConfig)
 	if err != nil {
@@ -256,8 +263,17 @@ func openAccessLog(stderr io.Writer, cfg runtime.ServeConfig) (io.Writer, func()
 	}, nil
 }
 
-func migrate(stderr io.Writer, cfg runtime.Config) error {
+func migrate(stdin io.Reader, stderr io.Writer, cfg runtime.Config, assumeYes bool) error {
 	ctx := context.Background()
+	created, err := confirmDatabaseCreation(stdin, stderr, cfg, assumeYes)
+	if err != nil {
+		return err
+	}
+	if !created {
+		if err := confirmPendingMigrations(ctx, stdin, stderr, cfg, assumeYes); err != nil {
+			return err
+		}
+	}
 	appInstance, err := runtime.New(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("startup error: %w", err)
@@ -269,4 +285,91 @@ func migrate(stderr io.Writer, cfg runtime.Config) error {
 	}()
 
 	return nil
+}
+
+func confirmDatabaseCreation(stdin io.Reader, stderr io.Writer, cfg runtime.Config, assumeYes bool) (bool, error) {
+	if cfg.DatabasePath == "" {
+		return false, nil
+	}
+	_, err := os.Stat(cfg.DatabasePath)
+	if err == nil {
+		return false, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("stat database path: %w", err)
+	}
+	if assumeYes {
+		return true, nil
+	}
+
+	if _, err := fmt.Fprintf(
+		stderr,
+		"database %s does not exist; create it? [y/N]: ",
+		cfg.DatabasePath,
+	); err != nil {
+		return false, err
+	}
+	answer, err := readConfirmation(stdin)
+	if err != nil {
+		return false, err
+	}
+	if answer {
+		return true, nil
+	}
+
+	return false, errors.New("database creation not confirmed")
+}
+
+func confirmPendingMigrations(
+	ctx context.Context,
+	stdin io.Reader,
+	stderr io.Writer,
+	cfg runtime.Config,
+	assumeYes bool,
+) error {
+	if cfg.DatabasePath == "" {
+		return nil
+	}
+
+	pending, err := runtime.HasPendingMigrations(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("check pending migrations: %w", err)
+	}
+	if !pending {
+		return nil
+	}
+	if assumeYes {
+		return nil
+	}
+
+	if _, err := fmt.Fprintf(
+		stderr,
+		"pending database migrations for %s; apply before continuing? [y/N]: ",
+		cfg.DatabasePath,
+	); err != nil {
+		return err
+	}
+	confirmed, err := readConfirmation(stdin)
+	if err != nil {
+		return err
+	}
+	if confirmed {
+		return nil
+	}
+
+	return errors.New("database migrations not confirmed")
+}
+
+func readConfirmation(stdin io.Reader) (bool, error) {
+	answer, err := bufio.NewReader(stdin).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false, fmt.Errorf("read confirmation: %w", err)
+	}
+
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "y", "yes":
+		return true, nil
+	default:
+		return false, nil
+	}
 }

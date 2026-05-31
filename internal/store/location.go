@@ -8,14 +8,6 @@ import (
 	"strings"
 )
 
-// Fixed accounting-state locations owned by the store layer.
-const (
-	InMemoryAccountingDatabase = "memory"
-	InMemoryAccountingSchema   = "mina"
-	AttachedAccountingDatabase = "accounting"
-	AttachedAccountingSchema   = "main"
-)
-
 var unquotedIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // AccountingLocationConfig names the DuckDB database and schema that hold accounting state.
@@ -30,32 +22,6 @@ type AccountingLocation struct {
 	schema             string
 	databaseIdentifier string
 	schemaIdentifier   string
-}
-
-// InMemoryAccountingLocationConfig returns the fixed in-memory accounting-state location config.
-func InMemoryAccountingLocationConfig() AccountingLocationConfig {
-	return AccountingLocationConfig{
-		Database: InMemoryAccountingDatabase,
-		Schema:   InMemoryAccountingSchema,
-	}
-}
-
-// InMemoryAccountingLocation returns the fixed in-memory accounting-state location.
-func InMemoryAccountingLocation() AccountingLocation {
-	return staticAccountingLocation(InMemoryAccountingDatabase, InMemoryAccountingSchema)
-}
-
-// AttachedDatabaseAccountingLocationConfig returns the fixed attached-database accounting-state location config.
-func AttachedDatabaseAccountingLocationConfig() AccountingLocationConfig {
-	return AccountingLocationConfig{
-		Database: AttachedAccountingDatabase,
-		Schema:   AttachedAccountingSchema,
-	}
-}
-
-// AttachedDatabaseAccountingLocation returns the fixed attached-database accounting-state location.
-func AttachedDatabaseAccountingLocation() AccountingLocation {
-	return staticAccountingLocation(AttachedAccountingDatabase, AttachedAccountingSchema)
 }
 
 // NewAccountingLocation resolves SQL-safe identifier strings for an accounting location.
@@ -108,25 +74,6 @@ func (l AccountingLocation) mustQualifiedName(object string) string {
 	}
 
 	return name
-}
-
-func (l AccountingLocation) sequenceLiteral(sequence string) string {
-	name := strings.Join([]string{
-		l.databaseIdentifier,
-		l.schemaIdentifier,
-		sequence,
-	}, ".")
-
-	return quoteStringLiteral(name)
-}
-
-func staticAccountingLocation(database string, schema string) AccountingLocation {
-	return AccountingLocation{
-		database:           database,
-		schema:             schema,
-		databaseIdentifier: database,
-		schemaIdentifier:   schema,
-	}
 }
 
 func accountingIdentifier(ctx context.Context, db *sql.DB, kind string, name string) (string, error) {

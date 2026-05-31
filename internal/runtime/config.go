@@ -2,20 +2,24 @@ package runtime
 
 import (
 	"errors"
-	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/mishamsk/mina/internal/store"
+)
+
+// Runtime-owned accounting-state defaults.
+const (
+	InMemoryAccountingDatabase = "memory"
+	InMemoryAccountingSchema   = "mina"
+	AttachedAccountingDatabase = "accounting"
+	AttachedAccountingSchema   = "main"
 )
 
 // Config controls process-local Mina database lifecycle policy.
 type Config struct {
 	DatabasePath     string
 	AccountingSchema string
-	CreateIfMissing  bool
-	ApplyMigrations  bool
 	HTTP             HTTPConfig
 }
 
@@ -27,20 +31,6 @@ type HTTPConfig struct {
 
 // Validate checks database lifecycle settings before composition starts.
 func (c Config) Validate() error {
-	if c.DatabasePath == "" {
-		if !c.ApplyMigrations {
-			return errors.New("--migrate=false requires an existing database")
-		}
-		return nil
-	}
-	if c.CreateIfMissing && !c.ApplyMigrations {
-		if _, err := os.Stat(c.DatabasePath); errors.Is(err, os.ErrNotExist) {
-			return errors.New("--migrate=false requires an existing database")
-		} else if err != nil {
-			return fmt.Errorf("stat database path: %w", err)
-		}
-	}
-
 	return nil
 }
 
@@ -49,7 +39,6 @@ func (c Config) AccountingOpenRequest() store.AccountingOpenRequest {
 	return store.AccountingOpenRequest{
 		Path:     c.DatabasePath,
 		Location: c.AccountingLocationConfig(),
-		Migrate:  c.ApplyMigrations,
 	}
 }
 
@@ -57,14 +46,14 @@ func (c Config) AccountingOpenRequest() store.AccountingOpenRequest {
 func (c Config) AccountingLocationConfig() store.AccountingLocationConfig {
 	if c.DatabasePath == "" {
 		return store.AccountingLocationConfig{
-			Database: store.InMemoryAccountingDatabase,
-			Schema:   c.accountingSchemaOrDefault(store.InMemoryAccountingSchema),
+			Database: InMemoryAccountingDatabase,
+			Schema:   c.accountingSchemaOrDefault(InMemoryAccountingSchema),
 		}
 	}
 
 	return store.AccountingLocationConfig{
-		Database: store.AttachedAccountingDatabase,
-		Schema:   c.accountingSchemaOrDefault(store.AttachedAccountingSchema),
+		Database: AttachedAccountingDatabase,
+		Schema:   c.accountingSchemaOrDefault(AttachedAccountingSchema),
 	}
 }
 

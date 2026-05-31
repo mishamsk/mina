@@ -3,341 +3,267 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
+	"embed"
 	"fmt"
-	"strings"
+	"io/fs"
+
+	"github.com/pressly/goose/v3"
 )
 
-// Migration is one upgrade-only database schema change.
-type Migration struct {
-	Version int
-	Name    string
-	SQL     func(AccountingLocation) string
-}
-
-var migrations = []Migration{
-	{
-		Version: 1,
-		Name:    "create_schema_primitives",
-		SQL: migrationSQL(`
-CREATE SEQUENCE {primary_key_gen_seq} START 1;
-
-CREATE TYPE {posting_status} AS ENUM ('PENDING', 'POSTED', 'CANCELLED');
-CREATE TYPE {reconciliation_status} AS ENUM ('RECONCILED', 'UNRECONCILED');
-CREATE TYPE {source} AS ENUM ('MANUAL', 'IMPORTED', 'RECURRING_TEMPLATE');
-
-CREATE TABLE {schema_version} (
-	version INTEGER PRIMARY KEY,
-	name TEXT NOT NULL,
-	applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);`),
-	},
-	{
-		Version: 2,
-		Name:    "create_category",
-		SQL: migrationSQL(`
-CREATE TABLE {category} (
-	category_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
-	fqn TEXT NOT NULL,
-	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	tombstoned_at TIMESTAMP,
-	parent_fqn TEXT GENERATED ALWAYS AS (
-		CASE WHEN instr(fqn, ':') > 0 THEN regexp_replace(fqn, ':[^:]+$', '') ELSE NULL END
-	) VIRTUAL,
-	name TEXT GENERATED ALWAYS AS (regexp_extract(fqn, '[^:]+$')) VIRTUAL,
-	level INTEGER GENERATED ALWAYS AS (array_length(string_split(fqn, ':')) - 1) VIRTUAL,
-	UNIQUE(fqn, tombstoned_at)
-);
-
-CREATE UNIQUE INDEX {category_active_fqn_unique}
-ON {category} ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`),
-	},
-	{
-		Version: 3,
-		Name:    "create_tag",
-		SQL: migrationSQL(`
-CREATE TABLE {tag} (
-	tag_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
-	fqn TEXT NOT NULL,
-	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	tombstoned_at TIMESTAMP,
-	parent_fqn TEXT GENERATED ALWAYS AS (
-		CASE WHEN instr(fqn, ':') > 0 THEN regexp_replace(fqn, ':[^:]+$', '') ELSE NULL END
-	) VIRTUAL,
-	name TEXT GENERATED ALWAYS AS (regexp_extract(fqn, '[^:]+$')) VIRTUAL,
-	level INTEGER GENERATED ALWAYS AS (array_length(string_split(fqn, ':')) - 1) VIRTUAL,
-	UNIQUE(fqn, tombstoned_at)
-);
-
-CREATE UNIQUE INDEX {tag_active_fqn_unique}
-ON {tag} ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`),
-	},
-	{
-		Version: 4,
-		Name:    "create_member",
-		SQL: migrationSQL(`
-CREATE TABLE {member} (
-	member_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
-	name TEXT NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	tombstoned_at TIMESTAMP,
-	UNIQUE(name, tombstoned_at)
-);
-
-CREATE UNIQUE INDEX {member_active_name_unique}
-ON {member} ((CASE WHEN tombstoned_at IS NULL THEN name ELSE NULL END));`),
-	},
-	{
-		Version: 5,
-		Name:    "create_account",
-		SQL: migrationSQL(`
-CREATE TABLE {account} (
-	account_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
-	fqn TEXT NOT NULL,
-	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
-	currency TEXT,
-	external_id TEXT,
-	external_system TEXT,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	tombstoned_at TIMESTAMP,
-	kind TEXT GENERATED ALWAYS AS (regexp_extract(fqn, '^[^:]+')) VIRTUAL,
-	parent_fqn TEXT GENERATED ALWAYS AS (
-		CASE WHEN instr(fqn, ':') > 0 THEN regexp_replace(fqn, ':[^:]+$', '') ELSE NULL END
-	) VIRTUAL,
-	name TEXT GENERATED ALWAYS AS (regexp_extract(fqn, '[^:]+$')) VIRTUAL,
-	level INTEGER GENERATED ALWAYS AS (array_length(string_split(fqn, ':')) - 1) VIRTUAL,
-	UNIQUE(fqn, tombstoned_at)
-);
-
-CREATE UNIQUE INDEX {account_active_fqn_unique}
-ON {account} ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));`),
-	},
-	{
-		Version: 6,
-		Name:    "create_credit_limit_history",
-		SQL: migrationSQL(`
-CREATE TABLE {credit_limit_history} (
-	credit_limit_history_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
-	account_id INTEGER NOT NULL,
-	credit_limit DECIMAL(18,8) NOT NULL,
-	effective_date DATE NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	tombstoned_at TIMESTAMP,
-	UNIQUE(account_id, effective_date, tombstoned_at)
-);
-
-CREATE UNIQUE INDEX {credit_limit_history_active_account_date_unique}
-ON {credit_limit_history} ((CASE WHEN tombstoned_at IS NULL THEN CAST(account_id AS VARCHAR) || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));`),
-	},
-	{
-		Version: 7,
-		Name:    "create_exchange_rate",
-		SQL: migrationSQL(`
-CREATE TABLE {exchange_rate} (
-	exchange_rate_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
-	from_currency TEXT NOT NULL,
-	to_currency TEXT NOT NULL,
-	rate DECIMAL(18,8) NOT NULL,
-	effective_date DATE NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	tombstoned_at TIMESTAMP,
-	UNIQUE(from_currency, to_currency, effective_date, tombstoned_at)
-);
-
-CREATE UNIQUE INDEX {exchange_rate_active_pair_date_unique}
-ON {exchange_rate} ((CASE WHEN tombstoned_at IS NULL THEN from_currency || ':' || to_currency || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));`),
-	},
-	{
-		Version: 8,
-		Name:    "create_transaction_and_journal_record",
-		SQL: migrationSQL(`
-CREATE TABLE {transaction} (
-	transaction_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
-	initiated_date DATE NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	tombstoned_at TIMESTAMP
-);
-
-CREATE TABLE {journal_record} (
-	record_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
-	transaction_id INTEGER NOT NULL,
-	account_id INTEGER NOT NULL,
-	member_id INTEGER,
-	currency TEXT NOT NULL,
-	amount DECIMAL(18,8) NOT NULL,
-	amount_usd DECIMAL(18,8) NOT NULL,
-	category_id INTEGER NOT NULL,
-	tag_ids INTEGER[] NOT NULL DEFAULT [],
-	memo TEXT,
-	pending_date DATE,
-	posted_date DATE,
-	posting_status {posting_status} NOT NULL,
-	reconciliation_status {reconciliation_status} NOT NULL DEFAULT 'RECONCILED',
-	source {source} NOT NULL,
-	external_id TEXT,
-	external_system TEXT,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	tombstoned_at TIMESTAMP
-);
-
-CREATE INDEX {journal_record_transaction_id_idx}
-ON {journal_record}(transaction_id);`),
-	},
-	{
-		Version: 9,
-		Name:    "create_budget",
-		SQL: migrationSQL(`
-CREATE TABLE {budget} (
-	budget_id INTEGER PRIMARY KEY DEFAULT nextval({primary_key_gen_seq_literal}),
-	category_fqn TEXT NOT NULL,
-	month DATE NOT NULL,
-	amount DECIMAL(18,8) NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	tombstoned_at TIMESTAMP,
-	UNIQUE(category_fqn, month, tombstoned_at)
-);
-
-CREATE UNIQUE INDEX {budget_active_category_month_unique}
-ON {budget} ((CASE WHEN tombstoned_at IS NULL THEN category_fqn || ':' || CAST(month AS VARCHAR) ELSE NULL END));`),
-	},
-}
-
-func migrationSQL(template string) func(AccountingLocation) string {
-	return func(location AccountingLocation) string {
-		replacements := []string{
-			"{primary_key_gen_seq}", location.mustQualifiedName("primary_key_gen_seq"),
-			"{primary_key_gen_seq_literal}", location.sequenceLiteral("primary_key_gen_seq"),
-			"{posting_status}", location.mustQualifiedName("posting_status"),
-			"{reconciliation_status}", location.mustQualifiedName("reconciliation_status"),
-			"{source}", location.mustQualifiedName("source"),
-			"{schema_version}", location.mustQualifiedName("schema_version"),
-			"{category}", location.mustQualifiedName("category"),
-			"{tag}", location.mustQualifiedName("tag"),
-			"{member}", location.mustQualifiedName("member"),
-			"{account}", location.mustQualifiedName("account"),
-			"{credit_limit_history}", location.mustQualifiedName("credit_limit_history"),
-			"{exchange_rate}", location.mustQualifiedName("exchange_rate"),
-			"{transaction}", location.mustQualifiedName("transaction"),
-			"{journal_record}", location.mustQualifiedName("journal_record"),
-			"{budget}", location.mustQualifiedName("budget"),
-			// DuckDB places indexes through the qualified ON table and rejects
-			// database-qualified index names in CREATE INDEX.
-			"{category_active_fqn_unique}", QuoteIdentifier("category_active_fqn_unique"),
-			"{tag_active_fqn_unique}", QuoteIdentifier("tag_active_fqn_unique"),
-			"{member_active_name_unique}", QuoteIdentifier("member_active_name_unique"),
-			"{account_active_fqn_unique}", QuoteIdentifier("account_active_fqn_unique"),
-			"{credit_limit_history_active_account_date_unique}", QuoteIdentifier("credit_limit_history_active_account_date_unique"),
-			"{exchange_rate_active_pair_date_unique}", QuoteIdentifier("exchange_rate_active_pair_date_unique"),
-			"{journal_record_transaction_id_idx}", QuoteIdentifier("journal_record_transaction_id_idx"),
-			"{budget_active_category_month_unique}", QuoteIdentifier("budget_active_category_month_unique"),
-		}
-
-		return strings.NewReplacer(replacements...).Replace(template)
-	}
-}
-
-// LatestSchemaVersion returns the highest schema version known to this binary.
-func LatestSchemaVersion() int {
-	if len(migrations) == 0 {
-		return 0
-	}
-
-	return migrations[len(migrations)-1].Version
-}
-
-// CurrentSchemaVersion returns the highest applied database schema version.
-func CurrentSchemaVersion(ctx context.Context, accounting *AccountingDB) (int, error) {
-	exists, err := schemaVersionTableExists(ctx, accounting)
-	if err != nil {
-		return 0, err
-	}
-	if !exists {
-		return 0, nil
-	}
-
-	schemaVersion := accounting.location.mustQualifiedName("schema_version")
-	var version int
-	if err := accounting.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(version), 0) FROM "+schemaVersion).Scan(&version); err != nil {
-		return 0, fmt.Errorf("read schema version: %w", err)
-	}
-
-	return version, nil
-}
+//go:embed migrations/*.sql
+var embeddedMigrations embed.FS
 
 // Migrate applies all pending upgrade-only migrations.
 func Migrate(ctx context.Context, accounting *AccountingDB) error {
 	if err := PrepareAccountingLocation(ctx, accounting); err != nil {
 		return err
 	}
-
-	current, err := CurrentSchemaVersion(ctx, accounting)
-	if err != nil {
+	if err := useAccountingLocation(ctx, accounting); err != nil {
 		return err
 	}
-	if current > LatestSchemaVersion() {
-		return fmt.Errorf("database schema version %d is newer than binary schema version %d", current, LatestSchemaVersion())
+	if err := normalizeSchemaVersionTable(ctx, accounting); err != nil {
+		return err
 	}
 
-	for _, migration := range migrations {
-		if migration.Version <= current {
-			continue
-		}
-
-		if err := applyMigration(ctx, accounting, migration); err != nil {
-			return err
-		}
+	provider, err := newMigrationProvider(accounting)
+	if err != nil {
+		return fmt.Errorf("configure migrations: %w", err)
+	}
+	if _, err := provider.Up(ctx); err != nil {
+		return fmt.Errorf("apply migrations: %w", err)
 	}
 
 	return nil
 }
 
-func applyMigration(ctx context.Context, accounting *AccountingDB, migration Migration) error {
-	schemaVersion := accounting.location.mustQualifiedName("schema_version")
-	return WithTx(ctx, accounting.db, nil, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, migration.SQL(accounting.location)); err != nil {
-			return fmt.Errorf("apply migration %d %s: %w", migration.Version, migration.Name, err)
-		}
+// HasPendingMigrations reports whether Goose has migrations left to apply.
+func HasPendingMigrations(ctx context.Context, accounting *AccountingDB) (bool, error) {
+	exists, err := accountingLocationExists(ctx, accounting)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return true, nil
+	}
+	if err := useAccountingLocation(ctx, accounting); err != nil {
+		return false, err
+	}
 
+	exists, err = schemaVersionTableExists(ctx, accounting)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return true, nil
+	}
+	shape, err := schemaVersionTableShape(ctx, accounting)
+	if err != nil {
+		return false, err
+	}
+	if shape == schemaVersionTableLegacy {
+		return true, nil
+	}
+
+	provider, err := newMigrationProvider(accounting)
+	if err != nil {
+		return false, fmt.Errorf("configure migrations: %w", err)
+	}
+	pending, err := provider.HasPending(ctx)
+	if err != nil {
+		return false, fmt.Errorf("check pending migrations: %w", err)
+	}
+
+	return pending, nil
+}
+
+func newMigrationProvider(accounting *AccountingDB) (*goose.Provider, error) {
+	migrations, err := fs.Sub(embeddedMigrations, "migrations")
+	if err != nil {
+		return nil, fmt.Errorf("open embedded migrations: %w", err)
+	}
+
+	return goose.NewProvider(
+		// Goose v3.27 has no DuckDB dialect; this built-in store uses
+		// version-table SQL that DuckDB accepts through database/sql.
+		goose.DialectAuroraDSQL,
+		accounting.db,
+		migrations,
+		goose.WithTableName("schema_version"),
+		goose.WithDisableGlobalRegistry(true),
+	)
+}
+
+func useAccountingLocation(ctx context.Context, accounting *AccountingDB) error {
+	schemaName := accounting.location.databaseIdentifier + "." + accounting.location.schemaIdentifier
+	if _, err := accounting.db.ExecContext(ctx, "USE "+schemaName); err != nil {
+		return fmt.Errorf("select accounting schema %s: %w", schemaName, err)
+	}
+
+	return nil
+}
+
+type schemaVersionShape int
+
+const (
+	schemaVersionTableUnknown schemaVersionShape = iota
+	schemaVersionTableGoose
+	schemaVersionTableLegacy
+)
+
+func normalizeSchemaVersionTable(ctx context.Context, accounting *AccountingDB) error {
+	exists, err := schemaVersionTableExists(ctx, accounting)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+
+	shape, err := schemaVersionTableShape(ctx, accounting)
+	if err != nil {
+		return err
+	}
+	switch shape {
+	case schemaVersionTableGoose:
+		return nil
+	case schemaVersionTableLegacy:
+		return convertLegacySchemaVersionTable(ctx, accounting)
+	default:
+		return fmt.Errorf("schema_version table has unsupported shape")
+	}
+}
+
+func convertLegacySchemaVersionTable(ctx context.Context, accounting *AccountingDB) error {
+	rows, err := accounting.db.QueryContext(ctx, "SELECT version FROM "+QuoteIdentifier("schema_version")+" ORDER BY version")
+	if err != nil {
+		return fmt.Errorf("read legacy schema versions: %w", err)
+	}
+
+	var versions []int64
+	for rows.Next() {
+		var version int64
+		if err := rows.Scan(&version); err != nil {
+			return fmt.Errorf("scan legacy schema version: %w", err)
+		}
+		versions = append(versions, version)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("read legacy schema versions: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close legacy schema version rows: %w", err)
+	}
+
+	return WithTx(ctx, accounting.db, nil, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "DROP TABLE "+QuoteIdentifier("schema_version")); err != nil {
+			return fmt.Errorf("drop legacy schema_version table: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `CREATE TABLE schema_version (
+	id integer PRIMARY KEY,
+	version_id bigint NOT NULL,
+	is_applied boolean NOT NULL,
+	tstamp timestamp NOT NULL DEFAULT now()
+)`); err != nil {
+			return fmt.Errorf("create goose schema_version table: %w", err)
+		}
 		if _, err := tx.ExecContext(
 			ctx,
-			"INSERT INTO "+schemaVersion+"(version, name) VALUES (?, ?)",
-			migration.Version,
-			migration.Name,
+			"INSERT INTO "+QuoteIdentifier("schema_version")+" (id, version_id, is_applied) VALUES (?, ?, ?)",
+			1,
+			0,
+			true,
 		); err != nil {
-			return fmt.Errorf("record migration %d %s: %w", migration.Version, migration.Name, err)
+			return fmt.Errorf("seed goose schema version zero: %w", err)
+		}
+		for i, version := range versions {
+			if _, err := tx.ExecContext(
+				ctx,
+				"INSERT INTO "+QuoteIdentifier("schema_version")+" (id, version_id, is_applied) VALUES (?, ?, ?)",
+				i+2,
+				version,
+				true,
+			); err != nil {
+				return fmt.Errorf("seed goose schema version %d: %w", version, err)
+			}
 		}
 
 		return nil
 	})
 }
 
-func schemaVersionTableExists(ctx context.Context, accounting *AccountingDB) (bool, error) {
-	var tableName string
-	err := accounting.db.QueryRowContext(
+func accountingLocationExists(ctx context.Context, accounting *AccountingDB) (bool, error) {
+	var count int
+	if err := accounting.db.QueryRowContext(
 		ctx,
-		`SELECT table_name
+		`SELECT COUNT(*)
+FROM information_schema.schemata
+WHERE catalog_name = ?
+  AND schema_name = ?`,
+		accounting.location.database,
+		accounting.location.schema,
+	).Scan(&count); err != nil {
+		return false, fmt.Errorf("check accounting schema: %w", err)
+	}
+
+	return count > 0, nil
+}
+
+func schemaVersionTableExists(ctx context.Context, accounting *AccountingDB) (bool, error) {
+	var count int
+	if err := accounting.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*)
 FROM duckdb_tables()
 WHERE database_name = ?
   AND schema_name = ?
-  AND table_name = 'schema_version'
-LIMIT 1`,
+  AND table_name = 'schema_version'`,
 		accounting.location.database,
 		accounting.location.schema,
-	).Scan(&tableName)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
+	).Scan(&count); err != nil {
 		return false, fmt.Errorf("check schema version table: %w", err)
 	}
 
-	return true, nil
+	return count > 0, nil
+}
+
+func schemaVersionTableShape(ctx context.Context, accounting *AccountingDB) (schemaVersionShape, error) {
+	rows, err := accounting.db.QueryContext(
+		ctx,
+		`SELECT column_name
+FROM duckdb_columns()
+WHERE database_name = ?
+  AND schema_name = ?
+  AND table_name = 'schema_version'`,
+		accounting.location.database,
+		accounting.location.schema,
+	)
+	if err != nil {
+		return schemaVersionTableUnknown, fmt.Errorf("read schema_version columns: %w", err)
+	}
+
+	columns := map[string]bool{}
+	for rows.Next() {
+		var column string
+		if err := rows.Scan(&column); err != nil {
+			return schemaVersionTableUnknown, fmt.Errorf("scan schema_version column: %w", err)
+		}
+		columns[column] = true
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return schemaVersionTableUnknown, fmt.Errorf("read schema_version columns: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return schemaVersionTableUnknown, fmt.Errorf("close schema_version columns: %w", err)
+	}
+
+	if columns["id"] && columns["version_id"] && columns["is_applied"] && columns["tstamp"] {
+		return schemaVersionTableGoose, nil
+	}
+	if columns["version"] && columns["name"] && columns["applied_at"] {
+		return schemaVersionTableLegacy, nil
+	}
+
+	return schemaVersionTableUnknown, nil
 }

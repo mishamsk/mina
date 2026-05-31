@@ -10,7 +10,6 @@ import (
 type AccountingOpenRequest struct {
 	Path     string
 	Location AccountingLocationConfig
-	Migrate  bool
 }
 
 // AccountingDB owns the DuckDB handle and selected accounting location.
@@ -44,15 +43,6 @@ func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*Accoun
 	if request.Path != "" {
 		if err := AttachDatabase(ctx, accounting, request.Path); err != nil {
 			return nil, closeAccountingAfterError(accounting, err)
-		}
-	}
-
-	if err := PrepareAccountingLocation(ctx, accounting); err != nil {
-		return nil, closeAccountingAfterError(accounting, err)
-	}
-	if request.Migrate {
-		if err := Migrate(ctx, accounting); err != nil {
-			return nil, closeAccountingAfterError(accounting, fmt.Errorf("migrate database: %w", err))
 		}
 	}
 

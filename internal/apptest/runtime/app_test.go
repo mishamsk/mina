@@ -1,248 +1,106 @@
 package runtime_test
 
 import (
-	"bytes"
 	"context"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"os"
+	"database/sql"
 	"path/filepath"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/runtime"
 	"github.com/mishamsk/mina/internal/store"
+
+	_ "github.com/duckdb/duckdb-go/v2"
 )
 
-func TestNewCreatesAndMigratesDatabase(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "nested", "mina.db")
-
-	appInstance, err := runtime.New(ctx, runtime.Config{
-		DatabasePath:    path,
-		CreateIfMissing: true,
-		ApplyMigrations: true,
-	})
-	if err != nil {
-		t.Fatalf("new app: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := appInstance.Close(); err != nil {
-			t.Fatalf("close app: %v", err)
-		}
-	})
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("stat created database: %v", err)
-	}
-	if appInstance.AccountingLocation() != store.AttachedDatabaseAccountingLocation() {
-		t.Fatalf("accounting location = %#v, want %#v", appInstance.AccountingLocation(), store.AttachedDatabaseAccountingLocation())
-	}
-	assertSchemaVersionTableAtLocation(t, ctx, appInstance, store.AttachedDatabaseAccountingLocation())
-
-	version, err := store.CurrentSchemaVersion(ctx, appInstance.AccountingDB())
-	if err != nil {
-		t.Fatalf("current schema version: %v", err)
-	}
-	if version != store.LatestSchemaVersion() {
-		t.Fatalf("schema version = %d, want %d", version, store.LatestSchemaVersion())
-	}
-}
-
-func TestNewCreatesAttachedDatabaseWithConfiguredSchema(t *testing.T) {
+func TestNewMigratesExistingEmptyDatabaseAtConfiguredSchema(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "mina.db")
+	createEmptyDuckDB(t, ctx, path)
 
-	appInstance, err := runtime.New(ctx, runtime.Config{
+	// This single startup case covers persistent DB open, custom non-default
+	// schema selection, reserved-word schema quoting, and migration application.
+	client := apptest.New(t, apptest.WithConfig(runtime.Config{
 		DatabasePath:     path,
 		AccountingSchema: "select",
-		CreateIfMissing:  true,
-		ApplyMigrations:  true,
-	})
-	if err != nil {
-		t.Fatalf("new app: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := appInstance.Close(); err != nil {
-			t.Fatalf("close app: %v", err)
-		}
-	})
+	}))
+	persistence := client.Persistence()
 
-	location := appInstance.AccountingLocation()
-	if location.Database() != store.AttachedAccountingDatabase {
-		t.Fatalf("accounting database = %q, want %q", location.Database(), store.AttachedAccountingDatabase)
-	}
+	location := persistence.Location()
 	if location.Schema() != "select" {
 		t.Fatalf("accounting schema = %q, want select", location.Schema())
 	}
-	assertSchemaVersionTableAtLocation(t, ctx, appInstance, location)
+	assertTableExistsAtLocation(t, ctx, persistence, location, "schema_version")
+	assertTableCountAtLocation(t, ctx, persistence, location, 2)
 }
 
-func TestNewWithoutDatabasePathUsesEphemeralAccountingSchema(t *testing.T) {
-	ctx := context.Background()
+func createEmptyDuckDB(t *testing.T, ctx context.Context, path string) {
+	t.Helper()
 
-	appInstance, err := runtime.New(ctx, runtime.Config{
-		ApplyMigrations: true,
-	})
+	db, err := sql.Open("duckdb", path)
 	if err != nil {
-		t.Fatalf("new app: %v", err)
+		t.Fatalf("create empty DuckDB database: %v", err)
 	}
-	t.Cleanup(func() {
-		if err := appInstance.Close(); err != nil {
-			t.Fatalf("close app: %v", err)
-		}
-	})
-	if appInstance.AccountingLocation() != store.InMemoryAccountingLocation() {
-		t.Fatalf("accounting location = %#v, want %#v", appInstance.AccountingLocation(), store.InMemoryAccountingLocation())
+	if err := db.PingContext(ctx); err != nil {
+		t.Fatalf("ping empty DuckDB database: %v", err)
 	}
-	assertSchemaVersionTableAtLocation(t, ctx, appInstance, store.InMemoryAccountingLocation())
-
-	version, err := store.CurrentSchemaVersion(ctx, appInstance.AccountingDB())
-	if err != nil {
-		t.Fatalf("current schema version: %v", err)
-	}
-	if version != store.LatestSchemaVersion() {
-		t.Fatalf("schema version = %d, want %d", version, store.LatestSchemaVersion())
+	if err := db.Close(); err != nil {
+		t.Fatalf("close empty DuckDB database: %v", err)
 	}
 }
 
-func TestNewWithoutDatabasePathServesFromNonDefaultAccountingSchema(t *testing.T) {
-	ctx := context.Background()
-
-	appInstance, err := runtime.New(ctx, runtime.Config{
-		ApplyMigrations: true,
-	})
-	if err != nil {
-		t.Fatalf("new app: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := appInstance.Close(); err != nil {
-			t.Fatalf("close app: %v", err)
-		}
-	})
-
-	request := httptest.NewRequest(http.MethodPost, "/categories", bytes.NewBufferString(`{"fqn":"Food:Dining"}`))
-	request.Header.Set("Content-Type", "application/json")
-	recorder := httptest.NewRecorder()
-	appInstance.Handler().ServeHTTP(recorder, request)
-	response := recorder.Result()
-	body, readErr := io.ReadAll(response.Body)
-	closeErr := response.Body.Close()
-	if readErr != nil {
-		t.Fatalf("read response: %v", readErr)
-	}
-	if closeErr != nil {
-		t.Fatalf("close response: %v", closeErr)
-	}
-	if response.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", response.StatusCode, http.StatusCreated, body)
-	}
-
-	categoryTable, err := appInstance.AccountingLocation().QualifiedName("category")
-	if err != nil {
-		t.Fatalf("qualify category: %v", err)
-	}
-	var count int
-	if err := appInstance.DB().QueryRowContext(ctx, "SELECT COUNT(*) FROM "+categoryTable+" WHERE fqn = ?", "Food:Dining").Scan(&count); err != nil {
-		t.Fatalf("count qualified categories: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("category count in qualified location = %d, want 1", count)
-	}
-}
-
-func TestAppSupportsQuotedAccountingSchemaLocations(t *testing.T) {
-	tests := []struct {
-		name   string
-		schema string
-	}{
-		{name: "reserved word", schema: "select"},
-		{name: "unicode", schema: "mina_é"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			client := apptest.New(t, apptest.WithConfig(runtime.Config{
-				AccountingSchema: tt.schema,
-			}))
-			persistence := client.Persistence()
-			location := persistence.Location()
-
-			var count int
-			if err := persistence.QueryRowContext(
-				context.Background(),
-				`SELECT COUNT(*)
-FROM duckdb_tables()
-WHERE database_name = ?
-  AND schema_name = ?
-  AND table_name = 'schema_version'`,
-				location.Database(),
-				location.Schema(),
-			).Scan(&count); err != nil {
-				t.Fatalf("check schema version table: %v", err)
-			}
-			if count != 1 {
-				t.Fatalf("schema_version table count = %d, want 1", count)
-			}
-
-			response := client.JSON(http.MethodPost, "/categories", map[string]any{
-				"fqn": "Food:Dining",
-			})
-			if response.StatusCode != http.StatusCreated {
-				t.Fatalf("create category status = %d, want %d; body %s", response.StatusCode, http.StatusCreated, response.RawBody)
-			}
-			if err := persistence.QueryRowContext(
-				context.Background(),
-				"SELECT COUNT(*) FROM "+persistence.QualifiedName("category")+" WHERE fqn = ?",
-				"Food:Dining",
-			).Scan(&count); err != nil {
-				t.Fatalf("count category in quoted schema: %v", err)
-			}
-			if count != 1 {
-				t.Fatalf("category count = %d, want 1", count)
-			}
-		})
-	}
-}
-
-func TestNewRequiresExistingDatabaseWhenCreateDisabled(t *testing.T) {
-	_, err := runtime.New(context.Background(), runtime.Config{
-		DatabasePath:    filepath.Join(t.TempDir(), "missing.db"),
-		CreateIfMissing: false,
-		ApplyMigrations: true,
-	})
-	if err == nil {
-		t.Fatal("new app succeeded, want missing database error")
-	}
-}
-
-func TestNewWithoutDatabasePathRequiresMigrations(t *testing.T) {
-	_, err := runtime.New(context.Background(), runtime.Config{
-		ApplyMigrations: false,
-	})
-	if err == nil {
-		t.Fatal("new app succeeded, want migration-required error")
-	}
-}
-
-func assertSchemaVersionTableAtLocation(t *testing.T, ctx context.Context, appInstance *runtime.App, location store.AccountingLocation) {
+func assertTableExistsAtLocation(
+	t *testing.T,
+	ctx context.Context,
+	persistence *apptest.Persistence,
+	location store.AccountingLocation,
+	tableName string,
+) {
 	t.Helper()
 
 	var count int
-	err := appInstance.DB().QueryRowContext(
+	err := persistence.QueryRowContext(
 		ctx,
 		`SELECT COUNT(*)
 FROM duckdb_tables()
 WHERE database_name = ?
   AND schema_name = ?
-  AND table_name = 'schema_version'`,
+  AND table_name = ?`,
+		location.Database(),
+		location.Schema(),
+		tableName,
+	).Scan(&count)
+	if err != nil {
+		t.Fatalf("check table %s location: %v", tableName, err)
+	}
+	if count != 1 {
+		t.Fatalf("%s table count at %s.%s = %d, want 1", tableName, location.Database(), location.Schema(), count)
+	}
+}
+
+func assertTableCountAtLocation(
+	t *testing.T,
+	ctx context.Context,
+	persistence *apptest.Persistence,
+	location store.AccountingLocation,
+	minimum int,
+) {
+	t.Helper()
+
+	var count int
+	err := persistence.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*)
+FROM duckdb_tables()
+WHERE database_name = ?
+  AND schema_name = ?`,
 		location.Database(),
 		location.Schema(),
 	).Scan(&count)
 	if err != nil {
-		t.Fatalf("check schema version table location: %v", err)
+		t.Fatalf("count tables at location: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("schema_version table count at %s.%s = %d, want 1", location.Database(), location.Schema(), count)
+	if count < minimum {
+		t.Fatalf("table count at %s.%s = %d, want at least %d", location.Database(), location.Schema(), count, minimum)
 	}
 }
