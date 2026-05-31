@@ -9,7 +9,7 @@ import (
 )
 
 func TestSharedListQueryRejectsUnsupportedFiltersAndSorts(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	unsupportedFilter := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/categories?fqn=Food", nil)
 	if unsupportedFilter.StatusCode != http.StatusBadRequest {
@@ -33,7 +33,7 @@ func TestSharedListQueryRejectsUnsupportedFiltersAndSorts(t *testing.T) {
 }
 
 func TestSharedListQueryHiddenDefaultAndPagination(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	alpha := createListQueryCategory(t, client, "Budget:Alpha", false)
 	beta := createListQueryCategory(t, client, "Budget:Beta", false)
@@ -66,7 +66,7 @@ func TestSharedListQueryHiddenDefaultAndPagination(t *testing.T) {
 }
 
 func TestSharedListQueryCompositeSortDirection(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	eurEarly := createListQueryExchangeRate(t, client, "EUR", "USD", "2024-01-01")
 	eurLate := createListQueryExchangeRate(t, client, "EUR", "USD", "2024-02-01")

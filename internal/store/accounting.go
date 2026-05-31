@@ -12,22 +12,11 @@ type AccountingOpenRequest struct {
 	Location AccountingLocationConfig
 }
 
-// AccountingDB owns the DuckDB handle and selected accounting location.
+// AccountingDB represents the DuckDB handle and selected accounting location.
 type AccountingDB struct {
 	db       *sql.DB
 	location AccountingLocation
-}
-
-func newAccountingDB(db *sql.DB, location AccountingLocation) *AccountingDB {
-	return &AccountingDB{
-		db:       db,
-		location: location,
-	}
-}
-
-// NewAccountingDB wraps an existing DuckDB handle with an accounting location.
-func NewAccountingDB(db *sql.DB, location AccountingLocation) *AccountingDB {
-	return newAccountingDB(db, location)
+	close    func() error
 }
 
 // OpenAccounting opens the process DuckDB handle and prepares the accounting location.
@@ -36,18 +25,54 @@ func OpenAccounting(ctx context.Context, request AccountingOpenRequest) (*Accoun
 	if err != nil {
 		return nil, err
 	}
-	location, err := NewAccountingLocation(ctx, db, request.Location)
+
+	accounting, err := openAccounting(ctx, db, request, func(*AccountingDB) error {
+		return db.Close()
+	})
 	if err != nil {
 		if closeErr := db.Close(); closeErr != nil {
 			return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
 		}
+
 		return nil, err
 	}
-	accounting := newAccountingDB(db, location)
+
+	return accounting, nil
+}
+
+// OpenAccountingWithProcessDB opens accounting state on an existing DuckDB process handle.
+// Closing the returned accounting DB does not close the process handle.
+func OpenAccountingWithProcessDB(ctx context.Context, db *sql.DB, request AccountingOpenRequest) (*AccountingDB, error) {
+	return openAccounting(ctx, db, request, func(accounting *AccountingDB) error {
+		if request.Path == "" {
+			return nil
+		}
+
+		return detachDatabase(context.Background(), accounting)
+	})
+}
+
+func openAccounting(
+	ctx context.Context,
+	db *sql.DB,
+	request AccountingOpenRequest,
+	close func(*AccountingDB) error,
+) (*AccountingDB, error) {
+	location, err := NewAccountingLocation(ctx, db, request.Location)
+	if err != nil {
+		return nil, err
+	}
+	accounting := &AccountingDB{
+		db:       db,
+		location: location,
+	}
+	accounting.close = func() error {
+		return close(accounting)
+	}
 
 	if request.Path != "" {
-		if err := AttachDatabase(ctx, accounting, request.Path); err != nil {
-			return nil, closeAccountingAfterError(accounting, err)
+		if err := attachDatabase(ctx, accounting, request.Path); err != nil {
+			return nil, err
 		}
 	}
 
@@ -66,17 +91,9 @@ func (s *AccountingDB) Location() AccountingLocation {
 
 // Close releases database resources owned by the accounting database handle.
 func (s *AccountingDB) Close() error {
-	if s.db == nil {
+	if s.close == nil {
 		return nil
 	}
 
-	return s.db.Close()
-}
-
-func closeAccountingAfterError(accounting *AccountingDB, err error) error {
-	if closeErr := accounting.Close(); closeErr != nil {
-		return fmt.Errorf("%w; close database: %w", err, closeErr)
-	}
-
-	return err
+	return s.close()
 }

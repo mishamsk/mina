@@ -9,7 +9,7 @@ import (
 )
 
 func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	later := apptest.Decode[models.ExchangeRate](client, http.MethodPost, "/exchange-rates", models.CreateExchangeRateRequest{
 		FromCurrency:  "EUR",
@@ -109,7 +109,7 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 }
 
 func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	first := apptest.Decode[models.ExchangeRate](client, http.MethodPost, "/exchange-rates", models.CreateExchangeRateRequest{
 		FromCurrency:  "EUR",
@@ -151,7 +151,7 @@ func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
 }
 
 func TestExchangeRateValidationErrors(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	invalidCurrency := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/exchange-rates", models.CreateExchangeRateRequest{
 		FromCurrency:  "eur",

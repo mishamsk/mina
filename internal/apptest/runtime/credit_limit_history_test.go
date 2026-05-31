@@ -9,7 +9,7 @@ import (
 )
 
 func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	account := createCreditLimitAccount(t, client)
 	later := apptest.Decode[models.CreditLimitHistory](client, http.MethodPost, accountCreditLimitHistoryPath(account.AccountId), models.CreateCreditLimitHistoryRequest{
@@ -88,7 +88,7 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 }
 
 func TestCreditLimitHistoryRejectsDuplicateActiveAccountDate(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 	account := createCreditLimitAccount(t, client)
 
 	first := apptest.Decode[models.CreditLimitHistory](client, http.MethodPost, accountCreditLimitHistoryPath(account.AccountId), models.CreateCreditLimitHistoryRequest{
@@ -112,7 +112,7 @@ func TestCreditLimitHistoryRejectsDuplicateActiveAccountDate(t *testing.T) {
 }
 
 func TestCreditLimitHistoryValidationErrors(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 	account := createCreditLimitAccount(t, client)
 
 	missingAccount := apptest.Decode[models.ErrorResponse](client, http.MethodPost, accountCreditLimitHistoryPath(999), models.CreateCreditLimitHistoryRequest{

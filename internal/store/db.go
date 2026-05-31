@@ -26,8 +26,7 @@ func OpenInMemory(ctx context.Context) (*sql.DB, error) {
 	return open(ctx, ":memory:")
 }
 
-// AttachDatabase attaches a DuckDB database file as the accounting database.
-func AttachDatabase(ctx context.Context, accounting *AccountingDB, path string) error {
+func attachDatabase(ctx context.Context, accounting *AccountingDB, path string) error {
 	if path == "" {
 		return errors.New("database path is required")
 	}
@@ -40,8 +39,7 @@ func AttachDatabase(ctx context.Context, accounting *AccountingDB, path string) 
 	return nil
 }
 
-// DetachDatabase detaches the accounting database from the DuckDB handle.
-func DetachDatabase(ctx context.Context, accounting *AccountingDB) error {
+func detachDatabase(ctx context.Context, accounting *AccountingDB) error {
 	if _, err := accounting.db.ExecContext(ctx, "USE memory.main"); err != nil {
 		return fmt.Errorf("select memory database before detach: %w", err)
 	}

@@ -23,32 +23,25 @@ import (
 // App is a composed in-process Mina application.
 type App struct {
 	accounting *store.AccountingDB
-	close      func() error
 	handler    http.Handler
 }
 
 // New opens the configured database, applies migrations, and wires the REST handler.
 func New(ctx context.Context, cfg Config) (*App, error) {
-	return newApp(ctx, cfg, openOwnedAccounting)
+	return newApp(ctx, cfg, store.OpenAccounting)
 }
 
 // NewWithProcessDB applies migrations using an existing DuckDB process handle and wires the REST handler.
 func NewWithProcessDB(ctx context.Context, db *sql.DB, cfg Config) (*App, error) {
-	return newApp(ctx, cfg, func(ctx context.Context, cfg Config) (accountingHandle, error) {
-		return openBorrowedAccounting(ctx, db, cfg)
+	return newApp(ctx, cfg, func(ctx context.Context, request store.AccountingOpenRequest) (*store.AccountingDB, error) {
+		return store.OpenAccountingWithProcessDB(ctx, db, request)
 	})
-}
-
-type accountingHandle struct {
-	accounting      *store.AccountingDB
-	close           func() error
-	closeAfterError func(error) error
 }
 
 func newApp(
 	ctx context.Context,
 	cfg Config,
-	openAccounting func(context.Context, Config) (accountingHandle, error),
+	openAccounting func(context.Context, store.AccountingOpenRequest) (*store.AccountingDB, error),
 ) (*App, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -59,66 +52,16 @@ func newApp(
 		}
 	}
 
-	handle, err := openAccounting(ctx, cfg)
+	accounting, err := openAccounting(ctx, cfg.AccountingOpenRequest())
 	if err != nil {
 		return nil, err
 	}
 
-	if err := store.Migrate(ctx, handle.accounting); err != nil {
-		return nil, handle.closeAfterError(fmt.Errorf("migrate database: %w", err))
+	if err := store.Migrate(ctx, accounting); err != nil {
+		return nil, closeAccountingAfterError(accounting, fmt.Errorf("migrate database: %w", err))
 	}
 
-	return newWithAccountingDB(handle.accounting, cfg.HTTP, handle.close), nil
-}
-
-func openOwnedAccounting(ctx context.Context, cfg Config) (accountingHandle, error) {
-	accounting, err := store.OpenAccounting(ctx, cfg.AccountingOpenRequest())
-	if err != nil {
-		return accountingHandle{}, err
-	}
-
-	return accountingHandle{
-		accounting: accounting,
-		close:      accounting.Close,
-		closeAfterError: func(err error) error {
-			return closeAccountingAfterError(accounting, err)
-		},
-	}, nil
-}
-
-func openBorrowedAccounting(ctx context.Context, db *sql.DB, cfg Config) (accountingHandle, error) {
-	location, err := store.NewAccountingLocation(ctx, db, cfg.AccountingLocationConfig())
-	if err != nil {
-		return accountingHandle{}, err
-	}
-	accounting := store.NewAccountingDB(db, location)
-	attached := false
-	if cfg.DatabasePath != "" {
-		if err := store.AttachDatabase(ctx, accounting, cfg.DatabasePath); err != nil {
-			return accountingHandle{}, err
-		}
-		attached = true
-	}
-
-	return accountingHandle{
-		accounting: accounting,
-		close: func() error {
-			if attached {
-				return store.DetachDatabase(ctx, accounting)
-			}
-
-			return nil
-		},
-		closeAfterError: func(err error) error {
-			if attached {
-				if detachErr := store.DetachDatabase(ctx, accounting); detachErr != nil {
-					return fmt.Errorf("%w; detach database: %w", err, detachErr)
-				}
-			}
-
-			return err
-		},
-	}, nil
+	return NewWithAccountingDB(accounting, cfg.HTTP), nil
 }
 
 // HasPendingMigrations reports whether the configured accounting database would be migrated at startup.
@@ -149,10 +92,6 @@ func HasPendingMigrations(ctx context.Context, cfg Config) (bool, error) {
 
 // NewWithAccountingDB wires the REST handler around an already-opened migrated accounting database.
 func NewWithAccountingDB(accounting *store.AccountingDB, httpConfig HTTPConfig) *App {
-	return newWithAccountingDB(accounting, httpConfig, accounting.Close)
-}
-
-func newWithAccountingDB(accounting *store.AccountingDB, httpConfig HTTPConfig, close func() error) *App {
 	handler := httpapi.NewWithOptions(httpapi.Dependencies{
 		Categories:    categories.NewService(store.NewCategoryStore(accounting)),
 		Tags:          tags.NewService(store.NewTagStore(accounting)),
@@ -168,7 +107,6 @@ func newWithAccountingDB(accounting *store.AccountingDB, httpConfig HTTPConfig, 
 
 	return &App{
 		accounting: accounting,
-		close:      close,
 		handler:    handler,
 	}
 }
@@ -198,11 +136,8 @@ func (a *App) Close() error {
 	if a.accounting == nil {
 		return nil
 	}
-	if a.close == nil {
-		return nil
-	}
 
-	return a.close()
+	return a.accounting.Close()
 }
 
 func prepareDatabasePath(path string) error {

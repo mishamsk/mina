@@ -9,7 +9,7 @@ import (
 )
 
 func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	created := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
 		Name: "Alex",
@@ -87,7 +87,7 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 }
 
 func TestMemberRejectsDuplicateActiveName(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	first := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
 		Name: "Alex",
@@ -134,7 +134,7 @@ func TestMemberRejectsDuplicateActiveName(t *testing.T) {
 }
 
 func TestMemberValidationErrors(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 
 	blank := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/members", models.CreateMemberRequest{
 		Name: "",

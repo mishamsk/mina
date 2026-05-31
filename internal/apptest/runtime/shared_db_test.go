@@ -25,7 +25,9 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func newClient(t *testing.T, options ...apptest.Option) *apptest.Client {
+// newSharedClient creates a test app on the package-wide DuckDB process handle.
+// The client still gets a unique accounting schema unless the caller overrides it.
+func newSharedClient(t *testing.T, options ...apptest.Option) *apptest.Client {
 	t.Helper()
 
 	options = append([]apptest.Option{apptest.WithProcessDB(sharedProcessDB)}, options...)

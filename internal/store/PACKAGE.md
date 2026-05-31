@@ -7,8 +7,9 @@
 ## Implicit Contracts
 
 - Migrations are upgrade-only Goose SQL files recorded in `schema_version` in the selected accounting location.
-- The accounting DB owns the DuckDB handle and selected accounting location.
-- Accounting open helpers perform DuckDB-specific open, attach, and schema preparation.
+- The accounting DB owns the selected accounting location and close policy.
+- Accounting open helpers perform DuckDB-specific process DB open/reuse and file attach lifecycle.
+- Closing an owned accounting DB closes its DuckDB process handle; closing a borrowed process DB detaches any attached accounting file and leaves the caller's process handle open.
 - Accounting locations cache rendered database and schema identifiers resolved with DuckDB keyword metadata at open time.
 - Repository constructors receive the accounting DB and qualify accounting objects through its location.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.

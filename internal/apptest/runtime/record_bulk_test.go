@@ -9,7 +9,7 @@ import (
 )
 
 func TestRecordBulkOperationsBoundary(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
 
 	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs.transactionRefs))
@@ -91,7 +91,7 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 }
 
 func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
-	client := newClient(t)
+	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
 
 	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs.transactionRefs))
