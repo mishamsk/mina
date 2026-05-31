@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rebase"
+  short_description: "Safely rebase the current branch on main"
+  default_prompt: "$rebase"

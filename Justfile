@@ -146,4 +146,7 @@ pre-commit:
 codex-goal plan_file:
     command codex --dangerously-bypass-approvals-and-sandbox {{quote("/goal implement " + plan_file + ". Acceptance criteria - all checkboxes are ticked. Make sure you go commit by commit, task by task and never jump forward or skip any item.")}}
 
+rebase:
+    command codex exec --dangerously-bypass-approvals-and-sandbox {{quote("$rebase")}}
+
 # Agent-only manual smoke commands should be added temporarily when a concrete uncovered risk remains outside the testscript end-to-end suite.
