@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/mishamsk/mina/internal/runtime"
+	runtimeconfig "github.com/mishamsk/mina/internal/runtime/config"
 )
 
 const version = "0.0.0-dev"
@@ -58,6 +59,7 @@ func (e *exitError) Error() string {
 }
 
 func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+	var configFilePath string
 	root := &cobra.Command{
 		Use:           "mina",
 		Short:         "Mina local-first personal finance API",
@@ -74,10 +76,16 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
 	})
+	root.PersistentFlags().StringVar(
+		&configFilePath,
+		"config-file",
+		"",
+		"config file path (default: $XDG_CONFIG_PATH/mina/config.toml)",
+	)
 
 	root.AddCommand(newVersionCommand(stdout))
-	root.AddCommand(newServeCommand(stdin, stdout, stderr))
-	root.AddCommand(newMigrateCommand(stdin, stderr))
+	root.AddCommand(newServeCommand(stdin, stdout, stderr, &configFilePath))
+	root.AddCommand(newMigrateCommand(stdin, stderr, &configFilePath))
 
 	return root
 }
@@ -95,36 +103,63 @@ func newVersionCommand(stdout io.Writer) *cobra.Command {
 	}
 }
 
-func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, configFilePath *string) *cobra.Command {
 	var assumeYes bool
-	cfg := runtime.ServeConfig{
-		Host: "127.0.0.1",
-		Port: 8080,
-	}
+	flagCfg := runtimeconfig.DefaultServeConfig()
 	cmd := &cobra.Command{
 		Use:          "serve",
 		Short:        "Serve the REST API",
+		Long:         "Serve the REST API.\n\n" + runtimeconfig.ServeHelp(),
 		Args:         noPositionalArgs("serve"),
 		SilenceUsage: true,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			if err := cfg.Validate(); err != nil {
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, commandCfg, err := runtimeconfig.LoadServe(
+				runtimeconfig.LoadOptions{ConfigFilePath: *configFilePath},
+				runtimeconfig.ServeCLI{
+					SharedCLI:     sharedCLI(cmd, flagCfg.Config, assumeYes),
+					Host:          cliValue(cmd, "host", flagCfg.Host),
+					Port:          cliValue(cmd, "port", flagCfg.Port),
+					AccessLogPath: cliValue(cmd, "access-log", flagCfg.AccessLogPath),
+					Quiet:         cliValue(cmd, "quiet", flagCfg.Quiet),
+				},
+			)
+			if err != nil {
+				return err
+			}
+			serveCfg := runtimeServeConfig(cfg)
+			if err := serveCfg.Validate(); err != nil {
 				return err
 			}
 
-			if err := serve(stdin, stdout, stderr, cfg, assumeYes); err != nil {
+			if err := serve(stdin, stdout, stderr, serveCfg, commandCfg.AssumeYes); err != nil {
 				return &exitError{code: 1, err: err}
 			}
 
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&cfg.DatabasePath, "db", "", "path to the Mina database file")
-	cmd.Flags().StringVar(&cfg.AccountingSchema, "schema", "", "DuckDB schema for accounting state")
-	cmd.Flags().StringVar(&cfg.Host, "host", cfg.Host, "host interface for the REST API")
-	cmd.Flags().IntVar(&cfg.Port, "port", cfg.Port, "port for the REST API")
-	cmd.Flags().BoolVar(&assumeYes, "yes", false, "answer yes to database creation and migration prompts")
-	cmd.Flags().StringVar(&cfg.AccessLogPath, "access-log", "", "write access logs to a file instead of stderr")
-	cmd.Flags().BoolVar(&cfg.Quiet, "quiet", false, "disable access logs")
+	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+runtimeconfig.FlagSourceHelp("db"))
+	cmd.Flags().StringVar(
+		&flagCfg.AccountingSchema,
+		"schema",
+		"",
+		"DuckDB schema for accounting state "+runtimeconfig.FlagSourceHelp("schema"),
+	)
+	cmd.Flags().StringVar(&flagCfg.Host, "host", flagCfg.Host, "host interface for the REST API "+runtimeconfig.FlagSourceHelp("host"))
+	cmd.Flags().IntVar(&flagCfg.Port, "port", flagCfg.Port, "port for the REST API "+runtimeconfig.FlagSourceHelp("port"))
+	cmd.Flags().BoolVar(
+		&assumeYes,
+		"yes",
+		false,
+		"answer yes to database creation and migration prompts "+runtimeconfig.FlagSourceHelp("yes"),
+	)
+	cmd.Flags().StringVar(
+		&flagCfg.AccessLogPath,
+		"access-log",
+		"",
+		"write access logs to a file instead of stderr "+runtimeconfig.FlagSourceHelp("access-log"),
+	)
+	cmd.Flags().BoolVar(&flagCfg.Quiet, "quiet", false, "disable access logs "+runtimeconfig.FlagSourceHelp("quiet"))
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
 	})
@@ -132,34 +167,86 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra
 	return cmd
 }
 
-func newMigrateCommand(stdin io.Reader, stderr io.Writer) *cobra.Command {
+func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string) *cobra.Command {
 	var assumeYes bool
-	cfg := runtime.Config{}
+	flagCfg := runtimeconfig.Config{}
 	cmd := &cobra.Command{
 		Use:          "migrate",
 		Short:        "Apply database migrations",
+		Long:         "Apply database migrations.\n\n" + runtimeconfig.SharedHelp(),
 		Args:         noPositionalArgs("migrate"),
 		SilenceUsage: true,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, commandCfg, err := runtimeconfig.LoadMigrate(
+				runtimeconfig.LoadOptions{ConfigFilePath: *configFilePath},
+				sharedCLI(cmd, flagCfg, assumeYes),
+			)
+			if err != nil {
+				return err
+			}
 			if cfg.DatabasePath == "" {
 				return errors.New("migrate requires --db")
 			}
-			if err := cfg.Validate(); err != nil {
+			appCfg := runtimeConfig(cfg)
+			if err := appCfg.Validate(); err != nil {
 				return err
 			}
 
-			if err := migrate(stdin, stderr, cfg, assumeYes); err != nil {
+			if err := migrate(stdin, stderr, appCfg, commandCfg.AssumeYes); err != nil {
 				return &exitError{code: 1, err: err}
 			}
 
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&cfg.DatabasePath, "db", "", "path to the Mina database file")
-	cmd.Flags().StringVar(&cfg.AccountingSchema, "schema", "", "DuckDB schema for accounting state")
-	cmd.Flags().BoolVar(&assumeYes, "yes", false, "answer yes to database creation and migration prompts")
+	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+runtimeconfig.FlagSourceHelp("db"))
+	cmd.Flags().StringVar(
+		&flagCfg.AccountingSchema,
+		"schema",
+		"",
+		"DuckDB schema for accounting state "+runtimeconfig.FlagSourceHelp("schema"),
+	)
+	cmd.Flags().BoolVar(
+		&assumeYes,
+		"yes",
+		false,
+		"answer yes to database creation and migration prompts "+runtimeconfig.FlagSourceHelp("yes"),
+	)
 
 	return cmd
+}
+
+func sharedCLI(cmd *cobra.Command, cfg runtimeconfig.Config, assumeYes bool) runtimeconfig.SharedCLI {
+	return runtimeconfig.SharedCLI{
+		DatabasePath:     cliValue(cmd, "db", cfg.DatabasePath),
+		AccountingSchema: cliValue(cmd, "schema", cfg.AccountingSchema),
+		AssumeYes:        cliValue(cmd, "yes", assumeYes),
+	}
+}
+
+func cliValue[T any](cmd *cobra.Command, flag string, value T) runtimeconfig.Value[T] {
+	if cmd.Flags().Changed(flag) {
+		return runtimeconfig.Set(value)
+	}
+
+	return runtimeconfig.Value[T]{}
+}
+
+func runtimeConfig(cfg runtimeconfig.Config) runtime.Config {
+	return runtime.Config{
+		DatabasePath:     cfg.DatabasePath,
+		AccountingSchema: cfg.AccountingSchema,
+	}
+}
+
+func runtimeServeConfig(cfg runtimeconfig.ServeConfig) runtime.ServeConfig {
+	return runtime.ServeConfig{
+		Config:        runtimeConfig(cfg.Config),
+		Host:          cfg.Host,
+		Port:          cfg.Port,
+		AccessLogPath: cfg.AccessLogPath,
+		Quiet:         cfg.Quiet,
+	}
 }
 
 func noPositionalArgs(command string) cobra.PositionalArgs {

@@ -1,0 +1,68 @@
+# Command help documents config files, environment variables, and precedence.
+exec mina help serve
+stdout 'Config file: \$XDG_CONFIG_PATH/mina/config.toml'
+stdout '--config-file'
+stdout 'Precedence: defaults < config file < environment < CLI flags'
+stdout 'serve.host'
+stdout 'MINA_HOST'
+
+exec mina help migrate
+stdout 'Config file: \$XDG_CONFIG_PATH/mina/config.toml'
+stdout '--config-file'
+stdout 'MINA_DB'
+
+exec mina version --config-file missing.toml
+stdout 'mina 0.0.0-dev'
+
+# The local config file supplies shared command settings and serve settings.
+mkdir cfg/mina
+cp config.toml cfg/mina/config.toml
+env XDG_CONFIG_PATH=$WORK/cfg
+exec mina migrate
+exists cfg-serve.db
+
+! exec mina serve
+stderr '192\.0\.2\.1:32001'
+
+# --config-file overrides default config path discovery.
+! exec mina --config-file override.toml serve
+stderr '192\.0\.2\.4:32004'
+exists override.db
+
+# Missing explicit config files are ignored like missing default config files.
+! exec mina --config-file missing.toml migrate
+stderr 'migrate requires --db'
+
+# Present config files are validated.
+! exec mina --config-file invalid.toml migrate
+stderr 'unsupported key unsupported'
+
+# Environment values override the config file.
+env MINA_DB=env-serve.db MINA_HOST=192.0.2.2 MINA_PORT=32002
+! exec mina serve
+stderr '192\.0\.2\.2:32002'
+exists env-serve.db
+
+# CLI flags override both environment values and the config file.
+! exec mina serve --db cli-serve.db --host 192.0.2.3 --port 32003 --yes
+stderr '192\.0\.2\.3:32003'
+exists cli-serve.db
+
+-- config.toml --
+db = "cfg-serve.db"
+yes = true
+
+[serve]
+host = "192.0.2.1"
+port = 32001
+
+-- override.toml --
+db = "override.db"
+yes = true
+
+[serve]
+host = "192.0.2.4"
+port = 32004
+
+-- invalid.toml --
+unsupported = true
