@@ -4,7 +4,7 @@
 
 Mina is a local-first personal finance system for one household.
 
-- Go application.
+- Go 1.26+ application.
 - One `cmd/mina` binary.
 - REST API only.
 - No TUI or web UI implementation.
@@ -27,6 +27,7 @@ Mina is a local-first personal finance system for one household.
 Imports and runtime knowledge flow inward toward app-owned service packages. Composition may import every layer.
 
 - `cmd/mina`: one binary and Cobra command tree. Cobra owns CLI parsing and command help. Should delegate all operations to runtime.
+- `internal/httpclient`: generated REST client code from the OpenAPI source.
 - `internal/runtime`: config, open/create/migrate policy, and manual composition root.
 - `internal/httpapi`: REST/OpenAPI adapter, generated REST contract code, generated route registration, generated request binding, OpenAPI request validation for transport shape, HTTP DTO mapping, and HTTP status/error mapping.
 - App-owned service packages: domain types, validation, use cases, and repository interfaces.

@@ -2,40 +2,50 @@ package runtime_test
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"testing"
 
-	"github.com/mishamsk/mina/internal/apptest"
-	models "github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestHierarchyRootResponsesEncodeNullParentFQN(t *testing.T) {
 	client := newSharedClient(t)
 
-	account := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	currency := "USD"
+	account, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:      "cash",
-		Currency: new("USD"),
+		Currency: &currency,
 	})
-	if account.StatusCode != http.StatusCreated {
-		t.Fatalf("account create status = %d, want %d; body %s", account.StatusCode, http.StatusCreated, account.RawBody)
+	if err != nil {
+		t.Fatalf("account create request: %v", err)
 	}
-	assertRawParentFQNNull(t, account.RawBody)
+	if account.StatusCode() != http.StatusCreated {
+		t.Fatalf("account create status = %d, want %d; body %s", account.StatusCode(), http.StatusCreated, account.Body)
+	}
+	assertRawParentFQNNull(t, account.Body)
 
-	category := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
+	category, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
 		Fqn: "Food",
 	})
-	if category.StatusCode != http.StatusCreated {
-		t.Fatalf("category create status = %d, want %d; body %s", category.StatusCode, http.StatusCreated, category.RawBody)
+	if err != nil {
+		t.Fatalf("category create request: %v", err)
 	}
-	assertRawParentFQNNull(t, category.RawBody)
+	if category.StatusCode() != http.StatusCreated {
+		t.Fatalf("category create status = %d, want %d; body %s", category.StatusCode(), http.StatusCreated, category.Body)
+	}
+	assertRawParentFQNNull(t, category.Body)
 
-	tag := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
+	tag, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn: "Trips",
 	})
-	if tag.StatusCode != http.StatusCreated {
-		t.Fatalf("tag create status = %d, want %d; body %s", tag.StatusCode, http.StatusCreated, tag.RawBody)
+	if err != nil {
+		t.Fatalf("tag create request: %v", err)
 	}
-	assertRawParentFQNNull(t, tag.RawBody)
+	if tag.StatusCode() != http.StatusCreated {
+		t.Fatalf("tag create status = %d, want %d; body %s", tag.StatusCode(), http.StatusCreated, tag.Body)
+	}
+	assertRawParentFQNNull(t, tag.Body)
 }
 
 func assertRawParentFQNNull(t *testing.T, rawBody []byte) {

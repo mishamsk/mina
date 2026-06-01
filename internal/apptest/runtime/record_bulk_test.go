@@ -1,201 +1,231 @@
 package runtime_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-	models "github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestRecordBulkOperationsBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
 
-	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs.transactionRefs))
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs.transactionRefs))
+	requireNoTransportError(t, "create transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-	firstRecordID := created.Body.Records[0].RecordId
-	secondRecordID := created.Body.Records[1].RecordId
+	firstRecordID := created.JSON201.Records[0].RecordId
+	secondRecordID := created.JSON201.Records[1].RecordId
 
-	bulkCategory := apptest.Decode[models.BulkRecordOperationResponse](client, http.MethodPost, "/records/bulk/category", models.BulkCategorizeRecordsRequest{
+	bulkCategory, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
 		RecordIds:  []int64{firstRecordID},
 		CategoryId: refs.SecondCategoryId,
 	})
-	if bulkCategory.StatusCode != http.StatusOK {
-		t.Fatalf("bulk category status = %d, want %d; body %s", bulkCategory.StatusCode, http.StatusOK, bulkCategory.RawBody)
+	requireNoTransportError(t, "bulk categorize records", err)
+	if bulkCategory.StatusCode() != http.StatusOK {
+		t.Fatalf("bulk category status = %d, want %d; body %s", bulkCategory.StatusCode(), http.StatusOK, bulkCategory.Body)
 	}
-	assertBulkResponse(t, bulkCategory.Body, []int64{firstRecordID})
-	categorized := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?category_id="+apptest.FormatID(refs.SecondCategoryId), nil)
-	if categorized.StatusCode != http.StatusOK {
-		t.Fatalf("categorized search status = %d, want %d; body %s", categorized.StatusCode, http.StatusOK, categorized.RawBody)
+	assertBulkResponse(t, bulkCategory.JSON200, []int64{firstRecordID})
+	categorized, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{CategoryId: &refs.SecondCategoryId})
+	requireNoTransportError(t, "search records", err)
+	if categorized.StatusCode() != http.StatusOK {
+		t.Fatalf("categorized search status = %d, want %d; body %s", categorized.StatusCode(), http.StatusOK, categorized.Body)
 	}
-	assertRecordIDs(t, categorized.Body.Records, []int64{firstRecordID})
+	assertRecordIDs(t, categorized.JSON200.Records, []int64{firstRecordID})
 
-	bulkTags := apptest.Decode[models.BulkRecordOperationResponse](client, http.MethodPost, "/records/bulk/tags", models.BulkTagRecordsRequest{
+	bulkTags, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
 		RecordIds:    []int64{firstRecordID, secondRecordID},
 		AddTagIds:    apptest.Int64SlicePtr(refs.SecondTagId),
 		RemoveTagIds: apptest.Int64SlicePtr(refs.TagId),
 	})
-	if bulkTags.StatusCode != http.StatusOK {
-		t.Fatalf("bulk tags status = %d, want %d; body %s", bulkTags.StatusCode, http.StatusOK, bulkTags.RawBody)
+	requireNoTransportError(t, "bulk update record tags", err)
+	if bulkTags.StatusCode() != http.StatusOK {
+		t.Fatalf("bulk tags status = %d, want %d; body %s", bulkTags.StatusCode(), http.StatusOK, bulkTags.Body)
 	}
-	assertBulkResponse(t, bulkTags.Body, []int64{firstRecordID, secondRecordID})
-	addedTag := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?tag_id="+apptest.FormatID(refs.SecondTagId), nil)
-	if addedTag.StatusCode != http.StatusOK {
-		t.Fatalf("added tag search status = %d, want %d; body %s", addedTag.StatusCode, http.StatusOK, addedTag.RawBody)
+	assertBulkResponse(t, bulkTags.JSON200, []int64{firstRecordID, secondRecordID})
+	addedTag, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{TagId: &refs.SecondTagId})
+	requireNoTransportError(t, "search records", err)
+	if addedTag.StatusCode() != http.StatusOK {
+		t.Fatalf("added tag search status = %d, want %d; body %s", addedTag.StatusCode(), http.StatusOK, addedTag.Body)
 	}
-	assertRecordIDs(t, addedTag.Body.Records, []int64{firstRecordID, secondRecordID})
-	removedTag := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?tag_id="+apptest.FormatID(refs.TagId), nil)
-	if removedTag.StatusCode != http.StatusOK {
-		t.Fatalf("removed tag search status = %d, want %d; body %s", removedTag.StatusCode, http.StatusOK, removedTag.RawBody)
+	assertRecordIDs(t, addedTag.JSON200.Records, []int64{firstRecordID, secondRecordID})
+	removedTag, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{TagId: &refs.TagId})
+	requireNoTransportError(t, "search records", err)
+	if removedTag.StatusCode() != http.StatusOK {
+		t.Fatalf("removed tag search status = %d, want %d; body %s", removedTag.StatusCode(), http.StatusOK, removedTag.Body)
 	}
-	if len(removedTag.Body.Records) != 0 {
-		t.Fatalf("old tag record count = %d, want 0; body %+v", len(removedTag.Body.Records), removedTag.Body)
+	if len(removedTag.JSON200.Records) != 0 {
+		t.Fatalf("old tag record count = %d, want 0; body %+v", len(removedTag.JSON200.Records), removedTag.JSON200)
 	}
 
-	bulkAccount := apptest.Decode[models.BulkRecordOperationResponse](client, http.MethodPost, "/records/bulk/account", models.BulkReassignRecordsAccountRequest{
+	bulkAccount, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
 		RecordIds: []int64{secondRecordID},
 		AccountId: refs.SavingsAccountId,
 	})
-	if bulkAccount.StatusCode != http.StatusOK {
-		t.Fatalf("bulk account status = %d, want %d; body %s", bulkAccount.StatusCode, http.StatusOK, bulkAccount.RawBody)
+	requireNoTransportError(t, "bulk reassign record account", err)
+	if bulkAccount.StatusCode() != http.StatusOK {
+		t.Fatalf("bulk account status = %d, want %d; body %s", bulkAccount.StatusCode(), http.StatusOK, bulkAccount.Body)
 	}
-	assertBulkResponse(t, bulkAccount.Body, []int64{secondRecordID})
-	accountRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, accountRecordsPath(refs.SavingsAccountId), nil)
-	if accountRecords.StatusCode != http.StatusOK {
-		t.Fatalf("account records status = %d, want %d; body %s", accountRecords.StatusCode, http.StatusOK, accountRecords.RawBody)
+	assertBulkResponse(t, bulkAccount.JSON200, []int64{secondRecordID})
+	accountRecords, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.SavingsAccountId, nil)
+	requireNoTransportError(t, "search account records", err)
+	if accountRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("account records status = %d, want %d; body %s", accountRecords.StatusCode(), http.StatusOK, accountRecords.Body)
 	}
-	assertRecordIDs(t, accountRecords.Body.Records, []int64{secondRecordID})
-	if accountRecords.Body.Records[0].TransactionId != created.Body.TransactionId {
-		t.Fatalf("bulk account transaction_id = %d, want %d", accountRecords.Body.Records[0].TransactionId, created.Body.TransactionId)
+	assertRecordIDs(t, accountRecords.JSON200.Records, []int64{secondRecordID})
+	if accountRecords.JSON200.Records[0].TransactionId != created.JSON201.TransactionId {
+		t.Fatalf("bulk account transaction_id = %d, want %d", accountRecords.JSON200.Records[0].TransactionId, created.JSON201.TransactionId)
 	}
 
-	postingStatus := models.Cancelled
-	reconciliationStatus := models.Unreconciled
-	bulkStatus := apptest.Decode[models.BulkRecordOperationResponse](client, http.MethodPost, "/records/bulk/status", models.BulkUpdateRecordStatusRequest{
+	postingStatus := httpclient.Cancelled
+	reconciliationStatus := httpclient.Unreconciled
+	bulkStatus, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:            []int64{firstRecordID, secondRecordID},
 		PostingStatus:        &postingStatus,
 		ReconciliationStatus: &reconciliationStatus,
 	})
-	if bulkStatus.StatusCode != http.StatusOK {
-		t.Fatalf("bulk status status = %d, want %d; body %s", bulkStatus.StatusCode, http.StatusOK, bulkStatus.RawBody)
+	requireNoTransportError(t, "bulk update record statuses", err)
+	if bulkStatus.StatusCode() != http.StatusOK {
+		t.Fatalf("bulk status status = %d, want %d; body %s", bulkStatus.StatusCode(), http.StatusOK, bulkStatus.Body)
 	}
-	assertBulkResponse(t, bulkStatus.Body, []int64{firstRecordID, secondRecordID})
-	statusRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?posting_status=cancelled&reconciliation_status=unreconciled", nil)
-	if statusRecords.StatusCode != http.StatusOK {
-		t.Fatalf("status search status = %d, want %d; body %s", statusRecords.StatusCode, http.StatusOK, statusRecords.RawBody)
+	assertBulkResponse(t, bulkStatus.JSON200, []int64{firstRecordID, secondRecordID})
+	statusRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		PostingStatus:        &postingStatus,
+		ReconciliationStatus: &reconciliationStatus,
+	})
+	requireNoTransportError(t, "search records", err)
+	if statusRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("status search status = %d, want %d; body %s", statusRecords.StatusCode(), http.StatusOK, statusRecords.Body)
 	}
-	assertRecordIDs(t, statusRecords.Body.Records, []int64{firstRecordID, secondRecordID})
+	assertRecordIDs(t, statusRecords.JSON200.Records, []int64{firstRecordID, secondRecordID})
 }
 
 func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
 
-	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs.transactionRefs))
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs.transactionRefs))
+	requireNoTransportError(t, "create transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-	firstRecordID := created.Body.Records[0].RecordId
+	firstRecordID := created.JSON201.Records[0].RecordId
 
-	emptySelection := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/category", models.BulkCategorizeRecordsRequest{
+	emptySelection, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
 		RecordIds:  []int64{},
 		CategoryId: refs.SecondCategoryId,
 	})
-	if emptySelection.StatusCode != http.StatusBadRequest {
-		t.Fatalf("empty selection status = %d, want %d; body %s", emptySelection.StatusCode, http.StatusBadRequest, emptySelection.RawBody)
+	requireNoTransportError(t, "bulk categorize records", err)
+	if emptySelection.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("empty selection status = %d, want %d; body %s", emptySelection.StatusCode(), http.StatusBadRequest, emptySelection.Body)
 	}
 
-	duplicateSelection := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/category", models.BulkCategorizeRecordsRequest{
+	duplicateSelection, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
 		RecordIds:  []int64{firstRecordID, firstRecordID},
 		CategoryId: refs.SecondCategoryId,
 	})
-	if duplicateSelection.StatusCode != http.StatusBadRequest {
-		t.Fatalf("duplicate selection status = %d, want %d; body %s", duplicateSelection.StatusCode, http.StatusBadRequest, duplicateSelection.RawBody)
+	requireNoTransportError(t, "bulk categorize records", err)
+	if duplicateSelection.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("duplicate selection status = %d, want %d; body %s", duplicateSelection.StatusCode(), http.StatusBadRequest, duplicateSelection.Body)
 	}
 
-	missingCategory := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/category", models.BulkCategorizeRecordsRequest{
+	missingCategory, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
 		RecordIds:  []int64{firstRecordID},
 		CategoryId: 999,
 	})
-	if missingCategory.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing category status = %d, want %d; body %s", missingCategory.StatusCode, http.StatusBadRequest, missingCategory.RawBody)
+	requireNoTransportError(t, "bulk categorize records", err)
+	if missingCategory.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing category status = %d, want %d; body %s", missingCategory.StatusCode(), http.StatusBadRequest, missingCategory.Body)
 	}
 
-	missingTag := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/tags", models.BulkTagRecordsRequest{
+	missingTag, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
 		RecordIds: []int64{firstRecordID},
 		AddTagIds: apptest.Int64SlicePtr(999),
 	})
-	if missingTag.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing tag status = %d, want %d; body %s", missingTag.StatusCode, http.StatusBadRequest, missingTag.RawBody)
+	requireNoTransportError(t, "bulk update record tags", err)
+	if missingTag.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing tag status = %d, want %d; body %s", missingTag.StatusCode(), http.StatusBadRequest, missingTag.Body)
 	}
 
-	noOpTags := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/tags", models.BulkTagRecordsRequest{
+	noOpTags, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
 		RecordIds: []int64{firstRecordID},
 	})
-	if noOpTags.StatusCode != http.StatusBadRequest {
-		t.Fatalf("no-op tag status = %d, want %d; body %s", noOpTags.StatusCode, http.StatusBadRequest, noOpTags.RawBody)
+	requireNoTransportError(t, "bulk update record tags", err)
+	if noOpTags.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("no-op tag status = %d, want %d; body %s", noOpTags.StatusCode(), http.StatusBadRequest, noOpTags.Body)
 	}
 
-	overlappingTags := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/tags", models.BulkTagRecordsRequest{
+	overlappingTags, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
 		RecordIds:    []int64{firstRecordID},
 		AddTagIds:    apptest.Int64SlicePtr(refs.SecondTagId),
 		RemoveTagIds: apptest.Int64SlicePtr(refs.SecondTagId),
 	})
-	if overlappingTags.StatusCode != http.StatusBadRequest {
-		t.Fatalf("overlapping tag status = %d, want %d; body %s", overlappingTags.StatusCode, http.StatusBadRequest, overlappingTags.RawBody)
+	requireNoTransportError(t, "bulk update record tags", err)
+	if overlappingTags.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("overlapping tag status = %d, want %d; body %s", overlappingTags.StatusCode(), http.StatusBadRequest, overlappingTags.Body)
 	}
 
-	missingAccount := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/account", models.BulkReassignRecordsAccountRequest{
+	missingAccount, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
 		RecordIds: []int64{firstRecordID},
 		AccountId: 999,
 	})
-	if missingAccount.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing account status = %d, want %d; body %s", missingAccount.StatusCode, http.StatusBadRequest, missingAccount.RawBody)
+	requireNoTransportError(t, "bulk reassign record account", err)
+	if missingAccount.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing account status = %d, want %d; body %s", missingAccount.StatusCode(), http.StatusBadRequest, missingAccount.Body)
 	}
 
-	noOpStatus := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/status", models.BulkUpdateRecordStatusRequest{
+	noOpStatus, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds: []int64{firstRecordID},
 	})
-	if noOpStatus.StatusCode != http.StatusBadRequest {
-		t.Fatalf("no-op status status = %d, want %d; body %s", noOpStatus.StatusCode, http.StatusBadRequest, noOpStatus.RawBody)
+	requireNoTransportError(t, "bulk update record statuses", err)
+	if noOpStatus.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("no-op status status = %d, want %d; body %s", noOpStatus.StatusCode(), http.StatusBadRequest, noOpStatus.Body)
 	}
 
-	invalidStatus := models.PostingStatus("settled")
-	invalidStatusResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/status", models.BulkUpdateRecordStatusRequest{
+	invalidStatus := httpclient.PostingStatus("settled")
+	invalidStatusResponse, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     []int64{firstRecordID},
 		PostingStatus: &invalidStatus,
 	})
-	if invalidStatusResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid status status = %d, want %d; body %s", invalidStatusResponse.StatusCode, http.StatusBadRequest, invalidStatusResponse.RawBody)
+	requireNoTransportError(t, "bulk update record statuses", err)
+	if invalidStatusResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid status status = %d, want %d; body %s", invalidStatusResponse.StatusCode(), http.StatusBadRequest, invalidStatusResponse.Body)
 	}
 
-	allOrNothing := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/records/bulk/category", models.BulkCategorizeRecordsRequest{
+	allOrNothing, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
 		RecordIds:  []int64{firstRecordID, 999},
 		CategoryId: refs.SecondCategoryId,
 	})
-	if allOrNothing.StatusCode != http.StatusBadRequest {
-		t.Fatalf("all-or-nothing status = %d, want %d; body %s", allOrNothing.StatusCode, http.StatusBadRequest, allOrNothing.RawBody)
+	requireNoTransportError(t, "bulk categorize records", err)
+	if allOrNothing.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("all-or-nothing status = %d, want %d; body %s", allOrNothing.StatusCode(), http.StatusBadRequest, allOrNothing.Body)
 	}
-	newCategoryRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?category_id="+apptest.FormatID(refs.SecondCategoryId), nil)
-	if newCategoryRecords.StatusCode != http.StatusOK {
-		t.Fatalf("new category search status = %d, want %d; body %s", newCategoryRecords.StatusCode, http.StatusOK, newCategoryRecords.RawBody)
+	newCategoryRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{CategoryId: &refs.SecondCategoryId})
+	requireNoTransportError(t, "search records", err)
+	if newCategoryRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("new category search status = %d, want %d; body %s", newCategoryRecords.StatusCode(), http.StatusOK, newCategoryRecords.Body)
 	}
-	if len(newCategoryRecords.Body.Records) != 0 {
-		t.Fatalf("new category record count after rejected bulk update = %d, want 0; body %+v", len(newCategoryRecords.Body.Records), newCategoryRecords.Body)
+	if len(newCategoryRecords.JSON200.Records) != 0 {
+		t.Fatalf("new category record count after rejected bulk update = %d, want 0; body %+v", len(newCategoryRecords.JSON200.Records), newCategoryRecords.JSON200)
 	}
-	originalCategoryRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records?category_id="+apptest.FormatID(refs.CategoryId), nil)
-	if originalCategoryRecords.StatusCode != http.StatusOK {
-		t.Fatalf("original category search status = %d, want %d; body %s", originalCategoryRecords.StatusCode, http.StatusOK, originalCategoryRecords.RawBody)
+	originalCategoryRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId})
+	requireNoTransportError(t, "search records", err)
+	if originalCategoryRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("original category search status = %d, want %d; body %s", originalCategoryRecords.StatusCode(), http.StatusOK, originalCategoryRecords.Body)
 	}
-	assertRecordIDs(t, originalCategoryRecords.Body.Records, []int64{created.Body.Records[0].RecordId, created.Body.Records[1].RecordId})
+	assertRecordIDs(t, originalCategoryRecords.JSON200.Records, []int64{created.JSON201.Records[0].RecordId, created.JSON201.Records[1].RecordId})
 }
 
-func assertBulkResponse(t *testing.T, got models.BulkRecordOperationResponse, wantRecordIDs []int64) {
+func assertBulkResponse(t *testing.T, got *httpclient.BulkRecordOperationResponse, wantRecordIDs []int64) {
 	t.Helper()
 
+	if got == nil {
+		t.Fatal("bulk response body is nil")
+	}
 	assertInt64s(t, got.RecordIds, wantRecordIDs)
 	if got.UpdatedCount != len(wantRecordIDs) {
 		t.Fatalf("updated_count = %d, want %d", got.UpdatedCount, len(wantRecordIDs))

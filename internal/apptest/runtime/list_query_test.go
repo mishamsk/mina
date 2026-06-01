@@ -1,34 +1,47 @@
 package runtime_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-	models "github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestSharedListQueryRejectsUnsupportedFiltersAndSorts(t *testing.T) {
 	client := newSharedClient(t)
 
-	unsupportedFilter := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/categories?fqn=Food", nil)
-	if unsupportedFilter.StatusCode != http.StatusBadRequest {
-		t.Fatalf("unsupported filter status = %d, want %d; body %s", unsupportedFilter.StatusCode, http.StatusBadRequest, unsupportedFilter.RawBody)
+	unsupportedFilter, err := client.REST().ListCategoriesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("fqn=Food"))
+	if err != nil {
+		t.Fatalf("unsupported filter request: %v", err)
+	}
+	if unsupportedFilter.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unsupported filter status = %d, want %d; body %s", unsupportedFilter.StatusCode(), http.StatusBadRequest, unsupportedFilter.Body)
 	}
 
-	unsupportedSort := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/categories?sort=name", nil)
-	if unsupportedSort.StatusCode != http.StatusBadRequest {
-		t.Fatalf("unsupported sort status = %d, want %d; body %s", unsupportedSort.StatusCode, http.StatusBadRequest, unsupportedSort.RawBody)
+	unsupportedSort, err := client.REST().ListCategoriesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("sort=name"))
+	if err != nil {
+		t.Fatalf("unsupported sort request: %v", err)
+	}
+	if unsupportedSort.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unsupported sort status = %d, want %d; body %s", unsupportedSort.StatusCode(), http.StatusBadRequest, unsupportedSort.Body)
 	}
 
-	unsupportedHidden := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/members?include_hidden=true", nil)
-	if unsupportedHidden.StatusCode != http.StatusBadRequest {
-		t.Fatalf("unsupported hidden status = %d, want %d; body %s", unsupportedHidden.StatusCode, http.StatusBadRequest, unsupportedHidden.RawBody)
+	unsupportedHidden, err := client.REST().ListMembersWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_hidden=true"))
+	if err != nil {
+		t.Fatalf("unsupported hidden request: %v", err)
+	}
+	if unsupportedHidden.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unsupported hidden status = %d, want %d; body %s", unsupportedHidden.StatusCode(), http.StatusBadRequest, unsupportedHidden.Body)
 	}
 
-	badLimit := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/categories?limit=0", nil)
-	if badLimit.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad limit status = %d, want %d; body %s", badLimit.StatusCode, http.StatusBadRequest, badLimit.RawBody)
+	badLimit, err := client.REST().ListCategoriesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("limit=0"))
+	if err != nil {
+		t.Fatalf("bad limit request: %v", err)
+	}
+	if badLimit.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("bad limit status = %d, want %d; body %s", badLimit.StatusCode(), http.StatusBadRequest, badLimit.Body)
 	}
 }
 
@@ -40,29 +53,54 @@ func TestSharedListQueryHiddenDefaultAndPagination(t *testing.T) {
 	gamma := createListQueryCategory(t, client, "Budget:Gamma", false)
 	hidden := createListQueryCategory(t, client, "Budget:Hidden", true)
 
-	defaultList := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories", nil)
-	if defaultList.StatusCode != http.StatusOK {
-		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode, http.StatusOK, defaultList.RawBody)
+	defaultList, err := client.REST().ListCategoriesWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default list request: %v", err)
 	}
-	assertCategoryIDs(t, defaultList.Body.Categories, []int64{alpha.CategoryId, beta.CategoryId, gamma.CategoryId})
+	if defaultList.StatusCode() != http.StatusOK {
+		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
+	}
+	assertCategoryIDs(t, defaultList.JSON200.Categories, []int64{alpha.CategoryId, beta.CategoryId, gamma.CategoryId})
 
-	withHidden := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories?include_hidden=true", nil)
-	if withHidden.StatusCode != http.StatusOK {
-		t.Fatalf("with hidden status = %d, want %d; body %s", withHidden.StatusCode, http.StatusOK, withHidden.RawBody)
+	includeHidden := true
+	withHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{IncludeHidden: &includeHidden})
+	if err != nil {
+		t.Fatalf("with hidden request: %v", err)
 	}
-	assertCategoryIDs(t, withHidden.Body.Categories, []int64{alpha.CategoryId, beta.CategoryId, gamma.CategoryId, hidden.CategoryId})
+	if withHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("with hidden status = %d, want %d; body %s", withHidden.StatusCode(), http.StatusOK, withHidden.Body)
+	}
+	assertCategoryIDs(t, withHidden.JSON200.Categories, []int64{alpha.CategoryId, beta.CategoryId, gamma.CategoryId, hidden.CategoryId})
 
-	page := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories?sort=fqn&limit=2&offset=1", nil)
-	if page.StatusCode != http.StatusOK {
-		t.Fatalf("page status = %d, want %d; body %s", page.StatusCode, http.StatusOK, page.RawBody)
+	sortFQN := httpclient.ListCategoriesParamsSortFqn
+	limitTwo := 2
+	offsetOne := 1
+	page, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		Sort:   &sortFQN,
+		Limit:  &limitTwo,
+		Offset: &offsetOne,
+	})
+	if err != nil {
+		t.Fatalf("page request: %v", err)
 	}
-	assertCategoryIDs(t, page.Body.Categories, []int64{beta.CategoryId, gamma.CategoryId})
+	if page.StatusCode() != http.StatusOK {
+		t.Fatalf("page status = %d, want %d; body %s", page.StatusCode(), http.StatusOK, page.Body)
+	}
+	assertCategoryIDs(t, page.JSON200.Categories, []int64{beta.CategoryId, gamma.CategoryId})
 
-	descPage := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories?sort=fqn&sort_dir=desc&limit=2", nil)
-	if descPage.StatusCode != http.StatusOK {
-		t.Fatalf("desc page status = %d, want %d; body %s", descPage.StatusCode, http.StatusOK, descPage.RawBody)
+	desc := httpclient.ListCategoriesParamsSortDirDesc
+	descPage, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		Sort:    &sortFQN,
+		SortDir: &desc,
+		Limit:   &limitTwo,
+	})
+	if err != nil {
+		t.Fatalf("desc page request: %v", err)
 	}
-	assertCategoryIDs(t, descPage.Body.Categories, []int64{gamma.CategoryId, beta.CategoryId})
+	if descPage.StatusCode() != http.StatusOK {
+		t.Fatalf("desc page status = %d, want %d; body %s", descPage.StatusCode(), http.StatusOK, descPage.Body)
+	}
+	assertCategoryIDs(t, descPage.JSON200.Categories, []int64{gamma.CategoryId, beta.CategoryId})
 }
 
 func TestSharedListQueryCompositeSortDirection(t *testing.T) {
@@ -72,20 +110,28 @@ func TestSharedListQueryCompositeSortDirection(t *testing.T) {
 	eurLate := createListQueryExchangeRate(t, client, "EUR", "USD", "2024-02-01")
 	gbpEarly := createListQueryExchangeRate(t, client, "GBP", "USD", "2024-01-01")
 
-	desc := apptest.Decode[models.ExchangeRateListResponse](client, http.MethodGet, "/exchange-rates?sort=currency_pair&sort_dir=desc", nil)
-	if desc.StatusCode != http.StatusOK {
-		t.Fatalf("exchange rate desc status = %d, want %d; body %s", desc.StatusCode, http.StatusOK, desc.RawBody)
+	sortCurrencyPair := httpclient.ListExchangeRatesParamsSortCurrencyPair
+	descSort := httpclient.ListExchangeRatesParamsSortDirDesc
+	desc, err := client.REST().ListExchangeRatesWithResponse(context.Background(), &httpclient.ListExchangeRatesParams{
+		Sort:    &sortCurrencyPair,
+		SortDir: &descSort,
+	})
+	if err != nil {
+		t.Fatalf("exchange rate desc request: %v", err)
 	}
-	assertExchangeRateIDs(t, desc.Body.ExchangeRates, []int64{gbpEarly.ExchangeRateId, eurLate.ExchangeRateId, eurEarly.ExchangeRateId})
+	if desc.StatusCode() != http.StatusOK {
+		t.Fatalf("exchange rate desc status = %d, want %d; body %s", desc.StatusCode(), http.StatusOK, desc.Body)
+	}
+	assertExchangeRateIDs(t, desc.JSON200.ExchangeRates, []int64{gbpEarly.ExchangeRateId, eurLate.ExchangeRateId, eurEarly.ExchangeRateId})
 }
 
-func createListQueryCategory(t *testing.T, client *apptest.Client, fqn string, hidden bool) models.Category {
+func createListQueryCategory(t *testing.T, client *apptest.Client, fqn string, hidden bool) httpclient.Category {
 	t.Helper()
 
 	return client.Scenario().CategoryWithHidden(fqn, hidden)
 }
 
-func createListQueryExchangeRate(t *testing.T, client *apptest.Client, fromCurrency string, toCurrency string, effectiveDate string) models.ExchangeRate {
+func createListQueryExchangeRate(t *testing.T, client *apptest.Client, fromCurrency string, toCurrency string, effectiveDate string) httpclient.ExchangeRate {
 	t.Helper()
 
 	return client.Scenario().ExchangeRate(fromCurrency, toCurrency, effectiveDate)

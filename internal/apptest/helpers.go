@@ -1,9 +1,15 @@
 package apptest
 
-import "strconv"
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
 
-// EmptyJSON marks response bodies that tests do not inspect.
-type EmptyJSON struct{}
+	"github.com/mishamsk/mina/internal/httpclient"
+)
 
 // Int64SlicePtr returns a pointer to values.
 func Int64SlicePtr(values ...int64) *[]int64 {
@@ -16,7 +22,19 @@ func FormatID(id int64) string {
 	return strconv.FormatInt(id, 10)
 }
 
-// IDPath appends an integer identifier to a collection path.
-func IDPath(collection string, id int64) string {
-	return collection + "/" + FormatID(id)
+// ReplaceRawQuery replaces the generated request query string.
+func ReplaceRawQuery(rawQuery string) httpclient.RequestEditorFn {
+	return func(_ context.Context, req *http.Request) error {
+		req.URL.RawQuery = rawQuery
+		return nil
+	}
+}
+
+// JSONReader returns a JSON body reader for generated arbitrary-body methods.
+func JSONReader(body any) *bytes.Reader {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(body); err != nil {
+		panic(fmt.Sprintf("encode JSON body: %v", err))
+	}
+	return bytes.NewReader(buf.Bytes())
 }

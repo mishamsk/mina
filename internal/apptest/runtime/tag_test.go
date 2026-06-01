@@ -1,108 +1,156 @@
 package runtime_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-	models "github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	client := newSharedClient(t)
 
-	created := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
+	created, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn: "Trips:Vacation",
 	})
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
 	}
-	assertTagHierarchy(t, created.Body, "Trips", "Vacation", 1)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertTagHierarchy(t, *created.JSON201, "Trips", "Vacation", 1)
 
-	read := apptest.Decode[models.Tag](client, http.MethodGet, tagPath(created.Body.TagId), nil)
-	if read.StatusCode != http.StatusOK {
-		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
+	read, err := client.REST().GetTagWithResponse(context.Background(), created.JSON201.TagId, nil)
+	if err != nil {
+		t.Fatalf("read request: %v", err)
 	}
-	if read.Body.TagId != created.Body.TagId {
-		t.Fatalf("read tag id = %d, want %d", read.Body.TagId, created.Body.TagId)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	if read.JSON200.TagId != created.JSON201.TagId {
+		t.Fatalf("read tag id = %d, want %d", read.JSON200.TagId, created.JSON201.TagId)
 	}
 
-	hidden := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
+	hiddenValue := true
+	hidden, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn:      "Trips:Planning",
-		IsHidden: new(true),
+		IsHidden: &hiddenValue,
 	})
-	if hidden.StatusCode != http.StatusCreated {
-		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode, http.StatusCreated, hidden.RawBody)
+	if err != nil {
+		t.Fatalf("hidden create request: %v", err)
+	}
+	if hidden.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode(), http.StatusCreated, hidden.Body)
 	}
 
-	defaultList := apptest.Decode[models.TagListResponse](client, http.MethodGet, "/tags", nil)
-	if defaultList.StatusCode != http.StatusOK {
-		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode, http.StatusOK, defaultList.RawBody)
+	defaultList, err := client.REST().ListTagsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default list request: %v", err)
 	}
-	assertTagIDs(t, defaultList.Body.Tags, []int64{created.Body.TagId})
-
-	includeHidden := apptest.Decode[models.TagListResponse](client, http.MethodGet, "/tags?include_hidden=true", nil)
-	if includeHidden.StatusCode != http.StatusOK {
-		t.Fatalf("include hidden status = %d, want %d; body %s", includeHidden.StatusCode, http.StatusOK, includeHidden.RawBody)
+	if defaultList.StatusCode() != http.StatusOK {
+		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
-	assertTagIDs(t, includeHidden.Body.Tags, []int64{hidden.Body.TagId, created.Body.TagId})
+	assertTagIDs(t, defaultList.JSON200.Tags, []int64{created.JSON201.TagId})
 
-	updated := apptest.Decode[models.Tag](client, http.MethodPatch, tagPath(created.Body.TagId), models.UpdateTagRequest{
+	includeHidden, err := client.REST().ListTagsWithResponse(context.Background(), &httpclient.ListTagsParams{IncludeHidden: &hiddenValue})
+	if err != nil {
+		t.Fatalf("include hidden request: %v", err)
+	}
+	if includeHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("include hidden status = %d, want %d; body %s", includeHidden.StatusCode(), http.StatusOK, includeHidden.Body)
+	}
+	assertTagIDs(t, includeHidden.JSON200.Tags, []int64{hidden.JSON201.TagId, created.JSON201.TagId})
+
+	updated, err := client.REST().UpdateTagWithResponse(context.Background(), created.JSON201.TagId, httpclient.UpdateTagRequest{
 		IsHidden: true,
 	})
-	if updated.StatusCode != http.StatusOK {
-		t.Fatalf("update status = %d, want %d; body %s", updated.StatusCode, http.StatusOK, updated.RawBody)
+	if err != nil {
+		t.Fatalf("update request: %v", err)
 	}
-	if !updated.Body.IsHidden {
+	if updated.StatusCode() != http.StatusOK {
+		t.Fatalf("update status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
+	}
+	if !updated.JSON200.IsHidden {
 		t.Fatal("updated tag hidden = false, want true")
 	}
 
-	afterHide := apptest.Decode[models.TagListResponse](client, http.MethodGet, "/tags", nil)
-	if afterHide.StatusCode != http.StatusOK {
-		t.Fatalf("after hide list status = %d, want %d; body %s", afterHide.StatusCode, http.StatusOK, afterHide.RawBody)
+	afterHide, err := client.REST().ListTagsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("after hide list request: %v", err)
 	}
-	assertTagIDs(t, afterHide.Body.Tags, nil)
+	if afterHide.StatusCode() != http.StatusOK {
+		t.Fatalf("after hide list status = %d, want %d; body %s", afterHide.StatusCode(), http.StatusOK, afterHide.Body)
+	}
+	assertTagIDs(t, afterHide.JSON200.Tags, nil)
 
-	visibleDeleted := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
+	visibleDeleted, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn: "Trips:Archive",
 	})
-	if visibleDeleted.StatusCode != http.StatusCreated {
-		t.Fatalf("visible delete create status = %d, want %d; body %s", visibleDeleted.StatusCode, http.StatusCreated, visibleDeleted.RawBody)
+	if err != nil {
+		t.Fatalf("visible delete create request: %v", err)
 	}
-	visibleDelete := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, tagPath(visibleDeleted.Body.TagId), nil)
-	if visibleDelete.StatusCode != http.StatusNoContent {
-		t.Fatalf("visible delete status = %d, want %d; body %s", visibleDelete.StatusCode, http.StatusNoContent, visibleDelete.RawBody)
+	if visibleDeleted.StatusCode() != http.StatusCreated {
+		t.Fatalf("visible delete create status = %d, want %d; body %s", visibleDeleted.StatusCode(), http.StatusCreated, visibleDeleted.Body)
 	}
-	defaultAfterVisibleDelete := apptest.Decode[models.TagListResponse](client, http.MethodGet, "/tags", nil)
-	if defaultAfterVisibleDelete.StatusCode != http.StatusOK {
-		t.Fatalf("default after visible delete status = %d, want %d; body %s", defaultAfterVisibleDelete.StatusCode, http.StatusOK, defaultAfterVisibleDelete.RawBody)
+	visibleDelete, err := client.REST().DeleteTagWithResponse(context.Background(), visibleDeleted.JSON201.TagId)
+	if err != nil {
+		t.Fatalf("visible delete request: %v", err)
 	}
-	assertTagIDs(t, defaultAfterVisibleDelete.Body.Tags, nil)
+	if visibleDelete.StatusCode() != http.StatusNoContent {
+		t.Fatalf("visible delete status = %d, want %d; body %s", visibleDelete.StatusCode(), http.StatusNoContent, visibleDelete.Body)
+	}
+	defaultAfterVisibleDelete, err := client.REST().ListTagsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default after visible delete request: %v", err)
+	}
+	if defaultAfterVisibleDelete.StatusCode() != http.StatusOK {
+		t.Fatalf("default after visible delete status = %d, want %d; body %s", defaultAfterVisibleDelete.StatusCode(), http.StatusOK, defaultAfterVisibleDelete.Body)
+	}
+	assertTagIDs(t, defaultAfterVisibleDelete.JSON200.Tags, nil)
 
-	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, tagPath(hidden.Body.TagId), nil)
-	if deleted.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
+	deleted, err := client.REST().DeleteTagWithResponse(context.Background(), hidden.JSON201.TagId)
+	if err != nil {
+		t.Fatalf("delete request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
 	}
 
-	missing := apptest.Decode[models.ErrorResponse](client, http.MethodGet, tagPath(hidden.Body.TagId), nil)
-	if missing.StatusCode != http.StatusNotFound {
-		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode, http.StatusNotFound, missing.RawBody)
+	missing, err := client.REST().GetTagWithResponse(context.Background(), hidden.JSON201.TagId, nil)
+	if err != nil {
+		t.Fatalf("get deleted request: %v", err)
+	}
+	if missing.StatusCode() != http.StatusNotFound {
+		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode(), http.StatusNotFound, missing.Body)
 	}
 
-	deletedRead := apptest.Decode[models.Tag](client, http.MethodGet, tagPath(hidden.Body.TagId)+"?include_tombstoned=true", nil)
-	if deletedRead.StatusCode != http.StatusOK {
-		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode, http.StatusOK, deletedRead.RawBody)
+	includeTombstoned := true
+	deletedRead, err := client.REST().GetTagWithResponse(context.Background(), hidden.JSON201.TagId, &httpclient.GetTagParams{IncludeTombstoned: &includeTombstoned})
+	if err != nil {
+		t.Fatalf("get deleted with tombstones request: %v", err)
 	}
-	if deletedRead.Body.TombstonedAt == nil {
+	if deletedRead.StatusCode() != http.StatusOK {
+		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode(), http.StatusOK, deletedRead.Body)
+	}
+	if deletedRead.JSON200.TombstonedAt == nil {
 		t.Fatal("get deleted with tombstones tombstoned_at = nil, want timestamp")
 	}
 
-	withTombstones := apptest.Decode[models.TagListResponse](client, http.MethodGet, "/tags?include_hidden=true&include_tombstoned=true", nil)
-	if withTombstones.StatusCode != http.StatusOK {
-		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode, http.StatusOK, withTombstones.RawBody)
+	withTombstones, err := client.REST().ListTagsWithResponse(context.Background(), &httpclient.ListTagsParams{
+		IncludeHidden:     &hiddenValue,
+		IncludeTombstoned: &includeTombstoned,
+	})
+	if err != nil {
+		t.Fatalf("include tombstones request: %v", err)
 	}
-	assertTagIDs(t, withTombstones.Body.Tags, []int64{visibleDeleted.Body.TagId, hidden.Body.TagId, created.Body.TagId})
-	if withTombstones.Body.Tags[0].TombstonedAt == nil {
+	if withTombstones.StatusCode() != http.StatusOK {
+		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode(), http.StatusOK, withTombstones.Body)
+	}
+	assertTagIDs(t, withTombstones.JSON200.Tags, []int64{visibleDeleted.JSON201.TagId, hidden.JSON201.TagId, created.JSON201.TagId})
+	if withTombstones.JSON200.Tags[0].TombstonedAt == nil {
 		t.Fatal("deleted tag tombstoned_at = nil, want timestamp")
 	}
 }
@@ -110,85 +158,111 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 func TestTagRejectsDuplicateActiveFQN(t *testing.T) {
 	client := newSharedClient(t)
 
-	first := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
+	first, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn: "Tax:Medical",
 	})
-	if first.StatusCode != http.StatusCreated {
-		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode, http.StatusCreated, first.RawBody)
+	if err != nil {
+		t.Fatalf("first create request: %v", err)
+	}
+	if first.StatusCode() != http.StatusCreated {
+		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode(), http.StatusCreated, first.Body)
 	}
 
-	duplicate := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/tags", models.CreateTagRequest{
+	duplicate, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn: "Tax:Medical",
 	})
-	if duplicate.StatusCode != http.StatusConflict {
-		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode, http.StatusConflict, duplicate.RawBody)
+	if err != nil {
+		t.Fatalf("duplicate request: %v", err)
 	}
-	if duplicate.Body.Error.Code != models.APIErrorCodeConflict {
-		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
+	if duplicate.StatusCode() != http.StatusConflict {
+		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode(), http.StatusConflict, duplicate.Body)
 	}
-
-	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, tagPath(first.Body.TagId), nil)
-	if deleted.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
+	if duplicate.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("duplicate code = %q, want %q", duplicate.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
 	}
 
-	recreated := apptest.Decode[models.Tag](client, http.MethodPost, "/tags", models.CreateTagRequest{
+	deleted, err := client.REST().DeleteTagWithResponse(context.Background(), first.JSON201.TagId)
+	if err != nil {
+		t.Fatalf("delete request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+
+	recreated, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn: "Tax:Medical",
 	})
-	if recreated.StatusCode != http.StatusCreated {
-		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode, http.StatusCreated, recreated.RawBody)
+	if err != nil {
+		t.Fatalf("recreate request: %v", err)
+	}
+	if recreated.StatusCode() != http.StatusCreated {
+		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode(), http.StatusCreated, recreated.Body)
 	}
 }
 
 func TestTagValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 
-	invalid := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/tags", models.CreateTagRequest{
+	invalid, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn: "Tax::Medical",
 	})
-	if invalid.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid status = %d, want %d; body %s", invalid.StatusCode, http.StatusBadRequest, invalid.RawBody)
+	if err != nil {
+		t.Fatalf("invalid request: %v", err)
 	}
-	if invalid.Body.Error.Code != models.APIErrorCodeInvalidRequest {
-		t.Fatalf("invalid code = %q, want %q", invalid.Body.Error.Code, models.APIErrorCodeInvalidRequest)
+	if invalid.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid status = %d, want %d; body %s", invalid.StatusCode(), http.StatusBadRequest, invalid.Body)
 	}
-
-	badQuery := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/tags?include_hidden=maybe", nil)
-	if badQuery.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode, http.StatusBadRequest, badQuery.RawBody)
+	if invalid.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid code = %q, want %q", invalid.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
 
-	emptyQuery := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/tags?include_hidden=", nil)
-	if emptyQuery.StatusCode != http.StatusBadRequest {
-		t.Fatalf("empty query status = %d, want %d; body %s", emptyQuery.StatusCode, http.StatusBadRequest, emptyQuery.RawBody)
+	badQuery, err := client.REST().ListTagsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_hidden=maybe"))
+	if err != nil {
+		t.Fatalf("bad query request: %v", err)
+	}
+	if badQuery.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode(), http.StatusBadRequest, badQuery.Body)
 	}
 
-	missingRequired := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, "/tags/1", map[string]any{})
-	if missingRequired.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing required status = %d, want %d; body %s", missingRequired.StatusCode, http.StatusBadRequest, missingRequired.RawBody)
+	emptyQuery, err := client.REST().ListTagsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_hidden="))
+	if err != nil {
+		t.Fatalf("empty query request: %v", err)
+	}
+	if emptyQuery.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("empty query status = %d, want %d; body %s", emptyQuery.StatusCode(), http.StatusBadRequest, emptyQuery.Body)
 	}
 
-	missingHidden := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, "/tags/1", map[string]string{
+	missingRequired, err := client.REST().UpdateTagWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]any{}))
+	if err != nil {
+		t.Fatalf("missing required request: %v", err)
+	}
+	if missingRequired.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing required status = %d, want %d; body %s", missingRequired.StatusCode(), http.StatusBadRequest, missingRequired.Body)
+	}
+
+	missingHidden, err := client.REST().UpdateTagWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]string{
 		"fqn": "Other",
-	})
-	if missingHidden.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing hidden status = %d, want %d; body %s", missingHidden.StatusCode, http.StatusBadRequest, missingHidden.RawBody)
+	}))
+	if err != nil {
+		t.Fatalf("missing hidden request: %v", err)
+	}
+	if missingHidden.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing hidden status = %d, want %d; body %s", missingHidden.StatusCode(), http.StatusBadRequest, missingHidden.Body)
 	}
 
-	extraField := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/tags", map[string]any{
+	extraField, err := client.REST().CreateTagWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
 		"fqn":        "Tax:Medical",
 		"extraField": true,
-	})
-	if extraField.StatusCode != http.StatusBadRequest {
-		t.Fatalf("extra field status = %d, want %d; body %s", extraField.StatusCode, http.StatusBadRequest, extraField.RawBody)
+	}))
+	if err != nil {
+		t.Fatalf("extra field request: %v", err)
+	}
+	if extraField.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("extra field status = %d, want %d; body %s", extraField.StatusCode(), http.StatusBadRequest, extraField.Body)
 	}
 }
 
-func tagPath(id int64) string {
-	return apptest.IDPath("/tags", id)
-}
-
-func assertTagHierarchy(t *testing.T, tag models.Tag, parent string, name string, level int) {
+func assertTagHierarchy(t *testing.T, tag httpclient.Tag, parent string, name string, level int) {
 	t.Helper()
 
 	if tag.ParentFqn == nil || *tag.ParentFqn != parent {
@@ -202,7 +276,7 @@ func assertTagHierarchy(t *testing.T, tag models.Tag, parent string, name string
 	}
 }
 
-func assertTagIDs(t *testing.T, tags []models.Tag, want []int64) {
+func assertTagIDs(t *testing.T, tags []httpclient.Tag, want []int64) {
 	t.Helper()
 
 	if len(tags) != len(want) {

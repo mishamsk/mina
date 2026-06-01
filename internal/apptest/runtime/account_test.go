@@ -1,215 +1,298 @@
 package runtime_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-	models "github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	client := newSharedClient(t)
 
-	created := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	currency := "USD"
+	externalID := "acct-123"
+	externalSystem := "plaid"
+	created, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:            "checking:Chase:Primary",
-		Currency:       new("USD"),
-		ExternalId:     new("acct-123"),
-		ExternalSystem: new("plaid"),
+		Currency:       &currency,
+		ExternalId:     &externalID,
+		ExternalSystem: &externalSystem,
 	})
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
 	}
-	assertAccountHierarchy(t, created.Body, "checking", "checking:Chase", "Primary", 2)
-	if created.Body.Currency == nil || *created.Body.Currency != "USD" {
-		t.Fatalf("currency = %v, want USD", created.Body.Currency)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-
-	read := apptest.Decode[models.Account](client, http.MethodGet, accountPath(created.Body.AccountId), nil)
-	if read.StatusCode != http.StatusOK {
-		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
-	}
-	if read.Body.AccountId != created.Body.AccountId {
-		t.Fatalf("read account id = %d, want %d", read.Body.AccountId, created.Body.AccountId)
+	assertAccountHierarchy(t, *created.JSON201, "checking", "checking:Chase", "Primary", 2)
+	if created.JSON201.Currency == nil || *created.JSON201.Currency != "USD" {
+		t.Fatalf("currency = %v, want USD", created.JSON201.Currency)
 	}
 
-	hidden := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	read, err := client.REST().GetAccountWithResponse(context.Background(), created.JSON201.AccountId, nil)
+	if err != nil {
+		t.Fatalf("read request: %v", err)
+	}
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	if read.JSON200.AccountId != created.JSON201.AccountId {
+		t.Fatalf("read account id = %d, want %d", read.JSON200.AccountId, created.JSON201.AccountId)
+	}
+
+	hiddenValue := true
+	hidden, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:      "credit:Amex:Blue",
-		IsHidden: new(true),
-		Currency: new("USD"),
+		IsHidden: &hiddenValue,
+		Currency: &currency,
 	})
-	if hidden.StatusCode != http.StatusCreated {
-		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode, http.StatusCreated, hidden.RawBody)
+	if err != nil {
+		t.Fatalf("hidden create request: %v", err)
+	}
+	if hidden.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode(), http.StatusCreated, hidden.Body)
 	}
 
-	defaultList := apptest.Decode[models.AccountListResponse](client, http.MethodGet, "/accounts", nil)
-	if defaultList.StatusCode != http.StatusOK {
-		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode, http.StatusOK, defaultList.RawBody)
+	defaultList, err := client.REST().ListAccountsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default list request: %v", err)
 	}
-	assertAccountIDs(t, defaultList.Body.Accounts, []int64{created.Body.AccountId})
-
-	includeHidden := apptest.Decode[models.AccountListResponse](client, http.MethodGet, "/accounts?include_hidden=true", nil)
-	if includeHidden.StatusCode != http.StatusOK {
-		t.Fatalf("include hidden status = %d, want %d; body %s", includeHidden.StatusCode, http.StatusOK, includeHidden.RawBody)
+	if defaultList.StatusCode() != http.StatusOK {
+		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
-	assertAccountIDs(t, includeHidden.Body.Accounts, []int64{created.Body.AccountId, hidden.Body.AccountId})
+	assertAccountIDs(t, defaultList.JSON200.Accounts, []int64{created.JSON201.AccountId})
 
-	updated := apptest.Decode[models.Account](client, http.MethodPatch, accountPath(created.Body.AccountId), models.UpdateAccountRequest{
+	includeHidden, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{IncludeHidden: &hiddenValue})
+	if err != nil {
+		t.Fatalf("include hidden request: %v", err)
+	}
+	if includeHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("include hidden status = %d, want %d; body %s", includeHidden.StatusCode(), http.StatusOK, includeHidden.Body)
+	}
+	assertAccountIDs(t, includeHidden.JSON200.Accounts, []int64{created.JSON201.AccountId, hidden.JSON201.AccountId})
+
+	updatedExternalID := "acct-456"
+	updatedExternalSystem := "manual"
+	updated, err := client.REST().UpdateAccountWithResponse(context.Background(), created.JSON201.AccountId, httpclient.UpdateAccountRequest{
 		IsHidden:       true,
-		ExternalId:     new("acct-456"),
-		ExternalSystem: new("manual"),
+		ExternalId:     &updatedExternalID,
+		ExternalSystem: &updatedExternalSystem,
 	})
-	if updated.StatusCode != http.StatusOK {
-		t.Fatalf("update status = %d, want %d; body %s", updated.StatusCode, http.StatusOK, updated.RawBody)
+	if err != nil {
+		t.Fatalf("update request: %v", err)
 	}
-	if !updated.Body.IsHidden {
+	if updated.StatusCode() != http.StatusOK {
+		t.Fatalf("update status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
+	}
+	if !updated.JSON200.IsHidden {
 		t.Fatal("updated account hidden = false, want true")
 	}
-	if updated.Body.ExternalId == nil || *updated.Body.ExternalId != "acct-456" {
-		t.Fatalf("external_id = %v, want acct-456", updated.Body.ExternalId)
+	if updated.JSON200.ExternalId == nil || *updated.JSON200.ExternalId != "acct-456" {
+		t.Fatalf("external_id = %v, want acct-456", updated.JSON200.ExternalId)
 	}
-	if updated.Body.ExternalSystem == nil || *updated.Body.ExternalSystem != "manual" {
-		t.Fatalf("external_system = %v, want manual", updated.Body.ExternalSystem)
+	if updated.JSON200.ExternalSystem == nil || *updated.JSON200.ExternalSystem != "manual" {
+		t.Fatalf("external_system = %v, want manual", updated.JSON200.ExternalSystem)
 	}
 
-	afterHide := apptest.Decode[models.AccountListResponse](client, http.MethodGet, "/accounts", nil)
-	if afterHide.StatusCode != http.StatusOK {
-		t.Fatalf("after hide list status = %d, want %d; body %s", afterHide.StatusCode, http.StatusOK, afterHide.RawBody)
+	afterHide, err := client.REST().ListAccountsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("after hide list request: %v", err)
 	}
-	assertAccountIDs(t, afterHide.Body.Accounts, nil)
+	if afterHide.StatusCode() != http.StatusOK {
+		t.Fatalf("after hide list status = %d, want %d; body %s", afterHide.StatusCode(), http.StatusOK, afterHide.Body)
+	}
+	assertAccountIDs(t, afterHide.JSON200.Accounts, nil)
 
-	visibleDeleted := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	visibleDeleted, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:      "savings:Ally:Reserve",
-		Currency: new("USD"),
+		Currency: &currency,
 	})
-	if visibleDeleted.StatusCode != http.StatusCreated {
-		t.Fatalf("visible delete create status = %d, want %d; body %s", visibleDeleted.StatusCode, http.StatusCreated, visibleDeleted.RawBody)
+	if err != nil {
+		t.Fatalf("visible delete create request: %v", err)
 	}
-	visibleDelete := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, accountPath(visibleDeleted.Body.AccountId), nil)
-	if visibleDelete.StatusCode != http.StatusNoContent {
-		t.Fatalf("visible delete status = %d, want %d; body %s", visibleDelete.StatusCode, http.StatusNoContent, visibleDelete.RawBody)
+	if visibleDeleted.StatusCode() != http.StatusCreated {
+		t.Fatalf("visible delete create status = %d, want %d; body %s", visibleDeleted.StatusCode(), http.StatusCreated, visibleDeleted.Body)
 	}
-	defaultAfterVisibleDelete := apptest.Decode[models.AccountListResponse](client, http.MethodGet, "/accounts", nil)
-	if defaultAfterVisibleDelete.StatusCode != http.StatusOK {
-		t.Fatalf("default after visible delete status = %d, want %d; body %s", defaultAfterVisibleDelete.StatusCode, http.StatusOK, defaultAfterVisibleDelete.RawBody)
+	visibleDelete, err := client.REST().DeleteAccountWithResponse(context.Background(), visibleDeleted.JSON201.AccountId)
+	if err != nil {
+		t.Fatalf("visible delete request: %v", err)
 	}
-	assertAccountIDs(t, defaultAfterVisibleDelete.Body.Accounts, nil)
+	if visibleDelete.StatusCode() != http.StatusNoContent {
+		t.Fatalf("visible delete status = %d, want %d; body %s", visibleDelete.StatusCode(), http.StatusNoContent, visibleDelete.Body)
+	}
+	defaultAfterVisibleDelete, err := client.REST().ListAccountsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default after visible delete request: %v", err)
+	}
+	if defaultAfterVisibleDelete.StatusCode() != http.StatusOK {
+		t.Fatalf("default after visible delete status = %d, want %d; body %s", defaultAfterVisibleDelete.StatusCode(), http.StatusOK, defaultAfterVisibleDelete.Body)
+	}
+	assertAccountIDs(t, defaultAfterVisibleDelete.JSON200.Accounts, nil)
 
-	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, accountPath(hidden.Body.AccountId), nil)
-	if deleted.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
+	deleted, err := client.REST().DeleteAccountWithResponse(context.Background(), hidden.JSON201.AccountId)
+	if err != nil {
+		t.Fatalf("delete request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
 	}
 
-	missing := apptest.Decode[models.ErrorResponse](client, http.MethodGet, accountPath(hidden.Body.AccountId), nil)
-	if missing.StatusCode != http.StatusNotFound {
-		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode, http.StatusNotFound, missing.RawBody)
+	missing, err := client.REST().GetAccountWithResponse(context.Background(), hidden.JSON201.AccountId, nil)
+	if err != nil {
+		t.Fatalf("get deleted request: %v", err)
+	}
+	if missing.StatusCode() != http.StatusNotFound {
+		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode(), http.StatusNotFound, missing.Body)
 	}
 
-	deletedRead := apptest.Decode[models.Account](client, http.MethodGet, accountPath(hidden.Body.AccountId)+"?include_tombstoned=true", nil)
-	if deletedRead.StatusCode != http.StatusOK {
-		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode, http.StatusOK, deletedRead.RawBody)
+	includeTombstoned := true
+	deletedRead, err := client.REST().GetAccountWithResponse(context.Background(), hidden.JSON201.AccountId, &httpclient.GetAccountParams{IncludeTombstoned: &includeTombstoned})
+	if err != nil {
+		t.Fatalf("get deleted with tombstones request: %v", err)
 	}
-	if deletedRead.Body.TombstonedAt == nil {
+	if deletedRead.StatusCode() != http.StatusOK {
+		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode(), http.StatusOK, deletedRead.Body)
+	}
+	if deletedRead.JSON200.TombstonedAt == nil {
 		t.Fatal("get deleted with tombstones tombstoned_at = nil, want timestamp")
 	}
 
-	withTombstones := apptest.Decode[models.AccountListResponse](client, http.MethodGet, "/accounts?include_hidden=true&include_tombstoned=true", nil)
-	if withTombstones.StatusCode != http.StatusOK {
-		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode, http.StatusOK, withTombstones.RawBody)
+	withTombstones, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{
+		IncludeHidden:     &hiddenValue,
+		IncludeTombstoned: &includeTombstoned,
+	})
+	if err != nil {
+		t.Fatalf("include tombstones request: %v", err)
 	}
-	assertAccountIDs(t, withTombstones.Body.Accounts, []int64{created.Body.AccountId, hidden.Body.AccountId, visibleDeleted.Body.AccountId})
+	if withTombstones.StatusCode() != http.StatusOK {
+		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode(), http.StatusOK, withTombstones.Body)
+	}
+	assertAccountIDs(t, withTombstones.JSON200.Accounts, []int64{created.JSON201.AccountId, hidden.JSON201.AccountId, visibleDeleted.JSON201.AccountId})
 }
 
 func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 	client := newSharedClient(t)
 
-	first := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	currency := "USD"
+	first, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:      "cash:Wallet",
-		Currency: new("USD"),
+		Currency: &currency,
 	})
-	if first.StatusCode != http.StatusCreated {
-		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode, http.StatusCreated, first.RawBody)
+	if err != nil {
+		t.Fatalf("first create request: %v", err)
+	}
+	if first.StatusCode() != http.StatusCreated {
+		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode(), http.StatusCreated, first.Body)
 	}
 
-	duplicate := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	duplicate, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:      "cash:Wallet",
-		Currency: new("USD"),
+		Currency: &currency,
 	})
-	if duplicate.StatusCode != http.StatusConflict {
-		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode, http.StatusConflict, duplicate.RawBody)
+	if err != nil {
+		t.Fatalf("duplicate request: %v", err)
 	}
-	if duplicate.Body.Error.Code != models.APIErrorCodeConflict {
-		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
+	if duplicate.StatusCode() != http.StatusConflict {
+		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode(), http.StatusConflict, duplicate.Body)
+	}
+	if duplicate.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("duplicate code = %q, want %q", duplicate.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
 	}
 
-	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, accountPath(first.Body.AccountId), nil)
-	if deleted.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
+	deleted, err := client.REST().DeleteAccountWithResponse(context.Background(), first.JSON201.AccountId)
+	if err != nil {
+		t.Fatalf("delete request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
 	}
 
-	recreated := apptest.Decode[models.Account](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	recreated, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:      "cash:Wallet",
-		Currency: new("USD"),
+		Currency: &currency,
 	})
-	if recreated.StatusCode != http.StatusCreated {
-		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode, http.StatusCreated, recreated.RawBody)
+	if err != nil {
+		t.Fatalf("recreate request: %v", err)
+	}
+	if recreated.StatusCode() != http.StatusCreated {
+		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode(), http.StatusCreated, recreated.Body)
 	}
 }
 
 func TestAccountValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 
-	invalidCurrency := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	invalidCurrencyValue := "usd"
+	invalidCurrency, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:      "checking:Chase",
-		Currency: new("usd"),
+		Currency: &invalidCurrencyValue,
 	})
-	if invalidCurrency.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid currency status = %d, want %d; body %s", invalidCurrency.StatusCode, http.StatusBadRequest, invalidCurrency.RawBody)
+	if err != nil {
+		t.Fatalf("invalid currency request: %v", err)
 	}
-	if invalidCurrency.Body.Error.Code != models.APIErrorCodeInvalidRequest {
-		t.Fatalf("invalid currency code = %q, want %q", invalidCurrency.Body.Error.Code, models.APIErrorCodeInvalidRequest)
+	if invalidCurrency.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid currency status = %d, want %d; body %s", invalidCurrency.StatusCode(), http.StatusBadRequest, invalidCurrency.Body)
+	}
+	if invalidCurrency.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid currency code = %q, want %q", invalidCurrency.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
 
-	nonASCIICurrency := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	nonASCIICurrencyValue := "ÅB"
+	nonASCIICurrency, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:      "checking:CreditUnion",
-		Currency: new("ÅB"),
+		Currency: &nonASCIICurrencyValue,
 	})
-	if nonASCIICurrency.StatusCode != http.StatusBadRequest {
-		t.Fatalf("non-ASCII currency status = %d, want %d; body %s", nonASCIICurrency.StatusCode, http.StatusBadRequest, nonASCIICurrency.RawBody)
+	if err != nil {
+		t.Fatalf("non-ASCII currency request: %v", err)
+	}
+	if nonASCIICurrency.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("non-ASCII currency status = %d, want %d; body %s", nonASCIICurrency.StatusCode(), http.StatusBadRequest, nonASCIICurrency.Body)
 	}
 
-	missingExternalSystem := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", models.CreateAccountRequest{
+	externalID := "acct-123"
+	missingExternalSystem, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:        "checking:Chase",
-		ExternalId: new("acct-123"),
+		ExternalId: &externalID,
 	})
-	if missingExternalSystem.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing external system status = %d, want %d; body %s", missingExternalSystem.StatusCode, http.StatusBadRequest, missingExternalSystem.RawBody)
+	if err != nil {
+		t.Fatalf("missing external system request: %v", err)
+	}
+	if missingExternalSystem.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing external system status = %d, want %d; body %s", missingExternalSystem.StatusCode(), http.StatusBadRequest, missingExternalSystem.Body)
 	}
 
-	missingHidden := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, "/accounts/1", map[string]any{})
-	if missingHidden.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing hidden status = %d, want %d; body %s", missingHidden.StatusCode, http.StatusBadRequest, missingHidden.RawBody)
+	missingHidden, err := client.REST().UpdateAccountWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]any{}))
+	if err != nil {
+		t.Fatalf("missing hidden request: %v", err)
+	}
+	if missingHidden.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing hidden status = %d, want %d; body %s", missingHidden.StatusCode(), http.StatusBadRequest, missingHidden.Body)
 	}
 
-	badQuery := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/accounts?include_hidden=maybe", nil)
-	if badQuery.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode, http.StatusBadRequest, badQuery.RawBody)
+	badQuery, err := client.REST().ListAccountsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_hidden=maybe"))
+	if err != nil {
+		t.Fatalf("bad query request: %v", err)
+	}
+	if badQuery.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode(), http.StatusBadRequest, badQuery.Body)
 	}
 
-	extraField := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/accounts", map[string]any{
+	extraField, err := client.REST().CreateAccountWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
 		"fqn":        "checking:Chase",
 		"extraField": true,
-	})
-	if extraField.StatusCode != http.StatusBadRequest {
-		t.Fatalf("extra field status = %d, want %d; body %s", extraField.StatusCode, http.StatusBadRequest, extraField.RawBody)
+	}))
+	if err != nil {
+		t.Fatalf("extra field request: %v", err)
+	}
+	if extraField.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("extra field status = %d, want %d; body %s", extraField.StatusCode(), http.StatusBadRequest, extraField.Body)
 	}
 }
 
-func accountPath(id int64) string {
-	return apptest.IDPath("/accounts", id)
-}
-
-func assertAccountHierarchy(t *testing.T, account models.Account, kind string, parent string, name string, level int) {
+func assertAccountHierarchy(t *testing.T, account httpclient.Account, kind string, parent string, name string, level int) {
 	t.Helper()
 
 	if account.Kind != kind {
@@ -226,7 +309,7 @@ func assertAccountHierarchy(t *testing.T, account models.Account, kind string, p
 	}
 }
 
-func assertAccountIDs(t *testing.T, accounts []models.Account, want []int64) {
+func assertAccountIDs(t *testing.T, accounts []httpclient.Account, want []int64) {
 	t.Helper()
 
 	if len(accounts) != len(want) {

@@ -3,8 +3,8 @@
 ## Purpose
 
 - Owns generated OpenAPI route registration, generated request binding, OpenAPI request validation, response encoding, and OpenAPI DTO mapping.
-- Contains the adapter-owned generated OpenAPI contract subpackage.
-  REST DTO structs are generated from `api/openapi.yaml` in `internal/httpapi/openapi`.
+- Contains the adapter-owned generated OpenAPI server contract subpackage.
+  Server DTO structs are generated from `api/openapi.yaml` in `internal/httpapi/openapi`.
 
 ## Implicit Contracts
 
@@ -25,7 +25,7 @@
 
 ## Boundaries
 
-- Owns: HTTP status mapping, transport DTO conversion, REST query validation/mapping, router middleware, and generated OpenAPI code if colocated.
+- Owns: HTTP status mapping, transport DTO conversion, REST query validation/mapping, router middleware, and generated OpenAPI server code.
 - Does not own: database opening, CLI parsing, SQL execution, or service-layer decisions.
 
 ## Testing Notes

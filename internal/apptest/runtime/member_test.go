@@ -1,87 +1,119 @@
 package runtime_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-	models "github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	client := newSharedClient(t)
 
-	created := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
+	created, err := client.REST().CreateMemberWithResponse(context.Background(), httpclient.CreateMemberRequest{
 		Name: "Alex",
 	})
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
 	}
-	if created.Body.Name != "Alex" {
-		t.Fatalf("created name = %q, want Alex", created.Body.Name)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-
-	read := apptest.Decode[models.Member](client, http.MethodGet, memberPath(created.Body.MemberId), nil)
-	if read.StatusCode != http.StatusOK {
-		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
-	}
-	if read.Body.MemberId != created.Body.MemberId {
-		t.Fatalf("read member id = %d, want %d", read.Body.MemberId, created.Body.MemberId)
+	if created.JSON201.Name != "Alex" {
+		t.Fatalf("created name = %q, want Alex", created.JSON201.Name)
 	}
 
-	second := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
+	read, err := client.REST().GetMemberWithResponse(context.Background(), created.JSON201.MemberId, nil)
+	if err != nil {
+		t.Fatalf("read request: %v", err)
+	}
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	if read.JSON200.MemberId != created.JSON201.MemberId {
+		t.Fatalf("read member id = %d, want %d", read.JSON200.MemberId, created.JSON201.MemberId)
+	}
+
+	second, err := client.REST().CreateMemberWithResponse(context.Background(), httpclient.CreateMemberRequest{
 		Name: "Blair",
 	})
-	if second.StatusCode != http.StatusCreated {
-		t.Fatalf("second create status = %d, want %d; body %s", second.StatusCode, http.StatusCreated, second.RawBody)
+	if err != nil {
+		t.Fatalf("second create request: %v", err)
+	}
+	if second.StatusCode() != http.StatusCreated {
+		t.Fatalf("second create status = %d, want %d; body %s", second.StatusCode(), http.StatusCreated, second.Body)
 	}
 
-	defaultList := apptest.Decode[models.MemberListResponse](client, http.MethodGet, "/members", nil)
-	if defaultList.StatusCode != http.StatusOK {
-		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode, http.StatusOK, defaultList.RawBody)
+	defaultList, err := client.REST().ListMembersWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default list request: %v", err)
 	}
-	assertMemberIDs(t, defaultList.Body.Members, []int64{created.Body.MemberId, second.Body.MemberId})
+	if defaultList.StatusCode() != http.StatusOK {
+		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
+	}
+	assertMemberIDs(t, defaultList.JSON200.Members, []int64{created.JSON201.MemberId, second.JSON201.MemberId})
 
-	updated := apptest.Decode[models.Member](client, http.MethodPatch, memberPath(created.Body.MemberId), models.UpdateMemberRequest{
+	updated, err := client.REST().UpdateMemberWithResponse(context.Background(), created.JSON201.MemberId, httpclient.UpdateMemberRequest{
 		Name: "Casey",
 	})
-	if updated.StatusCode != http.StatusOK {
-		t.Fatalf("update status = %d, want %d; body %s", updated.StatusCode, http.StatusOK, updated.RawBody)
+	if err != nil {
+		t.Fatalf("update request: %v", err)
 	}
-	if updated.Body.Name != "Casey" {
-		t.Fatalf("updated name = %q, want Casey", updated.Body.Name)
+	if updated.StatusCode() != http.StatusOK {
+		t.Fatalf("update status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
 	}
-
-	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, memberPath(second.Body.MemberId), nil)
-	if deleted.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
+	if updated.JSON200.Name != "Casey" {
+		t.Fatalf("updated name = %q, want Casey", updated.JSON200.Name)
 	}
 
-	missing := apptest.Decode[models.ErrorResponse](client, http.MethodGet, memberPath(second.Body.MemberId), nil)
-	if missing.StatusCode != http.StatusNotFound {
-		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode, http.StatusNotFound, missing.RawBody)
+	deleted, err := client.REST().DeleteMemberWithResponse(context.Background(), second.JSON201.MemberId)
+	if err != nil {
+		t.Fatalf("delete request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
 	}
 
-	defaultAfterDelete := apptest.Decode[models.MemberListResponse](client, http.MethodGet, "/members", nil)
-	if defaultAfterDelete.StatusCode != http.StatusOK {
-		t.Fatalf("default after delete status = %d, want %d; body %s", defaultAfterDelete.StatusCode, http.StatusOK, defaultAfterDelete.RawBody)
+	missing, err := client.REST().GetMemberWithResponse(context.Background(), second.JSON201.MemberId, nil)
+	if err != nil {
+		t.Fatalf("get deleted request: %v", err)
 	}
-	assertMemberIDs(t, defaultAfterDelete.Body.Members, []int64{created.Body.MemberId})
+	if missing.StatusCode() != http.StatusNotFound {
+		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode(), http.StatusNotFound, missing.Body)
+	}
 
-	deletedRead := apptest.Decode[models.Member](client, http.MethodGet, memberPath(second.Body.MemberId)+"?include_tombstoned=true", nil)
-	if deletedRead.StatusCode != http.StatusOK {
-		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode, http.StatusOK, deletedRead.RawBody)
+	defaultAfterDelete, err := client.REST().ListMembersWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default after delete request: %v", err)
 	}
-	if deletedRead.Body.TombstonedAt == nil {
+	if defaultAfterDelete.StatusCode() != http.StatusOK {
+		t.Fatalf("default after delete status = %d, want %d; body %s", defaultAfterDelete.StatusCode(), http.StatusOK, defaultAfterDelete.Body)
+	}
+	assertMemberIDs(t, defaultAfterDelete.JSON200.Members, []int64{created.JSON201.MemberId})
+
+	includeTombstoned := true
+	deletedRead, err := client.REST().GetMemberWithResponse(context.Background(), second.JSON201.MemberId, &httpclient.GetMemberParams{IncludeTombstoned: &includeTombstoned})
+	if err != nil {
+		t.Fatalf("get deleted with tombstones request: %v", err)
+	}
+	if deletedRead.StatusCode() != http.StatusOK {
+		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode(), http.StatusOK, deletedRead.Body)
+	}
+	if deletedRead.JSON200.TombstonedAt == nil {
 		t.Fatal("get deleted with tombstones tombstoned_at = nil, want timestamp")
 	}
 
-	withTombstones := apptest.Decode[models.MemberListResponse](client, http.MethodGet, "/members?include_tombstoned=true", nil)
-	if withTombstones.StatusCode != http.StatusOK {
-		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode, http.StatusOK, withTombstones.RawBody)
+	withTombstones, err := client.REST().ListMembersWithResponse(context.Background(), &httpclient.ListMembersParams{IncludeTombstoned: &includeTombstoned})
+	if err != nil {
+		t.Fatalf("include tombstones request: %v", err)
 	}
-	assertMemberIDs(t, withTombstones.Body.Members, []int64{second.Body.MemberId, created.Body.MemberId})
-	if withTombstones.Body.Members[0].TombstonedAt == nil {
+	if withTombstones.StatusCode() != http.StatusOK {
+		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode(), http.StatusOK, withTombstones.Body)
+	}
+	assertMemberIDs(t, withTombstones.JSON200.Members, []int64{second.JSON201.MemberId, created.JSON201.MemberId})
+	if withTombstones.JSON200.Members[0].TombstonedAt == nil {
 		t.Fatal("deleted member tombstoned_at = nil, want timestamp")
 	}
 }
@@ -89,94 +121,123 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 func TestMemberRejectsDuplicateActiveName(t *testing.T) {
 	client := newSharedClient(t)
 
-	first := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
+	first, err := client.REST().CreateMemberWithResponse(context.Background(), httpclient.CreateMemberRequest{
 		Name: "Alex",
 	})
-	if first.StatusCode != http.StatusCreated {
-		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode, http.StatusCreated, first.RawBody)
+	if err != nil {
+		t.Fatalf("first create request: %v", err)
+	}
+	if first.StatusCode() != http.StatusCreated {
+		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode(), http.StatusCreated, first.Body)
 	}
 
-	duplicate := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/members", models.CreateMemberRequest{
+	duplicate, err := client.REST().CreateMemberWithResponse(context.Background(), httpclient.CreateMemberRequest{
 		Name: "Alex",
 	})
-	if duplicate.StatusCode != http.StatusConflict {
-		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode, http.StatusConflict, duplicate.RawBody)
+	if err != nil {
+		t.Fatalf("duplicate request: %v", err)
 	}
-	if duplicate.Body.Error.Code != models.APIErrorCodeConflict {
-		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
+	if duplicate.StatusCode() != http.StatusConflict {
+		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode(), http.StatusConflict, duplicate.Body)
+	}
+	if duplicate.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("duplicate code = %q, want %q", duplicate.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
 	}
 
-	second := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
+	second, err := client.REST().CreateMemberWithResponse(context.Background(), httpclient.CreateMemberRequest{
 		Name: "Blair",
 	})
-	if second.StatusCode != http.StatusCreated {
-		t.Fatalf("second create status = %d, want %d; body %s", second.StatusCode, http.StatusCreated, second.RawBody)
+	if err != nil {
+		t.Fatalf("second create request: %v", err)
+	}
+	if second.StatusCode() != http.StatusCreated {
+		t.Fatalf("second create status = %d, want %d; body %s", second.StatusCode(), http.StatusCreated, second.Body)
 	}
 
-	duplicateUpdate := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, memberPath(second.Body.MemberId), models.UpdateMemberRequest{
+	duplicateUpdate, err := client.REST().UpdateMemberWithResponse(context.Background(), second.JSON201.MemberId, httpclient.UpdateMemberRequest{
 		Name: "Alex",
 	})
-	if duplicateUpdate.StatusCode != http.StatusConflict {
-		t.Fatalf("duplicate update status = %d, want %d; body %s", duplicateUpdate.StatusCode, http.StatusConflict, duplicateUpdate.RawBody)
+	if err != nil {
+		t.Fatalf("duplicate update request: %v", err)
+	}
+	if duplicateUpdate.StatusCode() != http.StatusConflict {
+		t.Fatalf("duplicate update status = %d, want %d; body %s", duplicateUpdate.StatusCode(), http.StatusConflict, duplicateUpdate.Body)
 	}
 
-	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, memberPath(first.Body.MemberId), nil)
-	if deleted.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
+	deleted, err := client.REST().DeleteMemberWithResponse(context.Background(), first.JSON201.MemberId)
+	if err != nil {
+		t.Fatalf("delete request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
 	}
 
-	recreated := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
+	recreated, err := client.REST().CreateMemberWithResponse(context.Background(), httpclient.CreateMemberRequest{
 		Name: "Alex",
 	})
-	if recreated.StatusCode != http.StatusCreated {
-		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode, http.StatusCreated, recreated.RawBody)
+	if err != nil {
+		t.Fatalf("recreate request: %v", err)
+	}
+	if recreated.StatusCode() != http.StatusCreated {
+		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode(), http.StatusCreated, recreated.Body)
 	}
 }
 
 func TestMemberValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 
-	blank := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/members", models.CreateMemberRequest{
+	blank, err := client.REST().CreateMemberWithResponse(context.Background(), httpclient.CreateMemberRequest{
 		Name: "",
 	})
-	if blank.StatusCode != http.StatusBadRequest {
-		t.Fatalf("blank status = %d, want %d; body %s", blank.StatusCode, http.StatusBadRequest, blank.RawBody)
+	if err != nil {
+		t.Fatalf("blank request: %v", err)
 	}
-	if blank.Body.Error.Code != models.APIErrorCodeInvalidRequest {
-		t.Fatalf("blank code = %q, want %q", blank.Body.Error.Code, models.APIErrorCodeInvalidRequest)
+	if blank.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("blank status = %d, want %d; body %s", blank.StatusCode(), http.StatusBadRequest, blank.Body)
+	}
+	if blank.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("blank code = %q, want %q", blank.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
 
-	whitespace := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, "/members/1", models.UpdateMemberRequest{
+	whitespace, err := client.REST().UpdateMemberWithResponse(context.Background(), 1, httpclient.UpdateMemberRequest{
 		Name: " Alex",
 	})
-	if whitespace.StatusCode != http.StatusBadRequest {
-		t.Fatalf("whitespace status = %d, want %d; body %s", whitespace.StatusCode, http.StatusBadRequest, whitespace.RawBody)
+	if err != nil {
+		t.Fatalf("whitespace request: %v", err)
+	}
+	if whitespace.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("whitespace status = %d, want %d; body %s", whitespace.StatusCode(), http.StatusBadRequest, whitespace.Body)
 	}
 
-	badQuery := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/members?include_tombstoned=maybe", nil)
-	if badQuery.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode, http.StatusBadRequest, badQuery.RawBody)
+	badQuery, err := client.REST().ListMembersWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_tombstoned=maybe"))
+	if err != nil {
+		t.Fatalf("bad query request: %v", err)
+	}
+	if badQuery.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode(), http.StatusBadRequest, badQuery.Body)
 	}
 
-	emptyQuery := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/members?include_tombstoned=", nil)
-	if emptyQuery.StatusCode != http.StatusBadRequest {
-		t.Fatalf("empty query status = %d, want %d; body %s", emptyQuery.StatusCode, http.StatusBadRequest, emptyQuery.RawBody)
+	emptyQuery, err := client.REST().ListMembersWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_tombstoned="))
+	if err != nil {
+		t.Fatalf("empty query request: %v", err)
+	}
+	if emptyQuery.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("empty query status = %d, want %d; body %s", emptyQuery.StatusCode(), http.StatusBadRequest, emptyQuery.Body)
 	}
 
-	extraField := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/members", map[string]any{
+	extraField, err := client.REST().CreateMemberWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
 		"name":       "Alex",
 		"extraField": true,
-	})
-	if extraField.StatusCode != http.StatusBadRequest {
-		t.Fatalf("extra field status = %d, want %d; body %s", extraField.StatusCode, http.StatusBadRequest, extraField.RawBody)
+	}))
+	if err != nil {
+		t.Fatalf("extra field request: %v", err)
+	}
+	if extraField.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("extra field status = %d, want %d; body %s", extraField.StatusCode(), http.StatusBadRequest, extraField.Body)
 	}
 }
 
-func memberPath(id int64) string {
-	return apptest.IDPath("/members", id)
-}
-
-func assertMemberIDs(t *testing.T, members []models.Member, want []int64) {
+func assertMemberIDs(t *testing.T, members []httpclient.Member, want []int64) {
 	t.Helper()
 
 	if len(members) != len(want) {

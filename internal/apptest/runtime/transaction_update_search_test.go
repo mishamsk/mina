@@ -1,101 +1,112 @@
 package runtime_test
 
 import (
+	"context"
 	"net/http"
-	"net/url"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-	models "github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestTransactionReplaceBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
 
-	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs))
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs))
+	requireNoTransportError(t, "create transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-	oldRecordIDs := recordIDs(created.Body.Records)
+	oldRecordIDs := recordIDs(created.JSON201.Records)
 
 	replacement := replacementTransactionRequest(refs)
-	updated := apptest.Decode[models.Transaction](client, http.MethodPut, transactionPath(created.Body.TransactionId), replacement)
-	if updated.StatusCode != http.StatusOK {
-		t.Fatalf("replace status = %d, want %d; body %s", updated.StatusCode, http.StatusOK, updated.RawBody)
+	updated, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacement)
+	requireNoTransportError(t, "replace transaction", err)
+	if updated.StatusCode() != http.StatusOK {
+		t.Fatalf("replace status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
 	}
-	if updated.Body.TransactionId != created.Body.TransactionId {
-		t.Fatalf("replaced transaction id = %d, want %d", updated.Body.TransactionId, created.Body.TransactionId)
+	if updated.JSON200.TransactionId != created.JSON201.TransactionId {
+		t.Fatalf("replaced transaction id = %d, want %d", updated.JSON200.TransactionId, created.JSON201.TransactionId)
 	}
-	if updated.Body.InitiatedDate != "2024-03-12" {
-		t.Fatalf("replaced initiated_date = %q, want 2024-03-12", updated.Body.InitiatedDate)
+	if updated.JSON200.InitiatedDate != "2024-03-12" {
+		t.Fatalf("replaced initiated_date = %q, want 2024-03-12", updated.JSON200.InitiatedDate)
 	}
-	if len(updated.Body.Records) != 2 {
-		t.Fatalf("replaced record count = %d, want 2; body %+v", len(updated.Body.Records), updated.Body)
+	if len(updated.JSON200.Records) != 2 {
+		t.Fatalf("replaced record count = %d, want 2; body %+v", len(updated.JSON200.Records), updated.JSON200)
 	}
-	assertNoRecordIDs(t, updated.Body.Records, oldRecordIDs)
+	assertNoRecordIDs(t, updated.JSON200.Records, oldRecordIDs)
 
-	search := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records", nil)
-	if search.StatusCode != http.StatusOK {
-		t.Fatalf("record search status = %d, want %d; body %s", search.StatusCode, http.StatusOK, search.RawBody)
+	search, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil)
+	requireNoTransportError(t, "search records", err)
+	if search.StatusCode() != http.StatusOK {
+		t.Fatalf("record search status = %d, want %d; body %s", search.StatusCode(), http.StatusOK, search.Body)
 	}
-	assertRecordIDs(t, search.Body.Records, recordIDs(updated.Body.Records))
+	assertRecordIDs(t, search.JSON200.Records, recordIDs(updated.JSON200.Records))
 
 	imbalanced := replacement
 	imbalanced.Records[1].AmountUsd = "19.00"
-	rejected := apptest.Decode[models.ErrorResponse](client, http.MethodPut, transactionPath(created.Body.TransactionId), imbalanced)
-	if rejected.StatusCode != http.StatusBadRequest {
-		t.Fatalf("imbalanced replace status = %d, want %d; body %s", rejected.StatusCode, http.StatusBadRequest, rejected.RawBody)
+	rejected, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, imbalanced)
+	requireNoTransportError(t, "replace transaction", err)
+	if rejected.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("imbalanced replace status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
 	}
 
-	read := apptest.Decode[models.Transaction](client, http.MethodGet, transactionPath(created.Body.TransactionId), nil)
-	if read.StatusCode != http.StatusOK {
-		t.Fatalf("read after rejected replace status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "get transaction", err)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read after rejected replace status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
 	}
-	if read.Body.InitiatedDate != updated.Body.InitiatedDate {
-		t.Fatalf("initiated_date after rejected replace = %q, want %q", read.Body.InitiatedDate, updated.Body.InitiatedDate)
+	if read.JSON200.InitiatedDate != updated.JSON200.InitiatedDate {
+		t.Fatalf("initiated_date after rejected replace = %q, want %q", read.JSON200.InitiatedDate, updated.JSON200.InitiatedDate)
 	}
-	assertRecordIDs(t, read.Body.Records, recordIDs(updated.Body.Records))
+	assertRecordIDs(t, read.JSON200.Records, recordIDs(updated.JSON200.Records))
 }
 
 func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
 
-	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs))
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs))
+	requireNoTransportError(t, "create transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
 
-	deleted := apptest.Decode[struct{}](client, http.MethodDelete, transactionPath(created.Body.TransactionId), nil)
-	if deleted.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
+	deleted, err := client.REST().DeleteTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "delete transaction", err)
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
 	}
 
-	read := apptest.Decode[models.ErrorResponse](client, http.MethodGet, transactionPath(created.Body.TransactionId), nil)
-	if read.StatusCode != http.StatusNotFound {
-		t.Fatalf("read tombstoned transaction status = %d, want %d; body %s", read.StatusCode, http.StatusNotFound, read.RawBody)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "get transaction", err)
+	if read.StatusCode() != http.StatusNotFound {
+		t.Fatalf("read tombstoned transaction status = %d, want %d; body %s", read.StatusCode(), http.StatusNotFound, read.Body)
 	}
 
-	list := apptest.Decode[models.TransactionListResponse](client, http.MethodGet, "/transactions", nil)
-	if list.StatusCode != http.StatusOK {
-		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode, http.StatusOK, list.RawBody)
+	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	requireNoTransportError(t, "list transactions", err)
+	if list.StatusCode() != http.StatusOK {
+		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
 	}
-	if len(list.Body.Transactions) != 0 {
-		t.Fatalf("transaction count after delete = %d, want 0; body %+v", len(list.Body.Transactions), list.Body)
-	}
-
-	records := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, "/records", nil)
-	if records.StatusCode != http.StatusOK {
-		t.Fatalf("record search status = %d, want %d; body %s", records.StatusCode, http.StatusOK, records.RawBody)
-	}
-	if len(records.Body.Records) != 0 {
-		t.Fatalf("record count after delete = %d, want 0; body %+v", len(records.Body.Records), records.Body)
+	if len(list.JSON200.Transactions) != 0 {
+		t.Fatalf("transaction count after delete = %d, want 0; body %+v", len(list.JSON200.Transactions), list.JSON200)
 	}
 
-	secondDelete := apptest.Decode[models.ErrorResponse](client, http.MethodDelete, transactionPath(created.Body.TransactionId), nil)
-	if secondDelete.StatusCode != http.StatusNotFound {
-		t.Fatalf("second delete status = %d, want %d; body %s", secondDelete.StatusCode, http.StatusNotFound, secondDelete.RawBody)
+	records, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil)
+	requireNoTransportError(t, "search records", err)
+	if records.StatusCode() != http.StatusOK {
+		t.Fatalf("record search status = %d, want %d; body %s", records.StatusCode(), http.StatusOK, records.Body)
+	}
+	if len(records.JSON200.Records) != 0 {
+		t.Fatalf("record count after delete = %d, want 0; body %+v", len(records.JSON200.Records), records.JSON200)
+	}
+
+	secondDelete, err := client.REST().DeleteTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "delete transaction", err)
+	if secondDelete.StatusCode() != http.StatusNotFound {
+		t.Fatalf("second delete status = %d, want %d; body %s", secondDelete.StatusCode(), http.StatusNotFound, secondDelete.Body)
 	}
 }
 
@@ -104,14 +115,17 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	refs := createSearchRefs(t, client)
 
 	firstReq := balancedTransactionRequest(refs.transactionRefs)
-	first := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", firstReq)
-	if first.StatusCode != http.StatusCreated {
-		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode, http.StatusCreated, first.RawBody)
+	first, err := client.REST().CreateTransactionWithResponse(context.Background(), firstReq)
+	requireNoTransportError(t, "create transaction", err)
+	if first.StatusCode() != http.StatusCreated {
+		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode(), http.StatusCreated, first.Body)
 	}
 
-	secondReq := models.CreateTransactionRequest{
+	memo := "Rent"
+	pendingDate := "2024-04-01"
+	secondReq := httpclient.CreateTransactionRequest{
 		InitiatedDate: "2024-04-01",
-		Records: []models.CreateJournalRecordRequest{
+		Records: []httpclient.CreateJournalRecordRequest{
 			{
 				AccountId:            refs.SavingsAccountId,
 				MemberId:             &refs.SecondMemberId,
@@ -120,11 +134,11 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				AmountUsd:            "-50.00",
 				CategoryId:           refs.SecondCategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.SecondTagId),
-				Memo:                 new("Rent"),
-				PendingDate:          new("2024-04-01"),
-				PostingStatus:        models.Pending,
-				ReconciliationStatus: models.Unreconciled,
-				Source:               models.Manual,
+				Memo:                 &memo,
+				PendingDate:          &pendingDate,
+				PostingStatus:        httpclient.Pending,
+				ReconciliationStatus: httpclient.Unreconciled,
+				Source:               httpclient.Manual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -132,85 +146,97 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				Amount:               "50.00",
 				AmountUsd:            "50.00",
 				CategoryId:           refs.SecondCategoryId,
-				PostingStatus:        models.Pending,
-				ReconciliationStatus: models.Unreconciled,
-				Source:               models.Manual,
+				PostingStatus:        httpclient.Pending,
+				ReconciliationStatus: httpclient.Unreconciled,
+				Source:               httpclient.Manual,
 			},
 		},
 	}
-	second := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", secondReq)
-	if second.StatusCode != http.StatusCreated {
-		t.Fatalf("second create status = %d, want %d; body %s", second.StatusCode, http.StatusCreated, second.RawBody)
+	second, err := client.REST().CreateTransactionWithResponse(context.Background(), secondReq)
+	requireNoTransportError(t, "create transaction", err)
+	if second.StatusCode() != http.StatusCreated {
+		t.Fatalf("second create status = %d, want %d; body %s", second.StatusCode(), http.StatusCreated, second.Body)
 	}
 
-	firstDebit := first.Body.Records[0]
-	firstCredit := first.Body.Records[1]
-	secondDebit := second.Body.Records[0]
-	secondCredit := second.Body.Records[1]
+	firstDebit := first.JSON201.Records[0]
+	firstCredit := first.JSON201.Records[1]
+	secondDebit := second.JSON201.Records[0]
+	secondCredit := second.JSON201.Records[1]
 
 	cases := []struct {
-		name string
-		path string
-		want []int64
+		name   string
+		params *httpclient.SearchJournalRecordsParams
+		want   []int64
 	}{
-		{name: "account", path: "/records?account_id=" + apptest.FormatID(refs.CheckingAccountId), want: []int64{firstDebit.RecordId}},
-		{name: "category", path: "/records?category_id=" + apptest.FormatID(refs.CategoryId), want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
-		{name: "tag", path: "/records?tag_id=" + apptest.FormatID(refs.TagId), want: []int64{firstDebit.RecordId}},
-		{name: "member", path: "/records?member_id=" + apptest.FormatID(refs.MemberId), want: []int64{firstDebit.RecordId}},
-		{name: "posting status", path: "/records?posting_status=pending", want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
-		{name: "reconciliation status", path: "/records?reconciliation_status=unreconciled", want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
-		{name: "amount min", path: "/records?amount_min=40.00", want: []int64{secondCredit.RecordId}},
-		{name: "amount max", path: "/records?amount_max=-40.00", want: []int64{secondDebit.RecordId}},
-		{name: "amount usd min", path: "/records?amount_usd_min=40.00", want: []int64{secondCredit.RecordId}},
-		{name: "amount usd max", path: "/records?amount_usd_max=-40.00", want: []int64{secondDebit.RecordId}},
-		{name: "initiated from", path: "/records?initiated_date_from=2024-04-01", want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
-		{name: "initiated to", path: "/records?initiated_date_to=2024-03-31", want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
-		{name: "pending from", path: "/records?pending_date_from=2024-04-01", want: []int64{secondDebit.RecordId}},
-		{name: "pending to", path: "/records?pending_date_to=2024-03-31", want: []int64{firstDebit.RecordId}},
-		{name: "posted from", path: "/records?posted_date_from=2024-03-11", want: []int64{firstDebit.RecordId}},
-		{name: "posted to", path: "/records?posted_date_to=2024-03-11", want: []int64{firstDebit.RecordId}},
-		{name: "memo", path: "/records?memo_contains=" + url.QueryEscape("unc"), want: []int64{firstDebit.RecordId}},
-		{name: "combined", path: "/records?category_id=" + apptest.FormatID(refs.CategoryId) + "&tag_id=" + apptest.FormatID(refs.TagId) + "&memo_contains=Lunch", want: []int64{firstDebit.RecordId}},
+		{name: "account", params: &httpclient.SearchJournalRecordsParams{AccountId: &refs.CheckingAccountId}, want: []int64{firstDebit.RecordId}},
+		{name: "category", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
+		{name: "tag", params: &httpclient.SearchJournalRecordsParams{TagId: &refs.TagId}, want: []int64{firstDebit.RecordId}},
+		{name: "member", params: &httpclient.SearchJournalRecordsParams{MemberId: &refs.MemberId}, want: []int64{firstDebit.RecordId}},
+		{name: "posting status", params: &httpclient.SearchJournalRecordsParams{PostingStatus: ptrTo(httpclient.Pending)}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "reconciliation status", params: &httpclient.SearchJournalRecordsParams{ReconciliationStatus: ptrTo(httpclient.Unreconciled)}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "amount min", params: &httpclient.SearchJournalRecordsParams{AmountMin: new("40.00")}, want: []int64{secondCredit.RecordId}},
+		{name: "amount max", params: &httpclient.SearchJournalRecordsParams{AmountMax: new("-40.00")}, want: []int64{secondDebit.RecordId}},
+		{name: "amount usd min", params: &httpclient.SearchJournalRecordsParams{AmountUsdMin: new("40.00")}, want: []int64{secondCredit.RecordId}},
+		{name: "amount usd max", params: &httpclient.SearchJournalRecordsParams{AmountUsdMax: new("-40.00")}, want: []int64{secondDebit.RecordId}},
+		{name: "initiated from", params: &httpclient.SearchJournalRecordsParams{InitiatedDateFrom: new("2024-04-01")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "initiated to", params: &httpclient.SearchJournalRecordsParams{InitiatedDateTo: new("2024-03-31")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
+		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: new("2024-04-01")}, want: []int64{secondDebit.RecordId}},
+		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: new("2024-03-31")}, want: []int64{firstDebit.RecordId}},
+		{name: "posted from", params: &httpclient.SearchJournalRecordsParams{PostedDateFrom: new("2024-03-11")}, want: []int64{firstDebit.RecordId}},
+		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: new("2024-03-11")}, want: []int64{firstDebit.RecordId}},
+		{name: "memo", params: &httpclient.SearchJournalRecordsParams{MemoContains: new("unc")}, want: []int64{firstDebit.RecordId}},
+		{name: "combined", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId, TagId: &refs.TagId, MemoContains: new("Lunch")}, want: []int64{firstDebit.RecordId}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, tc.path, nil)
-			if got.StatusCode != http.StatusOK {
-				t.Fatalf("search status = %d, want %d; body %s", got.StatusCode, http.StatusOK, got.RawBody)
+			got, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), tc.params)
+			requireNoTransportError(t, "search records", err)
+			if got.StatusCode() != http.StatusOK {
+				t.Fatalf("search status = %d, want %d; body %s", got.StatusCode(), http.StatusOK, got.Body)
 			}
-			assertRecordIDs(t, got.Body.Records, tc.want)
+			assertRecordIDs(t, got.JSON200.Records, tc.want)
 		})
 	}
 
-	accountRecords := apptest.Decode[models.JournalRecordSearchResponse](client, http.MethodGet, accountRecordsPath(refs.CheckingAccountId), nil)
-	if accountRecords.StatusCode != http.StatusOK {
-		t.Fatalf("account records status = %d, want %d; body %s", accountRecords.StatusCode, http.StatusOK, accountRecords.RawBody)
+	accountRecords, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, nil)
+	requireNoTransportError(t, "search account records", err)
+	if accountRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("account records status = %d, want %d; body %s", accountRecords.StatusCode(), http.StatusOK, accountRecords.Body)
 	}
-	assertRecordIDs(t, accountRecords.Body.Records, []int64{firstDebit.RecordId})
-	if accountRecords.Body.Records[0].TransactionId != first.Body.TransactionId {
-		t.Fatalf("account record transaction_id = %d, want %d", accountRecords.Body.Records[0].TransactionId, first.Body.TransactionId)
+	assertRecordIDs(t, accountRecords.JSON200.Records, []int64{firstDebit.RecordId})
+	if accountRecords.JSON200.Records[0].TransactionId != first.JSON201.TransactionId {
+		t.Fatalf("account record transaction_id = %d, want %d", accountRecords.JSON200.Records[0].TransactionId, first.JSON201.TransactionId)
 	}
 
-	unsupported := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/records?bad=1", nil)
-	if unsupported.StatusCode != http.StatusBadRequest {
-		t.Fatalf("unsupported filter status = %d, want %d; body %s", unsupported.StatusCode, http.StatusBadRequest, unsupported.RawBody)
+	unsupported, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("bad=1"))
+	requireNoTransportError(t, "search records", err)
+	if unsupported.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unsupported filter status = %d, want %d; body %s", unsupported.StatusCode(), http.StatusBadRequest, unsupported.Body)
 	}
-	invalidDecimal := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/records?amount_min=not-a-decimal", nil)
-	if invalidDecimal.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid decimal filter status = %d, want %d; body %s", invalidDecimal.StatusCode, http.StatusBadRequest, invalidDecimal.RawBody)
+	invalidDecimal, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("amount_min=not-a-decimal"))
+	requireNoTransportError(t, "search records", err)
+	if invalidDecimal.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid decimal filter status = %d, want %d; body %s", invalidDecimal.StatusCode(), http.StatusBadRequest, invalidDecimal.Body)
 	}
-	invalidPostingStatus := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/records?posting_status=unknown", nil)
-	if invalidPostingStatus.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid posting status filter status = %d, want %d; body %s", invalidPostingStatus.StatusCode, http.StatusBadRequest, invalidPostingStatus.RawBody)
+	invalidPostingStatus, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("posting_status=unknown"))
+	requireNoTransportError(t, "search records", err)
+	if invalidPostingStatus.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid posting status filter status = %d, want %d; body %s", invalidPostingStatus.StatusCode(), http.StatusBadRequest, invalidPostingStatus.Body)
 	}
-	invalidReconciliationStatus := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/records?reconciliation_status=unknown", nil)
-	if invalidReconciliationStatus.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid reconciliation status filter status = %d, want %d; body %s", invalidReconciliationStatus.StatusCode, http.StatusBadRequest, invalidReconciliationStatus.RawBody)
+	invalidReconciliationStatus, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("reconciliation_status=unknown"))
+	requireNoTransportError(t, "search records", err)
+	if invalidReconciliationStatus.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid reconciliation status filter status = %d, want %d; body %s", invalidReconciliationStatus.StatusCode(), http.StatusBadRequest, invalidReconciliationStatus.Body)
 	}
-	accountIDOnAccountView := apptest.Decode[models.ErrorResponse](client, http.MethodGet, accountRecordsPath(refs.CheckingAccountId)+"?account_id="+apptest.FormatID(refs.SavingsAccountId), nil)
-	if accountIDOnAccountView.StatusCode != http.StatusBadRequest {
-		t.Fatalf("account_id on account view status = %d, want %d; body %s", accountIDOnAccountView.StatusCode, http.StatusBadRequest, accountIDOnAccountView.RawBody)
+	accountIDOnAccountView, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, nil, apptest.ReplaceRawQuery("account_id="+apptest.FormatID(refs.SavingsAccountId)))
+	requireNoTransportError(t, "search account records", err)
+	if accountIDOnAccountView.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("account_id on account view status = %d, want %d; body %s", accountIDOnAccountView.StatusCode(), http.StatusBadRequest, accountIDOnAccountView.Body)
 	}
+}
+
+func ptrTo[T any](value T) *T {
+	return new(value)
 }
 
 type searchRefs struct {
@@ -240,10 +266,13 @@ func createSearchRefs(t *testing.T, client *apptest.Client) searchRefs {
 	}
 }
 
-func replacementTransactionRequest(refs transactionRefs) models.UpdateTransactionRequest {
-	return models.UpdateTransactionRequest{
+func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransactionRequest {
+	memo := "Replacement"
+	pendingDate := "2024-03-12"
+	postedDate := "2024-03-13"
+	return httpclient.UpdateTransactionRequest{
 		InitiatedDate: "2024-03-12",
-		Records: []models.CreateJournalRecordRequest{
+		Records: []httpclient.CreateJournalRecordRequest{
 			{
 				AccountId:            refs.CheckingAccountId,
 				MemberId:             &refs.MemberId,
@@ -252,12 +281,12 @@ func replacementTransactionRequest(refs transactionRefs) models.UpdateTransactio
 				AmountUsd:            "-20.00",
 				CategoryId:           refs.CategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.TagId),
-				Memo:                 new("Replacement"),
-				PendingDate:          new("2024-03-12"),
-				PostedDate:           new("2024-03-13"),
-				PostingStatus:        models.Posted,
-				ReconciliationStatus: models.Reconciled,
-				Source:               models.Manual,
+				Memo:                 &memo,
+				PendingDate:          &pendingDate,
+				PostedDate:           &postedDate,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -265,19 +294,15 @@ func replacementTransactionRequest(refs transactionRefs) models.UpdateTransactio
 				Amount:               "20.00",
 				AmountUsd:            "20.00",
 				CategoryId:           refs.CategoryId,
-				PostingStatus:        models.Posted,
-				ReconciliationStatus: models.Reconciled,
-				Source:               models.Manual,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
 			},
 		},
 	}
 }
 
-func accountRecordsPath(accountID int64) string {
-	return apptest.IDPath("/accounts", accountID) + "/records"
-}
-
-func recordIDs(records []models.JournalRecord) []int64 {
+func recordIDs(records []httpclient.JournalRecord) []int64 {
 	ids := make([]int64, 0, len(records))
 	for _, record := range records {
 		ids = append(ids, record.RecordId)
@@ -286,13 +311,13 @@ func recordIDs(records []models.JournalRecord) []int64 {
 	return ids
 }
 
-func assertRecordIDs(t *testing.T, records []models.JournalRecord, want []int64) {
+func assertRecordIDs(t *testing.T, records []httpclient.JournalRecord, want []int64) {
 	t.Helper()
 
 	assertInt64s(t, recordIDs(records), want)
 }
 
-func assertNoRecordIDs(t *testing.T, records []models.JournalRecord, blocked []int64) {
+func assertNoRecordIDs(t *testing.T, records []httpclient.JournalRecord, blocked []int64) {
 	t.Helper()
 
 	blockedSet := map[int64]struct{}{}

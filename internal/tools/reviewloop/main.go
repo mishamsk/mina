@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -325,9 +326,7 @@ func (cfg config) placeholderValues(overrides map[string]string) map[string]stri
 		"RAW_REVIEWS":          "",
 		"REVIEWS":              "",
 	}
-	for key, value := range overrides {
-		values[key] = value
-	}
+	maps.Copy(values, overrides)
 	return values
 }
 
@@ -373,9 +372,7 @@ func runReviewers(cfg config, reviewScope string) (string, error) {
 	var progressMu sync.Mutex
 	var wg sync.WaitGroup
 	for i, reviewer := range cfg.reviewers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 
 			prompt, err := interpolate(cfg.templates.reviewer, cfg.placeholderValues(map[string]string{
 				"REVIEWER_NAME": reviewer.name,
@@ -396,7 +393,7 @@ func runReviewers(cfg config, reviewScope string) (string, error) {
 			fmt.Fprintf(os.Stderr, "reviewer %s finished\n", reviewer.name)
 			progressMu.Unlock()
 			results[i] = reviewerResult{name: reviewer.name, message: message}
-		}()
+		})
 	}
 	wg.Wait()
 

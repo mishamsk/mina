@@ -11,9 +11,10 @@ Mina has only two app test classes:
 Normal tests are the default and should be about 90% of the test suite.
 
 - Bypass CLI parsing and network listeners.
-- Exercise app behavior through an in-process JSON client, in-memory DuckDB, and per-test schemas.
+- Exercise app behavior through the apptest in-process generated REST client, in-memory DuckDB, and per-test schemas.
 - Use `internal/apptest` for reusable harness code.
-- Use the test client for fixture setup, actions, and assertions.
+- Obtain the generated REST client from `internal/apptest`.
+- Use the generated REST client for fixture setup, actions, and assertions.
 - Set up fixtures through REST APIs exposed by the client.
 - Assert observable state through REST APIs exposed by the client.
 - Keep test bodies readable as user scenarios, not setup plumbing.
@@ -41,7 +42,7 @@ and the raw client calls would hide the scenario intent.
 
 - Put it in `internal/apptest`.
 - Name it in user/domain terms.
-- For normal tests, compose REST client calls through the in-process client.
+- For normal tests, compose REST client calls through the apptest in-process generated REST client.
 - Do not run SQL, call services, or call stores from normal-test helpers.
 - Do not add one-off helpers for a single test.
 

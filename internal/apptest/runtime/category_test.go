@@ -1,92 +1,131 @@
 package runtime_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-	models "github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	client := newSharedClient(t)
 
-	created := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
+	created, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
 		Fqn: "Food:Restaurants",
 	})
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
 	}
-	assertCategoryHierarchy(t, created.Body, "Food", "Restaurants", 1)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertCategoryHierarchy(t, *created.JSON201, "Food", "Restaurants", 1)
 
-	read := apptest.Decode[models.Category](client, http.MethodGet, categoryPath(created.Body.CategoryId), nil)
-	if read.StatusCode != http.StatusOK {
-		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
+	read, err := client.REST().GetCategoryWithResponse(context.Background(), created.JSON201.CategoryId, nil)
+	if err != nil {
+		t.Fatalf("read request: %v", err)
 	}
-	if read.Body.CategoryId != created.Body.CategoryId {
-		t.Fatalf("read category id = %d, want %d", read.Body.CategoryId, created.Body.CategoryId)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	if read.JSON200.CategoryId != created.JSON201.CategoryId {
+		t.Fatalf("read category id = %d, want %d", read.JSON200.CategoryId, created.JSON201.CategoryId)
 	}
 
-	hidden := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
+	hiddenValue := true
+	hidden, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
 		Fqn:      "Food:Groceries",
-		IsHidden: new(true),
+		IsHidden: &hiddenValue,
 	})
-	if hidden.StatusCode != http.StatusCreated {
-		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode, http.StatusCreated, hidden.RawBody)
+	if err != nil {
+		t.Fatalf("hidden create request: %v", err)
+	}
+	if hidden.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden create status = %d, want %d; body %s", hidden.StatusCode(), http.StatusCreated, hidden.Body)
 	}
 
-	defaultList := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories", nil)
-	if defaultList.StatusCode != http.StatusOK {
-		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode, http.StatusOK, defaultList.RawBody)
+	defaultList, err := client.REST().ListCategoriesWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default list request: %v", err)
 	}
-	assertCategoryIDs(t, defaultList.Body.Categories, []int64{created.Body.CategoryId})
-
-	includeHidden := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories?include_hidden=true", nil)
-	if includeHidden.StatusCode != http.StatusOK {
-		t.Fatalf("include hidden status = %d, want %d; body %s", includeHidden.StatusCode, http.StatusOK, includeHidden.RawBody)
+	if defaultList.StatusCode() != http.StatusOK {
+		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
-	assertCategoryIDs(t, includeHidden.Body.Categories, []int64{hidden.Body.CategoryId, created.Body.CategoryId})
+	assertCategoryIDs(t, defaultList.JSON200.Categories, []int64{created.JSON201.CategoryId})
 
-	updated := apptest.Decode[models.Category](client, http.MethodPatch, categoryPath(created.Body.CategoryId), models.UpdateCategoryRequest{
+	includeHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{IncludeHidden: &hiddenValue})
+	if err != nil {
+		t.Fatalf("include hidden request: %v", err)
+	}
+	if includeHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("include hidden status = %d, want %d; body %s", includeHidden.StatusCode(), http.StatusOK, includeHidden.Body)
+	}
+	assertCategoryIDs(t, includeHidden.JSON200.Categories, []int64{hidden.JSON201.CategoryId, created.JSON201.CategoryId})
+
+	updated, err := client.REST().UpdateCategoryWithResponse(context.Background(), created.JSON201.CategoryId, httpclient.UpdateCategoryRequest{
 		IsHidden: true,
 	})
-	if updated.StatusCode != http.StatusOK {
-		t.Fatalf("update status = %d, want %d; body %s", updated.StatusCode, http.StatusOK, updated.RawBody)
+	if err != nil {
+		t.Fatalf("update request: %v", err)
 	}
-	if !updated.Body.IsHidden {
+	if updated.StatusCode() != http.StatusOK {
+		t.Fatalf("update status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
+	}
+	if !updated.JSON200.IsHidden {
 		t.Fatal("updated category hidden = false, want true")
 	}
 
-	afterHide := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories", nil)
-	if afterHide.StatusCode != http.StatusOK {
-		t.Fatalf("after hide list status = %d, want %d; body %s", afterHide.StatusCode, http.StatusOK, afterHide.RawBody)
+	afterHide, err := client.REST().ListCategoriesWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("after hide list request: %v", err)
 	}
-	assertCategoryIDs(t, afterHide.Body.Categories, nil)
+	if afterHide.StatusCode() != http.StatusOK {
+		t.Fatalf("after hide list status = %d, want %d; body %s", afterHide.StatusCode(), http.StatusOK, afterHide.Body)
+	}
+	assertCategoryIDs(t, afterHide.JSON200.Categories, nil)
 
-	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, categoryPath(hidden.Body.CategoryId), nil)
-	if deleted.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
+	deleted, err := client.REST().DeleteCategoryWithResponse(context.Background(), hidden.JSON201.CategoryId)
+	if err != nil {
+		t.Fatalf("delete request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
 	}
 
-	missing := apptest.Decode[models.ErrorResponse](client, http.MethodGet, categoryPath(hidden.Body.CategoryId), nil)
-	if missing.StatusCode != http.StatusNotFound {
-		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode, http.StatusNotFound, missing.RawBody)
+	missing, err := client.REST().GetCategoryWithResponse(context.Background(), hidden.JSON201.CategoryId, nil)
+	if err != nil {
+		t.Fatalf("get deleted request: %v", err)
+	}
+	if missing.StatusCode() != http.StatusNotFound {
+		t.Fatalf("get deleted status = %d, want %d; body %s", missing.StatusCode(), http.StatusNotFound, missing.Body)
 	}
 
-	deletedRead := apptest.Decode[models.Category](client, http.MethodGet, categoryPath(hidden.Body.CategoryId)+"?include_tombstoned=true", nil)
-	if deletedRead.StatusCode != http.StatusOK {
-		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode, http.StatusOK, deletedRead.RawBody)
+	includeTombstoned := true
+	deletedRead, err := client.REST().GetCategoryWithResponse(context.Background(), hidden.JSON201.CategoryId, &httpclient.GetCategoryParams{IncludeTombstoned: &includeTombstoned})
+	if err != nil {
+		t.Fatalf("get deleted with tombstones request: %v", err)
 	}
-	if deletedRead.Body.TombstonedAt == nil {
+	if deletedRead.StatusCode() != http.StatusOK {
+		t.Fatalf("get deleted with tombstones status = %d, want %d; body %s", deletedRead.StatusCode(), http.StatusOK, deletedRead.Body)
+	}
+	if deletedRead.JSON200.TombstonedAt == nil {
 		t.Fatal("get deleted with tombstones tombstoned_at = nil, want timestamp")
 	}
 
-	withTombstones := apptest.Decode[models.CategoryListResponse](client, http.MethodGet, "/categories?include_hidden=true&include_tombstoned=true", nil)
-	if withTombstones.StatusCode != http.StatusOK {
-		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode, http.StatusOK, withTombstones.RawBody)
+	withTombstones, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		IncludeHidden:     &hiddenValue,
+		IncludeTombstoned: &includeTombstoned,
+	})
+	if err != nil {
+		t.Fatalf("include tombstones request: %v", err)
 	}
-	assertCategoryIDs(t, withTombstones.Body.Categories, []int64{hidden.Body.CategoryId, created.Body.CategoryId})
-	if withTombstones.Body.Categories[0].TombstonedAt == nil {
+	if withTombstones.StatusCode() != http.StatusOK {
+		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode(), http.StatusOK, withTombstones.Body)
+	}
+	assertCategoryIDs(t, withTombstones.JSON200.Categories, []int64{hidden.JSON201.CategoryId, created.JSON201.CategoryId})
+	if withTombstones.JSON200.Categories[0].TombstonedAt == nil {
 		t.Fatal("deleted category tombstoned_at = nil, want timestamp")
 	}
 }
@@ -94,80 +133,103 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 func TestCategoryRejectsDuplicateActiveFQN(t *testing.T) {
 	client := newSharedClient(t)
 
-	first := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
+	first, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
 		Fqn: "Bills:Utilities",
 	})
-	if first.StatusCode != http.StatusCreated {
-		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode, http.StatusCreated, first.RawBody)
+	if err != nil {
+		t.Fatalf("first create request: %v", err)
+	}
+	if first.StatusCode() != http.StatusCreated {
+		t.Fatalf("first create status = %d, want %d; body %s", first.StatusCode(), http.StatusCreated, first.Body)
 	}
 
-	duplicate := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
+	duplicate, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
 		Fqn: "Bills:Utilities",
 	})
-	if duplicate.StatusCode != http.StatusConflict {
-		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode, http.StatusConflict, duplicate.RawBody)
+	if err != nil {
+		t.Fatalf("duplicate request: %v", err)
 	}
-	if duplicate.Body.Error.Code != models.APIErrorCodeConflict {
-		t.Fatalf("duplicate code = %q, want %q", duplicate.Body.Error.Code, models.APIErrorCodeConflict)
+	if duplicate.StatusCode() != http.StatusConflict {
+		t.Fatalf("duplicate status = %d, want %d; body %s", duplicate.StatusCode(), http.StatusConflict, duplicate.Body)
 	}
-
-	deleted := apptest.Decode[apptest.EmptyJSON](client, http.MethodDelete, categoryPath(first.Body.CategoryId), nil)
-	if deleted.StatusCode != http.StatusNoContent {
-		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode, http.StatusNoContent, deleted.RawBody)
+	if duplicate.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("duplicate code = %q, want %q", duplicate.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
 	}
 
-	recreated := apptest.Decode[models.Category](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
+	deleted, err := client.REST().DeleteCategoryWithResponse(context.Background(), first.JSON201.CategoryId)
+	if err != nil {
+		t.Fatalf("delete request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+
+	recreated, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
 		Fqn: "Bills:Utilities",
 	})
-	if recreated.StatusCode != http.StatusCreated {
-		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode, http.StatusCreated, recreated.RawBody)
+	if err != nil {
+		t.Fatalf("recreate request: %v", err)
+	}
+	if recreated.StatusCode() != http.StatusCreated {
+		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode(), http.StatusCreated, recreated.Body)
 	}
 }
 
 func TestCategoryValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 
-	invalid := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/categories", models.CreateCategoryRequest{
+	invalid, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
 		Fqn: "Food::Restaurants",
 	})
-	if invalid.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid status = %d, want %d; body %s", invalid.StatusCode, http.StatusBadRequest, invalid.RawBody)
+	if err != nil {
+		t.Fatalf("invalid request: %v", err)
 	}
-	if invalid.Body.Error.Code != models.APIErrorCodeInvalidRequest {
-		t.Fatalf("invalid code = %q, want %q", invalid.Body.Error.Code, models.APIErrorCodeInvalidRequest)
+	if invalid.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid status = %d, want %d; body %s", invalid.StatusCode(), http.StatusBadRequest, invalid.Body)
 	}
-
-	badQuery := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/categories?include_hidden=maybe", nil)
-	if badQuery.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode, http.StatusBadRequest, badQuery.RawBody)
+	if invalid.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid code = %q, want %q", invalid.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
 
-	missingRequired := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, "/categories/1", map[string]any{})
-	if missingRequired.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing required status = %d, want %d; body %s", missingRequired.StatusCode, http.StatusBadRequest, missingRequired.RawBody)
+	badQuery, err := client.REST().ListCategoriesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_hidden=maybe"))
+	if err != nil {
+		t.Fatalf("bad query request: %v", err)
+	}
+	if badQuery.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode(), http.StatusBadRequest, badQuery.Body)
 	}
 
-	missingHidden := apptest.Decode[models.ErrorResponse](client, http.MethodPatch, "/categories/1", map[string]string{
+	missingRequired, err := client.REST().UpdateCategoryWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]any{}))
+	if err != nil {
+		t.Fatalf("missing required request: %v", err)
+	}
+	if missingRequired.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing required status = %d, want %d; body %s", missingRequired.StatusCode(), http.StatusBadRequest, missingRequired.Body)
+	}
+
+	missingHidden, err := client.REST().UpdateCategoryWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]string{
 		"fqn": "Other",
-	})
-	if missingHidden.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing hidden status = %d, want %d; body %s", missingHidden.StatusCode, http.StatusBadRequest, missingHidden.RawBody)
+	}))
+	if err != nil {
+		t.Fatalf("missing hidden request: %v", err)
+	}
+	if missingHidden.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing hidden status = %d, want %d; body %s", missingHidden.StatusCode(), http.StatusBadRequest, missingHidden.Body)
 	}
 
-	extraField := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/categories", map[string]any{
+	extraField, err := client.REST().CreateCategoryWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
 		"fqn":        "Food:Restaurants",
 		"extraField": true,
-	})
-	if extraField.StatusCode != http.StatusBadRequest {
-		t.Fatalf("extra field status = %d, want %d; body %s", extraField.StatusCode, http.StatusBadRequest, extraField.RawBody)
+	}))
+	if err != nil {
+		t.Fatalf("extra field request: %v", err)
+	}
+	if extraField.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("extra field status = %d, want %d; body %s", extraField.StatusCode(), http.StatusBadRequest, extraField.Body)
 	}
 }
 
-func categoryPath(id int64) string {
-	return apptest.IDPath("/categories", id)
-}
-
-func assertCategoryHierarchy(t *testing.T, category models.Category, parent string, name string, level int) {
+func assertCategoryHierarchy(t *testing.T, category httpclient.Category, parent string, name string, level int) {
 	t.Helper()
 
 	if category.ParentFqn == nil || *category.ParentFqn != parent {
@@ -181,7 +243,7 @@ func assertCategoryHierarchy(t *testing.T, category models.Category, parent stri
 	}
 }
 
-func assertCategoryIDs(t *testing.T, categories []models.Category, want []int64) {
+func assertCategoryIDs(t *testing.T, categories []httpclient.Category, want []int64) {
 	t.Helper()
 
 	if len(categories) != len(want) {

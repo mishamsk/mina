@@ -1,58 +1,68 @@
 package runtime_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-	models "github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestTransactionCreateReadListBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
 
-	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs))
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs))
+	if err != nil {
+		t.Fatalf("create request: %v", err)
 	}
-	if created.Body.InitiatedDate != "2024-03-10" {
-		t.Fatalf("initiated_date = %q, want 2024-03-10", created.Body.InitiatedDate)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-	if len(created.Body.Records) != 2 {
-		t.Fatalf("created record count = %d, want 2; body %+v", len(created.Body.Records), created.Body)
+	if created.JSON201.InitiatedDate != "2024-03-10" {
+		t.Fatalf("initiated_date = %q, want 2024-03-10", created.JSON201.InitiatedDate)
 	}
-	if created.Body.Records[0].AccountId != refs.CheckingAccountId || created.Body.Records[1].AccountId != refs.MerchantAccountId {
-		t.Fatalf("created account ids = %d/%d, want %d/%d", created.Body.Records[0].AccountId, created.Body.Records[1].AccountId, refs.CheckingAccountId, refs.MerchantAccountId)
+	if len(created.JSON201.Records) != 2 {
+		t.Fatalf("created record count = %d, want 2; body %+v", len(created.JSON201.Records), created.JSON201)
 	}
-	if created.Body.Records[0].MemberId == nil || *created.Body.Records[0].MemberId != refs.MemberId {
-		t.Fatalf("member_id = %v, want %d", created.Body.Records[0].MemberId, refs.MemberId)
+	if created.JSON201.Records[0].AccountId != refs.CheckingAccountId || created.JSON201.Records[1].AccountId != refs.MerchantAccountId {
+		t.Fatalf("created account ids = %d/%d, want %d/%d", created.JSON201.Records[0].AccountId, created.JSON201.Records[1].AccountId, refs.CheckingAccountId, refs.MerchantAccountId)
 	}
-	assertInt64s(t, created.Body.Records[0].TagIds, []int64{refs.TagId})
+	if created.JSON201.Records[0].MemberId == nil || *created.JSON201.Records[0].MemberId != refs.MemberId {
+		t.Fatalf("member_id = %v, want %d", created.JSON201.Records[0].MemberId, refs.MemberId)
+	}
+	assertInt64s(t, created.JSON201.Records[0].TagIds, []int64{refs.TagId})
 
-	read := apptest.Decode[models.Transaction](client, http.MethodGet, transactionPath(created.Body.TransactionId), nil)
-	if read.StatusCode != http.StatusOK {
-		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	if err != nil {
+		t.Fatalf("read request: %v", err)
 	}
-	if read.Body.TransactionId != created.Body.TransactionId {
-		t.Fatalf("read transaction id = %d, want %d", read.Body.TransactionId, created.Body.TransactionId)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
 	}
-	if len(read.Body.Records) != 2 {
-		t.Fatalf("read record count = %d, want 2; body %+v", len(read.Body.Records), read.Body)
+	if read.JSON200.TransactionId != created.JSON201.TransactionId {
+		t.Fatalf("read transaction id = %d, want %d", read.JSON200.TransactionId, created.JSON201.TransactionId)
 	}
-	if read.Body.Records[0].Memo == nil || *read.Body.Records[0].Memo != "Lunch" {
-		t.Fatalf("read memo = %v, want Lunch", read.Body.Records[0].Memo)
+	if len(read.JSON200.Records) != 2 {
+		t.Fatalf("read record count = %d, want 2; body %+v", len(read.JSON200.Records), read.JSON200)
+	}
+	if read.JSON200.Records[0].Memo == nil || *read.JSON200.Records[0].Memo != "Lunch" {
+		t.Fatalf("read memo = %v, want Lunch", read.JSON200.Records[0].Memo)
 	}
 
-	list := apptest.Decode[models.TransactionListResponse](client, http.MethodGet, "/transactions", nil)
-	if list.StatusCode != http.StatusOK {
-		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode, http.StatusOK, list.RawBody)
+	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	if err != nil {
+		t.Fatalf("list request: %v", err)
 	}
-	if len(list.Body.Transactions) != 1 {
-		t.Fatalf("transaction count = %d, want 1; body %+v", len(list.Body.Transactions), list.Body)
+	if list.StatusCode() != http.StatusOK {
+		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
 	}
-	if list.Body.Transactions[0].TransactionId != created.Body.TransactionId || len(list.Body.Transactions[0].Records) != 2 {
-		t.Fatalf("listed transaction = %+v, want id %d with 2 records", list.Body.Transactions[0], created.Body.TransactionId)
+	if len(list.JSON200.Transactions) != 1 {
+		t.Fatalf("transaction count = %d, want 1; body %+v", len(list.JSON200.Transactions), list.JSON200)
+	}
+	if list.JSON200.Transactions[0].TransactionId != created.JSON201.TransactionId || len(list.JSON200.Transactions[0].Records) != 2 {
+		t.Fatalf("listed transaction = %+v, want id %d with 2 records", list.JSON200.Transactions[0], created.JSON201.TransactionId)
 	}
 }
 
@@ -60,19 +70,22 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
 
-	created := apptest.Decode[models.Transaction](client, http.MethodPost, "/transactions", balancedTransactionRequest(refs))
-	if created.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs))
+	if err != nil {
+		t.Fatalf("create request: %v", err)
 	}
-	record := created.Body.Records[0]
-	if record.PostingStatus != models.Posted {
-		t.Fatalf("posting_status = %q, want %q", record.PostingStatus, models.Posted)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-	if record.ReconciliationStatus != models.Reconciled {
-		t.Fatalf("reconciliation_status = %q, want %q", record.ReconciliationStatus, models.Reconciled)
+	record := created.JSON201.Records[0]
+	if record.PostingStatus != httpclient.Posted {
+		t.Fatalf("posting_status = %q, want %q", record.PostingStatus, httpclient.Posted)
 	}
-	if record.Source != models.Manual {
-		t.Fatalf("source = %q, want %q", record.Source, models.Manual)
+	if record.ReconciliationStatus != httpclient.Reconciled {
+		t.Fatalf("reconciliation_status = %q, want %q", record.ReconciliationStatus, httpclient.Reconciled)
+	}
+	if record.Source != httpclient.Manual {
+		t.Fatalf("source = %q, want %q", record.Source, httpclient.Manual)
 	}
 	if record.PendingDate == nil || *record.PendingDate != "2024-03-10" {
 		t.Fatalf("pending_date = %v, want 2024-03-10", record.PendingDate)
@@ -88,25 +101,28 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 		t.Fatalf("timestamps = %q/%q, want populated created_at/updated_at", record.CreatedAt, record.UpdatedAt)
 	}
 
-	read := apptest.Decode[models.Transaction](client, http.MethodGet, transactionPath(created.Body.TransactionId), nil)
-	if read.StatusCode != http.StatusOK {
-		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	if err != nil {
+		t.Fatalf("read request: %v", err)
 	}
-	if len(read.Body.Records) != 2 {
-		t.Fatalf("read record count = %d, want 2; body %+v", len(read.Body.Records), read.Body)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
 	}
-	readRecord := read.Body.Records[0]
+	if len(read.JSON200.Records) != 2 {
+		t.Fatalf("read record count = %d, want 2; body %+v", len(read.JSON200.Records), read.JSON200)
+	}
+	readRecord := read.JSON200.Records[0]
 	if readRecord.RecordId != record.RecordId {
 		t.Fatalf("read record id = %d, want %d", readRecord.RecordId, record.RecordId)
 	}
-	if readRecord.PostingStatus != models.Posted {
-		t.Fatalf("read posting_status = %q, want %q", readRecord.PostingStatus, models.Posted)
+	if readRecord.PostingStatus != httpclient.Posted {
+		t.Fatalf("read posting_status = %q, want %q", readRecord.PostingStatus, httpclient.Posted)
 	}
-	if readRecord.ReconciliationStatus != models.Reconciled {
-		t.Fatalf("read reconciliation_status = %q, want %q", readRecord.ReconciliationStatus, models.Reconciled)
+	if readRecord.ReconciliationStatus != httpclient.Reconciled {
+		t.Fatalf("read reconciliation_status = %q, want %q", readRecord.ReconciliationStatus, httpclient.Reconciled)
 	}
-	if readRecord.Source != models.Manual {
-		t.Fatalf("read source = %q, want %q", readRecord.Source, models.Manual)
+	if readRecord.Source != httpclient.Manual {
+		t.Fatalf("read source = %q, want %q", readRecord.Source, httpclient.Manual)
 	}
 	if readRecord.PendingDate == nil || *readRecord.PendingDate != "2024-03-10" {
 		t.Fatalf("read pending_date = %v, want 2024-03-10", readRecord.PendingDate)
@@ -129,17 +145,23 @@ func TestTransactionRejectsImbalanceAndDoesNotPersist(t *testing.T) {
 	req := balancedTransactionRequest(refs)
 	req.Records[1].AmountUsd = "11.00"
 
-	rejected := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", req)
-	if rejected.StatusCode != http.StatusBadRequest {
-		t.Fatalf("imbalance status = %d, want %d; body %s", rejected.StatusCode, http.StatusBadRequest, rejected.RawBody)
+	rejected, err := client.REST().CreateTransactionWithResponse(context.Background(), req)
+	if err != nil {
+		t.Fatalf("imbalance request: %v", err)
+	}
+	if rejected.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("imbalance status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
 	}
 
-	list := apptest.Decode[models.TransactionListResponse](client, http.MethodGet, "/transactions", nil)
-	if list.StatusCode != http.StatusOK {
-		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode, http.StatusOK, list.RawBody)
+	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	if err != nil {
+		t.Fatalf("list request: %v", err)
 	}
-	if len(list.Body.Transactions) != 0 {
-		t.Fatalf("transaction count after rejected create = %d, want 0; body %+v", len(list.Body.Transactions), list.Body)
+	if list.StatusCode() != http.StatusOK {
+		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
+	}
+	if len(list.JSON200.Transactions) != 0 {
+		t.Fatalf("transaction count after rejected create = %d, want 0; body %+v", len(list.JSON200.Transactions), list.JSON200)
 	}
 }
 
@@ -149,70 +171,100 @@ func TestTransactionValidationErrors(t *testing.T) {
 
 	missingAccount := balancedTransactionRequest(refs)
 	missingAccount.Records[0].AccountId = 999
-	missingAccountResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", missingAccount)
-	if missingAccountResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing account status = %d, want %d; body %s", missingAccountResponse.StatusCode, http.StatusBadRequest, missingAccountResponse.RawBody)
+	missingAccountResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), missingAccount)
+	if err != nil {
+		t.Fatalf("missing account request: %v", err)
+	}
+	if missingAccountResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing account status = %d, want %d; body %s", missingAccountResponse.StatusCode(), http.StatusBadRequest, missingAccountResponse.Body)
 	}
 
 	missingMember := balancedTransactionRequest(refs)
 	*missingMember.Records[0].MemberId = 999
-	missingMemberResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", missingMember)
-	if missingMemberResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing member status = %d, want %d; body %s", missingMemberResponse.StatusCode, http.StatusBadRequest, missingMemberResponse.RawBody)
+	missingMemberResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), missingMember)
+	if err != nil {
+		t.Fatalf("missing member request: %v", err)
+	}
+	if missingMemberResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing member status = %d, want %d; body %s", missingMemberResponse.StatusCode(), http.StatusBadRequest, missingMemberResponse.Body)
 	}
 
 	missingCategory := balancedTransactionRequest(refs)
 	missingCategory.Records[0].CategoryId = 999
-	missingCategoryResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", missingCategory)
-	if missingCategoryResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing category status = %d, want %d; body %s", missingCategoryResponse.StatusCode, http.StatusBadRequest, missingCategoryResponse.RawBody)
+	missingCategoryResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), missingCategory)
+	if err != nil {
+		t.Fatalf("missing category request: %v", err)
+	}
+	if missingCategoryResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing category status = %d, want %d; body %s", missingCategoryResponse.StatusCode(), http.StatusBadRequest, missingCategoryResponse.Body)
 	}
 
 	missingTag := balancedTransactionRequest(refs)
 	missingTag.Records[0].TagIds = apptest.Int64SlicePtr(999)
-	missingTagResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", missingTag)
-	if missingTagResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("missing tag status = %d, want %d; body %s", missingTagResponse.StatusCode, http.StatusBadRequest, missingTagResponse.RawBody)
+	missingTagResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), missingTag)
+	if err != nil {
+		t.Fatalf("missing tag request: %v", err)
+	}
+	if missingTagResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing tag status = %d, want %d; body %s", missingTagResponse.StatusCode(), http.StatusBadRequest, missingTagResponse.Body)
 	}
 
 	invalidStatus := balancedTransactionRequest(refs)
-	invalidStatus.Records[0].PostingStatus = models.PostingStatus("settled")
-	invalidStatusResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", invalidStatus)
-	if invalidStatusResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid status status = %d, want %d; body %s", invalidStatusResponse.StatusCode, http.StatusBadRequest, invalidStatusResponse.RawBody)
+	invalidStatus.Records[0].PostingStatus = httpclient.PostingStatus("settled")
+	invalidStatusResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), invalidStatus)
+	if err != nil {
+		t.Fatalf("invalid status request: %v", err)
+	}
+	if invalidStatusResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid status status = %d, want %d; body %s", invalidStatusResponse.StatusCode(), http.StatusBadRequest, invalidStatusResponse.Body)
 	}
 
 	invalidReconciliation := balancedTransactionRequest(refs)
-	invalidReconciliation.Records[0].ReconciliationStatus = models.ReconciliationStatus("matched")
-	invalidReconciliationResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", invalidReconciliation)
-	if invalidReconciliationResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid reconciliation status = %d, want %d; body %s", invalidReconciliationResponse.StatusCode, http.StatusBadRequest, invalidReconciliationResponse.RawBody)
+	invalidReconciliation.Records[0].ReconciliationStatus = httpclient.ReconciliationStatus("matched")
+	invalidReconciliationResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), invalidReconciliation)
+	if err != nil {
+		t.Fatalf("invalid reconciliation request: %v", err)
+	}
+	if invalidReconciliationResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid reconciliation status = %d, want %d; body %s", invalidReconciliationResponse.StatusCode(), http.StatusBadRequest, invalidReconciliationResponse.Body)
 	}
 
 	invalidSource := balancedTransactionRequest(refs)
-	invalidSource.Records[0].Source = models.Source("imported")
-	invalidSourceResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", invalidSource)
-	if invalidSourceResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid source status = %d, want %d; body %s", invalidSourceResponse.StatusCode, http.StatusBadRequest, invalidSourceResponse.RawBody)
+	invalidSource.Records[0].Source = httpclient.Source("imported")
+	invalidSourceResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), invalidSource)
+	if err != nil {
+		t.Fatalf("invalid source request: %v", err)
+	}
+	if invalidSourceResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid source status = %d, want %d; body %s", invalidSourceResponse.StatusCode(), http.StatusBadRequest, invalidSourceResponse.Body)
 	}
 
 	invalidDate := balancedTransactionRequest(refs)
 	invalidDate.InitiatedDate = "2024-02-30"
-	invalidDateResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", invalidDate)
-	if invalidDateResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("invalid date status = %d, want %d; body %s", invalidDateResponse.StatusCode, http.StatusBadRequest, invalidDateResponse.RawBody)
+	invalidDateResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), invalidDate)
+	if err != nil {
+		t.Fatalf("invalid date request: %v", err)
+	}
+	if invalidDateResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid date status = %d, want %d; body %s", invalidDateResponse.StatusCode(), http.StatusBadRequest, invalidDateResponse.Body)
 	}
 
 	tooManyIntegerDigits := balancedTransactionRequest(refs)
 	tooManyIntegerDigits.Records[0].Amount = "-12345678901"
-	tooManyIntegerDigitsResponse := apptest.Decode[models.ErrorResponse](client, http.MethodPost, "/transactions", tooManyIntegerDigits)
-	if tooManyIntegerDigitsResponse.StatusCode != http.StatusBadRequest {
-		t.Fatalf("too many integer digits status = %d, want %d; body %s", tooManyIntegerDigitsResponse.StatusCode, http.StatusBadRequest, tooManyIntegerDigitsResponse.RawBody)
+	tooManyIntegerDigitsResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), tooManyIntegerDigits)
+	if err != nil {
+		t.Fatalf("too many integer digits request: %v", err)
+	}
+	if tooManyIntegerDigitsResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("too many integer digits status = %d, want %d; body %s", tooManyIntegerDigitsResponse.StatusCode(), http.StatusBadRequest, tooManyIntegerDigitsResponse.Body)
 	}
 
-	unsupportedListQuery := apptest.Decode[models.ErrorResponse](client, http.MethodGet, "/transactions?limit=1", nil)
-	if unsupportedListQuery.StatusCode != http.StatusBadRequest {
-		t.Fatalf("unsupported list query status = %d, want %d; body %s", unsupportedListQuery.StatusCode, http.StatusBadRequest, unsupportedListQuery.RawBody)
+	unsupportedListQuery, err := client.REST().ListTransactionsWithResponse(context.Background(), apptest.ReplaceRawQuery("limit=1"))
+	if err != nil {
+		t.Fatalf("unsupported list query request: %v", err)
+	}
+	if unsupportedListQuery.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unsupported list query status = %d, want %d; body %s", unsupportedListQuery.StatusCode(), http.StatusBadRequest, unsupportedListQuery.Body)
 	}
 }
 
@@ -238,10 +290,13 @@ func createTransactionRefs(t *testing.T, client *apptest.Client) transactionRefs
 	}
 }
 
-func balancedTransactionRequest(refs transactionRefs) models.CreateTransactionRequest {
-	return models.CreateTransactionRequest{
+func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransactionRequest {
+	memo := "Lunch"
+	pendingDate := "2024-03-10"
+	postedDate := "2024-03-11"
+	return httpclient.CreateTransactionRequest{
 		InitiatedDate: "2024-03-10",
-		Records: []models.CreateJournalRecordRequest{
+		Records: []httpclient.CreateJournalRecordRequest{
 			{
 				AccountId:            refs.CheckingAccountId,
 				MemberId:             &refs.MemberId,
@@ -250,12 +305,12 @@ func balancedTransactionRequest(refs transactionRefs) models.CreateTransactionRe
 				AmountUsd:            "-12.34",
 				CategoryId:           refs.CategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.TagId),
-				Memo:                 new("Lunch"),
-				PendingDate:          new("2024-03-10"),
-				PostedDate:           new("2024-03-11"),
-				PostingStatus:        models.Posted,
-				ReconciliationStatus: models.Reconciled,
-				Source:               models.Manual,
+				Memo:                 &memo,
+				PendingDate:          &pendingDate,
+				PostedDate:           &postedDate,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -263,16 +318,12 @@ func balancedTransactionRequest(refs transactionRefs) models.CreateTransactionRe
 				Amount:               "12.34",
 				AmountUsd:            "12.34",
 				CategoryId:           refs.CategoryId,
-				PostingStatus:        models.Posted,
-				ReconciliationStatus: models.Reconciled,
-				Source:               models.Manual,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
 			},
 		},
 	}
-}
-
-func transactionPath(id int64) string {
-	return apptest.IDPath("/transactions", id)
 }
 
 func assertInt64s(t *testing.T, got []int64, want []int64) {

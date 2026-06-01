@@ -18,6 +18,8 @@ linters:
             - "**/cmd/mina/*.go"
             - "**/cmd/mina/**/*.go"
           deny:
+            - pkg: github.com/mishamsk/mina/internal/httpclient
+              desc: cmd/mina must not use the generated REST client until an approved production use case exists
             - pkg: github.com/mishamsk/mina/internal/httpapi
               desc: cmd/mina should delegate application behavior through internal/runtime
             - pkg: github.com/mishamsk/mina/internal/services
@@ -32,8 +34,8 @@ linters:
             - "**/internal/apptest/runtime/*_test.go"
             - "**/internal/apptest/runtime/**/*_test.go"
           allow:
+            - github.com/mishamsk/mina/internal/httpclient
             - github.com/mishamsk/mina/internal/apptest
-            - github.com/mishamsk/mina/internal/httpapi/openapi
           deny:
             - pkg: database/sql
               desc: normal app tests should exercise persistence through apptest helpers
@@ -73,6 +75,8 @@ linters:
               desc: service packages must not know DuckDB
             - pkg: github.com/mishamsk/mina/internal/httpapi
               desc: service packages must not know REST/OpenAPI adapters
+            - pkg: github.com/mishamsk/mina/internal/httpclient
+              desc: service packages must not use the generated REST client
             - pkg: github.com/mishamsk/mina/internal/runtime
               desc: service packages must not know runtime composition
             - pkg: github.com/mishamsk/mina/internal/store
@@ -95,6 +99,8 @@ linters:
             - "**/internal/store/*.go"
             - "**/internal/store/**/*.go"
           deny:
+            - pkg: github.com/mishamsk/mina/internal/httpclient
+              desc: store must not use the generated REST client
             - pkg: github.com/mishamsk/mina/internal/httpapi
               desc: store must not know REST/OpenAPI adapters
             - pkg: github.com/mishamsk/mina/internal/runtime
@@ -117,6 +123,8 @@ linters:
               desc: HTTP adapters must not own SQL access
             - pkg: github.com/duckdb/duckdb-go/v2
               desc: HTTP adapters must not know DuckDB
+            - pkg: github.com/mishamsk/mina/internal/httpclient
+              desc: HTTP adapters must not use the generated REST client
             - pkg: github.com/mishamsk/mina/internal/runtime
               desc: HTTP adapters must not know runtime composition
             - pkg: github.com/mishamsk/mina/internal/store
@@ -151,5 +159,7 @@ linters:
             - "!**/internal/apptest/*.go"
             - "!**/internal/apptest/**/*.go"
           deny:
+            - pkg: github.com/mishamsk/mina/internal/httpclient
+              desc: production code must not use the generated REST client until an approved production use case exists
             - pkg: github.com/mishamsk/mina/internal/runtime
               desc: runtime composition may only be imported by cmd/mina and app-test helpers

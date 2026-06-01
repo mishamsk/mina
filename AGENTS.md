@@ -37,5 +37,6 @@ For every commit:
 - Do not run tests or broad validation for pure documentation changes, or for tooling/developer-recipe changes that do not touch application code.
 - For changes that alter implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs update the relevant package docs in the same commit.
 
-At the end of your work run our review loop, unless you are a reviewer or fixing review findings:
+At the end of your work run review loop once, unless you are a reviewer or fixing review findings:
 - just review-loop "<short summary of the task/goal of the change>"
+- If review left unresolved comments, address them yourself and do not re-run the review again
