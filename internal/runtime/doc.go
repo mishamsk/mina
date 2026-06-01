@@ -1,3 +1,3 @@
 // Package runtime composes Mina process configuration, persistence, services,
-// and adapters into runnable application modes.
+// and HTTP handlers into runnable application modes.
 package runtime

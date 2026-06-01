@@ -26,7 +26,7 @@ func NewAccountStore(accounting *AccountingDB) *AccountStore {
 // Create persists a new account.
 func (s *AccountStore) Create(ctx context.Context, input accounts.CreateInput) (accounts.Account, error) {
 	var account accounts.Account
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		exists, err := accountFQNExists(ctx, tx, s.accounting, input.FQN)
 		if err != nil {
 			return err
@@ -73,7 +73,7 @@ WHERE account_id = ?`
 		query += " AND tombstoned_at IS NULL"
 	}
 
-	account, err := scanAccount(s.accounting.db.QueryRowContext(ctx, query, args...))
+	account, err := scanAccount(s.accounting.query().QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return accounts.Account{}, services.ErrNotFound
 	}
@@ -98,7 +98,7 @@ WHERE 1 = 1`
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, accountSortColumns, services.SortKeyFQN, "account_id")
 
-	rows, err := s.accounting.db.QueryContext(ctx, query, args...)
+	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list accounts: %w", err)
 	}
@@ -126,7 +126,7 @@ WHERE 1 = 1`
 
 // UpdateMutable updates account hidden state and external identifiers.
 func (s *AccountStore) UpdateMutable(ctx context.Context, id int64, input accounts.UpdateInput) (accounts.Account, error) {
-	row := s.accounting.db.QueryRowContext(
+	row := s.accounting.query().QueryRowContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("account")+`
 SET is_hidden = ?,
@@ -153,7 +153,7 @@ RETURNING account_id, fqn, kind, is_hidden, currency, external_id, external_syst
 
 // Tombstone marks an account deleted without removing its historical row.
 func (s *AccountStore) Tombstone(ctx context.Context, id int64) error {
-	result, err := s.accounting.db.ExecContext(
+	result, err := s.accounting.query().ExecContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("account")+`
 SET tombstoned_at = CURRENT_TIMESTAMP,

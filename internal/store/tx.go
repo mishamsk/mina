@@ -7,8 +7,39 @@ import (
 	"fmt"
 )
 
-// WithTx runs fn inside a database transaction and commits only when fn succeeds.
-func WithTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(*sql.Tx) error) (err error) {
+type sqlQueryer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// WithAccountingTx runs fn with repositories bound to one database transaction.
+// Transaction-scoped accounting handles reuse their active transaction.
+func (s *AccountingDB) WithAccountingTx(ctx context.Context, opts *sql.TxOptions, fn func(*AccountingDB) error) error {
+	if s.tx != nil {
+		return fn(s)
+	}
+
+	return withSQLTx(ctx, s.db, opts, func(tx *sql.Tx) error {
+		txAccounting := *s
+		txAccounting.tx = tx
+
+		return fn(&txAccounting)
+	})
+}
+
+// withTx runs store-local SQL mutations in a transaction.
+// Transaction-scoped accounting handles reuse their active transaction.
+func (s *AccountingDB) withTx(ctx context.Context, opts *sql.TxOptions, fn func(*sql.Tx) error) error {
+	if s.tx != nil {
+		return fn(s.tx)
+	}
+
+	return withSQLTx(ctx, s.db, opts, fn)
+}
+
+// withSQLTx starts a transaction on a raw process DB and owns commit/rollback.
+func withSQLTx(ctx context.Context, db *sql.DB, opts *sql.TxOptions, fn func(*sql.Tx) error) (err error) {
 	tx, err := db.BeginTx(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)

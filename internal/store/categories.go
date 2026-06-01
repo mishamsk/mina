@@ -26,7 +26,7 @@ func NewCategoryStore(accounting *AccountingDB) *CategoryStore {
 // Create persists a new category.
 func (s *CategoryStore) Create(ctx context.Context, input categories.CreateInput) (categories.Category, error) {
 	var category categories.Category
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		exists, err := categoryFQNExists(ctx, tx, s.accounting, input.FQN)
 		if err != nil {
 			return err
@@ -70,7 +70,7 @@ WHERE category_id = ?`
 		query += " AND tombstoned_at IS NULL"
 	}
 
-	category, err := scanCategory(s.accounting.db.QueryRowContext(ctx, query, args...))
+	category, err := scanCategory(s.accounting.query().QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return categories.Category{}, services.ErrNotFound
 	}
@@ -95,7 +95,7 @@ WHERE 1 = 1`
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, categorySortColumns, services.SortKeyFQN, "category_id")
 
-	rows, err := s.accounting.db.QueryContext(ctx, query, args...)
+	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list categories: %w", err)
 	}
@@ -123,7 +123,7 @@ WHERE 1 = 1`
 
 // UpdateHidden updates a category's hidden state.
 func (s *CategoryStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (categories.Category, error) {
-	row := s.accounting.db.QueryRowContext(
+	row := s.accounting.query().QueryRowContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("category")+`
 SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
@@ -145,7 +145,7 @@ RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, upda
 
 // Tombstone marks a category deleted without removing its historical row.
 func (s *CategoryStore) Tombstone(ctx context.Context, id int64) error {
-	result, err := s.accounting.db.ExecContext(
+	result, err := s.accounting.query().ExecContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("category")+`
 SET tombstoned_at = CURRENT_TIMESTAMP,

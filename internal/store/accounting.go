@@ -15,6 +15,7 @@ type AccountingOpenRequest struct {
 // AccountingDB represents the DuckDB handle and selected accounting location.
 type AccountingDB struct {
 	db       *sql.DB
+	tx       *sql.Tx
 	location AccountingLocation
 	close    func() error
 }
@@ -79,8 +80,13 @@ func openAccounting(
 	return accounting, nil
 }
 
-// DB returns the opened DuckDB handle.
-func (s *AccountingDB) DB() *sql.DB {
+// query returns the SQL executor repository methods must use for direct queries.
+// Transaction-scoped accounting handles route queries to their active transaction.
+func (s *AccountingDB) query() sqlQueryer {
+	if s.tx != nil {
+		return s.tx
+	}
+
 	return s.db
 }
 

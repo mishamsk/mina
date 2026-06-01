@@ -12,6 +12,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/demo"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
 	"github.com/mishamsk/mina/internal/services/health"
 	"github.com/mishamsk/mina/internal/services/members"
@@ -31,6 +32,7 @@ type Dependencies struct {
 	CreditLimits  *creditlimits.Service
 	ExchangeRates *exchangerates.Service
 	Transactions  *transactions.Service
+	Demo          *demo.Service
 }
 
 // Options controls process-local HTTP adapter behavior.

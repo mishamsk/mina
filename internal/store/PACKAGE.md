@@ -11,7 +11,12 @@
 - Accounting open helpers perform DuckDB-specific process DB open/reuse and file attach lifecycle.
 - Closing an owned accounting DB closes its DuckDB process handle; closing a borrowed process DB detaches any attached accounting file and leaves the caller's process handle open.
 - Accounting locations cache rendered database and schema identifiers resolved with DuckDB keyword metadata at open time.
+- Schema-existence checks report the selected accounting schema before migration creates missing schemas.
 - Repository constructors receive the accounting DB and qualify accounting objects through its location.
+- Repository methods execute SQL only through `AccountingDB.query()` or `AccountingDB.withTx()`.
+- `AccountingDB.query()` routes direct repository queries to the active transaction when one exists.
+- `AccountingDB.withTx()` starts a transaction or reuses the active one on transaction-scoped handles.
+- Direct `AccountingDB.db` access is limited to open, attach, detach, migration setup, transaction creation, and close paths.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.
 - Repositories bind and scan DuckDB `DATE`, `TIMESTAMP`, and `DECIMAL(18,8)` columns through app service value types.

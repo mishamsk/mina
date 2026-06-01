@@ -105,6 +105,7 @@ func newVersionCommand(stdout io.Writer) *cobra.Command {
 
 func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, configFilePath *string) *cobra.Command {
 	var assumeYes bool
+	var seedDemo bool
 	sourceInfo := runtimeconfig.Sources()
 	flagCfg := runtimeconfig.DefaultConfig()
 	cmd := &cobra.Command{
@@ -131,6 +132,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 				return err
 			}
 			serveCfg := runtimeServeConfig(cfg)
+			serveCfg.Demo = seedDemo
 			if err := serveCfg.Validate(); err != nil {
 				return err
 			}
@@ -164,6 +166,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 		"write access logs to a file instead of stderr "+sourceHelp(sourceInfo.Serve.AccessLogPath),
 	)
 	cmd.Flags().BoolVar(&flagCfg.Serve.Quiet, "quiet", false, "disable access logs "+sourceHelp(sourceInfo.Serve.Quiet))
+	cmd.Flags().BoolVar(&seedDemo, "demo", false, "seed deterministic demo data at startup")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
 	})
@@ -296,6 +299,15 @@ func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.Serv
 	if err != nil {
 		return err
 	}
+	if cfg.Demo && cfg.DatabasePath != "" {
+		exists, err := runtime.AccountingSchemaExists(ctx, appConfig)
+		if err != nil {
+			return fmt.Errorf("check demo schema: %w", err)
+		}
+		if exists {
+			return fmt.Errorf("demo seeding requires schema %q to not already exist", appConfig.AccountingLocationConfig().Schema)
+		}
+	}
 	if !created {
 		if err := confirmPendingMigrations(ctx, stdin, stderr, appConfig, assumeYes); err != nil {
 			return err
@@ -310,6 +322,15 @@ func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.Serv
 			_, _ = fmt.Fprintf(stderr, "close error: %v\n", err)
 		}
 	}()
+	if cfg.Demo {
+		summary, err := appInstance.SeedDemo(ctx)
+		if err != nil {
+			return fmt.Errorf("demo seed error: %w", err)
+		}
+		if _, err := fmt.Fprintf(stdout, "seeded demo data: %d transactions\n", summary.Transactions); err != nil {
+			return err
+		}
+	}
 
 	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)))
 	if err != nil {

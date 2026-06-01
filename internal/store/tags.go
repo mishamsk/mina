@@ -26,7 +26,7 @@ func NewTagStore(accounting *AccountingDB) *TagStore {
 // Create persists a new tag.
 func (s *TagStore) Create(ctx context.Context, input tags.CreateInput) (tags.Tag, error) {
 	var tag tags.Tag
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		exists, err := tagFQNExists(ctx, tx, s.accounting, input.FQN)
 		if err != nil {
 			return err
@@ -70,7 +70,7 @@ WHERE tag_id = ?`
 		query += " AND tombstoned_at IS NULL"
 	}
 
-	tag, err := scanTag(s.accounting.db.QueryRowContext(ctx, query, args...))
+	tag, err := scanTag(s.accounting.query().QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return tags.Tag{}, services.ErrNotFound
 	}
@@ -95,7 +95,7 @@ WHERE 1 = 1`
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, tagSortColumns, services.SortKeyFQN, "tag_id")
 
-	rows, err := s.accounting.db.QueryContext(ctx, query, args...)
+	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list tags: %w", err)
 	}
@@ -123,7 +123,7 @@ WHERE 1 = 1`
 
 // UpdateHidden updates a tag's hidden state.
 func (s *TagStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (tags.Tag, error) {
-	row := s.accounting.db.QueryRowContext(
+	row := s.accounting.query().QueryRowContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("tag")+`
 SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
@@ -145,7 +145,7 @@ RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_a
 
 // Tombstone marks a tag deleted without removing its historical row.
 func (s *TagStore) Tombstone(ctx context.Context, id int64) error {
-	result, err := s.accounting.db.ExecContext(
+	result, err := s.accounting.query().ExecContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("tag")+`
 SET tombstoned_at = CURRENT_TIMESTAMP,

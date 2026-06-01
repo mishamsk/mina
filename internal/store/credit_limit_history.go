@@ -28,7 +28,7 @@ func NewCreditLimitHistoryStore(accounting *AccountingDB) *CreditLimitHistorySto
 // Create persists a new credit limit history entry for an active account.
 func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, input creditlimits.CreateInput) (creditlimits.CreditLimitHistory, error) {
 	var history creditlimits.CreditLimitHistory
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		accountExists, err := activeAccountExists(ctx, tx, s.accounting, accountID)
 		if err != nil {
 			return err
@@ -81,7 +81,7 @@ WHERE credit_limit_history_id = ?`
 		query += " AND tombstoned_at IS NULL"
 	}
 
-	history, err := scanCreditLimitHistory(s.accounting.db.QueryRowContext(ctx, query, args...))
+	history, err := scanCreditLimitHistory(s.accounting.query().QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return creditlimits.CreditLimitHistory{}, services.ErrNotFound
 	}
@@ -94,7 +94,7 @@ WHERE credit_limit_history_id = ?`
 
 // ListByAccount returns credit limit history for an active account in effective-date order.
 func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID int64, opts creditlimits.ListOptions) ([]creditlimits.CreditLimitHistory, error) {
-	accountExists, err := activeAccountExists(ctx, s.accounting.db, s.accounting, accountID)
+	accountExists, err := activeAccountExists(ctx, s.accounting.query(), s.accounting, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ WHERE account_id = ?`
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, creditLimitHistorySortColumns, services.SortKeyEffectiveDate, "credit_limit_history_id")
 
-	rows, err := s.accounting.db.QueryContext(ctx, query, args...)
+	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list credit limit history: %w", err)
 	}
@@ -139,7 +139,7 @@ WHERE account_id = ?`
 
 // Tombstone marks a credit limit history entry deleted without removing its historical row.
 func (s *CreditLimitHistoryStore) Tombstone(ctx context.Context, id int64) error {
-	result, err := s.accounting.db.ExecContext(
+	result, err := s.accounting.query().ExecContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("credit_limit_history")+`
 SET tombstoned_at = CURRENT_TIMESTAMP

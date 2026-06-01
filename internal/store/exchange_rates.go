@@ -28,7 +28,7 @@ func NewExchangeRateStore(accounting *AccountingDB) *ExchangeRateStore {
 // Create persists a new exchange rate.
 func (s *ExchangeRateStore) Create(ctx context.Context, input exchangerates.CreateInput) (exchangerates.ExchangeRate, error) {
 	var rate exchangerates.ExchangeRate
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		exists, err := activeExchangeRateExists(ctx, tx, s.accounting, input.FromCurrency, input.ToCurrency, input.EffectiveDate)
 		if err != nil {
 			return err
@@ -74,7 +74,7 @@ WHERE exchange_rate_id = ?`
 		query += " AND tombstoned_at IS NULL"
 	}
 
-	rate, err := scanExchangeRate(s.accounting.db.QueryRowContext(ctx, query, args...))
+	rate, err := scanExchangeRate(s.accounting.query().QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return exchangerates.ExchangeRate{}, services.ErrNotFound
 	}
@@ -108,7 +108,7 @@ WHERE 1 = 1`
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, exchangeRateSortColumns, services.SortKeyCurrencyPair, "exchange_rate_id")
 
-	rows, err := s.accounting.db.QueryContext(ctx, query, args...)
+	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list exchange rates: %w", err)
 	}
@@ -136,7 +136,7 @@ WHERE 1 = 1`
 
 // UpdateRate updates an active exchange rate value.
 func (s *ExchangeRateStore) UpdateRate(ctx context.Context, id int64, rate values.Decimal) (exchangerates.ExchangeRate, error) {
-	row := s.accounting.db.QueryRowContext(
+	row := s.accounting.query().QueryRowContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("exchange_rate")+`
 SET rate = ?
@@ -158,7 +158,7 @@ RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, cr
 
 // Tombstone marks an exchange rate deleted without removing its historical row.
 func (s *ExchangeRateStore) Tombstone(ctx context.Context, id int64) error {
-	result, err := s.accounting.db.ExecContext(
+	result, err := s.accounting.query().ExecContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("exchange_rate")+`
 SET tombstoned_at = CURRENT_TIMESTAMP

@@ -40,7 +40,8 @@ build:
     go build -o bin/mina ./cmd/mina
 
 # Start the REST API in the background; pass -p to persist data in build/dev/mina.db.
-dev mode="": build
+# Pass --demo to seed deterministic demo data at startup.
+dev mode="" extra="": build
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -50,18 +51,24 @@ dev mode="": build
     stderr_log="$dev_dir/stderr.log"
     access_log="$dev_dir/access.log"
     db_path="$dev_dir/mina.db"
-    mode={{quote(mode)}}
-
-    case "$mode" in
-        "")
-            ;;
-        "-p")
-            ;;
-        *)
-            echo "usage: just dev [-p]" >&2
-            exit 2
-            ;;
-    esac
+    persist=false
+    demo=false
+    for arg in {{quote(mode)}} {{quote(extra)}}; do
+        case "$arg" in
+            "")
+                ;;
+            "-p")
+                persist=true
+                ;;
+            "--demo")
+                demo=true
+                ;;
+            *)
+                echo "usage: just dev [-p] [--demo]" >&2
+                exit 2
+                ;;
+        esac
+    done
 
     mkdir -p "$dev_dir"
     if [ -f "$pid_file" ]; then
@@ -75,11 +82,14 @@ dev mode="": build
 
     : > "$stdout_log"
     : > "$stderr_log"
-    if [ "$mode" = "-p" ]; then
-        nohup ./bin/mina serve --db "$db_path" --yes --host 127.0.0.1 --port 8080 --access-log "$access_log" > "$stdout_log" 2> "$stderr_log" &
-    else
-        nohup ./bin/mina serve --host 127.0.0.1 --port 8080 --access-log "$access_log" > "$stdout_log" 2> "$stderr_log" &
+    serve_args=(serve --host 127.0.0.1 --port 8080 --access-log "$access_log")
+    if [ "$persist" = true ]; then
+        serve_args+=(--db "$db_path" --yes)
     fi
+    if [ "$demo" = true ]; then
+        serve_args+=(--demo)
+    fi
+    nohup ./bin/mina "${serve_args[@]}" > "$stdout_log" 2> "$stderr_log" &
     pid="$!"
     echo "$pid" > "$pid_file"
     disown "$pid"

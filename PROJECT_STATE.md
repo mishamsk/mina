@@ -4,12 +4,17 @@
 - Default operator workflow: start the REST API with `mina serve --db PATH`
 - Implemented API capability groups:
   - Health checks and stable JSON error envelopes.
+  - App administration for seeding demo data.
   - Account, category, tag, and household member CRUD/list flows.
   - Exchange-rate and account credit-limit-history flows.
   - Transaction creation, read, list, full replacement, and tombstone deletion with nested journal records.
   - Journal-record search and account-record search.
   - Bulk journal-record category, tag, account, and status updates.
   - OpenAPI discovery through `GET /openapi.json`.
+- Implemented runtime/demo behavior:
+  - Runtime opens one app for the process lifetime and wires its REST handler directly.
+  - `mina serve --demo` seeds deterministic April-May 2026 demo data for new in-memory state or new file-backed schemas.
+  - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Implemented storage behavior:
   - Runtime owns accounting location defaults, opens an in-memory DuckDB process database, and selects either an attached accounting database file or the in-memory accounting database with configurable schema fallback.
   - Store-owned accounting locations qualify migration and repository SQL against the selected database and schema.

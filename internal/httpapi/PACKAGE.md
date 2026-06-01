@@ -23,6 +23,8 @@
 - Direct raw query parsing in `internal/httpapi` is disallowed unless a specific transport rule cannot be expressed through OpenAPI validation or generated params; document any exception near the code.
 - Generated binding errors, OpenAPI validation errors, and strict handler errors all map to Mina's stable JSON error envelope before responses leave the adapter.
 - HTTP handlers call service use cases; they do not own domain validation or SQL.
+- HTTP handlers use runtime-provided app service dependencies.
+- Demo seeding endpoints call the app's demo service and return service summary counts.
 
 ## Boundaries
 

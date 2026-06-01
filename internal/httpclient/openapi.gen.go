@@ -521,6 +521,17 @@ type CreditLimitHistoryListResponse struct {
 	CreditLimitHistory []CreditLimitHistory `json:"credit_limit_history"`
 }
 
+// DemoSeedResponse defines model for DemoSeedResponse.
+type DemoSeedResponse struct {
+	Accounts           int `json:"accounts"`
+	Categories         int `json:"categories"`
+	CreditLimitEntries int `json:"credit_limit_entries"`
+	ExchangeRates      int `json:"exchange_rates"`
+	Members            int `json:"members"`
+	Tags               int `json:"tags"`
+	Transactions       int `json:"transactions"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Error APIError `json:"error"`
@@ -677,6 +688,9 @@ type UpdateTransactionRequest struct {
 
 // Conflict defines model for Conflict.
 type Conflict = ErrorResponse
+
+// InternalError defines model for InternalError.
+type InternalError = ErrorResponse
 
 // InvalidRequest defines model for InvalidRequest.
 type InvalidRequest = ErrorResponse
@@ -1024,6 +1038,9 @@ type ClientInterface interface {
 	// SearchAccountJournalRecords request
 	SearchAccountJournalRecords(ctx context.Context, accountId int64, params *SearchAccountJournalRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SeedDemo request
+	SeedDemo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListCategories request
 	ListCategories(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1274,6 +1291,18 @@ func (c *Client) CreateCreditLimitHistory(ctx context.Context, accountId int64, 
 
 func (c *Client) SearchAccountJournalRecords(ctx context.Context, accountId int64, params *SearchAccountJournalRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSearchAccountJournalRecordsRequest(c.Server, accountId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SeedDemo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSeedDemoRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -2534,6 +2563,33 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSeedDemoRequest generates requests for SeedDemo
+func NewSeedDemoRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/app/demo-seed")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -4520,6 +4576,9 @@ type ClientWithResponsesInterface interface {
 	// SearchAccountJournalRecordsWithResponse request
 	SearchAccountJournalRecordsWithResponse(ctx context.Context, accountId int64, params *SearchAccountJournalRecordsParams, reqEditors ...RequestEditorFn) (*SearchAccountJournalRecordsResponse, error)
 
+	// SeedDemoWithResponse request
+	SeedDemoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SeedDemoResponse, error)
+
 	// ListCategoriesWithResponse request
 	ListCategoriesWithResponse(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*ListCategoriesResponse, error)
 
@@ -4896,6 +4955,40 @@ func (r SearchAccountJournalRecordsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SearchAccountJournalRecordsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SeedDemoResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DemoSeedResponse
+	JSON400      *InvalidRequest
+	JSON405      *MethodNotAllowed
+	JSON409      *Conflict
+	JSON500      *InternalError
+}
+
+// Status returns HTTPResponse.Status
+func (r SeedDemoResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SeedDemoResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SeedDemoResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -6036,6 +6129,15 @@ func (c *ClientWithResponses) SearchAccountJournalRecordsWithResponse(ctx contex
 	return ParseSearchAccountJournalRecordsResponse(rsp)
 }
 
+// SeedDemoWithResponse request returning *SeedDemoResponse
+func (c *ClientWithResponses) SeedDemoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SeedDemoResponse, error) {
+	rsp, err := c.SeedDemo(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSeedDemoResponse(rsp)
+}
+
 // ListCategoriesWithResponse request returning *ListCategoriesResponse
 func (c *ClientWithResponses) ListCategoriesWithResponse(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*ListCategoriesResponse, error) {
 	rsp, err := c.ListCategories(ctx, params, reqEditors...)
@@ -6745,6 +6847,60 @@ func ParseSearchAccountJournalRecordsResponse(rsp *http.Response) (*SearchAccoun
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSeedDemoResponse parses an HTTP response from a SeedDemoWithResponse call
+func ParseSeedDemoResponse(rsp *http.Response) (*SeedDemoResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SeedDemoResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DemoSeedResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
 
 	}
 

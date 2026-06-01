@@ -72,6 +72,7 @@ type ServeConfig struct {
 	Port          int
 	AccessLogPath string
 	Quiet         bool
+	Demo          bool
 }
 
 // Validate checks REST server process settings before startup.

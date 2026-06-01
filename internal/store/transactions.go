@@ -30,7 +30,7 @@ func NewTransactionStore(accounting *AccountingDB) *TransactionStore {
 // Create persists a transaction and all journal records atomically.
 func (s *TransactionStore) Create(ctx context.Context, req transactions.CreateInput) (transactions.Transaction, error) {
 	var transaction transactions.Transaction
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := validateTransactionReferences(ctx, tx, s.accounting, req); err != nil {
 			return err
 		}
@@ -68,7 +68,7 @@ RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
 // Replace atomically replaces a transaction's metadata and active journal records.
 func (s *TransactionStore) Replace(ctx context.Context, id int64, req transactions.CreateInput) (transactions.Transaction, error) {
 	var transaction transactions.Transaction
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
 			`UPDATE `+s.accounting.location.mustQualifiedName("transaction")+`
@@ -124,7 +124,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 
 // Get returns a transaction with nested journal records.
 func (s *TransactionStore) Get(ctx context.Context, id int64) (transactions.Transaction, error) {
-	transaction, err := scanTransaction(s.accounting.db.QueryRowContext(
+	transaction, err := scanTransaction(s.accounting.query().QueryRowContext(
 		ctx,
 		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
 FROM `+s.accounting.location.mustQualifiedName("transaction")+`
@@ -149,7 +149,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 
 // List returns transactions with nested journal records in deterministic date order.
 func (s *TransactionStore) List(ctx context.Context) ([]transactions.Transaction, error) {
-	rows, err := s.accounting.db.QueryContext(
+	rows, err := s.accounting.query().QueryContext(
 		ctx,
 		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
 FROM `+s.accounting.location.mustQualifiedName("transaction")+`
@@ -193,7 +193,7 @@ ORDER BY initiated_date ASC, transaction_id ASC`,
 
 // Tombstone marks a transaction and its active journal records deleted.
 func (s *TransactionStore) Tombstone(ctx context.Context, id int64) error {
-	return WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	return s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.accounting.location.mustQualifiedName("transaction")+`
@@ -306,7 +306,7 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	}
 	query += " ORDER BY tx.initiated_date ASC, jr.transaction_id ASC, jr.record_id ASC"
 
-	rows, err := s.accounting.db.QueryContext(ctx, query, args...)
+	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search journal records: %w", err)
 	}
@@ -342,7 +342,7 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 
 // BulkCategorize assigns one active category to active journal records atomically.
 func (s *TransactionStore) BulkCategorize(ctx context.Context, recordIDs []int64, categoryID int64) (int, error) {
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := validateActiveJournalRecords(ctx, tx, s.accounting, recordIDs); err != nil {
 			return err
 		}
@@ -377,7 +377,7 @@ WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
 
 // BulkReassignAccount assigns one active account to active journal records atomically.
 func (s *TransactionStore) BulkReassignAccount(ctx context.Context, recordIDs []int64, accountID int64) (int, error) {
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := validateActiveJournalRecords(ctx, tx, s.accounting, recordIDs); err != nil {
 			return err
 		}
@@ -412,7 +412,7 @@ WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
 
 // BulkUpdateTags adds and removes active tags on active journal records atomically.
 func (s *TransactionStore) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagIDs []int64, removeTagIDs []int64) (int, error) {
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := validateActiveJournalRecords(ctx, tx, s.accounting, recordIDs); err != nil {
 			return err
 		}
@@ -456,7 +456,7 @@ func (s *TransactionStore) BulkUpdateStatuses(
 	postingStatus *transactions.PostingStatus,
 	reconciliationStatus *transactions.ReconciliationStatus,
 ) (int, error) {
-	err := WithTx(ctx, s.accounting.db, nil, func(tx *sql.Tx) error {
+	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := validateActiveJournalRecords(ctx, tx, s.accounting, recordIDs); err != nil {
 			return err
 		}
@@ -649,7 +649,7 @@ func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transact
 	}
 
 	for _, transactionID := range transactionIDs {
-		rows, err := s.accounting.db.QueryContext(
+		rows, err := s.accounting.query().QueryContext(
 			ctx,
 			`SELECT record_id, transaction_id, account_id, member_id, currency, amount, amount_usd, category_id,
 	memo, pending_date, posted_date, CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR), external_id, external_system,
@@ -695,7 +695,7 @@ ORDER BY record_id ASC`,
 }
 
 func (s *TransactionStore) tagIDsByRecordID(ctx context.Context, recordID int64) ([]int64, error) {
-	return tagIDsByRecordID(ctx, s.accounting.db, s.accounting, recordID)
+	return tagIDsByRecordID(ctx, s.accounting.query(), s.accounting, recordID)
 }
 
 type rowsQuerier interface {

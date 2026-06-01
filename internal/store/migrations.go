@@ -38,7 +38,7 @@ func Migrate(ctx context.Context, accounting *AccountingDB) error {
 
 // HasPendingMigrations reports whether Goose has migrations left to apply.
 func HasPendingMigrations(ctx context.Context, accounting *AccountingDB) (bool, error) {
-	exists, err := accountingLocationExists(ctx, accounting)
+	exists, err := AccountingLocationExists(ctx, accounting)
 	if err != nil {
 		return false, err
 	}
@@ -74,6 +74,24 @@ func HasPendingMigrations(ctx context.Context, accounting *AccountingDB) (bool, 
 	}
 
 	return pending, nil
+}
+
+// AccountingLocationExists reports whether the selected accounting schema already exists.
+func AccountingLocationExists(ctx context.Context, accounting *AccountingDB) (bool, error) {
+	var count int
+	if err := accounting.db.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*)
+FROM information_schema.schemata
+WHERE catalog_name = ?
+  AND schema_name = ?`,
+		accounting.location.database,
+		accounting.location.schema,
+	).Scan(&count); err != nil {
+		return false, fmt.Errorf("check accounting schema: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 func newMigrationProvider(accounting *AccountingDB) (*goose.Provider, error) {
@@ -155,7 +173,7 @@ func convertLegacySchemaVersionTable(ctx context.Context, accounting *Accounting
 		return fmt.Errorf("close legacy schema version rows: %w", err)
 	}
 
-	return WithTx(ctx, accounting.db, nil, func(tx *sql.Tx) error {
+	return withSQLTx(ctx, accounting.db, nil, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, "DROP TABLE "+QuoteIdentifier("schema_version")); err != nil {
 			return fmt.Errorf("drop legacy schema_version table: %w", err)
 		}
@@ -190,23 +208,6 @@ func convertLegacySchemaVersionTable(ctx context.Context, accounting *Accounting
 
 		return nil
 	})
-}
-
-func accountingLocationExists(ctx context.Context, accounting *AccountingDB) (bool, error) {
-	var count int
-	if err := accounting.db.QueryRowContext(
-		ctx,
-		`SELECT COUNT(*)
-FROM information_schema.schemata
-WHERE catalog_name = ?
-  AND schema_name = ?`,
-		accounting.location.database,
-		accounting.location.schema,
-	).Scan(&count); err != nil {
-		return false, fmt.Errorf("check accounting schema: %w", err)
-	}
-
-	return count > 0, nil
 }
 
 func schemaVersionTableExists(ctx context.Context, accounting *AccountingDB) (bool, error) {

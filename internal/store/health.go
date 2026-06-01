@@ -18,7 +18,7 @@ func NewHealthStore(accounting *AccountingDB) *HealthStore {
 // CurrentSchemaVersion returns the highest applied migration version.
 func (s *HealthStore) CurrentSchemaVersion(ctx context.Context) (int64, error) {
 	var version int64
-	if err := s.accounting.db.QueryRowContext(
+	if err := s.accounting.query().QueryRowContext(
 		ctx,
 		"SELECT COALESCE(MAX(version_id), 0) FROM "+s.accounting.location.mustQualifiedName("schema_version")+" WHERE is_applied",
 	).Scan(&version); err != nil {

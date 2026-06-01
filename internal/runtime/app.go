@@ -13,6 +13,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/demo"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
 	"github.com/mishamsk/mina/internal/services/health"
 	"github.com/mishamsk/mina/internal/services/members"
@@ -21,10 +22,15 @@ import (
 	"github.com/mishamsk/mina/internal/store"
 )
 
-// App is a composed in-process Mina application.
+// App owns one opened accounting state, app services, and REST handler.
 type App struct {
 	accounting *store.AccountingDB
+	services   appServices
 	handler    http.Handler
+}
+
+type appServices struct {
+	httpapi.Dependencies
 }
 
 // New opens the configured database, applies migrations, and wires the REST handler.
@@ -91,31 +97,90 @@ func HasPendingMigrations(ctx context.Context, cfg Config) (bool, error) {
 	return store.HasPendingMigrations(ctx, accounting)
 }
 
-// NewWithAccountingDB wires the REST handler around an already-opened migrated accounting database.
+// AccountingSchemaExists reports whether the configured file-backed accounting schema exists.
+func AccountingSchemaExists(ctx context.Context, cfg Config) (bool, error) {
+	if err := cfg.Validate(); err != nil {
+		return false, err
+	}
+	if cfg.DatabasePath == "" {
+		return false, nil
+	}
+	exists, err := databasePathExists(cfg.DatabasePath)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return false, nil
+	}
+
+	accounting, err := store.OpenAccounting(ctx, cfg.AccountingOpenRequest())
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		_ = accounting.Close()
+	}()
+
+	return store.AccountingLocationExists(ctx, accounting)
+}
+
+// NewWithAccountingDB wires services and the REST handler around an already-opened migrated accounting database.
 func NewWithAccountingDB(accounting *store.AccountingDB, httpConfig HTTPConfig) *App {
-	handler := httpapi.NewWithOptions(httpapi.Dependencies{
-		Health:        health.NewService(store.NewHealthStore(accounting)),
-		Categories:    categories.NewService(store.NewCategoryStore(accounting)),
-		Tags:          tags.NewService(store.NewTagStore(accounting)),
-		Members:       members.NewService(store.NewMemberStore(accounting)),
-		Accounts:      accounts.NewService(store.NewAccountStore(accounting)),
-		CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(accounting)),
-		ExchangeRates: exchangerates.NewService(store.NewExchangeRateStore(accounting)),
-		Transactions:  transactions.NewService(store.NewTransactionStore(accounting)),
-	}, httpapi.Options{
+	services := newAppServices(accounting)
+	handler := httpapi.NewWithOptions(services.Dependencies, httpapi.Options{
 		AccessLog: httpConfig.AccessLog,
 		Timeout:   httpConfig.Timeout,
 	})
 
 	return &App{
 		accounting: accounting,
+		services:   services,
 		handler:    handler,
 	}
 }
 
-// DB returns the opened database handle.
-func (a *App) DB() *sql.DB {
-	return a.accounting.DB()
+func newAppServices(accounting *store.AccountingDB) appServices {
+	services := newAccountingServices(accounting)
+	services.Demo = newDemoService(accounting)
+
+	return services
+}
+
+func newAccountingServices(accounting *store.AccountingDB) appServices {
+	return appServices{
+		Dependencies: httpapi.Dependencies{
+			Health:        health.NewService(store.NewHealthStore(accounting)),
+			Categories:    categories.NewService(store.NewCategoryStore(accounting)),
+			Tags:          tags.NewService(store.NewTagStore(accounting)),
+			Members:       members.NewService(store.NewMemberStore(accounting)),
+			Accounts:      accounts.NewService(store.NewAccountStore(accounting)),
+			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(accounting)),
+			ExchangeRates: exchangerates.NewService(store.NewExchangeRateStore(accounting)),
+			Transactions:  transactions.NewService(store.NewTransactionStore(accounting)),
+		},
+	}
+}
+
+func demoDependencies(s appServices) demo.Services {
+	return demo.Services{
+		Accounts:      s.Accounts,
+		Categories:    s.Categories,
+		Tags:          s.Tags,
+		Members:       s.Members,
+		CreditLimits:  s.CreditLimits,
+		ExchangeRates: s.ExchangeRates,
+		Transactions:  s.Transactions,
+	}
+}
+
+func newDemoService(accounting *store.AccountingDB) *demo.Service {
+	return demo.NewService(demo.Dependencies{
+		Atomic: func(ctx context.Context, fn func(demo.Services) error) error {
+			return accounting.WithAccountingTx(ctx, nil, func(txAccounting *store.AccountingDB) error {
+				return fn(demoDependencies(newAccountingServices(txAccounting)))
+			})
+		},
+	})
 }
 
 // AccountingLocation returns the database and schema holding accounting state.
@@ -123,9 +188,9 @@ func (a *App) AccountingLocation() store.AccountingLocation {
 	return a.accounting.Location()
 }
 
-// AccountingDB returns the initialized accounting database handle.
-func (a *App) AccountingDB() *store.AccountingDB {
-	return a.accounting
+// SeedDemo seeds deterministic demo data for startup demo mode.
+func (a *App) SeedDemo(ctx context.Context) (demo.Summary, error) {
+	return a.services.Demo.Seed(ctx)
 }
 
 // Handler returns the composed REST API handler.

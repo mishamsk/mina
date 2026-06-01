@@ -3,6 +3,25 @@ info:
   title: Mina REST API
   version: 0.1.0
 paths:
+  /app/demo-seed:
+    post:
+      operationId: seedDemo
+      summary: Seed demo data into the opened app.
+      responses:
+        "200":
+          description: Demo data seeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DemoSeedResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /health:
     get:
       operationId: getHealth
@@ -1286,6 +1305,39 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    DemoSeedResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - members
+        - accounts
+        - categories
+        - tags
+        - exchange_rates
+        - credit_limit_entries
+        - transactions
+      properties:
+        members:
+          type: integer
+          minimum: 0
+        accounts:
+          type: integer
+          minimum: 0
+        categories:
+          type: integer
+          minimum: 0
+        tags:
+          type: integer
+          minimum: 0
+        exchange_rates:
+          type: integer
+          minimum: 0
+        credit_limit_entries:
+          type: integer
+          minimum: 0
+        transactions:
+          type: integer
+          minimum: 0
     Account:
       type: object
       additionalProperties: false

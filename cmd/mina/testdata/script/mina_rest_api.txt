@@ -13,11 +13,25 @@ stdout '\{"error":\{"code":"method_not_allowed","message":"method not allowed"\}
 kill -INT server
 wait server
 
+# File-backed demo startup refuses when the configured schema already exists, even if empty.
+! exec mina serve --demo --db $WORK/rest.db --yes --host 127.0.0.1 --port 0 --quiet
+stderr 'demo seeding requires schema "main" to not already exist'
+
 # The REST API can serve from an omitted database path for ephemeral sessions.
 freeport
 exec mina serve --host 127.0.0.1 --port $PORT &server&
 httpget http://127.0.0.1:$PORT/health
 stdout '"status":"ok"'
+kill -INT server
+wait server
+stderr 'warning: no --db provided; using ephemeral in-memory accounting state'
+
+# Demo startup seeding works with omitted database path for ephemeral sessions.
+freeport
+exec mina serve --demo --host 127.0.0.1 --port $PORT --quiet &server&
+httpget http://127.0.0.1:$PORT/transactions
+stdout '"transactions":\['
+stdout '"transaction_id"'
 kill -INT server
 wait server
 stderr 'warning: no --db provided; using ephemeral in-memory accounting state'
@@ -46,3 +60,16 @@ kill -INT server
 wait server
 ! stderr .
 grep 'GET /health 200' $WORK/access.log
+
+# Demo startup seeding populates visible REST data.
+freeport
+exec mina serve --demo --db $WORK/rest-demo.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpget http://127.0.0.1:$PORT/transactions
+stdout '"transactions":\['
+stdout '"transaction_id"'
+kill -INT server
+wait server
+
+# File-backed demo startup refuses when the configured schema already exists.
+! exec mina serve --demo --db $WORK/rest-demo.db --yes --host 127.0.0.1 --port 0 --quiet
+stderr 'demo seeding requires schema "main" to not already exist'
