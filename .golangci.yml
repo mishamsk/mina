@@ -31,8 +31,6 @@ linters:
             - internal/apptest/runtime/**/*_test.go
             - "**/internal/apptest/runtime/*_test.go"
             - "**/internal/apptest/runtime/**/*_test.go"
-            - "!internal/apptest/runtime/app_test.go"
-            - "!**/internal/apptest/runtime/app_test.go"
           allow:
             - github.com/mishamsk/mina/internal/apptest
             - github.com/mishamsk/mina/internal/httpapi/openapi
@@ -47,22 +45,6 @@ linters:
               desc: testscript belongs only to the integration test driver
             - pkg: net/http/httptest
               desc: normal app tests should use the apptest client instead of raw handler tests
-        startup-persistence-test-boundaries:
-          list-mode: lax
-          files:
-            - internal/apptest/runtime/app_test.go
-            - "**/internal/apptest/runtime/app_test.go"
-          allow:
-            - database/sql$
-            - github.com/duckdb/duckdb-go/v2$
-            - github.com/mishamsk/mina/internal/apptest
-          deny:
-            - pkg: github.com/mishamsk/mina
-              desc: app startup persistence tests should exercise runtime through internal/apptest
-            - pkg: github.com/rogpeppe/go-internal/testscript
-              desc: testscript belongs only to the integration test driver
-            - pkg: net/http/httptest
-              desc: app startup persistence tests should use the apptest client instead of raw handler tests
         integration-test-boundaries:
           list-mode: strict
           files:

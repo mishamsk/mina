@@ -3,6 +3,7 @@ freeport
 exec mina serve --db $WORK/rest.db --yes --host 127.0.0.1 --port $PORT &server&
 httpget http://127.0.0.1:$PORT/health
 stdout '"status":"ok"'
+stdout '"schema_version":[1-9][0-9]*'
 httpget http://127.0.0.1:$PORT/categories
 stdout '"categories":\[\]'
 httpget -status 404 http://127.0.0.1:$PORT/missing

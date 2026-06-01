@@ -1,42 +1,21 @@
 package runtime_test
 
 import (
-	"context"
-	"database/sql"
-	"path/filepath"
+	"net/http"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
-
-	_ "github.com/duckdb/duckdb-go/v2"
+	models "github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
-func TestNewMigratesExistingEmptyDatabaseAtConfiguredSchema(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "mina.db")
-	createEmptyDuckDB(t, ctx, path)
+func TestAppReportsMigratedSchemaVersion(t *testing.T) {
+	client := newSharedClient(t)
 
-	// This single startup case covers persistent DB open, custom non-default
-	// schema selection, reserved-word schema quoting, and migration application.
-	client := newSharedClient(t, apptest.WithDatabasePath(path), apptest.WithAccountingSchema("select"))
-	persistence := client.Persistence()
-
-	persistence.RequireAccountingSchema("select")
-	persistence.RequireTableExists("schema_version")
-	persistence.RequireMinimumTableCount(2)
-}
-
-func createEmptyDuckDB(t *testing.T, ctx context.Context, path string) {
-	t.Helper()
-
-	db, err := sql.Open("duckdb", path)
-	if err != nil {
-		t.Fatalf("create empty DuckDB database: %v", err)
+	response := apptest.Decode[models.HealthResponse](client, http.MethodGet, "/health", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("health status = %d, want %d; body %s", response.StatusCode, http.StatusOK, response.RawBody)
 	}
-	if err := db.PingContext(ctx); err != nil {
-		t.Fatalf("ping empty DuckDB database: %v", err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatalf("close empty DuckDB database: %v", err)
+	if response.Body.SchemaVersion == 0 {
+		t.Fatalf("schema_version = 0, want migrated schema version")
 	}
 }

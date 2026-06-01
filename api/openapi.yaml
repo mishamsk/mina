@@ -1777,11 +1777,16 @@ components:
       additionalProperties: false
       required:
         - status
+        - schema_version
       properties:
         status:
           type: string
           enum:
             - ok
+        schema_version:
+          type: integer
+          format: int64
+          minimum: 0
     Member:
       type: object
       additionalProperties: false

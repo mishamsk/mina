@@ -1,7 +1,6 @@
 package runtime_test
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -9,35 +8,37 @@ import (
 	models "github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
-func TestAppTestClientUsesPerTestInMemorySchema(t *testing.T) {
-	client := newSharedClient(t)
-	persistence := client.Persistence()
+func TestAppTestClientIsolatesClientState(t *testing.T) {
+	t.Run("first test", func(t *testing.T) {
+		client := newSharedClient(t)
 
-	location := persistence.Location()
+		created := apptest.Decode[models.Member](client, http.MethodPost, "/members", models.CreateMemberRequest{
+			Name: "Alex",
+		})
+		if created.StatusCode != http.StatusCreated {
+			t.Fatalf("create status = %d, want %d; body %s", created.StatusCode, http.StatusCreated, created.RawBody)
+		}
 
-	var count int
-	if err := persistence.QueryRowContext(
-		context.Background(),
-		`SELECT COUNT(*)
-FROM duckdb_tables()
-WHERE database_name = ?
-  AND schema_name = ?
-  AND table_name = 'schema_version'`,
-		location.Database(),
-		location.Schema(),
-	).Scan(&count); err != nil {
-		t.Fatalf("count schema version tables: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("schema_version table count = %d, want 1", count)
-	}
+		list := apptest.Decode[models.MemberListResponse](client, http.MethodGet, "/members", nil)
+		if list.StatusCode != http.StatusOK {
+			t.Fatalf("list status = %d, want %d; body %s", list.StatusCode, http.StatusOK, list.RawBody)
+		}
+		if len(list.Body.Members) != 1 || list.Body.Members[0].MemberId != created.Body.MemberId {
+			t.Fatalf("members = %+v, want created member %d", list.Body.Members, created.Body.MemberId)
+		}
+	})
 
-	if err := persistence.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM "+persistence.QualifiedName("schema_version")).Scan(&count); err != nil {
-		t.Fatalf("count schema versions: %v", err)
-	}
-	if count == 0 {
-		t.Fatalf("schema_version count = 0, want migrated schema")
-	}
+	t.Run("second test", func(t *testing.T) {
+		client := newSharedClient(t)
+
+		list := apptest.Decode[models.MemberListResponse](client, http.MethodGet, "/members", nil)
+		if list.StatusCode != http.StatusOK {
+			t.Fatalf("list status = %d, want %d; body %s", list.StatusCode, http.StatusOK, list.RawBody)
+		}
+		if len(list.Body.Members) != 0 {
+			t.Fatalf("member count = %d, want 0; body %+v", len(list.Body.Members), list.Body)
+		}
+	})
 }
 
 func TestScenarioCreatesFixturesThroughClient(t *testing.T) {

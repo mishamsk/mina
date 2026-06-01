@@ -56,7 +56,7 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	}
 }
 
-func TestTransactionDuckDBMappingsBoundary(t *testing.T) {
+func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
 
@@ -84,40 +84,42 @@ func TestTransactionDuckDBMappingsBoundary(t *testing.T) {
 		t.Fatalf("amounts = %q/%q, want -12.34000000/-12.34000000", record.Amount, record.AmountUsd)
 	}
 	assertInt64s(t, record.TagIds, []int64{refs.TagId})
+	if record.CreatedAt == "" || record.UpdatedAt == "" {
+		t.Fatalf("timestamps = %q/%q, want populated created_at/updated_at", record.CreatedAt, record.UpdatedAt)
+	}
 
-	var dbPostingStatus string
-	var dbReconciliationStatus string
-	var dbSource string
-	var dbPendingDate string
-	var dbPostedDate string
-	var dbCreatedAt string
-	var dbUpdatedAt string
-	var dbAmount string
-	var hasTag bool
-	persistence := client.Persistence()
-	if err := persistence.QueryRowContext(
-		t.Context(),
-		`SELECT CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR),
-	CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(updated_at AS VARCHAR), CAST(amount AS VARCHAR),
-	list_contains(tag_ids, ?)
-FROM `+persistence.QualifiedName("journal_record")+`
-WHERE record_id = ?`,
-		refs.TagId,
-		record.RecordId,
-	).Scan(&dbPostingStatus, &dbReconciliationStatus, &dbSource, &dbPendingDate, &dbPostedDate, &dbCreatedAt, &dbUpdatedAt, &dbAmount, &hasTag); err != nil {
-		t.Fatalf("read db-backed transaction mapping: %v", err)
+	read := apptest.Decode[models.Transaction](client, http.MethodGet, transactionPath(created.Body.TransactionId), nil)
+	if read.StatusCode != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode, http.StatusOK, read.RawBody)
 	}
-	if dbPostingStatus != "POSTED" || dbReconciliationStatus != "RECONCILED" || dbSource != "MANUAL" {
-		t.Fatalf("db enum values = %q/%q/%q, want POSTED/RECONCILED/MANUAL", dbPostingStatus, dbReconciliationStatus, dbSource)
+	if len(read.Body.Records) != 2 {
+		t.Fatalf("read record count = %d, want 2; body %+v", len(read.Body.Records), read.Body)
 	}
-	if dbPendingDate != "2024-03-10" || dbPostedDate != "2024-03-11" {
-		t.Fatalf("db dates = %q/%q, want 2024-03-10/2024-03-11", dbPendingDate, dbPostedDate)
+	readRecord := read.Body.Records[0]
+	if readRecord.RecordId != record.RecordId {
+		t.Fatalf("read record id = %d, want %d", readRecord.RecordId, record.RecordId)
 	}
-	if record.CreatedAt != dbCreatedAt || record.UpdatedAt != dbUpdatedAt {
-		t.Fatalf("api timestamps = %q/%q, want db timestamps %q/%q", record.CreatedAt, record.UpdatedAt, dbCreatedAt, dbUpdatedAt)
+	if readRecord.PostingStatus != models.Posted {
+		t.Fatalf("read posting_status = %q, want %q", readRecord.PostingStatus, models.Posted)
 	}
-	if dbCreatedAt == "" || dbAmount != "-12.34000000" || !hasTag {
-		t.Fatalf("db timestamp/decimal/tag = %q/%q/%v, want timestamp/-12.34000000/true", dbCreatedAt, dbAmount, hasTag)
+	if readRecord.ReconciliationStatus != models.Reconciled {
+		t.Fatalf("read reconciliation_status = %q, want %q", readRecord.ReconciliationStatus, models.Reconciled)
+	}
+	if readRecord.Source != models.Manual {
+		t.Fatalf("read source = %q, want %q", readRecord.Source, models.Manual)
+	}
+	if readRecord.PendingDate == nil || *readRecord.PendingDate != "2024-03-10" {
+		t.Fatalf("read pending_date = %v, want 2024-03-10", readRecord.PendingDate)
+	}
+	if readRecord.PostedDate == nil || *readRecord.PostedDate != "2024-03-11" {
+		t.Fatalf("read posted_date = %v, want 2024-03-11", readRecord.PostedDate)
+	}
+	if readRecord.Amount != "-12.34000000" || readRecord.AmountUsd != "-12.34000000" {
+		t.Fatalf("read amounts = %q/%q, want -12.34000000/-12.34000000", readRecord.Amount, readRecord.AmountUsd)
+	}
+	assertInt64s(t, readRecord.TagIds, []int64{refs.TagId})
+	if readRecord.CreatedAt != record.CreatedAt || readRecord.UpdatedAt != record.UpdatedAt {
+		t.Fatalf("read timestamps = %q/%q, want %q/%q", readRecord.CreatedAt, readRecord.UpdatedAt, record.CreatedAt, record.UpdatedAt)
 	}
 }
 

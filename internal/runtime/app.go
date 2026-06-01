@@ -14,6 +14,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
+	"github.com/mishamsk/mina/internal/services/health"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
@@ -93,6 +94,7 @@ func HasPendingMigrations(ctx context.Context, cfg Config) (bool, error) {
 // NewWithAccountingDB wires the REST handler around an already-opened migrated accounting database.
 func NewWithAccountingDB(accounting *store.AccountingDB, httpConfig HTTPConfig) *App {
 	handler := httpapi.NewWithOptions(httpapi.Dependencies{
+		Health:        health.NewService(store.NewHealthStore(accounting)),
 		Categories:    categories.NewService(store.NewCategoryStore(accounting)),
 		Tags:          tags.NewService(store.NewTagStore(accounting)),
 		Members:       members.NewService(store.NewMemberStore(accounting)),
