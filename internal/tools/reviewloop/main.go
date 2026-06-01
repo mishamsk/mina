@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	modulePath    = "github.com/mishamsk/mina"
-	maxIterations = 3
+	modulePath              = "github.com/mishamsk/mina"
+	maxIterations           = 3
+	reviewLoopActiveEnvName = "MINA_REVIEW_LOOP_ACTIVE"
 )
 
 var (
@@ -66,6 +67,11 @@ func main() {
 }
 
 func run(args []string) (int, error) {
+	if os.Getenv(reviewLoopActiveEnvName) != "" {
+		fmt.Println("review loop skipped: already running as part of an outer review loop")
+		return 0, nil
+	}
+
 	cfg, err := loadConfig(args)
 	if err != nil {
 		return 2, err
@@ -439,6 +445,7 @@ func runCodex(root string, label string, prompt string) (string, error) {
 		"-",
 	)
 	cmd.Stdin = strings.NewReader(prompt)
+	cmd.Env = append(os.Environ(), reviewLoopActiveEnvName+"=1")
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
