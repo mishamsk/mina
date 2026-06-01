@@ -10,8 +10,8 @@
 
 ## Boundaries
 
-- Owns: credit-limit decimal validation, effective-date validation, account-reference use-case rules, tombstoned use-case rules, and active-history conflict mapping.
-- Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
+- Owns: typed credit-limit validation, account-reference use-case rules, tombstoned use-case rules, and active-history conflict mapping.
+- Does not own: HTTP DTOs, transport string parsing, SQL queries, database row types, or process configuration.
 
 ## Testing Notes
 

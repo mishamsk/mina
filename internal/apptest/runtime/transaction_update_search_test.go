@@ -29,7 +29,7 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 	if updated.JSON200.TransactionId != created.JSON201.TransactionId {
 		t.Fatalf("replaced transaction id = %d, want %d", updated.JSON200.TransactionId, created.JSON201.TransactionId)
 	}
-	if updated.JSON200.InitiatedDate != "2024-03-12" {
+	if updated.JSON200.InitiatedDate.String() != "2024-03-12" {
 		t.Fatalf("replaced initiated_date = %q, want 2024-03-12", updated.JSON200.InitiatedDate)
 	}
 	if len(updated.JSON200.Records) != 2 {
@@ -122,9 +122,9 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	}
 
 	memo := "Rent"
-	pendingDate := "2024-04-01"
+	pendingDate := apptest.Date("2024-04-01")
 	secondReq := httpclient.CreateTransactionRequest{
-		InitiatedDate: "2024-04-01",
+		InitiatedDate: apptest.Date("2024-04-01"),
 		Records: []httpclient.CreateJournalRecordRequest{
 			{
 				AccountId:            refs.SavingsAccountId,
@@ -178,12 +178,12 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		{name: "amount max", params: &httpclient.SearchJournalRecordsParams{AmountMax: new("-40.00")}, want: []int64{secondDebit.RecordId}},
 		{name: "amount usd min", params: &httpclient.SearchJournalRecordsParams{AmountUsdMin: new("40.00")}, want: []int64{secondCredit.RecordId}},
 		{name: "amount usd max", params: &httpclient.SearchJournalRecordsParams{AmountUsdMax: new("-40.00")}, want: []int64{secondDebit.RecordId}},
-		{name: "initiated from", params: &httpclient.SearchJournalRecordsParams{InitiatedDateFrom: new("2024-04-01")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
-		{name: "initiated to", params: &httpclient.SearchJournalRecordsParams{InitiatedDateTo: new("2024-03-31")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
-		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: new("2024-04-01")}, want: []int64{secondDebit.RecordId}},
-		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: new("2024-03-31")}, want: []int64{firstDebit.RecordId}},
-		{name: "posted from", params: &httpclient.SearchJournalRecordsParams{PostedDateFrom: new("2024-03-11")}, want: []int64{firstDebit.RecordId}},
-		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: new("2024-03-11")}, want: []int64{firstDebit.RecordId}},
+		{name: "initiated from", params: &httpclient.SearchJournalRecordsParams{InitiatedDateFrom: apptest.DatePtr("2024-04-01")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "initiated to", params: &httpclient.SearchJournalRecordsParams{InitiatedDateTo: apptest.DatePtr("2024-03-31")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
+		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: apptest.DatePtr("2024-04-01")}, want: []int64{secondDebit.RecordId}},
+		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: apptest.DatePtr("2024-03-31")}, want: []int64{firstDebit.RecordId}},
+		{name: "posted from", params: &httpclient.SearchJournalRecordsParams{PostedDateFrom: apptest.DatePtr("2024-03-11")}, want: []int64{firstDebit.RecordId}},
+		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: apptest.DatePtr("2024-03-11")}, want: []int64{firstDebit.RecordId}},
 		{name: "memo", params: &httpclient.SearchJournalRecordsParams{MemoContains: new("unc")}, want: []int64{firstDebit.RecordId}},
 		{name: "combined", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId, TagId: &refs.TagId, MemoContains: new("Lunch")}, want: []int64{firstDebit.RecordId}},
 	}
@@ -208,6 +208,24 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		t.Fatalf("account record transaction_id = %d, want %d", accountRecords.JSON200.Records[0].TransactionId, first.JSON201.TransactionId)
 	}
 
+	accountDateFiltered, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.SavingsAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		InitiatedDateFrom: apptest.DatePtr("2024-04-01"),
+	})
+	requireNoTransportError(t, "search account records", err)
+	if accountDateFiltered.StatusCode() != http.StatusOK {
+		t.Fatalf("account date filter status = %d, want %d; body %s", accountDateFiltered.StatusCode(), http.StatusOK, accountDateFiltered.Body)
+	}
+	assertRecordIDs(t, accountDateFiltered.JSON200.Records, []int64{secondDebit.RecordId})
+
+	accountAmountFiltered, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		AmountMax: new("-10.00"),
+	})
+	requireNoTransportError(t, "search account records", err)
+	if accountAmountFiltered.StatusCode() != http.StatusOK {
+		t.Fatalf("account amount filter status = %d, want %d; body %s", accountAmountFiltered.StatusCode(), http.StatusOK, accountAmountFiltered.Body)
+	}
+	assertRecordIDs(t, accountAmountFiltered.JSON200.Records, []int64{firstDebit.RecordId})
+
 	unsupported, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("bad=1"))
 	requireNoTransportError(t, "search records", err)
 	if unsupported.StatusCode() != http.StatusBadRequest {
@@ -217,6 +235,11 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	requireNoTransportError(t, "search records", err)
 	if invalidDecimal.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid decimal filter status = %d, want %d; body %s", invalidDecimal.StatusCode(), http.StatusBadRequest, invalidDecimal.Body)
+	}
+	invalidDate, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("initiated_date_from=2024-02-30"))
+	requireNoTransportError(t, "search records", err)
+	if invalidDate.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid date filter status = %d, want %d; body %s", invalidDate.StatusCode(), http.StatusBadRequest, invalidDate.Body)
 	}
 	invalidPostingStatus, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("posting_status=unknown"))
 	requireNoTransportError(t, "search records", err)
@@ -232,6 +255,16 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	requireNoTransportError(t, "search account records", err)
 	if accountIDOnAccountView.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("account_id on account view status = %d, want %d; body %s", accountIDOnAccountView.StatusCode(), http.StatusBadRequest, accountIDOnAccountView.Body)
+	}
+	invalidAccountDecimal, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, nil, apptest.ReplaceRawQuery("amount_min=not-a-decimal"))
+	requireNoTransportError(t, "search account records", err)
+	if invalidAccountDecimal.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid account decimal filter status = %d, want %d; body %s", invalidAccountDecimal.StatusCode(), http.StatusBadRequest, invalidAccountDecimal.Body)
+	}
+	invalidAccountDate, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, nil, apptest.ReplaceRawQuery("initiated_date_from=2024-02-30"))
+	requireNoTransportError(t, "search account records", err)
+	if invalidAccountDate.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid account date filter status = %d, want %d; body %s", invalidAccountDate.StatusCode(), http.StatusBadRequest, invalidAccountDate.Body)
 	}
 }
 
@@ -268,10 +301,10 @@ func createSearchRefs(t *testing.T, client *apptest.Client) searchRefs {
 
 func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransactionRequest {
 	memo := "Replacement"
-	pendingDate := "2024-03-12"
-	postedDate := "2024-03-13"
+	pendingDate := apptest.Date("2024-03-12")
+	postedDate := apptest.Date("2024-03-13")
 	return httpclient.UpdateTransactionRequest{
-		InitiatedDate: "2024-03-12",
+		InitiatedDate: apptest.Date("2024-03-12"),
 		Records: []httpclient.CreateJournalRecordRequest{
 			{
 				AccountId:            refs.CheckingAccountId,

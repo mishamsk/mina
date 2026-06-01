@@ -14,6 +14,8 @@
 - Repository constructors receive the accounting DB and qualify accounting objects through its location.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.
+- Repositories bind and scan DuckDB `DATE`, `TIMESTAMP`, and `DECIMAL(18,8)` columns through app service value types.
+- SQL casts on typed date/decimal columns are limited to store-owned expression keys such as active uniqueness indexes.
 - Query generation is not selected for Stage 1 recovery because the required DuckDB SQL features are not yet proven against a repo-owned generator. Manual query code must keep user values parameter-bound and dynamic identifiers selected from store-owned allowlists.
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
 - Active-reference checks are repository-owned instead of DuckDB foreign keys for mutable/tombstoned parent rows.

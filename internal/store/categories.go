@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/categories"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // CategoryStore persists categories.
@@ -174,7 +176,9 @@ type categoryScanner interface {
 func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	var category categories.Category
 	var parentFQN sql.NullString
-	var tombstonedAt sql.NullString
+	var createdAt time.Time
+	var updatedAt time.Time
+	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&category.ID,
 		&category.FQN,
@@ -182,18 +186,18 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 		&parentFQN,
 		&category.Name,
 		&category.Level,
-		&category.CreatedAt,
-		&category.UpdatedAt,
+		&createdAt,
+		&updatedAt,
 		&tombstonedAt,
 	); err != nil {
 		return categories.Category{}, err
 	}
+	category.CreatedAt = values.AuditTimestampFromTime(createdAt)
+	category.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
 	if parentFQN.Valid {
 		category.ParentFQN = &parentFQN.String
 	}
-	if tombstonedAt.Valid {
-		category.TombstonedAt = &tombstonedAt.String
-	}
+	category.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
 
 	return category, nil
 }

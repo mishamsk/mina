@@ -12,8 +12,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for APIErrorCode.
@@ -360,19 +362,19 @@ type APIErrorCode string
 
 // Account defines model for Account.
 type Account struct {
-	AccountId      int64   `json:"account_id"`
-	CreatedAt      string  `json:"created_at"`
-	Currency       *string `json:"currency,omitempty"`
-	ExternalId     *string `json:"external_id,omitempty"`
-	ExternalSystem *string `json:"external_system,omitempty"`
-	Fqn            string  `json:"fqn"`
-	IsHidden       bool    `json:"is_hidden"`
-	Kind           string  `json:"kind"`
-	Level          int     `json:"level"`
-	Name           string  `json:"name"`
-	ParentFqn      *string `json:"parent_fqn"`
-	TombstonedAt   *string `json:"tombstoned_at,omitempty"`
-	UpdatedAt      string  `json:"updated_at"`
+	AccountId      int64      `json:"account_id"`
+	CreatedAt      time.Time  `json:"created_at"`
+	Currency       *string    `json:"currency,omitempty"`
+	ExternalId     *string    `json:"external_id,omitempty"`
+	ExternalSystem *string    `json:"external_system,omitempty"`
+	Fqn            string     `json:"fqn"`
+	IsHidden       bool       `json:"is_hidden"`
+	Kind           string     `json:"kind"`
+	Level          int        `json:"level"`
+	Name           string     `json:"name"`
+	ParentFqn      *string    `json:"parent_fqn"`
+	TombstonedAt   *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // AccountListResponse defines model for AccountListResponse.
@@ -414,15 +416,15 @@ type BulkUpdateRecordStatusRequest struct {
 
 // Category defines model for Category.
 type Category struct {
-	CategoryId   int64   `json:"category_id"`
-	CreatedAt    string  `json:"created_at"`
-	Fqn          string  `json:"fqn"`
-	IsHidden     bool    `json:"is_hidden"`
-	Level        int     `json:"level"`
-	Name         string  `json:"name"`
-	ParentFqn    *string `json:"parent_fqn"`
-	TombstonedAt *string `json:"tombstoned_at,omitempty"`
-	UpdatedAt    string  `json:"updated_at"`
+	CategoryId   int64      `json:"category_id"`
+	CreatedAt    time.Time  `json:"created_at"`
+	Fqn          string     `json:"fqn"`
+	IsHidden     bool       `json:"is_hidden"`
+	Level        int        `json:"level"`
+	Name         string     `json:"name"`
+	ParentFqn    *string    `json:"parent_fqn"`
+	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // CategoryListResponse defines model for CategoryListResponse.
@@ -447,22 +449,29 @@ type CreateCategoryRequest struct {
 
 // CreateCreditLimitHistoryRequest defines model for CreateCreditLimitHistoryRequest.
 type CreateCreditLimitHistoryRequest struct {
-	CreditLimit   string `json:"credit_limit"`
-	EffectiveDate string `json:"effective_date"`
+	// CreditLimit JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	CreditLimit   string             `json:"credit_limit"`
+	EffectiveDate openapi_types.Date `json:"effective_date"`
 }
 
 // CreateExchangeRateRequest defines model for CreateExchangeRateRequest.
 type CreateExchangeRateRequest struct {
-	EffectiveDate string `json:"effective_date"`
-	FromCurrency  string `json:"from_currency"`
-	Rate          string `json:"rate"`
-	ToCurrency    string `json:"to_currency"`
+	EffectiveDate openapi_types.Date `json:"effective_date"`
+	FromCurrency  string             `json:"from_currency"`
+
+	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Rate       string `json:"rate"`
+	ToCurrency string `json:"to_currency"`
 }
 
 // CreateJournalRecordRequest defines model for CreateJournalRecordRequest.
 type CreateJournalRecordRequest struct {
-	AccountId            int64                `json:"account_id"`
-	Amount               string               `json:"amount"`
+	AccountId int64 `json:"account_id"`
+
+	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount string `json:"amount"`
+
+	// AmountUsd JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountUsd            string               `json:"amount_usd"`
 	CategoryId           int64                `json:"category_id"`
 	Currency             string               `json:"currency"`
@@ -470,8 +479,8 @@ type CreateJournalRecordRequest struct {
 	ExternalSystem       *string              `json:"external_system,omitempty"`
 	MemberId             *int64               `json:"member_id,omitempty"`
 	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *string              `json:"pending_date,omitempty"`
-	PostedDate           *string              `json:"posted_date,omitempty"`
+	PendingDate          *openapi_types.Date  `json:"pending_date,omitempty"`
+	PostedDate           *openapi_types.Date  `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	Source               Source               `json:"source"`
@@ -491,18 +500,20 @@ type CreateTagRequest struct {
 
 // CreateTransactionRequest defines model for CreateTransactionRequest.
 type CreateTransactionRequest struct {
-	InitiatedDate string                       `json:"initiated_date"`
+	InitiatedDate openapi_types.Date           `json:"initiated_date"`
 	Records       []CreateJournalRecordRequest `json:"records"`
 }
 
 // CreditLimitHistory defines model for CreditLimitHistory.
 type CreditLimitHistory struct {
-	AccountId            int64   `json:"account_id"`
-	CreatedAt            string  `json:"created_at"`
-	CreditLimit          string  `json:"credit_limit"`
-	CreditLimitHistoryId int64   `json:"credit_limit_history_id"`
-	EffectiveDate        string  `json:"effective_date"`
-	TombstonedAt         *string `json:"tombstoned_at,omitempty"`
+	AccountId int64     `json:"account_id"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// CreditLimit JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	CreditLimit          string             `json:"credit_limit"`
+	CreditLimitHistoryId int64              `json:"credit_limit_history_id"`
+	EffectiveDate        openapi_types.Date `json:"effective_date"`
+	TombstonedAt         *time.Time         `json:"tombstoned_at,omitempty"`
 }
 
 // CreditLimitHistoryListResponse defines model for CreditLimitHistoryListResponse.
@@ -517,13 +528,15 @@ type ErrorResponse struct {
 
 // ExchangeRate defines model for ExchangeRate.
 type ExchangeRate struct {
-	CreatedAt      string  `json:"created_at"`
-	EffectiveDate  string  `json:"effective_date"`
-	ExchangeRateId int64   `json:"exchange_rate_id"`
-	FromCurrency   string  `json:"from_currency"`
-	Rate           string  `json:"rate"`
-	ToCurrency     string  `json:"to_currency"`
-	TombstonedAt   *string `json:"tombstoned_at,omitempty"`
+	CreatedAt      time.Time          `json:"created_at"`
+	EffectiveDate  openapi_types.Date `json:"effective_date"`
+	ExchangeRateId int64              `json:"exchange_rate_id"`
+	FromCurrency   string             `json:"from_currency"`
+
+	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Rate         string     `json:"rate"`
+	ToCurrency   string     `json:"to_currency"`
+	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
 }
 
 // ExchangeRateListResponse defines model for ExchangeRateListResponse.
@@ -542,26 +555,30 @@ type HealthResponseStatus string
 
 // JournalRecord defines model for JournalRecord.
 type JournalRecord struct {
-	AccountId            int64                `json:"account_id"`
-	Amount               string               `json:"amount"`
+	AccountId int64 `json:"account_id"`
+
+	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount string `json:"amount"`
+
+	// AmountUsd JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountUsd            string               `json:"amount_usd"`
 	CategoryId           int64                `json:"category_id"`
-	CreatedAt            string               `json:"created_at"`
+	CreatedAt            time.Time            `json:"created_at"`
 	Currency             string               `json:"currency"`
 	ExternalId           *string              `json:"external_id,omitempty"`
 	ExternalSystem       *string              `json:"external_system,omitempty"`
 	MemberId             *int64               `json:"member_id,omitempty"`
 	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *string              `json:"pending_date,omitempty"`
-	PostedDate           *string              `json:"posted_date,omitempty"`
+	PendingDate          *openapi_types.Date  `json:"pending_date,omitempty"`
+	PostedDate           *openapi_types.Date  `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
 	Source               Source               `json:"source"`
 	TagIds               []int64              `json:"tag_ids"`
-	TombstonedAt         *string              `json:"tombstoned_at,omitempty"`
+	TombstonedAt         *time.Time           `json:"tombstoned_at,omitempty"`
 	TransactionId        int64                `json:"transaction_id"`
-	UpdatedAt            string               `json:"updated_at"`
+	UpdatedAt            time.Time            `json:"updated_at"`
 }
 
 // JournalRecordSearchResponse defines model for JournalRecordSearchResponse.
@@ -571,11 +588,11 @@ type JournalRecordSearchResponse struct {
 
 // Member defines model for Member.
 type Member struct {
-	CreatedAt    string  `json:"created_at"`
-	MemberId     int64   `json:"member_id"`
-	Name         string  `json:"name"`
-	TombstonedAt *string `json:"tombstoned_at,omitempty"`
-	UpdatedAt    string  `json:"updated_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	MemberId     int64      `json:"member_id"`
+	Name         string     `json:"name"`
+	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // MemberListResponse defines model for MemberListResponse.
@@ -594,15 +611,15 @@ type Source string
 
 // Tag defines model for Tag.
 type Tag struct {
-	CreatedAt    string  `json:"created_at"`
-	Fqn          string  `json:"fqn"`
-	IsHidden     bool    `json:"is_hidden"`
-	Level        int     `json:"level"`
-	Name         string  `json:"name"`
-	ParentFqn    *string `json:"parent_fqn"`
-	TagId        int64   `json:"tag_id"`
-	TombstonedAt *string `json:"tombstoned_at,omitempty"`
-	UpdatedAt    string  `json:"updated_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	Fqn          string     `json:"fqn"`
+	IsHidden     bool       `json:"is_hidden"`
+	Level        int        `json:"level"`
+	Name         string     `json:"name"`
+	ParentFqn    *string    `json:"parent_fqn"`
+	TagId        int64      `json:"tag_id"`
+	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // TagListResponse defines model for TagListResponse.
@@ -612,11 +629,11 @@ type TagListResponse struct {
 
 // Transaction defines model for Transaction.
 type Transaction struct {
-	CreatedAt     string          `json:"created_at"`
-	InitiatedDate string          `json:"initiated_date"`
-	Records       []JournalRecord `json:"records"`
-	TombstonedAt  *string         `json:"tombstoned_at,omitempty"`
-	TransactionId int64           `json:"transaction_id"`
+	CreatedAt     time.Time          `json:"created_at"`
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+	Records       []JournalRecord    `json:"records"`
+	TombstonedAt  *time.Time         `json:"tombstoned_at,omitempty"`
+	TransactionId int64              `json:"transaction_id"`
 }
 
 // TransactionListResponse defines model for TransactionListResponse.
@@ -638,6 +655,7 @@ type UpdateCategoryRequest struct {
 
 // UpdateExchangeRateRequest defines model for UpdateExchangeRateRequest.
 type UpdateExchangeRateRequest struct {
+	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Rate string `json:"rate"`
 }
 
@@ -653,7 +671,7 @@ type UpdateTagRequest struct {
 
 // UpdateTransactionRequest defines model for UpdateTransactionRequest.
 type UpdateTransactionRequest struct {
-	InitiatedDate string                       `json:"initiated_date"`
+	InitiatedDate openapi_types.Date           `json:"initiated_date"`
 	Records       []CreateJournalRecordRequest `json:"records"`
 }
 
@@ -712,17 +730,25 @@ type SearchAccountJournalRecordsParams struct {
 	MemberId             *int64                `form:"member_id,omitempty" json:"member_id,omitempty"`
 	PostingStatus        *PostingStatus        `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
-	AmountMin            *string               `form:"amount_min,omitempty" json:"amount_min,omitempty"`
-	AmountMax            *string               `form:"amount_max,omitempty" json:"amount_max,omitempty"`
-	AmountUsdMin         *string               `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
-	AmountUsdMax         *string               `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
-	InitiatedDateFrom    *string               `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo      *string               `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom      *string               `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo        *string               `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom       *string               `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo         *string               `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
-	MemoContains         *string               `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+
+	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountMin *string `form:"amount_min,omitempty" json:"amount_min,omitempty"`
+
+	// AmountMax JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountMax *string `form:"amount_max,omitempty" json:"amount_max,omitempty"`
+
+	// AmountUsdMin JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
+
+	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
+	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+	PendingDateFrom   *openapi_types.Date `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+	PendingDateTo     *openapi_types.Date `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+	PostedDateFrom    *openapi_types.Date `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+	PostedDateTo      *openapi_types.Date `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 }
 
 // ListCategoriesParams defines parameters for ListCategories.
@@ -755,7 +781,7 @@ type GetCreditLimitHistoryParams struct {
 type ListExchangeRatesParams struct {
 	FromCurrency      *string                         `form:"from_currency,omitempty" json:"from_currency,omitempty"`
 	ToCurrency        *string                         `form:"to_currency,omitempty" json:"to_currency,omitempty"`
-	EffectiveDate     *string                         `form:"effective_date,omitempty" json:"effective_date,omitempty"`
+	EffectiveDate     *openapi_types.Date             `form:"effective_date,omitempty" json:"effective_date,omitempty"`
 	IncludeTombstoned *bool                           `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 	Sort              *ListExchangeRatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListExchangeRatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
@@ -802,17 +828,25 @@ type SearchJournalRecordsParams struct {
 	MemberId             *int64                `form:"member_id,omitempty" json:"member_id,omitempty"`
 	PostingStatus        *PostingStatus        `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
-	AmountMin            *string               `form:"amount_min,omitempty" json:"amount_min,omitempty"`
-	AmountMax            *string               `form:"amount_max,omitempty" json:"amount_max,omitempty"`
-	AmountUsdMin         *string               `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
-	AmountUsdMax         *string               `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
-	InitiatedDateFrom    *string               `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo      *string               `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom      *string               `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo        *string               `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom       *string               `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo         *string               `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
-	MemoContains         *string               `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+
+	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountMin *string `form:"amount_min,omitempty" json:"amount_min,omitempty"`
+
+	// AmountMax JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountMax *string `form:"amount_max,omitempty" json:"amount_max,omitempty"`
+
+	// AmountUsdMin JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
+
+	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
+	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+	PendingDateFrom   *openapi_types.Date `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+	PendingDateTo     *openapi_types.Date `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+	PostedDateFrom    *openapi_types.Date `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+	PostedDateTo      *openapi_types.Date `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 }
 
 // ListTagsParams defines parameters for ListTags.
@@ -2411,7 +2445,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.InitiatedDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_from", *params.InitiatedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_from", *params.InitiatedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2423,7 +2457,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.InitiatedDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_to", *params.InitiatedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_to", *params.InitiatedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2435,7 +2469,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.PendingDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_from", *params.PendingDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_from", *params.PendingDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2447,7 +2481,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.PendingDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_to", *params.PendingDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_to", *params.PendingDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2459,7 +2493,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.PostedDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_from", *params.PostedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_from", *params.PostedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2471,7 +2505,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.PostedDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_to", *params.PostedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_to", *params.PostedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2952,7 +2986,7 @@ func NewListExchangeRatesRequest(server string, params *ListExchangeRatesParams)
 
 		if params.EffectiveDate != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "effective_date", *params.EffectiveDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "effective_date", *params.EffectiveDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3679,7 +3713,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.InitiatedDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_from", *params.InitiatedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_from", *params.InitiatedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3691,7 +3725,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.InitiatedDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_to", *params.InitiatedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_to", *params.InitiatedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3703,7 +3737,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.PendingDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_from", *params.PendingDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_from", *params.PendingDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3715,7 +3749,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.PendingDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_to", *params.PendingDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_to", *params.PendingDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3727,7 +3761,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.PostedDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_from", *params.PostedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_from", *params.PostedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3739,7 +3773,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.PostedDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_to", *params.PostedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_to", *params.PostedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/tags"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // TagStore persists tags.
@@ -174,7 +176,9 @@ type tagScanner interface {
 func scanTag(scanner tagScanner) (tags.Tag, error) {
 	var tag tags.Tag
 	var parentFQN sql.NullString
-	var tombstonedAt sql.NullString
+	var createdAt time.Time
+	var updatedAt time.Time
+	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&tag.ID,
 		&tag.FQN,
@@ -182,18 +186,18 @@ func scanTag(scanner tagScanner) (tags.Tag, error) {
 		&parentFQN,
 		&tag.Name,
 		&tag.Level,
-		&tag.CreatedAt,
-		&tag.UpdatedAt,
+		&createdAt,
+		&updatedAt,
 		&tombstonedAt,
 	); err != nil {
 		return tags.Tag{}, err
 	}
+	tag.CreatedAt = values.AuditTimestampFromTime(createdAt)
+	tag.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
 	if parentFQN.Valid {
 		tag.ParentFQN = &parentFQN.String
 	}
-	if tombstonedAt.Valid {
-		tag.TombstonedAt = &tombstonedAt.String
-	}
+	tag.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
 
 	return tag, nil
 }

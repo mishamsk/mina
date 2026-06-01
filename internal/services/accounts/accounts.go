@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // Account is a hierarchical financial account or counterparty.
@@ -20,9 +21,9 @@ type Account struct {
 	ParentFQN      *string
 	Name           string
 	Level          int
-	CreatedAt      string
-	UpdatedAt      string
-	TombstonedAt   *string
+	CreatedAt      values.AuditTimestamp
+	UpdatedAt      values.AuditTimestamp
+	TombstonedAt   *values.AuditTimestamp
 }
 
 // CreateInput contains fields for creating an account.

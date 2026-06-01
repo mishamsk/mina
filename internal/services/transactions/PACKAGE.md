@@ -11,7 +11,7 @@
 ## Boundaries
 
 - Owns: transaction balance checks, journal record field validation, source/status rules, record search filter validation, reference-error mapping, tombstone delete semantics, and bulk record operation rules.
-- Does not own: HTTP DTOs, query-string parsing, SQL queries, database row types, or process configuration.
+- Does not own: HTTP DTOs, transport string parsing, query-string parsing, SQL queries, database row types, or process configuration.
 
 ## Testing Notes
 

@@ -3,26 +3,25 @@ package creditlimits
 import (
 	"context"
 	"errors"
-	"strings"
-	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // CreditLimitHistory is one historical credit limit entry for an account.
 type CreditLimitHistory struct {
 	ID            int64
 	AccountID     int64
-	CreditLimit   string
-	EffectiveDate string
-	CreatedAt     string
-	TombstonedAt  *string
+	CreditLimit   values.Decimal
+	EffectiveDate values.CivilDate
+	CreatedAt     values.AuditTimestamp
+	TombstonedAt  *values.AuditTimestamp
 }
 
 // CreateInput contains fields for creating a credit limit history entry.
 type CreateInput struct {
-	CreditLimit   string
-	EffectiveDate string
+	CreditLimit   values.Decimal
+	EffectiveDate values.CivilDate
 }
 
 // ListOptions controls credit limit history list visibility.
@@ -54,11 +53,8 @@ func (s *Service) Create(ctx context.Context, accountID int64, input CreateInput
 	if accountID <= 0 {
 		return CreditLimitHistory{}, services.InvalidRequest("account_id must be positive")
 	}
-	if err := validateCreditLimit(input.CreditLimit); err != nil {
-		return CreditLimitHistory{}, err
-	}
-	if err := validateEffectiveDate(input.EffectiveDate); err != nil {
-		return CreditLimitHistory{}, err
+	if input.CreditLimit.Sign() < 0 {
+		return CreditLimitHistory{}, services.InvalidRequest("credit_limit must be a non-negative decimal")
 	}
 
 	history, err := s.repo.Create(ctx, accountID, input)
@@ -119,50 +115,6 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return services.NotFound("credit limit history not found")
 	} else if err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func validateEffectiveDate(effectiveDate string) error {
-	if len(effectiveDate) != len("2006-01-02") {
-		return services.InvalidRequest("effective_date must use YYYY-MM-DD format")
-	}
-	parsed, err := time.Parse("2006-01-02", effectiveDate)
-	if err != nil || parsed.Format("2006-01-02") != effectiveDate {
-		return services.InvalidRequest("effective_date must use YYYY-MM-DD format")
-	}
-
-	return nil
-}
-
-func validateCreditLimit(creditLimit string) error {
-	if strings.TrimSpace(creditLimit) != creditLimit || creditLimit == "" {
-		return services.InvalidRequest("credit_limit must be a non-negative decimal")
-	}
-
-	parts := strings.Split(creditLimit, ".")
-	if len(parts) > 2 || parts[0] == "" {
-		return services.InvalidRequest("credit_limit must be a non-negative decimal")
-	}
-	if len(parts) == 2 && (parts[1] == "" || len(parts[1]) > 8) {
-		return services.InvalidRequest("credit_limit must be a non-negative decimal with at most 8 fractional digits")
-	}
-	if len(parts[0]) > 10 {
-		return services.InvalidRequest("credit_limit must have at most 10 integer digits")
-	}
-
-	digitCount := 0
-	for _, part := range parts {
-		for i := range part {
-			if part[i] < '0' || part[i] > '9' {
-				return services.InvalidRequest("credit_limit must be a non-negative decimal")
-			}
-			digitCount++
-		}
-	}
-	if digitCount > 18 {
-		return services.InvalidRequest("credit_limit must have at most 10 integer digits and 8 fractional digits")
 	}
 
 	return nil

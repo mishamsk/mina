@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // AccountStore persists accounts.
@@ -185,7 +187,9 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	var externalID sql.NullString
 	var externalSystem sql.NullString
 	var parentFQN sql.NullString
-	var tombstonedAt sql.NullString
+	var createdAt time.Time
+	var updatedAt time.Time
+	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&account.ID,
 		&account.FQN,
@@ -197,12 +201,14 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 		&parentFQN,
 		&account.Name,
 		&account.Level,
-		&account.CreatedAt,
-		&account.UpdatedAt,
+		&createdAt,
+		&updatedAt,
 		&tombstonedAt,
 	); err != nil {
 		return accounts.Account{}, err
 	}
+	account.CreatedAt = values.AuditTimestampFromTime(createdAt)
+	account.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
 	if currency.Valid {
 		account.Currency = &currency.String
 	}
@@ -215,9 +221,7 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	if parentFQN.Valid {
 		account.ParentFQN = &parentFQN.String
 	}
-	if tombstonedAt.Valid {
-		account.TombstonedAt = &tombstonedAt.String
-	}
+	account.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
 
 	return account, nil
 }

@@ -3,8 +3,10 @@ package apptest
 import (
 	"context"
 	"net/http"
+	"time"
 
 	models "github.com/mishamsk/mina/internal/httpclient"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Scenario creates common fixtures through the in-process API client.
@@ -24,6 +26,23 @@ type TransactionRefs struct {
 // Scenario returns reusable fixture builders for high-level workflow tests.
 func (c *Client) Scenario() *Scenario {
 	return &Scenario{client: c}
+}
+
+// Date returns a generated OpenAPI date value for YYYY-MM-DD test input.
+func Date(value string) openapi_types.Date {
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		panic(err)
+	}
+
+	return openapi_types.Date{Time: parsed}
+}
+
+// DatePtr returns a pointer to a generated OpenAPI date value for YYYY-MM-DD test input.
+func DatePtr(value string) *openapi_types.Date {
+	date := Date(value)
+
+	return &date
 }
 
 // Account creates an account fixture through the API client.
@@ -100,7 +119,7 @@ func (s *Scenario) ExchangeRate(fromCurrency string, toCurrency string, effectiv
 		FromCurrency:  fromCurrency,
 		ToCurrency:    toCurrency,
 		Rate:          "1.10000000",
-		EffectiveDate: effectiveDate,
+		EffectiveDate: Date(effectiveDate),
 	})
 	requireNoClientError(s.client, "create exchange rate", err)
 	requireStatus(s.client, "create exchange rate", response.StatusCode(), http.StatusCreated, response.Body)
@@ -134,7 +153,7 @@ func (s *Scenario) BalancedTransaction(refs TransactionRefs) models.Transaction 
 	memberID := refs.MemberID
 	memo := "Lunch"
 	response, err := s.client.REST().CreateTransactionWithResponse(context.Background(), models.CreateTransactionRequest{
-		InitiatedDate: "2024-01-02",
+		InitiatedDate: Date("2024-01-02"),
 		Records: []models.CreateJournalRecordRequest{
 			{
 				AccountId:            refs.CheckingAccountID,

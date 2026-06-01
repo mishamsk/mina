@@ -6,15 +6,16 @@ import (
 	"strings"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // Member is a household member used for journal record attribution.
 type Member struct {
 	ID           int64
 	Name         string
-	CreatedAt    string
-	UpdatedAt    string
-	TombstonedAt *string
+	CreatedAt    values.AuditTimestamp
+	UpdatedAt    values.AuditTimestamp
+	TombstonedAt *values.AuditTimestamp
 }
 
 // CreateInput contains fields for creating a household member.

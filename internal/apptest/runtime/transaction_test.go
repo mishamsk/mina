@@ -20,7 +20,7 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	if created.StatusCode() != http.StatusCreated {
 		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-	if created.JSON201.InitiatedDate != "2024-03-10" {
+	if created.JSON201.InitiatedDate.String() != "2024-03-10" {
 		t.Fatalf("initiated_date = %q, want 2024-03-10", created.JSON201.InitiatedDate)
 	}
 	if len(created.JSON201.Records) != 2 {
@@ -87,17 +87,17 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if record.Source != httpclient.Manual {
 		t.Fatalf("source = %q, want %q", record.Source, httpclient.Manual)
 	}
-	if record.PendingDate == nil || *record.PendingDate != "2024-03-10" {
+	if record.PendingDate == nil || record.PendingDate.String() != "2024-03-10" {
 		t.Fatalf("pending_date = %v, want 2024-03-10", record.PendingDate)
 	}
-	if record.PostedDate == nil || *record.PostedDate != "2024-03-11" {
+	if record.PostedDate == nil || record.PostedDate.String() != "2024-03-11" {
 		t.Fatalf("posted_date = %v, want 2024-03-11", record.PostedDate)
 	}
 	if record.Amount != "-12.34000000" || record.AmountUsd != "-12.34000000" {
 		t.Fatalf("amounts = %q/%q, want -12.34000000/-12.34000000", record.Amount, record.AmountUsd)
 	}
 	assertInt64s(t, record.TagIds, []int64{refs.TagId})
-	if record.CreatedAt == "" || record.UpdatedAt == "" {
+	if record.CreatedAt.IsZero() || record.UpdatedAt.IsZero() {
 		t.Fatalf("timestamps = %q/%q, want populated created_at/updated_at", record.CreatedAt, record.UpdatedAt)
 	}
 
@@ -124,10 +124,10 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if readRecord.Source != httpclient.Manual {
 		t.Fatalf("read source = %q, want %q", readRecord.Source, httpclient.Manual)
 	}
-	if readRecord.PendingDate == nil || *readRecord.PendingDate != "2024-03-10" {
+	if readRecord.PendingDate == nil || readRecord.PendingDate.String() != "2024-03-10" {
 		t.Fatalf("read pending_date = %v, want 2024-03-10", readRecord.PendingDate)
 	}
-	if readRecord.PostedDate == nil || *readRecord.PostedDate != "2024-03-11" {
+	if readRecord.PostedDate == nil || readRecord.PostedDate.String() != "2024-03-11" {
 		t.Fatalf("read posted_date = %v, want 2024-03-11", readRecord.PostedDate)
 	}
 	if readRecord.Amount != "-12.34000000" || readRecord.AmountUsd != "-12.34000000" {
@@ -240,8 +240,10 @@ func TestTransactionValidationErrors(t *testing.T) {
 	}
 
 	invalidDate := balancedTransactionRequest(refs)
-	invalidDate.InitiatedDate = "2024-02-30"
-	invalidDateResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), invalidDate)
+	invalidDateResponse, err := client.REST().CreateTransactionWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
+		"initiated_date": "2024-02-30",
+		"records":        invalidDate.Records,
+	}))
 	if err != nil {
 		t.Fatalf("invalid date request: %v", err)
 	}
@@ -292,10 +294,10 @@ func createTransactionRefs(t *testing.T, client *apptest.Client) transactionRefs
 
 func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransactionRequest {
 	memo := "Lunch"
-	pendingDate := "2024-03-10"
-	postedDate := "2024-03-11"
+	pendingDate := apptest.Date("2024-03-10")
+	postedDate := apptest.Date("2024-03-11")
 	return httpclient.CreateTransactionRequest{
-		InitiatedDate: "2024-03-10",
+		InitiatedDate: apptest.Date("2024-03-10"),
 		Records: []httpclient.CreateJournalRecordRequest{
 			{
 				AccountId:            refs.CheckingAccountId,

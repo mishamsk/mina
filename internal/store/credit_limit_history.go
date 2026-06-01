@@ -5,9 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // CreditLimitHistoryStore persists account credit limit history.
@@ -46,10 +49,10 @@ func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, i
 			ctx,
 			`INSERT INTO `+s.accounting.location.mustQualifiedName("credit_limit_history")+` (account_id, credit_limit, effective_date)
 VALUES (?, ?, ?)
-RETURNING credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
+RETURNING credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at`,
 			accountID,
-			input.CreditLimit,
-			input.EffectiveDate,
+			input.CreditLimit.LibraryDecimal(),
+			civilDateArg(input.EffectiveDate),
 		)
 		history, err = scanCreditLimitHistory(row)
 		if err != nil {
@@ -70,7 +73,7 @@ RETURNING credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CA
 
 // Get returns a credit limit history entry by ID.
 func (s *CreditLimitHistoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (creditlimits.CreditLimitHistory, error) {
-	query := `SELECT credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
+	query := `SELECT credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at
 FROM ` + s.accounting.location.mustQualifiedName("credit_limit_history") + `
 WHERE credit_limit_history_id = ?`
 	args := []any{id}
@@ -99,7 +102,7 @@ func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID i
 		return nil, services.ErrNotFound
 	}
 
-	query := `SELECT credit_limit_history_id, account_id, CAST(credit_limit AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
+	query := `SELECT credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at
 FROM ` + s.accounting.location.mustQualifiedName("credit_limit_history") + `
 WHERE account_id = ?`
 	args := []any{accountID}
@@ -164,20 +167,28 @@ type creditLimitHistoryScanner interface {
 
 func scanCreditLimitHistory(scanner creditLimitHistoryScanner) (creditlimits.CreditLimitHistory, error) {
 	var history creditlimits.CreditLimitHistory
-	var tombstonedAt sql.NullString
+	var creditLimit duckdb.Decimal
+	var effectiveDate time.Time
+	var createdAt time.Time
+	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&history.ID,
 		&history.AccountID,
-		&history.CreditLimit,
-		&history.EffectiveDate,
-		&history.CreatedAt,
+		&creditLimit,
+		&effectiveDate,
+		&createdAt,
 		&tombstonedAt,
 	); err != nil {
 		return creditlimits.CreditLimitHistory{}, err
 	}
-	if tombstonedAt.Valid {
-		history.TombstonedAt = &tombstonedAt.String
+	parsedLimit, err := decimalFromDuckDB(creditLimit)
+	if err != nil {
+		return creditlimits.CreditLimitHistory{}, fmt.Errorf("scan credit limit decimal: %w", err)
 	}
+	history.CreditLimit = parsedLimit
+	history.EffectiveDate = values.CivilDateFromTime(effectiveDate)
+	history.CreatedAt = values.AuditTimestampFromTime(createdAt)
+	history.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
 
 	return history, nil
 }
@@ -203,7 +214,7 @@ func activeAccountExists(ctx context.Context, queryer rowQuerier, accounting *Ac
 	return true, nil
 }
 
-func activeCreditLimitHistoryExists(ctx context.Context, queryer rowQuerier, accounting *AccountingDB, accountID int64, effectiveDate string) (bool, error) {
+func activeCreditLimitHistoryExists(ctx context.Context, queryer rowQuerier, accounting *AccountingDB, accountID int64, effectiveDate values.CivilDate) (bool, error) {
 	var id int64
 	err := queryer.QueryRowContext(
 		ctx,
@@ -212,7 +223,7 @@ FROM `+accounting.location.mustQualifiedName("credit_limit_history")+`
 WHERE account_id = ? AND effective_date = ? AND tombstoned_at IS NULL
 LIMIT 1`,
 		accountID,
-		effectiveDate,
+		civilDateArg(effectiveDate),
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

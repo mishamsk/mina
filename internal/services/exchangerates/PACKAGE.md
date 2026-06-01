@@ -10,8 +10,8 @@
 
 ## Boundaries
 
-- Owns: currency validation, rate decimal validation, effective-date validation, filter validation, tombstoned use-case rules, and active-rate conflict mapping.
-- Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
+- Owns: currency validation, typed rate validation, typed filter validation, tombstoned use-case rules, and active-rate conflict mapping.
+- Does not own: HTTP DTOs, transport string parsing, SQL queries, database row types, or process configuration.
 
 ## Testing Notes
 

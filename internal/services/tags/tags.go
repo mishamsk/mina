@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // Tag is a hierarchical label used for flexible journal record grouping.
@@ -16,9 +17,9 @@ type Tag struct {
 	ParentFQN    *string
 	Name         string
 	Level        int
-	CreatedAt    string
-	UpdatedAt    string
-	TombstonedAt *string
+	CreatedAt    values.AuditTimestamp
+	UpdatedAt    values.AuditTimestamp
+	TombstonedAt *values.AuditTimestamp
 }
 
 // CreateInput contains fields for creating a tag.

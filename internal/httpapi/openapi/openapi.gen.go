@@ -15,10 +15,12 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for APIErrorCode.
@@ -365,19 +367,19 @@ type APIErrorCode string
 
 // Account defines model for Account.
 type Account struct {
-	AccountId      int64   `json:"account_id"`
-	CreatedAt      string  `json:"created_at"`
-	Currency       *string `json:"currency,omitempty"`
-	ExternalId     *string `json:"external_id,omitempty"`
-	ExternalSystem *string `json:"external_system,omitempty"`
-	Fqn            string  `json:"fqn"`
-	IsHidden       bool    `json:"is_hidden"`
-	Kind           string  `json:"kind"`
-	Level          int     `json:"level"`
-	Name           string  `json:"name"`
-	ParentFqn      *string `json:"parent_fqn"`
-	TombstonedAt   *string `json:"tombstoned_at,omitempty"`
-	UpdatedAt      string  `json:"updated_at"`
+	AccountId      int64      `json:"account_id"`
+	CreatedAt      time.Time  `json:"created_at"`
+	Currency       *string    `json:"currency,omitempty"`
+	ExternalId     *string    `json:"external_id,omitempty"`
+	ExternalSystem *string    `json:"external_system,omitempty"`
+	Fqn            string     `json:"fqn"`
+	IsHidden       bool       `json:"is_hidden"`
+	Kind           string     `json:"kind"`
+	Level          int        `json:"level"`
+	Name           string     `json:"name"`
+	ParentFqn      *string    `json:"parent_fqn"`
+	TombstonedAt   *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // AccountListResponse defines model for AccountListResponse.
@@ -419,15 +421,15 @@ type BulkUpdateRecordStatusRequest struct {
 
 // Category defines model for Category.
 type Category struct {
-	CategoryId   int64   `json:"category_id"`
-	CreatedAt    string  `json:"created_at"`
-	Fqn          string  `json:"fqn"`
-	IsHidden     bool    `json:"is_hidden"`
-	Level        int     `json:"level"`
-	Name         string  `json:"name"`
-	ParentFqn    *string `json:"parent_fqn"`
-	TombstonedAt *string `json:"tombstoned_at,omitempty"`
-	UpdatedAt    string  `json:"updated_at"`
+	CategoryId   int64      `json:"category_id"`
+	CreatedAt    time.Time  `json:"created_at"`
+	Fqn          string     `json:"fqn"`
+	IsHidden     bool       `json:"is_hidden"`
+	Level        int        `json:"level"`
+	Name         string     `json:"name"`
+	ParentFqn    *string    `json:"parent_fqn"`
+	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // CategoryListResponse defines model for CategoryListResponse.
@@ -452,22 +454,29 @@ type CreateCategoryRequest struct {
 
 // CreateCreditLimitHistoryRequest defines model for CreateCreditLimitHistoryRequest.
 type CreateCreditLimitHistoryRequest struct {
-	CreditLimit   string `json:"credit_limit"`
-	EffectiveDate string `json:"effective_date"`
+	// CreditLimit JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	CreditLimit   string             `json:"credit_limit"`
+	EffectiveDate openapi_types.Date `json:"effective_date"`
 }
 
 // CreateExchangeRateRequest defines model for CreateExchangeRateRequest.
 type CreateExchangeRateRequest struct {
-	EffectiveDate string `json:"effective_date"`
-	FromCurrency  string `json:"from_currency"`
-	Rate          string `json:"rate"`
-	ToCurrency    string `json:"to_currency"`
+	EffectiveDate openapi_types.Date `json:"effective_date"`
+	FromCurrency  string             `json:"from_currency"`
+
+	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Rate       string `json:"rate"`
+	ToCurrency string `json:"to_currency"`
 }
 
 // CreateJournalRecordRequest defines model for CreateJournalRecordRequest.
 type CreateJournalRecordRequest struct {
-	AccountId            int64                `json:"account_id"`
-	Amount               string               `json:"amount"`
+	AccountId int64 `json:"account_id"`
+
+	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount string `json:"amount"`
+
+	// AmountUsd JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountUsd            string               `json:"amount_usd"`
 	CategoryId           int64                `json:"category_id"`
 	Currency             string               `json:"currency"`
@@ -475,8 +484,8 @@ type CreateJournalRecordRequest struct {
 	ExternalSystem       *string              `json:"external_system,omitempty"`
 	MemberId             *int64               `json:"member_id,omitempty"`
 	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *string              `json:"pending_date,omitempty"`
-	PostedDate           *string              `json:"posted_date,omitempty"`
+	PendingDate          *openapi_types.Date  `json:"pending_date,omitempty"`
+	PostedDate           *openapi_types.Date  `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	Source               Source               `json:"source"`
@@ -496,18 +505,20 @@ type CreateTagRequest struct {
 
 // CreateTransactionRequest defines model for CreateTransactionRequest.
 type CreateTransactionRequest struct {
-	InitiatedDate string                       `json:"initiated_date"`
+	InitiatedDate openapi_types.Date           `json:"initiated_date"`
 	Records       []CreateJournalRecordRequest `json:"records"`
 }
 
 // CreditLimitHistory defines model for CreditLimitHistory.
 type CreditLimitHistory struct {
-	AccountId            int64   `json:"account_id"`
-	CreatedAt            string  `json:"created_at"`
-	CreditLimit          string  `json:"credit_limit"`
-	CreditLimitHistoryId int64   `json:"credit_limit_history_id"`
-	EffectiveDate        string  `json:"effective_date"`
-	TombstonedAt         *string `json:"tombstoned_at,omitempty"`
+	AccountId int64     `json:"account_id"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// CreditLimit JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	CreditLimit          string             `json:"credit_limit"`
+	CreditLimitHistoryId int64              `json:"credit_limit_history_id"`
+	EffectiveDate        openapi_types.Date `json:"effective_date"`
+	TombstonedAt         *time.Time         `json:"tombstoned_at,omitempty"`
 }
 
 // CreditLimitHistoryListResponse defines model for CreditLimitHistoryListResponse.
@@ -522,13 +533,15 @@ type ErrorResponse struct {
 
 // ExchangeRate defines model for ExchangeRate.
 type ExchangeRate struct {
-	CreatedAt      string  `json:"created_at"`
-	EffectiveDate  string  `json:"effective_date"`
-	ExchangeRateId int64   `json:"exchange_rate_id"`
-	FromCurrency   string  `json:"from_currency"`
-	Rate           string  `json:"rate"`
-	ToCurrency     string  `json:"to_currency"`
-	TombstonedAt   *string `json:"tombstoned_at,omitempty"`
+	CreatedAt      time.Time          `json:"created_at"`
+	EffectiveDate  openapi_types.Date `json:"effective_date"`
+	ExchangeRateId int64              `json:"exchange_rate_id"`
+	FromCurrency   string             `json:"from_currency"`
+
+	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Rate         string     `json:"rate"`
+	ToCurrency   string     `json:"to_currency"`
+	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
 }
 
 // ExchangeRateListResponse defines model for ExchangeRateListResponse.
@@ -547,26 +560,30 @@ type HealthResponseStatus string
 
 // JournalRecord defines model for JournalRecord.
 type JournalRecord struct {
-	AccountId            int64                `json:"account_id"`
-	Amount               string               `json:"amount"`
+	AccountId int64 `json:"account_id"`
+
+	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount string `json:"amount"`
+
+	// AmountUsd JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountUsd            string               `json:"amount_usd"`
 	CategoryId           int64                `json:"category_id"`
-	CreatedAt            string               `json:"created_at"`
+	CreatedAt            time.Time            `json:"created_at"`
 	Currency             string               `json:"currency"`
 	ExternalId           *string              `json:"external_id,omitempty"`
 	ExternalSystem       *string              `json:"external_system,omitempty"`
 	MemberId             *int64               `json:"member_id,omitempty"`
 	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *string              `json:"pending_date,omitempty"`
-	PostedDate           *string              `json:"posted_date,omitempty"`
+	PendingDate          *openapi_types.Date  `json:"pending_date,omitempty"`
+	PostedDate           *openapi_types.Date  `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
 	Source               Source               `json:"source"`
 	TagIds               []int64              `json:"tag_ids"`
-	TombstonedAt         *string              `json:"tombstoned_at,omitempty"`
+	TombstonedAt         *time.Time           `json:"tombstoned_at,omitempty"`
 	TransactionId        int64                `json:"transaction_id"`
-	UpdatedAt            string               `json:"updated_at"`
+	UpdatedAt            time.Time            `json:"updated_at"`
 }
 
 // JournalRecordSearchResponse defines model for JournalRecordSearchResponse.
@@ -576,11 +593,11 @@ type JournalRecordSearchResponse struct {
 
 // Member defines model for Member.
 type Member struct {
-	CreatedAt    string  `json:"created_at"`
-	MemberId     int64   `json:"member_id"`
-	Name         string  `json:"name"`
-	TombstonedAt *string `json:"tombstoned_at,omitempty"`
-	UpdatedAt    string  `json:"updated_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	MemberId     int64      `json:"member_id"`
+	Name         string     `json:"name"`
+	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // MemberListResponse defines model for MemberListResponse.
@@ -599,15 +616,15 @@ type Source string
 
 // Tag defines model for Tag.
 type Tag struct {
-	CreatedAt    string  `json:"created_at"`
-	Fqn          string  `json:"fqn"`
-	IsHidden     bool    `json:"is_hidden"`
-	Level        int     `json:"level"`
-	Name         string  `json:"name"`
-	ParentFqn    *string `json:"parent_fqn"`
-	TagId        int64   `json:"tag_id"`
-	TombstonedAt *string `json:"tombstoned_at,omitempty"`
-	UpdatedAt    string  `json:"updated_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	Fqn          string     `json:"fqn"`
+	IsHidden     bool       `json:"is_hidden"`
+	Level        int        `json:"level"`
+	Name         string     `json:"name"`
+	ParentFqn    *string    `json:"parent_fqn"`
+	TagId        int64      `json:"tag_id"`
+	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
 // TagListResponse defines model for TagListResponse.
@@ -617,11 +634,11 @@ type TagListResponse struct {
 
 // Transaction defines model for Transaction.
 type Transaction struct {
-	CreatedAt     string          `json:"created_at"`
-	InitiatedDate string          `json:"initiated_date"`
-	Records       []JournalRecord `json:"records"`
-	TombstonedAt  *string         `json:"tombstoned_at,omitempty"`
-	TransactionId int64           `json:"transaction_id"`
+	CreatedAt     time.Time          `json:"created_at"`
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+	Records       []JournalRecord    `json:"records"`
+	TombstonedAt  *time.Time         `json:"tombstoned_at,omitempty"`
+	TransactionId int64              `json:"transaction_id"`
 }
 
 // TransactionListResponse defines model for TransactionListResponse.
@@ -643,6 +660,7 @@ type UpdateCategoryRequest struct {
 
 // UpdateExchangeRateRequest defines model for UpdateExchangeRateRequest.
 type UpdateExchangeRateRequest struct {
+	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Rate string `json:"rate"`
 }
 
@@ -658,7 +676,7 @@ type UpdateTagRequest struct {
 
 // UpdateTransactionRequest defines model for UpdateTransactionRequest.
 type UpdateTransactionRequest struct {
-	InitiatedDate string                       `json:"initiated_date"`
+	InitiatedDate openapi_types.Date           `json:"initiated_date"`
 	Records       []CreateJournalRecordRequest `json:"records"`
 }
 
@@ -717,17 +735,25 @@ type SearchAccountJournalRecordsParams struct {
 	MemberId             *int64                `form:"member_id,omitempty" json:"member_id,omitempty"`
 	PostingStatus        *PostingStatus        `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
-	AmountMin            *string               `form:"amount_min,omitempty" json:"amount_min,omitempty"`
-	AmountMax            *string               `form:"amount_max,omitempty" json:"amount_max,omitempty"`
-	AmountUsdMin         *string               `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
-	AmountUsdMax         *string               `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
-	InitiatedDateFrom    *string               `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo      *string               `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom      *string               `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo        *string               `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom       *string               `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo         *string               `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
-	MemoContains         *string               `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+
+	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountMin *string `form:"amount_min,omitempty" json:"amount_min,omitempty"`
+
+	// AmountMax JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountMax *string `form:"amount_max,omitempty" json:"amount_max,omitempty"`
+
+	// AmountUsdMin JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
+
+	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
+	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+	PendingDateFrom   *openapi_types.Date `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+	PendingDateTo     *openapi_types.Date `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+	PostedDateFrom    *openapi_types.Date `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+	PostedDateTo      *openapi_types.Date `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 }
 
 // ListCategoriesParams defines parameters for ListCategories.
@@ -760,7 +786,7 @@ type GetCreditLimitHistoryParams struct {
 type ListExchangeRatesParams struct {
 	FromCurrency      *string                         `form:"from_currency,omitempty" json:"from_currency,omitempty"`
 	ToCurrency        *string                         `form:"to_currency,omitempty" json:"to_currency,omitempty"`
-	EffectiveDate     *string                         `form:"effective_date,omitempty" json:"effective_date,omitempty"`
+	EffectiveDate     *openapi_types.Date             `form:"effective_date,omitempty" json:"effective_date,omitempty"`
 	IncludeTombstoned *bool                           `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 	Sort              *ListExchangeRatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListExchangeRatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
@@ -807,17 +833,25 @@ type SearchJournalRecordsParams struct {
 	MemberId             *int64                `form:"member_id,omitempty" json:"member_id,omitempty"`
 	PostingStatus        *PostingStatus        `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
-	AmountMin            *string               `form:"amount_min,omitempty" json:"amount_min,omitempty"`
-	AmountMax            *string               `form:"amount_max,omitempty" json:"amount_max,omitempty"`
-	AmountUsdMin         *string               `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
-	AmountUsdMax         *string               `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
-	InitiatedDateFrom    *string               `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo      *string               `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom      *string               `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo        *string               `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom       *string               `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo         *string               `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
-	MemoContains         *string               `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+
+	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountMin *string `form:"amount_min,omitempty" json:"amount_min,omitempty"`
+
+	// AmountMax JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountMax *string `form:"amount_max,omitempty" json:"amount_max,omitempty"`
+
+	// AmountUsdMin JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
+
+	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
+	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+	PendingDateFrom   *openapi_types.Date `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+	PendingDateTo     *openapi_types.Date `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+	PostedDateFrom    *openapi_types.Date `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+	PostedDateTo      *openapi_types.Date `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 }
 
 // ListTagsParams defines parameters for ListTags.
@@ -1741,7 +1775,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "initiated_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "initiated_date_from", r.URL.Query(), &params.InitiatedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "initiated_date_from", r.URL.Query(), &params.InitiatedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -1754,7 +1788,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "initiated_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "initiated_date_to", r.URL.Query(), &params.InitiatedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "initiated_date_to", r.URL.Query(), &params.InitiatedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -1767,7 +1801,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "pending_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_from", r.URL.Query(), &params.PendingDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_from", r.URL.Query(), &params.PendingDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -1780,7 +1814,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "pending_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_to", r.URL.Query(), &params.PendingDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_to", r.URL.Query(), &params.PendingDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -1793,7 +1827,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "posted_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_from", r.URL.Query(), &params.PostedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_from", r.URL.Query(), &params.PostedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -1806,7 +1840,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "posted_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_to", r.URL.Query(), &params.PostedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_to", r.URL.Query(), &params.PostedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2152,7 +2186,7 @@ func (siw *ServerInterfaceWrapper) ListExchangeRates(w http.ResponseWriter, r *h
 
 	// ------------- Optional query parameter "effective_date" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "effective_date", r.URL.Query(), &params.EffectiveDate, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "effective_date", r.URL.Query(), &params.EffectiveDate, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2695,7 +2729,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "initiated_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "initiated_date_from", r.URL.Query(), &params.InitiatedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "initiated_date_from", r.URL.Query(), &params.InitiatedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2708,7 +2742,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "initiated_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "initiated_date_to", r.URL.Query(), &params.InitiatedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "initiated_date_to", r.URL.Query(), &params.InitiatedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2721,7 +2755,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "pending_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_from", r.URL.Query(), &params.PendingDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_from", r.URL.Query(), &params.PendingDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2734,7 +2768,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "pending_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_to", r.URL.Query(), &params.PendingDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_to", r.URL.Query(), &params.PendingDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2747,7 +2781,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "posted_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_from", r.URL.Query(), &params.PostedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_from", r.URL.Query(), &params.PostedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2760,7 +2794,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "posted_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_to", r.URL.Query(), &params.PostedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_to", r.URL.Query(), &params.PostedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -6580,68 +6614,72 @@ func (sh *strictHandler) ReplaceTransaction(w http.ResponseWriter, r *http.Reque
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"3VlyAR/NX3LddA5Em83mfwEAAP//",
+	"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",
+	"avXfAAAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

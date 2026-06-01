@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/members"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // MemberStore persists household members.
@@ -191,19 +193,21 @@ type memberScanner interface {
 
 func scanMember(scanner memberScanner) (members.Member, error) {
 	var member members.Member
-	var tombstonedAt sql.NullString
+	var createdAt time.Time
+	var updatedAt time.Time
+	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&member.ID,
 		&member.Name,
-		&member.CreatedAt,
-		&member.UpdatedAt,
+		&createdAt,
+		&updatedAt,
 		&tombstonedAt,
 	); err != nil {
 		return members.Member{}, err
 	}
-	if tombstonedAt.Valid {
-		member.TombstonedAt = &tombstonedAt.String
-	}
+	member.CreatedAt = values.AuditTimestampFromTime(createdAt)
+	member.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
+	member.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
 
 	return member, nil
 }

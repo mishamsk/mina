@@ -29,10 +29,16 @@ func (s *strictServer) ListCreditLimitHistory(ctx context.Context, request opena
 }
 
 func (s *strictServer) CreateCreditLimitHistory(ctx context.Context, request openapi.CreateCreditLimitHistoryRequestObject) (openapi.CreateCreditLimitHistoryResponseObject, error) {
-	history, err := s.deps.CreditLimits.Create(ctx, request.AccountId, creditlimits.CreateInput{
-		CreditLimit:   request.Body.CreditLimit,
-		EffectiveDate: request.Body.EffectiveDate,
-	})
+	creditLimit, err := decimalField("credit_limit", request.Body.CreditLimit)
+	if err != nil {
+		return nil, err
+	}
+	input := creditlimits.CreateInput{
+		CreditLimit:   creditLimit,
+		EffectiveDate: civilDateFromOpenAPI(request.Body.EffectiveDate),
+	}
+
+	history, err := s.deps.CreditLimits.Create(ctx, request.AccountId, input)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +68,7 @@ func (s *strictServer) ListExchangeRates(ctx context.Context, request openapi.Li
 	rates, err := s.deps.ExchangeRates.List(ctx, exchangerates.ListOptions{
 		FromCurrency:      params.FromCurrency,
 		ToCurrency:        params.ToCurrency,
-		EffectiveDate:     params.EffectiveDate,
+		EffectiveDate:     nullableCivilDateFromOpenAPI(params.EffectiveDate),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
 		List: listOptionsFromParams(
 			params.Sort,
@@ -80,12 +86,18 @@ func (s *strictServer) ListExchangeRates(ctx context.Context, request openapi.Li
 }
 
 func (s *strictServer) CreateExchangeRate(ctx context.Context, request openapi.CreateExchangeRateRequestObject) (openapi.CreateExchangeRateResponseObject, error) {
-	rate, err := s.deps.ExchangeRates.Create(ctx, exchangerates.CreateInput{
+	rateValue, err := decimalField("rate", request.Body.Rate)
+	if err != nil {
+		return nil, err
+	}
+	input := exchangerates.CreateInput{
 		FromCurrency:  request.Body.FromCurrency,
 		ToCurrency:    request.Body.ToCurrency,
-		Rate:          request.Body.Rate,
-		EffectiveDate: request.Body.EffectiveDate,
-	})
+		Rate:          rateValue,
+		EffectiveDate: civilDateFromOpenAPI(request.Body.EffectiveDate),
+	}
+
+	rate, err := s.deps.ExchangeRates.Create(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +123,13 @@ func (s *strictServer) GetExchangeRate(ctx context.Context, request openapi.GetE
 }
 
 func (s *strictServer) UpdateExchangeRate(ctx context.Context, request openapi.UpdateExchangeRateRequestObject) (openapi.UpdateExchangeRateResponseObject, error) {
-	rate, err := s.deps.ExchangeRates.UpdateRate(ctx, request.ExchangeRateId, exchangerates.UpdateInput{Rate: request.Body.Rate})
+	rateValue, err := decimalField("rate", request.Body.Rate)
+	if err != nil {
+		return nil, err
+	}
+	input := exchangerates.UpdateInput{Rate: rateValue}
+
+	rate, err := s.deps.ExchangeRates.UpdateRate(ctx, request.ExchangeRateId, input)
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +141,10 @@ func creditLimitHistoryAPIResponse(history creditlimits.CreditLimitHistory) open
 	return openapi.CreditLimitHistory{
 		CreditLimitHistoryId: history.ID,
 		AccountId:            history.AccountID,
-		CreditLimit:          history.CreditLimit,
-		EffectiveDate:        history.EffectiveDate,
-		CreatedAt:            history.CreatedAt,
-		TombstonedAt:         history.TombstonedAt,
+		CreditLimit:          history.CreditLimit.String(),
+		EffectiveDate:        openAPIDate(history.EffectiveDate),
+		CreatedAt:            history.CreatedAt.Time(),
+		TombstonedAt:         nullableAuditTimestampTime(history.TombstonedAt),
 	}
 }
 
@@ -144,10 +162,10 @@ func exchangeRateAPIResponse(rate exchangerates.ExchangeRate) openapi.ExchangeRa
 		ExchangeRateId: rate.ID,
 		FromCurrency:   rate.FromCurrency,
 		ToCurrency:     rate.ToCurrency,
-		Rate:           rate.Rate,
-		EffectiveDate:  rate.EffectiveDate,
-		CreatedAt:      rate.CreatedAt,
-		TombstonedAt:   rate.TombstonedAt,
+		Rate:           rate.Rate.String(),
+		EffectiveDate:  openAPIDate(rate.EffectiveDate),
+		CreatedAt:      rate.CreatedAt.Time(),
+		TombstonedAt:   nullableAuditTimestampTime(rate.TombstonedAt),
 	}
 }
 

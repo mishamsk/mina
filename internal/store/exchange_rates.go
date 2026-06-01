@@ -5,9 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // ExchangeRateStore persists exchange rates.
@@ -38,11 +41,11 @@ func (s *ExchangeRateStore) Create(ctx context.Context, input exchangerates.Crea
 			ctx,
 			`INSERT INTO `+s.accounting.location.mustQualifiedName("exchange_rate")+` (from_currency, to_currency, rate, effective_date)
 VALUES (?, ?, ?, ?)
-RETURNING exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
+RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at`,
 			input.FromCurrency,
 			input.ToCurrency,
-			input.Rate,
-			input.EffectiveDate,
+			input.Rate.LibraryDecimal(),
+			civilDateArg(input.EffectiveDate),
 		)
 		rate, err = scanExchangeRate(row)
 		if err != nil {
@@ -63,7 +66,7 @@ RETURNING exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), C
 
 // Get returns an exchange rate by ID.
 func (s *ExchangeRateStore) Get(ctx context.Context, id int64, includeTombstoned bool) (exchangerates.ExchangeRate, error) {
-	query := `SELECT exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
+	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
 FROM ` + s.accounting.location.mustQualifiedName("exchange_rate") + `
 WHERE exchange_rate_id = ?`
 	args := []any{id}
@@ -84,7 +87,7 @@ WHERE exchange_rate_id = ?`
 
 // List returns exchange rates using explicit filters and deterministic ordering.
 func (s *ExchangeRateStore) List(ctx context.Context, opts exchangerates.ListOptions) ([]exchangerates.ExchangeRate, error) {
-	query := `SELECT exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
+	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
 FROM ` + s.accounting.location.mustQualifiedName("exchange_rate") + `
 WHERE 1 = 1`
 	args := []any{}
@@ -98,7 +101,7 @@ WHERE 1 = 1`
 	}
 	if opts.EffectiveDate != nil {
 		query += " AND effective_date = ?"
-		args = append(args, *opts.EffectiveDate)
+		args = append(args, civilDateArg(*opts.EffectiveDate))
 	}
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
@@ -132,14 +135,14 @@ WHERE 1 = 1`
 }
 
 // UpdateRate updates an active exchange rate value.
-func (s *ExchangeRateStore) UpdateRate(ctx context.Context, id int64, rate string) (exchangerates.ExchangeRate, error) {
+func (s *ExchangeRateStore) UpdateRate(ctx context.Context, id int64, rate values.Decimal) (exchangerates.ExchangeRate, error) {
 	row := s.accounting.db.QueryRowContext(
 		ctx,
 		`UPDATE `+s.accounting.location.mustQualifiedName("exchange_rate")+`
 SET rate = ?
 WHERE exchange_rate_id = ? AND tombstoned_at IS NULL
-RETURNING exchange_rate_id, from_currency, to_currency, CAST(rate AS VARCHAR), CAST(effective_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
-		rate,
+RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at`,
+		rate.LibraryDecimal(),
 		id,
 	)
 	updated, err := scanExchangeRate(row)
@@ -183,26 +186,34 @@ type exchangeRateScanner interface {
 
 func scanExchangeRate(scanner exchangeRateScanner) (exchangerates.ExchangeRate, error) {
 	var rate exchangerates.ExchangeRate
-	var tombstonedAt sql.NullString
+	var rateValue duckdb.Decimal
+	var effectiveDate time.Time
+	var createdAt time.Time
+	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&rate.ID,
 		&rate.FromCurrency,
 		&rate.ToCurrency,
-		&rate.Rate,
-		&rate.EffectiveDate,
-		&rate.CreatedAt,
+		&rateValue,
+		&effectiveDate,
+		&createdAt,
 		&tombstonedAt,
 	); err != nil {
 		return exchangerates.ExchangeRate{}, err
 	}
-	if tombstonedAt.Valid {
-		rate.TombstonedAt = &tombstonedAt.String
+	parsedRate, err := decimalFromDuckDB(rateValue)
+	if err != nil {
+		return exchangerates.ExchangeRate{}, fmt.Errorf("scan exchange rate decimal: %w", err)
 	}
+	rate.Rate = parsedRate
+	rate.EffectiveDate = values.CivilDateFromTime(effectiveDate)
+	rate.CreatedAt = values.AuditTimestampFromTime(createdAt)
+	rate.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
 
 	return rate, nil
 }
 
-func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, fromCurrency string, toCurrency string, effectiveDate string) (bool, error) {
+func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, fromCurrency string, toCurrency string, effectiveDate values.CivilDate) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
@@ -212,7 +223,7 @@ WHERE from_currency = ? AND to_currency = ? AND effective_date = ? AND tombstone
 LIMIT 1`,
 		fromCurrency,
 		toCurrency,
-		effectiveDate,
+		civilDateArg(effectiveDate),
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

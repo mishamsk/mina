@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/big"
 	"slices"
 	"strings"
+	"time"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/transactions"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // TransactionStore persists transactions and journal records.
@@ -37,8 +39,8 @@ func (s *TransactionStore) Create(ctx context.Context, req transactions.CreateIn
 			ctx,
 			`INSERT INTO `+s.accounting.location.mustQualifiedName("transaction")+` (initiated_date)
 VALUES (?)
-RETURNING transaction_id, CAST(initiated_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
-			req.InitiatedDate,
+RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
+			civilDateArg(req.InitiatedDate),
 		)
 		var err error
 		transaction, err = scanTransaction(row)
@@ -72,8 +74,8 @@ func (s *TransactionStore) Replace(ctx context.Context, id int64, req transactio
 			`UPDATE `+s.accounting.location.mustQualifiedName("transaction")+`
 SET initiated_date = ?
 WHERE transaction_id = ? AND tombstoned_at IS NULL
-RETURNING transaction_id, CAST(initiated_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
-			req.InitiatedDate,
+RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
+			civilDateArg(req.InitiatedDate),
 			id,
 		)
 		var err error
@@ -124,7 +126,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 func (s *TransactionStore) Get(ctx context.Context, id int64) (transactions.Transaction, error) {
 	transaction, err := scanTransaction(s.accounting.db.QueryRowContext(
 		ctx,
-		`SELECT transaction_id, CAST(initiated_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
+		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
 FROM `+s.accounting.location.mustQualifiedName("transaction")+`
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		id,
@@ -149,7 +151,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 func (s *TransactionStore) List(ctx context.Context) ([]transactions.Transaction, error) {
 	rows, err := s.accounting.db.QueryContext(
 		ctx,
-		`SELECT transaction_id, CAST(initiated_date AS VARCHAR), CAST(created_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
+		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
 FROM `+s.accounting.location.mustQualifiedName("transaction")+`
 WHERE tombstoned_at IS NULL
 ORDER BY initiated_date ASC, transaction_id ASC`,
@@ -227,9 +229,9 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 
 // SearchRecords returns active journal records matching filters.
 func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.RecordSearchOptions) ([]transactions.JournalRecord, error) {
-	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, CAST(jr.amount AS VARCHAR), CAST(jr.amount_usd AS VARCHAR), jr.category_id,
-	jr.memo, CAST(jr.pending_date AS VARCHAR), CAST(jr.posted_date AS VARCHAR), CAST(jr.posting_status AS VARCHAR), CAST(jr.reconciliation_status AS VARCHAR), CAST(jr.source AS VARCHAR), jr.external_id, jr.external_system,
-	CAST(jr.created_at AS VARCHAR), CAST(jr.updated_at AS VARCHAR), CAST(jr.tombstoned_at AS VARCHAR)
+	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
+	jr.memo, jr.pending_date, jr.posted_date, CAST(jr.posting_status AS VARCHAR), CAST(jr.reconciliation_status AS VARCHAR), CAST(jr.source AS VARCHAR), jr.external_id, jr.external_system,
+	jr.created_at, jr.updated_at, jr.tombstoned_at
 FROM ` + s.accounting.location.mustQualifiedName("journal_record") + ` jr
 JOIN ` + s.accounting.location.mustQualifiedName("transaction") + ` tx ON tx.transaction_id = jr.transaction_id
 WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
@@ -258,29 +260,45 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 		query += " AND jr.reconciliation_status = CAST(? AS " + s.accounting.location.mustQualifiedName("reconciliation_status") + ")"
 		args = append(args, enumValue(*opts.ReconciliationStatus))
 	}
+	if opts.AmountMin != nil {
+		query += " AND jr.amount >= ?"
+		args = append(args, opts.AmountMin.LibraryDecimal())
+	}
+	if opts.AmountMax != nil {
+		query += " AND jr.amount <= ?"
+		args = append(args, opts.AmountMax.LibraryDecimal())
+	}
+	if opts.AmountUSDMin != nil {
+		query += " AND jr.amount_usd >= ?"
+		args = append(args, opts.AmountUSDMin.LibraryDecimal())
+	}
+	if opts.AmountUSDMax != nil {
+		query += " AND jr.amount_usd <= ?"
+		args = append(args, opts.AmountUSDMax.LibraryDecimal())
+	}
 	if opts.InitiatedDateFrom != nil {
 		query += " AND tx.initiated_date >= ?"
-		args = append(args, *opts.InitiatedDateFrom)
+		args = append(args, civilDateArg(*opts.InitiatedDateFrom))
 	}
 	if opts.InitiatedDateTo != nil {
 		query += " AND tx.initiated_date <= ?"
-		args = append(args, *opts.InitiatedDateTo)
+		args = append(args, civilDateArg(*opts.InitiatedDateTo))
 	}
 	if opts.PendingDateFrom != nil {
 		query += " AND jr.pending_date >= ?"
-		args = append(args, *opts.PendingDateFrom)
+		args = append(args, civilDateArg(*opts.PendingDateFrom))
 	}
 	if opts.PendingDateTo != nil {
 		query += " AND jr.pending_date <= ?"
-		args = append(args, *opts.PendingDateTo)
+		args = append(args, civilDateArg(*opts.PendingDateTo))
 	}
 	if opts.PostedDateFrom != nil {
 		query += " AND jr.posted_date >= ?"
-		args = append(args, *opts.PostedDateFrom)
+		args = append(args, civilDateArg(*opts.PostedDateFrom))
 	}
 	if opts.PostedDateTo != nil {
 		query += " AND jr.posted_date <= ?"
-		args = append(args, *opts.PostedDateTo)
+		args = append(args, civilDateArg(*opts.PostedDateTo))
 	}
 	if opts.MemoContains != nil {
 		query += " AND jr.memo LIKE ? ESCAPE '\\'"
@@ -298,13 +316,6 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 		record, err := scanJournalRecord(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan searched journal record: %w", err)
-		}
-		matchesAmount, err := recordMatchesAmountRanges(record, opts)
-		if err != nil {
-			return nil, err
-		}
-		if !matchesAmount {
-			continue
 		}
 		records = append(records, record)
 	}
@@ -486,18 +497,20 @@ type transactionScanner interface {
 
 func scanTransaction(scanner transactionScanner) (transactions.Transaction, error) {
 	var transaction transactions.Transaction
-	var tombstonedAt sql.NullString
+	var initiatedDate time.Time
+	var createdAt time.Time
+	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&transaction.ID,
-		&transaction.InitiatedDate,
-		&transaction.CreatedAt,
+		&initiatedDate,
+		&createdAt,
 		&tombstonedAt,
 	); err != nil {
 		return transactions.Transaction{}, err
 	}
-	if tombstonedAt.Valid {
-		transaction.TombstonedAt = &tombstonedAt.String
-	}
+	transaction.InitiatedDate = values.CivilDateFromTime(initiatedDate)
+	transaction.CreatedAt = values.AuditTimestampFromTime(createdAt)
+	transaction.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
 	transaction.Records = []transactions.JournalRecord{}
 
 	return transaction, nil
@@ -510,15 +523,15 @@ func insertJournalRecord(ctx context.Context, tx *sql.Tx, accounting *Accounting
 		req.AccountID,
 		req.MemberID,
 		req.Currency,
-		req.Amount,
-		req.AmountUSD,
+		req.Amount.LibraryDecimal(),
+		req.AmountUSD.LibraryDecimal(),
 		req.CategoryID,
 	}
 	args = append(args, tagListArgs...)
 	args = append(args,
 		req.Memo,
-		req.PendingDate,
-		req.PostedDate,
+		nullableCivilDateArg(req.PendingDate),
+		nullableCivilDateArg(req.PostedDate),
 		enumValue(req.PostingStatus),
 		enumValue(req.ReconciliationStatus),
 		enumValue(req.Source),
@@ -533,9 +546,9 @@ func insertJournalRecord(ctx context.Context, tx *sql.Tx, accounting *Accounting
 	pending_date, posted_date, posting_status, reconciliation_status, source, external_id, external_system
 )
 VALUES (?, ?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, ?, ?, CAST(? AS `+accounting.location.mustQualifiedName("posting_status")+`), CAST(? AS `+accounting.location.mustQualifiedName("reconciliation_status")+`), CAST(? AS `+accounting.location.mustQualifiedName("source")+`), ?, ?)
-RETURNING record_id, transaction_id, account_id, member_id, currency, CAST(amount AS VARCHAR), CAST(amount_usd AS VARCHAR), category_id,
-	memo, CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR), external_id, external_system,
-	CAST(created_at AS VARCHAR), CAST(updated_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)`,
+RETURNING record_id, transaction_id, account_id, member_id, currency, amount, amount_usd, category_id,
+	memo, pending_date, posted_date, CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR), external_id, external_system,
+	created_at, updated_at, tombstoned_at`,
 		args...,
 	)
 
@@ -558,20 +571,24 @@ type journalRecordScanner interface {
 func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord, error) {
 	var record transactions.JournalRecord
 	var memberID sql.NullInt64
+	var amount duckdb.Decimal
+	var amountUSD duckdb.Decimal
 	var memo sql.NullString
-	var pendingDate sql.NullString
-	var postedDate sql.NullString
+	var pendingDate sql.NullTime
+	var postedDate sql.NullTime
 	var externalID sql.NullString
 	var externalSystem sql.NullString
-	var tombstonedAt sql.NullString
+	var createdAt time.Time
+	var updatedAt time.Time
+	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&record.ID,
 		&record.TransactionID,
 		&record.AccountID,
 		&memberID,
 		&record.Currency,
-		&record.Amount,
-		&record.AmountUSD,
+		&amount,
+		&amountUSD,
 		&record.CategoryID,
 		&memo,
 		&pendingDate,
@@ -581,33 +598,39 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 		&record.Source,
 		&externalID,
 		&externalSystem,
-		&record.CreatedAt,
-		&record.UpdatedAt,
+		&createdAt,
+		&updatedAt,
 		&tombstonedAt,
 	); err != nil {
 		return transactions.JournalRecord{}, err
 	}
+	parsedAmount, err := decimalFromDuckDB(amount)
+	if err != nil {
+		return transactions.JournalRecord{}, fmt.Errorf("scan journal record amount: %w", err)
+	}
+	parsedAmountUSD, err := decimalFromDuckDB(amountUSD)
+	if err != nil {
+		return transactions.JournalRecord{}, fmt.Errorf("scan journal record amount_usd: %w", err)
+	}
+	record.Amount = parsedAmount
+	record.AmountUSD = parsedAmountUSD
 	if memberID.Valid {
 		record.MemberID = &memberID.Int64
 	}
 	if memo.Valid {
 		record.Memo = &memo.String
 	}
-	if pendingDate.Valid {
-		record.PendingDate = &pendingDate.String
-	}
-	if postedDate.Valid {
-		record.PostedDate = &postedDate.String
-	}
+	record.PendingDate = nullableCivilDateFromSQL(pendingDate)
+	record.PostedDate = nullableCivilDateFromSQL(postedDate)
 	if externalID.Valid {
 		record.ExternalID = &externalID.String
 	}
 	if externalSystem.Valid {
 		record.ExternalSystem = &externalSystem.String
 	}
-	if tombstonedAt.Valid {
-		record.TombstonedAt = &tombstonedAt.String
-	}
+	record.CreatedAt = values.AuditTimestampFromTime(createdAt)
+	record.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
+	record.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
 	record.PostingStatus = transactions.PostingStatus(strings.ToLower(string(record.PostingStatus)))
 	record.ReconciliationStatus = transactions.ReconciliationStatus(strings.ToLower(string(record.ReconciliationStatus)))
 	record.Source = transactions.Source(strings.ToLower(string(record.Source)))
@@ -628,9 +651,9 @@ func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transact
 	for _, transactionID := range transactionIDs {
 		rows, err := s.accounting.db.QueryContext(
 			ctx,
-			`SELECT record_id, transaction_id, account_id, member_id, currency, CAST(amount AS VARCHAR), CAST(amount_usd AS VARCHAR), category_id,
-	memo, CAST(pending_date AS VARCHAR), CAST(posted_date AS VARCHAR), CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR), external_id, external_system,
-	CAST(created_at AS VARCHAR), CAST(updated_at AS VARCHAR), CAST(tombstoned_at AS VARCHAR)
+			`SELECT record_id, transaction_id, account_id, member_id, currency, amount, amount_usd, category_id,
+	memo, pending_date, posted_date, CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR), external_id, external_system,
+	created_at, updated_at, tombstoned_at
 FROM `+s.accounting.location.mustQualifiedName("journal_record")+`
 WHERE transaction_id = ? AND tombstoned_at IS NULL
 ORDER BY record_id ASC`,
@@ -895,42 +918,6 @@ func escapeLikePattern(value string) string {
 	value = strings.ReplaceAll(value, `_`, `\_`)
 
 	return value
-}
-
-func recordMatchesAmountRanges(record transactions.JournalRecord, opts transactions.RecordSearchOptions) (bool, error) {
-	matches, err := decimalStringInRange(record.Amount, opts.AmountMin, opts.AmountMax)
-	if err != nil || !matches {
-		return matches, err
-	}
-
-	return decimalStringInRange(record.AmountUSD, opts.AmountUSDMin, opts.AmountUSDMax)
-}
-
-func decimalStringInRange(value string, minValue *string, maxValue *string) (bool, error) {
-	decimal, ok := new(big.Rat).SetString(value)
-	if !ok {
-		return false, fmt.Errorf("parse stored decimal %q", value)
-	}
-	if minValue != nil {
-		minDecimal, ok := new(big.Rat).SetString(*minValue)
-		if !ok {
-			return false, fmt.Errorf("parse decimal filter %q", *minValue)
-		}
-		if decimal.Cmp(minDecimal) < 0 {
-			return false, nil
-		}
-	}
-	if maxValue != nil {
-		maxDecimal, ok := new(big.Rat).SetString(*maxValue)
-		if !ok {
-			return false, fmt.Errorf("parse decimal filter %q", *maxValue)
-		}
-		if decimal.Cmp(maxDecimal) > 0 {
-			return false, nil
-		}
-	}
-
-	return true, nil
 }
 
 func placeholders(count int) string {

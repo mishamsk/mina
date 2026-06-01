@@ -15,7 +15,7 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 	account := createCreditLimitAccount(t, client)
 	later, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "5000.00",
-		EffectiveDate: "2024-02-01",
+		EffectiveDate: apptest.Date("2024-02-01"),
 	})
 	if err != nil {
 		t.Fatalf("later create request: %v", err)
@@ -32,7 +32,7 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 
 	earlier, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "4000",
-		EffectiveDate: "2024-01-01",
+		EffectiveDate: apptest.Date("2024-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("earlier create request: %v", err)
@@ -91,7 +91,7 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 
 	recreated, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "4500",
-		EffectiveDate: "2024-01-01",
+		EffectiveDate: apptest.Date("2024-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("recreate request: %v", err)
@@ -125,7 +125,7 @@ func TestCreditLimitHistoryRejectsDuplicateActiveAccountDate(t *testing.T) {
 
 	first, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "10000",
-		EffectiveDate: "2024-03-01",
+		EffectiveDate: apptest.Date("2024-03-01"),
 	})
 	if err != nil {
 		t.Fatalf("first create request: %v", err)
@@ -136,7 +136,7 @@ func TestCreditLimitHistoryRejectsDuplicateActiveAccountDate(t *testing.T) {
 
 	duplicate, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "11000",
-		EffectiveDate: "2024-03-01",
+		EffectiveDate: apptest.Date("2024-03-01"),
 	})
 	if err != nil {
 		t.Fatalf("duplicate request: %v", err)
@@ -155,7 +155,7 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 
 	missingAccount, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), 999, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "10000",
-		EffectiveDate: "2024-01-01",
+		EffectiveDate: apptest.Date("2024-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("missing account request: %v", err)
@@ -172,10 +172,10 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 		t.Fatalf("missing account list status = %d, want %d; body %s", missingAccountList.StatusCode(), http.StatusNotFound, missingAccountList.Body)
 	}
 
-	invalidDate, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
-		CreditLimit:   "10000",
-		EffectiveDate: "2024-02-30",
-	})
+	invalidDate, err := client.REST().CreateCreditLimitHistoryWithBodyWithResponse(context.Background(), account.AccountId, "application/json", apptest.JSONReader(map[string]any{
+		"credit_limit":   "10000",
+		"effective_date": "2024-02-30",
+	}))
 	if err != nil {
 		t.Fatalf("invalid date request: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 
 	negativeLimit, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "-1",
-		EffectiveDate: "2024-01-01",
+		EffectiveDate: apptest.Date("2024-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("negative limit request: %v", err)
@@ -196,7 +196,7 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 
 	tooPrecise, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "1.123456789",
-		EffectiveDate: "2024-01-01",
+		EffectiveDate: apptest.Date("2024-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("too precise request: %v", err)
@@ -207,7 +207,7 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 
 	tooManyDigits, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "1234567890123456789",
-		EffectiveDate: "2024-01-01",
+		EffectiveDate: apptest.Date("2024-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("too many digits request: %v", err)
@@ -218,7 +218,7 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 
 	tooManyIntegerDigits, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{
 		CreditLimit:   "12345678901",
-		EffectiveDate: "2024-01-01",
+		EffectiveDate: apptest.Date("2024-01-01"),
 	})
 	if err != nil {
 		t.Fatalf("too many integer digits request: %v", err)

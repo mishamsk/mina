@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // PostingStatus is a journal record posting lifecycle state.
@@ -44,9 +44,9 @@ const (
 // Transaction is a double-entry transaction with nested journal records.
 type Transaction struct {
 	ID            int64
-	InitiatedDate string
-	CreatedAt     string
-	TombstonedAt  *string
+	InitiatedDate values.CivilDate
+	CreatedAt     values.AuditTimestamp
+	TombstonedAt  *values.AuditTimestamp
 	Records       []JournalRecord
 }
 
@@ -57,26 +57,26 @@ type JournalRecord struct {
 	AccountID            int64
 	MemberID             *int64
 	Currency             string
-	Amount               string
-	AmountUSD            string
+	Amount               values.Decimal
+	AmountUSD            values.Decimal
 	CategoryID           int64
 	TagIDs               []int64
 	Memo                 *string
-	PendingDate          *string
-	PostedDate           *string
+	PendingDate          *values.CivilDate
+	PostedDate           *values.CivilDate
 	PostingStatus        PostingStatus
 	ReconciliationStatus ReconciliationStatus
 	Source               Source
 	ExternalID           *string
 	ExternalSystem       *string
-	CreatedAt            string
-	UpdatedAt            string
-	TombstonedAt         *string
+	CreatedAt            values.AuditTimestamp
+	UpdatedAt            values.AuditTimestamp
+	TombstonedAt         *values.AuditTimestamp
 }
 
 // CreateInput contains fields for creating or replacing a transaction.
 type CreateInput struct {
-	InitiatedDate string
+	InitiatedDate values.CivilDate
 	Records       []JournalRecordInput
 }
 
@@ -85,13 +85,13 @@ type JournalRecordInput struct {
 	AccountID            int64
 	MemberID             *int64
 	Currency             string
-	Amount               string
-	AmountUSD            string
+	Amount               values.Decimal
+	AmountUSD            values.Decimal
 	CategoryID           int64
 	TagIDs               []int64
 	Memo                 *string
-	PendingDate          *string
-	PostedDate           *string
+	PendingDate          *values.CivilDate
+	PostedDate           *values.CivilDate
 	PostingStatus        PostingStatus
 	ReconciliationStatus ReconciliationStatus
 	Source               Source
@@ -107,16 +107,16 @@ type RecordSearchOptions struct {
 	TagID                *int64
 	PostingStatus        *PostingStatus
 	ReconciliationStatus *ReconciliationStatus
-	AmountMin            *string
-	AmountMax            *string
-	AmountUSDMin         *string
-	AmountUSDMax         *string
-	InitiatedDateFrom    *string
-	InitiatedDateTo      *string
-	PendingDateFrom      *string
-	PendingDateTo        *string
-	PostedDateFrom       *string
-	PostedDateTo         *string
+	AmountMin            *values.Decimal
+	AmountMax            *values.Decimal
+	AmountUSDMin         *values.Decimal
+	AmountUSDMax         *values.Decimal
+	InitiatedDateFrom    *values.CivilDate
+	InitiatedDateTo      *values.CivilDate
+	PendingDateFrom      *values.CivilDate
+	PendingDateTo        *values.CivilDate
+	PostedDateFrom       *values.CivilDate
+	PostedDateTo         *values.CivilDate
 	MemoContains         *string
 }
 
@@ -152,7 +152,7 @@ func NewService(repo Repository) *Service {
 
 // Create validates and creates a transaction and its journal records.
 func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, error) {
-	if err := validateTransactionInput(input.InitiatedDate, input.Records); err != nil {
+	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
 
@@ -172,7 +172,7 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 	if id <= 0 {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
-	if err := validateTransactionInput(input.InitiatedDate, input.Records); err != nil {
+	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
 
@@ -344,21 +344,21 @@ func (s *Service) BulkUpdateStatuses(
 	return bulkRecordOperationResponse(recordIDs, count), nil
 }
 
-func validateTransactionInput(initiatedDate string, records []JournalRecordInput) error {
-	if err := validateEffectiveDate(initiatedDate); err != nil {
-		return services.InvalidRequest("initiated_date must use YYYY-MM-DD format")
-	}
-	if len(records) < 2 {
+func validateTransactionInput(input CreateInput) error {
+	if len(input.Records) < 2 {
 		return services.InvalidRequest("transaction requires at least two records")
 	}
 
-	balanceUSD := big.NewInt(0)
-	for index, record := range records {
-		amountUSD, err := validateJournalRecord(index, record)
-		if err != nil {
+	var balanceUSD big.Int
+	for index, record := range input.Records {
+		if err := validateJournalRecord(index, record); err != nil {
 			return err
 		}
-		balanceUSD.Add(balanceUSD, amountUSD)
+		amountUSD, ok := decimalScaledUnits(record.AmountUSD)
+		if !ok {
+			return services.InvalidRequest("transaction records must balance to zero amount_usd")
+		}
+		balanceUSD.Add(&balanceUSD, &amountUSD)
 	}
 	if balanceUSD.Sign() != 0 {
 		return services.InvalidRequest("transaction records must balance to zero amount_usd")
@@ -367,62 +367,71 @@ func validateTransactionInput(initiatedDate string, records []JournalRecordInput
 	return nil
 }
 
-func validateJournalRecord(index int, record JournalRecordInput) (*big.Int, error) {
+func decimalScaledUnits(value values.Decimal) (big.Int, bool) {
+	whole, fraction, ok := value.LibraryDecimal().Int64(8)
+	if !ok {
+		return big.Int{}, false
+	}
+
+	var units big.Int
+	units.SetInt64(whole)
+	units.Mul(&units, big.NewInt(100000000))
+
+	var fractionUnits big.Int
+	fractionUnits.SetInt64(fraction)
+	units.Add(&units, &fractionUnits)
+
+	return units, true
+}
+
+func validateJournalRecord(index int, record JournalRecordInput) error {
 	if record.AccountID <= 0 {
-		return nil, services.InvalidRequest(indexedField(index, "account_id") + " must be positive")
+		return services.InvalidRequest(indexedField(index, "account_id") + " must be positive")
 	}
 	if record.MemberID != nil && *record.MemberID <= 0 {
-		return nil, services.InvalidRequest(indexedField(index, "member_id") + " must be positive")
+		return services.InvalidRequest(indexedField(index, "member_id") + " must be positive")
 	}
 	if record.CategoryID <= 0 {
-		return nil, services.InvalidRequest(indexedField(index, "category_id") + " must be positive")
+		return services.InvalidRequest(indexedField(index, "category_id") + " must be positive")
+	}
+	if record.Amount.IsZero() {
+		return services.InvalidRequest(indexedField(index, "amount") + " must be non-zero")
+	}
+	if record.AmountUSD.IsZero() {
+		return services.InvalidRequest(indexedField(index, "amount_usd") + " must be non-zero")
 	}
 
 	seenTags := map[int64]struct{}{}
 	for _, tagID := range record.TagIDs {
 		if tagID <= 0 {
-			return nil, services.InvalidRequest(indexedField(index, "tag_ids") + " values must be positive")
+			return services.InvalidRequest(indexedField(index, "tag_ids") + " values must be positive")
 		}
 		if _, ok := seenTags[tagID]; ok {
-			return nil, services.InvalidRequest(indexedField(index, "tag_ids") + " values must be unique")
+			return services.InvalidRequest(indexedField(index, "tag_ids") + " values must be unique")
 		}
 		seenTags[tagID] = struct{}{}
 	}
 
 	if err := validateCurrency(record.Currency); err != nil {
-		return nil, services.InvalidRequest(indexedField(index, "currency") + " must be a three-letter uppercase code")
-	}
-	amount, err := parseSignedDecimal(record.Amount)
-	if err != nil || amount.Sign() == 0 {
-		return nil, services.InvalidRequest(indexedField(index, "amount") + " must be a non-zero decimal with at most 10 integer digits and 8 fractional digits")
-	}
-	amountUSD, err := parseSignedDecimal(record.AmountUSD)
-	if err != nil || amountUSD.Sign() == 0 {
-		return nil, services.InvalidRequest(indexedField(index, "amount_usd") + " must be a non-zero decimal with at most 10 integer digits and 8 fractional digits")
-	}
-	if err := validateOptionalDate(indexedField(index, "pending_date"), record.PendingDate); err != nil {
-		return nil, err
-	}
-	if err := validateOptionalDate(indexedField(index, "posted_date"), record.PostedDate); err != nil {
-		return nil, err
+		return services.InvalidRequest(indexedField(index, "currency") + " must be a three-letter uppercase code")
 	}
 	if err := validatePostingStatus(index, record.PostingStatus); err != nil {
-		return nil, err
+		return err
 	}
 	if err := validateReconciliationStatus(index, record.ReconciliationStatus); err != nil {
-		return nil, err
+		return err
 	}
 	if record.Source != SourceManual {
-		return nil, services.InvalidRequest(indexedField(index, "source") + " must be manual")
+		return services.InvalidRequest(indexedField(index, "source") + " must be manual")
 	}
 	if record.Memo != nil && strings.TrimSpace(*record.Memo) != *record.Memo {
-		return nil, services.InvalidRequest(indexedField(index, "memo") + " must not have leading or trailing whitespace")
+		return services.InvalidRequest(indexedField(index, "memo") + " must not have leading or trailing whitespace")
 	}
 	if err := validateExternalIdentifiers(record.ExternalID, record.ExternalSystem); err != nil {
-		return nil, services.InvalidRequest(indexedField(index, "external_id") + " and " + indexedField(index, "external_system") + " must be provided together without surrounding whitespace")
+		return services.InvalidRequest(indexedField(index, "external_id") + " and " + indexedField(index, "external_system") + " must be provided together without surrounding whitespace")
 	}
 
-	return amountUSD, nil
+	return nil
 }
 
 func validateRecordSearchOptions(opts RecordSearchOptions) error {
@@ -451,32 +460,6 @@ func validateRecordSearchOptions(opts RecordSearchOptions) error {
 	if opts.MemoContains != nil && *opts.MemoContains == "" {
 		return services.InvalidRequest("memo_contains must be non-empty")
 	}
-	for name, value := range map[string]*string{
-		"amount_min":          opts.AmountMin,
-		"amount_max":          opts.AmountMax,
-		"amount_usd_min":      opts.AmountUSDMin,
-		"amount_usd_max":      opts.AmountUSDMax,
-		"initiated_date_from": opts.InitiatedDateFrom,
-		"initiated_date_to":   opts.InitiatedDateTo,
-		"pending_date_from":   opts.PendingDateFrom,
-		"pending_date_to":     opts.PendingDateTo,
-		"posted_date_from":    opts.PostedDateFrom,
-		"posted_date_to":      opts.PostedDateTo,
-	} {
-		if value == nil {
-			continue
-		}
-		if strings.Contains(name, "date") {
-			if err := validateEffectiveDate(*value); err != nil {
-				return services.InvalidRequest(name + " must use YYYY-MM-DD format")
-			}
-			continue
-		}
-		if _, err := parseSignedDecimal(*value); err != nil {
-			return services.InvalidRequest(name + " must be a decimal with at most 10 integer digits and 8 fractional digits")
-		}
-	}
-
 	return nil
 }
 
@@ -528,17 +511,6 @@ func bulkRecordOperationResponse(recordIDs []int64, count int) BulkRecordOperati
 	}
 }
 
-func validateOptionalDate(name string, value *string) error {
-	if value == nil {
-		return nil
-	}
-	if err := validateEffectiveDate(*value); err != nil {
-		return services.InvalidRequest(name + " must use YYYY-MM-DD format")
-	}
-
-	return nil
-}
-
 func validatePostingStatus(index int, status PostingStatus) error {
 	switch status {
 	case PostingStatusPending, PostingStatusPosted, PostingStatusCancelled:
@@ -585,82 +557,4 @@ func validateExternalIdentifiers(externalID *string, externalSystem *string) err
 	}
 
 	return nil
-}
-
-func validateEffectiveDate(effectiveDate string) error {
-	if len(effectiveDate) != len("2006-01-02") {
-		return errors.New("invalid date")
-	}
-	parsed, err := time.Parse("2006-01-02", effectiveDate)
-	if err != nil || parsed.Format("2006-01-02") != effectiveDate {
-		return errors.New("invalid date")
-	}
-
-	return nil
-}
-
-func parseSignedDecimal(value string) (*big.Int, error) {
-	if strings.TrimSpace(value) != value || value == "" {
-		return nil, errors.New("invalid decimal")
-	}
-
-	sign := 1
-	if strings.HasPrefix(value, "-") {
-		sign = -1
-		value = strings.TrimPrefix(value, "-")
-	} else if strings.HasPrefix(value, "+") {
-		return nil, errors.New("invalid decimal")
-	}
-	if value == "" {
-		return nil, errors.New("invalid decimal")
-	}
-
-	parts := strings.Split(value, ".")
-	if len(parts) > 2 || parts[0] == "" {
-		return nil, errors.New("invalid decimal")
-	}
-	if len(parts) == 2 && (parts[1] == "" || len(parts[1]) > 8) {
-		return nil, errors.New("invalid decimal")
-	}
-	if len(parts[0]) > 10 {
-		return nil, errors.New("invalid decimal")
-	}
-
-	digitCount := 0
-	var digits strings.Builder
-	digits.WriteString(parts[0])
-	for i := range parts[0] {
-		if parts[0][i] < '0' || parts[0][i] > '9' {
-			return nil, errors.New("invalid decimal")
-		}
-		digitCount++
-	}
-
-	fracDigits := 0
-	if len(parts) == 2 {
-		fracDigits = len(parts[1])
-		for i := range parts[1] {
-			if parts[1][i] < '0' || parts[1][i] > '9' {
-				return nil, errors.New("invalid decimal")
-			}
-			digitCount++
-		}
-		digits.WriteString(parts[1])
-	}
-	if digitCount > 18 {
-		return nil, errors.New("invalid decimal")
-	}
-	for ; fracDigits < 8; fracDigits++ {
-		digits.WriteString("0")
-	}
-
-	scaled, ok := new(big.Int).SetString(digits.String(), 10)
-	if !ok {
-		return nil, errors.New("invalid decimal")
-	}
-	if sign < 0 {
-		scaled.Neg(scaled)
-	}
-
-	return scaled, nil
 }
