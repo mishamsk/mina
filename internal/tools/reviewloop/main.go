@@ -39,7 +39,9 @@ type config struct {
 }
 
 type reviewTarget struct {
-	commitSHA string
+	branchName string
+	commitSHA  string
+	headSHA    string
 }
 
 type reviewTemplates struct {
@@ -153,19 +155,29 @@ func loadConfig(args []string) (config, error) {
 				return config{}, err
 			}
 			target.commitSHA = arg
-		} else if err := requireCurrentBranch(root); err != nil {
+		} else {
+			branchName, err := requireCurrentBranch(root)
+			if err != nil {
+				return config{}, err
+			}
+			target.branchName = branchName
+		}
+	} else {
+		branchName, err := requireCurrentBranch(root)
+		if err != nil {
 			return config{}, err
 		}
-	} else if err := requireCurrentBranch(root); err != nil {
-		return config{}, err
+		target.branchName = branchName
 	}
 
-	previousReview, err := os.CreateTemp("/tmp", "mina-reviewloop-history-*.md")
+	headSHA, err := shortGitSHA(root, "HEAD")
 	if err != nil {
-		return config{}, fmt.Errorf("create previous review file: %w", err)
+		return config{}, err
 	}
-	if err := previousReview.Close(); err != nil {
-		return config{}, fmt.Errorf("close previous review file: %w", err)
+	target.headSHA = headSHA
+	previousReviewFile, err := createReviewProgressFile(root, target)
+	if err != nil {
+		return config{}, err
 	}
 
 	templates, err := loadTemplates(root)
@@ -180,7 +192,7 @@ func loadConfig(args []string) (config, error) {
 	return config{
 		root:               root,
 		goal:               goal,
-		previousReviewFile: previousReview.Name(),
+		previousReviewFile: previousReviewFile,
 		reviewTarget:       target,
 		templates:          templates,
 		reviewers:          reviewers,
@@ -238,17 +250,17 @@ func isMinaRoot(dir string) bool {
 	return err == nil && strings.Contains(string(contents), "module "+modulePath+"\n")
 }
 
-func requireCurrentBranch(root string) error {
+func requireCurrentBranch(root string) (string, error) {
 	cmd := exec.Command("git", "-C", root, "branch", "--show-current")
 	output, err := cmd.Output()
 	if err != nil {
-		return fmt.Errorf("resolve current branch: %w", err)
+		return "", fmt.Errorf("resolve current branch: %w", err)
 	}
 	branch := strings.TrimSpace(string(output))
 	if branch == "" {
-		return errors.New("current branch is empty; provide branch-or-commit explicitly")
+		return "", errors.New("current branch is empty; provide branch-or-commit explicitly")
 	}
-	return nil
+	return branch, nil
 }
 
 func verifyCommit(root string, commitSHA string) error {
@@ -257,6 +269,60 @@ func verifyCommit(root string, commitSHA string) error {
 		return fmt.Errorf("resolve commit %s: %w", commitSHA, err)
 	}
 	return nil
+}
+
+func shortGitSHA(root string, rev string) (string, error) {
+	cmd := exec.Command("git", "-C", root, "rev-parse", "--short=12", rev)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("resolve short sha for %s: %w", rev, err)
+	}
+	shortSHA := strings.TrimSpace(string(output))
+	if shortSHA == "" {
+		return "", fmt.Errorf("resolve short sha for %s: empty output", rev)
+	}
+	return shortSHA, nil
+}
+
+func createReviewProgressFile(root string, target reviewTarget) (string, error) {
+	progressDir := filepath.Join(root, "build", "review-loop")
+	if err := os.MkdirAll(progressDir, 0o755); err != nil {
+		return "", fmt.Errorf("create review progress directory: %w", err)
+	}
+
+	var baseName string
+	if target.commitSHA != "" {
+		shortSHA, err := shortGitSHA(root, target.commitSHA)
+		if err != nil {
+			return "", err
+		}
+		baseName = "review-progress-commit-" + shortSHA
+	} else {
+		baseName = "review-progress-full-branch-" + fileSafeName(target.branchName) + "-head-" + target.headSHA
+	}
+
+	return createNumberedFile(progressDir, baseName, ".md")
+}
+
+func createNumberedFile(dir string, baseName string, ext string) (string, error) {
+	for counter := 0; ; counter++ {
+		name := baseName + ext
+		if counter > 0 {
+			name = fmt.Sprintf("%s-%d%s", baseName, counter+1, ext)
+		}
+		path := filepath.Join(dir, name)
+		file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("create review progress file: %w", err)
+		}
+		if err := file.Close(); err != nil {
+			return "", fmt.Errorf("close review progress file: %w", err)
+		}
+		return path, nil
+	}
 }
 
 func loadTemplates(root string) (reviewTemplates, error) {
