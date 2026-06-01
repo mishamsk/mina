@@ -3,6 +3,7 @@ package exchangerates
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/values"
@@ -14,9 +15,9 @@ type ExchangeRate struct {
 	FromCurrency  string
 	ToCurrency    string
 	Rate          values.Decimal
-	EffectiveDate values.CivilDate
-	CreatedAt     values.AuditTimestamp
-	TombstonedAt  *values.AuditTimestamp
+	EffectiveDate time.Time
+	CreatedAt     time.Time
+	TombstonedAt  *time.Time
 }
 
 // CreateInput contains fields for creating an exchange rate.
@@ -24,7 +25,7 @@ type CreateInput struct {
 	FromCurrency  string
 	ToCurrency    string
 	Rate          values.Decimal
-	EffectiveDate values.CivilDate
+	EffectiveDate time.Time
 }
 
 // UpdateInput contains mutable exchange rate fields.
@@ -36,7 +37,7 @@ type UpdateInput struct {
 type ListOptions struct {
 	FromCurrency      *string
 	ToCurrency        *string
-	EffectiveDate     *values.CivilDate
+	EffectiveDate     *time.Time
 	IncludeTombstoned bool
 	List              services.ListOptions
 }

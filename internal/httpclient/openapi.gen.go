@@ -456,8 +456,8 @@ type CreateCreditLimitHistoryRequest struct {
 
 // CreateExchangeRateRequest defines model for CreateExchangeRateRequest.
 type CreateExchangeRateRequest struct {
-	EffectiveDate openapi_types.Date `json:"effective_date"`
-	FromCurrency  string             `json:"from_currency"`
+	EffectiveDate time.Time `json:"effective_date"`
+	FromCurrency  string    `json:"from_currency"`
 
 	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Rate       string `json:"rate"`
@@ -479,8 +479,8 @@ type CreateJournalRecordRequest struct {
 	ExternalSystem       *string              `json:"external_system,omitempty"`
 	MemberId             *int64               `json:"member_id,omitempty"`
 	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *openapi_types.Date  `json:"pending_date,omitempty"`
-	PostedDate           *openapi_types.Date  `json:"posted_date,omitempty"`
+	PendingDate          *time.Time           `json:"pending_date,omitempty"`
+	PostedDate           *time.Time           `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	Source               Source               `json:"source"`
@@ -528,10 +528,10 @@ type ErrorResponse struct {
 
 // ExchangeRate defines model for ExchangeRate.
 type ExchangeRate struct {
-	CreatedAt      time.Time          `json:"created_at"`
-	EffectiveDate  openapi_types.Date `json:"effective_date"`
-	ExchangeRateId int64              `json:"exchange_rate_id"`
-	FromCurrency   string             `json:"from_currency"`
+	CreatedAt      time.Time `json:"created_at"`
+	EffectiveDate  time.Time `json:"effective_date"`
+	ExchangeRateId int64     `json:"exchange_rate_id"`
+	FromCurrency   string    `json:"from_currency"`
 
 	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Rate         string     `json:"rate"`
@@ -569,8 +569,8 @@ type JournalRecord struct {
 	ExternalSystem       *string              `json:"external_system,omitempty"`
 	MemberId             *int64               `json:"member_id,omitempty"`
 	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *openapi_types.Date  `json:"pending_date,omitempty"`
-	PostedDate           *openapi_types.Date  `json:"posted_date,omitempty"`
+	PendingDate          *time.Time           `json:"pending_date,omitempty"`
+	PostedDate           *time.Time           `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
@@ -744,10 +744,10 @@ type SearchAccountJournalRecordsParams struct {
 	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
 	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *openapi_types.Date `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *openapi_types.Date `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *openapi_types.Date `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *openapi_types.Date `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 }
 
@@ -781,7 +781,7 @@ type GetCreditLimitHistoryParams struct {
 type ListExchangeRatesParams struct {
 	FromCurrency      *string                         `form:"from_currency,omitempty" json:"from_currency,omitempty"`
 	ToCurrency        *string                         `form:"to_currency,omitempty" json:"to_currency,omitempty"`
-	EffectiveDate     *openapi_types.Date             `form:"effective_date,omitempty" json:"effective_date,omitempty"`
+	EffectiveDate     *time.Time                      `form:"effective_date,omitempty" json:"effective_date,omitempty"`
 	IncludeTombstoned *bool                           `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 	Sort              *ListExchangeRatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListExchangeRatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
@@ -842,10 +842,10 @@ type SearchJournalRecordsParams struct {
 	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
 	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *openapi_types.Date `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *openapi_types.Date `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *openapi_types.Date `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *openapi_types.Date `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 }
 
@@ -2469,7 +2469,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.PendingDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_from", *params.PendingDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_from", *params.PendingDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2481,7 +2481,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.PendingDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_to", *params.PendingDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_to", *params.PendingDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2493,7 +2493,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.PostedDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_from", *params.PostedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_from", *params.PostedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2505,7 +2505,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		if params.PostedDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_to", *params.PostedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_to", *params.PostedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -2986,7 +2986,7 @@ func NewListExchangeRatesRequest(server string, params *ListExchangeRatesParams)
 
 		if params.EffectiveDate != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "effective_date", *params.EffectiveDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "effective_date", *params.EffectiveDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3737,7 +3737,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.PendingDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_from", *params.PendingDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_from", *params.PendingDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3749,7 +3749,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.PendingDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_to", *params.PendingDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_to", *params.PendingDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3761,7 +3761,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.PostedDateFrom != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_from", *params.PostedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_from", *params.PostedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3773,7 +3773,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		if params.PostedDateTo != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_to", *params.PostedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_to", *params.PostedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

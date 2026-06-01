@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/mishamsk/mina/internal/services"
-	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // Category is a hierarchical category used to classify journal records.
@@ -17,9 +17,9 @@ type Category struct {
 	ParentFQN    *string
 	Name         string
 	Level        int
-	CreatedAt    values.AuditTimestamp
-	UpdatedAt    values.AuditTimestamp
-	TombstonedAt *values.AuditTimestamp
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	TombstonedAt *time.Time
 }
 
 // CreateInput contains fields for creating a category.

@@ -9,7 +9,6 @@ import (
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/tags"
-	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // TagStore persists tags.
@@ -192,12 +191,12 @@ func scanTag(scanner tagScanner) (tags.Tag, error) {
 	); err != nil {
 		return tags.Tag{}, err
 	}
-	tag.CreatedAt = values.AuditTimestampFromTime(createdAt)
-	tag.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
+	tag.CreatedAt = createdAt.UTC()
+	tag.UpdatedAt = updatedAt.UTC()
 	if parentFQN.Valid {
 		tag.ParentFQN = &parentFQN.String
 	}
-	tag.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
+	tag.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 
 	return tag, nil
 }

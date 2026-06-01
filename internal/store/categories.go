@@ -9,7 +9,6 @@ import (
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/categories"
-	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // CategoryStore persists categories.
@@ -192,12 +191,12 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	); err != nil {
 		return categories.Category{}, err
 	}
-	category.CreatedAt = values.AuditTimestampFromTime(createdAt)
-	category.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
+	category.CreatedAt = createdAt.UTC()
+	category.UpdatedAt = updatedAt.UTC()
 	if parentFQN.Valid {
 		category.ParentFQN = &parentFQN.String
 	}
-	category.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
+	category.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 
 	return category, nil
 }

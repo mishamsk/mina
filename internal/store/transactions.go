@@ -286,19 +286,19 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	}
 	if opts.PendingDateFrom != nil {
 		query += " AND jr.pending_date >= ?"
-		args = append(args, civilDateArg(*opts.PendingDateFrom))
+		args = append(args, timestampArg(*opts.PendingDateFrom))
 	}
 	if opts.PendingDateTo != nil {
 		query += " AND jr.pending_date <= ?"
-		args = append(args, civilDateArg(*opts.PendingDateTo))
+		args = append(args, timestampArg(*opts.PendingDateTo))
 	}
 	if opts.PostedDateFrom != nil {
 		query += " AND jr.posted_date >= ?"
-		args = append(args, civilDateArg(*opts.PostedDateFrom))
+		args = append(args, timestampArg(*opts.PostedDateFrom))
 	}
 	if opts.PostedDateTo != nil {
 		query += " AND jr.posted_date <= ?"
-		args = append(args, civilDateArg(*opts.PostedDateTo))
+		args = append(args, timestampArg(*opts.PostedDateTo))
 	}
 	if opts.MemoContains != nil {
 		query += " AND jr.memo LIKE ? ESCAPE '\\'"
@@ -509,8 +509,8 @@ func scanTransaction(scanner transactionScanner) (transactions.Transaction, erro
 		return transactions.Transaction{}, err
 	}
 	transaction.InitiatedDate = values.CivilDateFromTime(initiatedDate)
-	transaction.CreatedAt = values.AuditTimestampFromTime(createdAt)
-	transaction.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
+	transaction.CreatedAt = createdAt.UTC()
+	transaction.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 	transaction.Records = []transactions.JournalRecord{}
 
 	return transaction, nil
@@ -530,8 +530,8 @@ func insertJournalRecord(ctx context.Context, tx *sql.Tx, accounting *Accounting
 	args = append(args, tagListArgs...)
 	args = append(args,
 		req.Memo,
-		nullableCivilDateArg(req.PendingDate),
-		nullableCivilDateArg(req.PostedDate),
+		nullableTimestampArg(req.PendingDate),
+		nullableTimestampArg(req.PostedDate),
 		enumValue(req.PostingStatus),
 		enumValue(req.ReconciliationStatus),
 		enumValue(req.Source),
@@ -620,17 +620,17 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	if memo.Valid {
 		record.Memo = &memo.String
 	}
-	record.PendingDate = nullableCivilDateFromSQL(pendingDate)
-	record.PostedDate = nullableCivilDateFromSQL(postedDate)
+	record.PendingDate = nullableTimeFromSQL(pendingDate)
+	record.PostedDate = nullableTimeFromSQL(postedDate)
 	if externalID.Valid {
 		record.ExternalID = &externalID.String
 	}
 	if externalSystem.Valid {
 		record.ExternalSystem = &externalSystem.String
 	}
-	record.CreatedAt = values.AuditTimestampFromTime(createdAt)
-	record.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
-	record.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
+	record.CreatedAt = createdAt.UTC()
+	record.UpdatedAt = updatedAt.UTC()
+	record.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 	record.PostingStatus = transactions.PostingStatus(strings.ToLower(string(record.PostingStatus)))
 	record.ReconciliationStatus = transactions.ReconciliationStatus(strings.ToLower(string(record.ReconciliationStatus)))
 	record.Source = transactions.Source(strings.ToLower(string(record.Source)))

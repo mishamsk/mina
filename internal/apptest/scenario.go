@@ -45,6 +45,23 @@ func DatePtr(value string) *openapi_types.Date {
 	return &date
 }
 
+// Timestamp returns a UTC timestamp for RFC3339 test input.
+func Timestamp(value string) time.Time {
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		panic(err)
+	}
+
+	return parsed.UTC()
+}
+
+// TimestampPtr returns a pointer to a UTC timestamp for RFC3339 test input.
+func TimestampPtr(value string) *time.Time {
+	timestamp := Timestamp(value)
+
+	return &timestamp
+}
+
 // Account creates an account fixture through the API client.
 func (s *Scenario) Account(fqn string) models.Account {
 	s.client.t.Helper()
@@ -119,7 +136,7 @@ func (s *Scenario) ExchangeRate(fromCurrency string, toCurrency string, effectiv
 		FromCurrency:  fromCurrency,
 		ToCurrency:    toCurrency,
 		Rate:          "1.10000000",
-		EffectiveDate: Date(effectiveDate),
+		EffectiveDate: Timestamp(effectiveDate),
 	})
 	requireNoClientError(s.client, "create exchange rate", err)
 	requireStatus(s.client, "create exchange rate", response.StatusCode(), http.StatusCreated, response.Body)

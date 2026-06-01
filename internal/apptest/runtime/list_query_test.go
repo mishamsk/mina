@@ -106,9 +106,9 @@ func TestSharedListQueryHiddenDefaultAndPagination(t *testing.T) {
 func TestSharedListQueryCompositeSortDirection(t *testing.T) {
 	client := newSharedClient(t)
 
-	eurEarly := createListQueryExchangeRate(t, client, "EUR", "USD", "2024-01-01")
-	eurLate := createListQueryExchangeRate(t, client, "EUR", "USD", "2024-02-01")
-	gbpEarly := createListQueryExchangeRate(t, client, "GBP", "USD", "2024-01-01")
+	eurEarly := createListQueryExchangeRate(t, client, "EUR", "USD", "2024-01-01T00:00:00Z")
+	eurLate := createListQueryExchangeRate(t, client, "EUR", "USD", "2024-02-01T00:00:00Z")
+	gbpEarly := createListQueryExchangeRate(t, client, "GBP", "USD", "2024-01-01T00:00:00Z")
 
 	sortCurrencyPair := httpclient.ListExchangeRatesParamsSortCurrencyPair
 	descSort := httpclient.ListExchangeRatesParamsSortDirDesc

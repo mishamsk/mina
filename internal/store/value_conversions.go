@@ -3,42 +3,37 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/govalues/decimal"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
-func nullableAuditTimestampFromSQL(value sql.NullTime) *values.AuditTimestamp {
+func nullableTimeFromSQL(value sql.NullTime) *time.Time {
 	if !value.Valid {
 		return nil
 	}
 
-	timestamp := values.AuditTimestampFromTime(value.Time)
+	timestamp := value.Time.UTC()
 
 	return &timestamp
-}
-
-func nullableCivilDateArg(value *values.CivilDate) any {
-	if value == nil {
-		return nil
-	}
-
-	return civilDateArg(*value)
 }
 
 func civilDateArg(value values.CivilDate) any {
 	return duckdb.Typed(value.Time(), duckdb.TYPE_DATE)
 }
 
-func nullableCivilDateFromSQL(value sql.NullTime) *values.CivilDate {
-	if !value.Valid {
+func nullableTimestampArg(value *time.Time) any {
+	if value == nil {
 		return nil
 	}
 
-	date := values.CivilDateFromTime(value.Time)
+	return timestampArg(*value)
+}
 
-	return &date
+func timestampArg(value time.Time) any {
+	return duckdb.Typed(value.UTC(), duckdb.TYPE_TIMESTAMP)
 }
 
 func decimalFromDuckDB(value duckdb.Decimal) (values.Decimal, error) {

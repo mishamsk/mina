@@ -122,7 +122,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	}
 
 	memo := "Rent"
-	pendingDate := apptest.Date("2024-04-01")
+	pendingDate := apptest.Timestamp("2024-04-01T00:00:00Z")
 	secondReq := httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-04-01"),
 		Records: []httpclient.CreateJournalRecordRequest{
@@ -180,10 +180,10 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		{name: "amount usd max", params: &httpclient.SearchJournalRecordsParams{AmountUsdMax: new("-40.00")}, want: []int64{secondDebit.RecordId}},
 		{name: "initiated from", params: &httpclient.SearchJournalRecordsParams{InitiatedDateFrom: apptest.DatePtr("2024-04-01")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
 		{name: "initiated to", params: &httpclient.SearchJournalRecordsParams{InitiatedDateTo: apptest.DatePtr("2024-03-31")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
-		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: apptest.DatePtr("2024-04-01")}, want: []int64{secondDebit.RecordId}},
-		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: apptest.DatePtr("2024-03-31")}, want: []int64{firstDebit.RecordId}},
-		{name: "posted from", params: &httpclient.SearchJournalRecordsParams{PostedDateFrom: apptest.DatePtr("2024-03-11")}, want: []int64{firstDebit.RecordId}},
-		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: apptest.DatePtr("2024-03-11")}, want: []int64{firstDebit.RecordId}},
+		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: apptest.TimestampPtr("2024-04-01T00:00:00Z")}, want: []int64{secondDebit.RecordId}},
+		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: apptest.TimestampPtr("2024-03-31T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
+		{name: "posted from", params: &httpclient.SearchJournalRecordsParams{PostedDateFrom: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
+		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
 		{name: "memo", params: &httpclient.SearchJournalRecordsParams{MemoContains: new("unc")}, want: []int64{firstDebit.RecordId}},
 		{name: "combined", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId, TagId: &refs.TagId, MemoContains: new("Lunch")}, want: []int64{firstDebit.RecordId}},
 	}
@@ -216,6 +216,15 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		t.Fatalf("account date filter status = %d, want %d; body %s", accountDateFiltered.StatusCode(), http.StatusOK, accountDateFiltered.Body)
 	}
 	assertRecordIDs(t, accountDateFiltered.JSON200.Records, []int64{secondDebit.RecordId})
+
+	accountPendingFiltered, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.SavingsAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		PendingDateFrom: apptest.TimestampPtr("2024-04-01T00:00:00Z"),
+	})
+	requireNoTransportError(t, "search account records", err)
+	if accountPendingFiltered.StatusCode() != http.StatusOK {
+		t.Fatalf("account pending date filter status = %d, want %d; body %s", accountPendingFiltered.StatusCode(), http.StatusOK, accountPendingFiltered.Body)
+	}
+	assertRecordIDs(t, accountPendingFiltered.JSON200.Records, []int64{secondDebit.RecordId})
 
 	accountAmountFiltered, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
 		AmountMax: new("-10.00"),
@@ -301,8 +310,8 @@ func createSearchRefs(t *testing.T, client *apptest.Client) searchRefs {
 
 func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransactionRequest {
 	memo := "Replacement"
-	pendingDate := apptest.Date("2024-03-12")
-	postedDate := apptest.Date("2024-03-13")
+	pendingDate := apptest.Timestamp("2024-03-12T00:00:00Z")
+	postedDate := apptest.Timestamp("2024-03-13T00:00:00Z")
 	return httpclient.UpdateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-03-12"),
 		Records: []httpclient.CreateJournalRecordRequest{

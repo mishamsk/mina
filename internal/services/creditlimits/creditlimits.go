@@ -3,6 +3,7 @@ package creditlimits
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/values"
@@ -14,8 +15,8 @@ type CreditLimitHistory struct {
 	AccountID     int64
 	CreditLimit   values.Decimal
 	EffectiveDate values.CivilDate
-	CreatedAt     values.AuditTimestamp
-	TombstonedAt  *values.AuditTimestamp
+	CreatedAt     time.Time
+	TombstonedAt  *time.Time
 }
 
 // CreateInput contains fields for creating a credit limit history entry.

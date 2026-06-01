@@ -9,7 +9,6 @@ import (
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
-	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // AccountStore persists accounts.
@@ -207,8 +206,8 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	); err != nil {
 		return accounts.Account{}, err
 	}
-	account.CreatedAt = values.AuditTimestampFromTime(createdAt)
-	account.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
+	account.CreatedAt = createdAt.UTC()
+	account.UpdatedAt = updatedAt.UTC()
 	if currency.Valid {
 		account.Currency = &currency.String
 	}
@@ -221,7 +220,7 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	if parentFQN.Valid {
 		account.ParentFQN = &parentFQN.String
 	}
-	account.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
+	account.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 
 	return account, nil
 }

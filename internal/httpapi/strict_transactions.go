@@ -147,10 +147,10 @@ func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (t
 		TagID:             params.TagId,
 		InitiatedDateFrom: nullableCivilDateFromOpenAPI(params.InitiatedDateFrom),
 		InitiatedDateTo:   nullableCivilDateFromOpenAPI(params.InitiatedDateTo),
-		PendingDateFrom:   nullableCivilDateFromOpenAPI(params.PendingDateFrom),
-		PendingDateTo:     nullableCivilDateFromOpenAPI(params.PendingDateTo),
-		PostedDateFrom:    nullableCivilDateFromOpenAPI(params.PostedDateFrom),
-		PostedDateTo:      nullableCivilDateFromOpenAPI(params.PostedDateTo),
+		PendingDateFrom:   nullableTimestampFromOpenAPI(params.PendingDateFrom),
+		PendingDateTo:     nullableTimestampFromOpenAPI(params.PendingDateTo),
+		PostedDateFrom:    nullableTimestampFromOpenAPI(params.PostedDateFrom),
+		PostedDateTo:      nullableTimestampFromOpenAPI(params.PostedDateTo),
 		MemoContains:      params.MemoContains,
 	}
 	var err error
@@ -178,10 +178,10 @@ func recordSearchOptionsFromAccountParams(params openapi.SearchAccountJournalRec
 		TagID:             params.TagId,
 		InitiatedDateFrom: nullableCivilDateFromOpenAPI(params.InitiatedDateFrom),
 		InitiatedDateTo:   nullableCivilDateFromOpenAPI(params.InitiatedDateTo),
-		PendingDateFrom:   nullableCivilDateFromOpenAPI(params.PendingDateFrom),
-		PendingDateTo:     nullableCivilDateFromOpenAPI(params.PendingDateTo),
-		PostedDateFrom:    nullableCivilDateFromOpenAPI(params.PostedDateFrom),
-		PostedDateTo:      nullableCivilDateFromOpenAPI(params.PostedDateTo),
+		PendingDateFrom:   nullableTimestampFromOpenAPI(params.PendingDateFrom),
+		PendingDateTo:     nullableTimestampFromOpenAPI(params.PendingDateTo),
+		PostedDateFrom:    nullableTimestampFromOpenAPI(params.PostedDateFrom),
+		PostedDateTo:      nullableTimestampFromOpenAPI(params.PostedDateTo),
 		MemoContains:      params.MemoContains,
 	}
 	var err error
@@ -249,8 +249,8 @@ func journalRecordAPIInputs(records []openapi.CreateJournalRecordRequest) ([]tra
 			CategoryID:           record.CategoryId,
 			TagIDs:               cloneOptionalInt64Slice(record.TagIds),
 			Memo:                 record.Memo,
-			PendingDate:          nullableCivilDateFromOpenAPI(record.PendingDate),
-			PostedDate:           nullableCivilDateFromOpenAPI(record.PostedDate),
+			PendingDate:          nullableTimestampFromOpenAPI(record.PendingDate),
+			PostedDate:           nullableTimestampFromOpenAPI(record.PostedDate),
 			PostingStatus:        transactions.PostingStatus(record.PostingStatus),
 			ReconciliationStatus: transactions.ReconciliationStatus(record.ReconciliationStatus),
 			Source:               transactions.Source(record.Source),
@@ -266,8 +266,8 @@ func transactionAPIResponse(transaction transactions.Transaction) openapi.Transa
 	return openapi.Transaction{
 		TransactionId: transaction.ID,
 		InitiatedDate: openAPIDate(transaction.InitiatedDate),
-		CreatedAt:     transaction.CreatedAt.Time(),
-		TombstonedAt:  nullableAuditTimestampTime(transaction.TombstonedAt),
+		CreatedAt:     transaction.CreatedAt.UTC(),
+		TombstonedAt:  nullableTimestampTime(transaction.TombstonedAt),
 		Records:       journalRecordAPIResponses(transaction.Records),
 	}
 }
@@ -293,16 +293,16 @@ func journalRecordAPIResponse(record transactions.JournalRecord) openapi.Journal
 		CategoryId:           record.CategoryID,
 		TagIds:               cloneInt64Slice(record.TagIDs),
 		Memo:                 record.Memo,
-		PendingDate:          nullableOpenAPICivilDate(record.PendingDate),
-		PostedDate:           nullableOpenAPICivilDate(record.PostedDate),
+		PendingDate:          nullableOpenAPITimestamp(record.PendingDate),
+		PostedDate:           nullableOpenAPITimestamp(record.PostedDate),
 		PostingStatus:        openapi.PostingStatus(record.PostingStatus),
 		ReconciliationStatus: openapi.ReconciliationStatus(record.ReconciliationStatus),
 		Source:               openapi.Source(record.Source),
 		ExternalId:           record.ExternalID,
 		ExternalSystem:       record.ExternalSystem,
-		CreatedAt:            record.CreatedAt.Time(),
-		UpdatedAt:            record.UpdatedAt.Time(),
-		TombstonedAt:         nullableAuditTimestampTime(record.TombstonedAt),
+		CreatedAt:            record.CreatedAt.UTC(),
+		UpdatedAt:            record.UpdatedAt.UTC(),
+		TombstonedAt:         nullableTimestampTime(record.TombstonedAt),
 	}
 }
 

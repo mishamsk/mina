@@ -136,6 +136,8 @@ CREATE TABLE "transaction" (
     tombstoned_at TIMESTAMP
 );
 
+COMMENT ON COLUMN "transaction".initiated_date IS 'Calendar date the transaction happened, independent of time zone.';
+
 -- Journal record table for individual debit/credit entries
 CREATE TABLE journal_record (
     record_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
@@ -152,8 +154,8 @@ CREATE TABLE journal_record (
 
     memo TEXT,
 
-    pending_date DATE,
-    posted_date DATE,
+    pending_date TIMESTAMP,
+    posted_date TIMESTAMP,
 
     posting_status posting_status NOT NULL,
     reconciliation_status reconciliation_status NOT NULL DEFAULT 'RECONCILED',
@@ -168,18 +170,23 @@ CREATE TABLE journal_record (
     tombstoned_at TIMESTAMP
 );
 
+COMMENT ON COLUMN journal_record.pending_date IS 'UTC timestamp when the record appeared as pending.';
+COMMENT ON COLUMN journal_record.posted_date IS 'UTC timestamp when the record posted.';
+
 -- Exchange rate table for historical currency conversion
 CREATE TABLE exchange_rate (
     exchange_rate_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
     from_currency TEXT NOT NULL,
     to_currency TEXT NOT NULL,
     rate DECIMAL(18,8) NOT NULL,
-    effective_date DATE NOT NULL,
+    effective_date TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP,
 
     UNIQUE(from_currency, to_currency, effective_date, tombstoned_at)
 );
+
+COMMENT ON COLUMN exchange_rate.effective_date IS 'UTC timestamp when the exchange rate becomes effective.';
 
 -- Budget table for monthly category budgets
 CREATE TABLE budget (
@@ -193,6 +200,8 @@ CREATE TABLE budget (
 
     UNIQUE(category_fqn, month, tombstoned_at)
 );
+
+COMMENT ON COLUMN budget.month IS 'Budget month, stored as the first calendar date of that month.';
 
 -- Credit limit history table for tracking limit changes over time
 CREATE TABLE credit_limit_history (

@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"time"
+
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/values"
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -24,14 +26,28 @@ func openAPIDate(value values.CivilDate) openapi_types.Date {
 	return openapi_types.Date{Time: value.Time()}
 }
 
-func nullableOpenAPICivilDate(value *values.CivilDate) *openapi_types.Date {
+func timestampFromOpenAPI(value time.Time) time.Time {
+	return value.UTC()
+}
+
+func nullableTimestampFromOpenAPI(value *time.Time) *time.Time {
 	if value == nil {
 		return nil
 	}
 
-	date := openAPIDate(*value)
+	timestamp := timestampFromOpenAPI(*value)
 
-	return &date
+	return &timestamp
+}
+
+func nullableOpenAPITimestamp(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+
+	timestamp := value.UTC()
+
+	return &timestamp
 }
 
 func decimalField(name string, value string) (values.Decimal, error) {

@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/values"
@@ -45,8 +46,8 @@ const (
 type Transaction struct {
 	ID            int64
 	InitiatedDate values.CivilDate
-	CreatedAt     values.AuditTimestamp
-	TombstonedAt  *values.AuditTimestamp
+	CreatedAt     time.Time
+	TombstonedAt  *time.Time
 	Records       []JournalRecord
 }
 
@@ -62,16 +63,16 @@ type JournalRecord struct {
 	CategoryID           int64
 	TagIDs               []int64
 	Memo                 *string
-	PendingDate          *values.CivilDate
-	PostedDate           *values.CivilDate
+	PendingDate          *time.Time
+	PostedDate           *time.Time
 	PostingStatus        PostingStatus
 	ReconciliationStatus ReconciliationStatus
 	Source               Source
 	ExternalID           *string
 	ExternalSystem       *string
-	CreatedAt            values.AuditTimestamp
-	UpdatedAt            values.AuditTimestamp
-	TombstonedAt         *values.AuditTimestamp
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TombstonedAt         *time.Time
 }
 
 // CreateInput contains fields for creating or replacing a transaction.
@@ -90,8 +91,8 @@ type JournalRecordInput struct {
 	CategoryID           int64
 	TagIDs               []int64
 	Memo                 *string
-	PendingDate          *values.CivilDate
-	PostedDate           *values.CivilDate
+	PendingDate          *time.Time
+	PostedDate           *time.Time
 	PostingStatus        PostingStatus
 	ReconciliationStatus ReconciliationStatus
 	Source               Source
@@ -113,10 +114,10 @@ type RecordSearchOptions struct {
 	AmountUSDMax         *values.Decimal
 	InitiatedDateFrom    *values.CivilDate
 	InitiatedDateTo      *values.CivilDate
-	PendingDateFrom      *values.CivilDate
-	PendingDateTo        *values.CivilDate
-	PostedDateFrom       *values.CivilDate
-	PostedDateTo         *values.CivilDate
+	PendingDateFrom      *time.Time
+	PendingDateTo        *time.Time
+	PostedDateFrom       *time.Time
+	PostedDateTo         *time.Time
 	MemoContains         *string
 }
 

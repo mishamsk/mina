@@ -45,7 +45,7 @@ RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, cr
 			input.FromCurrency,
 			input.ToCurrency,
 			input.Rate.LibraryDecimal(),
-			civilDateArg(input.EffectiveDate),
+			timestampArg(input.EffectiveDate),
 		)
 		rate, err = scanExchangeRate(row)
 		if err != nil {
@@ -101,7 +101,7 @@ WHERE 1 = 1`
 	}
 	if opts.EffectiveDate != nil {
 		query += " AND effective_date = ?"
-		args = append(args, civilDateArg(*opts.EffectiveDate))
+		args = append(args, timestampArg(*opts.EffectiveDate))
 	}
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
@@ -206,14 +206,14 @@ func scanExchangeRate(scanner exchangeRateScanner) (exchangerates.ExchangeRate, 
 		return exchangerates.ExchangeRate{}, fmt.Errorf("scan exchange rate decimal: %w", err)
 	}
 	rate.Rate = parsedRate
-	rate.EffectiveDate = values.CivilDateFromTime(effectiveDate)
-	rate.CreatedAt = values.AuditTimestampFromTime(createdAt)
-	rate.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
+	rate.EffectiveDate = effectiveDate.UTC()
+	rate.CreatedAt = createdAt.UTC()
+	rate.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 
 	return rate, nil
 }
 
-func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, fromCurrency string, toCurrency string, effectiveDate values.CivilDate) (bool, error) {
+func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, fromCurrency string, toCurrency string, effectiveDate time.Time) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
@@ -223,7 +223,7 @@ WHERE from_currency = ? AND to_currency = ? AND effective_date = ? AND tombstone
 LIMIT 1`,
 		fromCurrency,
 		toCurrency,
-		civilDateArg(effectiveDate),
+		timestampArg(effectiveDate),
 	).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil

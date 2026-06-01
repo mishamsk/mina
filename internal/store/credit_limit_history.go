@@ -187,8 +187,8 @@ func scanCreditLimitHistory(scanner creditLimitHistoryScanner) (creditlimits.Cre
 	}
 	history.CreditLimit = parsedLimit
 	history.EffectiveDate = values.CivilDateFromTime(effectiveDate)
-	history.CreatedAt = values.AuditTimestampFromTime(createdAt)
-	history.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
+	history.CreatedAt = createdAt.UTC()
+	history.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 
 	return history, nil
 }

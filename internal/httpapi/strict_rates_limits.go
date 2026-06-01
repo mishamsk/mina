@@ -68,7 +68,7 @@ func (s *strictServer) ListExchangeRates(ctx context.Context, request openapi.Li
 	rates, err := s.deps.ExchangeRates.List(ctx, exchangerates.ListOptions{
 		FromCurrency:      params.FromCurrency,
 		ToCurrency:        params.ToCurrency,
-		EffectiveDate:     nullableCivilDateFromOpenAPI(params.EffectiveDate),
+		EffectiveDate:     nullableTimestampFromOpenAPI(params.EffectiveDate),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
 		List: listOptionsFromParams(
 			params.Sort,
@@ -94,7 +94,7 @@ func (s *strictServer) CreateExchangeRate(ctx context.Context, request openapi.C
 		FromCurrency:  request.Body.FromCurrency,
 		ToCurrency:    request.Body.ToCurrency,
 		Rate:          rateValue,
-		EffectiveDate: civilDateFromOpenAPI(request.Body.EffectiveDate),
+		EffectiveDate: timestampFromOpenAPI(request.Body.EffectiveDate),
 	}
 
 	rate, err := s.deps.ExchangeRates.Create(ctx, input)
@@ -143,8 +143,8 @@ func creditLimitHistoryAPIResponse(history creditlimits.CreditLimitHistory) open
 		AccountId:            history.AccountID,
 		CreditLimit:          history.CreditLimit.String(),
 		EffectiveDate:        openAPIDate(history.EffectiveDate),
-		CreatedAt:            history.CreatedAt.Time(),
-		TombstonedAt:         nullableAuditTimestampTime(history.TombstonedAt),
+		CreatedAt:            history.CreatedAt.UTC(),
+		TombstonedAt:         nullableTimestampTime(history.TombstonedAt),
 	}
 }
 
@@ -163,9 +163,9 @@ func exchangeRateAPIResponse(rate exchangerates.ExchangeRate) openapi.ExchangeRa
 		FromCurrency:   rate.FromCurrency,
 		ToCurrency:     rate.ToCurrency,
 		Rate:           rate.Rate.String(),
-		EffectiveDate:  openAPIDate(rate.EffectiveDate),
-		CreatedAt:      rate.CreatedAt.Time(),
-		TombstonedAt:   nullableAuditTimestampTime(rate.TombstonedAt),
+		EffectiveDate:  rate.EffectiveDate.UTC(),
+		CreatedAt:      rate.CreatedAt.UTC(),
+		TombstonedAt:   nullableTimestampTime(rate.TombstonedAt),
 	}
 }
 

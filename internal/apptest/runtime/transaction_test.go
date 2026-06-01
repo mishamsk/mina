@@ -1,9 +1,11 @@
 package runtime_test
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
@@ -87,11 +89,11 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if record.Source != httpclient.Manual {
 		t.Fatalf("source = %q, want %q", record.Source, httpclient.Manual)
 	}
-	if record.PendingDate == nil || record.PendingDate.String() != "2024-03-10" {
-		t.Fatalf("pending_date = %v, want 2024-03-10", record.PendingDate)
+	if record.PendingDate == nil || !record.PendingDate.Equal(apptest.Timestamp("2024-03-10T00:00:00Z")) {
+		t.Fatalf("pending_date = %v, want 2024-03-10T00:00:00Z", record.PendingDate)
 	}
-	if record.PostedDate == nil || record.PostedDate.String() != "2024-03-11" {
-		t.Fatalf("posted_date = %v, want 2024-03-11", record.PostedDate)
+	if record.PostedDate == nil || !record.PostedDate.Equal(apptest.Timestamp("2024-03-11T00:00:00Z")) {
+		t.Fatalf("posted_date = %v, want 2024-03-11T00:00:00Z", record.PostedDate)
 	}
 	if record.Amount != "-12.34000000" || record.AmountUsd != "-12.34000000" {
 		t.Fatalf("amounts = %q/%q, want -12.34000000/-12.34000000", record.Amount, record.AmountUsd)
@@ -124,11 +126,11 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if readRecord.Source != httpclient.Manual {
 		t.Fatalf("read source = %q, want %q", readRecord.Source, httpclient.Manual)
 	}
-	if readRecord.PendingDate == nil || readRecord.PendingDate.String() != "2024-03-10" {
-		t.Fatalf("read pending_date = %v, want 2024-03-10", readRecord.PendingDate)
+	if readRecord.PendingDate == nil || !readRecord.PendingDate.Equal(apptest.Timestamp("2024-03-10T00:00:00Z")) {
+		t.Fatalf("read pending_date = %v, want 2024-03-10T00:00:00Z", readRecord.PendingDate)
 	}
-	if readRecord.PostedDate == nil || readRecord.PostedDate.String() != "2024-03-11" {
-		t.Fatalf("read posted_date = %v, want 2024-03-11", readRecord.PostedDate)
+	if readRecord.PostedDate == nil || !readRecord.PostedDate.Equal(apptest.Timestamp("2024-03-11T00:00:00Z")) {
+		t.Fatalf("read posted_date = %v, want 2024-03-11T00:00:00Z", readRecord.PostedDate)
 	}
 	if readRecord.Amount != "-12.34000000" || readRecord.AmountUsd != "-12.34000000" {
 		t.Fatalf("read amounts = %q/%q, want -12.34000000/-12.34000000", readRecord.Amount, readRecord.AmountUsd)
@@ -137,6 +139,101 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if readRecord.CreatedAt != record.CreatedAt || readRecord.UpdatedAt != record.UpdatedAt {
 		t.Fatalf("read timestamps = %q/%q, want %q/%q", readRecord.CreatedAt, readRecord.UpdatedAt, record.CreatedAt, record.UpdatedAt)
 	}
+}
+
+func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	memo := "Offset lunch"
+	pendingDate := parseTimestamp(t, "2024-03-10T00:30:00-05:00")
+	postedDate := parseTimestamp(t, "2024-03-11T00:30:00-04:00")
+	wantPendingDate := apptest.Timestamp("2024-03-10T05:30:00Z")
+	wantPostedDate := apptest.Timestamp("2024-03-11T04:30:00Z")
+	wantPendingJSON := `"pending_date":"2024-03-10T05:30:00Z"`
+	wantPostedJSON := `"posted_date":"2024-03-11T04:30:00Z"`
+	req := httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-03-10"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            refs.CheckingAccountId,
+				MemberId:             &refs.MemberId,
+				Currency:             "USD",
+				Amount:               "-12.34",
+				AmountUsd:            "-12.34",
+				CategoryId:           refs.CategoryId,
+				TagIds:               apptest.Int64SlicePtr(refs.TagId),
+				Memo:                 &memo,
+				PendingDate:          &pendingDate,
+				PostedDate:           &postedDate,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+			{
+				AccountId:            refs.MerchantAccountId,
+				Currency:             "USD",
+				Amount:               "12.34",
+				AmountUsd:            "12.34",
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+		},
+	}
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), req)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertRecordTimestamps(t, "created", created.JSON201.Records[0], wantPendingDate, wantPostedDate)
+	assertBodyContains(t, "created", created.Body, wantPendingJSON)
+	assertBodyContains(t, "created", created.Body, wantPostedJSON)
+
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	if err != nil {
+		t.Fatalf("read request: %v", err)
+	}
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	assertRecordTimestamps(t, "read", read.JSON200.Records[0], wantPendingDate, wantPostedDate)
+	assertBodyContains(t, "read", read.Body, wantPendingJSON)
+	assertBodyContains(t, "read", read.Body, wantPostedJSON)
+
+	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	if err != nil {
+		t.Fatalf("list request: %v", err)
+	}
+	if list.StatusCode() != http.StatusOK {
+		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
+	}
+	if len(list.JSON200.Transactions) != 1 {
+		t.Fatalf("transaction count = %d, want 1; body %+v", len(list.JSON200.Transactions), list.JSON200)
+	}
+	assertRecordTimestamps(t, "list", list.JSON200.Transactions[0].Records[0], wantPendingDate, wantPostedDate)
+	assertBodyContains(t, "list", list.Body, wantPendingJSON)
+	assertBodyContains(t, "list", list.Body, wantPostedJSON)
+
+	search, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		PendingDateFrom: &pendingDate,
+		PendingDateTo:   &pendingDate,
+		PostedDateFrom:  &postedDate,
+		PostedDateTo:    &postedDate,
+	})
+	if err != nil {
+		t.Fatalf("search request: %v", err)
+	}
+	if search.StatusCode() != http.StatusOK {
+		t.Fatalf("search status = %d, want %d; body %s", search.StatusCode(), http.StatusOK, search.Body)
+	}
+	assertRecordIDs(t, search.JSON200.Records, []int64{created.JSON201.Records[0].RecordId})
+	assertRecordTimestamps(t, "search", search.JSON200.Records[0], wantPendingDate, wantPostedDate)
+	assertBodyContains(t, "search", search.Body, wantPendingJSON)
+	assertBodyContains(t, "search", search.Body, wantPostedJSON)
 }
 
 func TestTransactionRejectsImbalanceAndDoesNotPersist(t *testing.T) {
@@ -294,8 +391,8 @@ func createTransactionRefs(t *testing.T, client *apptest.Client) transactionRefs
 
 func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransactionRequest {
 	memo := "Lunch"
-	pendingDate := apptest.Date("2024-03-10")
-	postedDate := apptest.Date("2024-03-11")
+	pendingDate := apptest.Timestamp("2024-03-10T00:00:00Z")
+	postedDate := apptest.Timestamp("2024-03-11T00:00:00Z")
 	return httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-03-10"),
 		Records: []httpclient.CreateJournalRecordRequest{
@@ -338,5 +435,35 @@ func assertInt64s(t *testing.T, got []int64, want []int64) {
 		if got[i] != want[i] {
 			t.Fatalf("int64 slice at %d = %d, want %d; got %+v", i, got[i], want[i], got)
 		}
+	}
+}
+
+func parseTimestamp(t *testing.T, value string) time.Time {
+	t.Helper()
+
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		t.Fatalf("parse timestamp %q: %v", value, err)
+	}
+
+	return parsed
+}
+
+func assertRecordTimestamps(t *testing.T, label string, record httpclient.JournalRecord, wantPending time.Time, wantPosted time.Time) {
+	t.Helper()
+
+	if record.PendingDate == nil || !record.PendingDate.Equal(wantPending) {
+		t.Fatalf("%s pending_date = %v, want %s", label, record.PendingDate, wantPending.Format(time.RFC3339))
+	}
+	if record.PostedDate == nil || !record.PostedDate.Equal(wantPosted) {
+		t.Fatalf("%s posted_date = %v, want %s", label, record.PostedDate, wantPosted.Format(time.RFC3339))
+	}
+}
+
+func assertBodyContains(t *testing.T, label string, body []byte, want string) {
+	t.Helper()
+
+	if !bytes.Contains(body, []byte(want)) {
+		t.Fatalf("%s body missing %s: %s", label, want, body)
 	}
 }

@@ -9,7 +9,6 @@ import (
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/members"
-	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // MemberStore persists household members.
@@ -205,9 +204,9 @@ func scanMember(scanner memberScanner) (members.Member, error) {
 	); err != nil {
 		return members.Member{}, err
 	}
-	member.CreatedAt = values.AuditTimestampFromTime(createdAt)
-	member.UpdatedAt = values.AuditTimestampFromTime(updatedAt)
-	member.TombstonedAt = nullableAuditTimestampFromSQL(tombstonedAt)
+	member.CreatedAt = createdAt.UTC()
+	member.UpdatedAt = updatedAt.UTC()
+	member.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 
 	return member, nil
 }

@@ -10,7 +10,6 @@ import (
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/tags"
-	"github.com/mishamsk/mina/internal/services/values"
 )
 
 func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAccountsRequestObject) (openapi.ListAccountsResponseObject, error) {
@@ -267,9 +266,9 @@ func accountAPIResponse(account accounts.Account) openapi.Account {
 		ParentFqn:      account.ParentFQN,
 		Name:           account.Name,
 		Level:          account.Level,
-		CreatedAt:      account.CreatedAt.Time(),
-		UpdatedAt:      account.UpdatedAt.Time(),
-		TombstonedAt:   nullableAuditTimestampTime(account.TombstonedAt),
+		CreatedAt:      account.CreatedAt.UTC(),
+		UpdatedAt:      account.UpdatedAt.UTC(),
+		TombstonedAt:   nullableTimestampTime(account.TombstonedAt),
 	}
 }
 
@@ -290,9 +289,9 @@ func categoryAPIResponse(category categories.Category) openapi.Category {
 		ParentFqn:    category.ParentFQN,
 		Name:         category.Name,
 		Level:        category.Level,
-		CreatedAt:    category.CreatedAt.Time(),
-		UpdatedAt:    category.UpdatedAt.Time(),
-		TombstonedAt: nullableAuditTimestampTime(category.TombstonedAt),
+		CreatedAt:    category.CreatedAt.UTC(),
+		UpdatedAt:    category.UpdatedAt.UTC(),
+		TombstonedAt: nullableTimestampTime(category.TombstonedAt),
 	}
 }
 
@@ -309,9 +308,9 @@ func memberAPIResponse(member members.Member) openapi.Member {
 	return openapi.Member{
 		MemberId:     member.ID,
 		Name:         member.Name,
-		CreatedAt:    member.CreatedAt.Time(),
-		UpdatedAt:    member.UpdatedAt.Time(),
-		TombstonedAt: nullableAuditTimestampTime(member.TombstonedAt),
+		CreatedAt:    member.CreatedAt.UTC(),
+		UpdatedAt:    member.UpdatedAt.UTC(),
+		TombstonedAt: nullableTimestampTime(member.TombstonedAt),
 	}
 }
 
@@ -332,9 +331,9 @@ func tagAPIResponse(tag tags.Tag) openapi.Tag {
 		ParentFqn:    tag.ParentFQN,
 		Name:         tag.Name,
 		Level:        tag.Level,
-		CreatedAt:    tag.CreatedAt.Time(),
-		UpdatedAt:    tag.UpdatedAt.Time(),
-		TombstonedAt: nullableAuditTimestampTime(tag.TombstonedAt),
+		CreatedAt:    tag.CreatedAt.UTC(),
+		UpdatedAt:    tag.UpdatedAt.UTC(),
+		TombstonedAt: nullableTimestampTime(tag.TombstonedAt),
 	}
 }
 
@@ -347,12 +346,12 @@ func tagAPIResponses(tags []tags.Tag) []openapi.Tag {
 	return responses
 }
 
-func nullableAuditTimestampTime(value *values.AuditTimestamp) *time.Time {
+func nullableTimestampTime(value *time.Time) *time.Time {
 	if value == nil {
 		return nil
 	}
 
-	timestamp := value.Time()
+	timestamp := value.UTC()
 
 	return &timestamp
 }

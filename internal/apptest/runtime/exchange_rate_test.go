@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
@@ -16,7 +17,7 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		FromCurrency:  "EUR",
 		ToCurrency:    "USD",
 		Rate:          "1.08",
-		EffectiveDate: apptest.Date("2024-02-01"),
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("later create request: %v", err)
@@ -35,7 +36,7 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		FromCurrency:  "EUR",
 		ToCurrency:    "USD",
 		Rate:          "1.07000000",
-		EffectiveDate: apptest.Date("2024-01-01"),
+		EffectiveDate: apptest.Timestamp("2024-01-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("earlier create request: %v", err)
@@ -48,7 +49,7 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		FromCurrency:  "GBP",
 		ToCurrency:    "USD",
 		Rate:          "1.25000000",
-		EffectiveDate: apptest.Date("2024-01-01"),
+		EffectiveDate: apptest.Timestamp("2024-01-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("other create request: %v", err)
@@ -88,7 +89,7 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 	assertExchangeRateIDs(t, filteredPair.JSON200.ExchangeRates, []int64{earlier.JSON201.ExchangeRateId, later.JSON201.ExchangeRateId})
 
-	effectiveDate := apptest.Date("2024-02-01")
+	effectiveDate := apptest.Timestamp("2024-02-01T00:00:00Z")
 	filteredDate, err := client.REST().ListExchangeRatesWithResponse(context.Background(), &httpclient.ListExchangeRatesParams{FromCurrency: &fromCurrency, ToCurrency: &toCurrency, EffectiveDate: &effectiveDate})
 	if err != nil {
 		t.Fatalf("filtered date request: %v", err)
@@ -156,7 +157,7 @@ func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
 		FromCurrency:  "EUR",
 		ToCurrency:    "USD",
 		Rate:          "1.08000000",
-		EffectiveDate: apptest.Date("2024-02-01"),
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("first create request: %v", err)
@@ -169,7 +170,7 @@ func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
 		FromCurrency:  "EUR",
 		ToCurrency:    "USD",
 		Rate:          "1.09000000",
-		EffectiveDate: apptest.Date("2024-02-01"),
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("duplicate request: %v", err)
@@ -193,7 +194,7 @@ func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
 		FromCurrency:  "EUR",
 		ToCurrency:    "USD",
 		Rate:          "1.10000000",
-		EffectiveDate: apptest.Date("2024-02-01"),
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("recreate request: %v", err)
@@ -203,6 +204,51 @@ func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
 	}
 }
 
+func TestExchangeRateEffectiveDateNormalizesOffsetBoundary(t *testing.T) {
+	client := newSharedClient(t)
+
+	inputEffectiveDate := parseTimestamp(t, "2024-02-01T00:30:00-05:00")
+	wantEffectiveDate := apptest.Timestamp("2024-02-01T05:30:00Z")
+	created, err := client.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{
+		FromCurrency:  "CAD",
+		ToCurrency:    "USD",
+		Rate:          "0.74000000",
+		EffectiveDate: inputEffectiveDate,
+	})
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertExchangeRateEffectiveDate(t, "created", created.JSON201.EffectiveDate, wantEffectiveDate)
+
+	read, err := client.REST().GetExchangeRateWithResponse(context.Background(), created.JSON201.ExchangeRateId, nil)
+	if err != nil {
+		t.Fatalf("read request: %v", err)
+	}
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	assertExchangeRateEffectiveDate(t, "read", read.JSON200.EffectiveDate, wantEffectiveDate)
+
+	fromCurrency := "CAD"
+	toCurrency := "USD"
+	list, err := client.REST().ListExchangeRatesWithResponse(context.Background(), &httpclient.ListExchangeRatesParams{
+		FromCurrency:  &fromCurrency,
+		ToCurrency:    &toCurrency,
+		EffectiveDate: &wantEffectiveDate,
+	})
+	if err != nil {
+		t.Fatalf("filtered list request: %v", err)
+	}
+	if list.StatusCode() != http.StatusOK {
+		t.Fatalf("filtered list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
+	}
+	assertExchangeRateIDs(t, list.JSON200.ExchangeRates, []int64{created.JSON201.ExchangeRateId})
+	assertExchangeRateEffectiveDate(t, "list", list.JSON200.ExchangeRates[0].EffectiveDate, wantEffectiveDate)
+}
+
 func TestExchangeRateValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 
@@ -210,7 +256,7 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 		FromCurrency:  "eur",
 		ToCurrency:    "USD",
 		Rate:          "1.08000000",
-		EffectiveDate: apptest.Date("2024-02-01"),
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("invalid currency request: %v", err)
@@ -223,7 +269,7 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 		FromCurrency:  "EUR",
 		ToCurrency:    "USD",
 		Rate:          "0.00000000",
-		EffectiveDate: apptest.Date("2024-02-01"),
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("zero rate request: %v", err)
@@ -236,7 +282,7 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 		FromCurrency:  "EUR",
 		ToCurrency:    "USD",
 		Rate:          "-1",
-		EffectiveDate: apptest.Date("2024-02-01"),
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("negative rate request: %v", err)
@@ -249,7 +295,7 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 		FromCurrency:  "EUR",
 		ToCurrency:    "USD",
 		Rate:          "12345678901",
-		EffectiveDate: apptest.Date("2024-02-01"),
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
 	})
 	if err != nil {
 		t.Fatalf("too many integer digits request: %v", err)
@@ -262,7 +308,7 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 		"from_currency":  "EUR",
 		"to_currency":    "USD",
 		"rate":           "1.08000000",
-		"effective_date": "2024-02-30",
+		"effective_date": "2024-02-30T00:00:00Z",
 	}))
 	if err != nil {
 		t.Fatalf("invalid date request: %v", err)
@@ -287,7 +333,7 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 		t.Fatalf("invalid filter currency status = %d, want %d; body %s", invalidFilterCurrency.StatusCode(), http.StatusBadRequest, invalidFilterCurrency.Body)
 	}
 
-	invalidFilterDate, err := client.REST().ListExchangeRatesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("effective_date=2024-02-30"))
+	invalidFilterDate, err := client.REST().ListExchangeRatesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("effective_date=2024-02-30T00:00:00Z"))
 	if err != nil {
 		t.Fatalf("invalid filter date request: %v", err)
 	}
@@ -315,7 +361,7 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 		"from_currency":  "EUR",
 		"to_currency":    "USD",
 		"rate":           "1.08000000",
-		"effective_date": "2024-02-01",
+		"effective_date": "2024-02-01T00:00:00Z",
 		"extraField":     true,
 	}))
 	if err != nil {
@@ -323,6 +369,14 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 	}
 	if extraField.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("extra field status = %d, want %d; body %s", extraField.StatusCode(), http.StatusBadRequest, extraField.Body)
+	}
+}
+
+func assertExchangeRateEffectiveDate(t *testing.T, label string, got time.Time, want time.Time) {
+	t.Helper()
+
+	if got.Format(time.RFC3339) != want.Format(time.RFC3339) {
+		t.Fatalf("%s effective_date = %s, want %s", label, got.Format(time.RFC3339), want.Format(time.RFC3339))
 	}
 }
 

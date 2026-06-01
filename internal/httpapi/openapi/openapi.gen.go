@@ -461,8 +461,8 @@ type CreateCreditLimitHistoryRequest struct {
 
 // CreateExchangeRateRequest defines model for CreateExchangeRateRequest.
 type CreateExchangeRateRequest struct {
-	EffectiveDate openapi_types.Date `json:"effective_date"`
-	FromCurrency  string             `json:"from_currency"`
+	EffectiveDate time.Time `json:"effective_date"`
+	FromCurrency  string    `json:"from_currency"`
 
 	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Rate       string `json:"rate"`
@@ -484,8 +484,8 @@ type CreateJournalRecordRequest struct {
 	ExternalSystem       *string              `json:"external_system,omitempty"`
 	MemberId             *int64               `json:"member_id,omitempty"`
 	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *openapi_types.Date  `json:"pending_date,omitempty"`
-	PostedDate           *openapi_types.Date  `json:"posted_date,omitempty"`
+	PendingDate          *time.Time           `json:"pending_date,omitempty"`
+	PostedDate           *time.Time           `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	Source               Source               `json:"source"`
@@ -533,10 +533,10 @@ type ErrorResponse struct {
 
 // ExchangeRate defines model for ExchangeRate.
 type ExchangeRate struct {
-	CreatedAt      time.Time          `json:"created_at"`
-	EffectiveDate  openapi_types.Date `json:"effective_date"`
-	ExchangeRateId int64              `json:"exchange_rate_id"`
-	FromCurrency   string             `json:"from_currency"`
+	CreatedAt      time.Time `json:"created_at"`
+	EffectiveDate  time.Time `json:"effective_date"`
+	ExchangeRateId int64     `json:"exchange_rate_id"`
+	FromCurrency   string    `json:"from_currency"`
 
 	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Rate         string     `json:"rate"`
@@ -574,8 +574,8 @@ type JournalRecord struct {
 	ExternalSystem       *string              `json:"external_system,omitempty"`
 	MemberId             *int64               `json:"member_id,omitempty"`
 	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *openapi_types.Date  `json:"pending_date,omitempty"`
-	PostedDate           *openapi_types.Date  `json:"posted_date,omitempty"`
+	PendingDate          *time.Time           `json:"pending_date,omitempty"`
+	PostedDate           *time.Time           `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
@@ -749,10 +749,10 @@ type SearchAccountJournalRecordsParams struct {
 	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
 	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *openapi_types.Date `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *openapi_types.Date `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *openapi_types.Date `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *openapi_types.Date `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 }
 
@@ -786,7 +786,7 @@ type GetCreditLimitHistoryParams struct {
 type ListExchangeRatesParams struct {
 	FromCurrency      *string                         `form:"from_currency,omitempty" json:"from_currency,omitempty"`
 	ToCurrency        *string                         `form:"to_currency,omitempty" json:"to_currency,omitempty"`
-	EffectiveDate     *openapi_types.Date             `form:"effective_date,omitempty" json:"effective_date,omitempty"`
+	EffectiveDate     *time.Time                      `form:"effective_date,omitempty" json:"effective_date,omitempty"`
 	IncludeTombstoned *bool                           `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 	Sort              *ListExchangeRatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListExchangeRatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
@@ -847,10 +847,10 @@ type SearchJournalRecordsParams struct {
 	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
 	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *openapi_types.Date `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *openapi_types.Date `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *openapi_types.Date `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *openapi_types.Date `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 }
 
@@ -1801,7 +1801,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "pending_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_from", r.URL.Query(), &params.PendingDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_from", r.URL.Query(), &params.PendingDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -1814,7 +1814,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "pending_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_to", r.URL.Query(), &params.PendingDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_to", r.URL.Query(), &params.PendingDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -1827,7 +1827,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "posted_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_from", r.URL.Query(), &params.PostedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_from", r.URL.Query(), &params.PostedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -1840,7 +1840,7 @@ func (siw *ServerInterfaceWrapper) SearchAccountJournalRecords(w http.ResponseWr
 
 	// ------------- Optional query parameter "posted_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_to", r.URL.Query(), &params.PostedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_to", r.URL.Query(), &params.PostedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2186,7 +2186,7 @@ func (siw *ServerInterfaceWrapper) ListExchangeRates(w http.ResponseWriter, r *h
 
 	// ------------- Optional query parameter "effective_date" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "effective_date", r.URL.Query(), &params.EffectiveDate, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "effective_date", r.URL.Query(), &params.EffectiveDate, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2755,7 +2755,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "pending_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_from", r.URL.Query(), &params.PendingDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_from", r.URL.Query(), &params.PendingDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2768,7 +2768,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "pending_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_to", r.URL.Query(), &params.PendingDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pending_date_to", r.URL.Query(), &params.PendingDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2781,7 +2781,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "posted_date_from" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_from", r.URL.Query(), &params.PostedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_from", r.URL.Query(), &params.PostedDateFrom, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -2794,7 +2794,7 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 
 	// ------------- Optional query parameter "posted_date_to" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_to", r.URL.Query(), &params.PostedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "posted_date_to", r.URL.Query(), &params.PostedDateTo, runtime.BindQueryParameterOptions{Type: "string", Format: "date-time"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -6614,72 +6614,72 @@ func (sh *strictHandler) ReplaceTransaction(w http.ResponseWriter, r *http.Reque
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"avXfAAAA//8=",
+	"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",
+	"AP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

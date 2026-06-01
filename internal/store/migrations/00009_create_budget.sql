@@ -10,5 +10,7 @@ CREATE TABLE budget (
 	UNIQUE(category_fqn, month, tombstoned_at)
 );
 
+COMMENT ON COLUMN budget.month IS 'Budget month, stored as the first calendar date of that month.';
+
 CREATE UNIQUE INDEX budget_active_category_month_unique
 ON budget ((CASE WHEN tombstoned_at IS NULL THEN category_fqn || ':' || CAST(month AS VARCHAR) ELSE NULL END));
