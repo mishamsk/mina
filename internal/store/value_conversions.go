@@ -36,6 +36,14 @@ func timestampArg(value time.Time) any {
 	return duckdb.Typed(value.UTC(), duckdb.TYPE_TIMESTAMP)
 }
 
+func nullableDecimalArg(value *values.Decimal) any {
+	if value == nil {
+		return nil
+	}
+
+	return value.LibraryDecimal()
+}
+
 func decimalFromDuckDB(value duckdb.Decimal) (values.Decimal, error) {
 	if !value.Value.IsInt64() {
 		return values.Decimal{}, fmt.Errorf("duckdb decimal coefficient exceeds int64")

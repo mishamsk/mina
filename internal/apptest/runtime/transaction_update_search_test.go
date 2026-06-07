@@ -44,23 +44,41 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 	}
 	assertRecordIDs(t, search.JSON200.Records, recordIDs(updated.JSON200.Records))
 
-	imbalanced := replacement
-	imbalanced.Records[1].AmountUsd = "19.00"
-	rejected, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, imbalanced)
+	amountUnbalanced := replacementTransactionRequest(refs)
+	amountUnbalanced.Records[1].Amount = "19.00"
+	rejected, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, amountUnbalanced)
 	requireNoTransportError(t, "replace transaction", err)
 	if rejected.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("imbalanced replace status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
+		t.Fatalf("amount-unbalanced replace status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
+	}
+
+	readAfterRejected, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "get transaction", err)
+	if readAfterRejected.StatusCode() != http.StatusOK {
+		t.Fatalf("read after amount-unbalanced replace status = %d, want %d; body %s", readAfterRejected.StatusCode(), http.StatusOK, readAfterRejected.Body)
+	}
+	assertRecordIDs(t, readAfterRejected.JSON200.Records, recordIDs(updated.JSON200.Records))
+
+	usdUnbalanced := replacementTransactionRequest(refs)
+	usdUnbalanced.Records[0].AmountUsd = nil
+	usdUnbalanced.Records[1].AmountUsd = apptest.StringPtr("19.00")
+	usdUpdated, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, usdUnbalanced)
+	requireNoTransportError(t, "replace transaction", err)
+	if usdUpdated.StatusCode() != http.StatusOK {
+		t.Fatalf("usd-unbalanced replace status = %d, want %d; body %s", usdUpdated.StatusCode(), http.StatusOK, usdUpdated.Body)
 	}
 
 	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
 	requireNoTransportError(t, "get transaction", err)
 	if read.StatusCode() != http.StatusOK {
-		t.Fatalf("read after rejected replace status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+		t.Fatalf("read after usd-unbalanced replace status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
 	}
-	if read.JSON200.InitiatedDate != updated.JSON200.InitiatedDate {
-		t.Fatalf("initiated_date after rejected replace = %q, want %q", read.JSON200.InitiatedDate, updated.JSON200.InitiatedDate)
+	if read.JSON200.Records[0].AmountUsd != nil {
+		t.Fatalf("first amount_usd after replace = %v, want nil", read.JSON200.Records[0].AmountUsd)
 	}
-	assertRecordIDs(t, read.JSON200.Records, recordIDs(updated.JSON200.Records))
+	if read.JSON200.Records[1].AmountUsd == nil || *read.JSON200.Records[1].AmountUsd != "19.00000000" {
+		t.Fatalf("second amount_usd after replace = %v, want 19.00000000", read.JSON200.Records[1].AmountUsd)
+	}
 }
 
 func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
@@ -131,7 +149,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				MemberId:             &refs.SecondMemberId,
 				Currency:             "USD",
 				Amount:               "-50.00",
-				AmountUsd:            "-50.00",
+				AmountUsd:            apptest.StringPtr("-50.00"),
 				CategoryId:           refs.SecondCategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.SecondTagId),
 				Memo:                 &memo,
@@ -144,7 +162,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				AccountId:            refs.MerchantAccountId,
 				Currency:             "USD",
 				Amount:               "50.00",
-				AmountUsd:            "50.00",
+				AmountUsd:            apptest.StringPtr("50.00"),
 				CategoryId:           refs.SecondCategoryId,
 				PostingStatus:        httpclient.Pending,
 				ReconciliationStatus: httpclient.Unreconciled,
@@ -176,12 +194,12 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		{name: "reconciliation status", params: &httpclient.SearchJournalRecordsParams{ReconciliationStatus: ptrTo(httpclient.Unreconciled)}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
 		{name: "amount min", params: &httpclient.SearchJournalRecordsParams{AmountMin: new("40.00")}, want: []int64{secondCredit.RecordId}},
 		{name: "amount max", params: &httpclient.SearchJournalRecordsParams{AmountMax: new("-40.00")}, want: []int64{secondDebit.RecordId}},
-		{name: "amount usd min", params: &httpclient.SearchJournalRecordsParams{AmountUsdMin: new("40.00")}, want: []int64{secondCredit.RecordId}},
-		{name: "amount usd max", params: &httpclient.SearchJournalRecordsParams{AmountUsdMax: new("-40.00")}, want: []int64{secondDebit.RecordId}},
+		{name: "amount usd min", params: &httpclient.SearchJournalRecordsParams{AmountUsdMin: apptest.StringPtr("40.00")}, want: []int64{secondCredit.RecordId}},
+		{name: "amount usd max", params: &httpclient.SearchJournalRecordsParams{AmountUsdMax: apptest.StringPtr("-40.00")}, want: []int64{secondDebit.RecordId}},
 		{name: "initiated from", params: &httpclient.SearchJournalRecordsParams{InitiatedDateFrom: apptest.DatePtr("2024-04-01")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
 		{name: "initiated to", params: &httpclient.SearchJournalRecordsParams{InitiatedDateTo: apptest.DatePtr("2024-03-31")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
-		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: apptest.TimestampPtr("2024-04-01T00:00:00Z")}, want: []int64{secondDebit.RecordId}},
-		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: apptest.TimestampPtr("2024-03-31T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
+		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: apptest.TimestampPtr("2024-04-01T00:00:00Z")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
+		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: apptest.TimestampPtr("2024-03-31T00:00:00Z")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
 		{name: "posted from", params: &httpclient.SearchJournalRecordsParams{PostedDateFrom: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
 		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
 		{name: "memo", params: &httpclient.SearchJournalRecordsParams{MemoContains: new("unc")}, want: []int64{firstDebit.RecordId}},
@@ -320,7 +338,7 @@ func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransa
 				MemberId:             &refs.MemberId,
 				Currency:             "USD",
 				Amount:               "-20.00",
-				AmountUsd:            "-20.00",
+				AmountUsd:            apptest.StringPtr("-20.00"),
 				CategoryId:           refs.CategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.TagId),
 				Memo:                 &memo,
@@ -334,7 +352,7 @@ func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransa
 				AccountId:            refs.MerchantAccountId,
 				Currency:             "USD",
 				Amount:               "20.00",
-				AmountUsd:            "20.00",
+				AmountUsd:            apptest.StringPtr("20.00"),
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.Posted,
 				ReconciliationStatus: httpclient.Reconciled,

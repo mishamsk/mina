@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/values"
 )
 
 // Account is a hierarchical financial account or counterparty.
@@ -171,13 +172,8 @@ func validateCurrency(currency *string) error {
 	if currency == nil {
 		return nil
 	}
-	if len(*currency) != 3 {
-		return services.InvalidRequest("currency must be a three-letter uppercase code")
-	}
-	for i := range *currency {
-		if (*currency)[i] < 'A' || (*currency)[i] > 'Z' {
-			return services.InvalidRequest("currency must be a three-letter uppercase code")
-		}
+	if !values.ValidCurrencyCode(*currency) {
+		return services.InvalidRequest("currency must be an ISO 4217 code or crypto code prefixed with C::")
 	}
 
 	return nil

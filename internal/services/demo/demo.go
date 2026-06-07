@@ -135,6 +135,9 @@ func (b *seedBuilder) seedAccounts(ctx context.Context) error {
 		{"cash:Wallet", strPtr("USD")},
 		{"cash:Travel:EUR", strPtr("EUR")},
 		{"cash:Travel:JPY", strPtr("JPY")},
+		{"trading:USD", strPtr("USD")},
+		{"trading:EUR", strPtr("EUR")},
+		{"trading:JPY", strPtr("JPY")},
 		{"income:AcmePayroll", strPtr("USD")},
 		{"income:Freelance", strPtr("USD")},
 		{"merchant:TraderJoes", strPtr("USD")},
@@ -467,10 +470,17 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 		{"2026-05-07", 10900, 10000, "merchant:Travel:Dining:Lisbon", "Travel:Dining", "Lisbon food tour", "Trips:Vacation:Lisbon2026", "credit_card:Chase:Sapphire", "USD", 10900},
 		{"2026-05-21", 6720, 6000, "merchant:Travel:Dining:Lisbon", "Travel:Dining", "Lisbon cafe", "Trips:Vacation:Lisbon2026", "cash:Travel:EUR", "EUR", 6000},
 	} {
-		if err := b.tx(ctx, input.date,
+		records := []transactions.JournalRecordInput{
 			b.rec(input.payAccount, "Morgan", input.payCurrency, -input.payCents, -input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
 			b.rec(input.merchant, "", "EUR", input.eurCents, input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
-		); err != nil {
+		}
+		if input.payCurrency != "EUR" {
+			records = append(records,
+				b.rec("trading:"+input.payCurrency, "", input.payCurrency, input.payCents, input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
+				b.rec("trading:EUR", "", "EUR", -input.eurCents, -input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
+			)
+		}
+		if err := b.tx(ctx, input.date, records...); err != nil {
 			return err
 		}
 	}
@@ -484,6 +494,8 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 	} {
 		if err := b.tx(ctx, input.date,
 			b.rec("credit_card:Chase:Sapphire", "Riley", "USD", -input.usdCents, -input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
+			b.rec("trading:USD", "", "USD", input.usdCents, input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
+			b.rec("trading:JPY", "", "JPY", -input.jpyCents, -input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
 			b.rec("merchant:Travel:Transit:Tokyo", "", "JPY", input.jpyCents, input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
 		); err != nil {
 			return err
@@ -499,6 +511,8 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 	} {
 		if err := b.tx(ctx, input.date,
 			b.rec("checking:Chase:Joint", "", "USD", -input.usdCents, -input.usdCents, "Transfer", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
+			b.rec("trading:USD", "", "USD", input.usdCents, input.usdCents, "Transfer", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
+			b.rec("trading:EUR", "", "EUR", -input.eurCents, -input.usdCents, "Transfer", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
 			b.rec("cash:Travel:EUR", "", "EUR", input.eurCents, input.usdCents, "Transfer", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
 		); err != nil {
 			return err
@@ -576,7 +590,7 @@ func (b *seedBuilder) rec(
 		MemberID:             memberID,
 		Currency:             currency,
 		Amount:               money(amountCents),
-		AmountUSD:            money(amountUSDCents),
+		AmountUSD:            decimalPtr(money(amountUSDCents)),
 		CategoryID:           b.cats[categoryFQN],
 		TagIDs:               tagIDs,
 		Memo:                 strPtr(memo),
@@ -585,6 +599,10 @@ func (b *seedBuilder) rec(
 		ReconciliationStatus: transactions.ReconciliationStatusReconciled,
 		Source:               transactions.SourceManual,
 	}
+}
+
+func decimalPtr(value values.Decimal) *values.Decimal {
+	return &value
 }
 
 func dailySpend(day int) (string, string, int, string, string) {

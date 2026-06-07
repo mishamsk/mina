@@ -150,6 +150,33 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	assertExchangeRateIDs(t, withTombstones.JSON200.ExchangeRates, []int64{earlier.JSON201.ExchangeRateId, later.JSON201.ExchangeRateId})
 }
 
+func TestExchangeRateAcceptsCryptoCurrencyBoundary(t *testing.T) {
+	client := newSharedClient(t)
+
+	created, err := client.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{
+		FromCurrency:  "C::ETHEREUM-LONG-TOKEN",
+		ToCurrency:    "USD",
+		Rate:          "2500.00000000",
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
+	})
+	if err != nil {
+		t.Fatalf("crypto exchange rate request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("crypto exchange rate status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+
+	fromCurrency := "C::ETHEREUM-LONG-TOKEN"
+	filtered, err := client.REST().ListExchangeRatesWithResponse(context.Background(), &httpclient.ListExchangeRatesParams{FromCurrency: &fromCurrency})
+	if err != nil {
+		t.Fatalf("crypto filter request: %v", err)
+	}
+	if filtered.StatusCode() != http.StatusOK {
+		t.Fatalf("crypto filter status = %d, want %d; body %s", filtered.StatusCode(), http.StatusOK, filtered.Body)
+	}
+	assertExchangeRateIDs(t, filtered.JSON200.ExchangeRates, []int64{created.JSON201.ExchangeRateId})
+}
+
 func TestExchangeRateRejectsDuplicateActivePairDate(t *testing.T) {
 	client := newSharedClient(t)
 
@@ -263,6 +290,19 @@ func TestExchangeRateValidationErrors(t *testing.T) {
 	}
 	if invalidCurrency.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid currency status = %d, want %d; body %s", invalidCurrency.StatusCode(), http.StatusBadRequest, invalidCurrency.Body)
+	}
+
+	unknownCurrency, err := client.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{
+		FromCurrency:  "ZZZ",
+		ToCurrency:    "USD",
+		Rate:          "1.08000000",
+		EffectiveDate: apptest.Timestamp("2024-02-01T00:00:00Z"),
+	})
+	if err != nil {
+		t.Fatalf("unknown currency request: %v", err)
+	}
+	if unknownCurrency.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unknown currency status = %d, want %d; body %s", unknownCurrency.StatusCode(), http.StatusBadRequest, unknownCurrency.Body)
 	}
 
 	zeroRate, err := client.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{

@@ -152,13 +152,8 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 }
 
 func validateCurrencyCode(name string, currency string) error {
-	if len(currency) != 3 {
-		return services.InvalidRequest(name + " must be a three-letter uppercase code")
-	}
-	for i := range currency {
-		if currency[i] < 'A' || currency[i] > 'Z' {
-			return services.InvalidRequest(name + " must be a three-letter uppercase code")
-		}
+	if !values.ValidCurrencyCode(currency) {
+		return services.InvalidRequest(name + " must be an ISO 4217 code or crypto code prefixed with C::")
 	}
 
 	return nil

@@ -92,14 +92,14 @@ A unified chart of accounts for all financial entities:
 
 ### Transaction Structure
 
-A transaction is a collection of records that must sum to zero (balanced debits and credits).
+A transaction is a collection of records whose amounts must sum to zero within each currency.
 
 ### Record Properties
 
 Each record within a transaction contains:
 - **Account**: The account affected
 - **Amount**: In the record's currency (positive for debits, negative for credits)
-- **Amount in USD**: Converted value at time of transaction
+- **Amount in USD**: Optional converted value when an exchange rate is available at recording time, or back-filled later
 - **Household member**: Optional attribution to a specific member; when unspecified, represents a whole-household transaction
 - **Category**: Single category assignment
 - **Tags**: Multiple tags for flexible grouping
@@ -152,7 +152,7 @@ Three dates track the lifecycle:
 ### Multi-Currency Support
 
 - Records can be in any currency
-- Each record stores both original currency amount and USD equivalent
+- Each record stores the original currency amount and may store a USD equivalent
 - USD serves as the base currency for cross-currency comparison
 
 ### Exchange Rates

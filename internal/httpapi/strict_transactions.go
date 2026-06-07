@@ -236,7 +236,7 @@ func journalRecordAPIInputs(records []openapi.CreateJournalRecordRequest) ([]tra
 		if err != nil {
 			return nil, err
 		}
-		amountUSD, err := decimalField(recordField(index, "amount_usd"), record.AmountUsd)
+		amountUSDValue, err := optionalDecimalField(recordField(index, "amount_usd"), record.AmountUsd)
 		if err != nil {
 			return nil, err
 		}
@@ -245,7 +245,7 @@ func journalRecordAPIInputs(records []openapi.CreateJournalRecordRequest) ([]tra
 			MemberID:             record.MemberId,
 			Currency:             record.Currency,
 			Amount:               amount,
-			AmountUSD:            amountUSD,
+			AmountUSD:            amountUSDValue,
 			CategoryID:           record.CategoryId,
 			TagIDs:               cloneOptionalInt64Slice(record.TagIds),
 			Memo:                 record.Memo,
@@ -282,6 +282,8 @@ func transactionAPIResponses(transactions []transactions.Transaction) []openapi.
 }
 
 func journalRecordAPIResponse(record transactions.JournalRecord) openapi.JournalRecord {
+	amountUSD := nullableDecimalString(record.AmountUSD)
+
 	return openapi.JournalRecord{
 		RecordId:             record.ID,
 		TransactionId:        record.TransactionID,
@@ -289,11 +291,11 @@ func journalRecordAPIResponse(record transactions.JournalRecord) openapi.Journal
 		MemberId:             record.MemberID,
 		Currency:             record.Currency,
 		Amount:               record.Amount.String(),
-		AmountUsd:            record.AmountUSD.String(),
+		AmountUsd:            amountUSD,
 		CategoryId:           record.CategoryID,
 		TagIds:               cloneInt64Slice(record.TagIDs),
 		Memo:                 record.Memo,
-		PendingDate:          nullableOpenAPITimestamp(record.PendingDate),
+		PendingDate:          record.PendingDate.UTC(),
 		PostedDate:           nullableOpenAPITimestamp(record.PostedDate),
 		PostingStatus:        openapi.PostingStatus(record.PostingStatus),
 		ReconciliationStatus: openapi.ReconciliationStatus(record.ReconciliationStatus),

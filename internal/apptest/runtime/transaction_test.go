@@ -89,14 +89,14 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if record.Source != httpclient.Manual {
 		t.Fatalf("source = %q, want %q", record.Source, httpclient.Manual)
 	}
-	if record.PendingDate == nil || !record.PendingDate.Equal(apptest.Timestamp("2024-03-10T00:00:00Z")) {
+	if !record.PendingDate.Equal(apptest.Timestamp("2024-03-10T00:00:00Z")) {
 		t.Fatalf("pending_date = %v, want 2024-03-10T00:00:00Z", record.PendingDate)
 	}
 	if record.PostedDate == nil || !record.PostedDate.Equal(apptest.Timestamp("2024-03-11T00:00:00Z")) {
 		t.Fatalf("posted_date = %v, want 2024-03-11T00:00:00Z", record.PostedDate)
 	}
-	if record.Amount != "-12.34000000" || record.AmountUsd != "-12.34000000" {
-		t.Fatalf("amounts = %q/%q, want -12.34000000/-12.34000000", record.Amount, record.AmountUsd)
+	if record.Amount != "-12.34000000" || record.AmountUsd == nil || *record.AmountUsd != "-12.34000000" {
+		t.Fatalf("amounts = %q/%v, want -12.34000000/-12.34000000", record.Amount, record.AmountUsd)
 	}
 	assertInt64s(t, record.TagIds, []int64{refs.TagId})
 	if record.CreatedAt.IsZero() || record.UpdatedAt.IsZero() {
@@ -126,14 +126,14 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if readRecord.Source != httpclient.Manual {
 		t.Fatalf("read source = %q, want %q", readRecord.Source, httpclient.Manual)
 	}
-	if readRecord.PendingDate == nil || !readRecord.PendingDate.Equal(apptest.Timestamp("2024-03-10T00:00:00Z")) {
+	if !readRecord.PendingDate.Equal(apptest.Timestamp("2024-03-10T00:00:00Z")) {
 		t.Fatalf("read pending_date = %v, want 2024-03-10T00:00:00Z", readRecord.PendingDate)
 	}
 	if readRecord.PostedDate == nil || !readRecord.PostedDate.Equal(apptest.Timestamp("2024-03-11T00:00:00Z")) {
 		t.Fatalf("read posted_date = %v, want 2024-03-11T00:00:00Z", readRecord.PostedDate)
 	}
-	if readRecord.Amount != "-12.34000000" || readRecord.AmountUsd != "-12.34000000" {
-		t.Fatalf("read amounts = %q/%q, want -12.34000000/-12.34000000", readRecord.Amount, readRecord.AmountUsd)
+	if readRecord.Amount != "-12.34000000" || readRecord.AmountUsd == nil || *readRecord.AmountUsd != "-12.34000000" {
+		t.Fatalf("read amounts = %q/%v, want -12.34000000/-12.34000000", readRecord.Amount, readRecord.AmountUsd)
 	}
 	assertInt64s(t, readRecord.TagIds, []int64{refs.TagId})
 	if readRecord.CreatedAt != record.CreatedAt || readRecord.UpdatedAt != record.UpdatedAt {
@@ -159,7 +159,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				MemberId:             &refs.MemberId,
 				Currency:             "USD",
 				Amount:               "-12.34",
-				AmountUsd:            "-12.34",
+				AmountUsd:            apptest.StringPtr("-12.34"),
 				CategoryId:           refs.CategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.TagId),
 				Memo:                 &memo,
@@ -173,7 +173,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				AccountId:            refs.MerchantAccountId,
 				Currency:             "USD",
 				Amount:               "12.34",
-				AmountUsd:            "12.34",
+				AmountUsd:            apptest.StringPtr("12.34"),
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.Posted,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -236,11 +236,112 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 	assertBodyContains(t, "search", search.Body, wantPostedJSON)
 }
 
-func TestTransactionRejectsImbalanceAndDoesNotPersist(t *testing.T) {
+func TestTransactionAllowsNullAndUnbalancedAmountUSD(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
 	req := balancedTransactionRequest(refs)
-	req.Records[1].AmountUsd = "11.00"
+	req.Records[0].Currency = "C::ETHEREUM-LONG-TOKEN"
+	req.Records[1].Currency = "C::ETHEREUM-LONG-TOKEN"
+	req.Records[0].AmountUsd = nil
+	req.Records[1].AmountUsd = apptest.StringPtr("11.00")
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), req)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	if created.JSON201.Records[0].AmountUsd != nil {
+		t.Fatalf("first amount_usd = %v, want nil", created.JSON201.Records[0].AmountUsd)
+	}
+	if created.JSON201.Records[1].AmountUsd == nil || *created.JSON201.Records[1].AmountUsd != "11.00000000" {
+		t.Fatalf("second amount_usd = %v, want 11.00000000", created.JSON201.Records[1].AmountUsd)
+	}
+
+	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	if err != nil {
+		t.Fatalf("list request: %v", err)
+	}
+	if list.StatusCode() != http.StatusOK {
+		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
+	}
+	if len(list.JSON200.Transactions) != 1 {
+		t.Fatalf("transaction count after create = %d, want 1; body %+v", len(list.JSON200.Transactions), list.JSON200)
+	}
+}
+
+func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	scenario := client.Scenario()
+	tradingUSD := scenario.AccountWithCurrency("trading:USD", "USD")
+	tradingEUR := scenario.AccountWithCurrency("trading:EUR", "EUR")
+	cashEUR := scenario.AccountWithCurrency("cash:Travel:EUR", "EUR")
+
+	req := httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-03-10"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            refs.CheckingAccountId,
+				Currency:             "USD",
+				Amount:               "-110.00",
+				AmountUsd:            apptest.StringPtr("-110.00"),
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+			{
+				AccountId:            tradingUSD.AccountId,
+				Currency:             "USD",
+				Amount:               "110.00",
+				AmountUsd:            apptest.StringPtr("110.00"),
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+			{
+				AccountId:            tradingEUR.AccountId,
+				Currency:             "EUR",
+				Amount:               "-100.00",
+				AmountUsd:            apptest.StringPtr("-110.00"),
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+			{
+				AccountId:            cashEUR.AccountId,
+				Currency:             "EUR",
+				Amount:               "100.00",
+				AmountUsd:            nil,
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+		},
+	}
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), req)
+	if err != nil {
+		t.Fatalf("exchange create request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("exchange create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	if len(created.JSON201.Records) != 4 {
+		t.Fatalf("exchange record count = %d, want 4; body %+v", len(created.JSON201.Records), created.JSON201)
+	}
+}
+
+func TestTransactionRejectsPerCurrencyImbalanceAndDoesNotPersist(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	req := balancedTransactionRequest(refs)
+	req.Records[1].Amount = "11.00"
 
 	rejected, err := client.REST().CreateTransactionWithResponse(context.Background(), req)
 	if err != nil {
@@ -336,6 +437,16 @@ func TestTransactionValidationErrors(t *testing.T) {
 		t.Fatalf("invalid source status = %d, want %d; body %s", invalidSourceResponse.StatusCode(), http.StatusBadRequest, invalidSourceResponse.Body)
 	}
 
+	unknownCurrency := balancedTransactionRequest(refs)
+	unknownCurrency.Records[0].Currency = "ZZZ"
+	unknownCurrencyResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), unknownCurrency)
+	if err != nil {
+		t.Fatalf("unknown currency request: %v", err)
+	}
+	if unknownCurrencyResponse.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unknown currency status = %d, want %d; body %s", unknownCurrencyResponse.StatusCode(), http.StatusBadRequest, unknownCurrencyResponse.Body)
+	}
+
 	invalidDate := balancedTransactionRequest(refs)
 	invalidDateResponse, err := client.REST().CreateTransactionWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
 		"initiated_date": "2024-02-30",
@@ -401,7 +512,7 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				MemberId:             &refs.MemberId,
 				Currency:             "USD",
 				Amount:               "-12.34",
-				AmountUsd:            "-12.34",
+				AmountUsd:            apptest.StringPtr("-12.34"),
 				CategoryId:           refs.CategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.TagId),
 				Memo:                 &memo,
@@ -415,7 +526,7 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				AccountId:            refs.MerchantAccountId,
 				Currency:             "USD",
 				Amount:               "12.34",
-				AmountUsd:            "12.34",
+				AmountUsd:            apptest.StringPtr("12.34"),
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.Posted,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -452,7 +563,7 @@ func parseTimestamp(t *testing.T, value string) time.Time {
 func assertRecordTimestamps(t *testing.T, label string, record httpclient.JournalRecord, wantPending time.Time, wantPosted time.Time) {
 	t.Helper()
 
-	if record.PendingDate == nil || !record.PendingDate.Equal(wantPending) {
+	if !record.PendingDate.Equal(wantPending) {
 		t.Fatalf("%s pending_date = %v, want %s", label, record.PendingDate, wantPending.Format(time.RFC3339))
 	}
 	if record.PostedDate == nil || !record.PostedDate.Equal(wantPosted) {

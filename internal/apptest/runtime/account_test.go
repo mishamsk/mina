@@ -222,8 +222,39 @@ func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 	}
 }
 
+func TestAccountAcceptsCryptoCurrencyBoundary(t *testing.T) {
+	client := newSharedClient(t)
+
+	currency := "C::ETHEREUM-LONG-TOKEN"
+	created, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:      "crypto:Wallet:Cold",
+		Currency: &currency,
+	})
+	if err != nil {
+		t.Fatalf("crypto currency request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("crypto currency status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	if created.JSON201.Currency == nil || *created.JSON201.Currency != currency {
+		t.Fatalf("currency = %v, want %s", created.JSON201.Currency, currency)
+	}
+}
+
 func TestAccountValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
+
+	unknownCurrencyValue := "ZZZ"
+	unknownCurrency, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:      "checking:Unknown",
+		Currency: &unknownCurrencyValue,
+	})
+	if err != nil {
+		t.Fatalf("unknown currency request: %v", err)
+	}
+	if unknownCurrency.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unknown currency status = %d, want %d; body %s", unknownCurrency.StatusCode(), http.StatusBadRequest, unknownCurrency.Body)
+	}
 
 	invalidCurrencyValue := "usd"
 	invalidCurrency, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{

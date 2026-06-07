@@ -17,6 +17,11 @@ func Int64SlicePtr(values ...int64) *[]int64 {
 	return &copied
 }
 
+// StringPtr returns a pointer to value.
+func StringPtr(value string) *string {
+	return &value
+}
+
 // FormatID formats a numeric API identifier for path or query construction.
 func FormatID(id int64) string {
 	return strconv.FormatInt(id, 10)

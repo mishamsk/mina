@@ -29,12 +29,15 @@ CREATE TYPE source AS ENUM (
 -- Category table with hierarchical FQN and virtual columns
 CREATE TABLE category (
     category_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+    -- Colon-separated hierarchical category path, e.g. Food:Restaurants.
     fqn TEXT NOT NULL,
+    -- Excludes active rows from default lists while keeping them selectable by explicit query.
     is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP,
 
+    -- Parent category path derived from fqn, or NULL for root categories.
     parent_fqn TEXT GENERATED ALWAYS AS (
         CASE
             WHEN instr(fqn, ':') > 0
@@ -43,26 +46,37 @@ CREATE TABLE category (
         END
     ) VIRTUAL,
 
+    -- Leaf category name derived from fqn.
     name TEXT GENERATED ALWAYS AS (
         regexp_extract(fqn, '[^:]+$')
     ) VIRTUAL,
 
+    -- Zero-based category depth derived from fqn.
     level INTEGER GENERATED ALWAYS AS (
         ARRAY_LENGTH(SPLIT(fqn, ':')) - 1
     ) VIRTUAL,
 
     UNIQUE(fqn, tombstoned_at)
 );
+
+COMMENT ON COLUMN category.fqn IS 'Colon-separated hierarchical category path, e.g. Food:Restaurants.';
+COMMENT ON COLUMN category.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
+COMMENT ON COLUMN category.parent_fqn IS 'Parent category path derived from fqn, or NULL for root categories.';
+COMMENT ON COLUMN category.name IS 'Leaf category name derived from fqn.';
+COMMENT ON COLUMN category.level IS 'Zero-based category depth derived from fqn.';
 
 -- Tag table with hierarchical FQN and virtual columns
 CREATE TABLE tag (
     tag_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+    -- Colon-separated hierarchical tag path, e.g. Trips:Vacation.
     fqn TEXT NOT NULL,
+    -- Excludes active rows from default lists while keeping them selectable by explicit query.
     is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP,
 
+    -- Parent tag path derived from fqn, or NULL for root tags.
     parent_fqn TEXT GENERATED ALWAYS AS (
         CASE
             WHEN instr(fqn, ':') > 0
@@ -71,16 +85,24 @@ CREATE TABLE tag (
         END
     ) VIRTUAL,
 
+    -- Leaf tag name derived from fqn.
     name TEXT GENERATED ALWAYS AS (
         regexp_extract(fqn, '[^:]+$')
     ) VIRTUAL,
 
+    -- Zero-based tag depth derived from fqn.
     level INTEGER GENERATED ALWAYS AS (
         ARRAY_LENGTH(SPLIT(fqn, ':')) - 1
     ) VIRTUAL,
 
     UNIQUE(fqn, tombstoned_at)
 );
+
+COMMENT ON COLUMN tag.fqn IS 'Colon-separated hierarchical tag path, e.g. Trips:Vacation.';
+COMMENT ON COLUMN tag.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
+COMMENT ON COLUMN tag.parent_fqn IS 'Parent tag path derived from fqn, or NULL for root tags.';
+COMMENT ON COLUMN tag.name IS 'Leaf tag name derived from fqn.';
+COMMENT ON COLUMN tag.level IS 'Zero-based tag depth derived from fqn.';
 
 -- Member table for household member tracking
 CREATE TABLE member (
@@ -96,19 +118,26 @@ CREATE TABLE member (
 -- Account table with FQN hierarchy and virtual columns
 CREATE TABLE account (
     account_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+    -- Colon-separated hierarchical account path, e.g. checking:Chase:Primary.
     fqn TEXT NOT NULL,
+    -- Excludes active rows from default lists while keeping them selectable by explicit query.
     is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+    -- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
     currency TEXT,
+    -- Identifier assigned by an external system when this account is linked outside Mina.
     external_id TEXT,
+    -- External system namespace for external_id, e.g. plaid.
     external_system TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP,
 
+    -- Root account kind derived from the first fqn segment.
     kind TEXT GENERATED ALWAYS AS (
         regexp_extract(fqn, '^[^:]+')
     ) VIRTUAL,
 
+    -- Parent account path derived from fqn, or NULL for root accounts.
     parent_fqn TEXT GENERATED ALWAYS AS (
         CASE
             WHEN instr(fqn, ':') > 0
@@ -117,10 +146,12 @@ CREATE TABLE account (
         END
     ) VIRTUAL,
 
+    -- Leaf account name derived from fqn.
     name TEXT GENERATED ALWAYS AS (
         regexp_extract(fqn, '[^:]+$')
     ) VIRTUAL,
 
+    -- Zero-based account depth derived from fqn.
     level INTEGER GENERATED ALWAYS AS (
         ARRAY_LENGTH(SPLIT(fqn, ':')) - 1
     ) VIRTUAL,
@@ -128,15 +159,26 @@ CREATE TABLE account (
     UNIQUE(fqn, tombstoned_at)
 );
 
+COMMENT ON COLUMN account.fqn IS 'Colon-separated hierarchical account path, e.g. checking:Chase:Primary.';
+COMMENT ON COLUMN account.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
+COMMENT ON COLUMN account.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN account.external_id IS 'Identifier assigned by an external system when this account is linked outside Mina.';
+COMMENT ON COLUMN account.external_system IS 'External system namespace for external_id, e.g. plaid.';
+COMMENT ON COLUMN account.kind IS 'Root account kind derived from the first fqn segment.';
+COMMENT ON COLUMN account.parent_fqn IS 'Parent account path derived from fqn, or NULL for root accounts.';
+COMMENT ON COLUMN account.name IS 'Leaf account name derived from fqn.';
+COMMENT ON COLUMN account.level IS 'Zero-based account depth derived from fqn.';
+
 -- Transaction table for double-entry transaction metadata
 CREATE TABLE "transaction" (
     transaction_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+    -- Human-facing calendar date the transaction happened, distinct from formal banking timestamps on records that may be future dated.
     initiated_date DATE NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP
 );
 
-COMMENT ON COLUMN "transaction".initiated_date IS 'Calendar date the transaction happened, independent of time zone.';
+COMMENT ON COLUMN "transaction".initiated_date IS 'Human-facing calendar date the transaction happened, distinct from formal banking timestamps on records that may be future dated.';
 
 -- Journal record table for individual debit/credit entries
 CREATE TABLE journal_record (
@@ -145,24 +187,36 @@ CREATE TABLE journal_record (
     account_id INTEGER NOT NULL,
     member_id INTEGER,
 
+    -- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
     currency TEXT NOT NULL,
+    -- Signed debit or credit amount in the record currency.
     amount DECIMAL(18,8) NOT NULL,
-    amount_usd DECIMAL(18,8) NOT NULL,
+    -- Signed USD conversion at recording time; NULL when no exchange rate is available.
+    amount_usd DECIMAL(18,8),
 
     category_id INTEGER NOT NULL,
+    -- Tag IDs assigned to this record for flexible grouping.
     tag_ids INTEGER[] NOT NULL DEFAULT [],
 
+    -- Optional record note or description.
     memo TEXT,
 
-    pending_date TIMESTAMP,
-    posted_date TIMESTAMP,
+    -- UTC banking transaction timestamp, such as a card hold; for non-bank records, initiated_date as a full timestamp.
+    pending_date TIMESTAMP NOT NULL,
+    -- UTC timestamp when the record posted; equal to pending_date for manual non-bank records and NULL until posted.
+    posted_date TIMESTAMP DEFAULT NULL,
 
+    -- Banking lifecycle state for this record.
     posting_status posting_status NOT NULL,
+    -- Import/reconciliation matching state.
     reconciliation_status reconciliation_status NOT NULL DEFAULT 'RECONCILED',
 
+    -- Origin of this record.
     source source NOT NULL,
 
+    -- Identifier assigned by an external system when this record is linked outside Mina.
     external_id TEXT,
+    -- External system namespace for external_id.
     external_system TEXT,
 
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -170,15 +224,29 @@ CREATE TABLE journal_record (
     tombstoned_at TIMESTAMP
 );
 
-COMMENT ON COLUMN journal_record.pending_date IS 'UTC timestamp when the record appeared as pending.';
-COMMENT ON COLUMN journal_record.posted_date IS 'UTC timestamp when the record posted.';
+COMMENT ON COLUMN journal_record.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN journal_record.amount IS 'Signed debit or credit amount in the record currency.';
+COMMENT ON COLUMN journal_record.amount_usd IS 'Signed USD conversion at recording time; NULL when no exchange rate is available.';
+COMMENT ON COLUMN journal_record.tag_ids IS 'Tag IDs assigned to this record for flexible grouping.';
+COMMENT ON COLUMN journal_record.memo IS 'Optional record note or description.';
+COMMENT ON COLUMN journal_record.pending_date IS 'UTC banking transaction timestamp, such as a card hold; for non-bank records, initiated_date as a full timestamp.';
+COMMENT ON COLUMN journal_record.posted_date IS 'UTC timestamp when the record posted; equal to pending_date for manual non-bank records and NULL until posted.';
+COMMENT ON COLUMN journal_record.posting_status IS 'Banking lifecycle state for this record.';
+COMMENT ON COLUMN journal_record.reconciliation_status IS 'Import/reconciliation matching state.';
+COMMENT ON COLUMN journal_record.source IS 'Origin of this record.';
+COMMENT ON COLUMN journal_record.external_id IS 'Identifier assigned by an external system when this record is linked outside Mina.';
+COMMENT ON COLUMN journal_record.external_system IS 'External system namespace for external_id.';
 
 -- Exchange rate table for historical currency conversion
 CREATE TABLE exchange_rate (
     exchange_rate_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+    -- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
     from_currency TEXT NOT NULL,
+    -- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
     to_currency TEXT NOT NULL,
+    -- Multiplicative conversion rate from from_currency to to_currency.
     rate DECIMAL(18,8) NOT NULL,
+    -- UTC timestamp when the exchange rate becomes effective.
     effective_date TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP,
@@ -186,13 +254,19 @@ CREATE TABLE exchange_rate (
     UNIQUE(from_currency, to_currency, effective_date, tombstoned_at)
 );
 
+COMMENT ON COLUMN exchange_rate.from_currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN exchange_rate.to_currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN exchange_rate.rate IS 'Multiplicative conversion rate from from_currency to to_currency.';
 COMMENT ON COLUMN exchange_rate.effective_date IS 'UTC timestamp when the exchange rate becomes effective.';
 
 -- Budget table for monthly category budgets
 CREATE TABLE budget (
     budget_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+    -- Category path this monthly budget applies to.
     category_fqn TEXT NOT NULL,
+    -- Budget month, stored as the first calendar date of that month.
     month DATE NOT NULL,
+    -- Budgeted amount for category_fqn during month.
     amount DECIMAL(18,8) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -201,19 +275,26 @@ CREATE TABLE budget (
     UNIQUE(category_fqn, month, tombstoned_at)
 );
 
+COMMENT ON COLUMN budget.category_fqn IS 'Category path this monthly budget applies to.';
 COMMENT ON COLUMN budget.month IS 'Budget month, stored as the first calendar date of that month.';
+COMMENT ON COLUMN budget.amount IS 'Budgeted amount for category_fqn during month.';
 
 -- Credit limit history table for tracking limit changes over time
 CREATE TABLE credit_limit_history (
     credit_limit_history_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
     account_id INTEGER NOT NULL,
+    -- Credit limit amount effective for the account.
     credit_limit DECIMAL(18,8) NOT NULL,
+    -- Calendar date when this credit limit starts applying.
     effective_date DATE NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP,
 
     UNIQUE(account_id, effective_date, tombstoned_at)
 );
+
+COMMENT ON COLUMN credit_limit_history.credit_limit IS 'Credit limit amount effective for the account.';
+COMMENT ON COLUMN credit_limit_history.effective_date IS 'Calendar date when this credit limit starts applying.';
 
 -- Active-row uniqueness uses expression indexes because DuckDB treats NULL values
 -- as distinct inside UNIQUE constraints.

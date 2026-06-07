@@ -471,15 +471,19 @@ type CreateJournalRecordRequest struct {
 	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount string `json:"amount"`
 
-	// AmountUsd JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsd            string               `json:"amount_usd"`
-	CategoryId           int64                `json:"category_id"`
-	Currency             string               `json:"currency"`
-	ExternalId           *string              `json:"external_id,omitempty"`
-	ExternalSystem       *string              `json:"external_system,omitempty"`
-	MemberId             *int64               `json:"member_id,omitempty"`
-	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *time.Time           `json:"pending_date,omitempty"`
+	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsd      *string `json:"amount_usd"`
+	CategoryId     int64   `json:"category_id"`
+	Currency       string  `json:"currency"`
+	ExternalId     *string `json:"external_id,omitempty"`
+	ExternalSystem *string `json:"external_system,omitempty"`
+	MemberId       *int64  `json:"member_id,omitempty"`
+	Memo           *string `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp, such as a card hold; when omitted or null, defaults to initiated_date at 00:00:00Z for non-bank records.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the record posted; use pending_date for manual non-bank records and null until posted.
 	PostedDate           *time.Time           `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
@@ -571,16 +575,20 @@ type JournalRecord struct {
 	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount string `json:"amount"`
 
-	// AmountUsd JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsd            string               `json:"amount_usd"`
-	CategoryId           int64                `json:"category_id"`
-	CreatedAt            time.Time            `json:"created_at"`
-	Currency             string               `json:"currency"`
-	ExternalId           *string              `json:"external_id,omitempty"`
-	ExternalSystem       *string              `json:"external_system,omitempty"`
-	MemberId             *int64               `json:"member_id,omitempty"`
-	Memo                 *string              `json:"memo,omitempty"`
-	PendingDate          *time.Time           `json:"pending_date,omitempty"`
+	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsd      *string   `json:"amount_usd"`
+	CategoryId     int64     `json:"category_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	Currency       string    `json:"currency"`
+	ExternalId     *string   `json:"external_id,omitempty"`
+	ExternalSystem *string   `json:"external_system,omitempty"`
+	MemberId       *int64    `json:"member_id,omitempty"`
+	Memo           *string   `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp, such as a card hold; non-bank records use initiated_date as a full timestamp.
+	PendingDate time.Time `json:"pending_date"`
+
+	// PostedDate UTC timestamp when the record posted; equal to pending_date for manual non-bank records and null until posted.
 	PostedDate           *time.Time           `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`

@@ -175,7 +175,7 @@ func (s *Scenario) BalancedTransaction(refs TransactionRefs) models.Transaction 
 			{
 				AccountId:            refs.CheckingAccountID,
 				Amount:               "-12.34",
-				AmountUsd:            "-12.34",
+				AmountUsd:            StringPtr("-12.34"),
 				CategoryId:           refs.CategoryID,
 				Currency:             "USD",
 				MemberId:             &memberID,
@@ -188,7 +188,7 @@ func (s *Scenario) BalancedTransaction(refs TransactionRefs) models.Transaction 
 			{
 				AccountId:            refs.MerchantAccountID,
 				Amount:               "12.34",
-				AmountUsd:            "12.34",
+				AmountUsd:            StringPtr("12.34"),
 				CategoryId:           refs.CategoryID,
 				Currency:             "USD",
 				PostingStatus:        models.Posted,

@@ -3,7 +3,6 @@ package transactions
 import (
 	"context"
 	"errors"
-	"math/big"
 	"strconv"
 	"strings"
 	"time"
@@ -59,11 +58,11 @@ type JournalRecord struct {
 	MemberID             *int64
 	Currency             string
 	Amount               values.Decimal
-	AmountUSD            values.Decimal
+	AmountUSD            *values.Decimal
 	CategoryID           int64
 	TagIDs               []int64
 	Memo                 *string
-	PendingDate          *time.Time
+	PendingDate          time.Time
 	PostedDate           *time.Time
 	PostingStatus        PostingStatus
 	ReconciliationStatus ReconciliationStatus
@@ -87,7 +86,7 @@ type JournalRecordInput struct {
 	MemberID             *int64
 	Currency             string
 	Amount               values.Decimal
-	AmountUSD            values.Decimal
+	AmountUSD            *values.Decimal
 	CategoryID           int64
 	TagIDs               []int64
 	Memo                 *string
@@ -153,6 +152,7 @@ func NewService(repo Repository) *Service {
 
 // Create validates and creates a transaction and its journal records.
 func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, error) {
+	fillMissingPendingDates(&input)
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
@@ -173,6 +173,7 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 	if id <= 0 {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
+	fillMissingPendingDates(&input)
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
@@ -345,44 +346,42 @@ func (s *Service) BulkUpdateStatuses(
 	return bulkRecordOperationResponse(recordIDs, count), nil
 }
 
+func fillMissingPendingDates(input *CreateInput) {
+	defaultPendingDate := input.InitiatedDate.Time()
+	for index := range input.Records {
+		if input.Records[index].PendingDate == nil {
+			input.Records[index].PendingDate = &defaultPendingDate
+		}
+	}
+}
+
 func validateTransactionInput(input CreateInput) error {
 	if len(input.Records) < 2 {
 		return services.InvalidRequest("transaction requires at least two records")
 	}
 
-	var balanceUSD big.Int
+	balances := map[string]values.Decimal{}
 	for index, record := range input.Records {
 		if err := validateJournalRecord(index, record); err != nil {
 			return err
 		}
-		amountUSD, ok := decimalScaledUnits(record.AmountUSD)
-		if !ok {
-			return services.InvalidRequest("transaction records must balance to zero amount_usd")
+		if balance, ok := balances[record.Currency]; ok {
+			updated, err := balance.Add(record.Amount)
+			if err != nil {
+				return services.InvalidRequest("transaction records must balance to zero amount per currency")
+			}
+			balances[record.Currency] = updated
+		} else {
+			balances[record.Currency] = record.Amount
 		}
-		balanceUSD.Add(&balanceUSD, &amountUSD)
 	}
-	if balanceUSD.Sign() != 0 {
-		return services.InvalidRequest("transaction records must balance to zero amount_usd")
+	for _, balance := range balances {
+		if !balance.IsZero() {
+			return services.InvalidRequest("transaction records must balance to zero amount per currency")
+		}
 	}
 
 	return nil
-}
-
-func decimalScaledUnits(value values.Decimal) (big.Int, bool) {
-	whole, fraction, ok := value.LibraryDecimal().Int64(8)
-	if !ok {
-		return big.Int{}, false
-	}
-
-	var units big.Int
-	units.SetInt64(whole)
-	units.Mul(&units, big.NewInt(100000000))
-
-	var fractionUnits big.Int
-	fractionUnits.SetInt64(fraction)
-	units.Add(&units, &fractionUnits)
-
-	return units, true
 }
 
 func validateJournalRecord(index int, record JournalRecordInput) error {
@@ -398,7 +397,7 @@ func validateJournalRecord(index int, record JournalRecordInput) error {
 	if record.Amount.IsZero() {
 		return services.InvalidRequest(indexedField(index, "amount") + " must be non-zero")
 	}
-	if record.AmountUSD.IsZero() {
+	if record.AmountUSD != nil && record.AmountUSD.IsZero() {
 		return services.InvalidRequest(indexedField(index, "amount_usd") + " must be non-zero")
 	}
 
@@ -414,7 +413,7 @@ func validateJournalRecord(index int, record JournalRecordInput) error {
 	}
 
 	if err := validateCurrency(record.Currency); err != nil {
-		return services.InvalidRequest(indexedField(index, "currency") + " must be a three-letter uppercase code")
+		return services.InvalidRequest(indexedField(index, "currency") + " must be an ISO 4217 code or crypto code prefixed with C::")
 	}
 	if err := validatePostingStatus(index, record.PostingStatus); err != nil {
 		return err
@@ -531,13 +530,8 @@ func validateReconciliationStatus(index int, status ReconciliationStatus) error 
 }
 
 func validateCurrency(currency string) error {
-	if len(currency) != 3 {
+	if !values.ValidCurrencyCode(currency) {
 		return errors.New("invalid currency")
-	}
-	for i := range currency {
-		if currency[i] < 'A' || currency[i] > 'Z' {
-			return errors.New("invalid currency")
-		}
 	}
 
 	return nil

@@ -71,3 +71,13 @@ func optionalDecimalField(name string, value *string) (*values.Decimal, error) {
 
 	return &parsed, nil
 }
+
+func nullableDecimalString(value *values.Decimal) *string {
+	if value == nil {
+		return nil
+	}
+
+	formatted := value.String()
+
+	return &formatted
+}

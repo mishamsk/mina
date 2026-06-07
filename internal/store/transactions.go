@@ -524,7 +524,7 @@ func insertJournalRecord(ctx context.Context, tx *sql.Tx, accounting *Accounting
 		req.MemberID,
 		req.Currency,
 		req.Amount.LibraryDecimal(),
-		req.AmountUSD.LibraryDecimal(),
+		nullableDecimalArg(req.AmountUSD),
 		req.CategoryID,
 	}
 	args = append(args, tagListArgs...)
@@ -572,9 +572,9 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	var record transactions.JournalRecord
 	var memberID sql.NullInt64
 	var amount duckdb.Decimal
-	var amountUSD duckdb.Decimal
+	var amountUSD sql.Null[duckdb.Decimal]
 	var memo sql.NullString
-	var pendingDate sql.NullTime
+	var pendingDate time.Time
 	var postedDate sql.NullTime
 	var externalID sql.NullString
 	var externalSystem sql.NullString
@@ -608,19 +608,21 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	if err != nil {
 		return transactions.JournalRecord{}, fmt.Errorf("scan journal record amount: %w", err)
 	}
-	parsedAmountUSD, err := decimalFromDuckDB(amountUSD)
-	if err != nil {
-		return transactions.JournalRecord{}, fmt.Errorf("scan journal record amount_usd: %w", err)
-	}
 	record.Amount = parsedAmount
-	record.AmountUSD = parsedAmountUSD
+	if amountUSD.Valid {
+		parsedAmountUSD, err := decimalFromDuckDB(amountUSD.V)
+		if err != nil {
+			return transactions.JournalRecord{}, fmt.Errorf("scan journal record amount_usd: %w", err)
+		}
+		record.AmountUSD = &parsedAmountUSD
+	}
 	if memberID.Valid {
 		record.MemberID = &memberID.Int64
 	}
 	if memo.Valid {
 		record.Memo = &memo.String
 	}
-	record.PendingDate = nullableTimeFromSQL(pendingDate)
+	record.PendingDate = pendingDate.UTC()
 	record.PostedDate = nullableTimeFromSQL(postedDate)
 	if externalID.Valid {
 		record.ExternalID = &externalID.String

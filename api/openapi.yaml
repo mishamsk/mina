@@ -716,13 +716,13 @@ paths:
           required: false
           schema:
             type: string
-            pattern: ^[A-Z]{3}$
+            pattern: ^([A-Z]{3}|C::.+)$
         - name: to_currency
           in: query
           required: false
           schema:
             type: string
-            pattern: ^[A-Z]{3}$
+            pattern: ^([A-Z]{3}|C::.+)$
         - name: effective_date
           in: query
           required: false
@@ -871,7 +871,7 @@ paths:
                 $ref: "#/components/schemas/TransactionListResponse"
     post:
       operationId: createTransaction
-      summary: Create a balanced transaction.
+      summary: Create a per-currency balanced transaction.
       requestBody:
         required: true
         content:
@@ -1244,7 +1244,7 @@ paths:
     put:
       operationId: replaceTransaction
       summary: Replace a transaction and its journal records.
-      description: Replaces initiated_date and the full journal record set atomically. The transaction_id is preserved, previous active records are tombstoned, and replacement records must balance to zero amount_usd.
+      description: Replaces initiated_date and the full journal record set atomically. The transaction_id is preserved, previous active records are tombstoned, and replacement records must balance to zero amount within each currency.
       requestBody:
         required: true
         content:
@@ -1364,7 +1364,7 @@ components:
         currency:
           type: string
           nullable: true
-          pattern: ^[A-Z]{3}$
+          pattern: ^([A-Z]{3}|C::.+)$
         external_id:
           type: string
           nullable: true
@@ -1456,10 +1456,10 @@ components:
           format: int64
         from_currency:
           type: string
-          pattern: ^[A-Z]{3}$
+          pattern: ^([A-Z]{3}|C::.+)$
         to_currency:
           type: string
-          pattern: ^[A-Z]{3}$
+          pattern: ^([A-Z]{3}|C::.+)$
         rate:
           type: string
           description: JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -1576,7 +1576,7 @@ components:
         currency:
           type: string
           nullable: true
-          pattern: ^[A-Z]{3}$
+          pattern: ^([A-Z]{3}|C::.+)$
         external_id:
           type: string
           nullable: true
@@ -1610,10 +1610,10 @@ components:
       properties:
         from_currency:
           type: string
-          pattern: ^[A-Z]{3}$
+          pattern: ^([A-Z]{3}|C::.+)$
         to_currency:
           type: string
-          pattern: ^[A-Z]{3}$
+          pattern: ^([A-Z]{3}|C::.+)$
         rate:
           type: string
           description: JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -1648,7 +1648,7 @@ components:
           nullable: true
         currency:
           type: string
-          pattern: ^[A-Z]{3}$
+          pattern: ^([A-Z]{3}|C::.+)$
         amount:
           type: string
           description: JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -1656,7 +1656,8 @@ components:
           maxLength: 20
         amount_usd:
           type: string
-          description: JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          nullable: true
+          description: JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
           pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 20
         category_id:
@@ -1674,10 +1675,12 @@ components:
           nullable: true
         pending_date:
           type: string
+          description: UTC banking transaction timestamp, such as a card hold; when omitted or null, defaults to initiated_date at 00:00:00Z for non-bank records.
           nullable: true
           format: date-time
         posted_date:
           type: string
+          description: UTC timestamp when the record posted; use pending_date for manual non-bank records and null until posted.
           nullable: true
           format: date-time
         posting_status:
@@ -1915,6 +1918,7 @@ components:
         - currency
         - amount
         - amount_usd
+        - pending_date
         - category_id
         - tag_ids
         - posting_status
@@ -1938,7 +1942,7 @@ components:
           nullable: true
         currency:
           type: string
-          pattern: ^[A-Z]{3}$
+          pattern: ^([A-Z]{3}|C::.+)$
         amount:
           type: string
           description: JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -1946,7 +1950,8 @@ components:
           maxLength: 20
         amount_usd:
           type: string
-          description: JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          nullable: true
+          description: JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
           pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 20
         category_id:
@@ -1962,10 +1967,11 @@ components:
           nullable: true
         pending_date:
           type: string
-          nullable: true
+          description: UTC banking transaction timestamp, such as a card hold; non-bank records use initiated_date as a full timestamp.
           format: date-time
         posted_date:
           type: string
+          description: UTC timestamp when the record posted; equal to pending_date for manual non-bank records and null until posted.
           nullable: true
           format: date-time
         posting_status:
