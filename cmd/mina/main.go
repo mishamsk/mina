@@ -106,7 +106,7 @@ func newVersionCommand(stdout io.Writer) *cobra.Command {
 func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, configFilePath *string) *cobra.Command {
 	var assumeYes bool
 	var seedDemo bool
-	sourceInfo := runtimeconfig.Sources()
+	sources := runtimeconfig.Sources()
 	flagCfg := runtimeconfig.DefaultConfig()
 	cmd := &cobra.Command{
 		Use:          "serve",
@@ -144,28 +144,28 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sourceInfo.DatabasePath))
+	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sources[runtimeconfig.SourceDatabasePath]))
 	cmd.Flags().StringVar(
 		&flagCfg.AccountingSchema,
 		"schema",
 		"",
-		"DuckDB schema for accounting state "+sourceHelp(sourceInfo.AccountingSchema),
+		"DuckDB schema for accounting state "+sourceHelp(sources[runtimeconfig.SourceAccountingSchema]),
 	)
-	cmd.Flags().StringVar(&flagCfg.Serve.Host, "host", flagCfg.Serve.Host, "host interface for the REST API "+sourceHelp(sourceInfo.Serve.Host))
-	cmd.Flags().IntVar(&flagCfg.Serve.Port, "port", flagCfg.Serve.Port, "port for the REST API "+sourceHelp(sourceInfo.Serve.Port))
+	cmd.Flags().StringVar(&flagCfg.Serve.Host, "host", flagCfg.Serve.Host, "host interface for the REST API "+sourceHelp(sources[runtimeconfig.SourceServeHost]))
+	cmd.Flags().IntVar(&flagCfg.Serve.Port, "port", flagCfg.Serve.Port, "port for the REST API "+sourceHelp(sources[runtimeconfig.SourceServePort]))
 	cmd.Flags().BoolVar(
 		&assumeYes,
 		"yes",
 		false,
-		"answer yes to database creation and migration prompts "+sourceHelp(sourceInfo.AssumeYes),
+		"answer yes to database creation and migration prompts "+sourceHelp(sources[runtimeconfig.SourceAssumeYes]),
 	)
 	cmd.Flags().StringVar(
 		&flagCfg.Serve.AccessLogPath,
 		"access-log",
 		"",
-		"write access logs to a file instead of stderr "+sourceHelp(sourceInfo.Serve.AccessLogPath),
+		"write access logs to a file instead of stderr "+sourceHelp(sources[runtimeconfig.SourceServeAccessLogPath]),
 	)
-	cmd.Flags().BoolVar(&flagCfg.Serve.Quiet, "quiet", false, "disable access logs "+sourceHelp(sourceInfo.Serve.Quiet))
+	cmd.Flags().BoolVar(&flagCfg.Serve.Quiet, "quiet", false, "disable access logs "+sourceHelp(sources[runtimeconfig.SourceServeQuiet]))
 	cmd.Flags().BoolVar(&seedDemo, "demo", false, "seed deterministic demo data at startup")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
@@ -176,7 +176,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 
 func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string) *cobra.Command {
 	var assumeYes bool
-	sourceInfo := runtimeconfig.Sources()
+	sources := runtimeconfig.Sources()
 	flagCfg := runtimeconfig.Config{}
 	cmd := &cobra.Command{
 		Use:          "migrate",
@@ -210,18 +210,18 @@ func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sourceInfo.DatabasePath))
+	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sources[runtimeconfig.SourceDatabasePath]))
 	cmd.Flags().StringVar(
 		&flagCfg.AccountingSchema,
 		"schema",
 		"",
-		"DuckDB schema for accounting state "+sourceHelp(sourceInfo.AccountingSchema),
+		"DuckDB schema for accounting state "+sourceHelp(sources[runtimeconfig.SourceAccountingSchema]),
 	)
 	cmd.Flags().BoolVar(
 		&assumeYes,
 		"yes",
 		false,
-		"answer yes to database creation and migration prompts "+sourceHelp(sourceInfo.AssumeYes),
+		"answer yes to database creation and migration prompts "+sourceHelp(sources[runtimeconfig.SourceAssumeYes]),
 	)
 
 	return cmd

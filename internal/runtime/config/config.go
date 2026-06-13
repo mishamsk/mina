@@ -86,21 +86,25 @@ type Source struct {
 	EnvVar     string
 }
 
-// SourceInfo describes config file and environment sources by config field.
-type SourceInfo struct {
-	DatabasePath     Source
-	AccountingSchema Source
-	AssumeYes        Source
-	Serve            ServeSourceInfo
-}
+// SourceKey identifies a config field's file and environment source metadata.
+type SourceKey string
 
-// ServeSourceInfo describes config file and environment sources for serve settings.
-type ServeSourceInfo struct {
-	Host          Source
-	Port          Source
-	AccessLogPath Source
-	Quiet         Source
-}
+const (
+	// SourceDatabasePath identifies the database path config source.
+	SourceDatabasePath SourceKey = "db"
+	// SourceAccountingSchema identifies the accounting schema config source.
+	SourceAccountingSchema SourceKey = "schema"
+	// SourceAssumeYes identifies the assume-yes command config source.
+	SourceAssumeYes SourceKey = "yes"
+	// SourceServeHost identifies the REST listener host config source.
+	SourceServeHost SourceKey = "serve.host"
+	// SourceServePort identifies the REST listener port config source.
+	SourceServePort SourceKey = "serve.port"
+	// SourceServeAccessLogPath identifies the REST access log path config source.
+	SourceServeAccessLogPath SourceKey = "serve.access_log"
+	// SourceServeQuiet identifies the REST listener quiet-mode config source.
+	SourceServeQuiet SourceKey = "serve.quiet"
+)
 
 type fileConfig struct {
 	DatabasePath     *string         `toml:"db" env:"MINA_DB"`
@@ -131,18 +135,16 @@ func DefaultConfig() Config {
 	}
 }
 
-// Sources returns config file and environment source metadata.
-func Sources() SourceInfo {
-	return SourceInfo{
-		DatabasePath:     sourceFor("db"),
-		AccountingSchema: sourceFor("schema"),
-		AssumeYes:        sourceFor("yes"),
-		Serve: ServeSourceInfo{
-			Host:          sourceFor("serve.host"),
-			Port:          sourceFor("serve.port"),
-			AccessLogPath: sourceFor("serve.access_log"),
-			Quiet:         sourceFor("serve.quiet"),
-		},
+// Sources returns config file and environment source metadata by config source key.
+func Sources() map[SourceKey]Source {
+	return map[SourceKey]Source{
+		SourceDatabasePath:       sourceFor(SourceDatabasePath),
+		SourceAccountingSchema:   sourceFor(SourceAccountingSchema),
+		SourceAssumeYes:          sourceFor(SourceAssumeYes),
+		SourceServeHost:          sourceFor(SourceServeHost),
+		SourceServePort:          sourceFor(SourceServePort),
+		SourceServeAccessLogPath: sourceFor(SourceServeAccessLogPath),
+		SourceServeQuiet:         sourceFor(SourceServeQuiet),
 	}
 }
 
@@ -307,12 +309,12 @@ func (f configField) configPath() string {
 	return f.table + "." + f.key
 }
 
-func sourceFor(configPath string) Source {
+func sourceFor(configPath SourceKey) Source {
 	var source Source
 	_ = walkConfigFields(fileConfig{}, func(field configField) error {
-		if field.configPath() == configPath {
+		if field.configPath() == string(configPath) {
 			source = Source{
-				ConfigPath: configPath,
+				ConfigPath: string(configPath),
 				EnvVar:     field.env,
 			}
 		}
