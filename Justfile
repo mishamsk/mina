@@ -71,8 +71,31 @@ dev mode="" extra="": build
     stderr_log="$dev_dir/stderr.log"
     access_log="$dev_dir/access.log"
     db_path="$dev_dir/mina.db"
+    default_port=8080
     persist=false
     demo=false
+
+    port_in_use() {
+        (exec 3<>"/dev/tcp/127.0.0.1/$1") >/dev/null 2>&1
+    }
+
+    select_dev_port() {
+        if ! port_in_use "$default_port"; then
+            echo "$default_port"
+            return
+        fi
+
+        for port in $(seq 49152 65535); do
+            if ! port_in_use "$port"; then
+                echo "$port"
+                return
+            fi
+        done
+
+        echo "no free high port found" >&2
+        exit 1
+    }
+
     for arg in {{ quote(mode) }} {{ quote(extra) }}; do
         case "$arg" in
             "")
@@ -100,9 +123,10 @@ dev mode="" extra="": build
         rm -f "$pid_file"
     fi
 
+    port="$(select_dev_port)"
     : > "$stdout_log"
     : > "$stderr_log"
-    serve_args=(serve --host 127.0.0.1 --port 8080 --access-log "$access_log")
+    serve_args=(serve --host 127.0.0.1 --port "$port" --access-log "$access_log")
     if [ "$persist" = true ]; then
         serve_args+=(--db "$db_path" --yes)
     fi
@@ -115,8 +139,11 @@ dev mode="" extra="": build
     disown "$pid"
 
     for _ in {1..50}; do
-        if grep -q 'listening http://127.0.0.1:8080' "$stdout_log"; then
-            echo "mina listening at http://127.0.0.1:8080 with pid $pid"
+        if grep -q "listening http://127.0.0.1:$port" "$stdout_log"; then
+            echo "mina listening at http://127.0.0.1:$port with pid $pid"
+            if [ "$port" != "$default_port" ]; then
+                echo "default port $default_port was busy; selected high port $port"
+            fi
             echo "logs: $stdout_log $stderr_log $access_log"
             exit 0
         fi
@@ -138,8 +165,30 @@ dev-kill:
     set -euo pipefail
 
     pid_file="build/dev/mina.pid"
+
+    print_detected_mina_serve() {
+        detected_pids="$(pgrep -f '(^|.*/)mina serve([[:space:]]|$)' || true)"
+        if [ -z "$detected_pids" ]; then
+            echo "no mina serve processes detected"
+            return
+        fi
+
+        echo "detected mina serve processes:"
+        while IFS= read -r detected_pid; do
+            command_line="$(ps -p "$detected_pid" -o command= 2>/dev/null || true)"
+            listen_addrs="$(lsof -nP -a -p "$detected_pid" -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR > 1 { print $9 }' | paste -sd, - || true)"
+            if [ -n "$listen_addrs" ]; then
+                echo "  pid $detected_pid listening $listen_addrs: $command_line"
+            else
+                echo "  pid $detected_pid: $command_line"
+            fi
+        done <<< "$detected_pids"
+        echo "to stop all detected mina serve processes: kill -TERM $(echo "$detected_pids" | paste -sd' ' -)"
+    }
+
     if [ ! -f "$pid_file" ]; then
         echo "no background mina pid file found"
+        print_detected_mina_serve
         exit 0
     fi
 
@@ -147,12 +196,14 @@ dev-kill:
     if [ -z "$pid" ]; then
         rm -f "$pid_file"
         echo "removed empty mina pid file"
+        print_detected_mina_serve
         exit 0
     fi
 
     if ! kill -0 "$pid" 2>/dev/null; then
         rm -f "$pid_file"
         echo "removed stale mina pid file for pid $pid"
+        print_detected_mina_serve
         exit 0
     fi
 
