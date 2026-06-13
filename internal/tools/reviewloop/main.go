@@ -17,7 +17,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -738,7 +737,7 @@ func runCodex(root string, label string, prompt string) (string, error) {
 	)
 	cmd.Stdin = strings.NewReader(prompt)
 	cmd.Env = append(os.Environ(), reviewLoopActiveEnvName+"=1")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	configureProcessGroup(cmd)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -807,7 +806,7 @@ func runCodex(root string, label string, prompt string) (string, error) {
 			}
 			writeProgressLine("%s", timeoutErr.Error())
 			if cmd.Process != nil {
-				killProcessGroup(cmd.Process)
+				terminateProcess(cmd.Process)
 			}
 		}
 	}
@@ -827,12 +826,6 @@ func runCodex(root string, label string, prompt string) (string, error) {
 		return "", fmt.Errorf("read %s output file: %w", label, err)
 	}
 	return strings.TrimRight(string(message), "\n"), nil
-}
-
-func killProcessGroup(process *os.Process) {
-	if err := syscall.Kill(-process.Pid, syscall.SIGKILL); err != nil {
-		_ = process.Kill()
-	}
 }
 
 func readCodexEvents(stdout io.Reader, stdoutCapture *bytes.Buffer, events chan<- codexEvent) error {
