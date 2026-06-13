@@ -7,6 +7,7 @@ Focus on:
 - Errors that would make common repository workflows fail, skip required checks, or run the wrong scope.
 - Dangerous destructive commands that could delete user work, reset state, or modify data outside the intended workspace.
 - Long-running processes on common development paths, such as per-commit hooks, that would slow normal progress.
+- Developer tooling only needs to work on macOS and Linux. Do not report Windows compatibility issues or request Windows-specific support.
 
 Be intentionally lenient. Do not apply app/API review standards to developer workflow files, and avoid style opinions unless they create real breakage.
 
