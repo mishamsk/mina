@@ -19,7 +19,7 @@
   - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
   - [ ] <optional: Required docs updated>
-  - [ ] <optional. only add if it is a big independent commit: commit and run `just review-loop "<short summary of the task/goal of the commit>" <current commit sha>`>
+  - [ ] <optional. only add if it is a big independent commit: commit and run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
 
 ### Commit 2: [commit desc]
 - [ ] Task 1
@@ -31,7 +31,7 @@
   - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
   - [ ] <optional: Required docs updated>
-  - [ ] <optional. only add if it is a big independent commit: commit and run `just review-loop "<short summary of the task/goal of the commit>" <current commit sha>`>
+  - [ ] <optional. only add if it is a big independent commit: commit and run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
 
 ## <Optional: Deferred Verification>
 
@@ -45,4 +45,4 @@
 - [ ] `just test` passes
 - [ ] `just test-integration` passes
 - [ ] `just pre-commit` passes
-- [ ] `just review-loop "<short summary of the task/goal of the change>"`
+- [ ] `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>"`

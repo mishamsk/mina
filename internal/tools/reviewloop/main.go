@@ -29,13 +29,32 @@ var (
 	placeholderRE             = regexp.MustCompile(`\{\{[^{}]+\}\}`)
 )
 
+var (
+	appCodeReviewers = []string{
+		"compatibility",
+		"implementation",
+		"quality",
+		"simplification",
+		"testing",
+	}
+	stableReviewerOrder = []string{
+		"compatibility",
+		"implementation",
+		"quality",
+		"simplification",
+		"testing",
+		"docs",
+		"dev-tooling",
+	}
+)
+
 type config struct {
 	root               string
 	goal               string
 	previousReviewFile string
 	reviewTarget       reviewTarget
 	templates          reviewTemplates
-	reviewers          []reviewerPrompt
+	reviewerPrompts    map[string]reviewerPrompt
 }
 
 type reviewTarget struct {
@@ -82,7 +101,22 @@ func run(args []string) (int, error) {
 
 	for iteration := 1; iteration <= maxIterations; iteration++ {
 		reviewScope := cfg.reviewTarget.scope(iteration)
-		rawReviews, err := runReviewers(cfg, reviewScope)
+		changedFiles, err := cfg.reviewTarget.changedFiles(cfg.root, iteration)
+		if err != nil {
+			return 2, err
+		}
+		reviewerNames := selectReviewerNames(changedFiles)
+		if len(reviewerNames) == 0 {
+			fmt.Printf("review loop successful: no review findings; no reviewers selected for changed files in %s\n", cfg.reviewTarget.diffRange(iteration))
+			return 0, nil
+		}
+		reviewers, err := cfg.selectedReviewers(reviewerNames)
+		if err != nil {
+			return 2, err
+		}
+		fmt.Fprintf(os.Stderr, "selected reviewers: %s\n", strings.Join(reviewerNames, ", "))
+
+		rawReviews, err := runReviewers(cfg, reviewScope, reviewers)
 		if err != nil {
 			return 2, err
 		}
@@ -184,7 +218,7 @@ func loadConfig(args []string) (config, error) {
 	if err != nil {
 		return config{}, err
 	}
-	reviewers, err := loadReviewerPrompts(root)
+	reviewerPrompts, err := loadReviewerPrompts(root)
 	if err != nil {
 		return config{}, err
 	}
@@ -195,7 +229,7 @@ func loadConfig(args []string) (config, error) {
 		previousReviewFile: previousReviewFile,
 		reviewTarget:       target,
 		templates:          templates,
-		reviewers:          reviewers,
+		reviewerPrompts:    reviewerPrompts,
 	}, nil
 }
 
@@ -226,6 +260,61 @@ func (target reviewTarget) scope(iteration int) string {
 		fmt.Sprintf("2. Inspect focused diffs with `git diff %s~1 HEAD -- <path>`.", target.commitSHA),
 		"Do not review only the original commit sha, merge base with `main`, or unrelated history.",
 	}, "\n")
+}
+
+func (target reviewTarget) diffRange(iteration int) string {
+	if target.commitSHA == "" {
+		return "`git diff $(git merge-base HEAD main) HEAD`"
+	}
+	if iteration == 1 {
+		return fmt.Sprintf("`git diff %s~1 %s`", target.commitSHA, target.commitSHA)
+	}
+	return fmt.Sprintf("`git diff %s~1 HEAD`", target.commitSHA)
+}
+
+func (target reviewTarget) changedFiles(root string, iteration int) ([]string, error) {
+	var args []string
+	if target.commitSHA == "" {
+		base, err := gitOutput(root, "merge-base", "HEAD", "main")
+		if err != nil {
+			return nil, fmt.Errorf("resolve review diff base: %w", err)
+		}
+		args = []string{"diff", "--name-only", base, "HEAD"}
+	} else if iteration == 1 {
+		args = []string{"diff", "--name-only", target.commitSHA + "~1", target.commitSHA}
+	} else {
+		args = []string{"diff", "--name-only", target.commitSHA + "~1", "HEAD"}
+	}
+
+	output, err := gitOutput(root, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list changed files for %s: %w", target.diffRange(iteration), err)
+	}
+	return nonEmptyLines(output), nil
+}
+
+func gitOutput(root string, args ...string) (string, error) {
+	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func nonEmptyLines(output string) []string {
+	if output == "" {
+		return nil
+	}
+	lines := strings.Split(output, "\n")
+	values := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			values = append(values, line)
+		}
+	}
+	return values
 }
 
 func repoRoot() (string, error) {
@@ -356,7 +445,7 @@ func readTemplate(path string) (string, error) {
 	return string(contents), nil
 }
 
-func loadReviewerPrompts(root string) ([]reviewerPrompt, error) {
+func loadReviewerPrompts(root string) (map[string]reviewerPrompt, error) {
 	pattern := filepath.Join(root, "docs", "agents", "review", "reviewer-prompts", "*.md")
 	paths, err := filepath.Glob(pattern)
 	if err != nil {
@@ -367,18 +456,104 @@ func loadReviewerPrompts(root string) ([]reviewerPrompt, error) {
 		return nil, fmt.Errorf("no reviewer prompts found for %s", pattern)
 	}
 
-	reviewers := make([]reviewerPrompt, 0, len(paths))
+	reviewers := make(map[string]reviewerPrompt, len(paths))
 	for _, path := range paths {
 		contents, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", path, err)
 		}
-		reviewers = append(reviewers, reviewerPrompt{
-			name:  strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
+		name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		reviewers[name] = reviewerPrompt{
+			name:  name,
 			focus: string(contents),
-		})
+		}
 	}
 	return reviewers, nil
+}
+
+func (cfg config) selectedReviewers(names []string) ([]reviewerPrompt, error) {
+	reviewers := make([]reviewerPrompt, 0, len(names))
+	for _, name := range names {
+		reviewer, ok := cfg.reviewerPrompts[name]
+		if !ok {
+			return nil, fmt.Errorf("reviewer prompt %q is selected but missing", name)
+		}
+		reviewers = append(reviewers, reviewer)
+	}
+	return reviewers, nil
+}
+
+func selectReviewerNames(paths []string) []string {
+	selected := map[string]bool{}
+	for _, path := range paths {
+		selectReviewersForPath(selected, filepath.ToSlash(path))
+	}
+
+	var names []string
+	for _, name := range stableReviewerOrder {
+		if selected[name] {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func selectReviewersForPath(selected map[string]bool, path string) {
+	switch {
+	case path == "", isGeneratedOpenAPIOutput(path), isDocsAgentPath(path):
+		return
+	case isDevToolingPath(path):
+		selected["dev-tooling"] = true
+	case strings.EqualFold(filepath.Ext(path), ".md"):
+		selected["docs"] = true
+	case isAppCodePath(path):
+		for _, name := range appCodeReviewers {
+			selected[name] = true
+		}
+	}
+}
+
+func isDocsAgentPath(path string) bool {
+	return path == "docs/agents" || strings.HasPrefix(path, "docs/agents/")
+}
+
+func isDevToolingPath(path string) bool {
+	switch path {
+	case "Justfile", ".pre-commit-config.yaml", ".golangci.yml", ".kata.toml", "mise.toml":
+		return true
+	}
+	return strings.HasPrefix(path, ".codex/") || strings.HasPrefix(path, "internal/tools/")
+}
+
+func isGeneratedOpenAPIOutput(path string) bool {
+	switch path {
+	case "internal/httpapi/openapi/openapi.gen.go", "internal/httpclient/openapi.gen.go":
+		return true
+	default:
+		return false
+	}
+}
+
+func isAppCodePath(path string) bool {
+	switch path {
+	case "api/openapi.yaml", "api/oapi-codegen.yaml", "api/oapi-codegen-httpclient.yaml", "go.mod", "go.sum":
+		return true
+	}
+	appPrefixes := []string{
+		"cmd/",
+		"internal/apptest/",
+		"internal/httpapi/",
+		"internal/httpclient/",
+		"internal/runtime/",
+		"internal/services/",
+		"internal/store/",
+	}
+	for _, prefix := range appPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (cfg config) placeholderValues(overrides map[string]string) map[string]string {
@@ -432,12 +607,12 @@ func unique(values []string) []string {
 	return result
 }
 
-func runReviewers(cfg config, reviewScope string) (string, error) {
-	results := make([]reviewerResult, len(cfg.reviewers))
+func runReviewers(cfg config, reviewScope string, reviewers []reviewerPrompt) (string, error) {
+	results := make([]reviewerResult, len(reviewers))
 
 	var progressMu sync.Mutex
 	var wg sync.WaitGroup
-	for i, reviewer := range cfg.reviewers {
+	for i, reviewer := range reviewers {
 		wg.Go(func() {
 
 			prompt, err := interpolate(cfg.templates.reviewer, cfg.placeholderValues(map[string]string{
