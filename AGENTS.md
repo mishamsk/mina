@@ -39,4 +39,5 @@ For every commit:
 
 At the end of your work, commit and run review loop once unless you are a reviewer or fixing review findings:
 - just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>"
+- Review-loop can take about 10 minutes; use long command wait/poll timeouts and do not kill it while heartbeat/progress lines continue.
 - If review left unresolved comments, address them yourself and do not re-run the review again

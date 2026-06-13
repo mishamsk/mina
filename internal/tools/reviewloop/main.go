@@ -2,9 +2,12 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -14,12 +17,16 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
 	modulePath              = "github.com/mishamsk/mina"
 	maxIterations           = 3
 	reviewLoopActiveEnvName = "MINA_REVIEW_LOOP_ACTIVE"
+	codexHeartbeatInterval  = time.Minute
+	codexTurnTimeout        = 30 * time.Minute
+	codexNoEventTimeout     = 30 * time.Minute
 )
 
 var (
@@ -28,6 +35,8 @@ var (
 	markdownH2RE              = regexp.MustCompile(`(?m)^##\s+`)
 	placeholderRE             = regexp.MustCompile(`\{\{[^{}]+\}\}`)
 )
+
+var progressOutputMu sync.Mutex
 
 var (
 	appCodeReviewers = []string{
@@ -80,6 +89,38 @@ type reviewerResult struct {
 	err     error
 }
 
+type codexEvent struct {
+	Type     string          `json:"type"`
+	ThreadID string          `json:"thread_id"`
+	Item     codexEventItem  `json:"item"`
+	Message  string          `json:"message"`
+	Error    json.RawMessage `json:"error"`
+}
+
+type codexEventItem struct {
+	Type string `json:"type"`
+}
+
+type codexProgress struct {
+	label              string
+	startedAt          time.Time
+	lastEventAt        time.Time
+	currentTurnStarted time.Time
+	threadID           string
+	activeTurn         bool
+	turns              int
+	actions            codexActionCounters
+	errors             []string
+}
+
+type codexActionCounters struct {
+	commands int
+	mcp      int
+	web      int
+	messages int
+	other    int
+}
+
 func main() {
 	code, err := run(os.Args[1:])
 	if err != nil {
@@ -117,7 +158,7 @@ func run(args []string) (int, error) {
 		if err != nil {
 			return 2, err
 		}
-		fmt.Fprintf(os.Stderr, "selected reviewers: %s\n", strings.Join(reviewerNames, ", "))
+		writeProgressLine("selected reviewers: %s", strings.Join(reviewerNames, ", "))
 
 		rawReviews, err := runReviewers(cfg, reviewScope, reviewers)
 		if err != nil {
@@ -135,7 +176,7 @@ func run(args []string) (int, error) {
 		if err != nil {
 			return 2, err
 		}
-		fmt.Fprintln(os.Stderr, "aggregator finished")
+		writeProgressLine("aggregator finished")
 
 		if err := appendReviewHistory(cfg.previousReviewFile, iteration, aggregateReview); err != nil {
 			return 2, err
@@ -160,7 +201,7 @@ func run(args []string) (int, error) {
 		if _, err := runCodex(cfg.root, "fixer", fixPrompt); err != nil {
 			return 2, fmt.Errorf("%w; history: %s", err, cfg.previousReviewFile)
 		}
-		fmt.Fprintln(os.Stderr, "fixer finished")
+		writeProgressLine("fixer finished")
 	}
 
 	return 2, errors.New("unreachable review loop state")
@@ -624,7 +665,6 @@ func unique(values []string) []string {
 func runReviewers(cfg config, reviewScope string, reviewers []reviewerPrompt) (string, error) {
 	results := make([]reviewerResult, len(reviewers))
 
-	var progressMu sync.Mutex
 	var wg sync.WaitGroup
 	for i, reviewer := range reviewers {
 		wg.Go(func() {
@@ -644,9 +684,7 @@ func runReviewers(cfg config, reviewScope string, reviewers []reviewerPrompt) (s
 				results[i] = reviewerResult{name: reviewer.name, err: err}
 				return
 			}
-			progressMu.Lock()
-			fmt.Fprintf(os.Stderr, "reviewer %s finished\n", reviewer.name)
-			progressMu.Unlock()
+			writeProgressLine("reviewer %s finished", reviewer.name)
 			results[i] = reviewerResult{name: reviewer.name, message: message}
 		})
 	}
@@ -691,6 +729,7 @@ func runCodex(root string, label string, prompt string) (string, error) {
 	cmd := exec.Command(
 		"codex",
 		"exec",
+		"--json",
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--cd", root,
 		"--output-last-message", outputPath,
@@ -701,11 +740,84 @@ func runCodex(root string, label string, prompt string) (string, error) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("create %s stdout pipe: %w", label, err)
+	}
+
+	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("%s failed: %w%s", label, err, capturedOutput(stdout.String(), stderr.String()))
+	}
+	writeProgressLine("%s started", label)
+
+	eventCh := make(chan codexEvent)
+	readErrCh := make(chan error, 1)
+	go func() {
+		readErrCh <- readCodexEvents(stdoutPipe, &stdout, eventCh)
+	}()
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- cmd.Wait()
+	}()
+
+	now := time.Now()
+	progress := codexProgress{
+		label:       label,
+		startedAt:   now,
+		lastEventAt: now,
+	}
+	heartbeat := time.NewTicker(codexHeartbeatInterval)
+	defer heartbeat.Stop()
+	timeoutCheck := time.NewTicker(time.Second)
+	defer timeoutCheck.Stop()
+
+	var waitErr error
+	var readErr error
+	var timeoutErr error
+	processDone := false
+	eventsDone := false
+	for !processDone || !eventsDone {
+		select {
+		case event, ok := <-eventCh:
+			if !ok {
+				eventCh = nil
+				eventsDone = true
+				readErr = <-readErrCh
+				continue
+			}
+			progress.observe(event, time.Now())
+		case err := <-waitCh:
+			waitCh = nil
+			processDone = true
+			waitErr = err
+		case <-heartbeat.C:
+			writeProgressLine(progress.heartbeatLine(time.Now()))
+		case <-timeoutCheck.C:
+			if processDone || timeoutErr != nil {
+				continue
+			}
+			timeoutErr = progress.timeoutError(time.Now())
+			if timeoutErr == nil {
+				continue
+			}
+			writeProgressLine("%s", timeoutErr.Error())
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+		}
+	}
+
+	if timeoutErr != nil {
+		return "", fmt.Errorf("%w%s", timeoutErr, capturedOutput(stdout.String(), stderr.String()))
+	}
+	if readErr != nil {
+		return "", fmt.Errorf("%s failed: read JSON events: %w%s", label, readErr, capturedOutput(stdout.String(), stderr.String()))
+	}
+	if waitErr != nil {
+		return "", fmt.Errorf("%s failed: %w%s%s", label, waitErr, observedCodexErrors(progress.errors), capturedOutput(stdout.String(), stderr.String()))
 	}
 
 	message, err := os.ReadFile(outputPath)
@@ -713,6 +825,191 @@ func runCodex(root string, label string, prompt string) (string, error) {
 		return "", fmt.Errorf("read %s output file: %w", label, err)
 	}
 	return strings.TrimRight(string(message), "\n"), nil
+}
+
+func readCodexEvents(stdout io.Reader, stdoutCapture *bytes.Buffer, events chan<- codexEvent) error {
+	defer close(events)
+
+	reader := bufio.NewReader(stdout)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if len(line) > 0 {
+			stdoutCapture.Write(line)
+			event, parseErr := parseCodexEvent(line)
+			if parseErr == nil {
+				events <- event
+			}
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+func parseCodexEvent(line []byte) (codexEvent, error) {
+	line = bytes.TrimSpace(line)
+	if len(line) == 0 {
+		return codexEvent{}, errors.New("empty event")
+	}
+
+	var event codexEvent
+	if err := json.Unmarshal(line, &event); err != nil {
+		return codexEvent{}, err
+	}
+	if event.Type == "" {
+		return codexEvent{}, errors.New("missing event type")
+	}
+	return event, nil
+}
+
+func (progress *codexProgress) observe(event codexEvent, now time.Time) {
+	progress.lastEventAt = now
+
+	switch event.Type {
+	case "thread.started":
+		if event.ThreadID != "" {
+			progress.threadID = event.ThreadID
+		}
+	case "turn.started":
+		progress.turns++
+		progress.activeTurn = true
+		progress.currentTurnStarted = now
+	case "turn.completed", "turn.failed":
+		progress.activeTurn = false
+		progress.currentTurnStarted = time.Time{}
+	case "item.completed":
+		progress.actions.increment(event.Item.Type)
+	case "error":
+		progress.errors = append(progress.errors, codexEventErrorText(event))
+	}
+}
+
+func (progress codexProgress) heartbeatLine(now time.Time) string {
+	return fmt.Sprintf(
+		"%s still running; elapsed=%s current_turn=%s actions=%d (%s) timeout=30m",
+		progress.label,
+		durationString(now.Sub(progress.startedAt)),
+		progress.currentTurnAge(now),
+		progress.totalActions(),
+		progress.counterSummary(),
+	)
+}
+
+func (progress codexProgress) timeoutError(now time.Time) error {
+	if progress.activeTurn {
+		currentTurnAge := now.Sub(progress.currentTurnStarted)
+		if currentTurnAge > codexTurnTimeout {
+			return fmt.Errorf(
+				"%s timed out; current turn exceeded 30m; elapsed=%s current_turn=%s actions=%d (%s)",
+				progress.label,
+				durationString(now.Sub(progress.startedAt)),
+				durationString(currentTurnAge),
+				progress.totalActions(),
+				progress.counterSummary(),
+			)
+		}
+	}
+
+	timeSinceEvent := now.Sub(progress.lastEventAt)
+	if timeSinceEvent > codexNoEventTimeout {
+		return fmt.Errorf(
+			"%s timed out; no JSON event observed for 30m; elapsed=%s current_turn=%s actions=%d (%s)",
+			progress.label,
+			durationString(now.Sub(progress.startedAt)),
+			progress.currentTurnAge(now),
+			progress.totalActions(),
+			progress.counterSummary(),
+		)
+	}
+	return nil
+}
+
+func (progress codexProgress) currentTurnAge(now time.Time) string {
+	if !progress.activeTurn {
+		return "none"
+	}
+	return durationString(now.Sub(progress.currentTurnStarted))
+}
+
+func (progress codexProgress) totalActions() int {
+	return progress.turns + progress.actions.total()
+}
+
+func (progress codexProgress) counterSummary() string {
+	return fmt.Sprintf(
+		"turns=%d commands=%d mcp=%d web=%d messages=%d other=%d",
+		progress.turns,
+		progress.actions.commands,
+		progress.actions.mcp,
+		progress.actions.web,
+		progress.actions.messages,
+		progress.actions.other,
+	)
+}
+
+func (counters *codexActionCounters) increment(itemType string) {
+	itemType = strings.ToLower(itemType)
+	switch {
+	case strings.Contains(itemType, "command") || strings.Contains(itemType, "exec"):
+		counters.commands++
+	case strings.Contains(itemType, "mcp"):
+		counters.mcp++
+	case strings.Contains(itemType, "web") && strings.Contains(itemType, "search"):
+		counters.web++
+	case strings.Contains(itemType, "message"):
+		counters.messages++
+	default:
+		counters.other++
+	}
+}
+
+func (counters codexActionCounters) total() int {
+	return counters.commands + counters.mcp + counters.web + counters.messages + counters.other
+}
+
+func codexEventErrorText(event codexEvent) string {
+	if event.Message != "" {
+		return event.Message
+	}
+	if len(event.Error) == 0 {
+		return "unknown Codex error"
+	}
+
+	var message string
+	if err := json.Unmarshal(event.Error, &message); err == nil && message != "" {
+		return message
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(event.Error, &body); err == nil {
+		if message, ok := body["message"].(string); ok && message != "" {
+			return message
+		}
+	}
+	return string(event.Error)
+}
+
+func observedCodexErrors(errors []string) string {
+	if len(errors) == 0 {
+		return ""
+	}
+	return "\nobserved Codex errors:\n" + limitOutput(strings.Join(errors, "\n"))
+}
+
+func durationString(duration time.Duration) string {
+	if duration < 0 {
+		duration = 0
+	}
+	return duration.Round(time.Second).String()
+}
+
+func writeProgressLine(format string, args ...any) {
+	progressOutputMu.Lock()
+	defer progressOutputMu.Unlock()
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
 func fileSafeName(value string) string {
