@@ -7,6 +7,7 @@
 ## Tasks
 
 > Keep commits small, self-contained, and individually verifiable when practical.
+> Run review-loop only after committing.
 > Do not include this note in the resulting plan.
 
 ### Commit 1: [commit desc]
@@ -19,7 +20,8 @@
   - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
   - [ ] <optional: Required docs updated>
-  - [ ] <optional. only add if it is a big independent commit: commit and run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
+  - [ ] Commit changes
+  - [ ] <optional. only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
 
 ### Commit 2: [commit desc]
 - [ ] Task 1
@@ -31,7 +33,8 @@
   - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
   - [ ] <optional: Required docs updated>
-  - [ ] <optional. only add if it is a big independent commit: commit and run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
+  - [ ] Commit changes
+  - [ ] <optional. only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
 
 ## <Optional: Deferred Verification>
 
@@ -45,4 +48,5 @@
 - [ ] `just test` passes
 - [ ] `just test-integration` passes
 - [ ] `just pre-commit` passes
-- [ ] `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>"`
+- [ ] Commit final changes
+- [ ] Run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>"`

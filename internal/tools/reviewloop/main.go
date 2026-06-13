@@ -98,6 +98,9 @@ func run(args []string) (int, error) {
 	if err != nil {
 		return 2, err
 	}
+	if err := requireCleanWorktree(cfg.root); err != nil {
+		return 1, err
+	}
 
 	for iteration := 1; iteration <= maxIterations; iteration++ {
 		reviewScope := cfg.reviewTarget.scope(iteration)
@@ -300,6 +303,17 @@ func gitOutput(root string, args ...string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func requireCleanWorktree(root string) error {
+	output, err := gitOutput(root, "status", "--porcelain")
+	if err != nil {
+		return fmt.Errorf("check clean worktree: %w", err)
+	}
+	if output != "" {
+		return errors.New("worktree isn't clean; commit all your changes first and re-run review again")
+	}
+	return nil
 }
 
 func nonEmptyLines(output string) []string {
