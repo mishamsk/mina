@@ -2,7 +2,7 @@
 
 ## Purpose
 
-- Owns process-local configuration and manual app composition.
+- Owns process-local runtime options and manual app composition.
 - Applies database open/create/migrate policy before the app is served.
 
 ## Implicit Contracts
@@ -12,9 +12,9 @@
 - Startup demo seeding runs after app composition and before HTTP listen.
 - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Runtime decides database lifecycle policy, then delegates DuckDB mechanics to store open helpers.
-- Runtime config owns accounting database and schema defaults.
-- Runtime consumes source-loaded automatic exchange-rate loading settings from `internal/runtime/config`.
-- Runtime consumes the cache directory resolved by `internal/runtime/config`.
+- Runtime derives accounting database and schema defaults from `appconfig.Config`.
+- Runtime consumes source-loaded app settings from `internal/appconfig`.
+- Runtime consumes the cache directory resolved by `internal/appconfig`.
 - Process execution is opt-in per runtime mode; `serve` enables it and utility flows leave it disabled.
 - Runtime dependencies carry only true side-effect seams such as clocks and network provider factories.
 - Runtime operations start after app composition, publish operation status, and do not block app creation.
@@ -28,8 +28,8 @@
 
 ## Boundaries
 
-- Owns: process configuration, database lifecycle policy, HTTP adapter configuration, app composition, background operation lifecycle, and mode-ready runtime values.
-- Does not own: SQL statements, domain validation, REST DTO mapping, or CLI command help.
+- Owns: runtime options, database lifecycle policy, HTTP adapter configuration, app composition, background operation lifecycle, and mode-ready runtime values.
+- Does not own: source-loaded app config, CLI flags, SQL statements, domain validation, REST DTO mapping, or CLI command help.
 
 ## Testing Notes
 

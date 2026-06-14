@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/background"
 	"github.com/mishamsk/mina/internal/httpapi"
 	"github.com/mishamsk/mina/internal/providers/exchangerates/frankfurter"
@@ -45,23 +46,24 @@ type appServices struct {
 }
 
 // New opens the configured database, applies migrations, and wires the REST handler.
-func New(ctx context.Context, cfg Config) (*App, error) {
-	return newApp(ctx, cfg, store.OpenAccounting)
+func New(ctx context.Context, cfg appconfig.Config, opts Options) (*App, error) {
+	return newApp(ctx, cfg, opts, store.OpenAccounting)
 }
 
 // NewWithProcessDB applies migrations using an existing DuckDB process handle and wires the REST handler.
-func NewWithProcessDB(ctx context.Context, db *sql.DB, cfg Config) (*App, error) {
-	return newApp(ctx, cfg, func(ctx context.Context, request store.AccountingOpenRequest) (*store.AccountingDB, error) {
+func NewWithProcessDB(ctx context.Context, db *sql.DB, cfg appconfig.Config, opts Options) (*App, error) {
+	return newApp(ctx, cfg, opts, func(ctx context.Context, request store.AccountingOpenRequest) (*store.AccountingDB, error) {
 		return store.OpenAccountingWithProcessDB(ctx, db, request)
 	})
 }
 
 func newApp(
 	ctx context.Context,
-	cfg Config,
+	cfg appconfig.Config,
+	opts Options,
 	openAccounting func(context.Context, store.AccountingOpenRequest) (*store.AccountingDB, error),
 ) (*App, error) {
-	if err := cfg.Validate(); err != nil {
+	if err := Validate(cfg, opts.Operations.Enabled); err != nil {
 		return nil, err
 	}
 	if cfg.DatabasePath != "" {
@@ -70,7 +72,7 @@ func newApp(
 		}
 	}
 
-	accounting, err := openAccounting(ctx, cfg.AccountingOpenRequest())
+	accounting, err := openAccounting(ctx, AccountingOpenRequest(cfg))
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +81,7 @@ func newApp(
 		return nil, closeAccountingAfterError(accounting, fmt.Errorf("migrate database: %w", err))
 	}
 
-	app, err := NewWithAccountingDB(ctx, accounting, cfg)
+	app, err := NewWithAccountingDB(ctx, accounting, cfg, opts)
 	if err != nil {
 		return nil, closeAccountingAfterError(accounting, err)
 	}
@@ -88,8 +90,8 @@ func newApp(
 }
 
 // HasPendingMigrations reports whether the configured accounting database would be migrated at startup.
-func HasPendingMigrations(ctx context.Context, cfg Config) (bool, error) {
-	if err := cfg.Validate(); err != nil {
+func HasPendingMigrations(ctx context.Context, cfg appconfig.Config, operationsEnabled bool) (bool, error) {
+	if err := Validate(cfg, operationsEnabled); err != nil {
 		return false, err
 	}
 	if cfg.DatabasePath != "" {
@@ -102,7 +104,7 @@ func HasPendingMigrations(ctx context.Context, cfg Config) (bool, error) {
 		}
 	}
 
-	accounting, err := store.OpenAccounting(ctx, cfg.AccountingOpenRequest())
+	accounting, err := store.OpenAccounting(ctx, AccountingOpenRequest(cfg))
 	if err != nil {
 		return false, err
 	}
@@ -114,8 +116,8 @@ func HasPendingMigrations(ctx context.Context, cfg Config) (bool, error) {
 }
 
 // AccountingSchemaExists reports whether the configured file-backed accounting schema exists.
-func AccountingSchemaExists(ctx context.Context, cfg Config) (bool, error) {
-	if err := cfg.Validate(); err != nil {
+func AccountingSchemaExists(ctx context.Context, cfg appconfig.Config, operationsEnabled bool) (bool, error) {
+	if err := Validate(cfg, operationsEnabled); err != nil {
 		return false, err
 	}
 	if cfg.DatabasePath == "" {
@@ -129,7 +131,7 @@ func AccountingSchemaExists(ctx context.Context, cfg Config) (bool, error) {
 		return false, nil
 	}
 
-	accounting, err := store.OpenAccounting(ctx, cfg.AccountingOpenRequest())
+	accounting, err := store.OpenAccounting(ctx, AccountingOpenRequest(cfg))
 	if err != nil {
 		return false, err
 	}
@@ -141,22 +143,22 @@ func AccountingSchemaExists(ctx context.Context, cfg Config) (bool, error) {
 }
 
 // NewWithAccountingDB wires services and the REST handler around an already-opened migrated accounting database.
-func NewWithAccountingDB(ctx context.Context, accounting *store.AccountingDB, cfg Config) (*App, error) {
+func NewWithAccountingDB(ctx context.Context, accounting *store.AccountingDB, cfg appconfig.Config, opts Options) (*App, error) {
 	operationRepo, err := store.NewOperationRunRepository(ctx, accounting)
 	if err != nil {
 		return nil, err
 	}
-	services, err := newAppServices(accounting, cfg, operationRepo)
+	services, err := newAppServices(accounting, cfg, opts, operationRepo)
 	if err != nil {
 		return nil, err
 	}
-	backgroundRunner, err := newAppBackgroundRunner(cfg, services)
+	backgroundRunner, err := newAppBackgroundRunner(cfg, opts, services)
 	if err != nil {
 		return nil, err
 	}
 	handler := httpapi.NewWithOptions(services.Dependencies, httpapi.Options{
-		AccessLog: cfg.HTTP.AccessLog,
-		Timeout:   cfg.HTTP.Timeout,
+		AccessLog: opts.HTTP.AccessLog,
+		Timeout:   opts.HTTP.Timeout,
 	})
 
 	app := &App{
@@ -165,43 +167,43 @@ func NewWithAccountingDB(ctx context.Context, accounting *store.AccountingDB, cf
 		handler:    handler,
 		background: backgroundRunner,
 	}
-	if cfg.Operations.Enabled && !cfg.Operations.DeferStart {
+	if opts.Operations.Enabled && !opts.Operations.DeferStart {
 		app.StartOperations()
 	}
 
 	return app, nil
 }
 
-func newAppServices(accounting *store.AccountingDB, cfg Config, operationRepo operationruns.Repository) (appServices, error) {
-	services, err := newAccountingServices(accounting, cfg, operationRepo)
+func newAppServices(accounting *store.AccountingDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
+	services, err := newAccountingServices(accounting, cfg, opts, operationRepo)
 	if err != nil {
 		return appServices{}, err
 	}
-	services.Demo = newDemoService(accounting, cfg)
+	services.Demo = newDemoService(accounting, cfg, opts)
 
 	return services, nil
 }
 
-func newAccountingServices(accounting *store.AccountingDB, cfg Config, operationRepo operationruns.Repository) (appServices, error) {
+func newAccountingServices(accounting *store.AccountingDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
 	exchangeRateStore := store.NewExchangeRateStore(accounting)
-	startupProvider, err := startupExchangeRateProvider(cfg)
+	startupProvider, err := startupExchangeRateProvider(cfg, opts)
 	if err != nil {
 		return appServices{}, err
 	}
 	exchangeRateLoading := exchangerateloading.NewService(
 		exchangeRateStore,
-		exchangeRateProvider(cfg),
-		cfg.clock(),
+		exchangeRateProvider(cfg, opts),
+		opts.clock(),
 	)
 	startupExchangeRateLoading := exchangerateloading.NewService(
 		exchangeRateStore,
 		startupProvider,
-		cfg.clock(),
+		opts.clock(),
 	)
 	operationRuns := operationruns.NewService(operationruns.ExchangeRateLoadingConfig{
 		Enabled:     cfg.ExchangeRates.AutomaticLoadingEnabled,
 		ScheduleUTC: cfg.ExchangeRates.LoadScheduleUTC,
-	}, operationRepo, cfg.clock())
+	}, operationRepo, opts.clock())
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			Health:        health.NewService(store.NewHealthStore(accounting)),
@@ -219,26 +221,26 @@ func newAccountingServices(accounting *store.AccountingDB, cfg Config, operation
 	}, nil
 }
 
-func exchangeRateProvider(cfg Config) exchangerateloading.RateProvider {
-	if cfg.Dependencies.ExchangeRateProviderFactory != nil {
-		return cfg.Dependencies.ExchangeRateProviderFactory
+func exchangeRateProvider(cfg appconfig.Config, opts Options) exchangerateloading.RateProvider {
+	if opts.Dependencies.ExchangeRateProviderFactory != nil {
+		return opts.Dependencies.ExchangeRateProviderFactory
 	}
 
 	return frankfurter.NewTargetedProvider(frankfurter.Options{
-		BaseURL: cfg.ExchangeRates.Providers.Frankfurter.BaseURL,
-		Clock:   cfg.clock(),
+		BaseURL: cfg.ExchangeRates.Frankfurter.BaseURL,
+		Clock:   opts.clock(),
 	})
 }
 
-func startupExchangeRateProvider(cfg Config) (exchangerateloading.RateProvider, error) {
-	if cfg.Dependencies.StartupExchangeRateProviderFactory != nil {
-		return cfg.Dependencies.StartupExchangeRateProviderFactory, nil
+func startupExchangeRateProvider(cfg appconfig.Config, opts Options) (exchangerateloading.RateProvider, error) {
+	if opts.Dependencies.StartupExchangeRateProviderFactory != nil {
+		return opts.Dependencies.StartupExchangeRateProviderFactory, nil
 	}
-	if !cfg.Operations.Enabled || !cfg.ExchangeRates.AutomaticLoadingEnabled {
-		return exchangeRateProvider(cfg), nil
+	if !opts.Operations.Enabled || !cfg.ExchangeRates.AutomaticLoadingEnabled {
+		return exchangeRateProvider(cfg, opts), nil
 	}
 	if exchangeRateStartupProvider(cfg) == "frankfurter_api" {
-		return exchangeRateProvider(cfg), nil
+		return exchangeRateProvider(cfg, opts), nil
 	}
 	path, err := frankfurter.CachePath(cfg.CacheDir)
 	if err != nil {
@@ -260,11 +262,11 @@ func demoDependencies(s appServices) demo.Services {
 	}
 }
 
-func newDemoService(accounting *store.AccountingDB, cfg Config) *demo.Service {
+func newDemoService(accounting *store.AccountingDB, cfg appconfig.Config, opts Options) *demo.Service {
 	return demo.NewService(demo.Dependencies{
 		Atomic: func(ctx context.Context, fn func(demo.Services) error) error {
 			return accounting.WithAccountingTx(ctx, nil, func(txAccounting *store.AccountingDB) error {
-				services, err := newAccountingServices(txAccounting, cfg, nil)
+				services, err := newAccountingServices(txAccounting, cfg, opts, nil)
 				if err != nil {
 					return err
 				}
@@ -316,17 +318,17 @@ func (a *App) Close() error {
 	return a.accounting.Close()
 }
 
-func newAppBackgroundRunner(cfg Config, services appServices) (*background.Runner, error) {
-	runner := background.NewRunner(services.Operations, cfg.clock(), cfg.Operations.ErrorLog)
+func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServices) (*background.Runner, error) {
+	runner := background.NewRunner(services.Operations, opts.clock(), opts.Operations.ErrorLog)
 	op := background.Operation{
 		ID:         operationruns.ExchangeRateLoadingOperationID,
 		Key:        string(operationruns.ExchangeRateLoadingOperationID),
 		Run:        exchangeRateOperationRun(services.ExchangeRateLoading.Load),
-		StartupRun: startupExchangeRateLoad(cfg, services.StartupExchangeRateLoading),
+		StartupRun: startupExchangeRateLoad(cfg, opts, services.StartupExchangeRateLoading),
 		Timeout:    2 * time.Minute,
 		MaxRetries: 2,
 	}
-	if cfg.Operations.Enabled && cfg.ExchangeRates.AutomaticLoadingEnabled {
+	if opts.Operations.Enabled && cfg.ExchangeRates.AutomaticLoadingEnabled {
 		op.Startup = true
 		op.Schedule = cfg.ExchangeRates.LoadScheduleUTC
 	}
@@ -339,11 +341,11 @@ func newAppBackgroundRunner(cfg Config, services appServices) (*background.Runne
 	return runner, nil
 }
 
-func startupExchangeRateLoad(cfg Config, loader *exchangerateloading.Service) background.OperationFunc {
+func startupExchangeRateLoad(cfg appconfig.Config, opts Options, loader *exchangerateloading.Service) background.OperationFunc {
 	return func(ctx context.Context) error {
-		if cfg.Dependencies.StartupExchangeRateProviderFactory == nil &&
+		if opts.Dependencies.StartupExchangeRateProviderFactory == nil &&
 			exchangeRateStartupProvider(cfg) == "frankfurter_file" {
-			if err := ensureFrankfurterCache(ctx, cfg); err != nil {
+			if err := ensureFrankfurterCache(ctx, cfg, opts); err != nil {
 				return classifyExchangeRateOperationError(err)
 			}
 		}
@@ -372,22 +374,22 @@ func classifyExchangeRateOperationError(err error) error {
 	}
 }
 
-func ensureFrankfurterCache(ctx context.Context, cfg Config) error {
+func ensureFrankfurterCache(ctx context.Context, cfg appconfig.Config, opts Options) error {
 	path, err := frankfurter.CachePath(cfg.CacheDir)
 	if err != nil {
 		return err
 	}
-	from, to := frankfurter.DefaultHistoryWindow(cfg.clock())
+	from, to := frankfurter.DefaultHistoryWindow(opts.clock())
 
 	return frankfurter.PopulateCache(ctx, frankfurter.CacheOptions{
-		BaseURL: cfg.ExchangeRates.Providers.Frankfurter.BaseURL,
+		BaseURL: cfg.ExchangeRates.Frankfurter.BaseURL,
 		Path:    path,
 		From:    from,
 		To:      to,
 	})
 }
 
-func exchangeRateStartupProvider(cfg Config) string {
+func exchangeRateStartupProvider(cfg appconfig.Config) string {
 	if cfg.ExchangeRates.StartupProvider == "" {
 		return "frankfurter_file"
 	}

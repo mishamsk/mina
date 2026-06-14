@@ -21,7 +21,7 @@
 ## Boundaries
 
 - Owns: Frankfurter HTTP requests, fixed cache file name under Mina's app cache directory, cache file writes, cache file reads, response parsing, and provider-specific row mapping.
-- Does not own: runtime config source loading, cache directory discovery, SQL persistence, REST DTOs, or loader window planning.
+- Does not own: app config source loading, cache directory discovery, SQL persistence, REST DTOs, or loader window planning.
 
 ## Testing Notes
 

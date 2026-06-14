@@ -14,9 +14,9 @@ import (
 
 	_ "github.com/duckdb/duckdb-go/v2"
 
+	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/httpclient"
 	"github.com/mishamsk/mina/internal/runtime"
-	runtimeconfig "github.com/mishamsk/mina/internal/runtime/config"
 	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 )
 
@@ -70,8 +70,9 @@ func (c *FakeClock) Advance(duration time.Duration) {
 type Option func(*clientOptions)
 
 type clientOptions struct {
-	config    runtime.Config
-	processDB *ProcessDB
+	config         appconfig.Config
+	runtimeOptions runtime.Options
+	processDB      *ProcessDB
 }
 
 // ProcessDB is a reusable in-memory DuckDB process handle for app tests.
@@ -137,36 +138,36 @@ func WithProcessDB(db *ProcessDB) Option {
 // WithClock injects a runtime clock dependency.
 func WithClock(clock runtime.Clock) Option {
 	return func(opts *clientOptions) {
-		opts.config.Dependencies.Clock = clock
+		opts.runtimeOptions.Dependencies.Clock = clock
 	}
 }
 
 // WithExchangeRateProviderFactory injects the provider factory used by exchange-rate loading.
 func WithExchangeRateProviderFactory(factory exchangerateloading.RateProvider) Option {
 	return func(opts *clientOptions) {
-		opts.config.Dependencies.ExchangeRateProviderFactory = factory
-		opts.config.Dependencies.StartupExchangeRateProviderFactory = factory
+		opts.runtimeOptions.Dependencies.ExchangeRateProviderFactory = factory
+		opts.runtimeOptions.Dependencies.StartupExchangeRateProviderFactory = factory
 	}
 }
 
-// WithExchangeRateLoading configures automatic exchange-rate loading through runtime config.
+// WithExchangeRateLoading configures automatic exchange-rate loading through app config.
 func WithExchangeRateLoading(enabled bool) Option {
 	return func(opts *clientOptions) {
 		opts.config.ExchangeRates.AutomaticLoadingEnabled = enabled
 	}
 }
 
-// WithExchangeRateLoadScheduleUTC configures the automatic exchange-rate loading schedule through runtime config.
+// WithExchangeRateLoadScheduleUTC configures the automatic exchange-rate loading schedule through app config.
 func WithExchangeRateLoadScheduleUTC(schedule string) Option {
 	return func(opts *clientOptions) {
 		opts.config.ExchangeRates.LoadScheduleUTC = schedule
 	}
 }
 
-// WithOperationsEnabled configures runtime operation execution through runtime config.
+// WithOperationsEnabled configures runtime operation execution through runtime options.
 func WithOperationsEnabled(enabled bool) Option {
 	return func(opts *clientOptions) {
-		opts.config.Operations.Enabled = enabled
+		opts.runtimeOptions.Operations.Enabled = enabled
 	}
 }
 
@@ -188,21 +189,12 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 
 	ctx := context.Background()
 	schema := testSchemaName(t)
-	exchangeRateDefaults := runtimeconfig.DefaultExchangeRateConfig()
+	cfg := appconfig.DefaultConfig()
+	cfg.AccountingSchema = schema
+	cfg.CacheDir = filepath.Join(t.TempDir(), "mina")
+	cfg.ExchangeRates.AutomaticLoadingEnabled = false
 	opts := clientOptions{
-		config: runtime.Config{
-			AccountingSchema: schema,
-			CacheDir:         filepath.Join(t.TempDir(), "mina"),
-			ExchangeRates: runtime.ExchangeRateConfig{
-				LoadScheduleUTC: exchangeRateDefaults.LoadScheduleUTC,
-				StartupProvider: exchangeRateDefaults.StartupProvider,
-				Providers: runtime.ExchangeRateProviderConfig{
-					Frankfurter: runtime.FrankfurterExchangeRateProviderConfig{
-						BaseURL: exchangeRateDefaults.Providers.Frankfurter.BaseURL,
-					},
-				},
-			},
-		},
+		config: cfg,
 	}
 	for _, option := range options {
 		option(&opts)
@@ -214,9 +206,9 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 	var appInstance *runtime.App
 	var err error
 	if opts.processDB != nil {
-		appInstance, err = runtime.NewWithProcessDB(ctx, opts.processDB.db, opts.config)
+		appInstance, err = runtime.NewWithProcessDB(ctx, opts.processDB.db, opts.config, opts.runtimeOptions)
 	} else {
-		appInstance, err = runtime.New(ctx, opts.config)
+		appInstance, err = runtime.New(ctx, opts.config, opts.runtimeOptions)
 	}
 	if err != nil {
 		return nil, err

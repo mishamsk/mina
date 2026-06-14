@@ -28,7 +28,8 @@ Imports and runtime knowledge flow inward toward app-owned service packages. Com
 
 - `cmd/mina`: one binary and Cobra command tree. Cobra owns CLI parsing and command help. Should delegate all operations to runtime.
 - `internal/httpclient`: generated REST client code from the OpenAPI source.
-- `internal/runtime`: config, open/create/migrate policy, and manual composition root.
+- `internal/appconfig`: local app config source loading, config-file discovery, env parsing, explicit overrides, source precedence, defaults, and source metadata.
+- `internal/runtime`: database lifecycle policy, runtime option handling, and manual composition root.
 - `internal/httpapi`: REST/OpenAPI adapter, generated REST contract code, generated route registration, generated request binding, OpenAPI request validation for transport shape, HTTP DTO mapping, and HTTP status/error mapping.
 - App-owned service packages: domain types, validation, use cases, and repository interfaces.
 - `internal/store`: DuckDB driver access, migrations, transactions, query code, and repository implementations.
@@ -42,6 +43,7 @@ Rules:
 - `internal/store` owns DB-facing row types, migrations, transactions, DuckDB-specific error mapping, and app-to-DB type conversion.
 - `internal/store` does not know HTTP, OpenAPI, Cobra, or runtime composition.
 - `internal/runtime` wires concrete implementations manually. Avoid hidden global state for database handles, config, clocks, listeners, or services.
+- `internal/appconfig` does not import runtime, store, HTTP, OpenAPI, background, provider, service, Cobra, or pflag packages.
 - Shared contracts belong at the lowest layer that can own them.
 
 ## Store / Database
@@ -50,7 +52,7 @@ Rules:
 - User-provided values in SQL must use parameter binding.
 - The app opens an in-memory DuckDB database first.
 - When a database file is provided, the app attaches it as the portable accounting-state database.
-- Accounting state lives in one DuckDB schema selected by runtime config.
+- Accounting state lives in one DuckDB schema selected by app config plus explicit CLI overrides.
 - When no accounting-state database file is provided (e.g. for demos and tests) accounting state stored in a schema of the in-memory database.
 - Store state owns the fully qualified accounting schema name, whether attached or in-memory.
 - `docs/phase-1-data-model.md` is the source of truth for accounting-state tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
@@ -66,7 +68,8 @@ Rules:
 
 - Local config is operational state only.
 - Config must not be required to interpret the accounting database.
-- The selected database path and schema come from explicit CLI input or local config.
+- The selected database path and schema come from app config plus explicit CLI overrides.
+- Runtime derives DuckDB accounting location defaults from the selected app config.
 
 ## REST API
 

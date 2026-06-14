@@ -11,7 +11,7 @@
 ## Boundaries
 
 - Owns: exchange-rate provider subpackage grouping.
-- Does not own: runtime config source loading, runtime scheduling, SQL persistence, REST DTOs, or loader window planning.
+- Does not own: app config source loading, runtime scheduling, SQL persistence, REST DTOs, or loader window planning.
 
 ## Testing Notes
 

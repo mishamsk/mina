@@ -17,8 +17,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/runtime"
-	runtimeconfig "github.com/mishamsk/mina/internal/runtime/config"
 )
 
 const version = "0.0.0-dev"
@@ -105,67 +105,72 @@ func newVersionCommand(stdout io.Writer) *cobra.Command {
 
 func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, configFilePath *string) *cobra.Command {
 	var assumeYes bool
+	var quiet bool
 	var seedDemo bool
-	sources := runtimeconfig.Sources()
-	flagCfg := runtimeconfig.DefaultConfig()
+	sources := appconfig.Sources()
+	flagCfg := appconfig.DefaultConfig()
 	cmd := &cobra.Command{
 		Use:          "serve",
 		Short:        "Serve the REST API",
 		Args:         noPositionalArgs("serve"),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, commandCfg, err := runtimeconfig.Load(
-				runtimeconfig.LoadOptions{ConfigFilePath: *configFilePath},
-				runtimeconfig.Overrides{
+			cfg, err := appconfig.Load(
+				appconfig.LoadOptions{ConfigFilePath: *configFilePath},
+				appconfig.Overrides{
 					DatabasePath:     configOverride(cmd, "db", flagCfg.DatabasePath),
 					AccountingSchema: configOverride(cmd, "schema", flagCfg.AccountingSchema),
-					AssumeYes:        configOverride(cmd, "yes", assumeYes),
-					Serve: runtimeconfig.ServeOverrides{
+					Serve: appconfig.ServeOverrides{
 						Host:          configOverride(cmd, "host", flagCfg.Serve.Host),
 						Port:          configOverride(cmd, "port", flagCfg.Serve.Port),
 						AccessLogPath: configOverride(cmd, "access-log", flagCfg.Serve.AccessLogPath),
-						Quiet:         configOverride(cmd, "quiet", flagCfg.Serve.Quiet),
 					},
 				},
 			)
 			if err != nil {
 				return err
 			}
-			serveCfg := runtimeServeConfig(cfg)
-			serveCfg.Demo = seedDemo
-			if err := serveCfg.Validate(); err != nil {
+			assumeYesValue, err := commandBoolValue(cmd, "yes", assumeYes, "MINA_YES")
+			if err != nil {
+				return err
+			}
+			quietValue, err := commandBoolValue(cmd, "quiet", quiet, "MINA_QUIET")
+			if err != nil {
+				return err
+			}
+			if err := validateServeConfig(cfg, quietValue); err != nil {
 				return err
 			}
 
-			if err := serve(stdin, stdout, stderr, serveCfg, commandCfg.AssumeYes); err != nil {
+			if err := serve(stdin, stdout, stderr, cfg, quietValue, seedDemo, assumeYesValue); err != nil {
 				return &exitError{code: 1, err: err}
 			}
 
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sources[runtimeconfig.SourceDatabasePath]))
+	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sources[appconfig.SourceDatabasePath]))
 	cmd.Flags().StringVar(
 		&flagCfg.AccountingSchema,
 		"schema",
 		"",
-		"DuckDB schema for accounting state "+sourceHelp(sources[runtimeconfig.SourceAccountingSchema]),
+		"DuckDB schema for accounting state "+sourceHelp(sources[appconfig.SourceAccountingSchema]),
 	)
-	cmd.Flags().StringVar(&flagCfg.Serve.Host, "host", flagCfg.Serve.Host, "host interface for the REST API "+sourceHelp(sources[runtimeconfig.SourceServeHost]))
-	cmd.Flags().IntVar(&flagCfg.Serve.Port, "port", flagCfg.Serve.Port, "port for the REST API "+sourceHelp(sources[runtimeconfig.SourceServePort]))
+	cmd.Flags().StringVar(&flagCfg.Serve.Host, "host", flagCfg.Serve.Host, "host interface for the REST API "+sourceHelp(sources[appconfig.SourceServeHost]))
+	cmd.Flags().IntVar(&flagCfg.Serve.Port, "port", flagCfg.Serve.Port, "port for the REST API "+sourceHelp(sources[appconfig.SourceServePort]))
 	cmd.Flags().BoolVar(
 		&assumeYes,
 		"yes",
 		false,
-		"answer yes to database creation and migration prompts "+sourceHelp(sources[runtimeconfig.SourceAssumeYes]),
+		"answer yes to database creation and migration prompts "+commandEnvHelp("MINA_YES"),
 	)
 	cmd.Flags().StringVar(
 		&flagCfg.Serve.AccessLogPath,
 		"access-log",
 		"",
-		"write access logs to a file instead of stderr "+sourceHelp(sources[runtimeconfig.SourceServeAccessLogPath]),
+		"write access logs to a file instead of stderr "+sourceHelp(sources[appconfig.SourceServeAccessLogPath]),
 	)
-	cmd.Flags().BoolVar(&flagCfg.Serve.Quiet, "quiet", false, "disable access logs "+sourceHelp(sources[runtimeconfig.SourceServeQuiet]))
+	cmd.Flags().BoolVar(&quiet, "quiet", false, "disable access logs "+commandEnvHelp("MINA_QUIET"))
 	cmd.Flags().BoolVar(&seedDemo, "demo", false, "seed deterministic demo data at startup")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
@@ -176,95 +181,103 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 
 func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string) *cobra.Command {
 	var assumeYes bool
-	sources := runtimeconfig.Sources()
-	flagCfg := runtimeconfig.Config{}
+	sources := appconfig.Sources()
+	flagCfg := appconfig.Config{}
 	cmd := &cobra.Command{
 		Use:          "migrate",
 		Short:        "Apply database migrations",
 		Args:         noPositionalArgs("migrate"),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, commandCfg, err := runtimeconfig.Load(
-				runtimeconfig.LoadOptions{ConfigFilePath: *configFilePath},
-				runtimeconfig.Overrides{
+			cfg, err := appconfig.Load(
+				appconfig.LoadOptions{ConfigFilePath: *configFilePath},
+				appconfig.Overrides{
 					DatabasePath:     configOverride(cmd, "db", flagCfg.DatabasePath),
 					AccountingSchema: configOverride(cmd, "schema", flagCfg.AccountingSchema),
-					AssumeYes:        configOverride(cmd, "yes", assumeYes),
 				},
 			)
+			if err != nil {
+				return err
+			}
+			assumeYesValue, err := commandBoolValue(cmd, "yes", assumeYes, "MINA_YES")
 			if err != nil {
 				return err
 			}
 			if cfg.DatabasePath == "" {
 				return errors.New("migrate requires --db")
 			}
-			appCfg := runtimeConfig(cfg)
-			if err := appCfg.Validate(); err != nil {
+			if err := runtime.Validate(cfg, false); err != nil {
 				return err
 			}
 
-			if err := migrate(stdin, stderr, appCfg, commandCfg.AssumeYes); err != nil {
+			if err := migrate(stdin, stderr, cfg, assumeYesValue); err != nil {
 				return &exitError{code: 1, err: err}
 			}
 
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sources[runtimeconfig.SourceDatabasePath]))
+	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sources[appconfig.SourceDatabasePath]))
 	cmd.Flags().StringVar(
 		&flagCfg.AccountingSchema,
 		"schema",
 		"",
-		"DuckDB schema for accounting state "+sourceHelp(sources[runtimeconfig.SourceAccountingSchema]),
+		"DuckDB schema for accounting state "+sourceHelp(sources[appconfig.SourceAccountingSchema]),
 	)
 	cmd.Flags().BoolVar(
 		&assumeYes,
 		"yes",
 		false,
-		"answer yes to database creation and migration prompts "+sourceHelp(sources[runtimeconfig.SourceAssumeYes]),
+		"answer yes to database creation and migration prompts "+commandEnvHelp("MINA_YES"),
 	)
 
 	return cmd
 }
 
-func configOverride[T any](cmd *cobra.Command, flag string, value T) runtimeconfig.Override[T] {
+func configOverride[T any](cmd *cobra.Command, flag string, value T) appconfig.Override[T] {
 	if cmd.Flags().Changed(flag) {
-		return runtimeconfig.Set(value)
+		return appconfig.Set(value)
 	}
 
-	return runtimeconfig.Override[T]{}
+	return appconfig.Override[T]{}
 }
 
-func sourceHelp(source runtimeconfig.Source) string {
+func sourceHelp(source appconfig.Source) string {
 	return fmt.Sprintf("(config: %s; env: %s)", source.ConfigPath, source.EnvVar)
 }
 
-func runtimeConfig(cfg runtimeconfig.Config) runtime.Config {
-	return runtime.Config{
-		DatabasePath:     cfg.DatabasePath,
-		AccountingSchema: cfg.AccountingSchema,
-		CacheDir:         cfg.CacheDir,
-		ExchangeRates: runtime.ExchangeRateConfig{
-			AutomaticLoadingEnabled: cfg.ExchangeRates.AutomaticLoadingEnabled,
-			LoadScheduleUTC:         cfg.ExchangeRates.LoadScheduleUTC,
-			StartupProvider:         cfg.ExchangeRates.StartupProvider,
-			Providers: runtime.ExchangeRateProviderConfig{
-				Frankfurter: runtime.FrankfurterExchangeRateProviderConfig{
-					BaseURL: cfg.ExchangeRates.Providers.Frankfurter.BaseURL,
-				},
-			},
-		},
-	}
+func commandEnvHelp(envVar string) string {
+	return fmt.Sprintf("(env: %s)", envVar)
 }
 
-func runtimeServeConfig(cfg runtimeconfig.Config) runtime.ServeConfig {
-	return runtime.ServeConfig{
-		Config:        runtimeConfig(cfg),
-		Host:          cfg.Serve.Host,
-		Port:          cfg.Serve.Port,
-		AccessLogPath: cfg.Serve.AccessLogPath,
-		Quiet:         cfg.Serve.Quiet,
+func commandBoolValue(cmd *cobra.Command, flag string, flagValue bool, envVar string) (bool, error) {
+	if cmd.Flags().Changed(flag) {
+		return flagValue, nil
 	}
+	value, ok := os.LookupEnv(envVar)
+	if !ok {
+		return false, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s must be a boolean", envVar)
+	}
+
+	return parsed, nil
+}
+
+func validateServeConfig(cfg appconfig.Config, quiet bool) error {
+	if err := runtime.Validate(cfg, true); err != nil {
+		return err
+	}
+	if cfg.Serve.Port < 0 || cfg.Serve.Port > 65535 {
+		return errors.New("--port must be between 0 and 65535")
+	}
+	if quiet && cfg.Serve.AccessLogPath != "" {
+		return errors.New("--quiet cannot be combined with --access-log")
+	}
+
+	return nil
 }
 
 func noPositionalArgs(command string) cobra.PositionalArgs {
@@ -286,7 +299,15 @@ func normalizeFlagError(err error) error {
 	return err
 }
 
-func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.ServeConfig, assumeYes bool) error {
+func serve(
+	stdin io.Reader,
+	stdout io.Writer,
+	stderr io.Writer,
+	cfg appconfig.Config,
+	quiet bool,
+	seedDemo bool,
+	assumeYes bool,
+) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -296,40 +317,41 @@ func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.Serv
 		}
 	}
 
-	accessLog, closeAccessLog, err := openAccessLog(stderr, cfg)
+	accessLog, closeAccessLog, err := openAccessLog(stderr, cfg.Serve.AccessLogPath, quiet)
 	if err != nil {
 		return err
 	}
 	defer closeAccessLog()
 
-	appConfig := cfg.Config
-	appConfig.HTTP = runtime.HTTPConfig{
-		AccessLog: accessLog,
+	runtimeOpts := runtime.Options{
+		HTTP: runtime.HTTPConfig{
+			AccessLog: accessLog,
+		},
+		Operations: runtime.OperationConfig{
+			Enabled:    true,
+			DeferStart: true,
+			ErrorLog:   stderr,
+		},
 	}
-	appConfig.Operations = runtime.OperationConfig{
-		Enabled:    true,
-		DeferStart: true,
-		ErrorLog:   stderr,
-	}
-	created, err := confirmDatabaseCreation(stdin, stderr, appConfig, assumeYes)
+	created, err := confirmDatabaseCreation(stdin, stderr, cfg, assumeYes)
 	if err != nil {
 		return err
 	}
-	if cfg.Demo && cfg.DatabasePath != "" {
-		exists, err := runtime.AccountingSchemaExists(ctx, appConfig)
+	if seedDemo && cfg.DatabasePath != "" {
+		exists, err := runtime.AccountingSchemaExists(ctx, cfg, runtimeOpts.Operations.Enabled)
 		if err != nil {
 			return fmt.Errorf("check demo schema: %w", err)
 		}
 		if exists {
-			return fmt.Errorf("demo seeding requires schema %q to not already exist", appConfig.AccountingLocationConfig().Schema)
+			return fmt.Errorf("demo seeding requires schema %q to not already exist", runtime.AccountingLocationConfig(cfg).Schema)
 		}
 	}
 	if !created {
-		if err := confirmPendingMigrations(ctx, stdin, stderr, appConfig, assumeYes); err != nil {
+		if err := confirmPendingMigrations(ctx, stdin, stderr, cfg, runtimeOpts.Operations.Enabled, assumeYes); err != nil {
 			return err
 		}
 	}
-	appInstance, err := runtime.New(ctx, appConfig)
+	appInstance, err := runtime.New(ctx, cfg, runtimeOpts)
 	if err != nil {
 		return fmt.Errorf("startup error: %w", err)
 	}
@@ -338,7 +360,7 @@ func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.Serv
 			_, _ = fmt.Fprintf(stderr, "close error: %v\n", err)
 		}
 	}()
-	if cfg.Demo {
+	if seedDemo {
 		summary, err := appInstance.SeedDemo(ctx)
 		if err != nil {
 			return fmt.Errorf("demo seed error: %w", err)
@@ -348,7 +370,7 @@ func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.Serv
 		}
 	}
 
-	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)))
+	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Serve.Host, strconv.Itoa(cfg.Serve.Port)))
 	if err != nil {
 		return fmt.Errorf("listen error: %w", err)
 	}
@@ -374,15 +396,15 @@ func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.Serv
 	return nil
 }
 
-func openAccessLog(stderr io.Writer, cfg runtime.ServeConfig) (io.Writer, func(), error) {
-	if cfg.Quiet {
+func openAccessLog(stderr io.Writer, path string, quiet bool) (io.Writer, func(), error) {
+	if quiet {
 		return nil, func() {}, nil
 	}
-	if cfg.AccessLogPath == "" {
+	if path == "" {
 		return stderr, func() {}, nil
 	}
 
-	file, err := os.OpenFile(cfg.AccessLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, func() {}, fmt.Errorf("access log error: %w", err)
 	}
@@ -392,18 +414,18 @@ func openAccessLog(stderr io.Writer, cfg runtime.ServeConfig) (io.Writer, func()
 	}, nil
 }
 
-func migrate(stdin io.Reader, stderr io.Writer, cfg runtime.Config, assumeYes bool) error {
+func migrate(stdin io.Reader, stderr io.Writer, cfg appconfig.Config, assumeYes bool) error {
 	ctx := context.Background()
 	created, err := confirmDatabaseCreation(stdin, stderr, cfg, assumeYes)
 	if err != nil {
 		return err
 	}
 	if !created {
-		if err := confirmPendingMigrations(ctx, stdin, stderr, cfg, assumeYes); err != nil {
+		if err := confirmPendingMigrations(ctx, stdin, stderr, cfg, false, assumeYes); err != nil {
 			return err
 		}
 	}
-	appInstance, err := runtime.New(ctx, cfg)
+	appInstance, err := runtime.New(ctx, cfg, runtime.Options{})
 	if err != nil {
 		return fmt.Errorf("startup error: %w", err)
 	}
@@ -416,7 +438,7 @@ func migrate(stdin io.Reader, stderr io.Writer, cfg runtime.Config, assumeYes bo
 	return nil
 }
 
-func confirmDatabaseCreation(stdin io.Reader, stderr io.Writer, cfg runtime.Config, assumeYes bool) (bool, error) {
+func confirmDatabaseCreation(stdin io.Reader, stderr io.Writer, cfg appconfig.Config, assumeYes bool) (bool, error) {
 	if cfg.DatabasePath == "" {
 		return false, nil
 	}
@@ -453,14 +475,15 @@ func confirmPendingMigrations(
 	ctx context.Context,
 	stdin io.Reader,
 	stderr io.Writer,
-	cfg runtime.Config,
+	cfg appconfig.Config,
+	operationsEnabled bool,
 	assumeYes bool,
 ) error {
 	if cfg.DatabasePath == "" {
 		return nil
 	}
 
-	pending, err := runtime.HasPendingMigrations(ctx, cfg)
+	pending, err := runtime.HasPendingMigrations(ctx, cfg, operationsEnabled)
 	if err != nil {
 		return fmt.Errorf("check pending migrations: %w", err)
 	}

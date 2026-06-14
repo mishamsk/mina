@@ -75,6 +75,8 @@ linters:
           deny:
             - pkg: database/sql
               desc: service packages own domain behavior, not SQL access
+            - pkg: github.com/mishamsk/mina/internal/appconfig
+              desc: service packages must not know source-loaded app config
             - pkg: github.com/duckdb/duckdb-go/v2
               desc: service packages must not know DuckDB
             - pkg: github.com/cenkalti/backoff/v5
@@ -111,6 +113,8 @@ linters:
             - "**/internal/store/*.go"
             - "**/internal/store/**/*.go"
           deny:
+            - pkg: github.com/mishamsk/mina/internal/appconfig
+              desc: store must not know source-loaded app config
             - pkg: github.com/mishamsk/mina/internal/httpclient
               desc: store must not use the generated REST client
             - pkg: github.com/mishamsk/mina/internal/httpapi
@@ -137,6 +141,8 @@ linters:
           deny:
             - pkg: database/sql
               desc: HTTP adapters must not own SQL access
+            - pkg: github.com/mishamsk/mina/internal/appconfig
+              desc: HTTP adapters must not know source-loaded app config
             - pkg: github.com/duckdb/duckdb-go/v2
               desc: HTTP adapters must not know DuckDB
             - pkg: github.com/mishamsk/mina/internal/httpclient
@@ -175,6 +181,8 @@ linters:
           deny:
             - pkg: database/sql # Providers may later get provider-owned non-Mina SQL access if needed.
               desc: providers must not own SQL access
+            - pkg: github.com/mishamsk/mina/internal/appconfig
+              desc: providers must not know source-loaded app config
             - pkg: github.com/duckdb/duckdb-go/v2 # Providers may later get provider-owned non-Mina SQL access if needed.
               desc: providers must not know DuckDB
             - pkg: github.com/mishamsk/mina/internal/httpapi
@@ -199,6 +207,8 @@ linters:
           deny:
             - pkg: database/sql
               desc: background runners must not own SQL access
+            - pkg: github.com/mishamsk/mina/internal/appconfig
+              desc: background runners must not know source-loaded app config
             - pkg: github.com/duckdb/duckdb-go/v2
               desc: background runners must not know DuckDB
             - pkg: github.com/mishamsk/mina/internal/httpapi
@@ -215,16 +225,30 @@ linters:
               desc: background runners must not know CLI parsing
             - pkg: github.com/spf13/pflag
               desc: background runners must not know CLI flags
-        runtime-config-boundaries:
+        appconfig-boundaries:
           list-mode: lax
           files:
-            - internal/runtime/config/*.go
-            - internal/runtime/config/**/*.go
-            - "**/internal/runtime/config/*.go"
-            - "**/internal/runtime/config/**/*.go"
+            - internal/appconfig/*.go
+            - internal/appconfig/**/*.go
+            - "**/internal/appconfig/*.go"
+            - "**/internal/appconfig/**/*.go"
           deny:
+            - pkg: github.com/mishamsk/mina/internal/runtime
+              desc: appconfig must not know runtime composition
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: appconfig must not know persistence
+            - pkg: github.com/mishamsk/mina/internal/httpapi
+              desc: appconfig must not know REST/OpenAPI adapters
+            - pkg: github.com/mishamsk/mina/internal/background
+              desc: appconfig must not know background runners
             - pkg: github.com/mishamsk/mina/internal/providers
-              desc: runtime config source loading must not import concrete providers
+              desc: appconfig must not know concrete providers
+            - pkg: github.com/mishamsk/mina/internal/services
+              desc: appconfig must not know service packages
+            - pkg: github.com/spf13/cobra
+              desc: appconfig must not know CLI parsing
+            - pkg: github.com/spf13/pflag
+              desc: appconfig must not know CLI flags
         runtime-store-boundaries:
           list-mode: lax
           files:

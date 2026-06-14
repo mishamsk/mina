@@ -1,4 +1,4 @@
-package config
+package appconfig
 
 import (
 	"errors"
@@ -43,7 +43,6 @@ type ServeConfig struct {
 	Host          string
 	Port          int
 	AccessLogPath string
-	Quiet         bool
 }
 
 // ExchangeRateConfig contains source-loaded automatic exchange-rate loading settings.
@@ -51,16 +50,11 @@ type ExchangeRateConfig struct {
 	AutomaticLoadingEnabled bool
 	LoadScheduleUTC         string
 	StartupProvider         string
-	Providers               ExchangeRateProviderConfig
+	Frankfurter             FrankfurterConfig
 }
 
-// ExchangeRateProviderConfig contains source-loaded exchange-rate provider settings.
-type ExchangeRateProviderConfig struct {
-	Frankfurter FrankfurterExchangeRateProviderConfig
-}
-
-// FrankfurterExchangeRateProviderConfig contains source-loaded Frankfurter settings.
-type FrankfurterExchangeRateProviderConfig struct {
+// FrankfurterConfig contains source-loaded Frankfurter settings.
+type FrankfurterConfig struct {
 	BaseURL string
 }
 
@@ -78,11 +72,6 @@ func Set[T any](value T) Override[T] {
 	}
 }
 
-// CommandConfig controls command behavior outside runtime app composition.
-type CommandConfig struct {
-	AssumeYes bool
-}
-
 // LoadOptions controls config source discovery.
 type LoadOptions struct {
 	ConfigFilePath string
@@ -92,8 +81,9 @@ type LoadOptions struct {
 type Overrides struct {
 	DatabasePath     Override[string]
 	AccountingSchema Override[string]
-	AssumeYes        Override[bool]
+	CacheDir         Override[string]
 	Serve            ServeOverrides
+	ExchangeRates    ExchangeRateOverrides
 }
 
 // ServeOverrides contains explicit REST listener config values.
@@ -101,7 +91,19 @@ type ServeOverrides struct {
 	Host          Override[string]
 	Port          Override[int]
 	AccessLogPath Override[string]
-	Quiet         Override[bool]
+}
+
+// ExchangeRateOverrides contains explicit exchange-rate config values.
+type ExchangeRateOverrides struct {
+	AutomaticLoadingEnabled Override[bool]
+	LoadScheduleUTC         Override[string]
+	StartupProvider         Override[string]
+	Frankfurter             FrankfurterOverrides
+}
+
+// FrankfurterOverrides contains explicit Frankfurter config values.
+type FrankfurterOverrides struct {
+	BaseURL Override[string]
 }
 
 // Source describes where one config field may be loaded from.
@@ -118,16 +120,12 @@ const (
 	SourceDatabasePath SourceKey = "db"
 	// SourceAccountingSchema identifies the accounting schema config source.
 	SourceAccountingSchema SourceKey = "schema"
-	// SourceAssumeYes identifies the assume-yes command config source.
-	SourceAssumeYes SourceKey = "yes"
 	// SourceServeHost identifies the REST listener host config source.
 	SourceServeHost SourceKey = "serve.host"
 	// SourceServePort identifies the REST listener port config source.
 	SourceServePort SourceKey = "serve.port"
 	// SourceServeAccessLogPath identifies the REST access log path config source.
 	SourceServeAccessLogPath SourceKey = "serve.access_log"
-	// SourceServeQuiet identifies the REST listener quiet-mode config source.
-	SourceServeQuiet SourceKey = "serve.quiet"
 	// SourceExchangeRateAutomaticLoadingEnabled identifies the exchange-rate automatic-loading config source.
 	SourceExchangeRateAutomaticLoadingEnabled SourceKey = "exchange_rates.automatic_loading_enabled"
 	// SourceExchangeRateLoadScheduleUTC identifies the exchange-rate load schedule config source.
@@ -141,7 +139,6 @@ const (
 type fileConfig struct {
 	DatabasePath     *string                `toml:"db" env:"MINA_DB"`
 	AccountingSchema *string                `toml:"schema" env:"MINA_SCHEMA"`
-	AssumeYes        *bool                  `toml:"yes" env:"MINA_YES"`
 	Serve            serveFileConfig        `toml:"serve"`
 	ExchangeRates    exchangeRateFileConfig `toml:"exchange_rates"`
 }
@@ -150,7 +147,6 @@ type serveFileConfig struct {
 	Host          *string `toml:"host" env:"MINA_HOST"`
 	Port          *int    `toml:"port" env:"MINA_PORT"`
 	AccessLogPath *string `toml:"access_log" env:"MINA_ACCESS_LOG"`
-	Quiet         *bool   `toml:"quiet" env:"MINA_QUIET"`
 }
 
 type exchangeRateFileConfig struct {
@@ -199,10 +195,8 @@ func DefaultExchangeRateConfig() ExchangeRateConfig {
 		AutomaticLoadingEnabled: true,
 		LoadScheduleUTC:         defaultExchangeRateLoadScheduleUTC,
 		StartupProvider:         defaultExchangeRateStartupProvider,
-		Providers: ExchangeRateProviderConfig{
-			Frankfurter: FrankfurterExchangeRateProviderConfig{
-				BaseURL: defaultFrankfurterBaseURL,
-			},
+		Frankfurter: FrankfurterConfig{
+			BaseURL: defaultFrankfurterBaseURL,
 		},
 	}
 }
@@ -212,11 +206,9 @@ func Sources() map[SourceKey]Source {
 	return map[SourceKey]Source{
 		SourceDatabasePath:                        sourceFor(SourceDatabasePath),
 		SourceAccountingSchema:                    sourceFor(SourceAccountingSchema),
-		SourceAssumeYes:                           sourceFor(SourceAssumeYes),
 		SourceServeHost:                           sourceFor(SourceServeHost),
 		SourceServePort:                           sourceFor(SourceServePort),
 		SourceServeAccessLogPath:                  sourceFor(SourceServeAccessLogPath),
-		SourceServeQuiet:                          sourceFor(SourceServeQuiet),
 		SourceExchangeRateAutomaticLoadingEnabled: sourceFor(SourceExchangeRateAutomaticLoadingEnabled),
 		SourceExchangeRateLoadScheduleUTC:         sourceFor(SourceExchangeRateLoadScheduleUTC),
 		SourceExchangeRateStartupProvider:         sourceFor(SourceExchangeRateStartupProvider),
@@ -225,35 +217,37 @@ func Sources() map[SourceKey]Source {
 }
 
 // Load returns process config using Mina's source precedence.
-func Load(opts LoadOptions, overrides Overrides) (Config, CommandConfig, error) {
+func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	cfg := DefaultConfig()
-	commandCfg := CommandConfig{}
-	cacheDir, err := DefaultCacheDir()
-	if err != nil {
-		return Config{}, CommandConfig{}, err
+	if !overrides.CacheDir.IsSet {
+		cacheDir, err := DefaultCacheDir()
+		if err != nil {
+			return Config{}, err
+		}
+		cfg.CacheDir = cacheDir
 	}
-	cfg.CacheDir = cacheDir
 
 	fileCfg, err := loadFileConfig(opts)
 	if err != nil {
-		return Config{}, CommandConfig{}, err
+		return Config{}, err
 	}
-	applySharedFile(&cfg, &commandCfg, fileCfg)
+	applySharedFile(&cfg, fileCfg)
 	applyServeFile(&cfg, fileCfg)
 	applyExchangeRateFile(&cfg, fileCfg)
 
 	envCfg, err := loadEnvConfig()
 	if err != nil {
-		return Config{}, CommandConfig{}, err
+		return Config{}, err
 	}
-	applySharedFile(&cfg, &commandCfg, envCfg)
+	applySharedFile(&cfg, envCfg)
 	applyServeFile(&cfg, envCfg)
 	applyExchangeRateFile(&cfg, envCfg)
 
-	applyOverrides(&cfg, &commandCfg, overrides)
+	applyOverrides(&cfg, overrides)
 	applyServeOverrides(&cfg, overrides.Serve)
+	applyExchangeRateOverrides(&cfg, overrides.ExchangeRates)
 
-	return cfg, commandCfg, nil
+	return cfg, nil
 }
 
 func applyExchangeRateFile(cfg *Config, fileCfg fileConfig) {
@@ -267,7 +261,7 @@ func applyExchangeRateFile(cfg *Config, fileCfg fileConfig) {
 		cfg.ExchangeRates.StartupProvider = *fileCfg.ExchangeRates.StartupProvider
 	}
 	if fileCfg.ExchangeRates.Frankfurter.BaseURL != nil {
-		cfg.ExchangeRates.Providers.Frankfurter.BaseURL = *fileCfg.ExchangeRates.Frankfurter.BaseURL
+		cfg.ExchangeRates.Frankfurter.BaseURL = *fileCfg.ExchangeRates.Frankfurter.BaseURL
 	}
 }
 
@@ -338,15 +332,12 @@ func loadEnvConfig() (fileConfig, error) {
 	return cfg, nil
 }
 
-func applySharedFile(cfg *Config, commandCfg *CommandConfig, fileCfg fileConfig) {
+func applySharedFile(cfg *Config, fileCfg fileConfig) {
 	if fileCfg.DatabasePath != nil {
 		cfg.DatabasePath = *fileCfg.DatabasePath
 	}
 	if fileCfg.AccountingSchema != nil {
 		cfg.AccountingSchema = *fileCfg.AccountingSchema
-	}
-	if fileCfg.AssumeYes != nil {
-		commandCfg.AssumeYes = *fileCfg.AssumeYes
 	}
 }
 
@@ -360,20 +351,17 @@ func applyServeFile(cfg *Config, fileCfg fileConfig) {
 	if fileCfg.Serve.AccessLogPath != nil {
 		cfg.Serve.AccessLogPath = *fileCfg.Serve.AccessLogPath
 	}
-	if fileCfg.Serve.Quiet != nil {
-		cfg.Serve.Quiet = *fileCfg.Serve.Quiet
-	}
 }
 
-func applyOverrides(cfg *Config, commandCfg *CommandConfig, overrides Overrides) {
+func applyOverrides(cfg *Config, overrides Overrides) {
 	if overrides.DatabasePath.IsSet {
 		cfg.DatabasePath = overrides.DatabasePath.Val
 	}
 	if overrides.AccountingSchema.IsSet {
 		cfg.AccountingSchema = overrides.AccountingSchema.Val
 	}
-	if overrides.AssumeYes.IsSet {
-		commandCfg.AssumeYes = overrides.AssumeYes.Val
+	if overrides.CacheDir.IsSet {
+		cfg.CacheDir = overrides.CacheDir.Val
 	}
 }
 
@@ -387,8 +375,20 @@ func applyServeOverrides(cfg *Config, overrides ServeOverrides) {
 	if overrides.AccessLogPath.IsSet {
 		cfg.Serve.AccessLogPath = overrides.AccessLogPath.Val
 	}
-	if overrides.Quiet.IsSet {
-		cfg.Serve.Quiet = overrides.Quiet.Val
+}
+
+func applyExchangeRateOverrides(cfg *Config, overrides ExchangeRateOverrides) {
+	if overrides.AutomaticLoadingEnabled.IsSet {
+		cfg.ExchangeRates.AutomaticLoadingEnabled = overrides.AutomaticLoadingEnabled.Val
+	}
+	if overrides.LoadScheduleUTC.IsSet {
+		cfg.ExchangeRates.LoadScheduleUTC = overrides.LoadScheduleUTC.Val
+	}
+	if overrides.StartupProvider.IsSet {
+		cfg.ExchangeRates.StartupProvider = overrides.StartupProvider.Val
+	}
+	if overrides.Frankfurter.BaseURL.IsSet {
+		cfg.ExchangeRates.Frankfurter.BaseURL = overrides.Frankfurter.BaseURL.Val
 	}
 }
 

@@ -12,7 +12,7 @@
 ## Boundaries
 
 - Owns: network/file side effects, external request construction, response parsing, and provider-specific error normalization.
-- Does not own: runtime config source loading, SQL persistence, REST DTOs, CLI parsing, or domain decisions.
+- Does not own: app config source loading, SQL persistence, REST DTOs, CLI parsing, or domain decisions.
 
 ## Testing Notes
 

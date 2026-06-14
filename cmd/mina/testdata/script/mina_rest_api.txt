@@ -62,6 +62,15 @@ wait server
 ! stderr .
 grep 'GET /health 200' $WORK/access.log
 
+# MINA_QUIET disables access logs.
+env MINA_QUIET=true
+freeport
+exec mina serve --db $WORK/rest-env-quiet.db --yes --host 127.0.0.1 --port $PORT &server&
+httpget http://127.0.0.1:$PORT/health
+kill -INT server
+wait server
+! stderr .
+
 # Demo startup seeding populates visible REST data.
 freeport
 exec mina serve --demo --db $WORK/rest-demo.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
