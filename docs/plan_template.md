@@ -50,3 +50,4 @@
 - [ ] `just pre-commit` passes
 - [ ] Commit final changes
 - [ ] Run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>"`
+- [ ] Move this plan to `docs/plans/completed/`
