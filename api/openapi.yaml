@@ -35,6 +35,70 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /background-operations:
+    get:
+      operationId: listBackgroundOperations
+      summary: List registered background operations.
+      responses:
+        "200":
+          description: Registered background operations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackgroundOperationListResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /background-operations/exchange-rate-loading/status:
+    get:
+      operationId: getExchangeRateLoadingStatus
+      summary: Get exchange-rate loading operation status.
+      responses:
+        "200":
+          description: Exchange-rate loading status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeRateLoadingStatusResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /background-operations/exchange-rate-loading/runs:
+    post:
+      operationId: startExchangeRateLoadingRun
+      summary: Start an exchange-rate loading run.
+      responses:
+        "202":
+          description: Exchange-rate loading was invoked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationRunReferenceResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /background-operations/exchange-rate-loading/runs/{operation_run_id}:
+    parameters:
+      - name: operation_run_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getExchangeRateLoadingRun
+      summary: Get one exchange-rate loading run.
+      responses:
+        "200":
+          description: Exchange-rate loading run status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationRunResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /categories:
     get:
       operationId: listCategories
@@ -1859,6 +1923,128 @@ components:
       properties:
         error:
           $ref: "#/components/schemas/APIError"
+    BackgroundOperationListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operations
+      properties:
+        operations:
+          type: array
+          items:
+            $ref: "#/components/schemas/BackgroundOperationSummary"
+    BackgroundOperationSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - operation_id
+        - status_url
+      properties:
+        operation_id:
+          type: string
+          enum:
+            - exchange-rate-loading
+        status_url:
+          type: string
+    ExchangeRateLoadingStatusResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation_id
+        - enabled
+        - schedule_utc
+        - state
+        - run_count
+        - completed_run_revision
+      properties:
+        operation_id:
+          type: string
+          enum:
+            - exchange-rate-loading
+        enabled:
+          type: boolean
+        schedule_utc:
+          type: string
+          description: Five-field cron-style schedule interpreted in UTC.
+        state:
+          type: string
+          enum:
+            - idle
+            - running
+        last_started_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_success:
+          type: boolean
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        run_count:
+          type: integer
+          format: int64
+          minimum: 0
+        completed_run_revision:
+          type: integer
+          format: int64
+          minimum: 0
+    OperationRunReferenceResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation_run_id
+        - operation_id
+        - status_url
+      properties:
+        operation_run_id:
+          type: integer
+          format: int64
+          minimum: 1
+        operation_id:
+          type: string
+          enum:
+            - exchange-rate-loading
+        status_url:
+          type: string
+    OperationRunResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation_run_id
+        - operation_id
+        - status
+        - started_at
+      properties:
+        operation_run_id:
+          type: integer
+          format: int64
+          minimum: 1
+        operation_id:
+          type: string
+          enum:
+            - exchange-rate-loading
+        status:
+          type: string
+          enum:
+            - running
+            - succeeded
+            - failed
+            - skipped
+            - canceled
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        error:
+          type: string
+          nullable: true
     HealthResponse:
       type: object
       additionalProperties: false

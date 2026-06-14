@@ -1,0 +1,273 @@
+# Manual loading works while automatic loading is disabled.
+frankfurter FRANKFURTER_URL slow 0s
+env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport
+exec mina serve --config-file exchange-rate-loading.toml --db $WORK/rates.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpget http://127.0.0.1:$PORT/health
+stdout '"status":"ok"'
+
+httpget -method POST -status 201 -body account_eur.json http://127.0.0.1:$PORT/accounts
+stdout '"account_id":1'
+httpget -method POST -status 201 -body account_counterparty.json http://127.0.0.1:$PORT/accounts
+stdout '"account_id":2'
+httpget -method POST -status 201 -body category.json http://127.0.0.1:$PORT/categories
+stdout '"category_id":3'
+httpget -method POST -status 201 -body transaction.json http://127.0.0.1:$PORT/transactions
+stdout '"transaction_id"'
+
+httpget -method POST -status 202 http://127.0.0.1:$PORT/background-operations/exchange-rate-loading/runs
+stdout '"operation_id":"exchange-rate-loading"'
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$PORT/background-operations/exchange-rate-loading/status
+stdout '"last_success":true'
+stdout '"completed_run_revision":1'
+
+httpget 'http://127.0.0.1:'$PORT'/exchange-rates?from_currency=USD&to_currency=EUR&effective_date=2024-04-02T00:00:00Z'
+stdout '"exchange_rates":\['
+stdout '"from_currency":"USD"'
+stdout '"to_currency":"EUR"'
+stdout '"effective_date":"2024-04-02T00:00:00Z"'
+
+kill -INT server
+wait server
+
+# Startup cache population accepts provider quote codes outside Mina's domain currency set.
+freeport PROVIDER_QUOTE_PREP_PORT
+exec mina serve --config-file exchange-rate-loading.toml --db $WORK/provider-quotes.db --yes --host 127.0.0.1 --port $PROVIDER_QUOTE_PREP_PORT --quiet &provider_quote_prep_server&
+httpget http://127.0.0.1:$PROVIDER_QUOTE_PREP_PORT/health
+stdout '"status":"ok"'
+httpget -method POST -status 201 -body account_eur.json http://127.0.0.1:$PROVIDER_QUOTE_PREP_PORT/accounts
+stdout '"account_id":1'
+httpget -method POST -status 201 -body account_counterparty.json http://127.0.0.1:$PROVIDER_QUOTE_PREP_PORT/accounts
+stdout '"account_id":2'
+httpget -method POST -status 201 -body category.json http://127.0.0.1:$PROVIDER_QUOTE_PREP_PORT/categories
+stdout '"category_id":3'
+httpget -method POST -status 201 -body transaction.json http://127.0.0.1:$PROVIDER_QUOTE_PREP_PORT/transactions
+stdout '"transaction_id"'
+kill -INT provider_quote_prep_server
+wait provider_quote_prep_server
+
+frankfurter FRANKFURTER_URL provider-quotes 0s
+env XDG_CACHE_HOME=$WORK/provider-quote-cache HOME=$WORK/provider-quote-home MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport PROVIDER_QUOTE_PORT
+exec mina serve --config-file automatic-startup-loading.toml --db $WORK/provider-quotes.db --yes --host 127.0.0.1 --port $PROVIDER_QUOTE_PORT --quiet &provider_quote_server&
+httpget http://127.0.0.1:$PROVIDER_QUOTE_PORT/health
+stdout '"status":"ok"'
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$PROVIDER_QUOTE_PORT/background-operations/exchange-rate-loading/status
+stdout '"completed_run_revision":1'
+exists $WORK/provider-quote-cache/mina/frankfurter-usd-rates.ndjson
+httpget 'http://127.0.0.1:'$PROVIDER_QUOTE_PORT'/exchange-rates?from_currency=USD&to_currency=EUR&effective_date=2024-04-02T00:00:00Z'
+stdout '"exchange_rates":\['
+stdout '"from_currency":"USD"'
+stdout '"to_currency":"EUR"'
+stdout '"effective_date":"2024-04-02T00:00:00Z"'
+kill -INT provider_quote_server
+wait provider_quote_server
+
+# Automatic startup loading runs after serve binds its listener.
+mkdir $WORK/cache/mina
+mkdir $WORK/home
+cp frankfurter-usd-rates.ndjson $WORK/cache/mina/frankfurter-usd-rates.ndjson
+frankfurter FRANKFURTER_URL slow 0s
+env XDG_CACHE_HOME=$WORK/cache HOME=$WORK/home MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport STARTUP_PORT
+exec mina serve --config-file startup-loading.toml --db $WORK/startup-rates.db --yes --host 127.0.0.1 --port $STARTUP_PORT --quiet &startup_server&
+httpget http://127.0.0.1:$STARTUP_PORT/health
+stdout '"status":"ok"'
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$STARTUP_PORT/background-operations/exchange-rate-loading/status
+stdout '"completed_run_revision":1'
+kill -INT startup_server
+wait startup_server
+
+# Automatic startup loading falls back to the platform user cache dir when XDG is unset.
+frankfurter FRANKFURTER_URL slow 0s
+env XDG_CACHE_HOME= HOME=$WORK/fallback-home LocalAppData=$WORK/fallback-local-app-data MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+[darwin] mkdir $WORK/fallback-home/Library/Caches/mina
+[darwin] cp frankfurter-usd-rates.ndjson $WORK/fallback-home/Library/Caches/mina/frankfurter-usd-rates.ndjson
+[windows] mkdir $WORK/fallback-local-app-data/mina
+[windows] cp frankfurter-usd-rates.ndjson $WORK/fallback-local-app-data/mina/frankfurter-usd-rates.ndjson
+[!darwin] [!windows] mkdir $WORK/fallback-home/.cache/mina
+[!darwin] [!windows] cp frankfurter-usd-rates.ndjson $WORK/fallback-home/.cache/mina/frankfurter-usd-rates.ndjson
+freeport FALLBACK_PORT
+exec mina serve --config-file startup-loading.toml --db $WORK/fallback-startup-rates.db --yes --host 127.0.0.1 --port $FALLBACK_PORT --quiet &fallback_server&
+httpget http://127.0.0.1:$FALLBACK_PORT/health
+stdout '"status":"ok"'
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$FALLBACK_PORT/background-operations/exchange-rate-loading/status
+stdout '"completed_run_revision":1'
+kill -INT fallback_server
+wait fallback_server
+
+# Interrupted cache population records failure, keeps safe partial rows, and later resumes.
+env XDG_CACHE_HOME=$WORK/partial-cache HOME=$WORK/partial-home
+frankfurter FRANKFURTER_URL truncated 0s
+env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport PARTIAL_PORT
+exec mina serve --config-file automatic-startup-loading.toml --db $WORK/partial-startup-rates.db --yes --host 127.0.0.1 --port $PARTIAL_PORT --quiet &partial_server&
+httpget http://127.0.0.1:$PARTIAL_PORT/health
+stdout '"status":"ok"'
+httpwait -timeout 10s '"last_success":false' http://127.0.0.1:$PARTIAL_PORT/background-operations/exchange-rate-loading/status
+stdout '"completed_run_revision":1'
+cmp partial-frankfurter-cache.ndjson $WORK/partial-cache/mina/frankfurter-usd-rates.ndjson
+! glob $WORK/partial-cache/mina/.frankfurter-usd-rates.ndjson.*.tmp
+
+httpget -method POST -status 201 -body account_eur.json http://127.0.0.1:$PARTIAL_PORT/accounts
+stdout '"account_id":1'
+httpget -method POST -status 201 -body account_counterparty.json http://127.0.0.1:$PARTIAL_PORT/accounts
+stdout '"account_id":2'
+httpget -method POST -status 201 -body category.json http://127.0.0.1:$PARTIAL_PORT/categories
+stdout '"category_id":3'
+httpget -method POST -status 201 -body transaction.json http://127.0.0.1:$PARTIAL_PORT/transactions
+stdout '"transaction_id"'
+
+kill -INT partial_server
+wait partial_server
+
+frankfurter FRANKFURTER_URL expect-from 0s 2024-04-02
+env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport RESUME_PORT
+exec mina serve --config-file automatic-startup-loading.toml --db $WORK/partial-startup-rates.db --yes --host 127.0.0.1 --port $RESUME_PORT --quiet &resume_server&
+httpget http://127.0.0.1:$RESUME_PORT/health
+stdout '"status":"ok"'
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$RESUME_PORT/background-operations/exchange-rate-loading/status
+stdout '"completed_run_revision":1'
+httpget 'http://127.0.0.1:'$RESUME_PORT'/exchange-rates?from_currency=USD&to_currency=EUR&effective_date=2024-04-02T00:00:00Z'
+stdout '"exchange_rates":\['
+stdout '"from_currency":"USD"'
+stdout '"to_currency":"EUR"'
+stdout '"effective_date":"2024-04-02T00:00:00Z"'
+kill -INT resume_server
+wait resume_server
+
+# Canceled cache population keeps safe partial rows and later resumes.
+env XDG_CACHE_HOME=$WORK/stalled-cache HOME=$WORK/stalled-home
+frankfurter FRANKFURTER_URL stall 0s $WORK/stalled-frankfurter-ready
+env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport STALLED_PORT
+exec mina serve --config-file automatic-startup-loading.toml --db $WORK/stalled-startup-rates.db --yes --host 127.0.0.1 --port $STALLED_PORT --quiet &stalled_server&
+httpget http://127.0.0.1:$STALLED_PORT/health
+stdout '"status":"ok"'
+waitfile -timeout 10s $WORK/stalled-frankfurter-ready
+kill -INT stalled_server
+wait stalled_server
+cmp partial-frankfurter-cache.ndjson $WORK/stalled-cache/mina/frankfurter-usd-rates.ndjson
+! glob $WORK/stalled-cache/mina/.frankfurter-usd-rates.ndjson.*.tmp
+
+frankfurter FRANKFURTER_URL slow 0s
+env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport STALLED_RESUME_PORT
+exec mina serve --config-file automatic-startup-loading.toml --db $WORK/stalled-startup-rates.db --yes --host 127.0.0.1 --port $STALLED_RESUME_PORT --quiet &stalled_resume_server&
+httpget http://127.0.0.1:$STALLED_RESUME_PORT/health
+stdout '"status":"ok"'
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$STALLED_RESUME_PORT/background-operations/exchange-rate-loading/status
+stdout '"completed_run_revision":1'
+cmp frankfurter-usd-rates.ndjson $WORK/stalled-cache/mina/frankfurter-usd-rates.ndjson
+kill -INT stalled_resume_server
+wait stalled_resume_server
+
+# Cache population tolerates a slow NDJSON stream and installs a final cache file.
+env XDG_CACHE_HOME=$WORK/slow-cache HOME=$WORK/slow-home
+frankfurter FRANKFURTER_URL slow 11s
+env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport SLOW_PORT
+exec mina serve --config-file automatic-startup-loading.toml --db $WORK/slow-startup-rates.db --yes --host 127.0.0.1 --port $SLOW_PORT --quiet &slow_server&
+httpget http://127.0.0.1:$SLOW_PORT/health
+stdout '"status":"ok"'
+httpwait -timeout 30s '"last_success":true' http://127.0.0.1:$SLOW_PORT/background-operations/exchange-rate-loading/status
+stdout '"completed_run_revision":1'
+exists $WORK/slow-cache/mina/frankfurter-usd-rates.ndjson
+! glob $WORK/slow-cache/mina/.frankfurter-usd-rates.ndjson.*.tmp
+kill -INT slow_server
+wait slow_server
+
+# Cache population preserves a cache that appears while population is streaming.
+env XDG_CACHE_HOME=$WORK/competing-cache HOME=$WORK/competing-home
+frankfurter FRANKFURTER_URL competing-install 0s $WORK/competing-cache/mina/frankfurter-usd-rates.ndjson
+env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport COMPETING_PORT
+exec mina serve --config-file automatic-startup-loading.toml --db $WORK/competing-startup-rates.db --yes --host 127.0.0.1 --port $COMPETING_PORT --quiet &competing_server&
+httpget http://127.0.0.1:$COMPETING_PORT/health
+stdout '"status":"ok"'
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$COMPETING_PORT/background-operations/exchange-rate-loading/status
+stdout '"completed_run_revision":1'
+cmp competing-frankfurter-cache.ndjson $WORK/competing-cache/mina/frankfurter-usd-rates.ndjson
+kill -INT competing_server
+wait competing_server
+
+# Cache extension preserves a newer cache installed while resume streaming.
+env XDG_CACHE_HOME=$WORK/competing-resume-cache HOME=$WORK/competing-resume-home
+mkdir $WORK/competing-resume-cache/mina
+cp partial-frankfurter-cache.ndjson $WORK/competing-resume-cache/mina/frankfurter-usd-rates.ndjson
+frankfurter FRANKFURTER_URL competing-install 0s $WORK/competing-resume-cache/mina/frankfurter-usd-rates.ndjson
+env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
+freeport COMPETING_RESUME_PORT
+exec mina serve --config-file automatic-startup-loading.toml --db $WORK/competing-resume-startup-rates.db --yes --host 127.0.0.1 --port $COMPETING_RESUME_PORT --quiet &competing_resume_server&
+httpget http://127.0.0.1:$COMPETING_RESUME_PORT/health
+stdout '"status":"ok"'
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$COMPETING_RESUME_PORT/background-operations/exchange-rate-loading/status
+stdout '"completed_run_revision":1'
+cmp competing-frankfurter-cache.ndjson $WORK/competing-resume-cache/mina/frankfurter-usd-rates.ndjson
+kill -INT competing_resume_server
+wait competing_resume_server
+
+-- account_eur.json --
+{"fqn":"checking:EUR","currency":"EUR"}
+
+-- account_counterparty.json --
+{"fqn":"counterparty:EUR"}
+
+-- category.json --
+{"fqn":"Transfers:EUR"}
+
+-- transaction.json --
+{
+  "initiated_date": "2024-04-02",
+  "records": [
+    {
+      "account_id": 1,
+      "amount": "-10.00000000",
+      "amount_usd": null,
+      "category_id": 3,
+      "currency": "EUR",
+      "pending_date": "2024-04-02T12:00:00Z",
+      "posted_date": "2024-04-02T12:00:00Z",
+      "posting_status": "posted",
+      "reconciliation_status": "reconciled",
+      "source": "manual"
+    },
+    {
+      "account_id": 2,
+      "amount": "10.00000000",
+      "amount_usd": null,
+      "category_id": 3,
+      "currency": "EUR",
+      "pending_date": "2024-04-02T12:00:00Z",
+      "posted_date": "2024-04-02T12:00:00Z",
+      "posting_status": "posted",
+      "reconciliation_status": "reconciled",
+      "source": "manual"
+    }
+  ]
+}
+
+-- exchange-rate-loading.toml --
+[exchange_rates]
+automatic_loading_enabled = false
+
+-- startup-loading.toml --
+[exchange_rates]
+automatic_loading_enabled = true
+
+[exchange_rates.frankfurter]
+base_url = "http://127.0.0.1:1"
+
+-- automatic-startup-loading.toml --
+[exchange_rates]
+automatic_loading_enabled = true
+
+-- frankfurter-usd-rates.ndjson --
+{"date":"2024-04-02","base":"USD","quote":"EUR","rate":0.93000000}
+{"date":"2026-04-01","base":"USD","quote":"EUR","rate":1.09000000}
+-- competing-frankfurter-cache.ndjson --
+{"date":"2024-04-02","base":"USD","quote":"EUR","rate":1.23000000}
+{"date":"2026-04-01","base":"USD","quote":"EUR","rate":1.45000000}
+-- partial-frankfurter-cache.ndjson --
+{"date":"2024-04-02","base":"USD","quote":"EUR","rate":0.93000000}

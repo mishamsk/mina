@@ -45,6 +45,54 @@ func (e APIErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for BackgroundOperationSummaryOperationId.
+const (
+	BackgroundOperationSummaryOperationIdExchangeRateLoading BackgroundOperationSummaryOperationId = "exchange-rate-loading"
+)
+
+// Valid indicates whether the value is a known member of the BackgroundOperationSummaryOperationId enum.
+func (e BackgroundOperationSummaryOperationId) Valid() bool {
+	switch e {
+	case BackgroundOperationSummaryOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExchangeRateLoadingStatusResponseOperationId.
+const (
+	ExchangeRateLoadingStatusResponseOperationIdExchangeRateLoading ExchangeRateLoadingStatusResponseOperationId = "exchange-rate-loading"
+)
+
+// Valid indicates whether the value is a known member of the ExchangeRateLoadingStatusResponseOperationId enum.
+func (e ExchangeRateLoadingStatusResponseOperationId) Valid() bool {
+	switch e {
+	case ExchangeRateLoadingStatusResponseOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExchangeRateLoadingStatusResponseState.
+const (
+	ExchangeRateLoadingStatusResponseStateIdle    ExchangeRateLoadingStatusResponseState = "idle"
+	ExchangeRateLoadingStatusResponseStateRunning ExchangeRateLoadingStatusResponseState = "running"
+)
+
+// Valid indicates whether the value is a known member of the ExchangeRateLoadingStatusResponseState enum.
+func (e ExchangeRateLoadingStatusResponseState) Valid() bool {
+	switch e {
+	case ExchangeRateLoadingStatusResponseStateIdle:
+		return true
+	case ExchangeRateLoadingStatusResponseStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseStatus.
 const (
 	Ok HealthResponseStatus = "ok"
@@ -54,6 +102,63 @@ const (
 func (e HealthResponseStatus) Valid() bool {
 	switch e {
 	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationRunReferenceResponseOperationId.
+const (
+	OperationRunReferenceResponseOperationIdExchangeRateLoading OperationRunReferenceResponseOperationId = "exchange-rate-loading"
+)
+
+// Valid indicates whether the value is a known member of the OperationRunReferenceResponseOperationId enum.
+func (e OperationRunReferenceResponseOperationId) Valid() bool {
+	switch e {
+	case OperationRunReferenceResponseOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationRunResponseOperationId.
+const (
+	OperationRunResponseOperationIdExchangeRateLoading OperationRunResponseOperationId = "exchange-rate-loading"
+)
+
+// Valid indicates whether the value is a known member of the OperationRunResponseOperationId enum.
+func (e OperationRunResponseOperationId) Valid() bool {
+	switch e {
+	case OperationRunResponseOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationRunResponseStatus.
+const (
+	OperationRunResponseStatusCanceled  OperationRunResponseStatus = "canceled"
+	OperationRunResponseStatusFailed    OperationRunResponseStatus = "failed"
+	OperationRunResponseStatusRunning   OperationRunResponseStatus = "running"
+	OperationRunResponseStatusSkipped   OperationRunResponseStatus = "skipped"
+	OperationRunResponseStatusSucceeded OperationRunResponseStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the OperationRunResponseStatus enum.
+func (e OperationRunResponseStatus) Valid() bool {
+	switch e {
+	case OperationRunResponseStatusCanceled:
+		return true
+	case OperationRunResponseStatusFailed:
+		return true
+	case OperationRunResponseStatusRunning:
+		return true
+	case OperationRunResponseStatusSkipped:
+		return true
+	case OperationRunResponseStatusSucceeded:
 		return true
 	default:
 		return false
@@ -382,6 +487,20 @@ type AccountListResponse struct {
 	Accounts []Account `json:"accounts"`
 }
 
+// BackgroundOperationListResponse defines model for BackgroundOperationListResponse.
+type BackgroundOperationListResponse struct {
+	Operations []BackgroundOperationSummary `json:"operations"`
+}
+
+// BackgroundOperationSummary defines model for BackgroundOperationSummary.
+type BackgroundOperationSummary struct {
+	OperationId BackgroundOperationSummaryOperationId `json:"operation_id"`
+	StatusUrl   string                                `json:"status_url"`
+}
+
+// BackgroundOperationSummaryOperationId defines model for BackgroundOperationSummary.OperationId.
+type BackgroundOperationSummaryOperationId string
+
 // BulkCategorizeRecordsRequest defines model for BulkCategorizeRecordsRequest.
 type BulkCategorizeRecordsRequest struct {
 	CategoryId int64   `json:"category_id"`
@@ -559,6 +678,28 @@ type ExchangeRateListResponse struct {
 	ExchangeRates []ExchangeRate `json:"exchange_rates"`
 }
 
+// ExchangeRateLoadingStatusResponse defines model for ExchangeRateLoadingStatusResponse.
+type ExchangeRateLoadingStatusResponse struct {
+	CompletedRunRevision int64                                        `json:"completed_run_revision"`
+	Enabled              bool                                         `json:"enabled"`
+	LastCompletedAt      *time.Time                                   `json:"last_completed_at,omitempty"`
+	LastError            *string                                      `json:"last_error,omitempty"`
+	LastStartedAt        *time.Time                                   `json:"last_started_at,omitempty"`
+	LastSuccess          *bool                                        `json:"last_success,omitempty"`
+	OperationId          ExchangeRateLoadingStatusResponseOperationId `json:"operation_id"`
+	RunCount             int64                                        `json:"run_count"`
+
+	// ScheduleUtc Five-field cron-style schedule interpreted in UTC.
+	ScheduleUtc string                                 `json:"schedule_utc"`
+	State       ExchangeRateLoadingStatusResponseState `json:"state"`
+}
+
+// ExchangeRateLoadingStatusResponseOperationId defines model for ExchangeRateLoadingStatusResponse.OperationId.
+type ExchangeRateLoadingStatusResponseOperationId string
+
+// ExchangeRateLoadingStatusResponseState defines model for ExchangeRateLoadingStatusResponse.State.
+type ExchangeRateLoadingStatusResponseState string
+
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	SchemaVersion int64                `json:"schema_version"`
@@ -618,6 +759,32 @@ type Member struct {
 type MemberListResponse struct {
 	Members []Member `json:"members"`
 }
+
+// OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
+type OperationRunReferenceResponse struct {
+	OperationId    OperationRunReferenceResponseOperationId `json:"operation_id"`
+	OperationRunId int64                                    `json:"operation_run_id"`
+	StatusUrl      string                                   `json:"status_url"`
+}
+
+// OperationRunReferenceResponseOperationId defines model for OperationRunReferenceResponse.OperationId.
+type OperationRunReferenceResponseOperationId string
+
+// OperationRunResponse defines model for OperationRunResponse.
+type OperationRunResponse struct {
+	CompletedAt    *time.Time                      `json:"completed_at,omitempty"`
+	Error          *string                         `json:"error,omitempty"`
+	OperationId    OperationRunResponseOperationId `json:"operation_id"`
+	OperationRunId int64                           `json:"operation_run_id"`
+	StartedAt      time.Time                       `json:"started_at"`
+	Status         OperationRunResponseStatus      `json:"status"`
+}
+
+// OperationRunResponseOperationId defines model for OperationRunResponse.OperationId.
+type OperationRunResponseOperationId string
+
+// OperationRunResponseStatus defines model for OperationRunResponse.Status.
+type OperationRunResponseStatus string
 
 // PostingStatus defines model for PostingStatus.
 type PostingStatus string
@@ -1049,6 +1216,18 @@ type ClientInterface interface {
 	// SeedDemo request
 	SeedDemo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListBackgroundOperations request
+	ListBackgroundOperations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartExchangeRateLoadingRun request
+	StartExchangeRateLoadingRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetExchangeRateLoadingRun request
+	GetExchangeRateLoadingRun(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetExchangeRateLoadingStatus request
+	GetExchangeRateLoadingStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListCategories request
 	ListCategories(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1311,6 +1490,54 @@ func (c *Client) SearchAccountJournalRecords(ctx context.Context, accountId int6
 
 func (c *Client) SeedDemo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSeedDemoRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListBackgroundOperations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListBackgroundOperationsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) StartExchangeRateLoadingRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartExchangeRateLoadingRunRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetExchangeRateLoadingRun(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetExchangeRateLoadingRunRequest(c.Server, operationRunId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetExchangeRateLoadingStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetExchangeRateLoadingStatusRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -2598,6 +2825,121 @@ func NewSeedDemoRequest(server string) (*http.Request, error) {
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListBackgroundOperationsRequest generates requests for ListBackgroundOperations
+func NewListBackgroundOperationsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/background-operations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartExchangeRateLoadingRunRequest generates requests for StartExchangeRateLoadingRun
+func NewStartExchangeRateLoadingRunRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/background-operations/exchange-rate-loading/runs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetExchangeRateLoadingRunRequest generates requests for GetExchangeRateLoadingRun
+func NewGetExchangeRateLoadingRunRequest(server string, operationRunId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "operation_run_id", operationRunId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/background-operations/exchange-rate-loading/runs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetExchangeRateLoadingStatusRequest generates requests for GetExchangeRateLoadingStatus
+func NewGetExchangeRateLoadingStatusRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/background-operations/exchange-rate-loading/status")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -4587,6 +4929,18 @@ type ClientWithResponsesInterface interface {
 	// SeedDemoWithResponse request
 	SeedDemoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SeedDemoResponse, error)
 
+	// ListBackgroundOperationsWithResponse request
+	ListBackgroundOperationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBackgroundOperationsResponse, error)
+
+	// StartExchangeRateLoadingRunWithResponse request
+	StartExchangeRateLoadingRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartExchangeRateLoadingRunResponse, error)
+
+	// GetExchangeRateLoadingRunWithResponse request
+	GetExchangeRateLoadingRunWithResponse(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*GetExchangeRateLoadingRunResponse, error)
+
+	// GetExchangeRateLoadingStatusWithResponse request
+	GetExchangeRateLoadingStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetExchangeRateLoadingStatusResponse, error)
+
 	// ListCategoriesWithResponse request
 	ListCategoriesWithResponse(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*ListCategoriesResponse, error)
 
@@ -4997,6 +5351,132 @@ func (r SeedDemoResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SeedDemoResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListBackgroundOperationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *BackgroundOperationListResponse
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r ListBackgroundOperationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListBackgroundOperationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListBackgroundOperationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StartExchangeRateLoadingRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *OperationRunReferenceResponse
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r StartExchangeRateLoadingRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartExchangeRateLoadingRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StartExchangeRateLoadingRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetExchangeRateLoadingRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OperationRunResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetExchangeRateLoadingRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetExchangeRateLoadingRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetExchangeRateLoadingRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetExchangeRateLoadingStatusResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ExchangeRateLoadingStatusResponse
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetExchangeRateLoadingStatusResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetExchangeRateLoadingStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetExchangeRateLoadingStatusResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -6146,6 +6626,42 @@ func (c *ClientWithResponses) SeedDemoWithResponse(ctx context.Context, reqEdito
 	return ParseSeedDemoResponse(rsp)
 }
 
+// ListBackgroundOperationsWithResponse request returning *ListBackgroundOperationsResponse
+func (c *ClientWithResponses) ListBackgroundOperationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBackgroundOperationsResponse, error) {
+	rsp, err := c.ListBackgroundOperations(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListBackgroundOperationsResponse(rsp)
+}
+
+// StartExchangeRateLoadingRunWithResponse request returning *StartExchangeRateLoadingRunResponse
+func (c *ClientWithResponses) StartExchangeRateLoadingRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartExchangeRateLoadingRunResponse, error) {
+	rsp, err := c.StartExchangeRateLoadingRun(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartExchangeRateLoadingRunResponse(rsp)
+}
+
+// GetExchangeRateLoadingRunWithResponse request returning *GetExchangeRateLoadingRunResponse
+func (c *ClientWithResponses) GetExchangeRateLoadingRunWithResponse(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*GetExchangeRateLoadingRunResponse, error) {
+	rsp, err := c.GetExchangeRateLoadingRun(ctx, operationRunId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetExchangeRateLoadingRunResponse(rsp)
+}
+
+// GetExchangeRateLoadingStatusWithResponse request returning *GetExchangeRateLoadingStatusResponse
+func (c *ClientWithResponses) GetExchangeRateLoadingStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetExchangeRateLoadingStatusResponse, error) {
+	rsp, err := c.GetExchangeRateLoadingStatus(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetExchangeRateLoadingStatusResponse(rsp)
+}
+
 // ListCategoriesWithResponse request returning *ListCategoriesResponse
 func (c *ClientWithResponses) ListCategoriesWithResponse(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*ListCategoriesResponse, error) {
 	rsp, err := c.ListCategories(ctx, params, reqEditors...)
@@ -6909,6 +7425,152 @@ func ParseSeedDemoResponse(rsp *http.Response) (*SeedDemoResponse, error) {
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListBackgroundOperationsResponse parses an HTTP response from a ListBackgroundOperationsWithResponse call
+func ParseListBackgroundOperationsResponse(rsp *http.Response) (*ListBackgroundOperationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListBackgroundOperationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BackgroundOperationListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStartExchangeRateLoadingRunResponse parses an HTTP response from a StartExchangeRateLoadingRunWithResponse call
+func ParseStartExchangeRateLoadingRunResponse(rsp *http.Response) (*StartExchangeRateLoadingRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartExchangeRateLoadingRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest OperationRunReferenceResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetExchangeRateLoadingRunResponse parses an HTTP response from a GetExchangeRateLoadingRunWithResponse call
+func ParseGetExchangeRateLoadingRunResponse(rsp *http.Response) (*GetExchangeRateLoadingRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetExchangeRateLoadingRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperationRunResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetExchangeRateLoadingStatusResponse parses an HTTP response from a GetExchangeRateLoadingStatusWithResponse call
+func ParseGetExchangeRateLoadingStatusResponse(rsp *http.Response) (*GetExchangeRateLoadingStatusResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetExchangeRateLoadingStatusResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExchangeRateLoadingStatusResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
 
 	}
 

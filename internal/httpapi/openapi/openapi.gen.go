@@ -50,6 +50,54 @@ func (e APIErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for BackgroundOperationSummaryOperationId.
+const (
+	BackgroundOperationSummaryOperationIdExchangeRateLoading BackgroundOperationSummaryOperationId = "exchange-rate-loading"
+)
+
+// Valid indicates whether the value is a known member of the BackgroundOperationSummaryOperationId enum.
+func (e BackgroundOperationSummaryOperationId) Valid() bool {
+	switch e {
+	case BackgroundOperationSummaryOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExchangeRateLoadingStatusResponseOperationId.
+const (
+	ExchangeRateLoadingStatusResponseOperationIdExchangeRateLoading ExchangeRateLoadingStatusResponseOperationId = "exchange-rate-loading"
+)
+
+// Valid indicates whether the value is a known member of the ExchangeRateLoadingStatusResponseOperationId enum.
+func (e ExchangeRateLoadingStatusResponseOperationId) Valid() bool {
+	switch e {
+	case ExchangeRateLoadingStatusResponseOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExchangeRateLoadingStatusResponseState.
+const (
+	ExchangeRateLoadingStatusResponseStateIdle    ExchangeRateLoadingStatusResponseState = "idle"
+	ExchangeRateLoadingStatusResponseStateRunning ExchangeRateLoadingStatusResponseState = "running"
+)
+
+// Valid indicates whether the value is a known member of the ExchangeRateLoadingStatusResponseState enum.
+func (e ExchangeRateLoadingStatusResponseState) Valid() bool {
+	switch e {
+	case ExchangeRateLoadingStatusResponseStateIdle:
+		return true
+	case ExchangeRateLoadingStatusResponseStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseStatus.
 const (
 	Ok HealthResponseStatus = "ok"
@@ -59,6 +107,63 @@ const (
 func (e HealthResponseStatus) Valid() bool {
 	switch e {
 	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationRunReferenceResponseOperationId.
+const (
+	OperationRunReferenceResponseOperationIdExchangeRateLoading OperationRunReferenceResponseOperationId = "exchange-rate-loading"
+)
+
+// Valid indicates whether the value is a known member of the OperationRunReferenceResponseOperationId enum.
+func (e OperationRunReferenceResponseOperationId) Valid() bool {
+	switch e {
+	case OperationRunReferenceResponseOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationRunResponseOperationId.
+const (
+	OperationRunResponseOperationIdExchangeRateLoading OperationRunResponseOperationId = "exchange-rate-loading"
+)
+
+// Valid indicates whether the value is a known member of the OperationRunResponseOperationId enum.
+func (e OperationRunResponseOperationId) Valid() bool {
+	switch e {
+	case OperationRunResponseOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationRunResponseStatus.
+const (
+	OperationRunResponseStatusCanceled  OperationRunResponseStatus = "canceled"
+	OperationRunResponseStatusFailed    OperationRunResponseStatus = "failed"
+	OperationRunResponseStatusRunning   OperationRunResponseStatus = "running"
+	OperationRunResponseStatusSkipped   OperationRunResponseStatus = "skipped"
+	OperationRunResponseStatusSucceeded OperationRunResponseStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the OperationRunResponseStatus enum.
+func (e OperationRunResponseStatus) Valid() bool {
+	switch e {
+	case OperationRunResponseStatusCanceled:
+		return true
+	case OperationRunResponseStatusFailed:
+		return true
+	case OperationRunResponseStatusRunning:
+		return true
+	case OperationRunResponseStatusSkipped:
+		return true
+	case OperationRunResponseStatusSucceeded:
 		return true
 	default:
 		return false
@@ -387,6 +492,20 @@ type AccountListResponse struct {
 	Accounts []Account `json:"accounts"`
 }
 
+// BackgroundOperationListResponse defines model for BackgroundOperationListResponse.
+type BackgroundOperationListResponse struct {
+	Operations []BackgroundOperationSummary `json:"operations"`
+}
+
+// BackgroundOperationSummary defines model for BackgroundOperationSummary.
+type BackgroundOperationSummary struct {
+	OperationId BackgroundOperationSummaryOperationId `json:"operation_id"`
+	StatusUrl   string                                `json:"status_url"`
+}
+
+// BackgroundOperationSummaryOperationId defines model for BackgroundOperationSummary.OperationId.
+type BackgroundOperationSummaryOperationId string
+
 // BulkCategorizeRecordsRequest defines model for BulkCategorizeRecordsRequest.
 type BulkCategorizeRecordsRequest struct {
 	CategoryId int64   `json:"category_id"`
@@ -564,6 +683,28 @@ type ExchangeRateListResponse struct {
 	ExchangeRates []ExchangeRate `json:"exchange_rates"`
 }
 
+// ExchangeRateLoadingStatusResponse defines model for ExchangeRateLoadingStatusResponse.
+type ExchangeRateLoadingStatusResponse struct {
+	CompletedRunRevision int64                                        `json:"completed_run_revision"`
+	Enabled              bool                                         `json:"enabled"`
+	LastCompletedAt      *time.Time                                   `json:"last_completed_at,omitempty"`
+	LastError            *string                                      `json:"last_error,omitempty"`
+	LastStartedAt        *time.Time                                   `json:"last_started_at,omitempty"`
+	LastSuccess          *bool                                        `json:"last_success,omitempty"`
+	OperationId          ExchangeRateLoadingStatusResponseOperationId `json:"operation_id"`
+	RunCount             int64                                        `json:"run_count"`
+
+	// ScheduleUtc Five-field cron-style schedule interpreted in UTC.
+	ScheduleUtc string                                 `json:"schedule_utc"`
+	State       ExchangeRateLoadingStatusResponseState `json:"state"`
+}
+
+// ExchangeRateLoadingStatusResponseOperationId defines model for ExchangeRateLoadingStatusResponse.OperationId.
+type ExchangeRateLoadingStatusResponseOperationId string
+
+// ExchangeRateLoadingStatusResponseState defines model for ExchangeRateLoadingStatusResponse.State.
+type ExchangeRateLoadingStatusResponseState string
+
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	SchemaVersion int64                `json:"schema_version"`
@@ -623,6 +764,32 @@ type Member struct {
 type MemberListResponse struct {
 	Members []Member `json:"members"`
 }
+
+// OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
+type OperationRunReferenceResponse struct {
+	OperationId    OperationRunReferenceResponseOperationId `json:"operation_id"`
+	OperationRunId int64                                    `json:"operation_run_id"`
+	StatusUrl      string                                   `json:"status_url"`
+}
+
+// OperationRunReferenceResponseOperationId defines model for OperationRunReferenceResponse.OperationId.
+type OperationRunReferenceResponseOperationId string
+
+// OperationRunResponse defines model for OperationRunResponse.
+type OperationRunResponse struct {
+	CompletedAt    *time.Time                      `json:"completed_at,omitempty"`
+	Error          *string                         `json:"error,omitempty"`
+	OperationId    OperationRunResponseOperationId `json:"operation_id"`
+	OperationRunId int64                           `json:"operation_run_id"`
+	StartedAt      time.Time                       `json:"started_at"`
+	Status         OperationRunResponseStatus      `json:"status"`
+}
+
+// OperationRunResponseOperationId defines model for OperationRunResponse.OperationId.
+type OperationRunResponseOperationId string
+
+// OperationRunResponseStatus defines model for OperationRunResponse.Status.
+type OperationRunResponseStatus string
 
 // PostingStatus defines model for PostingStatus.
 type PostingStatus string
@@ -977,6 +1144,18 @@ type ServerInterface interface {
 	// Seed demo data into the opened app.
 	// (POST /app/demo-seed)
 	SeedDemo(w http.ResponseWriter, r *http.Request)
+	// List registered background operations.
+	// (GET /background-operations)
+	ListBackgroundOperations(w http.ResponseWriter, r *http.Request)
+	// Start an exchange-rate loading run.
+	// (POST /background-operations/exchange-rate-loading/runs)
+	StartExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request)
+	// Get one exchange-rate loading run.
+	// (GET /background-operations/exchange-rate-loading/runs/{operation_run_id})
+	GetExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request, operationRunId int64)
+	// Get exchange-rate loading operation status.
+	// (GET /background-operations/exchange-rate-loading/status)
+	GetExchangeRateLoadingStatus(w http.ResponseWriter, r *http.Request)
 	// List categories.
 	// (GET /categories)
 	ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams)
@@ -1133,6 +1312,30 @@ func (_ Unimplemented) SearchAccountJournalRecords(w http.ResponseWriter, r *htt
 // Seed demo data into the opened app.
 // (POST /app/demo-seed)
 func (_ Unimplemented) SeedDemo(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List registered background operations.
+// (GET /background-operations)
+func (_ Unimplemented) ListBackgroundOperations(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Start an exchange-rate loading run.
+// (POST /background-operations/exchange-rate-loading/runs)
+func (_ Unimplemented) StartExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get one exchange-rate loading run.
+// (GET /background-operations/exchange-rate-loading/runs/{operation_run_id})
+func (_ Unimplemented) GetExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request, operationRunId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get exchange-rate loading operation status.
+// (GET /background-operations/exchange-rate-loading/status)
+func (_ Unimplemented) GetExchangeRateLoadingStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1911,6 +2114,74 @@ func (siw *ServerInterfaceWrapper) SeedDemo(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SeedDemo(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListBackgroundOperations operation middleware
+func (siw *ServerInterfaceWrapper) ListBackgroundOperations(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBackgroundOperations(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartExchangeRateLoadingRun operation middleware
+func (siw *ServerInterfaceWrapper) StartExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartExchangeRateLoadingRun(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetExchangeRateLoadingRun operation middleware
+func (siw *ServerInterfaceWrapper) GetExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "operation_run_id" -------------
+	var operationRunId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operation_run_id", chi.URLParam(r, "operation_run_id"), &operationRunId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operation_run_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetExchangeRateLoadingRun(w, r, operationRunId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetExchangeRateLoadingStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetExchangeRateLoadingStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetExchangeRateLoadingStatus(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3383,6 +3654,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/app/demo-seed", wrapper.SeedDemo)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/background-operations", wrapper.ListBackgroundOperations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/background-operations/exchange-rate-loading/runs", wrapper.StartExchangeRateLoadingRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/background-operations/exchange-rate-loading/runs/{operation_run_id}", wrapper.GetExchangeRateLoadingRun)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/background-operations/exchange-rate-loading/status", wrapper.GetExchangeRateLoadingStatus)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories", wrapper.ListCategories)
 	})
 	r.Group(func(r chi.Router) {
@@ -3953,6 +4236,175 @@ func (response SeedDemo500JSONResponse) VisitSeedDemoResponse(w http.ResponseWri
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBackgroundOperationsRequestObject struct {
+}
+
+type ListBackgroundOperationsResponseObject interface {
+	VisitListBackgroundOperationsResponse(w http.ResponseWriter) error
+}
+
+type ListBackgroundOperations200JSONResponse BackgroundOperationListResponse
+
+func (response ListBackgroundOperations200JSONResponse) VisitListBackgroundOperationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBackgroundOperations405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response ListBackgroundOperations405JSONResponse) VisitListBackgroundOperationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartExchangeRateLoadingRunRequestObject struct {
+}
+
+type StartExchangeRateLoadingRunResponseObject interface {
+	VisitStartExchangeRateLoadingRunResponse(w http.ResponseWriter) error
+}
+
+type StartExchangeRateLoadingRun202JSONResponse OperationRunReferenceResponse
+
+func (response StartExchangeRateLoadingRun202JSONResponse) VisitStartExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartExchangeRateLoadingRun405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response StartExchangeRateLoadingRun405JSONResponse) VisitStartExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExchangeRateLoadingRunRequestObject struct {
+	OperationRunId int64 `json:"operation_run_id"`
+}
+
+type GetExchangeRateLoadingRunResponseObject interface {
+	VisitGetExchangeRateLoadingRunResponse(w http.ResponseWriter) error
+}
+
+type GetExchangeRateLoadingRun200JSONResponse OperationRunResponse
+
+func (response GetExchangeRateLoadingRun200JSONResponse) VisitGetExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExchangeRateLoadingRun400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response GetExchangeRateLoadingRun400JSONResponse) VisitGetExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExchangeRateLoadingRun404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetExchangeRateLoadingRun404JSONResponse) VisitGetExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExchangeRateLoadingRun405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetExchangeRateLoadingRun405JSONResponse) VisitGetExchangeRateLoadingRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExchangeRateLoadingStatusRequestObject struct {
+}
+
+type GetExchangeRateLoadingStatusResponseObject interface {
+	VisitGetExchangeRateLoadingStatusResponse(w http.ResponseWriter) error
+}
+
+type GetExchangeRateLoadingStatus200JSONResponse ExchangeRateLoadingStatusResponse
+
+func (response GetExchangeRateLoadingStatus200JSONResponse) VisitGetExchangeRateLoadingStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetExchangeRateLoadingStatus405JSONResponse struct{ MethodNotAllowedJSONResponse }
+
+func (response GetExchangeRateLoadingStatus405JSONResponse) VisitGetExchangeRateLoadingStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(405)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -5440,6 +5892,18 @@ type StrictServerInterface interface {
 	// Seed demo data into the opened app.
 	// (POST /app/demo-seed)
 	SeedDemo(ctx context.Context, request SeedDemoRequestObject) (SeedDemoResponseObject, error)
+	// List registered background operations.
+	// (GET /background-operations)
+	ListBackgroundOperations(ctx context.Context, request ListBackgroundOperationsRequestObject) (ListBackgroundOperationsResponseObject, error)
+	// Start an exchange-rate loading run.
+	// (POST /background-operations/exchange-rate-loading/runs)
+	StartExchangeRateLoadingRun(ctx context.Context, request StartExchangeRateLoadingRunRequestObject) (StartExchangeRateLoadingRunResponseObject, error)
+	// Get one exchange-rate loading run.
+	// (GET /background-operations/exchange-rate-loading/runs/{operation_run_id})
+	GetExchangeRateLoadingRun(ctx context.Context, request GetExchangeRateLoadingRunRequestObject) (GetExchangeRateLoadingRunResponseObject, error)
+	// Get exchange-rate loading operation status.
+	// (GET /background-operations/exchange-rate-loading/status)
+	GetExchangeRateLoadingStatus(ctx context.Context, request GetExchangeRateLoadingStatusRequestObject) (GetExchangeRateLoadingStatusResponseObject, error)
 	// List categories.
 	// (GET /categories)
 	ListCategories(ctx context.Context, request ListCategoriesRequestObject) (ListCategoriesResponseObject, error)
@@ -5817,6 +6281,104 @@ func (sh *strictHandler) SeedDemo(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SeedDemoResponseObject); ok {
 		if err := validResponse.VisitSeedDemoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBackgroundOperations operation middleware
+func (sh *strictHandler) ListBackgroundOperations(w http.ResponseWriter, r *http.Request) {
+	var request ListBackgroundOperationsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBackgroundOperations(ctx, request.(ListBackgroundOperationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBackgroundOperations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBackgroundOperationsResponseObject); ok {
+		if err := validResponse.VisitListBackgroundOperationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartExchangeRateLoadingRun operation middleware
+func (sh *strictHandler) StartExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request) {
+	var request StartExchangeRateLoadingRunRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartExchangeRateLoadingRun(ctx, request.(StartExchangeRateLoadingRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartExchangeRateLoadingRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartExchangeRateLoadingRunResponseObject); ok {
+		if err := validResponse.VisitStartExchangeRateLoadingRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetExchangeRateLoadingRun operation middleware
+func (sh *strictHandler) GetExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request, operationRunId int64) {
+	var request GetExchangeRateLoadingRunRequestObject
+
+	request.OperationRunId = operationRunId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetExchangeRateLoadingRun(ctx, request.(GetExchangeRateLoadingRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetExchangeRateLoadingRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetExchangeRateLoadingRunResponseObject); ok {
+		if err := validResponse.VisitGetExchangeRateLoadingRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetExchangeRateLoadingStatus operation middleware
+func (sh *strictHandler) GetExchangeRateLoadingStatus(w http.ResponseWriter, r *http.Request) {
+	var request GetExchangeRateLoadingStatusRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetExchangeRateLoadingStatus(ctx, request.(GetExchangeRateLoadingStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetExchangeRateLoadingStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetExchangeRateLoadingStatusResponseObject); ok {
+		if err := validResponse.VisitGetExchangeRateLoadingStatusResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -6768,77 +7330,85 @@ func (sh *strictHandler) ReplaceTransaction(w http.ResponseWriter, r *http.Reque
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

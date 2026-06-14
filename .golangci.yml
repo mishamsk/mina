@@ -22,6 +22,10 @@ linters:
               desc: cmd/mina must not use the generated REST client until an approved production use case exists
             - pkg: github.com/mishamsk/mina/internal/httpapi
               desc: cmd/mina should delegate application behavior through internal/runtime
+            - pkg: github.com/mishamsk/mina/internal/background
+              desc: cmd/mina should delegate background operation wiring through internal/runtime
+            - pkg: github.com/mishamsk/mina/internal/providers
+              desc: cmd/mina should delegate provider wiring through internal/runtime
             - pkg: github.com/mishamsk/mina/internal/services
               desc: cmd/mina should delegate application behavior through internal/runtime
             - pkg: github.com/mishamsk/mina/internal/store
@@ -73,10 +77,18 @@ linters:
               desc: service packages own domain behavior, not SQL access
             - pkg: github.com/duckdb/duckdb-go/v2
               desc: service packages must not know DuckDB
+            - pkg: github.com/cenkalti/backoff/v5
+              desc: retry/backoff belongs at the background runner boundary
+            - pkg: github.com/robfig/cron/v3
+              desc: schedules belong at the background runner boundary
+            - pkg: github.com/mishamsk/mina/internal/background
+              desc: service packages must not know background runner composition
             - pkg: github.com/mishamsk/mina/internal/httpapi
               desc: service packages must not know REST/OpenAPI adapters
             - pkg: github.com/mishamsk/mina/internal/httpclient
               desc: service packages must not use the generated REST client
+            - pkg: github.com/mishamsk/mina/internal/providers
+              desc: service packages own provider interfaces and must not import concrete providers
             - pkg: github.com/mishamsk/mina/internal/runtime
               desc: service packages must not know runtime composition
             - pkg: github.com/mishamsk/mina/internal/store
@@ -103,6 +115,10 @@ linters:
               desc: store must not use the generated REST client
             - pkg: github.com/mishamsk/mina/internal/httpapi
               desc: store must not know REST/OpenAPI adapters
+            - pkg: github.com/mishamsk/mina/internal/background
+              desc: store must not know background runners
+            - pkg: github.com/mishamsk/mina/internal/providers
+              desc: store must not know concrete providers
             - pkg: github.com/mishamsk/mina/internal/runtime
               desc: store must not know runtime composition
             - pkg: github.com/spf13/cobra
@@ -125,6 +141,10 @@ linters:
               desc: HTTP adapters must not know DuckDB
             - pkg: github.com/mishamsk/mina/internal/httpclient
               desc: HTTP adapters must not use the generated REST client
+            - pkg: github.com/mishamsk/mina/internal/background
+              desc: HTTP adapters must not know background runners
+            - pkg: github.com/mishamsk/mina/internal/providers
+              desc: HTTP adapters must not know concrete providers
             - pkg: github.com/mishamsk/mina/internal/runtime
               desc: HTTP adapters must not know runtime composition
             - pkg: github.com/mishamsk/mina/internal/store
@@ -145,6 +165,81 @@ linters:
           deny:
             - pkg: github.com/mishamsk/mina/internal/services
               desc: generated OpenAPI contract code must not know service packages
+        provider-boundaries:
+          list-mode: lax
+          files:
+            - internal/providers/*.go
+            - internal/providers/**/*.go
+            - "**/internal/providers/*.go"
+            - "**/internal/providers/**/*.go"
+          deny:
+            - pkg: database/sql # Providers may later get provider-owned non-Mina SQL access if needed.
+              desc: providers must not own SQL access
+            - pkg: github.com/duckdb/duckdb-go/v2 # Providers may later get provider-owned non-Mina SQL access if needed.
+              desc: providers must not know DuckDB
+            - pkg: github.com/mishamsk/mina/internal/httpapi
+              desc: providers must not know REST/OpenAPI adapters
+            - pkg: github.com/mishamsk/mina/internal/httpclient
+              desc: providers must not use the generated REST client
+            - pkg: github.com/mishamsk/mina/internal/runtime
+              desc: providers must not know runtime composition
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: providers must not own Mina persistence or import internal/store
+            - pkg: github.com/spf13/cobra
+              desc: providers must not know CLI parsing
+            - pkg: github.com/spf13/pflag
+              desc: providers must not know CLI flags
+        background-boundaries:
+          list-mode: lax
+          files:
+            - internal/background/*.go
+            - internal/background/**/*.go
+            - "**/internal/background/*.go"
+            - "**/internal/background/**/*.go"
+          deny:
+            - pkg: database/sql
+              desc: background runners must not own SQL access
+            - pkg: github.com/duckdb/duckdb-go/v2
+              desc: background runners must not know DuckDB
+            - pkg: github.com/mishamsk/mina/internal/httpapi
+              desc: background runners must not know REST/OpenAPI adapters
+            - pkg: github.com/mishamsk/mina/internal/httpclient
+              desc: background runners must not use the generated REST client
+            - pkg: github.com/mishamsk/mina/internal/providers
+              desc: background runners must call services, not providers
+            - pkg: github.com/mishamsk/mina/internal/runtime
+              desc: background runners must not know runtime composition
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: background runners must not own persistence
+            - pkg: github.com/spf13/cobra
+              desc: background runners must not know CLI parsing
+            - pkg: github.com/spf13/pflag
+              desc: background runners must not know CLI flags
+        runtime-config-boundaries:
+          list-mode: lax
+          files:
+            - internal/runtime/config/*.go
+            - internal/runtime/config/**/*.go
+            - "**/internal/runtime/config/*.go"
+            - "**/internal/runtime/config/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/providers
+              desc: runtime config source loading must not import concrete providers
+        runtime-store-boundaries:
+          list-mode: lax
+          files:
+            - internal/runtime/*.go
+            - internal/runtime/**/*.go
+            - "**/internal/runtime/*.go"
+            - "**/internal/runtime/**/*.go"
+            # Runtime may touch store only in manual composition/database lifecycle and config-to-store request translation files.
+            - "!internal/runtime/app.go"
+            - "!internal/runtime/config.go"
+            - "!**/internal/runtime/app.go"
+            - "!**/internal/runtime/config.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: future runtime files needing store access must be added explicitly with a narrow reason instead of broadening all runtime access
         runtime-composition-only:
           list-mode: lax
           files:

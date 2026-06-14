@@ -2,7 +2,7 @@
 
 ## Purpose
 
-- Owns process health use cases and repository contracts.
+- Owns process health use cases and repository/clock contracts.
 
 ## Implicit Contracts
 
@@ -10,7 +10,7 @@
 
 ## Boundaries
 
-- Owns: health use-case shape and schema-version repository contract.
+- Owns: health use-case shape, schema-version repository contract, and current server time reporting.
 - Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
 
 ## Testing Notes

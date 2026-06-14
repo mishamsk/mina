@@ -1,4 +1,5 @@
 # The REST API serves real JSON over a real local listener.
+env MINA_FX_AUTO_LOAD_ENABLED=false
 freeport
 exec mina serve --db $WORK/rest.db --yes --host 127.0.0.1 --port $PORT &server&
 httpget http://127.0.0.1:$PORT/health

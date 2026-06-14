@@ -14,12 +14,16 @@ import (
 
 const (
 	configDirEnv  = "XDG_CONFIG_PATH"
+	cacheDirEnv   = "XDG_CACHE_HOME"
 	configRelPath = "mina/config.toml"
 )
 
 const (
-	defaultServeHost = "127.0.0.1"
-	defaultServePort = 8080
+	defaultServeHost                   = "127.0.0.1"
+	defaultServePort                   = 8080
+	defaultExchangeRateLoadScheduleUTC = "0 17 * * *"
+	defaultFrankfurterBaseURL          = "https://api.frankfurter.dev/v2"
+	defaultExchangeRateStartupProvider = "frankfurter_file"
 )
 
 // ConfigFileHelp documents the local config file path used by the loader.
@@ -29,7 +33,9 @@ const ConfigFileHelp = "$XDG_CONFIG_PATH/mina/config.toml"
 type Config struct {
 	DatabasePath     string
 	AccountingSchema string
+	CacheDir         string
 	Serve            ServeConfig
+	ExchangeRates    ExchangeRateConfig
 }
 
 // ServeConfig contains source-loaded REST listener settings.
@@ -38,6 +44,24 @@ type ServeConfig struct {
 	Port          int
 	AccessLogPath string
 	Quiet         bool
+}
+
+// ExchangeRateConfig contains source-loaded automatic exchange-rate loading settings.
+type ExchangeRateConfig struct {
+	AutomaticLoadingEnabled bool
+	LoadScheduleUTC         string
+	StartupProvider         string
+	Providers               ExchangeRateProviderConfig
+}
+
+// ExchangeRateProviderConfig contains source-loaded exchange-rate provider settings.
+type ExchangeRateProviderConfig struct {
+	Frankfurter FrankfurterExchangeRateProviderConfig
+}
+
+// FrankfurterExchangeRateProviderConfig contains source-loaded Frankfurter settings.
+type FrankfurterExchangeRateProviderConfig struct {
+	BaseURL string
 }
 
 // Override is an optional caller-provided config value.
@@ -104,13 +128,22 @@ const (
 	SourceServeAccessLogPath SourceKey = "serve.access_log"
 	// SourceServeQuiet identifies the REST listener quiet-mode config source.
 	SourceServeQuiet SourceKey = "serve.quiet"
+	// SourceExchangeRateAutomaticLoadingEnabled identifies the exchange-rate automatic-loading config source.
+	SourceExchangeRateAutomaticLoadingEnabled SourceKey = "exchange_rates.automatic_loading_enabled"
+	// SourceExchangeRateLoadScheduleUTC identifies the exchange-rate load schedule config source.
+	SourceExchangeRateLoadScheduleUTC SourceKey = "exchange_rates.load_schedule_utc"
+	// SourceExchangeRateStartupProvider identifies the exchange-rate startup provider config source.
+	SourceExchangeRateStartupProvider SourceKey = "exchange_rates.startup_provider"
+	// SourceExchangeRateFrankfurterBaseURL identifies the Frankfurter base URL config source.
+	SourceExchangeRateFrankfurterBaseURL SourceKey = "exchange_rates.frankfurter.base_url"
 )
 
 type fileConfig struct {
-	DatabasePath     *string         `toml:"db" env:"MINA_DB"`
-	AccountingSchema *string         `toml:"schema" env:"MINA_SCHEMA"`
-	AssumeYes        *bool           `toml:"yes" env:"MINA_YES"`
-	Serve            serveFileConfig `toml:"serve"`
+	DatabasePath     *string                `toml:"db" env:"MINA_DB"`
+	AccountingSchema *string                `toml:"schema" env:"MINA_SCHEMA"`
+	AssumeYes        *bool                  `toml:"yes" env:"MINA_YES"`
+	Serve            serveFileConfig        `toml:"serve"`
+	ExchangeRates    exchangeRateFileConfig `toml:"exchange_rates"`
 }
 
 type serveFileConfig struct {
@@ -118,6 +151,17 @@ type serveFileConfig struct {
 	Port          *int    `toml:"port" env:"MINA_PORT"`
 	AccessLogPath *string `toml:"access_log" env:"MINA_ACCESS_LOG"`
 	Quiet         *bool   `toml:"quiet" env:"MINA_QUIET"`
+}
+
+type exchangeRateFileConfig struct {
+	AutomaticLoadingEnabled *bool                             `toml:"automatic_loading_enabled" env:"MINA_FX_AUTO_LOAD_ENABLED"`
+	LoadScheduleUTC         *string                           `toml:"load_schedule_utc"`
+	StartupProvider         *string                           `toml:"startup_provider"`
+	Frankfurter             frankfurterExchangeRateFileConfig `toml:"frankfurter"`
+}
+
+type frankfurterExchangeRateFileConfig struct {
+	BaseURL *string `toml:"base_url" env:"MINA_FX_FRANKFURTER_BASE_URL"`
 }
 
 // DefaultServeConfig returns Mina's REST server defaults.
@@ -131,20 +175,52 @@ func DefaultServeConfig() ServeConfig {
 // DefaultConfig returns Mina's process config defaults.
 func DefaultConfig() Config {
 	return Config{
-		Serve: DefaultServeConfig(),
+		Serve:         DefaultServeConfig(),
+		ExchangeRates: DefaultExchangeRateConfig(),
+	}
+}
+
+// DefaultCacheDir returns Mina's app cache directory.
+func DefaultCacheDir() (string, error) {
+	if cacheDir := os.Getenv(cacheDirEnv); cacheDir != "" {
+		return filepath.Join(cacheDir, "mina"), nil
+	}
+	userCacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user cache directory: %w", err)
+	}
+
+	return filepath.Join(userCacheDir, "mina"), nil
+}
+
+// DefaultExchangeRateConfig returns automatic exchange-rate loading defaults.
+func DefaultExchangeRateConfig() ExchangeRateConfig {
+	return ExchangeRateConfig{
+		AutomaticLoadingEnabled: true,
+		LoadScheduleUTC:         defaultExchangeRateLoadScheduleUTC,
+		StartupProvider:         defaultExchangeRateStartupProvider,
+		Providers: ExchangeRateProviderConfig{
+			Frankfurter: FrankfurterExchangeRateProviderConfig{
+				BaseURL: defaultFrankfurterBaseURL,
+			},
+		},
 	}
 }
 
 // Sources returns config file and environment source metadata by config source key.
 func Sources() map[SourceKey]Source {
 	return map[SourceKey]Source{
-		SourceDatabasePath:       sourceFor(SourceDatabasePath),
-		SourceAccountingSchema:   sourceFor(SourceAccountingSchema),
-		SourceAssumeYes:          sourceFor(SourceAssumeYes),
-		SourceServeHost:          sourceFor(SourceServeHost),
-		SourceServePort:          sourceFor(SourceServePort),
-		SourceServeAccessLogPath: sourceFor(SourceServeAccessLogPath),
-		SourceServeQuiet:         sourceFor(SourceServeQuiet),
+		SourceDatabasePath:                        sourceFor(SourceDatabasePath),
+		SourceAccountingSchema:                    sourceFor(SourceAccountingSchema),
+		SourceAssumeYes:                           sourceFor(SourceAssumeYes),
+		SourceServeHost:                           sourceFor(SourceServeHost),
+		SourceServePort:                           sourceFor(SourceServePort),
+		SourceServeAccessLogPath:                  sourceFor(SourceServeAccessLogPath),
+		SourceServeQuiet:                          sourceFor(SourceServeQuiet),
+		SourceExchangeRateAutomaticLoadingEnabled: sourceFor(SourceExchangeRateAutomaticLoadingEnabled),
+		SourceExchangeRateLoadScheduleUTC:         sourceFor(SourceExchangeRateLoadScheduleUTC),
+		SourceExchangeRateStartupProvider:         sourceFor(SourceExchangeRateStartupProvider),
+		SourceExchangeRateFrankfurterBaseURL:      sourceFor(SourceExchangeRateFrankfurterBaseURL),
 	}
 }
 
@@ -152,6 +228,11 @@ func Sources() map[SourceKey]Source {
 func Load(opts LoadOptions, overrides Overrides) (Config, CommandConfig, error) {
 	cfg := DefaultConfig()
 	commandCfg := CommandConfig{}
+	cacheDir, err := DefaultCacheDir()
+	if err != nil {
+		return Config{}, CommandConfig{}, err
+	}
+	cfg.CacheDir = cacheDir
 
 	fileCfg, err := loadFileConfig(opts)
 	if err != nil {
@@ -159,6 +240,7 @@ func Load(opts LoadOptions, overrides Overrides) (Config, CommandConfig, error) 
 	}
 	applySharedFile(&cfg, &commandCfg, fileCfg)
 	applyServeFile(&cfg, fileCfg)
+	applyExchangeRateFile(&cfg, fileCfg)
 
 	envCfg, err := loadEnvConfig()
 	if err != nil {
@@ -166,11 +248,27 @@ func Load(opts LoadOptions, overrides Overrides) (Config, CommandConfig, error) 
 	}
 	applySharedFile(&cfg, &commandCfg, envCfg)
 	applyServeFile(&cfg, envCfg)
+	applyExchangeRateFile(&cfg, envCfg)
 
 	applyOverrides(&cfg, &commandCfg, overrides)
 	applyServeOverrides(&cfg, overrides.Serve)
 
 	return cfg, commandCfg, nil
+}
+
+func applyExchangeRateFile(cfg *Config, fileCfg fileConfig) {
+	if fileCfg.ExchangeRates.AutomaticLoadingEnabled != nil {
+		cfg.ExchangeRates.AutomaticLoadingEnabled = *fileCfg.ExchangeRates.AutomaticLoadingEnabled
+	}
+	if fileCfg.ExchangeRates.LoadScheduleUTC != nil {
+		cfg.ExchangeRates.LoadScheduleUTC = *fileCfg.ExchangeRates.LoadScheduleUTC
+	}
+	if fileCfg.ExchangeRates.StartupProvider != nil {
+		cfg.ExchangeRates.StartupProvider = *fileCfg.ExchangeRates.StartupProvider
+	}
+	if fileCfg.ExchangeRates.Frankfurter.BaseURL != nil {
+		cfg.ExchangeRates.Providers.Frankfurter.BaseURL = *fileCfg.ExchangeRates.Frankfurter.BaseURL
+	}
 }
 
 func loadFileConfig(opts LoadOptions) (fileConfig, error) {

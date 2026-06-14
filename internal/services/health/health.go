@@ -1,6 +1,8 @@
 package health
 
-import "context"
+import (
+	"context"
+)
 
 // Status is the process health status.
 type Status string

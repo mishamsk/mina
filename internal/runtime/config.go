@@ -2,9 +2,12 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
+	"github.com/mishamsk/mina/internal/background"
+	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 	"github.com/mishamsk/mina/internal/store"
 )
 
@@ -20,7 +23,11 @@ const (
 type Config struct {
 	DatabasePath     string
 	AccountingSchema string
+	CacheDir         string
 	HTTP             HTTPConfig
+	Operations       OperationConfig
+	ExchangeRates    ExchangeRateConfig
+	Dependencies     Dependencies
 }
 
 // HTTPConfig controls process-local HTTP adapter behavior.
@@ -29,8 +36,53 @@ type HTTPConfig struct {
 	Timeout   time.Duration
 }
 
+// Clock returns the current process time.
+type Clock interface {
+	Now() time.Time
+}
+
+// Dependencies contains side-effect boundary dependencies supplied by composition or tests.
+type Dependencies struct {
+	Clock                              Clock
+	ExchangeRateProviderFactory        exchangerateloading.RateProvider
+	StartupExchangeRateProviderFactory exchangerateloading.RateProvider
+}
+
+// OperationConfig controls whether and when runtime-owned background operations run.
+type OperationConfig struct {
+	Enabled    bool
+	DeferStart bool
+	ErrorLog   io.Writer
+}
+
+// ExchangeRateConfig controls automatic exchange-rate loading behavior.
+type ExchangeRateConfig struct {
+	AutomaticLoadingEnabled bool
+	LoadScheduleUTC         string
+	StartupProvider         string
+	Providers               ExchangeRateProviderConfig
+}
+
+// ExchangeRateProviderConfig contains runtime exchange-rate provider settings.
+type ExchangeRateProviderConfig struct {
+	Frankfurter FrankfurterExchangeRateProviderConfig
+}
+
+// FrankfurterExchangeRateProviderConfig contains runtime Frankfurter settings.
+type FrankfurterExchangeRateProviderConfig struct {
+	BaseURL string
+}
+
 // Validate checks database lifecycle settings before composition starts.
 func (c Config) Validate() error {
+	if c.Operations.Enabled && c.ExchangeRates.AutomaticLoadingEnabled {
+		if err := validateExchangeRateLoadSchedule(c.ExchangeRates.LoadScheduleUTC); err != nil {
+			return err
+		}
+		if err := validateExchangeRateStartupProvider(c.ExchangeRates.StartupProvider); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -40,6 +92,20 @@ func (c Config) AccountingOpenRequest() store.AccountingOpenRequest {
 		Path:     c.DatabasePath,
 		Location: c.AccountingLocationConfig(),
 	}
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time {
+	return time.Now()
+}
+
+func (c Config) clock() Clock {
+	if c.Dependencies.Clock != nil {
+		return c.Dependencies.Clock
+	}
+
+	return systemClock{}
 }
 
 // AccountingLocationConfig returns the DuckDB accounting database and schema selected by runtime config.
@@ -77,7 +143,9 @@ type ServeConfig struct {
 
 // Validate checks REST server process settings before startup.
 func (c ServeConfig) Validate() error {
-	if err := c.Config.Validate(); err != nil {
+	cfg := c.Config
+	cfg.Operations.Enabled = true
+	if err := cfg.Validate(); err != nil {
 		return err
 	}
 	if c.Port < 0 || c.Port > 65535 {
@@ -88,4 +156,21 @@ func (c ServeConfig) Validate() error {
 	}
 
 	return nil
+}
+
+func validateExchangeRateLoadSchedule(schedule string) error {
+	if err := background.ValidateSchedule(schedule); err != nil {
+		return fmt.Errorf("exchange-rate load schedule: %w", err)
+	}
+
+	return nil
+}
+
+func validateExchangeRateStartupProvider(provider string) error {
+	switch provider {
+	case "", "frankfurter_file", "frankfurter_api":
+		return nil
+	default:
+		return fmt.Errorf("exchange-rate startup provider %q is not supported", provider)
+	}
 }

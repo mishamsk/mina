@@ -3,7 +3,7 @@
 ## Purpose
 
 - Documents the app-owned service package pattern for Stage 1 domain use cases.
-- Implemented Stage 1 service packages are `accounts`, `categories`, `tags`, `members`, `exchangerates`, `creditlimits`, `transactions`, and `values`; `journalrecords` and `recordbulk` remain target packages.
+- Implemented Stage 1 service packages are `accounts`, `operationruns`, `categories`, `tags`, `members`, `exchangerates`, `exchangerateloading`, `creditlimits`, `transactions`, and `values`; `journalrecords` and `recordbulk` remain target packages.
 
 ## Implicit Contracts
 

@@ -44,6 +44,25 @@ env MINA_DB=env-serve.db MINA_HOST=192.0.2.2 MINA_PORT=32002
 stderr '192\.0\.2\.2:32002'
 exists env-serve.db
 
+# Invalid exchange-rate schedules are ignored while automatic loading is disabled.
+! exec mina --config-file fx-invalid-disabled.toml serve --db fx-disabled.db --host 192.0.2.6 --port 32006 --yes
+stderr '192\.0\.2\.6:32006'
+exists fx-disabled.db
+
+# Invalid exchange-rate schedules reject serve startup while automatic loading is enabled.
+! exec mina --config-file fx-invalid-enabled.toml serve --db fx-enabled.db --host 192.0.2.7 --port 32007 --yes
+stderr 'exchange-rate load schedule: cron schedule must have five fields'
+
+# Unsupported startup providers reject serve startup.
+! exec mina --config-file fx-invalid-startup-provider.toml serve --db fx-provider.db --host 192.0.2.8 --port 32008 --yes
+stderr 'exchange-rate startup provider "typo" is not supported'
+
+# The exchange-rate auto-load env var overrides only automatic loading.
+env MINA_FX_AUTO_LOAD_ENABLED=false
+! exec mina --config-file fx-auto-load-env.toml serve --db fx-env.db --host 192.0.2.5 --port 32005 --yes
+stderr '192\.0\.2\.5:32005'
+exists fx-env.db
+
 # CLI flags override both environment values and the config file.
 ! exec mina serve --db cli-serve.db --host 192.0.2.3 --port 32003 --yes
 stderr '192\.0\.2\.3:32003'
@@ -67,3 +86,22 @@ port = 32004
 
 -- invalid.toml --
 unsupported = true
+
+-- fx-auto-load-env.toml --
+[exchange_rates]
+automatic_loading_enabled = true
+load_schedule_utc = "invalid"
+
+-- fx-invalid-disabled.toml --
+[exchange_rates]
+automatic_loading_enabled = false
+load_schedule_utc = "not a cron schedule"
+
+-- fx-invalid-enabled.toml --
+[exchange_rates]
+automatic_loading_enabled = true
+load_schedule_utc = "not a cron schedule"
+
+-- fx-invalid-startup-provider.toml --
+[exchange_rates]
+startup_provider = "typo"

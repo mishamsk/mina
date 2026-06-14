@@ -243,6 +243,17 @@ func runtimeConfig(cfg runtimeconfig.Config) runtime.Config {
 	return runtime.Config{
 		DatabasePath:     cfg.DatabasePath,
 		AccountingSchema: cfg.AccountingSchema,
+		CacheDir:         cfg.CacheDir,
+		ExchangeRates: runtime.ExchangeRateConfig{
+			AutomaticLoadingEnabled: cfg.ExchangeRates.AutomaticLoadingEnabled,
+			LoadScheduleUTC:         cfg.ExchangeRates.LoadScheduleUTC,
+			StartupProvider:         cfg.ExchangeRates.StartupProvider,
+			Providers: runtime.ExchangeRateProviderConfig{
+				Frankfurter: runtime.FrankfurterExchangeRateProviderConfig{
+					BaseURL: cfg.ExchangeRates.Providers.Frankfurter.BaseURL,
+				},
+			},
+		},
 	}
 }
 
@@ -295,6 +306,11 @@ func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.Serv
 	appConfig.HTTP = runtime.HTTPConfig{
 		AccessLog: accessLog,
 	}
+	appConfig.Operations = runtime.OperationConfig{
+		Enabled:    true,
+		DeferStart: true,
+		ErrorLog:   stderr,
+	}
 	created, err := confirmDatabaseCreation(stdin, stderr, appConfig, assumeYes)
 	if err != nil {
 		return err
@@ -336,6 +352,7 @@ func serve(stdin io.Reader, stdout io.Writer, stderr io.Writer, cfg runtime.Serv
 	if err != nil {
 		return fmt.Errorf("listen error: %w", err)
 	}
+	appInstance.StartOperations()
 
 	server := &http.Server{
 		Handler: appInstance.Handler(),

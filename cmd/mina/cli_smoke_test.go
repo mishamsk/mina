@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -13,7 +14,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,7 +42,11 @@ func TestIntegrationScripts(t *testing.T) {
 			"duckdbtables":   testscriptDuckDBTables,
 			"duckdbtouch":    testscriptDuckDBTouch,
 			"freeport":       testscriptFreePort,
+			"frankfurter":    testscriptFrankfurter,
 			"httpget":        testscriptHTTPGet,
+			"httpwait":       testscriptHTTPWait,
+			"glob":           testscriptGlob,
+			"waitfile":       testscriptWaitFile,
 		},
 	})
 }
@@ -149,6 +157,261 @@ func testscriptFreePort(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Setenv(envVar, port)
 }
 
+func testscriptGlob(ts *testscript.TestScript, neg bool, args []string) {
+	if len(args) != 1 {
+		ts.Fatalf("usage: glob pattern")
+	}
+
+	matches, err := filepath.Glob(ts.MkAbs(args[0]))
+	ts.Check(err)
+	if neg {
+		if len(matches) != 0 {
+			ts.Fatalf("glob %q matched %v", args[0], matches)
+		}
+		return
+	}
+	if len(matches) == 0 {
+		ts.Fatalf("glob %q did not match any files", args[0])
+	}
+}
+
+func testscriptWaitFile(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("waitfile does not support negation")
+	}
+
+	timeout := 10 * time.Second
+	for len(args) > 0 && args[0] != "" && args[0][0] == '-' {
+		switch args[0] {
+		case "-timeout":
+			if len(args) < 2 {
+				ts.Fatalf("usage: waitfile [-timeout duration] path")
+			}
+			var err error
+			timeout, err = time.ParseDuration(args[1])
+			ts.Check(err)
+			args = args[2:]
+		default:
+			ts.Fatalf("unknown waitfile option %q", args[0])
+		}
+	}
+	if len(args) != 1 {
+		ts.Fatalf("usage: waitfile [-timeout duration] path")
+	}
+
+	path := ts.MkAbs(args[0])
+	deadline := time.Now().Add(timeout)
+	for {
+		_, err := os.Stat(path)
+		if err == nil {
+			return
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			ts.Fatalf("stat %s: %v", args[0], err)
+		}
+		if time.Now().After(deadline) {
+			ts.Fatalf("timed out waiting for %s", args[0])
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func testscriptFrankfurter(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("frankfurter does not support negation")
+	}
+	if len(args) < 3 {
+		ts.Fatalf("usage: frankfurter url_env_var slow|provider-quotes|expect-from|truncated|stall|competing-install delay [path]")
+	}
+
+	urlEnvVar := args[0]
+	mode := args[1]
+	delay, err := time.ParseDuration(args[2])
+	ts.Check(err)
+	var cachePath string
+	var expectedFrom string
+	var readyPath string
+	if mode == "competing-install" {
+		if len(args) != 4 {
+			ts.Fatalf("usage: frankfurter url_env_var competing-install delay cache_path")
+		}
+		cachePath = ts.MkAbs(args[3])
+	} else if mode == "expect-from" {
+		if len(args) != 4 {
+			ts.Fatalf("usage: frankfurter url_env_var expect-from delay from_date")
+		}
+		expectedFrom = args[3]
+	} else if mode == "stall" {
+		if len(args) != 4 {
+			ts.Fatalf("usage: frankfurter url_env_var stall delay ready_path")
+		}
+		readyPath = ts.MkAbs(args[3])
+	} else if (mode != "slow" && mode != "provider-quotes" && mode != "truncated") || len(args) != 3 {
+		ts.Fatalf("usage: frankfurter url_env_var slow|provider-quotes|expect-from|truncated|stall|competing-install delay [path]")
+	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rates" {
+			http.NotFound(w, r)
+			return
+		}
+		if cachePath != "" {
+			if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if err := os.WriteFile(cachePath, []byte(competingFrankfurterCache), 0o644); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+		from := r.URL.Query().Get("from")
+		if expectedFrom != "" && from != expectedFrom {
+			http.Error(w, "unexpected from date", http.StatusBadRequest)
+			return
+		}
+		rows := frankfurterRowsForRange(from, r.URL.Query().Get("to"))
+		if !strings.Contains(r.Header.Get("Accept"), "application/x-ndjson") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, frankfurterJSON(rows))
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		if mode == "truncated" {
+			body := frankfurterNDJSON(rows) + `{"date":"2026-06-13","base":"USD","quote":"EUR","rate":`
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)+32))
+			_, _ = io.WriteString(w, body)
+			return
+		}
+		if mode == "stall" {
+			_, err := io.WriteString(w, frankfurterNDJSON(rows))
+			if err != nil {
+				return
+			}
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			if err := os.WriteFile(readyPath, []byte("ready\n"), 0o644); err != nil {
+				return
+			}
+			<-r.Context().Done()
+			return
+		}
+		lines := frankfurterNDJSONForMode(mode, rows)
+		if delay > 0 && len(rows) > 1 {
+			_, err := io.WriteString(w, frankfurterNDJSONForMode(mode, rows[:1]))
+			if err != nil {
+				return
+			}
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+			time.Sleep(delay)
+			lines = frankfurterNDJSONForMode(mode, rows[1:])
+		}
+		_, _ = io.WriteString(w, lines)
+	})
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	ts.Check(err)
+	baseURL := "http://" + listener.Addr().String()
+	ts.Setenv(urlEnvVar, baseURL)
+	server := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	done := make(chan error, 1)
+	go func() {
+		defer close(done)
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			done <- err
+		}
+	}()
+	ts.Defer(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = server.Shutdown(ctx)
+		if err := <-done; err != nil {
+			ts.Fatalf("serve Frankfurter test server: %v", err)
+		}
+	})
+	_, err = fmt.Fprintln(ts.Stdout(), baseURL)
+	ts.Check(err)
+}
+
+type frankfurterTestRow struct {
+	date string
+	rate string
+}
+
+var frankfurterTestRows = []frankfurterTestRow{
+	{date: "2024-04-02", rate: "0.93000000"},
+	{date: "2026-04-01", rate: "1.09000000"},
+}
+
+func frankfurterRowsForRange(from string, to string) []frankfurterTestRow {
+	rows := []frankfurterTestRow{}
+	for _, row := range frankfurterTestRows {
+		if from != "" && row.date < from {
+			continue
+		}
+		if to != "" && row.date > to {
+			continue
+		}
+		rows = append(rows, row)
+	}
+
+	return rows
+}
+
+func frankfurterJSON(rows []frankfurterTestRow) string {
+	parts := make([]string, 0, len(rows))
+	for _, row := range rows {
+		parts = append(parts, frankfurterJSONObject(row))
+	}
+
+	return "[" + strings.Join(parts, ",") + "]"
+}
+
+func frankfurterNDJSON(rows []frankfurterTestRow) string {
+	var builder strings.Builder
+	for _, row := range rows {
+		builder.WriteString(frankfurterJSONObject(row))
+		builder.WriteByte('\n')
+	}
+
+	return builder.String()
+}
+
+func frankfurterNDJSONForMode(mode string, rows []frankfurterTestRow) string {
+	if mode == "provider-quotes" {
+		return frankfurterProviderQuotesNDJSON(rows)
+	}
+
+	return frankfurterNDJSON(rows)
+}
+
+func frankfurterProviderQuotesNDJSON(rows []frankfurterTestRow) string {
+	var builder strings.Builder
+	for _, row := range rows {
+		builder.WriteString(frankfurterJSONObject(row))
+		builder.WriteByte('\n')
+		if row.date == "2024-04-02" {
+			builder.WriteString(`{"date":"2024-04-02","base":"USD","quote":"GGP","rate":0.79000000}`)
+			builder.WriteByte('\n')
+		}
+	}
+
+	return builder.String()
+}
+
+func frankfurterJSONObject(row frankfurterTestRow) string {
+	return `{"date":"` + row.date + `","base":"USD","quote":"EUR","rate":` + row.rate + `}`
+}
+
+const competingFrankfurterCache = `{"date":"2024-04-02","base":"USD","quote":"EUR","rate":1.23000000}
+{"date":"2026-04-01","base":"USD","quote":"EUR","rate":1.45000000}
+`
+
 func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 	if neg {
 		ts.Fatalf("httpget does not support negation")
@@ -156,6 +419,7 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 
 	method := http.MethodGet
 	status := http.StatusOK
+	var body []byte
 	for len(args) > 0 && args[0] != "" && args[0][0] == '-' {
 		switch args[0] {
 		case "-method":
@@ -172,12 +436,18 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 			status, err = strconv.Atoi(args[1])
 			ts.Check(err)
 			args = args[2:]
+		case "-body":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpget [-method method] [-status status] [-body file] url")
+			}
+			body = []byte(ts.ReadFile(args[1]))
+			args = args[2:]
 		default:
 			ts.Fatalf("unknown httpget flag %q", args[0])
 		}
 	}
 	if len(args) != 1 {
-		ts.Fatalf("usage: httpget [-method method] [-status status] url")
+		ts.Fatalf("usage: httpget [-method method] [-status status] [-body file] url")
 	}
 
 	url := args[0]
@@ -185,8 +455,15 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 	deadline := time.Now().Add(5 * time.Second)
 	var lastErr error
 	for {
-		request, err := http.NewRequest(method, url, nil)
+		var requestBody io.Reader
+		if body != nil {
+			requestBody = bytes.NewReader(body)
+		}
+		request, err := http.NewRequest(method, url, requestBody)
 		ts.Check(err)
+		if body != nil {
+			request.Header.Set("Content-Type", "application/json")
+		}
 
 		response, err := client.Do(request)
 		if err == nil {
@@ -210,4 +487,66 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 	}
 
 	ts.Fatalf("%s %s: %v", method, url, lastErr)
+}
+
+func testscriptHTTPWait(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("httpwait does not support negation")
+	}
+	timeout := 10 * time.Second
+	for len(args) > 0 && args[0] != "" && args[0][0] == '-' {
+		switch args[0] {
+		case "-timeout":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpwait [-timeout duration] pattern url")
+			}
+			var err error
+			timeout, err = time.ParseDuration(args[1])
+			ts.Check(err)
+			args = args[2:]
+		default:
+			ts.Fatalf("unknown httpwait flag %q", args[0])
+		}
+	}
+	if len(args) != 2 {
+		ts.Fatalf("usage: httpwait [-timeout duration] pattern url")
+	}
+
+	pattern, err := regexp.Compile(args[0])
+	ts.Check(err)
+	url := args[1]
+	client := http.Client{Timeout: 500 * time.Millisecond}
+	deadline := time.Now().Add(timeout)
+	var lastBody string
+	var lastErr error
+	for {
+		response, err := client.Get(url)
+		if err == nil {
+			body, readErr := io.ReadAll(response.Body)
+			closeErr := response.Body.Close()
+			ts.Check(readErr)
+			ts.Check(closeErr)
+			if response.StatusCode == http.StatusOK {
+				lastBody = string(body)
+				if pattern.Match(body) {
+					_, err = ts.Stdout().Write(body)
+					ts.Check(err)
+					return
+				}
+			} else {
+				lastErr = fmt.Errorf("status = %d; body: %s", response.StatusCode, string(body))
+			}
+		} else {
+			lastErr = err
+		}
+
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if lastErr != nil {
+		ts.Fatalf("GET %s waiting for %q: %v", url, args[0], lastErr)
+	}
+	ts.Fatalf("GET %s did not match %q; last body: %s", url, args[0], lastBody)
 }

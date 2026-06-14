@@ -6,13 +6,18 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	_ "github.com/duckdb/duckdb-go/v2"
 
 	"github.com/mishamsk/mina/internal/httpclient"
 	"github.com/mishamsk/mina/internal/runtime"
+	runtimeconfig "github.com/mishamsk/mina/internal/runtime/config"
+	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 )
 
 const duckDBDriverName = "duckdb"
@@ -20,8 +25,45 @@ const testServerURL = "http://mina.test"
 
 // Client sends generated REST requests through an in-process app handler.
 type Client struct {
-	t    *testing.T
-	rest *httpclient.ClientWithResponses
+	t      *testing.T
+	rest   *httpclient.ClientWithResponses
+	app    *runtime.App
+	closed bool
+}
+
+// FakeClock is a test clock for runtime-owned current-time decisions.
+type FakeClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+// NewFakeClock returns a fake clock fixed at now.
+func NewFakeClock(now time.Time) *FakeClock {
+	return &FakeClock{now: now}
+}
+
+// Now returns the fake current time.
+func (c *FakeClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.now
+}
+
+// Set moves the fake current time.
+func (c *FakeClock) Set(now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.now = now
+}
+
+// Advance moves the fake current time forward.
+func (c *FakeClock) Advance(duration time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.now = c.now.Add(duration)
 }
 
 // Option customizes an in-process app test client.
@@ -78,6 +120,13 @@ func WithAccountingSchema(schema string) Option {
 	}
 }
 
+// WithCacheDir customizes the process cache directory used by the test app.
+func WithCacheDir(path string) Option {
+	return func(opts *clientOptions) {
+		opts.config.CacheDir = path
+	}
+}
+
 // WithProcessDB reuses an existing DuckDB process database for the test app.
 func WithProcessDB(db *ProcessDB) Option {
 	return func(opts *clientOptions) {
@@ -85,15 +134,74 @@ func WithProcessDB(db *ProcessDB) Option {
 	}
 }
 
+// WithClock injects a runtime clock dependency.
+func WithClock(clock runtime.Clock) Option {
+	return func(opts *clientOptions) {
+		opts.config.Dependencies.Clock = clock
+	}
+}
+
+// WithExchangeRateProviderFactory injects the provider factory used by exchange-rate loading.
+func WithExchangeRateProviderFactory(factory exchangerateloading.RateProvider) Option {
+	return func(opts *clientOptions) {
+		opts.config.Dependencies.ExchangeRateProviderFactory = factory
+		opts.config.Dependencies.StartupExchangeRateProviderFactory = factory
+	}
+}
+
+// WithExchangeRateLoading configures automatic exchange-rate loading through runtime config.
+func WithExchangeRateLoading(enabled bool) Option {
+	return func(opts *clientOptions) {
+		opts.config.ExchangeRates.AutomaticLoadingEnabled = enabled
+	}
+}
+
+// WithExchangeRateLoadScheduleUTC configures the automatic exchange-rate loading schedule through runtime config.
+func WithExchangeRateLoadScheduleUTC(schedule string) Option {
+	return func(opts *clientOptions) {
+		opts.config.ExchangeRates.LoadScheduleUTC = schedule
+	}
+}
+
+// WithOperationsEnabled configures runtime operation execution through runtime config.
+func WithOperationsEnabled(enabled bool) Option {
+	return func(opts *clientOptions) {
+		opts.config.Operations.Enabled = enabled
+	}
+}
+
 // New creates an in-process app backed by migrated in-memory DuckDB state.
 func New(t *testing.T, options ...Option) *Client {
 	t.Helper()
 
+	client, err := NewResult(t, options...)
+	if err != nil {
+		t.Fatalf("new test app: %v", err)
+	}
+
+	return client
+}
+
+// NewResult creates an in-process app and returns composition errors to the caller.
+func NewResult(t *testing.T, options ...Option) (*Client, error) {
+	t.Helper()
+
 	ctx := context.Background()
 	schema := testSchemaName(t)
+	exchangeRateDefaults := runtimeconfig.DefaultExchangeRateConfig()
 	opts := clientOptions{
 		config: runtime.Config{
 			AccountingSchema: schema,
+			CacheDir:         filepath.Join(t.TempDir(), "mina"),
+			ExchangeRates: runtime.ExchangeRateConfig{
+				LoadScheduleUTC: exchangeRateDefaults.LoadScheduleUTC,
+				StartupProvider: exchangeRateDefaults.StartupProvider,
+				Providers: runtime.ExchangeRateProviderConfig{
+					Frankfurter: runtime.FrankfurterExchangeRateProviderConfig{
+						BaseURL: exchangeRateDefaults.Providers.Frankfurter.BaseURL,
+					},
+				},
+			},
 		},
 	}
 	for _, option := range options {
@@ -111,24 +219,25 @@ func New(t *testing.T, options ...Option) *Client {
 		appInstance, err = runtime.New(ctx, opts.config)
 	}
 	if err != nil {
-		t.Fatalf("new test app: %v", err)
+		return nil, err
 	}
 	restClient, err := httpclient.NewClientWithResponses(testServerURL, httpclient.WithHTTPClient(inProcessDoer{
 		handler: appInstance.Handler(),
 	}))
 	if err != nil {
-		t.Fatalf("new generated REST client: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := appInstance.Close(); err != nil {
-			t.Fatalf("close test app: %v", err)
+		if closeErr := appInstance.Close(); closeErr != nil {
+			return nil, fmt.Errorf("new generated REST client: %w; close app: %w", err, closeErr)
 		}
-	})
-
-	return &Client{
+		return nil, fmt.Errorf("new generated REST client: %w", err)
+	}
+	client := &Client{
 		t:    t,
 		rest: restClient,
+		app:  appInstance,
 	}
+	t.Cleanup(client.Close)
+
+	return client, nil
 }
 
 // REST returns the generated in-process REST client.
@@ -136,6 +245,18 @@ func (c *Client) REST() *httpclient.ClientWithResponses {
 	c.t.Helper()
 
 	return c.rest
+}
+
+// Close releases resources owned by the in-process test app.
+func (c *Client) Close() {
+	c.t.Helper()
+	if c.closed {
+		return
+	}
+	c.closed = true
+	if err := c.app.Close(); err != nil {
+		c.t.Fatalf("close test app: %v", err)
+	}
 }
 
 type inProcessDoer struct {

@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
 	"github.com/mishamsk/mina/internal/services/values"
 )
@@ -19,10 +21,189 @@ type ExchangeRateStore struct {
 }
 
 var _ exchangerates.Repository = (*ExchangeRateStore)(nil)
+var _ exchangerateloading.Repository = (*ExchangeRateStore)(nil)
 
 // NewExchangeRateStore creates an exchange rate store using accounting.
 func NewExchangeRateStore(accounting *AccountingDB) *ExchangeRateStore {
 	return &ExchangeRateStore{accounting: accounting}
+}
+
+// NeededCurrencies returns active non-USD journal-record currencies and their earliest needed dates.
+func (s *ExchangeRateStore) NeededCurrencies(ctx context.Context) ([]exchangerateloading.NeededCurrency, error) {
+	rows, err := s.accounting.query().QueryContext(
+		ctx,
+		`SELECT jr.currency, MIN(COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date)) AS earliest_date
+FROM `+s.accounting.location.mustQualifiedName("journal_record")+` AS jr
+JOIN `+s.accounting.location.mustQualifiedName("transaction")+` AS t
+  ON t.transaction_id = jr.transaction_id
+WHERE jr.tombstoned_at IS NULL
+  AND t.tombstoned_at IS NULL
+  AND jr.currency <> 'USD'
+GROUP BY jr.currency
+ORDER BY jr.currency`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query needed exchange-rate currencies: %w", err)
+	}
+
+	needed := []exchangerateloading.NeededCurrency{}
+	for rows.Next() {
+		var currency string
+		var earliest time.Time
+		if err := rows.Scan(&currency, &earliest); err != nil {
+			return nil, fmt.Errorf("scan needed exchange-rate currency: %w", err)
+		}
+		needed = append(needed, exchangerateloading.NeededCurrency{
+			Currency:     currency,
+			EarliestDate: values.CivilDateFromTime(earliest),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate needed exchange-rate currencies: %w; close rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate needed exchange-rate currencies: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close needed exchange-rate currency rows: %w", err)
+	}
+
+	return needed, nil
+}
+
+// LatestActiveUSDRateDates returns the latest active USD pair date for each currency.
+func (s *ExchangeRateStore) LatestActiveUSDRateDates(ctx context.Context, currencies []string) (map[string]values.CivilDate, error) {
+	result := make(map[string]values.CivilDate)
+	if len(currencies) == 0 {
+		return result, nil
+	}
+
+	query := `SELECT to_currency, MAX(CAST(effective_date AS DATE))
+FROM ` + s.accounting.location.mustQualifiedName("exchange_rate") + `
+WHERE tombstoned_at IS NULL
+  AND from_currency = 'USD'
+  AND to_currency IN (` + placeholders(len(currencies)) + `)
+GROUP BY to_currency`
+	args := make([]any, 0, len(currencies))
+	for _, currency := range currencies {
+		args = append(args, currency)
+	}
+	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query latest USD exchange-rate dates: %w", err)
+	}
+
+	for rows.Next() {
+		var currency string
+		var latest time.Time
+		if err := rows.Scan(&currency, &latest); err != nil {
+			return nil, fmt.Errorf("scan latest USD exchange-rate date: %w", err)
+		}
+		result[currency] = values.CivilDateFromTime(latest)
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate latest USD exchange-rate dates: %w; close rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate latest USD exchange-rate dates: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close latest USD exchange-rate rows: %w", err)
+	}
+
+	return result, nil
+}
+
+// EarliestMissingActiveUSDRateDates returns each currency's earliest needed journal-record date without an active USD rate.
+func (s *ExchangeRateStore) EarliestMissingActiveUSDRateDates(
+	ctx context.Context,
+	currencies []string,
+) (map[string]values.CivilDate, error) {
+	result := make(map[string]values.CivilDate)
+	if len(currencies) == 0 {
+		return result, nil
+	}
+
+	query := `WITH needed_record AS (
+	SELECT jr.currency, COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date) AS needed_date
+	FROM ` + s.accounting.location.mustQualifiedName("journal_record") + ` AS jr
+	JOIN ` + s.accounting.location.mustQualifiedName("transaction") + ` AS t
+	  ON t.transaction_id = jr.transaction_id
+	WHERE jr.tombstoned_at IS NULL
+	  AND t.tombstoned_at IS NULL
+	  AND jr.currency <> 'USD'
+	  AND jr.currency IN (` + placeholders(len(currencies)) + `)
+)
+SELECT needed_record.currency, MIN(needed_record.needed_date)
+FROM needed_record
+LEFT JOIN ` + s.accounting.location.mustQualifiedName("exchange_rate") + ` AS er
+  ON er.tombstoned_at IS NULL
+ AND er.from_currency = 'USD'
+ AND er.to_currency = needed_record.currency
+ AND CAST(er.effective_date AS DATE) = needed_record.needed_date
+WHERE er.exchange_rate_id IS NULL
+GROUP BY needed_record.currency`
+	args := make([]any, 0, len(currencies))
+	for _, currency := range currencies {
+		args = append(args, currency)
+	}
+	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query missing USD exchange-rate dates: %w", err)
+	}
+
+	for rows.Next() {
+		var currency string
+		var earliest time.Time
+		if err := rows.Scan(&currency, &earliest); err != nil {
+			return nil, fmt.Errorf("scan missing USD exchange-rate date: %w", err)
+		}
+		result[currency] = values.CivilDateFromTime(earliest)
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate missing USD exchange-rate dates: %w; close rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate missing USD exchange-rate dates: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close missing USD exchange-rate rows: %w", err)
+	}
+
+	return result, nil
+}
+
+// UpsertActiveUSDRates creates or updates active USD exchange rates.
+func (s *ExchangeRateStore) UpsertActiveUSDRates(ctx context.Context, rates []exchangerateloading.UpsertRate) error {
+	if len(rates) == 0 {
+		return nil
+	}
+
+	sourceRows := make([]string, 0, len(rates))
+	args := make([]any, 0, len(rates)*3)
+	for _, rate := range rates {
+		sourceRows = append(sourceRows, "(?, ?, ?)")
+		args = append(args, rate.ToCurrency, rate.Rate.LibraryDecimal(), timestampArg(rate.EffectiveDate.Time()))
+	}
+
+	_, err := s.accounting.query().ExecContext(
+		ctx,
+		`MERGE INTO `+s.accounting.location.mustQualifiedName("exchange_rate")+` AS target
+USING (VALUES `+strings.Join(sourceRows, ", ")+`) AS source(to_currency, rate, effective_date)
+ON target.from_currency = 'USD'
+ AND target.to_currency = source.to_currency
+ AND target.effective_date = source.effective_date
+ AND target.tombstoned_at IS NULL
+WHEN MATCHED THEN UPDATE SET rate = source.rate
+WHEN NOT MATCHED THEN INSERT (from_currency, to_currency, rate, effective_date)
+VALUES ('USD', source.to_currency, source.rate, source.effective_date)`,
+		args...,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert active USD exchange rates: %w", err)
+	}
+
+	return nil
 }
 
 // Create persists a new exchange rate.
