@@ -3,15 +3,15 @@ Review code for bugs, security issues, and quality problems.
 ## Correctness Review
 
 1. Logic errors - off-by-one errors, incorrect conditionals, wrong operators
-2. Edge cases - empty inputs, nil/null values, boundary conditions, concurrent access
+2. Supported edge cases - empty inputs, nil/null values at public or external boundaries, boundary conditions, concurrent access
 3. Error handling - all errors checked, appropriate error wrapping, no silent failures
 4. Resource management - proper cleanup, no leaks, correct resource release
 5. Concurrency issues - race conditions, deadlocks, thread/coroutine leaks
-6. Data integrity - validation, sanitization, consistent state management
+6. Data integrity - validation at the owning layer, sanitization, consistent state management
 
 ## Security Analysis
 
-1. Input validation - all user inputs validated and sanitized
+1. Input validation - user and external inputs validated and sanitized at the owning layer
 2. Authentication/authorization - proper checks in place
 3. Injection vulnerabilities - SQL, command, path traversal
 4. Secret exposure - no hardcoded credentials or keys
@@ -25,6 +25,6 @@ Review code for bugs, security issues, and quality problems.
 4. No scope creep - changes solve only the stated problem
 5. No premature optimization - unless addressing proven bottlenecks
 
-Focus on defects that would cause runtime failures, security vulnerabilities, or maintainability problems.
+Focus on defects that would cause runtime failures, security vulnerabilities, or maintainability problems during supported use. Do not flag impossible internal states after validation or ask for duplicate guards in every layer.
 
 Report problems only - no positive observations.

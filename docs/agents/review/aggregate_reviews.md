@@ -22,6 +22,12 @@ diff, and likely worth fixing. Deduplicate overlapping comments, merge
 equivalent findings, and reject anything speculative, pre-existing, unrelated
 to the task, unsupported by the diff, or merely stylistic unless it creates a
 concrete correctness, maintainability, compatibility, or verification problem.
+Not every possible bug or edge case is worth fixing. Prefer issues that affect
+normal use, documented contracts, realistic data created by this app, or
+external boundaries where failure is expected. Do not obsess over defensive
+programming: reject comments that would add duplicate guards, handle states the
+app should not produce, or harden internal APIs against misuse without a clear
+correctness, security, or maintenance payoff.
 
 Also remove any previously reported and rejected issues in {{PREVIOUS_REVIEW_FILE}}.
 
@@ -33,9 +39,9 @@ paragraphs that explain the scenario or input where the issue matters.
 ## Output Format
 
 Use the following severity classes:
-* `major`: for definite regression/bug/implementaion gap or issue;
-* `minor`: for non-speculative items but that can be tackled in a follow-up;
-* `nit`: for speculative (e.g. coding prefernce), low/no impact findings
+* `major`: for definite regression, bug, implementation gap, data loss, or security issue;
+* `minor`: for concrete non-speculative issues that can be tackled in a follow-up;
+* `nit`: for concrete low-impact maintainability or correctness concerns. Do not use `nit` for speculative ideas.
 
 Each comment must follow this exact shape:
 ```md

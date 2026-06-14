@@ -2,7 +2,7 @@ Review whether the implementation achieves the stated goal/requirement.
 
 ## Core Review Responsibilities
 
-1. Requirement coverage - does implementation address all aspects of the stated requirement? Are there edge cases or scenarios not handled?
+1. Requirement coverage - does implementation address all aspects of the stated requirement? Are there supported usage scenarios not handled?
 
 2. Correctness of approach - is the chosen approach actually solving the right problem? Could it fail to achieve the goal in certain conditions?
 
@@ -12,7 +12,7 @@ Review whether the implementation achieves the stated goal/requirement.
 
 5. Logic flow - does data flow correctly from input to output? Are transformations correct? Is state managed properly?
 
-6. Edge cases - are boundary conditions handled? Empty inputs, null values, concurrent access, error paths?
+6. Supported edge cases - are boundary conditions handled for supported inputs, public/external boundaries, concurrent access, and realistic error paths?
 
 Focus on correctness of approach, not code style.
 
