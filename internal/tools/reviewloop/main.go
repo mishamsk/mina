@@ -556,7 +556,7 @@ func selectReviewerNames(paths []string) []string {
 
 func selectReviewersForPath(selected map[string]bool, path string) {
 	switch {
-	case path == "", isGeneratedOpenAPIOutput(path), isDocsAgentPath(path):
+	case path == "", isReviewExcludedPath(path):
 		return
 	case isDevToolingPath(path):
 		selected["dev-tooling"] = true
@@ -569,8 +569,23 @@ func selectReviewersForPath(selected map[string]bool, path string) {
 	}
 }
 
+func isReviewExcludedPath(path string) bool {
+	return isGeneratedOpenAPIOutput(path) ||
+		isDocsAgentPath(path) ||
+		isPlanPath(path) ||
+		isCodexPath(path)
+}
+
 func isDocsAgentPath(path string) bool {
 	return path == "docs/agents" || strings.HasPrefix(path, "docs/agents/")
+}
+
+func isPlanPath(path string) bool {
+	return path == "docs/plans" || strings.HasPrefix(path, "docs/plans/")
+}
+
+func isCodexPath(path string) bool {
+	return path == ".codex" || strings.HasPrefix(path, ".codex/")
 }
 
 func isDevToolingPath(path string) bool {
@@ -578,7 +593,7 @@ func isDevToolingPath(path string) bool {
 	case "Justfile", ".pre-commit-config.yaml", ".golangci.yml", ".kata.toml", "mise.toml":
 		return true
 	}
-	return strings.HasPrefix(path, ".codex/") || strings.HasPrefix(path, "internal/tools/")
+	return strings.HasPrefix(path, "internal/tools/")
 }
 
 func isGeneratedOpenAPIOutput(path string) bool {
