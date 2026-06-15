@@ -14,22 +14,22 @@ import (
 var backupTargetSequence atomic.Int64
 
 type backupSource struct {
-	accounting *AccountingDB
+	db *AppDB
 }
 
 // NewBackupSource creates a database backup source for the selected accounting database.
-func NewBackupSource(accounting *AccountingDB) backups.Source {
-	return &backupSource{accounting: accounting}
+func NewBackupSource(db *AppDB) backups.Source {
+	return &backupSource{db: db}
 }
 
 func (s *backupSource) CopyDatabaseToDuckDBFile(ctx context.Context, path string) error {
-	if s.accounting == nil {
+	if s.db == nil {
 		return backups.ErrSourceRequired
 	}
 	if path == "" {
 		return fmt.Errorf("%w: target path is required", backups.ErrSourceCopyFailed)
 	}
-	if s.accounting.location.Database() == "memory" {
+	if s.db.isInMemoryAccounting() {
 		return backups.ErrInMemorySource
 	}
 
@@ -55,22 +55,22 @@ func (s *backupSource) CopyDatabaseToDuckDBFile(ctx context.Context, path string
 }
 
 func (s *backupSource) attachTarget(ctx context.Context, path string, targetIdentifier string) error {
-	_, err := s.accounting.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+targetIdentifier)
+	_, err := s.db.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+targetIdentifier)
 	return backupSourceError(ctx, "attach backup target database", err)
 }
 
 func (s *backupSource) copyDatabase(ctx context.Context, targetIdentifier string) error {
-	sql := "COPY FROM DATABASE " + s.accounting.location.databaseIdentifier + " TO " + targetIdentifier
-	_, err := s.accounting.db.ExecContext(ctx, sql)
+	sql := "COPY FROM DATABASE " + s.db.accountingDatabaseIdentifier() + " TO " + targetIdentifier
+	_, err := s.db.db.ExecContext(ctx, sql)
 	return backupSourceError(ctx, "copy database", err)
 }
 
 func (s *backupSource) detachTarget(ctx context.Context, targetIdentifier string) error {
-	if _, err := s.accounting.db.ExecContext(ctx, "USE memory.main"); err != nil {
+	if _, err := s.db.db.ExecContext(ctx, "USE memory.main"); err != nil {
 		return backupSourceError(ctx, "select memory database before detach", err)
 	}
 
-	_, err := s.accounting.db.ExecContext(ctx, "DETACH "+targetIdentifier)
+	_, err := s.db.db.ExecContext(ctx, "DETACH "+targetIdentifier)
 	return backupSourceError(ctx, "detach backup target database", err)
 }
 

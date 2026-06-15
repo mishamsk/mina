@@ -13,9 +13,9 @@ type sqlQueryer interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// WithAccountingTx runs fn with repositories bound to one database transaction.
-// Transaction-scoped accounting handles reuse their active transaction.
-func (s *AccountingDB) WithAccountingTx(ctx context.Context, opts *sql.TxOptions, fn func(*AccountingDB) error) error {
+// WithTx runs fn with repositories bound to one database transaction.
+// Transaction-scoped AppDB handles reuse their active transaction.
+func (s *AppDB) WithTx(ctx context.Context, opts *sql.TxOptions, fn func(*AppDB) error) error {
 	if s.tx != nil {
 		return fn(s)
 	}
@@ -29,8 +29,8 @@ func (s *AccountingDB) WithAccountingTx(ctx context.Context, opts *sql.TxOptions
 }
 
 // withTx runs store-local SQL mutations in a transaction.
-// Transaction-scoped accounting handles reuse their active transaction.
-func (s *AccountingDB) withTx(ctx context.Context, opts *sql.TxOptions, fn func(*sql.Tx) error) error {
+// Transaction-scoped AppDB handles reuse their active transaction.
+func (s *AppDB) withTx(ctx context.Context, opts *sql.TxOptions, fn func(*sql.Tx) error) error {
 	if s.tx != nil {
 		return fn(s.tx)
 	}

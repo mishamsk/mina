@@ -8,10 +8,10 @@
 ## Implicit Contracts
 
 - Runtime composition is the only place that wires concrete service, store, and adapter implementations.
-- App instances own one initialized accounting DB, app service bundle, and REST handler.
+- App instances own one initialized `AppDB`, app service bundle, and REST handler.
 - Startup demo seeding runs after app composition and before HTTP listen.
 - File-backed startup demo seeding refuses when the selected accounting schema already exists.
-- Runtime decides database lifecycle policy, then delegates DuckDB mechanics to store open helpers.
+- Runtime decides database lifecycle policy, then delegates DuckDB mechanics to store `AppDB` open helpers.
 - Runtime derives accounting database and schema defaults from `appconfig.Config`.
 - Runtime consumes source-loaded app settings from `internal/appconfig`.
 - Runtime consumes the cache directory resolved by `internal/appconfig`.
@@ -25,7 +25,7 @@
 - Recurring and manual exchange-rate loading use the targeted Frankfurter API provider.
 - Runtime operation status reads operation-run rows from ephemeral store-owned process tables.
 - Runtime operation failures are recorded and logged without failing app creation or normal HTTP readiness.
-- Runtime cancels operations and waits for them before closing the accounting DB.
+- Runtime cancels operations and waits for them before closing `AppDB`.
 - Runtime may import every app layer, but app service packages must not import runtime.
 
 ## Boundaries

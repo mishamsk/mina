@@ -79,11 +79,11 @@ func Validate(cfg appconfig.Config, operationsEnabled bool) error {
 	return nil
 }
 
-// AccountingOpenRequest returns the store request selected by runtime database policy.
-func AccountingOpenRequest(cfg appconfig.Config) store.AccountingOpenRequest {
-	return store.AccountingOpenRequest{
-		Path:     cfg.DatabasePath,
-		Location: AccountingLocationConfig(cfg),
+// AppDBOpenRequest returns the store request selected by runtime database policy.
+func AppDBOpenRequest(cfg appconfig.Config) store.AppDBOpenRequest {
+	return store.AppDBOpenRequest{
+		Path:               cfg.DatabasePath,
+		AccountingLocation: AccountingLocationConfig(cfg),
 	}
 }
 

@@ -26,34 +26,33 @@ func OpenInMemory(ctx context.Context) (*sql.DB, error) {
 	return open(ctx, ":memory:")
 }
 
-func attachDatabase(ctx context.Context, accounting *AccountingDB, path string) error {
+func attachDatabase(ctx context.Context, appDB *AppDB, path string) error {
 	if path == "" {
 		return errors.New("database path is required")
 	}
 	// DuckDB does not accept bind parameters in ATTACH, so the file path is
 	// rendered as a SQL string literal with standard single-quote escaping.
-	if _, err := accounting.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+accounting.location.databaseIdentifier); err != nil {
+	if _, err := appDB.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+appDB.accountingDatabaseIdentifier()); err != nil {
 		return fmt.Errorf("attach accounting database %s: %w", path, err)
 	}
 
 	return nil
 }
 
-func detachDatabase(ctx context.Context, accounting *AccountingDB) error {
-	if _, err := accounting.db.ExecContext(ctx, "USE memory.main"); err != nil {
+func detachDatabase(ctx context.Context, appDB *AppDB) error {
+	if _, err := appDB.db.ExecContext(ctx, "USE memory.main"); err != nil {
 		return fmt.Errorf("select memory database before detach: %w", err)
 	}
-	if _, err := accounting.db.ExecContext(ctx, "DETACH "+QuoteIdentifier(accounting.location.database)); err != nil {
-		return fmt.Errorf("detach accounting database %s: %w", accounting.location.database, err)
+	if _, err := appDB.db.ExecContext(ctx, "DETACH "+QuoteIdentifier(appDB.accountingDatabaseName())); err != nil {
+		return fmt.Errorf("detach accounting database %s: %w", appDB.accountingDatabaseName(), err)
 	}
 
 	return nil
 }
 
-// PrepareAccountingLocation creates the accounting schema when needed.
-func PrepareAccountingLocation(ctx context.Context, accounting *AccountingDB) error {
-	schemaName := accounting.location.databaseIdentifier + "." + accounting.location.schemaIdentifier
-	if _, err := accounting.db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+schemaName); err != nil {
+func prepareAccountingLocation(ctx context.Context, appDB *AppDB) error {
+	schemaName := appDB.accountingSchemaName()
+	if _, err := appDB.db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+schemaName); err != nil {
 		return fmt.Errorf("create accounting schema %s: %w", schemaName, err)
 	}
 

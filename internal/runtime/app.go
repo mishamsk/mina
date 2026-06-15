@@ -33,7 +33,7 @@ import (
 
 // App owns one opened accounting state, app services, and REST handler.
 type App struct {
-	accounting        *store.AccountingDB
+	appDB             *store.AppDB
 	services          appServices
 	handler           http.Handler
 	background        *background.Runner
@@ -50,13 +50,13 @@ type appServices struct {
 
 // New opens the configured database, applies migrations, and wires the REST handler.
 func New(ctx context.Context, cfg appconfig.Config, opts Options) (*App, error) {
-	return newApp(ctx, cfg, opts, store.OpenAccounting)
+	return newApp(ctx, cfg, opts, store.OpenAppDB)
 }
 
 // NewWithProcessDB applies migrations using an existing DuckDB process handle and wires the REST handler.
 func NewWithProcessDB(ctx context.Context, db *sql.DB, cfg appconfig.Config, opts Options) (*App, error) {
-	return newApp(ctx, cfg, opts, func(ctx context.Context, request store.AccountingOpenRequest) (*store.AccountingDB, error) {
-		return store.OpenAccountingWithProcessDB(ctx, db, request)
+	return newApp(ctx, cfg, opts, func(ctx context.Context, request store.AppDBOpenRequest) (*store.AppDB, error) {
+		return store.OpenAppDBWithProcessDB(ctx, db, request)
 	})
 }
 
@@ -64,7 +64,7 @@ func newApp(
 	ctx context.Context,
 	cfg appconfig.Config,
 	opts Options,
-	openAccounting func(context.Context, store.AccountingOpenRequest) (*store.AccountingDB, error),
+	openAppDB func(context.Context, store.AppDBOpenRequest) (*store.AppDB, error),
 ) (*App, error) {
 	if err := Validate(cfg, opts.Operations.Enabled); err != nil {
 		return nil, err
@@ -75,18 +75,18 @@ func newApp(
 		}
 	}
 
-	accounting, err := openAccounting(ctx, AccountingOpenRequest(cfg))
+	appDB, err := openAppDB(ctx, AppDBOpenRequest(cfg))
 	if err != nil {
 		return nil, err
 	}
 
-	if err := store.Migrate(ctx, accounting); err != nil {
-		return nil, closeAccountingAfterError(accounting, fmt.Errorf("migrate database: %w", err))
+	if err := store.Migrate(ctx, appDB); err != nil {
+		return nil, closeAppDBAfterError(appDB, fmt.Errorf("migrate database: %w", err))
 	}
 
-	app, err := NewWithAccountingDB(ctx, accounting, cfg, opts)
+	app, err := NewWithAppDB(ctx, appDB, cfg, opts)
 	if err != nil {
-		return nil, closeAccountingAfterError(accounting, err)
+		return nil, closeAppDBAfterError(appDB, err)
 	}
 
 	return app, nil
@@ -107,15 +107,15 @@ func HasPendingMigrations(ctx context.Context, cfg appconfig.Config, operationsE
 		}
 	}
 
-	accounting, err := store.OpenAccounting(ctx, AccountingOpenRequest(cfg))
+	appDB, err := store.OpenAppDB(ctx, AppDBOpenRequest(cfg))
 	if err != nil {
 		return false, err
 	}
 	defer func() {
-		_ = accounting.Close()
+		_ = appDB.Close()
 	}()
 
-	return store.HasPendingMigrations(ctx, accounting)
+	return store.HasPendingMigrations(ctx, appDB)
 }
 
 // AccountingSchemaExists reports whether the configured file-backed accounting schema exists.
@@ -134,24 +134,24 @@ func AccountingSchemaExists(ctx context.Context, cfg appconfig.Config, operation
 		return false, nil
 	}
 
-	accounting, err := store.OpenAccounting(ctx, AccountingOpenRequest(cfg))
+	appDB, err := store.OpenAppDB(ctx, AppDBOpenRequest(cfg))
 	if err != nil {
 		return false, err
 	}
 	defer func() {
-		_ = accounting.Close()
+		_ = appDB.Close()
 	}()
 
-	return store.AccountingLocationExists(ctx, accounting)
+	return store.AccountingLocationExists(ctx, appDB)
 }
 
-// NewWithAccountingDB wires services and the REST handler around an already-opened migrated accounting database.
-func NewWithAccountingDB(ctx context.Context, accounting *store.AccountingDB, cfg appconfig.Config, opts Options) (*App, error) {
-	operationRepo, err := store.NewOperationRunRepository(ctx, accounting)
+// NewWithAppDB wires services and the REST handler around an already-opened migrated AppDB.
+func NewWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config, opts Options) (*App, error) {
+	operationRepo, err := store.NewOperationRunRepository(ctx, appDB)
 	if err != nil {
 		return nil, err
 	}
-	services, err := newAppServices(accounting, cfg, opts, operationRepo)
+	services, err := newAppServices(appDB, cfg, opts, operationRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +165,7 @@ func NewWithAccountingDB(ctx context.Context, accounting *store.AccountingDB, cf
 	})
 
 	app := &App{
-		accounting: accounting,
+		appDB:      appDB,
 		services:   services,
 		handler:    handler,
 		background: backgroundRunner,
@@ -177,18 +177,18 @@ func NewWithAccountingDB(ctx context.Context, accounting *store.AccountingDB, cf
 	return app, nil
 }
 
-func newAppServices(accounting *store.AccountingDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
-	services, err := newAccountingServices(accounting, cfg, opts, operationRepo)
+func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
+	services, err := newAccountingServices(appDB, cfg, opts, operationRepo)
 	if err != nil {
 		return appServices{}, err
 	}
-	services.Demo = newDemoService(accounting, cfg, opts)
+	services.Demo = newDemoService(appDB, cfg, opts)
 
 	return services, nil
 }
 
-func newAccountingServices(accounting *store.AccountingDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
-	exchangeRateStore := store.NewExchangeRateStore(accounting)
+func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
+	exchangeRateStore := store.NewExchangeRateStore(appDB)
 	startupProvider, err := startupExchangeRateProvider(cfg, opts)
 	if err != nil {
 		return appServices{}, err
@@ -208,7 +208,7 @@ func newAccountingServices(accounting *store.AccountingDB, cfg appconfig.Config,
 		return appServices{}, err
 	}
 	backupService := backups.NewService(
-		store.NewBackupSource(accounting),
+		store.NewBackupSource(appDB),
 		backupProvider,
 		opts.clock(),
 	)
@@ -228,15 +228,15 @@ func newAccountingServices(accounting *store.AccountingDB, cfg appconfig.Config,
 	)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
-			Health:        health.NewService(store.NewHealthStore(accounting)),
+			Health:        health.NewService(store.NewHealthStore(appDB)),
 			Operations:    operationRuns,
-			Categories:    categories.NewService(store.NewCategoryStore(accounting)),
-			Tags:          tags.NewService(store.NewTagStore(accounting)),
-			Members:       members.NewService(store.NewMemberStore(accounting)),
-			Accounts:      accounts.NewService(store.NewAccountStore(accounting)),
-			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(accounting)),
+			Categories:    categories.NewService(store.NewCategoryStore(appDB)),
+			Tags:          tags.NewService(store.NewTagStore(appDB)),
+			Members:       members.NewService(store.NewMemberStore(appDB)),
+			Accounts:      accounts.NewService(store.NewAccountStore(appDB)),
+			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB)),
 			ExchangeRates: exchangerates.NewService(exchangeRateStore),
-			Transactions:  transactions.NewService(store.NewTransactionStore(accounting)),
+			Transactions:  transactions.NewService(store.NewTransactionStore(appDB)),
 		},
 		Backup:                     backupService,
 		ExchangeRateLoading:        exchangeRateLoading,
@@ -299,11 +299,11 @@ func demoDependencies(s appServices) demo.Services {
 	}
 }
 
-func newDemoService(accounting *store.AccountingDB, cfg appconfig.Config, opts Options) *demo.Service {
+func newDemoService(appDB *store.AppDB, cfg appconfig.Config, opts Options) *demo.Service {
 	return demo.NewService(demo.Dependencies{
 		Atomic: func(ctx context.Context, fn func(demo.Services) error) error {
-			return accounting.WithAccountingTx(ctx, nil, func(txAccounting *store.AccountingDB) error {
-				services, err := newAccountingServices(txAccounting, cfg, opts, nil)
+			return appDB.WithTx(ctx, nil, func(txAppDB *store.AppDB) error {
+				services, err := newAccountingServices(txAppDB, cfg, opts, nil)
 				if err != nil {
 					return err
 				}
@@ -316,7 +316,7 @@ func newDemoService(accounting *store.AccountingDB, cfg appconfig.Config, opts O
 
 // AccountingLocation returns the database and schema holding accounting state.
 func (a *App) AccountingLocation() store.AccountingLocation {
-	return a.accounting.Location()
+	return a.appDB.Location()
 }
 
 // SeedDemo seeds deterministic demo data for startup demo mode.
@@ -348,11 +348,11 @@ func (a *App) Close() error {
 	if a.background != nil {
 		a.background.Close()
 	}
-	if a.accounting == nil {
+	if a.appDB == nil {
 		return nil
 	}
 
-	return a.accounting.Close()
+	return a.appDB.Close()
 }
 
 func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServices) (*background.Runner, error) {
@@ -499,8 +499,8 @@ func databasePathExists(path string) (bool, error) {
 	return false, nil
 }
 
-func closeAccountingAfterError(accounting *store.AccountingDB, err error) error {
-	if closeErr := accounting.Close(); closeErr != nil {
+func closeAppDBAfterError(appDB *store.AppDB, err error) error {
+	if closeErr := appDB.Close(); closeErr != nil {
 		return fmt.Errorf("%w; close database: %w", err, closeErr)
 	}
 

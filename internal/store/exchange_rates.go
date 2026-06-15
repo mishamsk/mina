@@ -17,24 +17,24 @@ import (
 
 // ExchangeRateStore persists exchange rates.
 type ExchangeRateStore struct {
-	accounting *AccountingDB
+	db *AppDB
 }
 
 var _ exchangerates.Repository = (*ExchangeRateStore)(nil)
 var _ exchangerateloading.Repository = (*ExchangeRateStore)(nil)
 
-// NewExchangeRateStore creates an exchange rate store using accounting.
-func NewExchangeRateStore(accounting *AccountingDB) *ExchangeRateStore {
-	return &ExchangeRateStore{accounting: accounting}
+// NewExchangeRateStore creates an exchange rate store using AppDB.
+func NewExchangeRateStore(db *AppDB) *ExchangeRateStore {
+	return &ExchangeRateStore{db: db}
 }
 
 // NeededCurrencies returns active non-USD journal-record currencies and their earliest needed dates.
 func (s *ExchangeRateStore) NeededCurrencies(ctx context.Context) ([]exchangerateloading.NeededCurrency, error) {
-	rows, err := s.accounting.query().QueryContext(
+	rows, err := s.db.query().QueryContext(
 		ctx,
 		`SELECT jr.currency, MIN(COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date)) AS earliest_date
-FROM `+s.accounting.location.mustQualifiedName("journal_record")+` AS jr
-JOIN `+s.accounting.location.mustQualifiedName("transaction")+` AS t
+FROM `+s.db.accountingName("journal_record")+` AS jr
+JOIN `+s.db.accountingName("transaction")+` AS t
   ON t.transaction_id = jr.transaction_id
 WHERE jr.tombstoned_at IS NULL
   AND t.tombstoned_at IS NULL
@@ -79,7 +79,7 @@ func (s *ExchangeRateStore) LatestActiveUSDRateDates(ctx context.Context, curren
 	}
 
 	query := `SELECT to_currency, MAX(CAST(effective_date AS DATE))
-FROM ` + s.accounting.location.mustQualifiedName("exchange_rate") + `
+FROM ` + s.db.accountingName("exchange_rate") + `
 WHERE tombstoned_at IS NULL
   AND from_currency = 'USD'
   AND to_currency IN (` + placeholders(len(currencies)) + `)
@@ -88,7 +88,7 @@ GROUP BY to_currency`
 	for _, currency := range currencies {
 		args = append(args, currency)
 	}
-	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
+	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query latest USD exchange-rate dates: %w", err)
 	}
@@ -126,8 +126,8 @@ func (s *ExchangeRateStore) EarliestMissingActiveUSDRateDates(
 
 	query := `WITH needed_record AS (
 	SELECT jr.currency, COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date) AS needed_date
-	FROM ` + s.accounting.location.mustQualifiedName("journal_record") + ` AS jr
-	JOIN ` + s.accounting.location.mustQualifiedName("transaction") + ` AS t
+	FROM ` + s.db.accountingName("journal_record") + ` AS jr
+	JOIN ` + s.db.accountingName("transaction") + ` AS t
 	  ON t.transaction_id = jr.transaction_id
 	WHERE jr.tombstoned_at IS NULL
 	  AND t.tombstoned_at IS NULL
@@ -136,7 +136,7 @@ func (s *ExchangeRateStore) EarliestMissingActiveUSDRateDates(
 )
 SELECT needed_record.currency, MIN(needed_record.needed_date)
 FROM needed_record
-LEFT JOIN ` + s.accounting.location.mustQualifiedName("exchange_rate") + ` AS er
+LEFT JOIN ` + s.db.accountingName("exchange_rate") + ` AS er
   ON er.tombstoned_at IS NULL
  AND er.from_currency = 'USD'
  AND er.to_currency = needed_record.currency
@@ -147,7 +147,7 @@ GROUP BY needed_record.currency`
 	for _, currency := range currencies {
 		args = append(args, currency)
 	}
-	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
+	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query missing USD exchange-rate dates: %w", err)
 	}
@@ -186,9 +186,9 @@ func (s *ExchangeRateStore) UpsertActiveUSDRates(ctx context.Context, rates []ex
 		args = append(args, rate.ToCurrency, rate.Rate.LibraryDecimal(), timestampArg(rate.EffectiveDate.Time()))
 	}
 
-	_, err := s.accounting.query().ExecContext(
+	_, err := s.db.query().ExecContext(
 		ctx,
-		`MERGE INTO `+s.accounting.location.mustQualifiedName("exchange_rate")+` AS target
+		`MERGE INTO `+s.db.accountingName("exchange_rate")+` AS target
 USING (VALUES `+strings.Join(sourceRows, ", ")+`) AS source(to_currency, rate, effective_date)
 ON target.from_currency = 'USD'
  AND target.to_currency = source.to_currency
@@ -209,8 +209,8 @@ VALUES ('USD', source.to_currency, source.rate, source.effective_date)`,
 // Create persists a new exchange rate.
 func (s *ExchangeRateStore) Create(ctx context.Context, input exchangerates.CreateInput) (exchangerates.ExchangeRate, error) {
 	var rate exchangerates.ExchangeRate
-	err := s.accounting.withTx(ctx, nil, func(tx *sql.Tx) error {
-		exists, err := activeExchangeRateExists(ctx, tx, s.accounting, input.FromCurrency, input.ToCurrency, input.EffectiveDate)
+	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		exists, err := activeExchangeRateExists(ctx, tx, s.db, input.FromCurrency, input.ToCurrency, input.EffectiveDate)
 		if err != nil {
 			return err
 		}
@@ -220,7 +220,7 @@ func (s *ExchangeRateStore) Create(ctx context.Context, input exchangerates.Crea
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.accounting.location.mustQualifiedName("exchange_rate")+` (from_currency, to_currency, rate, effective_date)
+			`INSERT INTO `+s.db.accountingName("exchange_rate")+` (from_currency, to_currency, rate, effective_date)
 VALUES (?, ?, ?, ?)
 RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at`,
 			input.FromCurrency,
@@ -248,14 +248,14 @@ RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, cr
 // Get returns an exchange rate by ID.
 func (s *ExchangeRateStore) Get(ctx context.Context, id int64, includeTombstoned bool) (exchangerates.ExchangeRate, error) {
 	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
-FROM ` + s.accounting.location.mustQualifiedName("exchange_rate") + `
+FROM ` + s.db.accountingName("exchange_rate") + `
 WHERE exchange_rate_id = ?`
 	args := []any{id}
 	if !includeTombstoned {
 		query += " AND tombstoned_at IS NULL"
 	}
 
-	rate, err := scanExchangeRate(s.accounting.query().QueryRowContext(ctx, query, args...))
+	rate, err := scanExchangeRate(s.db.query().QueryRowContext(ctx, query, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return exchangerates.ExchangeRate{}, services.ErrNotFound
 	}
@@ -269,7 +269,7 @@ WHERE exchange_rate_id = ?`
 // List returns exchange rates using explicit filters and deterministic ordering.
 func (s *ExchangeRateStore) List(ctx context.Context, opts exchangerates.ListOptions) ([]exchangerates.ExchangeRate, error) {
 	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
-FROM ` + s.accounting.location.mustQualifiedName("exchange_rate") + `
+FROM ` + s.db.accountingName("exchange_rate") + `
 WHERE 1 = 1`
 	args := []any{}
 	if opts.FromCurrency != nil {
@@ -289,7 +289,7 @@ WHERE 1 = 1`
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, exchangeRateSortColumns, services.SortKeyCurrencyPair, "exchange_rate_id")
 
-	rows, err := s.accounting.query().QueryContext(ctx, query, args...)
+	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list exchange rates: %w", err)
 	}
@@ -317,9 +317,9 @@ WHERE 1 = 1`
 
 // UpdateRate updates an active exchange rate value.
 func (s *ExchangeRateStore) UpdateRate(ctx context.Context, id int64, rate values.Decimal) (exchangerates.ExchangeRate, error) {
-	row := s.accounting.query().QueryRowContext(
+	row := s.db.query().QueryRowContext(
 		ctx,
-		`UPDATE `+s.accounting.location.mustQualifiedName("exchange_rate")+`
+		`UPDATE `+s.db.accountingName("exchange_rate")+`
 SET rate = ?
 WHERE exchange_rate_id = ? AND tombstoned_at IS NULL
 RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at`,
@@ -339,9 +339,9 @@ RETURNING exchange_rate_id, from_currency, to_currency, rate, effective_date, cr
 
 // Tombstone marks an exchange rate deleted without removing its historical row.
 func (s *ExchangeRateStore) Tombstone(ctx context.Context, id int64) error {
-	result, err := s.accounting.query().ExecContext(
+	result, err := s.db.query().ExecContext(
 		ctx,
-		`UPDATE `+s.accounting.location.mustQualifiedName("exchange_rate")+`
+		`UPDATE `+s.db.accountingName("exchange_rate")+`
 SET tombstoned_at = CURRENT_TIMESTAMP
 WHERE exchange_rate_id = ? AND tombstoned_at IS NULL`,
 		id,
@@ -394,12 +394,12 @@ func scanExchangeRate(scanner exchangeRateScanner) (exchangerates.ExchangeRate, 
 	return rate, nil
 }
 
-func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, accounting *AccountingDB, fromCurrency string, toCurrency string, effectiveDate time.Time) (bool, error) {
+func activeExchangeRateExists(ctx context.Context, tx *sql.Tx, db *AppDB, fromCurrency string, toCurrency string, effectiveDate time.Time) (bool, error) {
 	var id int64
 	err := tx.QueryRowContext(
 		ctx,
 		`SELECT exchange_rate_id
-FROM `+accounting.location.mustQualifiedName("exchange_rate")+`
+FROM `+db.accountingName("exchange_rate")+`
 WHERE from_currency = ? AND to_currency = ? AND effective_date = ? AND tombstoned_at IS NULL
 LIMIT 1`,
 		fromCurrency,
