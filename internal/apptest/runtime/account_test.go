@@ -17,6 +17,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	externalSystem := "plaid"
 	created, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:            "checking:Chase:Primary",
+		AccountType:    httpclient.Balance,
 		Currency:       &currency,
 		ExternalId:     &externalID,
 		ExternalSystem: &externalSystem,
@@ -27,7 +28,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if created.StatusCode() != http.StatusCreated {
 		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-	assertAccountHierarchy(t, *created.JSON201, "checking", "checking:Chase", "Primary", 2)
+	assertAccountHierarchy(t, *created.JSON201, httpclient.Balance, "checking:Chase", "Primary", 2)
 	if created.JSON201.Currency == nil || *created.JSON201.Currency != "USD" {
 		t.Fatalf("currency = %v, want USD", created.JSON201.Currency)
 	}
@@ -42,12 +43,16 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if read.JSON200.AccountId != created.JSON201.AccountId {
 		t.Fatalf("read account id = %d, want %d", read.JSON200.AccountId, created.JSON201.AccountId)
 	}
+	if read.JSON200.AccountType != httpclient.Balance {
+		t.Fatalf("read account_type = %q, want %q", read.JSON200.AccountType, httpclient.Balance)
+	}
 
 	hiddenValue := true
 	hidden, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "credit:Amex:Blue",
-		IsHidden: &hiddenValue,
-		Currency: &currency,
+		Fqn:         "credit:Amex:Blue",
+		AccountType: httpclient.Balance,
+		IsHidden:    &hiddenValue,
+		Currency:    &currency,
 	})
 	if err != nil {
 		t.Fatalf("hidden create request: %v", err)
@@ -64,6 +69,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
 	assertAccountIDs(t, defaultList.JSON200.Accounts, []int64{created.JSON201.AccountId})
+	assertAccountTypes(t, defaultList.JSON200.Accounts, []httpclient.AccountType{httpclient.Balance})
 
 	includeHidden, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{IncludeHidden: &hiddenValue})
 	if err != nil {
@@ -73,6 +79,72 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("include hidden status = %d, want %d; body %s", includeHidden.StatusCode(), http.StatusOK, includeHidden.Body)
 	}
 	assertAccountIDs(t, includeHidden.JSON200.Accounts, []int64{created.JSON201.AccountId, hidden.JSON201.AccountId})
+	assertAccountTypes(t, includeHidden.JSON200.Accounts, []httpclient.AccountType{httpclient.Balance, httpclient.Balance})
+
+	system, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "system:opening_balance",
+		AccountType: httpclient.System,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("system create request: %v", err)
+	}
+	if system.StatusCode() != http.StatusCreated {
+		t.Fatalf("system create status = %d, want %d; body %s", system.StatusCode(), http.StatusCreated, system.Body)
+	}
+	if system.JSON201.IsHidden {
+		t.Fatal("system account hidden = true, want false")
+	}
+
+	defaultAfterSystem, err := client.REST().ListAccountsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default after system list request: %v", err)
+	}
+	if defaultAfterSystem.StatusCode() != http.StatusOK {
+		t.Fatalf("default after system list status = %d, want %d; body %s", defaultAfterSystem.StatusCode(), http.StatusOK, defaultAfterSystem.Body)
+	}
+	assertAccountIDs(t, defaultAfterSystem.JSON200.Accounts, []int64{created.JSON201.AccountId, system.JSON201.AccountId})
+
+	accountTypeBalance := httpclient.Balance
+	balanceAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeBalance})
+	if err != nil {
+		t.Fatalf("balance account type list request: %v", err)
+	}
+	if balanceAccounts.StatusCode() != http.StatusOK {
+		t.Fatalf("balance account type list status = %d, want %d; body %s", balanceAccounts.StatusCode(), http.StatusOK, balanceAccounts.Body)
+	}
+	assertAccountIDs(t, balanceAccounts.JSON200.Accounts, []int64{created.JSON201.AccountId})
+
+	accountTypeSystem := httpclient.System
+	systemAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeSystem})
+	if err != nil {
+		t.Fatalf("system account type list request: %v", err)
+	}
+	if systemAccounts.StatusCode() != http.StatusOK {
+		t.Fatalf("system account type list status = %d, want %d; body %s", systemAccounts.StatusCode(), http.StatusOK, systemAccounts.Body)
+	}
+	assertAccountIDs(t, systemAccounts.JSON200.Accounts, []int64{system.JSON201.AccountId})
+
+	hideSystem, err := client.REST().UpdateAccountWithResponse(context.Background(), system.JSON201.AccountId, httpclient.UpdateAccountRequest{
+		IsHidden: true,
+	})
+	if err != nil {
+		t.Fatalf("hide system update request: %v", err)
+	}
+	if hideSystem.StatusCode() != http.StatusOK {
+		t.Fatalf("hide system update status = %d, want %d; body %s", hideSystem.StatusCode(), http.StatusOK, hideSystem.Body)
+	}
+	if !hideSystem.JSON200.IsHidden {
+		t.Fatal("updated system account hidden = false, want true")
+	}
+	defaultAfterHideSystem, err := client.REST().ListAccountsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default after hide system list request: %v", err)
+	}
+	if defaultAfterHideSystem.StatusCode() != http.StatusOK {
+		t.Fatalf("default after hide system list status = %d, want %d; body %s", defaultAfterHideSystem.StatusCode(), http.StatusOK, defaultAfterHideSystem.Body)
+	}
+	assertAccountIDs(t, defaultAfterHideSystem.JSON200.Accounts, []int64{created.JSON201.AccountId})
 
 	updatedExternalID := "acct-456"
 	updatedExternalSystem := "manual"
@@ -89,6 +161,9 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 	if !updated.JSON200.IsHidden {
 		t.Fatal("updated account hidden = false, want true")
+	}
+	if updated.JSON200.AccountType != httpclient.Balance {
+		t.Fatalf("updated account_type = %q, want %q", updated.JSON200.AccountType, httpclient.Balance)
 	}
 	if updated.JSON200.ExternalId == nil || *updated.JSON200.ExternalId != "acct-456" {
 		t.Fatalf("external_id = %v, want acct-456", updated.JSON200.ExternalId)
@@ -107,8 +182,9 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	assertAccountIDs(t, afterHide.JSON200.Accounts, nil)
 
 	visibleDeleted, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "savings:Ally:Reserve",
-		Currency: &currency,
+		Fqn:         "savings:Ally:Reserve",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
 	})
 	if err != nil {
 		t.Fatalf("visible delete create request: %v", err)
@@ -159,6 +235,9 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if deletedRead.JSON200.TombstonedAt == nil {
 		t.Fatal("get deleted with tombstones tombstoned_at = nil, want timestamp")
 	}
+	if deletedRead.JSON200.AccountType != httpclient.Balance {
+		t.Fatalf("get deleted with tombstones account_type = %q, want %q", deletedRead.JSON200.AccountType, httpclient.Balance)
+	}
 
 	withTombstones, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{
 		IncludeHidden:     &hiddenValue,
@@ -170,7 +249,8 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if withTombstones.StatusCode() != http.StatusOK {
 		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode(), http.StatusOK, withTombstones.Body)
 	}
-	assertAccountIDs(t, withTombstones.JSON200.Accounts, []int64{created.JSON201.AccountId, hidden.JSON201.AccountId, visibleDeleted.JSON201.AccountId})
+	assertAccountIDs(t, withTombstones.JSON200.Accounts, []int64{created.JSON201.AccountId, hidden.JSON201.AccountId, visibleDeleted.JSON201.AccountId, system.JSON201.AccountId})
+	assertAccountTypes(t, withTombstones.JSON200.Accounts, []httpclient.AccountType{httpclient.Balance, httpclient.Balance, httpclient.Balance, httpclient.System})
 }
 
 func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
@@ -178,8 +258,9 @@ func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 
 	currency := "USD"
 	first, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "cash:Wallet",
-		Currency: &currency,
+		Fqn:         "cash:Wallet",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
 	})
 	if err != nil {
 		t.Fatalf("first create request: %v", err)
@@ -189,8 +270,9 @@ func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 	}
 
 	duplicate, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "cash:Wallet",
-		Currency: &currency,
+		Fqn:         "cash:Wallet",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
 	})
 	if err != nil {
 		t.Fatalf("duplicate request: %v", err)
@@ -211,8 +293,9 @@ func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 	}
 
 	recreated, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "cash:Wallet",
-		Currency: &currency,
+		Fqn:         "cash:Wallet",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
 	})
 	if err != nil {
 		t.Fatalf("recreate request: %v", err)
@@ -227,8 +310,9 @@ func TestAccountAcceptsCryptoCurrencyBoundary(t *testing.T) {
 
 	currency := "C::ETHEREUM-LONG-TOKEN"
 	created, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "crypto:Wallet:Cold",
-		Currency: &currency,
+		Fqn:         "crypto:Wallet:Cold",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
 	})
 	if err != nil {
 		t.Fatalf("crypto currency request: %v", err)
@@ -246,8 +330,9 @@ func TestAccountValidationErrors(t *testing.T) {
 
 	unknownCurrencyValue := "ZZZ"
 	unknownCurrency, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "checking:Unknown",
-		Currency: &unknownCurrencyValue,
+		Fqn:         "checking:Unknown",
+		AccountType: httpclient.Balance,
+		Currency:    &unknownCurrencyValue,
 	})
 	if err != nil {
 		t.Fatalf("unknown currency request: %v", err)
@@ -258,8 +343,9 @@ func TestAccountValidationErrors(t *testing.T) {
 
 	invalidCurrencyValue := "usd"
 	invalidCurrency, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "checking:Chase",
-		Currency: &invalidCurrencyValue,
+		Fqn:         "checking:Chase",
+		AccountType: httpclient.Balance,
+		Currency:    &invalidCurrencyValue,
 	})
 	if err != nil {
 		t.Fatalf("invalid currency request: %v", err)
@@ -273,8 +359,9 @@ func TestAccountValidationErrors(t *testing.T) {
 
 	nonASCIICurrencyValue := "ÅB"
 	nonASCIICurrency, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "checking:CreditUnion",
-		Currency: &nonASCIICurrencyValue,
+		Fqn:         "checking:CreditUnion",
+		AccountType: httpclient.Balance,
+		Currency:    &nonASCIICurrencyValue,
 	})
 	if err != nil {
 		t.Fatalf("non-ASCII currency request: %v", err)
@@ -285,14 +372,36 @@ func TestAccountValidationErrors(t *testing.T) {
 
 	externalID := "acct-123"
 	missingExternalSystem, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:        "checking:Chase",
-		ExternalId: &externalID,
+		Fqn:         "checking:Chase",
+		AccountType: httpclient.Balance,
+		ExternalId:  &externalID,
 	})
 	if err != nil {
 		t.Fatalf("missing external system request: %v", err)
 	}
 	if missingExternalSystem.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("missing external system status = %d, want %d; body %s", missingExternalSystem.StatusCode(), http.StatusBadRequest, missingExternalSystem.Body)
+	}
+
+	missingAccountType, err := client.REST().CreateAccountWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
+		"fqn": "checking:MissingType",
+	}))
+	if err != nil {
+		t.Fatalf("missing account type request: %v", err)
+	}
+	if missingAccountType.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing account type status = %d, want %d; body %s", missingAccountType.StatusCode(), http.StatusBadRequest, missingAccountType.Body)
+	}
+
+	invalidAccountType, err := client.REST().CreateAccountWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
+		"fqn":          "checking:InvalidType",
+		"account_type": "unknown",
+	}))
+	if err != nil {
+		t.Fatalf("invalid account type request: %v", err)
+	}
+	if invalidAccountType.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid account type status = %d, want %d; body %s", invalidAccountType.StatusCode(), http.StatusBadRequest, invalidAccountType.Body)
 	}
 
 	missingHidden, err := client.REST().UpdateAccountWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]any{}))
@@ -311,9 +420,18 @@ func TestAccountValidationErrors(t *testing.T) {
 		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode(), http.StatusBadRequest, badQuery.Body)
 	}
 
+	badAccountTypeQuery, err := client.REST().ListAccountsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("account_type=unknown"))
+	if err != nil {
+		t.Fatalf("bad account type query request: %v", err)
+	}
+	if badAccountTypeQuery.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("bad account type query status = %d, want %d; body %s", badAccountTypeQuery.StatusCode(), http.StatusBadRequest, badAccountTypeQuery.Body)
+	}
+
 	extraField, err := client.REST().CreateAccountWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
-		"fqn":        "checking:Chase",
-		"extraField": true,
+		"fqn":          "checking:Chase",
+		"account_type": "balance",
+		"extraField":   true,
 	}))
 	if err != nil {
 		t.Fatalf("extra field request: %v", err)
@@ -323,11 +441,11 @@ func TestAccountValidationErrors(t *testing.T) {
 	}
 }
 
-func assertAccountHierarchy(t *testing.T, account httpclient.Account, kind string, parent string, name string, level int) {
+func assertAccountHierarchy(t *testing.T, account httpclient.Account, accountType httpclient.AccountType, parent string, name string, level int) {
 	t.Helper()
 
-	if account.Kind != kind {
-		t.Fatalf("kind = %q, want %q", account.Kind, kind)
+	if account.AccountType != accountType {
+		t.Fatalf("account_type = %q, want %q", account.AccountType, accountType)
 	}
 	if account.ParentFqn == nil || *account.ParentFqn != parent {
 		t.Fatalf("parent_fqn = %v, want %q", account.ParentFqn, parent)
@@ -349,6 +467,19 @@ func assertAccountIDs(t *testing.T, accounts []httpclient.Account, want []int64)
 	for i, account := range accounts {
 		if account.AccountId != want[i] {
 			t.Fatalf("account id at %d = %d, want %d; accounts = %+v", i, account.AccountId, want[i], accounts)
+		}
+	}
+}
+
+func assertAccountTypes(t *testing.T, accounts []httpclient.Account, want []httpclient.AccountType) {
+	t.Helper()
+
+	if len(accounts) != len(want) {
+		t.Fatalf("account count = %d, want %d; accounts = %+v", len(accounts), len(want), accounts)
+	}
+	for i, account := range accounts {
+		if account.AccountType != want[i] {
+			t.Fatalf("account type at %d = %q, want %q; accounts = %+v", i, account.AccountType, want[i], accounts)
 		}
 	}
 }

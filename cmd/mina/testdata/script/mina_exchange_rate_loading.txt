@@ -45,13 +45,13 @@ kill -INT startup_server
 wait startup_server
 
 -- account_eur.json --
-{"fqn":"checking:EUR","currency":"EUR"}
+{"fqn":"checking:EUR","account_type":"balance","currency":"EUR"}
 
 -- account_counterparty.json --
-{"fqn":"counterparty:EUR"}
+{"fqn":"counterparty:EUR","account_type":"balance"}
 
 -- category.json --
-{"fqn":"Transfers:EUR"}
+{"fqn":"Transfers:EUR","economic_intent":"transfer"}
 
 -- transaction.json --
 {

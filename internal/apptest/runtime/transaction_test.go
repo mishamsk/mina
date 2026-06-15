@@ -275,9 +275,9 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
 	scenario := client.Scenario()
-	tradingUSD := scenario.AccountWithCurrency("trading:USD", "USD")
-	tradingEUR := scenario.AccountWithCurrency("trading:EUR", "EUR")
+	provider := scenario.Account("merchant:ExchangeProvider")
 	cashEUR := scenario.AccountWithCurrency("cash:Travel:EUR", "EUR")
+	exchangeCategory := scenario.CategoryWithIntent("Currency:Exchange", httpclient.CategoryEconomicIntentExchange)
 
 	req := httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-03-10"),
@@ -287,27 +287,27 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Currency:             "USD",
 				Amount:               "-110.00",
 				AmountUsd:            apptest.StringPtr("-110.00"),
-				CategoryId:           refs.CategoryId,
+				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.Posted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
 			{
-				AccountId:            tradingUSD.AccountId,
+				AccountId:            provider.AccountId,
 				Currency:             "USD",
 				Amount:               "110.00",
 				AmountUsd:            apptest.StringPtr("110.00"),
-				CategoryId:           refs.CategoryId,
+				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.Posted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
 			{
-				AccountId:            tradingEUR.AccountId,
+				AccountId:            provider.AccountId,
 				Currency:             "EUR",
 				Amount:               "-100.00",
 				AmountUsd:            apptest.StringPtr("-110.00"),
-				CategoryId:           refs.CategoryId,
+				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.Posted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
@@ -317,7 +317,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Currency:             "EUR",
 				Amount:               "100.00",
 				AmountUsd:            nil,
-				CategoryId:           refs.CategoryId,
+				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.Posted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
@@ -334,6 +334,9 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 	}
 	if len(created.JSON201.Records) != 4 {
 		t.Fatalf("exchange record count = %d, want 4; body %+v", len(created.JSON201.Records), created.JSON201)
+	}
+	if created.JSON201.TransactionClass != httpclient.TransactionClassCurrencyExchange {
+		t.Fatalf("exchange class = %q, want %q", created.JSON201.TransactionClass, httpclient.TransactionClassCurrencyExchange)
 	}
 }
 
@@ -475,6 +478,77 @@ func TestTransactionValidationErrors(t *testing.T) {
 	}
 	if unsupportedListQuery.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("unsupported list query status = %d, want %d; body %s", unsupportedListQuery.StatusCode(), http.StatusBadRequest, unsupportedListQuery.Body)
+	}
+}
+
+func TestTransactionRejectsTombstonedAccountAndCategoryReferences(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+
+	tombstonedAccount := client.Scenario().Account("merchant:TombstonedTransactionReference")
+	deleteAccount, err := client.REST().DeleteAccountWithResponse(context.Background(), tombstonedAccount.AccountId)
+	if err != nil {
+		t.Fatalf("delete account request: %v", err)
+	}
+	if deleteAccount.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete account status = %d, want %d; body %s", deleteAccount.StatusCode(), http.StatusNoContent, deleteAccount.Body)
+	}
+
+	tombstonedCategory := client.Scenario().Category("Food:TombstonedTransactionReference")
+	deleteCategory, err := client.REST().DeleteCategoryWithResponse(context.Background(), tombstonedCategory.CategoryId)
+	if err != nil {
+		t.Fatalf("delete category request: %v", err)
+	}
+	if deleteCategory.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete category status = %d, want %d; body %s", deleteCategory.StatusCode(), http.StatusNoContent, deleteCategory.Body)
+	}
+
+	createWithTombstonedAccount := balancedTransactionRequest(refs)
+	createWithTombstonedAccount.Records[1].AccountId = tombstonedAccount.AccountId
+	rejectedCreateAccount, err := client.REST().CreateTransactionWithResponse(context.Background(), createWithTombstonedAccount)
+	if err != nil {
+		t.Fatalf("create with tombstoned account request: %v", err)
+	}
+	if rejectedCreateAccount.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("create with tombstoned account status = %d, want %d; body %s", rejectedCreateAccount.StatusCode(), http.StatusBadRequest, rejectedCreateAccount.Body)
+	}
+
+	createWithTombstonedCategory := balancedTransactionRequest(refs)
+	createWithTombstonedCategory.Records[0].CategoryId = tombstonedCategory.CategoryId
+	rejectedCreateCategory, err := client.REST().CreateTransactionWithResponse(context.Background(), createWithTombstonedCategory)
+	if err != nil {
+		t.Fatalf("create with tombstoned category request: %v", err)
+	}
+	if rejectedCreateCategory.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("create with tombstoned category status = %d, want %d; body %s", rejectedCreateCategory.StatusCode(), http.StatusBadRequest, rejectedCreateCategory.Body)
+	}
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs))
+	if err != nil {
+		t.Fatalf("create base transaction request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create base transaction status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+
+	replaceWithTombstonedAccount := replacementTransactionRequest(refs)
+	replaceWithTombstonedAccount.Records[1].AccountId = tombstonedAccount.AccountId
+	rejectedReplaceAccount, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replaceWithTombstonedAccount)
+	if err != nil {
+		t.Fatalf("replace with tombstoned account request: %v", err)
+	}
+	if rejectedReplaceAccount.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("replace with tombstoned account status = %d, want %d; body %s", rejectedReplaceAccount.StatusCode(), http.StatusBadRequest, rejectedReplaceAccount.Body)
+	}
+
+	replaceWithTombstonedCategory := replacementTransactionRequest(refs)
+	replaceWithTombstonedCategory.Records[0].CategoryId = tombstonedCategory.CategoryId
+	rejectedReplaceCategory, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replaceWithTombstonedCategory)
+	if err != nil {
+		t.Fatalf("replace with tombstoned category request: %v", err)
+	}
+	if rejectedReplaceCategory.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("replace with tombstoned category status = %d, want %d; body %s", rejectedReplaceCategory.StatusCode(), http.StatusBadRequest, rejectedReplaceCategory.Body)
 	}
 }
 

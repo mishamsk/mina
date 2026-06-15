@@ -9,23 +9,56 @@ import (
 	"github.com/mishamsk/mina/internal/services"
 )
 
+// CategoryEconomicIntent identifies the economic meaning of a category.
+type CategoryEconomicIntent string
+
+const (
+	CategoryEconomicIntentExpense    CategoryEconomicIntent = "expense"
+	CategoryEconomicIntentFee        CategoryEconomicIntent = "fee"
+	CategoryEconomicIntentIncome     CategoryEconomicIntent = "income"
+	CategoryEconomicIntentRefund     CategoryEconomicIntent = "refund"
+	CategoryEconomicIntentTransfer   CategoryEconomicIntent = "transfer"
+	CategoryEconomicIntentExchange   CategoryEconomicIntent = "exchange"
+	CategoryEconomicIntentAdjustment CategoryEconomicIntent = "adjustment"
+	CategoryEconomicIntentFXGainLoss CategoryEconomicIntent = "fx_gain_loss"
+)
+
+// ValidCategoryEconomicIntent reports whether value is a supported category economic intent.
+func ValidCategoryEconomicIntent(value CategoryEconomicIntent) bool {
+	switch value {
+	case CategoryEconomicIntentExpense,
+		CategoryEconomicIntentFee,
+		CategoryEconomicIntentIncome,
+		CategoryEconomicIntentRefund,
+		CategoryEconomicIntentTransfer,
+		CategoryEconomicIntentExchange,
+		CategoryEconomicIntentAdjustment,
+		CategoryEconomicIntentFXGainLoss:
+		return true
+	default:
+		return false
+	}
+}
+
 // Category is a hierarchical category used to classify journal records.
 type Category struct {
-	ID           int64
-	FQN          string
-	IsHidden     bool
-	ParentFQN    *string
-	Name         string
-	Level        int
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	TombstonedAt *time.Time
+	ID             int64
+	FQN            string
+	EconomicIntent CategoryEconomicIntent
+	IsHidden       bool
+	ParentFQN      *string
+	Name           string
+	Level          int
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	TombstonedAt   *time.Time
 }
 
 // CreateInput contains fields for creating a category.
 type CreateInput struct {
-	FQN      string
-	IsHidden bool
+	FQN            string
+	EconomicIntent CategoryEconomicIntent
+	IsHidden       bool
 }
 
 // ListOptions controls category list visibility.
@@ -58,6 +91,9 @@ func NewService(repo Repository) *Service {
 func (s *Service) Create(ctx context.Context, input CreateInput) (Category, error) {
 	if err := validateFQN(input.FQN); err != nil {
 		return Category{}, err
+	}
+	if !ValidCategoryEconomicIntent(input.EconomicIntent) {
+		return Category{}, services.InvalidRequest("economic_intent must be one of expense, fee, income, refund, transfer, exchange, adjustment, or fx_gain_loss")
 	}
 
 	category, err := s.repo.Create(ctx, input)

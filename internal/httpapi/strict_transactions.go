@@ -264,11 +264,14 @@ func journalRecordAPIInputs(records []openapi.CreateJournalRecordRequest) ([]tra
 
 func transactionAPIResponse(transaction transactions.Transaction) openapi.Transaction {
 	return openapi.Transaction{
-		TransactionId: transaction.ID,
-		InitiatedDate: openAPIDate(transaction.InitiatedDate),
-		CreatedAt:     transaction.CreatedAt.UTC(),
-		TombstonedAt:  nullableTimestampTime(transaction.TombstonedAt),
-		Records:       journalRecordAPIResponses(transaction.Records),
+		TransactionId:    transaction.ID,
+		InitiatedDate:    openAPIDate(transaction.InitiatedDate),
+		TransactionClass: openapi.TransactionClass(transaction.Class),
+		PrimaryAmounts:   displayAmountAPIResponses(transaction.PrimaryAmounts),
+		Components:       classificationComponentAPIResponses(transaction.Components),
+		CreatedAt:        transaction.CreatedAt.UTC(),
+		TombstonedAt:     nullableTimestampTime(transaction.TombstonedAt),
+		Records:          journalRecordAPIResponses(transaction.Records),
 	}
 }
 
@@ -322,6 +325,38 @@ func bulkRecordOperationAPIResponse(response transactions.BulkRecordOperationRes
 		RecordIds:    cloneInt64Slice(response.RecordIDs),
 		UpdatedCount: response.UpdatedCount,
 	}
+}
+
+func displayAmountAPIResponse(amount transactions.DisplayAmount) openapi.DisplayAmount {
+	return openapi.DisplayAmount{
+		Currency: amount.Currency,
+		Amount:   amount.Amount.String(),
+	}
+}
+
+func displayAmountAPIResponses(amounts []transactions.DisplayAmount) []openapi.DisplayAmount {
+	responses := make([]openapi.DisplayAmount, 0, len(amounts))
+	for _, amount := range amounts {
+		responses = append(responses, displayAmountAPIResponse(amount))
+	}
+
+	return responses
+}
+
+func classificationComponentAPIResponse(component transactions.ClassificationComponent) openapi.TransactionComponent {
+	return openapi.TransactionComponent{
+		Intent:  openapi.CategoryEconomicIntent(component.Intent),
+		Amounts: displayAmountAPIResponses(component.Amounts),
+	}
+}
+
+func classificationComponentAPIResponses(components []transactions.ClassificationComponent) []openapi.TransactionComponent {
+	responses := make([]openapi.TransactionComponent, 0, len(components))
+	for _, component := range components {
+		responses = append(responses, classificationComponentAPIResponse(component))
+	}
+
+	return responses
 }
 
 func cloneOptionalInt64Slice(values *[]int64) []int64 {

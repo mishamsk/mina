@@ -10,7 +10,7 @@
 
 ## Boundaries
 
-- Owns: category FQN validation, hidden/tombstoned use-case rules, and active-name conflict mapping.
+- Owns: category FQN validation, economic-intent validation, hidden/tombstoned use-case rules, and active-name conflict mapping.
 - Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
 
 ## Testing Notes

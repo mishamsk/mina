@@ -101,6 +101,16 @@ func (d Decimal) Add(other Decimal) (Decimal, error) {
 	return enforceDecimalConstraints(sum)
 }
 
+// Neg returns -d while preserving DECIMAL(18,8) constraints.
+func (d Decimal) Neg() Decimal {
+	return Decimal{value: d.value.Neg()}
+}
+
+// Abs returns the absolute value of d.
+func (d Decimal) Abs() Decimal {
+	return Decimal{value: d.value.Abs()}
+}
+
 // String formats d with exactly 8 fractional digits.
 func (d Decimal) String() string {
 	return d.value.Pad(decimalScale).String()

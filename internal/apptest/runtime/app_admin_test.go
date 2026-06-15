@@ -41,7 +41,8 @@ func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpcli
 		t.Fatalf("listed members = %d, want %d", len(members.JSON200.Members), seeded.Members)
 	}
 
-	accounts, err := client.REST().ListAccountsWithResponse(ctx, nil)
+	includeHidden := true
+	accounts, err := client.REST().ListAccountsWithResponse(ctx, &httpclient.ListAccountsParams{IncludeHidden: &includeHidden})
 	if err != nil {
 		t.Fatalf("list accounts request: %v", err)
 	}
@@ -109,5 +110,50 @@ func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpcli
 	}
 	if len(transactions.JSON200.Transactions) != seeded.Transactions {
 		t.Fatalf("listed transactions = %d, want %d", len(transactions.JSON200.Transactions), seeded.Transactions)
+	}
+	assertDemoSemanticCoverage(t, categories.JSON200.Categories, transactions.JSON200.Transactions)
+}
+
+func assertDemoSemanticCoverage(t *testing.T, categories []httpclient.Category, transactions []httpclient.Transaction) {
+	t.Helper()
+
+	wantIntents := []httpclient.CategoryEconomicIntent{
+		httpclient.CategoryEconomicIntentExpense,
+		httpclient.CategoryEconomicIntentFee,
+		httpclient.CategoryEconomicIntentIncome,
+		httpclient.CategoryEconomicIntentRefund,
+		httpclient.CategoryEconomicIntentTransfer,
+		httpclient.CategoryEconomicIntentExchange,
+		httpclient.CategoryEconomicIntentAdjustment,
+		httpclient.CategoryEconomicIntentFxGainLoss,
+	}
+	gotIntents := map[httpclient.CategoryEconomicIntent]struct{}{}
+	for _, category := range categories {
+		gotIntents[category.EconomicIntent] = struct{}{}
+	}
+	for _, intent := range wantIntents {
+		if _, ok := gotIntents[intent]; !ok {
+			t.Fatalf("seeded demo missing category economic intent %q", intent)
+		}
+	}
+
+	wantClasses := []httpclient.TransactionClass{
+		httpclient.TransactionClassSpend,
+		httpclient.TransactionClassIncome,
+		httpclient.TransactionClassRefund,
+		httpclient.TransactionClassTransfer,
+		httpclient.TransactionClassCurrencyExchange,
+		httpclient.TransactionClassAdjustment,
+		httpclient.TransactionClassFxGainLoss,
+		httpclient.TransactionClassMixed,
+	}
+	gotClasses := map[httpclient.TransactionClass]struct{}{}
+	for _, transaction := range transactions {
+		gotClasses[transaction.TransactionClass] = struct{}{}
+	}
+	for _, class := range wantClasses {
+		if _, ok := gotClasses[class]; !ok {
+			t.Fatalf("seeded demo missing transaction class %q", class)
+		}
 	}
 }

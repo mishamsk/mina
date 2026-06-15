@@ -45,6 +45,27 @@ func (e APIErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for AccountType.
+const (
+	Balance AccountType = "balance"
+	Flow    AccountType = "flow"
+	System  AccountType = "system"
+)
+
+// Valid indicates whether the value is a known member of the AccountType enum.
+func (e AccountType) Valid() bool {
+	switch e {
+	case Balance:
+		return true
+	case Flow:
+		return true
+	case System:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BackgroundOperationSummaryOperationId.
 const (
 	BackgroundOperationSummaryOperationIdDatabaseBackup      BackgroundOperationSummaryOperationId = "database-backup"
@@ -57,6 +78,42 @@ func (e BackgroundOperationSummaryOperationId) Valid() bool {
 	case BackgroundOperationSummaryOperationIdDatabaseBackup:
 		return true
 	case BackgroundOperationSummaryOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CategoryEconomicIntent.
+const (
+	CategoryEconomicIntentAdjustment CategoryEconomicIntent = "adjustment"
+	CategoryEconomicIntentExchange   CategoryEconomicIntent = "exchange"
+	CategoryEconomicIntentExpense    CategoryEconomicIntent = "expense"
+	CategoryEconomicIntentFee        CategoryEconomicIntent = "fee"
+	CategoryEconomicIntentFxGainLoss CategoryEconomicIntent = "fx_gain_loss"
+	CategoryEconomicIntentIncome     CategoryEconomicIntent = "income"
+	CategoryEconomicIntentRefund     CategoryEconomicIntent = "refund"
+	CategoryEconomicIntentTransfer   CategoryEconomicIntent = "transfer"
+)
+
+// Valid indicates whether the value is a known member of the CategoryEconomicIntent enum.
+func (e CategoryEconomicIntent) Valid() bool {
+	switch e {
+	case CategoryEconomicIntentAdjustment:
+		return true
+	case CategoryEconomicIntentExchange:
+		return true
+	case CategoryEconomicIntentExpense:
+		return true
+	case CategoryEconomicIntentFee:
+		return true
+	case CategoryEconomicIntentFxGainLoss:
+		return true
+	case CategoryEconomicIntentIncome:
+		return true
+	case CategoryEconomicIntentRefund:
+		return true
+	case CategoryEconomicIntentTransfer:
 		return true
 	default:
 		return false
@@ -255,6 +312,42 @@ const (
 func (e Source) Valid() bool {
 	switch e {
 	case Manual:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransactionClass.
+const (
+	TransactionClassAdjustment       TransactionClass = "adjustment"
+	TransactionClassCurrencyExchange TransactionClass = "currency_exchange"
+	TransactionClassFxGainLoss       TransactionClass = "fx_gain_loss"
+	TransactionClassIncome           TransactionClass = "income"
+	TransactionClassMixed            TransactionClass = "mixed"
+	TransactionClassRefund           TransactionClass = "refund"
+	TransactionClassSpend            TransactionClass = "spend"
+	TransactionClassTransfer         TransactionClass = "transfer"
+)
+
+// Valid indicates whether the value is a known member of the TransactionClass enum.
+func (e TransactionClass) Valid() bool {
+	switch e {
+	case TransactionClassAdjustment:
+		return true
+	case TransactionClassCurrencyExchange:
+		return true
+	case TransactionClassFxGainLoss:
+		return true
+	case TransactionClassIncome:
+		return true
+	case TransactionClassMixed:
+		return true
+	case TransactionClassRefund:
+		return true
+	case TransactionClassSpend:
+		return true
+	case TransactionClassTransfer:
 		return true
 	default:
 		return false
@@ -509,25 +602,28 @@ type APIErrorCode string
 
 // Account defines model for Account.
 type Account struct {
-	AccountId      int64      `json:"account_id"`
-	CreatedAt      time.Time  `json:"created_at"`
-	Currency       *string    `json:"currency,omitempty"`
-	ExternalId     *string    `json:"external_id,omitempty"`
-	ExternalSystem *string    `json:"external_system,omitempty"`
-	Fqn            string     `json:"fqn"`
-	IsHidden       bool       `json:"is_hidden"`
-	Kind           string     `json:"kind"`
-	Level          int        `json:"level"`
-	Name           string     `json:"name"`
-	ParentFqn      *string    `json:"parent_fqn"`
-	TombstonedAt   *time.Time `json:"tombstoned_at,omitempty"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	AccountId      int64       `json:"account_id"`
+	AccountType    AccountType `json:"account_type"`
+	CreatedAt      time.Time   `json:"created_at"`
+	Currency       *string     `json:"currency,omitempty"`
+	ExternalId     *string     `json:"external_id,omitempty"`
+	ExternalSystem *string     `json:"external_system,omitempty"`
+	Fqn            string      `json:"fqn"`
+	IsHidden       bool        `json:"is_hidden"`
+	Level          int         `json:"level"`
+	Name           string      `json:"name"`
+	ParentFqn      *string     `json:"parent_fqn"`
+	TombstonedAt   *time.Time  `json:"tombstoned_at,omitempty"`
+	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
 // AccountListResponse defines model for AccountListResponse.
 type AccountListResponse struct {
 	Accounts []Account `json:"accounts"`
 }
+
+// AccountType defines model for AccountType.
+type AccountType string
 
 // BackgroundOperationListResponse defines model for BackgroundOperationListResponse.
 type BackgroundOperationListResponse struct {
@@ -577,16 +673,20 @@ type BulkUpdateRecordStatusRequest struct {
 
 // Category defines model for Category.
 type Category struct {
-	CategoryId   int64      `json:"category_id"`
-	CreatedAt    time.Time  `json:"created_at"`
-	Fqn          string     `json:"fqn"`
-	IsHidden     bool       `json:"is_hidden"`
-	Level        int        `json:"level"`
-	Name         string     `json:"name"`
-	ParentFqn    *string    `json:"parent_fqn"`
-	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	CategoryId     int64                  `json:"category_id"`
+	CreatedAt      time.Time              `json:"created_at"`
+	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
+	Fqn            string                 `json:"fqn"`
+	IsHidden       bool                   `json:"is_hidden"`
+	Level          int                    `json:"level"`
+	Name           string                 `json:"name"`
+	ParentFqn      *string                `json:"parent_fqn"`
+	TombstonedAt   *time.Time             `json:"tombstoned_at,omitempty"`
+	UpdatedAt      time.Time              `json:"updated_at"`
 }
+
+// CategoryEconomicIntent defines model for CategoryEconomicIntent.
+type CategoryEconomicIntent string
 
 // CategoryListResponse defines model for CategoryListResponse.
 type CategoryListResponse struct {
@@ -595,17 +695,19 @@ type CategoryListResponse struct {
 
 // CreateAccountRequest defines model for CreateAccountRequest.
 type CreateAccountRequest struct {
-	Currency       *string `json:"currency,omitempty"`
-	ExternalId     *string `json:"external_id,omitempty"`
-	ExternalSystem *string `json:"external_system,omitempty"`
-	Fqn            string  `json:"fqn"`
-	IsHidden       *bool   `json:"is_hidden,omitempty"`
+	AccountType    AccountType `json:"account_type"`
+	Currency       *string     `json:"currency,omitempty"`
+	ExternalId     *string     `json:"external_id,omitempty"`
+	ExternalSystem *string     `json:"external_system,omitempty"`
+	Fqn            string      `json:"fqn"`
+	IsHidden       *bool       `json:"is_hidden,omitempty"`
 }
 
 // CreateCategoryRequest defines model for CreateCategoryRequest.
 type CreateCategoryRequest struct {
-	Fqn      string `json:"fqn"`
-	IsHidden *bool  `json:"is_hidden,omitempty"`
+	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
+	Fqn            string                 `json:"fqn"`
+	IsHidden       *bool                  `json:"is_hidden,omitempty"`
 }
 
 // CreateCreditLimitHistoryRequest defines model for CreateCreditLimitHistoryRequest.
@@ -717,6 +819,13 @@ type DemoSeedResponse struct {
 	Members            int `json:"members"`
 	Tags               int `json:"tags"`
 	Transactions       int `json:"transactions"`
+}
+
+// DisplayAmount defines model for DisplayAmount.
+type DisplayAmount struct {
+	// Amount JSON string, not a JSON number. Signed DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount   string `json:"amount"`
+	Currency string `json:"currency"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -879,11 +988,23 @@ type TagListResponse struct {
 
 // Transaction defines model for Transaction.
 type Transaction struct {
-	CreatedAt     time.Time          `json:"created_at"`
-	InitiatedDate openapi_types.Date `json:"initiated_date"`
-	Records       []JournalRecord    `json:"records"`
-	TombstonedAt  *time.Time         `json:"tombstoned_at,omitempty"`
-	TransactionId int64              `json:"transaction_id"`
+	Components       []TransactionComponent `json:"components"`
+	CreatedAt        time.Time              `json:"created_at"`
+	InitiatedDate    openapi_types.Date     `json:"initiated_date"`
+	PrimaryAmounts   []DisplayAmount        `json:"primary_amounts"`
+	Records          []JournalRecord        `json:"records"`
+	TombstonedAt     *time.Time             `json:"tombstoned_at,omitempty"`
+	TransactionClass TransactionClass       `json:"transaction_class"`
+	TransactionId    int64                  `json:"transaction_id"`
+}
+
+// TransactionClass defines model for TransactionClass.
+type TransactionClass string
+
+// TransactionComponent defines model for TransactionComponent.
+type TransactionComponent struct {
+	Amounts []DisplayAmount        `json:"amounts"`
+	Intent  CategoryEconomicIntent `json:"intent"`
 }
 
 // TransactionListResponse defines model for TransactionListResponse.
@@ -944,6 +1065,7 @@ type NotFound = ErrorResponse
 type ListAccountsParams struct {
 	IncludeHidden     *bool                      `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 	IncludeTombstoned *bool                      `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	AccountType       *AccountType               `form:"account_type,omitempty" json:"account_type,omitempty"`
 	Sort              *ListAccountsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListAccountsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
 	Limit             *int                       `form:"limit,omitempty" json:"limit,omitempty"`
@@ -2264,6 +2386,18 @@ func NewListAccountsRequest(server string, params *ListAccountsParams) (*http.Re
 		if params.IncludeTombstoned != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_tombstoned", *params.IncludeTombstoned, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AccountType != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "account_type", *params.AccountType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

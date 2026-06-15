@@ -13,7 +13,8 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	client := newSharedClient(t)
 
 	created, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
-		Fqn: "Food:Restaurants",
+		Fqn:            "Food:Restaurants",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
 	})
 	if err != nil {
 		t.Fatalf("create request: %v", err)
@@ -22,6 +23,9 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
 	assertCategoryHierarchy(t, *created.JSON201, "Food", "Restaurants", 1)
+	if created.JSON201.EconomicIntent != httpclient.CategoryEconomicIntentExpense {
+		t.Fatalf("economic_intent = %q, want %q", created.JSON201.EconomicIntent, httpclient.CategoryEconomicIntentExpense)
+	}
 
 	read, err := client.REST().GetCategoryWithResponse(context.Background(), created.JSON201.CategoryId, nil)
 	if err != nil {
@@ -33,11 +37,15 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if read.JSON200.CategoryId != created.JSON201.CategoryId {
 		t.Fatalf("read category id = %d, want %d", read.JSON200.CategoryId, created.JSON201.CategoryId)
 	}
+	if read.JSON200.EconomicIntent != httpclient.CategoryEconomicIntentExpense {
+		t.Fatalf("read economic_intent = %q, want %q", read.JSON200.EconomicIntent, httpclient.CategoryEconomicIntentExpense)
+	}
 
 	hiddenValue := true
 	hidden, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
-		Fqn:      "Food:Groceries",
-		IsHidden: &hiddenValue,
+		Fqn:            "Food:Groceries",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+		IsHidden:       &hiddenValue,
 	})
 	if err != nil {
 		t.Fatalf("hidden create request: %v", err)
@@ -54,6 +62,7 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
 	assertCategoryIDs(t, defaultList.JSON200.Categories, []int64{created.JSON201.CategoryId})
+	assertCategoryEconomicIntents(t, defaultList.JSON200.Categories, []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentExpense})
 
 	includeHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{IncludeHidden: &hiddenValue})
 	if err != nil {
@@ -63,6 +72,7 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("include hidden status = %d, want %d; body %s", includeHidden.StatusCode(), http.StatusOK, includeHidden.Body)
 	}
 	assertCategoryIDs(t, includeHidden.JSON200.Categories, []int64{hidden.JSON201.CategoryId, created.JSON201.CategoryId})
+	assertCategoryEconomicIntents(t, includeHidden.JSON200.Categories, []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentExpense, httpclient.CategoryEconomicIntentExpense})
 
 	updated, err := client.REST().UpdateCategoryWithResponse(context.Background(), created.JSON201.CategoryId, httpclient.UpdateCategoryRequest{
 		IsHidden: true,
@@ -75,6 +85,9 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 	if !updated.JSON200.IsHidden {
 		t.Fatal("updated category hidden = false, want true")
+	}
+	if updated.JSON200.EconomicIntent != httpclient.CategoryEconomicIntentExpense {
+		t.Fatalf("updated economic_intent = %q, want %q", updated.JSON200.EconomicIntent, httpclient.CategoryEconomicIntentExpense)
 	}
 
 	afterHide, err := client.REST().ListCategoriesWithResponse(context.Background(), nil)
@@ -113,6 +126,9 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	if deletedRead.JSON200.TombstonedAt == nil {
 		t.Fatal("get deleted with tombstones tombstoned_at = nil, want timestamp")
 	}
+	if deletedRead.JSON200.EconomicIntent != httpclient.CategoryEconomicIntentExpense {
+		t.Fatalf("get deleted with tombstones economic_intent = %q, want %q", deletedRead.JSON200.EconomicIntent, httpclient.CategoryEconomicIntentExpense)
+	}
 
 	withTombstones, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
 		IncludeHidden:     &hiddenValue,
@@ -125,6 +141,7 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode(), http.StatusOK, withTombstones.Body)
 	}
 	assertCategoryIDs(t, withTombstones.JSON200.Categories, []int64{hidden.JSON201.CategoryId, created.JSON201.CategoryId})
+	assertCategoryEconomicIntents(t, withTombstones.JSON200.Categories, []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentExpense, httpclient.CategoryEconomicIntentExpense})
 	if withTombstones.JSON200.Categories[0].TombstonedAt == nil {
 		t.Fatal("deleted category tombstoned_at = nil, want timestamp")
 	}
@@ -134,7 +151,8 @@ func TestCategoryRejectsDuplicateActiveFQN(t *testing.T) {
 	client := newSharedClient(t)
 
 	first, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
-		Fqn: "Bills:Utilities",
+		Fqn:            "Bills:Utilities",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
 	})
 	if err != nil {
 		t.Fatalf("first create request: %v", err)
@@ -144,7 +162,8 @@ func TestCategoryRejectsDuplicateActiveFQN(t *testing.T) {
 	}
 
 	duplicate, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
-		Fqn: "Bills:Utilities",
+		Fqn:            "Bills:Utilities",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
 	})
 	if err != nil {
 		t.Fatalf("duplicate request: %v", err)
@@ -165,7 +184,8 @@ func TestCategoryRejectsDuplicateActiveFQN(t *testing.T) {
 	}
 
 	recreated, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
-		Fqn: "Bills:Utilities",
+		Fqn:            "Bills:Utilities",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
 	})
 	if err != nil {
 		t.Fatalf("recreate request: %v", err)
@@ -179,7 +199,8 @@ func TestCategoryValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 
 	invalid, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
-		Fqn: "Food::Restaurants",
+		Fqn:            "Food::Restaurants",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
 	})
 	if err != nil {
 		t.Fatalf("invalid request: %v", err)
@@ -189,6 +210,27 @@ func TestCategoryValidationErrors(t *testing.T) {
 	}
 	if invalid.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
 		t.Fatalf("invalid code = %q, want %q", invalid.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
+	}
+
+	missingEconomicIntent, err := client.REST().CreateCategoryWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
+		"fqn": "Food:MissingIntent",
+	}))
+	if err != nil {
+		t.Fatalf("missing economic intent request: %v", err)
+	}
+	if missingEconomicIntent.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing economic intent status = %d, want %d; body %s", missingEconomicIntent.StatusCode(), http.StatusBadRequest, missingEconomicIntent.Body)
+	}
+
+	invalidEconomicIntent, err := client.REST().CreateCategoryWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
+		"fqn":             "Food:InvalidIntent",
+		"economic_intent": "unknown",
+	}))
+	if err != nil {
+		t.Fatalf("invalid economic intent request: %v", err)
+	}
+	if invalidEconomicIntent.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid economic intent status = %d, want %d; body %s", invalidEconomicIntent.StatusCode(), http.StatusBadRequest, invalidEconomicIntent.Body)
 	}
 
 	badQuery, err := client.REST().ListCategoriesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_hidden=maybe"))
@@ -218,8 +260,9 @@ func TestCategoryValidationErrors(t *testing.T) {
 	}
 
 	extraField, err := client.REST().CreateCategoryWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
-		"fqn":        "Food:Restaurants",
-		"extraField": true,
+		"fqn":             "Food:Restaurants",
+		"economic_intent": "expense",
+		"extraField":      true,
 	}))
 	if err != nil {
 		t.Fatalf("extra field request: %v", err)
@@ -252,6 +295,19 @@ func assertCategoryIDs(t *testing.T, categories []httpclient.Category, want []in
 	for i, category := range categories {
 		if category.CategoryId != want[i] {
 			t.Fatalf("category id at %d = %d, want %d; categories = %+v", i, category.CategoryId, want[i], categories)
+		}
+	}
+}
+
+func assertCategoryEconomicIntents(t *testing.T, categories []httpclient.Category, want []httpclient.CategoryEconomicIntent) {
+	t.Helper()
+
+	if len(categories) != len(want) {
+		t.Fatalf("category count = %d, want %d; categories = %+v", len(categories), len(want), categories)
+	}
+	for i, category := range categories {
+		if category.EconomicIntent != want[i] {
+			t.Fatalf("category economic_intent at %d = %q, want %q; categories = %+v", i, category.EconomicIntent, want[i], categories)
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
@@ -37,10 +38,11 @@ func (s *AccountStore) Create(ctx context.Context, input accounts.CreateInput) (
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("account")+` (fqn, is_hidden, currency, external_id, external_system)
-VALUES (?, ?, ?, ?, ?)
-RETURNING account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("account")+` (fqn, account_type, is_hidden, currency, external_id, external_system)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING account_id, fqn, account_type, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
+			enumValue(input.AccountType),
 			input.IsHidden,
 			input.Currency,
 			input.ExternalID,
@@ -65,7 +67,7 @@ RETURNING account_id, fqn, kind, is_hidden, currency, external_id, external_syst
 
 // Get returns an account by ID.
 func (s *AccountStore) Get(ctx context.Context, id int64, includeTombstoned bool) (accounts.Account, error) {
-	query := `SELECT account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT account_id, fqn, account_type, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("account") + `
 WHERE account_id = ?`
 	args := []any{id}
@@ -86,7 +88,7 @@ WHERE account_id = ?`
 
 // List returns accounts in deterministic hierarchy order.
 func (s *AccountStore) List(ctx context.Context, opts accounts.ListOptions) ([]accounts.Account, error) {
-	query := `SELECT account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT account_id, fqn, account_type, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("account") + `
 WHERE 1 = 1`
 	args := []any{}
@@ -95,6 +97,10 @@ WHERE 1 = 1`
 	}
 	if !opts.IncludeTombstoned {
 		query += " AND tombstoned_at IS NULL"
+	}
+	if opts.AccountType != nil {
+		query += " AND account_type = CAST(? AS " + s.db.accountingName("account_type") + ")"
+		args = append(args, enumValue(*opts.AccountType))
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, accountSortColumns, services.SortKeyFQN, "account_id")
 
@@ -134,7 +140,7 @@ SET is_hidden = ?,
     external_system = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE account_id = ? AND tombstoned_at IS NULL
-RETURNING account_id, fqn, kind, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+RETURNING account_id, fqn, account_type, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 		*input.IsHidden,
 		input.ExternalID,
 		input.ExternalSystem,
@@ -182,6 +188,7 @@ type accountScanner interface {
 
 func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	var account accounts.Account
+	var accountType string
 	var currency sql.NullString
 	var externalID sql.NullString
 	var externalSystem sql.NullString
@@ -192,7 +199,7 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	if err := scanner.Scan(
 		&account.ID,
 		&account.FQN,
-		&account.Kind,
+		&accountType,
 		&account.IsHidden,
 		&currency,
 		&externalID,
@@ -206,6 +213,7 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	); err != nil {
 		return accounts.Account{}, err
 	}
+	account.AccountType = accounts.AccountType(strings.ToLower(accountType))
 	account.CreatedAt = createdAt.UTC()
 	account.UpdatedAt = updatedAt.UTC()
 	if currency.Valid {

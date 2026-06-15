@@ -226,17 +226,19 @@ func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Option
 		operationRepo,
 		opts.clock(),
 	)
+	accountStore := store.NewAccountStore(appDB)
+	categoryStore := store.NewCategoryStore(appDB)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			Health:        health.NewService(store.NewHealthStore(appDB)),
 			Operations:    operationRuns,
-			Categories:    categories.NewService(store.NewCategoryStore(appDB)),
+			Categories:    categories.NewService(categoryStore),
 			Tags:          tags.NewService(store.NewTagStore(appDB)),
 			Members:       members.NewService(store.NewMemberStore(appDB)),
-			Accounts:      accounts.NewService(store.NewAccountStore(appDB)),
+			Accounts:      accounts.NewService(accountStore),
 			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB)),
 			ExchangeRates: exchangerates.NewService(exchangeRateStore),
-			Transactions:  transactions.NewService(store.NewTransactionStore(appDB)),
+			Transactions:  transactions.NewService(store.NewTransactionStore(appDB), accountStore, categoryStore),
 		},
 		Backup:                     backupService,
 		ExchangeRateLoading:        exchangeRateLoading,

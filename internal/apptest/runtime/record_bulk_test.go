@@ -20,6 +20,7 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 	}
 	firstRecordID := created.JSON201.Records[0].RecordId
 	secondRecordID := created.JSON201.Records[1].RecordId
+	replacementMerchant := client.Scenario().Account("merchant:BulkReplacement")
 
 	bulkCategory, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
 		RecordIds:  []int64{firstRecordID},
@@ -64,14 +65,14 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 
 	bulkAccount, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
 		RecordIds: []int64{secondRecordID},
-		AccountId: refs.SavingsAccountId,
+		AccountId: replacementMerchant.AccountId,
 	})
 	requireNoTransportError(t, "bulk reassign record account", err)
 	if bulkAccount.StatusCode() != http.StatusOK {
 		t.Fatalf("bulk account status = %d, want %d; body %s", bulkAccount.StatusCode(), http.StatusOK, bulkAccount.Body)
 	}
 	assertBulkResponse(t, bulkAccount.JSON200, []int64{secondRecordID})
-	accountRecords, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.SavingsAccountId, nil)
+	accountRecords, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), replacementMerchant.AccountId, nil)
 	requireNoTransportError(t, "search account records", err)
 	if accountRecords.StatusCode() != http.StatusOK {
 		t.Fatalf("account records status = %d, want %d; body %s", accountRecords.StatusCode(), http.StatusOK, accountRecords.Body)
@@ -218,6 +219,50 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 		t.Fatalf("original category search status = %d, want %d; body %s", originalCategoryRecords.StatusCode(), http.StatusOK, originalCategoryRecords.Body)
 	}
 	assertRecordIDs(t, originalCategoryRecords.JSON200.Records, []int64{created.JSON201.Records[0].RecordId, created.JSON201.Records[1].RecordId})
+}
+
+func TestRecordBulkOperationsRejectTombstonedTargetReferences(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs.transactionRefs))
+	requireNoTransportError(t, "create transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	firstRecordID := created.JSON201.Records[0].RecordId
+	secondRecordID := created.JSON201.Records[1].RecordId
+
+	tombstonedCategory := client.Scenario().Category("Food:TombstonedBulkTarget")
+	deleteCategory, err := client.REST().DeleteCategoryWithResponse(context.Background(), tombstonedCategory.CategoryId)
+	requireNoTransportError(t, "delete category", err)
+	if deleteCategory.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete category status = %d, want %d; body %s", deleteCategory.StatusCode(), http.StatusNoContent, deleteCategory.Body)
+	}
+	tombstonedAccount := client.Scenario().Account("merchant:TombstonedBulkTarget")
+	deleteAccount, err := client.REST().DeleteAccountWithResponse(context.Background(), tombstonedAccount.AccountId)
+	requireNoTransportError(t, "delete account", err)
+	if deleteAccount.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete account status = %d, want %d; body %s", deleteAccount.StatusCode(), http.StatusNoContent, deleteAccount.Body)
+	}
+
+	tombstonedBulkCategory, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
+		RecordIds:  []int64{firstRecordID},
+		CategoryId: tombstonedCategory.CategoryId,
+	})
+	requireNoTransportError(t, "bulk categorize tombstoned category", err)
+	if tombstonedBulkCategory.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("tombstoned category status = %d, want %d; body %s", tombstonedBulkCategory.StatusCode(), http.StatusBadRequest, tombstonedBulkCategory.Body)
+	}
+
+	tombstonedBulkAccount, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
+		RecordIds: []int64{secondRecordID},
+		AccountId: tombstonedAccount.AccountId,
+	})
+	requireNoTransportError(t, "bulk reassign tombstoned account", err)
+	if tombstonedBulkAccount.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("tombstoned account status = %d, want %d; body %s", tombstonedBulkAccount.StatusCode(), http.StatusBadRequest, tombstonedBulkAccount.Body)
+	}
 }
 
 func assertBulkResponse(t *testing.T, got *httpclient.BulkRecordOperationResponse, wantRecordIDs []int64) {

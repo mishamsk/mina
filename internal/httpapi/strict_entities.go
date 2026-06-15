@@ -17,6 +17,7 @@ func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAcc
 	accountList, err := s.deps.Accounts.List(ctx, accounts.ListOptions{
 		IncludeHidden:     boolParam(params.IncludeHidden),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		AccountType:       accountTypeParam(params.AccountType),
 		List: listOptionsFromParams(
 			params.Sort,
 			params.SortDir,
@@ -32,9 +33,18 @@ func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAcc
 	return openapi.ListAccounts200JSONResponse{Accounts: accountAPIResponses(accountList)}, nil
 }
 
+func accountTypeParam(value *openapi.AccountType) *accounts.AccountType {
+	if value == nil {
+		return nil
+	}
+	accountType := accounts.AccountType(*value)
+	return &accountType
+}
+
 func (s *strictServer) CreateAccount(ctx context.Context, request openapi.CreateAccountRequestObject) (openapi.CreateAccountResponseObject, error) {
 	account, err := s.deps.Accounts.Create(ctx, accounts.CreateInput{
 		FQN:            request.Body.Fqn,
+		AccountType:    accounts.AccountType(request.Body.AccountType),
 		IsHidden:       request.Body.IsHidden != nil && *request.Body.IsHidden,
 		Currency:       request.Body.Currency,
 		ExternalID:     request.Body.ExternalId,
@@ -100,8 +110,9 @@ func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListC
 
 func (s *strictServer) CreateCategory(ctx context.Context, request openapi.CreateCategoryRequestObject) (openapi.CreateCategoryResponseObject, error) {
 	category, err := s.deps.Categories.Create(ctx, categories.CreateInput{
-		FQN:      request.Body.Fqn,
-		IsHidden: request.Body.IsHidden != nil && *request.Body.IsHidden,
+		FQN:            request.Body.Fqn,
+		EconomicIntent: categories.CategoryEconomicIntent(request.Body.EconomicIntent),
+		IsHidden:       request.Body.IsHidden != nil && *request.Body.IsHidden,
 	})
 	if err != nil {
 		return nil, err
@@ -258,7 +269,7 @@ func accountAPIResponse(account accounts.Account) openapi.Account {
 	return openapi.Account{
 		AccountId:      account.ID,
 		Fqn:            account.FQN,
-		Kind:           account.Kind,
+		AccountType:    openapi.AccountType(account.AccountType),
 		IsHidden:       account.IsHidden,
 		Currency:       account.Currency,
 		ExternalId:     account.ExternalID,
@@ -283,15 +294,16 @@ func accountAPIResponses(accounts []accounts.Account) []openapi.Account {
 
 func categoryAPIResponse(category categories.Category) openapi.Category {
 	return openapi.Category{
-		CategoryId:   category.ID,
-		Fqn:          category.FQN,
-		IsHidden:     category.IsHidden,
-		ParentFqn:    category.ParentFQN,
-		Name:         category.Name,
-		Level:        category.Level,
-		CreatedAt:    category.CreatedAt.UTC(),
-		UpdatedAt:    category.UpdatedAt.UTC(),
-		TombstonedAt: nullableTimestampTime(category.TombstonedAt),
+		CategoryId:     category.ID,
+		Fqn:            category.FQN,
+		EconomicIntent: openapi.CategoryEconomicIntent(category.EconomicIntent),
+		IsHidden:       category.IsHidden,
+		ParentFqn:      category.ParentFQN,
+		Name:           category.Name,
+		Level:          category.Level,
+		CreatedAt:      category.CreatedAt.UTC(),
+		UpdatedAt:      category.UpdatedAt.UTC(),
+		TombstonedAt:   nullableTimestampTime(category.TombstonedAt),
 	}
 }
 

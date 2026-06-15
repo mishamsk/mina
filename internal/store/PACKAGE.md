@@ -22,12 +22,14 @@
 - Direct `AppDB.db` access is limited to open, attach, detach, migration setup, transaction creation, backup database copy, and close paths.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.
+- Store code reads account-type and category economic-intent metadata for service-owned semantic decisions.
+- Transaction repositories return semantic metadata for service-owned classification and bulk semantic validation.
 - Repositories bind and scan DuckDB `DATE`, `TIMESTAMP`, and `DECIMAL(18,8)` columns through app service value types.
 - Exchange-rate loading queries infer needed currencies and latest active USD-pair dates from active accounting rows only.
 - SQL casts on typed date/decimal columns are limited to store-owned expression keys such as active uniqueness indexes.
 - Query generation is not selected for Stage 1 recovery because the required DuckDB SQL features are not yet proven against a repo-owned generator. Manual query code must keep user values parameter-bound and dynamic identifiers selected from store-owned allowlists.
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
-- Active-reference checks are repository-owned instead of DuckDB foreign keys for mutable/tombstoned parent rows.
+- Transaction services prevalidate create/replace account/category references from active semantic dictionaries; transaction repositories recheck write targets inside DB transactions and own member/tag/record persistence checks.
 - Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; repositories also pre-check active uniqueness to return stable conflict messages.
 - Account, category, and tag hierarchy fields are read from DuckDB generated virtual columns.
 

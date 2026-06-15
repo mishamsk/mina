@@ -10,7 +10,7 @@
 
 ## Boundaries
 
-- Owns: account hierarchy validation and derivation, currency validation, external identifier validation, hidden/tombstoned use-case rules, and active-FQN conflict mapping.
+- Owns: account hierarchy validation and derivation, account-type validation, currency validation, external identifier validation, hidden/tombstoned use-case rules, and active-FQN conflict mapping.
 - Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
 
 ## Testing Notes

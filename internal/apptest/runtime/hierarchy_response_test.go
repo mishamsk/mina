@@ -14,8 +14,9 @@ func TestHierarchyRootResponsesEncodeNullParentFQN(t *testing.T) {
 
 	currency := "USD"
 	account, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
-		Fqn:      "cash",
-		Currency: &currency,
+		Fqn:         "cash",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
 	})
 	if err != nil {
 		t.Fatalf("account create request: %v", err)
@@ -26,7 +27,8 @@ func TestHierarchyRootResponsesEncodeNullParentFQN(t *testing.T) {
 	assertRawParentFQNNull(t, account.Body)
 
 	category, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
-		Fqn: "Food",
+		Fqn:            "Food",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
 	})
 	if err != nil {
 		t.Fatalf("category create request: %v", err)

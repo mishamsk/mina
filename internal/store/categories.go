@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
@@ -37,10 +38,11 @@ func (s *CategoryStore) Create(ctx context.Context, input categories.CreateInput
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("category")+` (fqn, is_hidden)
-VALUES (?, ?)
-RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("category")+` (fqn, economic_intent, is_hidden)
+VALUES (?, ?, ?)
+RETURNING category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
+			enumValue(input.EconomicIntent),
 			input.IsHidden,
 		)
 		category, err = scanCategory(row)
@@ -62,7 +64,7 @@ RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, upda
 
 // Get returns a category by ID.
 func (s *CategoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (categories.Category, error) {
-	query := `SELECT category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("category") + `
 WHERE category_id = ?`
 	args := []any{id}
@@ -83,7 +85,7 @@ WHERE category_id = ?`
 
 // List returns categories in deterministic hierarchy order.
 func (s *CategoryStore) List(ctx context.Context, opts categories.ListOptions) ([]categories.Category, error) {
-	query := `SELECT category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("category") + `
 WHERE 1 = 1`
 	args := []any{}
@@ -128,7 +130,7 @@ func (s *CategoryStore) UpdateHidden(ctx context.Context, id int64, isHidden boo
 		`UPDATE `+s.db.accountingName("category")+`
 SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
 WHERE category_id = ? AND tombstoned_at IS NULL
-RETURNING category_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+RETURNING category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 		isHidden,
 		id,
 	)
@@ -174,6 +176,7 @@ type categoryScanner interface {
 
 func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	var category categories.Category
+	var economicIntent string
 	var parentFQN sql.NullString
 	var createdAt time.Time
 	var updatedAt time.Time
@@ -181,6 +184,7 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	if err := scanner.Scan(
 		&category.ID,
 		&category.FQN,
+		&economicIntent,
 		&category.IsHidden,
 		&parentFQN,
 		&category.Name,
@@ -191,6 +195,7 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	); err != nil {
 		return categories.Category{}, err
 	}
+	category.EconomicIntent = categories.CategoryEconomicIntent(strings.ToLower(economicIntent))
 	category.CreatedAt = createdAt.UTC()
 	category.UpdatedAt = updatedAt.UTC()
 	if parentFQN.Valid {

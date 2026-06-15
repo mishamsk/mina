@@ -10,11 +10,30 @@ import (
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
+// AccountType identifies how an account participates in accounting semantics.
+type AccountType string
+
+const (
+	AccountTypeBalance AccountType = "balance"
+	AccountTypeFlow    AccountType = "flow"
+	AccountTypeSystem  AccountType = "system"
+)
+
+// ValidAccountType reports whether value is a supported account type.
+func ValidAccountType(value AccountType) bool {
+	switch value {
+	case AccountTypeBalance, AccountTypeFlow, AccountTypeSystem:
+		return true
+	default:
+		return false
+	}
+}
+
 // Account is a hierarchical financial account or counterparty.
 type Account struct {
 	ID             int64
 	FQN            string
-	Kind           string
+	AccountType    AccountType
 	IsHidden       bool
 	Currency       *string
 	ExternalID     *string
@@ -30,6 +49,7 @@ type Account struct {
 // CreateInput contains fields for creating an account.
 type CreateInput struct {
 	FQN            string
+	AccountType    AccountType
 	IsHidden       bool
 	Currency       *string
 	ExternalID     *string
@@ -47,6 +67,7 @@ type UpdateInput struct {
 type ListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	AccountType       *AccountType
 	List              services.ListOptions
 }
 
@@ -73,6 +94,9 @@ func NewService(repo Repository) *Service {
 func (s *Service) Create(ctx context.Context, input CreateInput) (Account, error) {
 	if err := validateFQN(input.FQN); err != nil {
 		return Account{}, err
+	}
+	if !ValidAccountType(input.AccountType) {
+		return Account{}, services.InvalidRequest("account_type must be one of balance, flow, or system")
 	}
 	if err := validateCurrency(input.Currency); err != nil {
 		return Account{}, err
@@ -111,6 +135,10 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ac
 
 // List returns accounts using default visibility rules unless explicitly overridden.
 func (s *Service) List(ctx context.Context, opts ListOptions) ([]Account, error) {
+	if opts.AccountType != nil && !ValidAccountType(*opts.AccountType) {
+		return nil, services.InvalidRequest("account_type must be one of balance, flow, or system")
+	}
+
 	return s.repo.List(ctx, opts)
 }
 

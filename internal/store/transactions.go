@@ -11,6 +11,8 @@ import (
 
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/values"
 )
@@ -49,12 +51,15 @@ RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
 		}
 
 		for _, recordReq := range req.Records {
-			record, err := insertJournalRecord(ctx, tx, s.db, transaction.ID, recordReq)
-			if err != nil {
+			if err := insertJournalRecord(ctx, tx, s.db, transaction.ID, recordReq); err != nil {
 				return err
 			}
-			transaction.Records = append(transaction.Records, record)
 		}
+		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{transaction.ID})
+		if err != nil {
+			return err
+		}
+		transaction.Records = records[transaction.ID]
 
 		return nil
 	})
@@ -106,12 +111,15 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		}
 
 		for _, recordReq := range req.Records {
-			record, err := insertJournalRecord(ctx, tx, s.db, transaction.ID, recordReq)
-			if err != nil {
+			if err := insertJournalRecord(ctx, tx, s.db, transaction.ID, recordReq); err != nil {
 				return err
 			}
-			transaction.Records = append(transaction.Records, record)
 		}
+		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{transaction.ID})
+		if err != nil {
+			return err
+		}
+		transaction.Records = records[transaction.ID]
 
 		return nil
 	})
@@ -230,10 +238,12 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 // SearchRecords returns active journal records matching filters.
 func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.RecordSearchOptions) ([]transactions.JournalRecord, error) {
 	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
-	jr.memo, jr.pending_date, jr.posted_date, CAST(jr.posting_status AS VARCHAR), CAST(jr.reconciliation_status AS VARCHAR), CAST(jr.source AS VARCHAR), jr.external_id, jr.external_system,
-	jr.created_at, jr.updated_at, jr.tombstoned_at
+	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
+	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, c.economic_intent
 FROM ` + s.db.accountingName("journal_record") + ` jr
 JOIN ` + s.db.accountingName("transaction") + ` tx ON tx.transaction_id = jr.transaction_id
+JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
+JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
 WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	args := []any{}
 	if opts.AccountID != nil {
@@ -329,15 +339,12 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 		return nil, fmt.Errorf("close searched journal record rows: %w", err)
 	}
 
-	for index := range records {
-		tagIDs, err := s.tagIDsByRecordID(ctx, records[index].ID)
-		if err != nil {
-			return nil, err
-		}
-		records[index].TagIDs = tagIDs
-	}
-
 	return records, nil
+}
+
+// TransactionsByRecordIDs returns active transactions containing selected active records.
+func (s *TransactionStore) TransactionsByRecordIDs(ctx context.Context, recordIDs []int64) ([]transactions.Transaction, error) {
+	return transactionsByRecordIDs(ctx, s.db.query(), s.db, recordIDs)
 }
 
 // BulkCategorize assigns one active category to active journal records atomically.
@@ -516,7 +523,7 @@ func scanTransaction(scanner transactionScanner) (transactions.Transaction, erro
 	return transaction, nil
 }
 
-func insertJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, transactionID int64, req transactions.JournalRecordInput) (transactions.JournalRecord, error) {
+func insertJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, transactionID int64, req transactions.JournalRecordInput) error {
 	tagListExpr, tagListArgs := tagListExpression(req.TagIDs)
 	args := []any{
 		transactionID,
@@ -539,29 +546,22 @@ func insertJournalRecord(ctx context.Context, tx *sql.Tx, db *AppDB, transaction
 		req.ExternalSystem,
 	)
 
-	row := tx.QueryRowContext(
+	if _, err := tx.ExecContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("journal_record")+` (
 	transaction_id, account_id, member_id, currency, amount, amount_usd, category_id, tag_ids, memo,
 	pending_date, posted_date, posting_status, reconciliation_status, source, external_id, external_system
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, ?, ?, CAST(? AS `+db.accountingName("posting_status")+`), CAST(? AS `+db.accountingName("reconciliation_status")+`), CAST(? AS `+db.accountingName("source")+`), ?, ?)
-RETURNING record_id, transaction_id, account_id, member_id, currency, amount, amount_usd, category_id,
-	memo, pending_date, posted_date, CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR), external_id, external_system,
-	created_at, updated_at, tombstoned_at`,
+VALUES (?, ?, ?, ?, ?, ?, ?, `+tagListExpr+`, ?, ?, ?, CAST(? AS `+db.accountingName("posting_status")+`), CAST(? AS `+db.accountingName("reconciliation_status")+`), CAST(? AS `+db.accountingName("source")+`), ?, ?)`,
 		args...,
-	)
-
-	record, err := scanJournalRecord(row)
-	if err != nil {
+	); err != nil {
 		if isForeignKeyConstraintError(err) {
-			return transactions.JournalRecord{}, services.ErrInvalidReference
+			return services.ErrInvalidReference
 		}
-		return transactions.JournalRecord{}, fmt.Errorf("insert journal record: %w", err)
+		return fmt.Errorf("insert journal record: %w", err)
 	}
-	record.TagIDs = append([]int64{}, req.TagIDs...)
 
-	return record, nil
+	return nil
 }
 
 type journalRecordScanner interface {
@@ -573,14 +573,20 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	var memberID sql.NullInt64
 	var amount duckdb.Decimal
 	var amountUSD sql.Null[duckdb.Decimal]
+	var tagIDs []any
 	var memo sql.NullString
 	var pendingDate time.Time
 	var postedDate sql.NullTime
+	var postingStatus string
+	var reconciliationStatus string
+	var source string
 	var externalID sql.NullString
 	var externalSystem sql.NullString
 	var createdAt time.Time
 	var updatedAt time.Time
 	var tombstonedAt sql.NullTime
+	var accountType sql.NullString
+	var economicIntent sql.NullString
 	if err := scanner.Scan(
 		&record.ID,
 		&record.TransactionID,
@@ -590,17 +596,20 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 		&amount,
 		&amountUSD,
 		&record.CategoryID,
+		&tagIDs,
 		&memo,
 		&pendingDate,
 		&postedDate,
-		&record.PostingStatus,
-		&record.ReconciliationStatus,
-		&record.Source,
+		&postingStatus,
+		&reconciliationStatus,
+		&source,
 		&externalID,
 		&externalSystem,
 		&createdAt,
 		&updatedAt,
 		&tombstonedAt,
+		&accountType,
+		&economicIntent,
 	); err != nil {
 		return transactions.JournalRecord{}, err
 	}
@@ -624,6 +633,12 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	}
 	record.PendingDate = pendingDate.UTC()
 	record.PostedDate = nullableTimeFromSQL(postedDate)
+	parsedTagIDs, err := int64ListFromDuckDB(tagIDs)
+	if err != nil {
+		return transactions.JournalRecord{}, fmt.Errorf("scan journal record tag_ids: %w", err)
+	}
+	slices.Sort(parsedTagIDs)
+	record.TagIDs = parsedTagIDs
 	if externalID.Valid {
 		record.ExternalID = &externalID.String
 	}
@@ -633,15 +648,20 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	record.CreatedAt = createdAt.UTC()
 	record.UpdatedAt = updatedAt.UTC()
 	record.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
-	record.PostingStatus = transactions.PostingStatus(strings.ToLower(string(record.PostingStatus)))
-	record.ReconciliationStatus = transactions.ReconciliationStatus(strings.ToLower(string(record.ReconciliationStatus)))
-	record.Source = transactions.Source(strings.ToLower(string(record.Source)))
-	record.TagIDs = []int64{}
+	record.PostingStatus = transactions.PostingStatus(strings.ToLower(postingStatus))
+	record.ReconciliationStatus = transactions.ReconciliationStatus(strings.ToLower(reconciliationStatus))
+	record.Source = transactions.Source(strings.ToLower(source))
+	if accountType.Valid {
+		record.AccountType = accounts.AccountType(strings.ToLower(accountType.String))
+	}
+	if economicIntent.Valid {
+		record.EconomicIntent = categories.CategoryEconomicIntent(strings.ToLower(economicIntent.String))
+	}
 
 	return record, nil
 }
 
-func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transactionIDs []int64) (map[int64][]transactions.JournalRecord, error) {
+func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, transactionIDs []int64) (map[int64][]transactions.JournalRecord, error) {
 	recordsByTransactionID := map[int64][]transactions.JournalRecord{}
 	for _, id := range transactionIDs {
 		recordsByTransactionID[id] = []transactions.JournalRecord{}
@@ -650,54 +670,44 @@ func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transact
 		return recordsByTransactionID, nil
 	}
 
-	for _, transactionID := range transactionIDs {
-		rows, err := s.db.query().QueryContext(
-			ctx,
-			`SELECT record_id, transaction_id, account_id, member_id, currency, amount, amount_usd, category_id,
-	memo, pending_date, posted_date, CAST(posting_status AS VARCHAR), CAST(reconciliation_status AS VARCHAR), CAST(source AS VARCHAR), external_id, external_system,
-	created_at, updated_at, tombstoned_at
-FROM `+s.db.accountingName("journal_record")+`
-WHERE transaction_id = ? AND tombstoned_at IS NULL
-ORDER BY record_id ASC`,
-			transactionID,
-		)
+	rows, err := queryer.QueryContext(
+		ctx,
+		`SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
+	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
+	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, c.economic_intent
+FROM `+db.accountingName("journal_record")+` jr
+JOIN `+db.accountingName("account")+` a ON a.account_id = jr.account_id
+JOIN `+db.accountingName("category")+` c ON c.category_id = jr.category_id
+WHERE jr.transaction_id IN (`+placeholders(len(transactionIDs))+`) AND jr.tombstoned_at IS NULL
+ORDER BY jr.transaction_id ASC, jr.record_id ASC`,
+		int64Args(transactionIDs)...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list journal records: %w", err)
+	}
+
+	for rows.Next() {
+		record, err := scanJournalRecord(rows)
 		if err != nil {
-			return nil, fmt.Errorf("list journal records: %w", err)
+			return nil, fmt.Errorf("scan journal record: %w", err)
 		}
-
-		transactionRecords := []transactions.JournalRecord{}
-		for rows.Next() {
-			record, err := scanJournalRecord(rows)
-			if err != nil {
-				return nil, fmt.Errorf("scan journal record: %w", err)
-			}
-			transactionRecords = append(transactionRecords, record)
+		recordsByTransactionID[record.TransactionID] = append(recordsByTransactionID[record.TransactionID], record)
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate journal records: %w; close journal record rows: %w", err, closeErr)
 		}
-		if err := rows.Err(); err != nil {
-			if closeErr := rows.Close(); closeErr != nil {
-				return nil, fmt.Errorf("iterate journal records: %w; close journal record rows: %w", err, closeErr)
-			}
-			return nil, fmt.Errorf("iterate journal records: %w", err)
-		}
-		if err := rows.Close(); err != nil {
-			return nil, fmt.Errorf("close journal record rows: %w", err)
-		}
-
-		for index := range transactionRecords {
-			tagIDs, err := s.tagIDsByRecordID(ctx, transactionRecords[index].ID)
-			if err != nil {
-				return nil, err
-			}
-			transactionRecords[index].TagIDs = tagIDs
-		}
-		recordsByTransactionID[transactionID] = transactionRecords
+		return nil, fmt.Errorf("iterate journal records: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close journal record rows: %w", err)
 	}
 
 	return recordsByTransactionID, nil
 }
 
-func (s *TransactionStore) tagIDsByRecordID(ctx context.Context, recordID int64) ([]int64, error) {
-	return tagIDsByRecordID(ctx, s.db.query(), s.db, recordID)
+func (s *TransactionStore) recordsByTransactionIDs(ctx context.Context, transactionIDs []int64) (map[int64][]transactions.JournalRecord, error) {
+	return recordsByTransactionIDs(ctx, s.db.query(), s.db, transactionIDs)
 }
 
 type rowsQuerier interface {
@@ -778,6 +788,67 @@ func validateTransactionReferences(ctx context.Context, tx *sql.Tx, db *AppDB, r
 	}
 
 	return nil
+}
+
+func transactionsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, recordIDs []int64) ([]transactions.Transaction, error) {
+	transactionIDs, err := transactionIDsByRecordIDs(ctx, queryer, db, recordIDs)
+	if err != nil {
+		return nil, err
+	}
+	if len(transactionIDs) == 0 {
+		return nil, services.ErrInvalidReference
+	}
+
+	records, err := recordsByTransactionIDs(ctx, queryer, db, transactionIDs)
+	if err != nil {
+		return nil, err
+	}
+	affected := make([]transactions.Transaction, 0, len(transactionIDs))
+	for _, transactionID := range transactionIDs {
+		affected = append(affected, transactions.Transaction{
+			ID:      transactionID,
+			Records: records[transactionID],
+		})
+	}
+
+	return affected, nil
+}
+
+func transactionIDsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, recordIDs []int64) ([]int64, error) {
+	rows, err := queryer.QueryContext(
+		ctx,
+		`SELECT DISTINCT jr.transaction_id
+FROM `+db.accountingName("journal_record")+` jr
+JOIN `+db.accountingName("transaction")+` tr ON tr.transaction_id = jr.transaction_id
+WHERE jr.record_id IN (`+placeholders(len(recordIDs))+`)
+  AND jr.tombstoned_at IS NULL
+  AND tr.tombstoned_at IS NULL
+ORDER BY jr.transaction_id ASC`,
+		int64Args(recordIDs)...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list affected transaction ids: %w", err)
+	}
+
+	transactionIDs := []int64{}
+	for rows.Next() {
+		var transactionID int64
+		if err := rows.Scan(&transactionID); err != nil {
+			return nil, fmt.Errorf("scan affected transaction id: %w", err)
+		}
+		transactionIDs = append(transactionIDs, transactionID)
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate affected transaction ids: %w; close transaction id rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate affected transaction ids: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close affected transaction id rows: %w", err)
+	}
+
+	return transactionIDs, nil
 }
 
 func validateActiveJournalRecords(ctx context.Context, queryer rowQuerier, db *AppDB, recordIDs []int64) error {
@@ -912,6 +983,22 @@ func activeTagExists(ctx context.Context, queryer rowQuerier, db *AppDB, tagID i
 	}
 
 	return true, nil
+}
+
+func int64ListFromDuckDB(values []any) ([]int64, error) {
+	converted := make([]int64, 0, len(values))
+	for _, value := range values {
+		switch typed := value.(type) {
+		case int32:
+			converted = append(converted, int64(typed))
+		case int64:
+			converted = append(converted, typed)
+		default:
+			return nil, fmt.Errorf("unsupported integer list value %T", value)
+		}
+	}
+
+	return converted, nil
 }
 
 func escapeLikePattern(value string) string {

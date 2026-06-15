@@ -26,11 +26,30 @@ CREATE TYPE source AS ENUM (
     'RECURRING_TEMPLATE'
 );
 
+CREATE TYPE account_type AS ENUM (
+    'BALANCE',
+    'FLOW',
+    'SYSTEM'
+);
+
+CREATE TYPE category_economic_intent AS ENUM (
+    'EXPENSE',
+    'FEE',
+    'INCOME',
+    'REFUND',
+    'TRANSFER',
+    'EXCHANGE',
+    'ADJUSTMENT',
+    'FX_GAIN_LOSS'
+);
+
 -- Category table with hierarchical FQN and virtual columns
 CREATE TABLE category (
     category_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
     -- Colon-separated hierarchical category path, e.g. Food:Restaurants.
     fqn TEXT NOT NULL,
+    -- Explicit economic meaning used for transaction classification.
+    economic_intent category_economic_intent NOT NULL,
     -- Excludes active rows from default lists while keeping them selectable by explicit query.
     is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -60,6 +79,7 @@ CREATE TABLE category (
 );
 
 COMMENT ON COLUMN category.fqn IS 'Colon-separated hierarchical category path, e.g. Food:Restaurants.';
+COMMENT ON COLUMN category.economic_intent IS 'Explicit economic meaning used for transaction classification.';
 COMMENT ON COLUMN category.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
 COMMENT ON COLUMN category.parent_fqn IS 'Parent category path derived from fqn, or NULL for root categories.';
 COMMENT ON COLUMN category.name IS 'Leaf category name derived from fqn.';
@@ -118,8 +138,10 @@ CREATE TABLE member (
 -- Account table with FQN hierarchy and virtual columns
 CREATE TABLE account (
     account_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
-    -- Colon-separated hierarchical account path, e.g. checking:Chase:Primary.
+    -- Colon-separated hierarchical account path, e.g. banks:Chase:checking:Joint.
     fqn TEXT NOT NULL,
+    -- Explicit semantic account type used for balances and transaction classification.
+    account_type account_type NOT NULL,
     -- Excludes active rows from default lists while keeping them selectable by explicit query.
     is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
     -- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
@@ -131,11 +153,6 @@ CREATE TABLE account (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP,
-
-    -- Root account kind derived from the first fqn segment.
-    kind TEXT GENERATED ALWAYS AS (
-        regexp_extract(fqn, '^[^:]+')
-    ) VIRTUAL,
 
     -- Parent account path derived from fqn, or NULL for root accounts.
     parent_fqn TEXT GENERATED ALWAYS AS (
@@ -159,12 +176,12 @@ CREATE TABLE account (
     UNIQUE(fqn, tombstoned_at)
 );
 
-COMMENT ON COLUMN account.fqn IS 'Colon-separated hierarchical account path, e.g. checking:Chase:Primary.';
+COMMENT ON COLUMN account.fqn IS 'Colon-separated hierarchical account path, e.g. banks:Chase:checking:Joint.';
+COMMENT ON COLUMN account.account_type IS 'Explicit semantic account type used for balances and transaction classification.';
 COMMENT ON COLUMN account.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
 COMMENT ON COLUMN account.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
 COMMENT ON COLUMN account.external_id IS 'Identifier assigned by an external system when this account is linked outside Mina.';
 COMMENT ON COLUMN account.external_system IS 'External system namespace for external_id, e.g. plaid.';
-COMMENT ON COLUMN account.kind IS 'Root account kind derived from the first fqn segment.';
 COMMENT ON COLUMN account.parent_fqn IS 'Parent account path derived from fqn, or NULL for root accounts.';
 COMMENT ON COLUMN account.name IS 'Leaf account name derived from fqn.';
 COMMENT ON COLUMN account.level IS 'Zero-based account depth derived from fqn.';
@@ -324,8 +341,11 @@ ON budget ((CASE WHEN tombstoned_at IS NULL THEN category_fqn || ':' || CAST(mon
 
 Accounts, categories, and tags use hierarchical naming with colon-separated paths:
 
-- `checking:Chase:Primary`
-- `Food:Restaurants:FastFood`
+- `banks:Chase:checking:Joint`
+- `people:Jordan:balance`
+- `system:opening_balance`
+- `Food:Restaurants`
 - `Trips:Vacation:Summer2024`
 
 Hierarchy is encoded directly in the name string. Tree structure is derived at query time when needed.
+Account type and category economic intent are explicit metadata; they are not inferred from FQN prefixes.

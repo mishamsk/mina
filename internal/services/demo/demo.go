@@ -124,43 +124,52 @@ func (b *seedBuilder) seedMembers(ctx context.Context) error {
 
 func (b *seedBuilder) seedAccounts(ctx context.Context) error {
 	accountInputs := []struct {
-		fqn      string
-		currency *string
+		fqn         string
+		accountType accounts.AccountType
+		currency    *string
 	}{
-		{"checking:Chase:Joint", strPtr("USD")},
-		{"savings:Ally:Emergency", strPtr("USD")},
-		{"mortgage:Rocket:Home", strPtr("USD")},
-		{"credit_card:Chase:Sapphire", strPtr("USD")},
-		{"credit_card:Amex:BlueCash", strPtr("USD")},
-		{"cash:Wallet", strPtr("USD")},
-		{"cash:Travel:EUR", strPtr("EUR")},
-		{"cash:Travel:JPY", strPtr("JPY")},
-		{"trading:USD", strPtr("USD")},
-		{"trading:EUR", strPtr("EUR")},
-		{"trading:JPY", strPtr("JPY")},
-		{"income:AcmePayroll", strPtr("USD")},
-		{"income:Freelance", strPtr("USD")},
-		{"merchant:TraderJoes", strPtr("USD")},
-		{"merchant:BlueBottle", strPtr("USD")},
-		{"merchant:MTA", strPtr("USD")},
-		{"merchant:Shell", strPtr("USD")},
-		{"merchant:Target", strPtr("USD")},
-		{"merchant:Netflix", strPtr("USD")},
-		{"merchant:CVS", strPtr("USD")},
-		{"merchant:Restaurant:Local", strPtr("USD")},
-		{"merchant:Books", strPtr("USD")},
-		{"merchant:Utilities:ConEd", strPtr("USD")},
-		{"merchant:MortgageEscrow", strPtr("USD")},
-		{"person:Friend:Jordan", strPtr("USD")},
-		{"person:Pool:BeachHouse", strPtr("USD")},
-		{"merchant:Travel:Hotel:Lisbon", nil},
-		{"merchant:Travel:Dining:Lisbon", nil},
-		{"merchant:Travel:Transit:Tokyo", nil},
+		{"checking:Chase:Joint", accounts.AccountTypeBalance, strPtr("USD")},
+		{"savings:Ally:Emergency", accounts.AccountTypeBalance, strPtr("USD")},
+		{"mortgage:Rocket:Home", accounts.AccountTypeBalance, strPtr("USD")},
+		{"credit_card:Chase:Sapphire", accounts.AccountTypeBalance, strPtr("USD")},
+		{"credit_card:Amex:BlueCash", accounts.AccountTypeBalance, strPtr("USD")},
+		{"cash:Wallet", accounts.AccountTypeBalance, strPtr("USD")},
+		{"cash:Travel:EUR", accounts.AccountTypeBalance, strPtr("EUR")},
+		{"cash:Travel:JPY", accounts.AccountTypeBalance, strPtr("JPY")},
+		{"trading:USD", accounts.AccountTypeBalance, strPtr("USD")},
+		{"trading:EUR", accounts.AccountTypeBalance, strPtr("EUR")},
+		{"trading:JPY", accounts.AccountTypeBalance, strPtr("JPY")},
+		{"merchant:ExchangeProvider", accounts.AccountTypeFlow, nil},
+		{"bank:Chase:fees", accounts.AccountTypeFlow, strPtr("USD")},
+		{"bank:Chase:interest", accounts.AccountTypeFlow, strPtr("USD")},
+		{"income:AcmePayroll", accounts.AccountTypeFlow, strPtr("USD")},
+		{"income:Freelance", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:TraderJoes", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:BlueBottle", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:MTA", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:Shell", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:Target", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:Netflix", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:CVS", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:Restaurant:Local", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:Books", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:Utilities:ConEd", accounts.AccountTypeFlow, strPtr("USD")},
+		{"merchant:MortgageEscrow", accounts.AccountTypeFlow, strPtr("USD")},
+		{"person:Friend:Jordan", accounts.AccountTypeBalance, strPtr("USD")},
+		{"person:Pool:BeachHouse", accounts.AccountTypeBalance, strPtr("USD")},
+		{"merchant:Travel:Hotel:Lisbon", accounts.AccountTypeFlow, nil},
+		{"merchant:Travel:Dining:Lisbon", accounts.AccountTypeFlow, nil},
+		{"merchant:Travel:Transit:Tokyo", accounts.AccountTypeFlow, nil},
+		{"system:opening_balance", accounts.AccountTypeSystem, strPtr("USD")},
+		{"system:reconciliation_adjustment", accounts.AccountTypeSystem, strPtr("USD")},
+		{"system:rounding", accounts.AccountTypeSystem, nil},
+		{"system:fx_gain_loss", accounts.AccountTypeSystem, nil},
 	}
 	for _, input := range accountInputs {
 		account, err := b.services.Accounts.Create(ctx, accounts.CreateInput{
-			FQN:      input.fqn,
-			Currency: input.currency,
+			FQN:         input.fqn,
+			AccountType: input.accountType,
+			Currency:    input.currency,
 		})
 		if err != nil {
 			return fmt.Errorf("create account %q: %w", input.fqn, err)
@@ -173,35 +182,49 @@ func (b *seedBuilder) seedAccounts(ctx context.Context) error {
 }
 
 func (b *seedBuilder) seedCategories(ctx context.Context) error {
-	for _, fqn := range []string{
-		"Income:Salary",
-		"Income:Freelance",
-		"Housing:Mortgage:Principal",
-		"Housing:Mortgage:Interest",
-		"Housing:Utilities",
-		"Food:Groceries",
-		"Food:Coffee",
-		"Food:Restaurants",
-		"Transport:Transit",
-		"Transport:Fuel",
-		"Shopping:Household",
-		"Health:Pharmacy",
-		"Entertainment:Books",
-		"Entertainment:Streaming",
-		"Transfer",
-		"Savings",
-		"Debt:CreditCardPayment",
-		"Debt:FriendLoan",
-		"Travel:Vacation",
-		"Travel:Dining",
-		"Travel:Transit",
-		"Cash:Withdrawal",
-	} {
-		category, err := b.services.Categories.Create(ctx, categories.CreateInput{FQN: fqn})
+	categoryInputs := []struct {
+		fqn            string
+		economicIntent categories.CategoryEconomicIntent
+	}{
+		{"Income:Salary", categories.CategoryEconomicIntentIncome},
+		{"Income:Freelance", categories.CategoryEconomicIntentIncome},
+		{"Income:BankInterest", categories.CategoryEconomicIntentIncome},
+		{"Bank:Fees", categories.CategoryEconomicIntentFee},
+		{"Refunds:Retail", categories.CategoryEconomicIntentRefund},
+		{"Housing:Mortgage:Principal", categories.CategoryEconomicIntentTransfer},
+		{"Housing:Mortgage:Interest", categories.CategoryEconomicIntentExpense},
+		{"Housing:Utilities", categories.CategoryEconomicIntentExpense},
+		{"Food:Groceries", categories.CategoryEconomicIntentExpense},
+		{"Food:Coffee", categories.CategoryEconomicIntentExpense},
+		{"Food:Restaurants", categories.CategoryEconomicIntentExpense},
+		{"Transport:Transit", categories.CategoryEconomicIntentExpense},
+		{"Transport:Fuel", categories.CategoryEconomicIntentExpense},
+		{"Shopping:Household", categories.CategoryEconomicIntentExpense},
+		{"Health:Pharmacy", categories.CategoryEconomicIntentExpense},
+		{"Entertainment:Books", categories.CategoryEconomicIntentExpense},
+		{"Entertainment:Streaming", categories.CategoryEconomicIntentExpense},
+		{"Transfer", categories.CategoryEconomicIntentTransfer},
+		{"Savings", categories.CategoryEconomicIntentTransfer},
+		{"Debt:CreditCardPayment", categories.CategoryEconomicIntentTransfer},
+		{"Debt:FriendLoan", categories.CategoryEconomicIntentTransfer},
+		{"Travel:Pool", categories.CategoryEconomicIntentTransfer},
+		{"Travel:Vacation", categories.CategoryEconomicIntentExpense},
+		{"Travel:Dining", categories.CategoryEconomicIntentExpense},
+		{"Travel:Transit", categories.CategoryEconomicIntentExpense},
+		{"Currency:Exchange", categories.CategoryEconomicIntentExchange},
+		{"Adjustment:Opening", categories.CategoryEconomicIntentAdjustment},
+		{"FX:GainLoss", categories.CategoryEconomicIntentFXGainLoss},
+		{"Cash:Withdrawal", categories.CategoryEconomicIntentTransfer},
+	}
+	for _, input := range categoryInputs {
+		category, err := b.services.Categories.Create(ctx, categories.CreateInput{
+			FQN:            input.fqn,
+			EconomicIntent: input.economicIntent,
+		})
 		if err != nil {
-			return fmt.Errorf("create category %q: %w", fqn, err)
+			return fmt.Errorf("create category %q: %w", input.fqn, err)
 		}
-		b.cats[fqn] = category.ID
+		b.cats[input.fqn] = category.ID
 		b.summary.Categories++
 	}
 
@@ -280,6 +303,9 @@ func (b *seedBuilder) seedTransactions(ctx context.Context) error {
 		return err
 	}
 	if err := b.seedTravel(ctx); err != nil {
+		return err
+	}
+	if err := b.seedSemanticCoverage(ctx); err != nil {
 		return err
 	}
 
@@ -442,8 +468,8 @@ func (b *seedBuilder) seedCashAndFriends(ctx context.Context) error {
 		{"2026-05-16", -20000},
 	} {
 		if err := b.tx(ctx, input.date,
-			b.rec("checking:Chase:Joint", "", "USD", -input.amount, -input.amount, "Travel:Vacation", []string{"Trips:Vacation:Lisbon2026"}, "Beach house money pool", input.date),
-			b.rec("person:Pool:BeachHouse", "", "USD", input.amount, input.amount, "Travel:Vacation", []string{"Trips:Vacation:Lisbon2026"}, "Beach house money pool", input.date),
+			b.rec("checking:Chase:Joint", "", "USD", -input.amount, -input.amount, "Travel:Pool", []string{"Trips:Vacation:Lisbon2026"}, "Beach house money pool", input.date),
+			b.rec("person:Pool:BeachHouse", "", "USD", input.amount, input.amount, "Travel:Pool", []string{"Trips:Vacation:Lisbon2026"}, "Beach house money pool", input.date),
 		); err != nil {
 			return err
 		}
@@ -475,10 +501,14 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 			b.rec(input.merchant, "", "EUR", input.eurCents, input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
 		}
 		if input.payCurrency != "EUR" {
-			records = append(records,
-				b.rec("trading:"+input.payCurrency, "", input.payCurrency, input.payCents, input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
-				b.rec("trading:EUR", "", "EUR", -input.eurCents, -input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
-			)
+			records = []transactions.JournalRecordInput{
+				b.rec(input.payAccount, "Morgan", input.payCurrency, -input.payCents, -input.usdCents, "Currency:Exchange", []string{input.tag}, input.memo, input.date),
+				b.rec("merchant:ExchangeProvider", "", input.payCurrency, input.payCents, input.usdCents, "Currency:Exchange", []string{input.tag}, input.memo, input.date),
+				b.rec("merchant:ExchangeProvider", "", "EUR", -input.eurCents, -input.usdCents, "Currency:Exchange", []string{input.tag}, input.memo, input.date),
+				b.rec("cash:Travel:EUR", "", "EUR", input.eurCents, input.usdCents, "Currency:Exchange", []string{input.tag}, input.memo, input.date),
+				b.rec("cash:Travel:EUR", "Morgan", "EUR", -input.eurCents, -input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
+				b.rec(input.merchant, "", "EUR", input.eurCents, input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
+			}
 		}
 		if err := b.tx(ctx, input.date, records...); err != nil {
 			return err
@@ -493,9 +523,11 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 		{"2026-05-22", 4080, 600000},
 	} {
 		if err := b.tx(ctx, input.date,
-			b.rec("credit_card:Chase:Sapphire", "Riley", "USD", -input.usdCents, -input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
-			b.rec("trading:USD", "", "USD", input.usdCents, input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
-			b.rec("trading:JPY", "", "JPY", -input.jpyCents, -input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
+			b.rec("credit_card:Chase:Sapphire", "Riley", "USD", -input.usdCents, -input.usdCents, "Currency:Exchange", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
+			b.rec("merchant:ExchangeProvider", "", "USD", input.usdCents, input.usdCents, "Currency:Exchange", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
+			b.rec("merchant:ExchangeProvider", "", "JPY", -input.jpyCents, -input.usdCents, "Currency:Exchange", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
+			b.rec("cash:Travel:JPY", "", "JPY", input.jpyCents, input.usdCents, "Currency:Exchange", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
+			b.rec("cash:Travel:JPY", "Riley", "JPY", -input.jpyCents, -input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
 			b.rec("merchant:Travel:Transit:Tokyo", "", "JPY", input.jpyCents, input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
 		); err != nil {
 			return err
@@ -510,13 +542,58 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 		{"2026-05-19", 22400, 20000},
 	} {
 		if err := b.tx(ctx, input.date,
-			b.rec("checking:Chase:Joint", "", "USD", -input.usdCents, -input.usdCents, "Transfer", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
-			b.rec("trading:USD", "", "USD", input.usdCents, input.usdCents, "Transfer", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
-			b.rec("trading:EUR", "", "EUR", -input.eurCents, -input.usdCents, "Transfer", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
-			b.rec("cash:Travel:EUR", "", "EUR", input.eurCents, input.usdCents, "Transfer", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
+			b.rec("checking:Chase:Joint", "", "USD", -input.usdCents, -input.usdCents, "Currency:Exchange", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
+			b.rec("merchant:ExchangeProvider", "", "USD", input.usdCents, input.usdCents, "Currency:Exchange", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
+			b.rec("merchant:ExchangeProvider", "", "EUR", -input.eurCents, -input.usdCents, "Currency:Exchange", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
+			b.rec("cash:Travel:EUR", "", "EUR", input.eurCents, input.usdCents, "Currency:Exchange", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
 		); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (b *seedBuilder) seedSemanticCoverage(ctx context.Context) error {
+	if err := b.tx(ctx, "2026-04-02",
+		b.rec("checking:Chase:Joint", "", "USD", 100000, 100000, "Adjustment:Opening", []string{"Shared:Family"}, "Opening balance", "2026-04-02"),
+		b.rec("system:opening_balance", "", "USD", -100000, -100000, "Adjustment:Opening", []string{"Shared:Family"}, "Opening balance", "2026-04-02"),
+	); err != nil {
+		return err
+	}
+	if err := b.tx(ctx, "2026-04-09",
+		b.rec("checking:Chase:Joint", "", "USD", 3499, 3499, "Refunds:Retail", []string{"Shared:Family"}, "Target return", "2026-04-09"),
+		b.rec("merchant:Target", "", "USD", -3499, -3499, "Refunds:Retail", []string{"Shared:Family"}, "Target return", "2026-04-09"),
+	); err != nil {
+		return err
+	}
+	if err := b.tx(ctx, "2026-04-15",
+		b.rec("checking:Chase:Joint", "", "USD", -10000, -10000, "Transfer", []string{"Shared:Family"}, "Wire transfer with fee", "2026-04-15"),
+		b.rec("savings:Ally:Emergency", "", "USD", 10000, 10000, "Transfer", []string{"Shared:Family"}, "Wire transfer with fee", "2026-04-15"),
+		b.rec("checking:Chase:Joint", "", "USD", -25, -25, "Bank:Fees", []string{"Shared:Family"}, "Wire transfer fee", "2026-04-15"),
+		b.rec("bank:Chase:fees", "", "USD", 25, 25, "Bank:Fees", []string{"Shared:Family"}, "Wire transfer fee", "2026-04-15"),
+	); err != nil {
+		return err
+	}
+	if err := b.tx(ctx, "2026-04-21",
+		b.rec("cash:Travel:EUR", "", "EUR", 1200, 1308, "FX:GainLoss", []string{"Trips:Vacation:Lisbon2026"}, "EUR valuation gain", "2026-04-21"),
+		b.rec("system:fx_gain_loss", "", "EUR", -1200, -1308, "FX:GainLoss", []string{"Trips:Vacation:Lisbon2026"}, "EUR valuation gain", "2026-04-21"),
+	); err != nil {
+		return err
+	}
+	if err := b.tx(ctx, "2026-04-23",
+		b.rec("checking:Chase:Joint", "", "USD", 215, 215, "Income:BankInterest", []string{"Income"}, "Checking interest", "2026-04-23"),
+		b.rec("bank:Chase:interest", "", "USD", -215, -215, "Income:BankInterest", []string{"Income"}, "Checking interest", "2026-04-23"),
+	); err != nil {
+		return err
+	}
+	if err := b.tx(ctx, "2026-05-26",
+		b.rec("checking:Chase:Joint", "Avery", "USD", -500, -500, "Food:Coffee", []string{"Shared:Family"}, "Mixed payroll correction", "2026-05-26"),
+		b.rec("merchant:BlueBottle", "", "USD", 500, 500, "Food:Coffee", []string{"Shared:Family"}, "Mixed payroll correction", "2026-05-26"),
+		b.rec("checking:Chase:Joint", "Avery", "USD", 10000, 10000, "Income:Salary", []string{"Income"}, "Mixed payroll correction", "2026-05-26"),
+		b.rec("income:AcmePayroll", "", "USD", -10000, -10000, "Income:Salary", []string{"Income"}, "Mixed payroll correction", "2026-05-26"),
+	); err != nil {
+		return err
 	}
 
 	return nil

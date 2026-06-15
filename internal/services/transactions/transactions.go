@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
@@ -43,11 +45,14 @@ const (
 
 // Transaction is a double-entry transaction with nested journal records.
 type Transaction struct {
-	ID            int64
-	InitiatedDate values.CivilDate
-	CreatedAt     time.Time
-	TombstonedAt  *time.Time
-	Records       []JournalRecord
+	ID             int64
+	InitiatedDate  values.CivilDate
+	Class          TransactionClass
+	PrimaryAmounts []DisplayAmount
+	Components     []ClassificationComponent
+	CreatedAt      time.Time
+	TombstonedAt   *time.Time
+	Records        []JournalRecord
 }
 
 // JournalRecord is one debit or credit entry inside a transaction.
@@ -55,11 +60,13 @@ type JournalRecord struct {
 	ID                   int64
 	TransactionID        int64
 	AccountID            int64
+	AccountType          accounts.AccountType
 	MemberID             *int64
 	Currency             string
 	Amount               values.Decimal
 	AmountUSD            *values.Decimal
 	CategoryID           int64
+	EconomicIntent       categories.CategoryEconomicIntent
 	TagIDs               []int64
 	Memo                 *string
 	PendingDate          time.Time
@@ -126,6 +133,40 @@ type BulkRecordOperationResponse struct {
 	UpdatedCount int
 }
 
+// TransactionClass is the derived user-facing transaction class.
+type TransactionClass string
+
+const (
+	TransactionClassSpend            TransactionClass = "spend"
+	TransactionClassIncome           TransactionClass = "income"
+	TransactionClassRefund           TransactionClass = "refund"
+	TransactionClassTransfer         TransactionClass = "transfer"
+	TransactionClassCurrencyExchange TransactionClass = "currency_exchange"
+	TransactionClassAdjustment       TransactionClass = "adjustment"
+	TransactionClassFXGainLoss       TransactionClass = "fx_gain_loss"
+	TransactionClassMixed            TransactionClass = "mixed"
+)
+
+// DisplayAmount is a signed display amount in one currency.
+type DisplayAmount struct {
+	Currency string
+	Amount   values.Decimal
+}
+
+// ClassificationComponent summarizes one economic-intent component.
+type ClassificationComponent struct {
+	Intent  categories.CategoryEconomicIntent
+	Amounts []DisplayAmount
+}
+
+// SemanticRecord is the service-owned classification input for one journal record.
+type SemanticRecord struct {
+	Currency       string
+	Amount         values.Decimal
+	AccountType    accounts.AccountType
+	EconomicIntent categories.CategoryEconomicIntent
+}
+
 // Repository persists transaction and journal record state.
 type Repository interface {
 	Create(context.Context, CreateInput) (Transaction, error)
@@ -134,20 +175,38 @@ type Repository interface {
 	List(context.Context) ([]Transaction, error)
 	Tombstone(context.Context, int64) error
 	SearchRecords(context.Context, RecordSearchOptions) ([]JournalRecord, error)
+	TransactionsByRecordIDs(context.Context, []int64) ([]Transaction, error)
 	BulkCategorize(context.Context, []int64, int64) (int, error)
 	BulkUpdateTags(context.Context, []int64, []int64, []int64) (int, error)
 	BulkReassignAccount(context.Context, []int64, int64) (int, error)
 	BulkUpdateStatuses(context.Context, []int64, *PostingStatus, *ReconciliationStatus) (int, error)
 }
 
-// Service owns transaction, journal record, and bulk record use cases.
-type Service struct {
-	repo Repository
+// AccountReader resolves active account semantics for transaction validation.
+type AccountReader interface {
+	List(context.Context, accounts.ListOptions) ([]accounts.Account, error)
 }
 
-// NewService creates a transaction service backed by repo.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+// CategoryReader resolves active category semantics for transaction validation.
+type CategoryReader interface {
+	List(context.Context, categories.ListOptions) ([]categories.Category, error)
+}
+
+// Service owns transaction, journal record, and bulk record use cases.
+type Service struct {
+	repo       Repository
+	accounts   AccountReader
+	categories CategoryReader
+}
+
+// NewService creates a transaction service backed by repositories.
+func NewService(repo Repository, accounts AccountReader, categories CategoryReader) *Service {
+	return &Service{repo: repo, accounts: accounts, categories: categories}
+}
+
+type semanticDictionaries struct {
+	accountTypes    map[int64]accounts.AccountType
+	categoryIntents map[int64]categories.CategoryEconomicIntent
 }
 
 // Create validates and creates a transaction and its journal records.
@@ -156,7 +215,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
-
+	if err := s.validateInputClassification(ctx, input); err != nil {
+		return Transaction{}, err
+	}
 	transaction, err := s.repo.Create(ctx, input)
 	if errors.Is(err, services.ErrNotFound) || errors.Is(err, services.ErrInvalidReference) {
 		return Transaction{}, services.InvalidRequest("transaction references missing or inactive resource")
@@ -165,7 +226,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 		return Transaction{}, err
 	}
 
-	return transaction, nil
+	return classifyTransaction(transaction)
 }
 
 // Replace validates and replaces a transaction and its journal records.
@@ -177,7 +238,9 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
-
+	if err := s.validateInputClassification(ctx, input); err != nil {
+		return Transaction{}, err
+	}
 	transaction, err := s.repo.Replace(ctx, id, input)
 	if errors.Is(err, services.ErrInvalidReference) {
 		return Transaction{}, services.InvalidRequest("transaction references missing or inactive resource")
@@ -189,7 +252,7 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 		return Transaction{}, err
 	}
 
-	return transaction, nil
+	return classifyTransaction(transaction)
 }
 
 // Get returns a transaction with nested journal records by ID.
@@ -206,12 +269,24 @@ func (s *Service) Get(ctx context.Context, id int64) (Transaction, error) {
 		return Transaction{}, err
 	}
 
-	return transaction, nil
+	return classifyTransaction(transaction)
 }
 
 // List returns transactions with nested journal records.
 func (s *Service) List(ctx context.Context) ([]Transaction, error) {
-	return s.repo.List(ctx)
+	transactions, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for index := range transactions {
+		classified, err := classifyTransaction(transactions[index])
+		if err != nil {
+			return nil, err
+		}
+		transactions[index] = classified
+	}
+
+	return transactions, nil
 }
 
 // Delete tombstones a transaction and its journal records.
@@ -245,6 +320,9 @@ func (s *Service) BulkCategorize(ctx context.Context, recordIDs []int64, categor
 	}
 	if categoryID <= 0 {
 		return BulkRecordOperationResponse{}, services.InvalidRequest("category_id must be positive")
+	}
+	if err := s.validateBulkCategorizeClassification(ctx, recordIDs, categoryID); err != nil {
+		return BulkRecordOperationResponse{}, err
 	}
 
 	count, err := s.repo.BulkCategorize(ctx, recordIDs, categoryID)
@@ -295,6 +373,9 @@ func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, ac
 	if accountID <= 0 {
 		return BulkRecordOperationResponse{}, services.InvalidRequest("account_id must be positive")
 	}
+	if err := s.validateBulkReassignAccountClassification(ctx, recordIDs, accountID); err != nil {
+		return BulkRecordOperationResponse{}, err
+	}
 
 	count, err := s.repo.BulkReassignAccount(ctx, recordIDs, accountID)
 	if errors.Is(err, services.ErrInvalidReference) {
@@ -344,6 +425,154 @@ func (s *Service) BulkUpdateStatuses(
 	}
 
 	return bulkRecordOperationResponse(recordIDs, count), nil
+}
+
+func (s *Service) validateInputClassification(ctx context.Context, input CreateInput) error {
+	dictionaries, err := s.semanticDictionaries(ctx)
+	if err != nil {
+		return err
+	}
+	records := make([]SemanticRecord, 0, len(input.Records))
+	for _, record := range input.Records {
+		accountType, ok := dictionaries.accountTypes[record.AccountID]
+		if !ok {
+			return invalidTransactionReferenceError()
+		}
+		economicIntent, ok := dictionaries.categoryIntents[record.CategoryID]
+		if !ok {
+			return invalidTransactionReferenceError()
+		}
+		records = append(records, SemanticRecord{
+			Currency:       record.Currency,
+			Amount:         record.Amount,
+			AccountType:    accountType,
+			EconomicIntent: economicIntent,
+		})
+	}
+	_, err = classifySemanticRecords(records)
+	return err
+}
+
+func (s *Service) validateBulkCategorizeClassification(ctx context.Context, recordIDs []int64, categoryID int64) error {
+	dictionaries, err := s.semanticDictionaries(ctx)
+	if err != nil {
+		return err
+	}
+	economicIntent, ok := dictionaries.categoryIntents[categoryID]
+	if !ok {
+		return invalidBulkCategoryReferenceError()
+	}
+	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return invalidBulkCategoryReferenceError()
+	}
+	if err != nil {
+		return err
+	}
+
+	selected := idSet(recordIDs)
+	found := map[int64]struct{}{}
+	for transactionIndex := range affected {
+		for recordIndex := range affected[transactionIndex].Records {
+			record := &affected[transactionIndex].Records[recordIndex]
+			if _, ok := selected[record.ID]; ok {
+				record.EconomicIntent = economicIntent
+				found[record.ID] = struct{}{}
+			}
+		}
+		if err := validateTransactionClassification(affected[transactionIndex]); err != nil {
+			return err
+		}
+	}
+	if len(found) != len(selected) {
+		return invalidBulkCategoryReferenceError()
+	}
+
+	return nil
+}
+
+func (s *Service) validateBulkReassignAccountClassification(ctx context.Context, recordIDs []int64, accountID int64) error {
+	dictionaries, err := s.semanticDictionaries(ctx)
+	if err != nil {
+		return err
+	}
+	accountType, ok := dictionaries.accountTypes[accountID]
+	if !ok {
+		return invalidBulkAccountReferenceError()
+	}
+	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return invalidBulkAccountReferenceError()
+	}
+	if err != nil {
+		return err
+	}
+
+	selected := idSet(recordIDs)
+	found := map[int64]struct{}{}
+	for transactionIndex := range affected {
+		for recordIndex := range affected[transactionIndex].Records {
+			record := &affected[transactionIndex].Records[recordIndex]
+			if _, ok := selected[record.ID]; ok {
+				record.AccountID = accountID
+				record.AccountType = accountType
+				found[record.ID] = struct{}{}
+			}
+		}
+		if err := validateTransactionClassification(affected[transactionIndex]); err != nil {
+			return err
+		}
+	}
+	if len(found) != len(selected) {
+		return invalidBulkAccountReferenceError()
+	}
+
+	return nil
+}
+
+func (s *Service) semanticDictionaries(ctx context.Context) (semanticDictionaries, error) {
+	accountList, err := s.accounts.List(ctx, accounts.ListOptions{IncludeHidden: true})
+	if err != nil {
+		return semanticDictionaries{}, err
+	}
+	categoryList, err := s.categories.List(ctx, categories.ListOptions{IncludeHidden: true})
+	if err != nil {
+		return semanticDictionaries{}, err
+	}
+
+	dictionaries := semanticDictionaries{
+		accountTypes:    make(map[int64]accounts.AccountType, len(accountList)),
+		categoryIntents: make(map[int64]categories.CategoryEconomicIntent, len(categoryList)),
+	}
+	for _, account := range accountList {
+		dictionaries.accountTypes[account.ID] = account.AccountType
+	}
+	for _, category := range categoryList {
+		dictionaries.categoryIntents[category.ID] = category.EconomicIntent
+	}
+
+	return dictionaries, nil
+}
+
+func invalidTransactionReferenceError() error {
+	return services.InvalidRequest("transaction references missing or inactive resource")
+}
+
+func idSet(ids []int64) map[int64]struct{} {
+	set := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		set[id] = struct{}{}
+	}
+
+	return set
+}
+
+func invalidBulkCategoryReferenceError() error {
+	return services.InvalidRequest("records or category missing or inactive resource")
+}
+
+func invalidBulkAccountReferenceError() error {
+	return services.InvalidRequest("records or account missing or inactive resource")
 }
 
 func fillMissingPendingDates(input *CreateInput) {

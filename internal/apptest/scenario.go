@@ -66,7 +66,17 @@ func TimestampPtr(value string) *time.Time {
 func (s *Scenario) Account(fqn string) models.Account {
 	s.client.t.Helper()
 
-	response, err := s.client.REST().CreateAccountWithResponse(context.Background(), models.CreateAccountRequest{Fqn: fqn})
+	return s.AccountWithType(fqn, models.Flow)
+}
+
+// AccountWithType creates an account fixture with an explicit semantic type through the API client.
+func (s *Scenario) AccountWithType(fqn string, accountType models.AccountType) models.Account {
+	s.client.t.Helper()
+
+	response, err := s.client.REST().CreateAccountWithResponse(context.Background(), models.CreateAccountRequest{
+		Fqn:         fqn,
+		AccountType: accountType,
+	})
 	requireNoClientError(s.client, "create account", err)
 	requireStatus(s.client, "create account", response.StatusCode(), http.StatusCreated, response.Body)
 	return *response.JSON201
@@ -77,8 +87,9 @@ func (s *Scenario) AccountWithCurrency(fqn string, currency string) models.Accou
 	s.client.t.Helper()
 
 	response, err := s.client.REST().CreateAccountWithResponse(context.Background(), models.CreateAccountRequest{
-		Fqn:      fqn,
-		Currency: &currency,
+		Fqn:         fqn,
+		AccountType: models.Balance,
+		Currency:    &currency,
 	})
 	requireNoClientError(s.client, "create account", err)
 	requireStatus(s.client, "create account", response.StatusCode(), http.StatusCreated, response.Body)
@@ -89,7 +100,17 @@ func (s *Scenario) AccountWithCurrency(fqn string, currency string) models.Accou
 func (s *Scenario) Category(fqn string) models.Category {
 	s.client.t.Helper()
 
-	response, err := s.client.REST().CreateCategoryWithResponse(context.Background(), models.CreateCategoryRequest{Fqn: fqn})
+	return s.CategoryWithIntent(fqn, models.CategoryEconomicIntentExpense)
+}
+
+// CategoryWithIntent creates a category fixture with an explicit economic intent through the API client.
+func (s *Scenario) CategoryWithIntent(fqn string, intent models.CategoryEconomicIntent) models.Category {
+	s.client.t.Helper()
+
+	response, err := s.client.REST().CreateCategoryWithResponse(context.Background(), models.CreateCategoryRequest{
+		Fqn:            fqn,
+		EconomicIntent: intent,
+	})
 	requireNoClientError(s.client, "create category", err)
 	requireStatus(s.client, "create category", response.StatusCode(), http.StatusCreated, response.Body)
 	return *response.JSON201
@@ -100,8 +121,9 @@ func (s *Scenario) CategoryWithHidden(fqn string, hidden bool) models.Category {
 	s.client.t.Helper()
 
 	response, err := s.client.REST().CreateCategoryWithResponse(context.Background(), models.CreateCategoryRequest{
-		Fqn:      fqn,
-		IsHidden: &hidden,
+		Fqn:            fqn,
+		EconomicIntent: models.CategoryEconomicIntentExpense,
+		IsHidden:       &hidden,
 	})
 	requireNoClientError(s.client, "create category", err)
 	requireStatus(s.client, "create category", response.StatusCode(), http.StatusCreated, response.Body)
