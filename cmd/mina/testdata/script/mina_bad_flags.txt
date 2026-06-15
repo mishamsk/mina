@@ -1,7 +1,0 @@
-# The serve command rejects malformed flags before starting.
-! exec mina serve --db $WORK/mina.db --port not-a-number
-stderr 'invalid value "not-a-number" for flag -port'
-
-# Access log redirection and quiet mode are mutually exclusive.
-! exec mina serve --db $WORK/mina.db --quiet --access-log $WORK/access.log
-stderr '--quiet cannot be combined with --access-log'

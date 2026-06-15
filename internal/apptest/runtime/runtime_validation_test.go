@@ -1,6 +1,7 @@
 package runtime_test
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +10,30 @@ import (
 )
 
 func TestRuntimeValidationExpectedBehavior(t *testing.T) {
+	t.Run("invalid enabled exchange-rate schedule fails runtime composition", func(t *testing.T) {
+		_, err := apptest.NewResult(
+			t,
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithExchangeRateLoadScheduleUTC("not-a-schedule"),
+		)
+		if err == nil || !strings.Contains(err.Error(), "exchange-rate load schedule") {
+			t.Fatalf("runtime composition error = %v, want exchange-rate schedule validation failure", err)
+		}
+	})
+
+	t.Run("unsupported startup provider fails runtime composition", func(t *testing.T) {
+		_, err := apptest.NewResult(
+			t,
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithExchangeRateStartupProvider("unsupported"),
+		)
+		if err == nil || !strings.Contains(err.Error(), "exchange-rate startup provider") {
+			t.Fatalf("runtime composition error = %v, want startup provider validation failure", err)
+		}
+	})
+
 	t.Run("impossible recurring schedule does not synthesize a fallback run", func(t *testing.T) {
 		clock := apptest.NewFakeClock(apptest.Timestamp("2026-01-01T00:00:00Z"))
 		client := newSharedClient(

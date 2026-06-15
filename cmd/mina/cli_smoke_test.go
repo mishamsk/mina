@@ -220,56 +220,17 @@ func testscriptFrankfurter(ts *testscript.TestScript, neg bool, args []string) {
 	if neg {
 		ts.Fatalf("frankfurter does not support negation")
 	}
-	if len(args) < 3 {
-		ts.Fatalf("usage: frankfurter url_env_var slow|provider-quotes|expect-from|truncated|stall|competing-install delay [path]")
+	if len(args) != 1 {
+		ts.Fatalf("usage: frankfurter url_env_var")
 	}
 
 	urlEnvVar := args[0]
-	mode := args[1]
-	delay, err := time.ParseDuration(args[2])
-	ts.Check(err)
-	var cachePath string
-	var expectedFrom string
-	var readyPath string
-	if mode == "competing-install" {
-		if len(args) != 4 {
-			ts.Fatalf("usage: frankfurter url_env_var competing-install delay cache_path")
-		}
-		cachePath = ts.MkAbs(args[3])
-	} else if mode == "expect-from" {
-		if len(args) != 4 {
-			ts.Fatalf("usage: frankfurter url_env_var expect-from delay from_date")
-		}
-		expectedFrom = args[3]
-	} else if mode == "stall" {
-		if len(args) != 4 {
-			ts.Fatalf("usage: frankfurter url_env_var stall delay ready_path")
-		}
-		readyPath = ts.MkAbs(args[3])
-	} else if (mode != "slow" && mode != "provider-quotes" && mode != "truncated") || len(args) != 3 {
-		ts.Fatalf("usage: frankfurter url_env_var slow|provider-quotes|expect-from|truncated|stall|competing-install delay [path]")
-	}
-
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rates" {
 			http.NotFound(w, r)
 			return
 		}
-		if cachePath != "" {
-			if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if err := os.WriteFile(cachePath, []byte(competingFrankfurterCache), 0o644); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-		}
 		from := r.URL.Query().Get("from")
-		if expectedFrom != "" && from != expectedFrom {
-			http.Error(w, "unexpected from date", http.StatusBadRequest)
-			return
-		}
 		rows := frankfurterRowsForRange(from, r.URL.Query().Get("to"))
 		if !strings.Contains(r.Header.Get("Accept"), "application/x-ndjson") {
 			w.Header().Set("Content-Type", "application/json")
@@ -277,39 +238,7 @@ func testscriptFrankfurter(ts *testscript.TestScript, neg bool, args []string) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/x-ndjson")
-		if mode == "truncated" {
-			body := frankfurterNDJSON(rows) + `{"date":"2026-06-13","base":"USD","quote":"EUR","rate":`
-			w.Header().Set("Content-Length", strconv.Itoa(len(body)+32))
-			_, _ = io.WriteString(w, body)
-			return
-		}
-		if mode == "stall" {
-			_, err := io.WriteString(w, frankfurterNDJSON(rows))
-			if err != nil {
-				return
-			}
-			if flusher, ok := w.(http.Flusher); ok {
-				flusher.Flush()
-			}
-			if err := os.WriteFile(readyPath, []byte("ready\n"), 0o644); err != nil {
-				return
-			}
-			<-r.Context().Done()
-			return
-		}
-		lines := frankfurterNDJSONForMode(mode, rows)
-		if delay > 0 && len(rows) > 1 {
-			_, err := io.WriteString(w, frankfurterNDJSONForMode(mode, rows[:1]))
-			if err != nil {
-				return
-			}
-			if flusher, ok := w.(http.Flusher); ok {
-				flusher.Flush()
-			}
-			time.Sleep(delay)
-			lines = frankfurterNDJSONForMode(mode, rows[1:])
-		}
-		_, _ = io.WriteString(w, lines)
+		_, _ = io.WriteString(w, frankfurterNDJSON(rows))
 	})
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	ts.Check(err)
@@ -382,35 +311,9 @@ func frankfurterNDJSON(rows []frankfurterTestRow) string {
 	return builder.String()
 }
 
-func frankfurterNDJSONForMode(mode string, rows []frankfurterTestRow) string {
-	if mode == "provider-quotes" {
-		return frankfurterProviderQuotesNDJSON(rows)
-	}
-
-	return frankfurterNDJSON(rows)
-}
-
-func frankfurterProviderQuotesNDJSON(rows []frankfurterTestRow) string {
-	var builder strings.Builder
-	for _, row := range rows {
-		builder.WriteString(frankfurterJSONObject(row))
-		builder.WriteByte('\n')
-		if row.date == "2024-04-02" {
-			builder.WriteString(`{"date":"2024-04-02","base":"USD","quote":"GGP","rate":0.79000000}`)
-			builder.WriteByte('\n')
-		}
-	}
-
-	return builder.String()
-}
-
 func frankfurterJSONObject(row frankfurterTestRow) string {
 	return `{"date":"` + row.date + `","base":"USD","quote":"EUR","rate":` + row.rate + `}`
 }
-
-const competingFrankfurterCache = `{"date":"2024-04-02","base":"USD","quote":"EUR","rate":1.23000000}
-{"date":"2026-04-01","base":"USD","quote":"EUR","rate":1.45000000}
-`
 
 func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 	if neg {

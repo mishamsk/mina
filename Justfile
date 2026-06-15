@@ -236,10 +236,10 @@ test-integration:
 pre-commit:
     prek run --all-files
 
-# Review branch changes against main.
+# Review branch changes since the merge-base with main.
 [group('review')]
 r-branch:
-    revdiff --untracked main..
+    revdiff --untracked "$(git merge-base main HEAD).."
 
 # Review the last commit.
 [group('review')]

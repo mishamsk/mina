@@ -164,6 +164,20 @@ func WithExchangeRateLoadScheduleUTC(schedule string) Option {
 	}
 }
 
+// WithExchangeRateStartupProvider configures the automatic startup exchange-rate provider.
+func WithExchangeRateStartupProvider(provider string) Option {
+	return func(opts *clientOptions) {
+		opts.config.ExchangeRates.StartupProvider = provider
+	}
+}
+
+// WithFrankfurterCacheHTTPClient injects the HTTP client used to populate the Frankfurter cache.
+func WithFrankfurterCacheHTTPClient(client *http.Client) Option {
+	return func(opts *clientOptions) {
+		opts.runtimeOptions.Dependencies.FrankfurterCacheHTTPClient = client
+	}
+}
+
 // WithBackupFileDirectory configures the local backup directory through app config.
 func WithBackupFileDirectory(path string) Option {
 	return func(opts *clientOptions) {

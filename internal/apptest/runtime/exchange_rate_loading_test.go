@@ -241,6 +241,30 @@ func assertExchangeRateDateExists(t *testing.T, client *apptest.Client, fromCurr
 	}
 }
 
+func assertExchangeRateRateOnDate(t *testing.T, client *apptest.Client, fromCurrency string, toCurrency string, date string, rate string) {
+	t.Helper()
+
+	effectiveDate := apptest.Timestamp(date + "T00:00:00Z")
+	response, err := client.REST().ListExchangeRatesWithResponse(context.Background(), &httpclient.ListExchangeRatesParams{
+		FromCurrency:  &fromCurrency,
+		ToCurrency:    &toCurrency,
+		EffectiveDate: &effectiveDate,
+	})
+	requireClientResponse(t, "list exchange rates by date", err, response.StatusCode(), http.StatusOK, response.Body)
+	if len(response.JSON200.ExchangeRates) != 1 {
+		t.Fatalf("rate count for %s/%s on %s = %d, want 1; rates = %+v",
+			fromCurrency,
+			toCurrency,
+			date,
+			len(response.JSON200.ExchangeRates),
+			response.JSON200.ExchangeRates,
+		)
+	}
+	if response.JSON200.ExchangeRates[0].Rate != rate {
+		t.Fatalf("rate for %s/%s on %s = %q, want %q", fromCurrency, toCurrency, date, response.JSON200.ExchangeRates[0].Rate, rate)
+	}
+}
+
 func assertExchangeRateDateMissing(t *testing.T, client *apptest.Client, fromCurrency string, toCurrency string, date string) {
 	t.Helper()
 

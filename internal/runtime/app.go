@@ -451,10 +451,11 @@ func ensureFrankfurterCache(ctx context.Context, cfg appconfig.Config, opts Opti
 	from, to := frankfurter.DefaultHistoryWindow(opts.clock())
 
 	return frankfurter.PopulateCache(ctx, frankfurter.CacheOptions{
-		BaseURL: cfg.ExchangeRates.Frankfurter.BaseURL,
-		Path:    path,
-		From:    from,
-		To:      to,
+		BaseURL:    cfg.ExchangeRates.Frankfurter.BaseURL,
+		Path:       path,
+		From:       from,
+		To:         to,
+		HTTPClient: opts.Dependencies.FrankfurterCacheHTTPClient,
 	})
 }
 

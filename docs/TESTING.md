@@ -1,14 +1,16 @@
 # Testing
 
-Mina has only two app test classes:
+Mina has exactly two app test classes. Both exercise Mina at a high-level app
+boundary:
 
-- Normal in-process end-to-end app tests in `internal/apptest/runtime`.
-- Testscript-driven end-to-end integration tests in `cmd/mina/testdata/script`, driven by `cmd/mina/cli_smoke_test.go`.
+- `app-tests`: normal in-process app tests in `internal/apptest/runtime`.
+- `e2e-tests`: testscript-driven launched-process tests in `cmd/mina/testdata/script`, driven by `cmd/mina/cli_smoke_test.go`.
 - No unit tests and no other app test locations.
 
-## Normal Tests
+## App-Tests
 
-Normal tests are the default and should be about 90% of the test suite.
+`app-tests` are the default for app behavior and user-visible REST scenarios.
+They should be the vast majority of the test suite.
 
 - Bypass CLI parsing and network listeners.
 - Exercise app behavior through the apptest in-process generated REST client, in-memory DuckDB, and per-test schemas.
@@ -17,14 +19,16 @@ Normal tests are the default and should be about 90% of the test suite.
 - Use the generated REST client for fixture setup, actions, and assertions.
 - Set up fixtures through REST APIs exposed by the client.
 - Assert observable state through REST APIs exposed by the client.
+- Use only in-memory app state and test-owned temp IO.
+- Do not read or write host user cache, config, or data locations.
 - Keep test bodies readable as user scenarios, not setup plumbing.
 - Do not call stores, services, repositories, handlers, routers, or private helpers.
-- Do not run SQL or inspect database tables from normal test functions.
+- Do not run SQL or inspect database tables from `app-test` functions.
 - Do not mock controllers, services, or stores.
 
 ## Coupling Rule
 
-A normal test must not need changes when any of these change:
+An `app-test` must not need changes when any of these change:
 
 - Database schema.
 - Store query shape.
@@ -42,8 +46,8 @@ and the raw client calls would hide the scenario intent.
 
 - Put it in `internal/apptest`.
 - Name it in user/domain terms.
-- For normal tests, compose REST client calls through the apptest in-process generated REST client.
-- Do not run SQL, call services, or call stores from normal-test helpers.
+- For `app-tests`, compose REST client calls through the apptest in-process generated REST client.
+- Do not run SQL, call services, or call stores from `app-test` helpers.
 - Do not add one-off helpers for a single test.
 
 If the missing operation is useful to a user or external tool, prefer adding a small
@@ -55,7 +59,7 @@ Do not add fake production APIs that expose raw test hooks or storage details.
 
 Examples are pseudocode.
 
-Bad: a normal test writes fixtures with SQL and asserts table state.
+Bad: an `app-test` writes fixtures with SQL and asserts table state.
 
 ```go
 func TestHiddenAccounts(t *testing.T) {
@@ -73,7 +77,7 @@ func TestHiddenAccounts(t *testing.T) {
 }
 ```
 
-Bad: a normal test bypasses the app boundary and couples to service methods.
+Bad: an `app-test` bypasses the app boundary and couples to service methods.
 
 ```go
 func TestCreateAccount(t *testing.T) {
@@ -130,17 +134,28 @@ func TestAccountBalance(t *testing.T) {
 }
 ```
 
-## Integration Tests
+## E2E-Tests
 
-Integration tests run only through testscript and are not run by default.
+`e2e-tests` run only through testscript and are not run by default.
 
-Use them for process-boundary and IO-bound checks only:
+Use them as a small smoke suite for process-boundary and IO-bound checks only:
 
-- CLI parsing, help, config, prompts, and exit behavior.
-- A small number of true-network REST smoke tests.
-- Basic database-file open/create/migrate behavior.
-- Basic correctness checks for external IO, such as not destroying an existing user database.
+- Launched command behavior.
+- CLI/config/env wiring.
+- Stdin, stdout, and stderr behavior.
+- Signals.
+- Real network listeners.
+- Database files.
+- External IO protection, such as not destroying an existing user database.
 - Later TUI process behavior.
 
-Do not duplicate normal-test scenario coverage in integration tests. Integration
-tests prove wiring and external boundaries; normal tests prove app behavior.
+Do not use `e2e-tests` for:
+
+- Every flag spelling or CLI argument combination.
+- Config precedence matrices beyond a representative wiring smoke.
+- REST endpoint, domain validation, provider edge-case, or app scenario coverage
+  that can be tested as `app-tests`.
+- Exhaustive coverage.
+
+Do not duplicate `app-test` scenario coverage in `e2e-tests`. `e2e-tests`
+prove wiring and external boundaries; `app-tests` prove app behavior.

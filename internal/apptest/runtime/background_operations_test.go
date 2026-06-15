@@ -1,8 +1,10 @@
 package runtime_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -153,6 +155,276 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			t.Fatalf("startup status = %+v, want successful startup run", status)
 		}
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-01")
+	})
+
+	t.Run("startup load ignores provider-only cache quote codes", func(t *testing.T) {
+		schema := fmt.Sprintf("startup_exchange_rate_loading_provider_quotes_%d", time.Now().UnixNano())
+		cacheDir := filepath.Join(t.TempDir(), "mina")
+		writeFrankfurterCache(t, cacheDir, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000")+frankfurterCacheRow("2024-04-02", "GGP", "0.79000000"))
+		clock := apptest.NewFakeClock(apptest.Timestamp("2024-04-02T12:00:00Z"))
+		setup := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithClock(clock),
+			apptest.WithExchangeRateLoading(false),
+		)
+		createForeignCurrencyTransaction(t, setup, foreignCurrencyTransaction{
+			Currency:      "EUR",
+			InitiatedDate: "2024-04-02",
+			PostedAt:      apptest.TimestampPtr("2024-04-02T12:00:00Z"),
+		})
+		setup.Close()
+
+		client := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+		)
+		status := client.PollExchangeRateLoadingStatusRevision(1)
+		if status.LastSuccess == nil || !*status.LastSuccess {
+			t.Fatalf("startup status = %+v, want successful startup run", status)
+		}
+		assertExchangeRateRateOnDate(t, client, "USD", "EUR", "2024-04-02", "0.93000000")
+	})
+
+	t.Run("startup load accepts safe partial cache and app remains usable", func(t *testing.T) {
+		schema := fmt.Sprintf("startup_exchange_rate_loading_partial_cache_%d", time.Now().UnixNano())
+		cacheDir := filepath.Join(t.TempDir(), "mina")
+		writeFrankfurterCache(t, cacheDir, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+		clock := apptest.NewFakeClock(apptest.Timestamp("2024-04-02T12:00:00Z"))
+		setup := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithClock(clock),
+			apptest.WithExchangeRateLoading(false),
+		)
+		createForeignCurrencyTransaction(t, setup, foreignCurrencyTransaction{
+			Currency:      "EUR",
+			InitiatedDate: "2024-04-02",
+			PostedAt:      apptest.TimestampPtr("2024-04-02T12:00:00Z"),
+		})
+		setup.Close()
+
+		client := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+		)
+		status := client.PollExchangeRateLoadingStatusRevision(1)
+		if status.LastSuccess == nil || !*status.LastSuccess {
+			t.Fatalf("startup status = %+v, want successful startup run", status)
+		}
+		assertExchangeRateRateOnDate(t, client, "USD", "EUR", "2024-04-02", "0.93000000")
+
+		response, err := client.REST().ListMembersWithResponse(context.Background(), nil)
+		requireClientResponse(t, "list members after partial-cache startup", err, response.StatusCode(), http.StatusOK, response.Body)
+	})
+
+	t.Run("interrupted cache population preserves partial cache and later resumes", func(t *testing.T) {
+		schema := fmt.Sprintf("startup_exchange_rate_loading_interrupted_cache_%d", time.Now().UnixNano())
+		cacheDir := filepath.Join(t.TempDir(), "mina")
+		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
+		seedExchangeRateLoadingTransaction(t, schema, clock)
+
+		client := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(_ *http.Request) io.ReadCloser {
+				return pipeCacheBody(func(w *io.PipeWriter) {
+					writePipeString(w, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+					writePipeString(w, frankfurterCacheRow("2026-04-01", "EUR", "1.09000000"))
+					_ = w.CloseWithError(io.ErrUnexpectedEOF)
+				})
+			})),
+		)
+		status := client.PollExchangeRateLoadingStatusRevision(1)
+		if status.LastSuccess == nil || *status.LastSuccess || status.LastError == nil {
+			t.Fatalf("interrupted startup status = %+v, want failed startup run", status)
+		}
+		assertFrankfurterCache(t, cacheDir, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+		assertNoFrankfurterCacheTemps(t, cacheDir)
+		client.Close()
+
+		resumedRequestFrom := make(chan string, 1)
+		resumed := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(request *http.Request) io.ReadCloser {
+				select {
+				case resumedRequestFrom <- request.URL.Query().Get("from"):
+				default:
+				}
+				return io.NopCloser(bytes.NewBufferString(
+					frankfurterCacheRow("2024-04-02", "EUR", "0.93000000") +
+						frankfurterCacheRow("2026-04-01", "EUR", "1.09000000"),
+				))
+			})),
+		)
+		resumedStatus := resumed.PollExchangeRateLoadingStatusRevision(1)
+		if resumedStatus.LastSuccess == nil || !*resumedStatus.LastSuccess {
+			t.Fatalf("resumed startup status = %+v, want successful startup run", resumedStatus)
+		}
+		select {
+		case got := <-resumedRequestFrom:
+			if got != "2024-04-02" {
+				t.Fatalf("resumed provider request from = %q, want %q", got, "2024-04-02")
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for resumed provider request")
+		}
+		assertExchangeRateRateOnDate(t, resumed, "USD", "EUR", "2024-04-02", "0.93000000")
+	})
+
+	t.Run("canceled cache population preserves safe partial cache", func(t *testing.T) {
+		schema := fmt.Sprintf("startup_exchange_rate_loading_canceled_cache_%d", time.Now().UnixNano())
+		cacheDir := filepath.Join(t.TempDir(), "mina")
+		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
+		seedExchangeRateLoadingTransaction(t, schema, clock)
+		blocked := make(chan struct{})
+
+		client := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(request *http.Request) io.ReadCloser {
+				return pipeCacheBody(func(w *io.PipeWriter) {
+					writePipeString(w, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+					writePipeString(w, frankfurterCacheRow("2026-04-01", "EUR", "1.09000000"))
+					close(blocked)
+					<-request.Context().Done()
+					_ = w.CloseWithError(request.Context().Err())
+				})
+			})),
+		)
+		waitForChannel(t, blocked, "cache population to block")
+		client.Close()
+
+		assertFrankfurterCache(t, cacheDir, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+		assertNoFrankfurterCacheTemps(t, cacheDir)
+	})
+
+	t.Run("slow cache stream installs a final cache", func(t *testing.T) {
+		schema := fmt.Sprintf("startup_exchange_rate_loading_slow_cache_%d", time.Now().UnixNano())
+		cacheDir := filepath.Join(t.TempDir(), "mina")
+		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
+		seedExchangeRateLoadingTransaction(t, schema, clock)
+		blocked := make(chan struct{})
+		release := make(chan struct{})
+
+		client := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(request *http.Request) io.ReadCloser {
+				return pipeCacheBody(func(w *io.PipeWriter) {
+					writePipeString(w, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+					close(blocked)
+					select {
+					case <-release:
+						writePipeString(w, frankfurterCacheRow("2026-04-01", "EUR", "1.09000000"))
+						_ = w.Close()
+					case <-request.Context().Done():
+						_ = w.CloseWithError(request.Context().Err())
+					}
+				})
+			})),
+		)
+		waitForChannel(t, blocked, "cache stream to pause")
+		close(release)
+		status := client.PollExchangeRateLoadingStatusRevision(1)
+		if status.LastSuccess == nil || !*status.LastSuccess {
+			t.Fatalf("slow stream status = %+v, want successful startup run", status)
+		}
+		assertFrankfurterCache(t, cacheDir,
+			frankfurterCacheRow("2024-04-02", "EUR", "0.93000000")+
+				frankfurterCacheRow("2026-04-01", "EUR", "1.09000000"),
+		)
+		assertNoFrankfurterCacheTemps(t, cacheDir)
+	})
+
+	t.Run("cache population preserves competing install", func(t *testing.T) {
+		schema := fmt.Sprintf("startup_exchange_rate_loading_competing_cache_%d", time.Now().UnixNano())
+		cacheDir := filepath.Join(t.TempDir(), "mina")
+		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
+		seedExchangeRateLoadingTransaction(t, schema, clock)
+		competing := frankfurterCacheRow("2024-04-02", "EUR", "1.23000000") +
+			frankfurterCacheRow("2026-04-01", "EUR", "1.45000000")
+
+		client := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(_ *http.Request) io.ReadCloser {
+				return pipeCacheBody(func(w *io.PipeWriter) {
+					writePipeString(w, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+					writePipeString(w, frankfurterCacheRow("2026-04-01", "EUR", "1.09000000"))
+					writeFrankfurterCache(t, cacheDir, competing)
+					_ = w.Close()
+				})
+			})),
+		)
+		status := client.PollExchangeRateLoadingStatusRevision(1)
+		if status.LastSuccess == nil || !*status.LastSuccess {
+			t.Fatalf("competing install status = %+v, want successful startup run", status)
+		}
+		assertFrankfurterCache(t, cacheDir, competing)
+		assertExchangeRateRateOnDate(t, client, "USD", "EUR", "2024-04-02", "1.23000000")
+	})
+
+	t.Run("cache population preserves competing resume", func(t *testing.T) {
+		schema := fmt.Sprintf("startup_exchange_rate_loading_competing_resume_%d", time.Now().UnixNano())
+		cacheDir := filepath.Join(t.TempDir(), "mina")
+		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
+		seedExchangeRateLoadingTransaction(t, schema, clock)
+		writeFrankfurterCache(t, cacheDir, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+		competing := frankfurterCacheRow("2024-04-02", "EUR", "1.23000000") +
+			frankfurterCacheRow("2026-04-01", "EUR", "1.45000000")
+
+		client := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(_ *http.Request) io.ReadCloser {
+				return pipeCacheBody(func(w *io.PipeWriter) {
+					writePipeString(w, frankfurterCacheRow("2024-04-02", "EUR", "0.93000000"))
+					writePipeString(w, frankfurterCacheRow("2026-04-01", "EUR", "1.09000000"))
+					writeFrankfurterCache(t, cacheDir, competing)
+					_ = w.Close()
+				})
+			})),
+		)
+		status := client.PollExchangeRateLoadingStatusRevision(1)
+		if status.LastSuccess == nil || !*status.LastSuccess {
+			t.Fatalf("competing resume status = %+v, want successful startup run", status)
+		}
+		assertFrankfurterCache(t, cacheDir, competing)
+		assertExchangeRateRateOnDate(t, client, "USD", "EUR", "2024-04-02", "1.23000000")
 	})
 
 	t.Run("startup provider failure is observable and REST remains usable", func(t *testing.T) {
@@ -325,6 +597,107 @@ func frankfurterCacheFixturePath(t *testing.T) string {
 	}
 
 	return filepath.Join(filepath.Dir(file), "..", "testdata", "frankfurter-usd-rates.ndjson")
+}
+
+func seedExchangeRateLoadingTransaction(t *testing.T, schema string, clock *apptest.FakeClock) {
+	t.Helper()
+
+	setup := newSharedClient(
+		t,
+		apptest.WithAccountingSchema(schema),
+		apptest.WithClock(clock),
+		apptest.WithExchangeRateLoading(false),
+	)
+	createForeignCurrencyTransaction(t, setup, foreignCurrencyTransaction{
+		Currency:      "EUR",
+		InitiatedDate: "2024-04-02",
+		PostedAt:      apptest.TimestampPtr("2024-04-02T12:00:00Z"),
+	})
+	setup.Close()
+}
+
+func frankfurterCacheRow(date string, quote string, rate string) string {
+	return fmt.Sprintf(`{"date":%q,"base":"USD","quote":%q,"rate":%s}`+"\n", date, quote, rate)
+}
+
+func writeFrankfurterCache(t *testing.T, cacheDir string, contents string) string {
+	t.Helper()
+
+	cachePath := filepath.Join(cacheDir, "frankfurter-usd-rates.ndjson")
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		t.Fatalf("create Frankfurter cache fixture dir: %v", err)
+	}
+	if err := os.WriteFile(cachePath, []byte(contents), 0o644); err != nil {
+		t.Fatalf("write Frankfurter cache fixture: %v", err)
+	}
+
+	return cachePath
+}
+
+func assertFrankfurterCache(t *testing.T, cacheDir string, want string) {
+	t.Helper()
+
+	got, err := os.ReadFile(filepath.Join(cacheDir, "frankfurter-usd-rates.ndjson"))
+	if err != nil {
+		t.Fatalf("read Frankfurter cache: %v", err)
+	}
+	if string(got) != want {
+		t.Fatalf("Frankfurter cache = %q, want %q", string(got), want)
+	}
+}
+
+func assertNoFrankfurterCacheTemps(t *testing.T, cacheDir string) {
+	t.Helper()
+
+	matches, err := filepath.Glob(filepath.Join(cacheDir, ".frankfurter-usd-rates.ndjson.*.tmp"))
+	if err != nil {
+		t.Fatalf("glob Frankfurter cache temp files: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("Frankfurter cache temp files = %v, want none", matches)
+	}
+}
+
+type cacheRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f cacheRoundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func cacheHTTPClient(body func(*http.Request) io.ReadCloser) *http.Client {
+	return &http.Client{
+		Transport: cacheRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       body(request),
+				Header:     make(http.Header),
+				Request:    request,
+			}, nil
+		}),
+	}
+}
+
+func pipeCacheBody(write func(*io.PipeWriter)) io.ReadCloser {
+	reader, writer := io.Pipe()
+	go write(writer)
+
+	return reader
+}
+
+func writePipeString(writer *io.PipeWriter, value string) {
+	if _, err := writer.Write([]byte(value)); err != nil {
+		_ = writer.CloseWithError(err)
+	}
+}
+
+func waitForChannel(t *testing.T, ch <-chan struct{}, label string) {
+	t.Helper()
+
+	select {
+	case <-ch:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for %s", label)
+	}
 }
 
 func requireClientResponse(t *testing.T, label string, err error, got int, want int, body []byte) {

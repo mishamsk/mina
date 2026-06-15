@@ -3,6 +3,7 @@ package runtime
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/mishamsk/mina/internal/appconfig"
@@ -44,6 +45,7 @@ type Dependencies struct {
 	BackupProvider                     backups.Provider
 	ExchangeRateProviderFactory        exchangerateloading.RateProvider
 	StartupExchangeRateProviderFactory exchangerateloading.RateProvider
+	FrankfurterCacheHTTPClient         *http.Client
 }
 
 // OperationConfig controls whether and when runtime-owned background operations run.

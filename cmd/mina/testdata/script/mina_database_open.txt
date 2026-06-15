@@ -38,9 +38,5 @@ stdout '^0$'
 exec mina migrate --db $WORK/quoted-schema.db --schema select --yes
 exists $WORK/quoted-schema.db
 
-# The migrate command does not accept HTTP listener flags.
-! exec mina migrate --db $WORK/migrated.db --host 127.0.0.1
-stderr 'unknown flag: --host'
-
 -- no.txt --
 n

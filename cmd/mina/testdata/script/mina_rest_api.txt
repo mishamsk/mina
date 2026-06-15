@@ -5,53 +5,12 @@ exec mina serve --db $WORK/rest.db --yes --host 127.0.0.1 --port $PORT &server&
 httpget http://127.0.0.1:$PORT/health
 stdout '"status":"ok"'
 stdout '"schema_version":[1-9][0-9]*'
-httpget http://127.0.0.1:$PORT/categories
-stdout '"categories":\[\]'
-httpget -status 404 http://127.0.0.1:$PORT/missing
-stdout '\{"error":\{"code":"not_found","message":"route not found"\}\}'
-httpget -method POST -status 405 http://127.0.0.1:$PORT/health
-stdout '\{"error":\{"code":"method_not_allowed","message":"method not allowed"\}\}'
 kill -INT server
 wait server
 
 # File-backed demo startup refuses when the configured schema already exists, even if empty.
 ! exec mina serve --demo --db $WORK/rest.db --yes --host 127.0.0.1 --port 0 --quiet
 stderr 'demo seeding requires schema "main" to not already exist'
-
-# The REST API can serve from an omitted database path for ephemeral sessions.
-freeport
-exec mina serve --host 127.0.0.1 --port $PORT &server&
-httpget http://127.0.0.1:$PORT/health
-stdout '"status":"ok"'
-kill -INT server
-wait server
-stderr 'warning: no --db provided; using ephemeral in-memory accounting state'
-
-# Demo startup seeding works with omitted database path for ephemeral sessions.
-freeport
-exec mina serve --demo --host 127.0.0.1 --port $PORT --quiet &server&
-httpget http://127.0.0.1:$PORT/transactions
-stdout '"transactions":\['
-stdout '"transaction_id"'
-kill -INT server
-wait server
-stderr 'warning: no --db provided; using ephemeral in-memory accounting state'
-
-# Access logs default to stderr.
-freeport
-exec mina serve --db $WORK/rest-default-log.db --yes --host 127.0.0.1 --port $PORT &server&
-httpget http://127.0.0.1:$PORT/health
-kill -INT server
-wait server
-stderr 'GET /health 200'
-
-# Quiet mode disables access logs.
-freeport
-exec mina serve --db $WORK/rest-quiet.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
-httpget http://127.0.0.1:$PORT/health
-kill -INT server
-wait server
-! stderr .
 
 # Access logs can be redirected to a file.
 freeport
@@ -62,16 +21,7 @@ wait server
 ! stderr .
 grep 'GET /health 200' $WORK/access.log
 
-# MINA_QUIET disables access logs.
-env MINA_QUIET=true
-freeport
-exec mina serve --db $WORK/rest-env-quiet.db --yes --host 127.0.0.1 --port $PORT &server&
-httpget http://127.0.0.1:$PORT/health
-kill -INT server
-wait server
-! stderr .
-
-# Demo startup seeding populates visible REST data.
+# Demo startup seeding binds the listener and exposes REST data.
 freeport
 exec mina serve --demo --db $WORK/rest-demo.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
 httpget http://127.0.0.1:$PORT/transactions
@@ -79,10 +29,6 @@ stdout '"transactions":\['
 stdout '"transaction_id"'
 kill -INT server
 wait server
-
-# File-backed demo startup refuses when the configured schema already exists.
-! exec mina serve --demo --db $WORK/rest-demo.db --yes --host 127.0.0.1 --port 0 --quiet
-stderr 'demo seeding requires schema "main" to not already exist'
 
 # Configured backup files can be created through the real REST listener.
 freeport

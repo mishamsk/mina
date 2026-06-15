@@ -16,7 +16,7 @@
 - Runtime consumes source-loaded app settings from `internal/appconfig`.
 - Runtime consumes the cache directory resolved by `internal/appconfig`.
 - Process execution is opt-in per runtime mode; `serve` enables it and utility flows leave it disabled.
-- Runtime dependencies carry only true side-effect seams such as clocks and network provider factories.
+- Runtime dependencies carry only true side-effect seams such as clocks, network provider factories, and cache HTTP clients.
 - Runtime operations start after app composition, publish operation status, and do not block app creation.
 - Runtime registers exchange-rate loading as startup, recurring, and manual-started work against one operation status surface.
 - Runtime registers database backup as manual-started work when configured and recurring work only when a backup schedule is configured.
@@ -35,4 +35,4 @@
 
 ## Testing Notes
 
-- Boundary tests should construct app instances through runtime.
+- `app-tests` construct app instances through runtime.

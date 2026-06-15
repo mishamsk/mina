@@ -38,4 +38,4 @@
 
 ## Testing Notes
 
-- Normal app tests may inspect DuckDB state through `internal/apptest` persistence helpers.
+- Store behavior is verified through `app-tests` at the REST boundary; `app-test` functions do not inspect DuckDB tables directly.

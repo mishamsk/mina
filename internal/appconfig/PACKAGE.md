@@ -20,4 +20,4 @@
 
 ## Testing Notes
 
-- CLI-facing config behavior is covered by testscript integration tests.
+- Config behavior defaults to `app-tests`; keep `e2e-tests` to representative CLI/config/env wiring smokes.
