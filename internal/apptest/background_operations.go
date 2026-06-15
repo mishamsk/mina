@@ -59,3 +59,55 @@ func (c *Client) PollExchangeRateLoadingRun(runID int64) *httpclient.OperationRu
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// DatabaseBackupStatus returns the public database backup status.
+func (c *Client) DatabaseBackupStatus() *httpclient.DatabaseBackupStatusResponse {
+	c.t.Helper()
+
+	response, err := c.REST().GetDatabaseBackupStatusWithResponse(context.Background())
+	requireNoClientError(c, "get database backup status", err)
+	requireStatus(c, "get database backup status", response.StatusCode(), http.StatusOK, response.Body)
+
+	return response.JSON200
+}
+
+// PollDatabaseBackupStatusRevision waits for a terminal-run revision through the public REST API.
+func (c *Client) PollDatabaseBackupStatusRevision(revision int64) *httpclient.DatabaseBackupStatusResponse {
+	c.t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		status := c.DatabaseBackupStatus()
+		if status.CompletedRunRevision >= revision {
+			return status
+		}
+		if time.Now().After(deadline) {
+			c.t.Fatalf(
+				"completed_run_revision = %d, want at least %d; status = %+v",
+				status.CompletedRunRevision,
+				revision,
+				status,
+			)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// PollDatabaseBackupRun waits for a concrete operation run through the public REST API.
+func (c *Client) PollDatabaseBackupRun(runID int64) *httpclient.OperationRunResponse {
+	c.t.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		response, err := c.REST().GetDatabaseBackupRunWithResponse(context.Background(), runID)
+		requireNoClientError(c, "get database backup run", err)
+		requireStatus(c, "get database backup run", response.StatusCode(), http.StatusOK, response.Body)
+		if response.JSON200.Status != httpclient.OperationRunResponseStatusRunning {
+			return response.JSON200
+		}
+		if time.Now().After(deadline) {
+			c.t.Fatalf("run %d did not complete; run = %+v", runID, response.JSON200)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}

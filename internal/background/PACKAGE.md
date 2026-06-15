@@ -9,6 +9,7 @@
 - Operation execution is non-durable and stops with the process.
 - Each startup, scheduled, or manual invocation is recorded once; retries are folded into that run.
 - Keyed no-overlap is enforced before operation bodies run.
+- Retry count is operation-owned; zero-retry operations make one attempt.
 
 ## Boundaries
 

@@ -12,11 +12,6 @@
 - Explicit config file paths override default config path discovery.
 - `DefaultConfig` does not inspect the filesystem or environment.
 - `Load` resolves Mina's app cache directory as `mina` under `XDG_CACHE_HOME` when set, otherwise under `os.UserCacheDir()`, unless `Overrides.CacheDir` is set.
-- Exchange-rate schedule and startup provider settings use defaults < config file < overrides; they have no environment source.
-- `MINA_FX_AUTO_LOAD_ENABLED` and `MINA_FX_FRANKFURTER_BASE_URL` may override exchange-rate settings.
-- Exchange-rate load schedules are five-field cron-style strings interpreted in UTC.
-- Exchange-rate startup provider defaults to the Frankfurter file cache.
-- Exchange-rate provider URLs are operational defaults for keyless Frankfurter clients; no API-key fields are loaded.
 
 ## Boundaries
 

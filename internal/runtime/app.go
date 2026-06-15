@@ -14,8 +14,10 @@ import (
 	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/background"
 	"github.com/mishamsk/mina/internal/httpapi"
+	backupfile "github.com/mishamsk/mina/internal/providers/backups/file"
 	"github.com/mishamsk/mina/internal/providers/exchangerates/frankfurter"
 	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services/backups"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
 	"github.com/mishamsk/mina/internal/services/demo"
@@ -41,6 +43,7 @@ type App struct {
 
 type appServices struct {
 	httpapi.Dependencies
+	Backup                     *backups.Service
 	ExchangeRateLoading        *exchangerateloading.Service
 	StartupExchangeRateLoading *exchangerateloading.Service
 }
@@ -200,10 +203,29 @@ func newAccountingServices(accounting *store.AccountingDB, cfg appconfig.Config,
 		startupProvider,
 		opts.clock(),
 	)
-	operationRuns := operationruns.NewService(operationruns.ExchangeRateLoadingConfig{
-		Enabled:     cfg.ExchangeRates.AutomaticLoadingEnabled,
-		ScheduleUTC: cfg.ExchangeRates.LoadScheduleUTC,
-	}, operationRepo, opts.clock())
+	backupProvider, err := fileBackupProvider(cfg, opts)
+	if err != nil {
+		return appServices{}, err
+	}
+	backupService := backups.NewService(
+		store.NewBackupSource(accounting),
+		backupProvider,
+		opts.clock(),
+	)
+	operationRuns := operationruns.NewService(
+		operationruns.Config{
+			ExchangeRateLoading: operationruns.OperationConfig{
+				Enabled:     cfg.ExchangeRates.AutomaticLoadingEnabled,
+				ScheduleUTC: cfg.ExchangeRates.LoadScheduleUTC,
+			},
+			DatabaseBackup: operationruns.OperationConfig{
+				Enabled:     cfg.Backups.File.Directory != "",
+				ScheduleUTC: cfg.Backups.File.ScheduleUTC,
+			},
+		},
+		operationRepo,
+		opts.clock(),
+	)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			Health:        health.NewService(store.NewHealthStore(accounting)),
@@ -216,9 +238,24 @@ func newAccountingServices(accounting *store.AccountingDB, cfg appconfig.Config,
 			ExchangeRates: exchangerates.NewService(exchangeRateStore),
 			Transactions:  transactions.NewService(store.NewTransactionStore(accounting)),
 		},
+		Backup:                     backupService,
 		ExchangeRateLoading:        exchangeRateLoading,
 		StartupExchangeRateLoading: startupExchangeRateLoading,
 	}, nil
+}
+
+func fileBackupProvider(cfg appconfig.Config, opts Options) (backups.Provider, error) {
+	if opts.Dependencies.BackupProvider != nil {
+		return opts.Dependencies.BackupProvider, nil
+	}
+	if cfg.Backups.File.Directory == "" {
+		return nil, nil
+	}
+
+	return backupfile.New(backupfile.Options{
+		Directory:      cfg.Backups.File.Directory,
+		RetentionCount: cfg.Backups.File.RetentionCount,
+	})
 }
 
 func exchangeRateProvider(cfg appconfig.Config, opts Options) exchangerateloading.RateProvider {
@@ -336,6 +373,20 @@ func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServ
 		return nil, err
 	}
 
+	backupOp := background.Operation{
+		ID:         operationruns.DatabaseBackupOperationID,
+		Key:        string(operationruns.DatabaseBackupOperationID),
+		Run:        databaseBackupOperationRun(services.Backup.Run),
+		Timeout:    2 * time.Minute,
+		MaxRetries: 0,
+	}
+	if opts.Operations.Enabled && cfg.Backups.File.ScheduleUTC != "" {
+		backupOp.Schedule = cfg.Backups.File.ScheduleUTC
+	}
+	if err := runner.Register(backupOp); err != nil {
+		return nil, err
+	}
+
 	services.Operations.SetTrigger(runner)
 
 	return runner, nil
@@ -369,6 +420,24 @@ func classifyExchangeRateOperationError(err error) error {
 		return background.Canceled(err)
 	case errors.Is(err, exchangerateloading.ErrProviderUnavailable), errors.Is(err, exchangerateloading.ErrProviderTimeout):
 		return background.Transient(err)
+	default:
+		return background.Permanent(err)
+	}
+}
+
+func databaseBackupOperationRun(run background.OperationFunc) background.OperationFunc {
+	return func(ctx context.Context) error {
+		return classifyDatabaseBackupOperationError(run(ctx))
+	}
+}
+
+func classifyDatabaseBackupOperationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return background.Canceled(err)
 	default:
 		return background.Permanent(err)
 	}

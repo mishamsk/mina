@@ -36,6 +36,7 @@ type Config struct {
 	CacheDir         string
 	Serve            ServeConfig
 	ExchangeRates    ExchangeRateConfig
+	Backups          BackupConfig
 }
 
 // ServeConfig contains source-loaded REST listener settings.
@@ -47,15 +48,34 @@ type ServeConfig struct {
 
 // ExchangeRateConfig contains source-loaded automatic exchange-rate loading settings.
 type ExchangeRateConfig struct {
+	// AutomaticLoadingEnabled may be set by config file or MINA_FX_AUTO_LOAD_ENABLED.
 	AutomaticLoadingEnabled bool
-	LoadScheduleUTC         string
-	StartupProvider         string
-	Frankfurter             FrankfurterConfig
+	// LoadScheduleUTC is a five-field cron-style UTC schedule loaded from config file or overrides.
+	LoadScheduleUTC string
+	// StartupProvider selects the startup exchange-rate source loaded from config file or overrides.
+	StartupProvider string
+	Frankfurter     FrankfurterConfig
 }
 
 // FrankfurterConfig contains source-loaded Frankfurter settings.
 type FrankfurterConfig struct {
+	// BaseURL may be set by config file or MINA_FX_FRANKFURTER_BASE_URL.
 	BaseURL string
+}
+
+// BackupConfig contains source-loaded backup settings.
+type BackupConfig struct {
+	File FileBackupConfig
+}
+
+// FileBackupConfig contains source-loaded local file backup settings.
+type FileBackupConfig struct {
+	// Directory may be set by config file or MINA_BACKUP_FILE_DIRECTORY.
+	Directory string
+	// RetentionCount may be set by config file or MINA_BACKUP_FILE_RETENTION_COUNT.
+	RetentionCount int
+	// ScheduleUTC is a five-field cron-style UTC schedule and may be set by config file or MINA_BACKUP_FILE_SCHEDULE_UTC.
+	ScheduleUTC string
 }
 
 // Override is an optional caller-provided config value.
@@ -84,6 +104,7 @@ type Overrides struct {
 	CacheDir         Override[string]
 	Serve            ServeOverrides
 	ExchangeRates    ExchangeRateOverrides
+	Backups          BackupOverrides
 }
 
 // ServeOverrides contains explicit REST listener config values.
@@ -104,6 +125,18 @@ type ExchangeRateOverrides struct {
 // FrankfurterOverrides contains explicit Frankfurter config values.
 type FrankfurterOverrides struct {
 	BaseURL Override[string]
+}
+
+// BackupOverrides contains explicit backup config values.
+type BackupOverrides struct {
+	File FileBackupOverrides
+}
+
+// FileBackupOverrides contains explicit local file backup config values.
+type FileBackupOverrides struct {
+	Directory      Override[string]
+	RetentionCount Override[int]
+	ScheduleUTC    Override[string]
 }
 
 // Source describes where one config field may be loaded from.
@@ -134,6 +167,12 @@ const (
 	SourceExchangeRateStartupProvider SourceKey = "exchange_rates.startup_provider"
 	// SourceExchangeRateFrankfurterBaseURL identifies the Frankfurter base URL config source.
 	SourceExchangeRateFrankfurterBaseURL SourceKey = "exchange_rates.frankfurter.base_url"
+	// SourceBackupFileDirectory identifies the file backup directory config source.
+	SourceBackupFileDirectory SourceKey = "backups.file.directory"
+	// SourceBackupFileRetentionCount identifies the file backup retention count config source.
+	SourceBackupFileRetentionCount SourceKey = "backups.file.retention_count"
+	// SourceBackupFileScheduleUTC identifies the file backup schedule config source.
+	SourceBackupFileScheduleUTC SourceKey = "backups.file.schedule_utc"
 )
 
 type fileConfig struct {
@@ -141,6 +180,7 @@ type fileConfig struct {
 	AccountingSchema *string                `toml:"schema" env:"MINA_SCHEMA"`
 	Serve            serveFileConfig        `toml:"serve"`
 	ExchangeRates    exchangeRateFileConfig `toml:"exchange_rates"`
+	Backups          backupFileConfig       `toml:"backups"`
 }
 
 type serveFileConfig struct {
@@ -158,6 +198,16 @@ type exchangeRateFileConfig struct {
 
 type frankfurterExchangeRateFileConfig struct {
 	BaseURL *string `toml:"base_url" env:"MINA_FX_FRANKFURTER_BASE_URL"`
+}
+
+type backupFileConfig struct {
+	File fileBackupFileConfig `toml:"file"`
+}
+
+type fileBackupFileConfig struct {
+	Directory      *string `toml:"directory" env:"MINA_BACKUP_FILE_DIRECTORY"`
+	RetentionCount *int    `toml:"retention_count" env:"MINA_BACKUP_FILE_RETENTION_COUNT"`
+	ScheduleUTC    *string `toml:"schedule_utc" env:"MINA_BACKUP_FILE_SCHEDULE_UTC"`
 }
 
 // DefaultServeConfig returns Mina's REST server defaults.
@@ -213,6 +263,9 @@ func Sources() map[SourceKey]Source {
 		SourceExchangeRateLoadScheduleUTC:         sourceFor(SourceExchangeRateLoadScheduleUTC),
 		SourceExchangeRateStartupProvider:         sourceFor(SourceExchangeRateStartupProvider),
 		SourceExchangeRateFrankfurterBaseURL:      sourceFor(SourceExchangeRateFrankfurterBaseURL),
+		SourceBackupFileDirectory:                 sourceFor(SourceBackupFileDirectory),
+		SourceBackupFileRetentionCount:            sourceFor(SourceBackupFileRetentionCount),
+		SourceBackupFileScheduleUTC:               sourceFor(SourceBackupFileScheduleUTC),
 	}
 }
 
@@ -234,6 +287,7 @@ func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	applySharedFile(&cfg, fileCfg)
 	applyServeFile(&cfg, fileCfg)
 	applyExchangeRateFile(&cfg, fileCfg)
+	applyBackupFile(&cfg, fileCfg)
 
 	envCfg, err := loadEnvConfig()
 	if err != nil {
@@ -242,12 +296,26 @@ func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	applySharedFile(&cfg, envCfg)
 	applyServeFile(&cfg, envCfg)
 	applyExchangeRateFile(&cfg, envCfg)
+	applyBackupFile(&cfg, envCfg)
 
 	applyOverrides(&cfg, overrides)
 	applyServeOverrides(&cfg, overrides.Serve)
 	applyExchangeRateOverrides(&cfg, overrides.ExchangeRates)
+	applyBackupOverrides(&cfg, overrides.Backups)
 
 	return cfg, nil
+}
+
+func applyBackupFile(cfg *Config, fileCfg fileConfig) {
+	if fileCfg.Backups.File.Directory != nil {
+		cfg.Backups.File.Directory = *fileCfg.Backups.File.Directory
+	}
+	if fileCfg.Backups.File.RetentionCount != nil {
+		cfg.Backups.File.RetentionCount = *fileCfg.Backups.File.RetentionCount
+	}
+	if fileCfg.Backups.File.ScheduleUTC != nil {
+		cfg.Backups.File.ScheduleUTC = *fileCfg.Backups.File.ScheduleUTC
+	}
 }
 
 func applyExchangeRateFile(cfg *Config, fileCfg fileConfig) {
@@ -389,6 +457,18 @@ func applyExchangeRateOverrides(cfg *Config, overrides ExchangeRateOverrides) {
 	}
 	if overrides.Frankfurter.BaseURL.IsSet {
 		cfg.ExchangeRates.Frankfurter.BaseURL = overrides.Frankfurter.BaseURL.Val
+	}
+}
+
+func applyBackupOverrides(cfg *Config, overrides BackupOverrides) {
+	if overrides.File.Directory.IsSet {
+		cfg.Backups.File.Directory = overrides.File.Directory.Val
+	}
+	if overrides.File.RetentionCount.IsSet {
+		cfg.Backups.File.RetentionCount = overrides.File.RetentionCount.Val
+	}
+	if overrides.File.ScheduleUTC.IsSet {
+		cfg.Backups.File.ScheduleUTC = overrides.File.ScheduleUTC.Val
 	}
 }
 

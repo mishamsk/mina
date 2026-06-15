@@ -164,6 +164,36 @@ func WithExchangeRateLoadScheduleUTC(schedule string) Option {
 	}
 }
 
+// WithBackupFileDirectory configures the local backup directory through app config.
+func WithBackupFileDirectory(path string) Option {
+	return func(opts *clientOptions) {
+		opts.config.Backups.File.Directory = path
+	}
+}
+
+// WithBackupFileRetentionCount configures local backup retention through app config.
+func WithBackupFileRetentionCount(count int) Option {
+	return func(opts *clientOptions) {
+		opts.config.Backups.File.RetentionCount = count
+	}
+}
+
+// WithBackupFileScheduleUTC configures the local backup schedule through app config.
+func WithBackupFileScheduleUTC(schedule string) Option {
+	return func(opts *clientOptions) {
+		opts.config.Backups.File.ScheduleUTC = schedule
+	}
+}
+
+// WithBlockedDatabaseBackup makes database backup runs block until the blocker is released.
+func WithBlockedDatabaseBackup(blocker *BlockedDatabaseBackup) Option {
+	return func(opts *clientOptions) {
+		if blocker != nil {
+			opts.runtimeOptions.Dependencies.BackupProvider = blocker.provider
+		}
+	}
+}
+
 // WithOperationsEnabled configures runtime operation execution through runtime options.
 func WithOperationsEnabled(enabled bool) Option {
 	return func(opts *clientOptions) {

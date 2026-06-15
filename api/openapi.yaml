@@ -99,6 +99,59 @@ paths:
           $ref: "#/components/responses/NotFound"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /background-operations/database-backup/status:
+    get:
+      operationId: getDatabaseBackupStatus
+      summary: Get database backup operation status.
+      responses:
+        "200":
+          description: Database backup status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatabaseBackupStatusResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /background-operations/database-backup/runs:
+    post:
+      operationId: startDatabaseBackupRun
+      summary: Start a database backup run.
+      responses:
+        "202":
+          description: Database backup was invoked.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationRunReferenceResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
+  /background-operations/database-backup/runs/{operation_run_id}:
+    parameters:
+      - name: operation_run_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getDatabaseBackupRun
+      summary: Get one database backup run.
+      responses:
+        "200":
+          description: Database backup run status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationRunResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /categories:
     get:
       operationId: listCategories
@@ -1944,6 +1997,7 @@ components:
           type: string
           enum:
             - exchange-rate-loading
+            - database-backup
         status_url:
           type: string
     ExchangeRateLoadingStatusResponse:
@@ -1993,6 +2047,53 @@ components:
           type: integer
           format: int64
           minimum: 0
+    DatabaseBackupStatusResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation_id
+        - enabled
+        - schedule_utc
+        - state
+        - run_count
+        - completed_run_revision
+      properties:
+        operation_id:
+          type: string
+          enum:
+            - database-backup
+        enabled:
+          type: boolean
+        schedule_utc:
+          type: string
+          description: Five-field cron-style schedule interpreted in UTC, or empty when automatic backups are disabled.
+        state:
+          type: string
+          enum:
+            - idle
+            - running
+        last_started_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_success:
+          type: boolean
+          nullable: true
+        last_error:
+          type: string
+          nullable: true
+        run_count:
+          type: integer
+          format: int64
+          minimum: 0
+        completed_run_revision:
+          type: integer
+          format: int64
+          minimum: 0
     OperationRunReferenceResponse:
       type: object
       additionalProperties: false
@@ -2009,6 +2110,7 @@ components:
           type: string
           enum:
             - exchange-rate-loading
+            - database-backup
         status_url:
           type: string
     OperationRunResponse:
@@ -2028,6 +2130,10 @@ components:
           type: string
           enum:
             - exchange-rate-loading
+            - database-backup
+          x-enum-varnames:
+            - OperationRunResponseOperationIdExchangeRateLoading
+            - OperationRunResponseOperationIdDatabaseBackup
         status:
           type: string
           enum:
@@ -2036,6 +2142,12 @@ components:
             - failed
             - skipped
             - canceled
+          x-enum-varnames:
+            - OperationRunResponseStatusRunning
+            - OperationRunResponseStatusSucceeded
+            - OperationRunResponseStatusFailed
+            - OperationRunResponseStatusSkipped
+            - OperationRunResponseStatusCanceled
         started_at:
           type: string
           format: date-time

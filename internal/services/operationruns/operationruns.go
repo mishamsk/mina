@@ -14,6 +14,8 @@ type OperationID string
 const (
 	// ExchangeRateLoadingOperationID identifies automatic and manual exchange-rate loading.
 	ExchangeRateLoadingOperationID OperationID = "exchange-rate-loading"
+	// DatabaseBackupOperationID identifies automatic and manual database backups.
+	DatabaseBackupOperationID OperationID = "database-backup"
 )
 
 // RunStatus is the observable lifecycle state of one operation invocation.
@@ -51,6 +53,20 @@ type ExchangeRateLoadingStatus struct {
 	CompletedRunRevision int64
 }
 
+// DatabaseBackupStatus is the public status for database backups.
+type DatabaseBackupStatus struct {
+	ID                   OperationID
+	Enabled              bool
+	ScheduleUTC          string
+	State                string
+	LastStartedAt        *time.Time
+	LastCompletedAt      *time.Time
+	LastSuccess          *bool
+	LastError            *string
+	RunCount             int64
+	CompletedRunRevision int64
+}
+
 // OperationRun describes one operation invocation.
 type OperationRun struct {
 	ID          int64
@@ -61,10 +77,16 @@ type OperationRun struct {
 	Error       *string
 }
 
-// ExchangeRateLoadingConfig contains observable exchange-rate loading config.
-type ExchangeRateLoadingConfig struct {
+// OperationConfig contains observable configuration for one registered operation.
+type OperationConfig struct {
 	Enabled     bool
 	ScheduleUTC string
+}
+
+// Config contains observable configuration for registered operations.
+type Config struct {
+	ExchangeRateLoading OperationConfig
+	DatabaseBackup      OperationConfig
 }
 
 // Repository stores background operation invocations.
@@ -88,18 +110,18 @@ type Clock interface {
 
 // Service owns operation observability use cases and run status transitions.
 type Service struct {
-	exchangeRates ExchangeRateLoadingConfig
-	repo          Repository
-	clock         Clock
-	trigger       Trigger
+	config  Config
+	repo    Repository
+	clock   Clock
+	trigger Trigger
 }
 
 // NewService creates an operation-run service.
-func NewService(exchangeRates ExchangeRateLoadingConfig, repo Repository, clock Clock) *Service {
+func NewService(config Config, repo Repository, clock Clock) *Service {
 	return &Service{
-		exchangeRates: exchangeRates,
-		repo:          repo,
-		clock:         clock,
+		config: config,
+		repo:   repo,
+		clock:  clock,
 	}
 }
 
@@ -114,6 +136,9 @@ func (s *Service) List(context.Context) ([]OperationSummary, error) {
 		{
 			ID: ExchangeRateLoadingOperationID,
 		},
+		{
+			ID: DatabaseBackupOperationID,
+		},
 	}, nil
 }
 
@@ -124,23 +149,33 @@ func (s *Service) ExchangeRateLoadingStatus(ctx context.Context) (ExchangeRateLo
 		return ExchangeRateLoadingStatus{}, err
 	}
 
-	var lastStartedAt *time.Time
-	var lastCompletedAt *time.Time
-	var lastSuccess *bool
-	var lastError *string
-	if latest != nil {
-		startedAt := latest.StartedAt
-		success := latest.Status == RunStatusSucceeded
-		lastStartedAt = &startedAt
-		lastCompletedAt = latest.CompletedAt
-		lastSuccess = &success
-		lastError = latest.Error
-	}
-
+	lastStartedAt, lastCompletedAt, lastSuccess, lastError := latestRunFields(latest)
 	return ExchangeRateLoadingStatus{
 		ID:                   ExchangeRateLoadingOperationID,
-		Enabled:              s.exchangeRates.Enabled,
-		ScheduleUTC:          s.exchangeRates.ScheduleUTC,
+		Enabled:              s.config.ExchangeRateLoading.Enabled,
+		ScheduleUTC:          s.config.ExchangeRateLoading.ScheduleUTC,
+		State:                state(running),
+		LastStartedAt:        lastStartedAt,
+		LastCompletedAt:      lastCompletedAt,
+		LastSuccess:          lastSuccess,
+		LastError:            lastError,
+		RunCount:             count,
+		CompletedRunRevision: count,
+	}, nil
+}
+
+// DatabaseBackupStatus returns database backup operation status.
+func (s *Service) DatabaseBackupStatus(ctx context.Context) (DatabaseBackupStatus, error) {
+	count, latest, running, err := s.repo.RunStats(ctx, DatabaseBackupOperationID)
+	if err != nil {
+		return DatabaseBackupStatus{}, err
+	}
+
+	lastStartedAt, lastCompletedAt, lastSuccess, lastError := latestRunFields(latest)
+	return DatabaseBackupStatus{
+		ID:                   DatabaseBackupOperationID,
+		Enabled:              s.config.DatabaseBackup.Enabled,
+		ScheduleUTC:          s.config.DatabaseBackup.ScheduleUTC,
 		State:                state(running),
 		LastStartedAt:        lastStartedAt,
 		LastCompletedAt:      lastCompletedAt,
@@ -160,14 +195,38 @@ func (s *Service) TriggerExchangeRateLoadingOperation(ctx context.Context) (Oper
 	return s.trigger.Trigger(ctx, ExchangeRateLoadingOperationID)
 }
 
+// TriggerDatabaseBackupOperation triggers one asynchronous database backup operation.
+func (s *Service) TriggerDatabaseBackupOperation(ctx context.Context) (OperationRun, error) {
+	if !s.config.DatabaseBackup.Enabled {
+		return OperationRun{}, services.InvalidRequest("backup file directory is not configured")
+	}
+	if s.trigger == nil {
+		return OperationRun{}, services.InvalidRequest("background operation trigger is not configured")
+	}
+
+	return s.trigger.Trigger(ctx, DatabaseBackupOperationID)
+}
+
 // GetExchangeRateLoadingRun returns one exchange-rate loading operation run.
 func (s *Service) GetExchangeRateLoadingRun(ctx context.Context, runID int64) (OperationRun, error) {
+	return s.getRun(ctx, ExchangeRateLoadingOperationID, runID)
+}
+
+// GetDatabaseBackupRun returns one database backup operation run.
+func (s *Service) GetDatabaseBackupRun(ctx context.Context, runID int64) (OperationRun, error) {
+	return s.getRun(ctx, DatabaseBackupOperationID, runID)
+}
+
+func (s *Service) getRun(ctx context.Context, operationID OperationID, runID int64) (OperationRun, error) {
 	run, err := s.repo.GetRun(ctx, runID)
 	if err != nil {
 		if errors.Is(err, services.ErrNotFound) {
 			return OperationRun{}, services.NotFound("operation run not found")
 		}
 		return OperationRun{}, err
+	}
+	if run.OperationID != operationID {
+		return OperationRun{}, services.NotFound("operation run not found")
 	}
 
 	return run, nil
@@ -243,6 +302,16 @@ func state(running bool) string {
 	}
 
 	return "idle"
+}
+
+func latestRunFields(latest *OperationRun) (*time.Time, *time.Time, *bool, *string) {
+	if latest == nil {
+		return nil, nil, nil, nil
+	}
+
+	startedAt := latest.StartedAt
+	success := latest.Status == RunStatusSucceeded
+	return &startedAt, latest.CompletedAt, &success, latest.Error
 }
 
 func errorMessage(err error) *string {

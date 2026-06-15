@@ -7,6 +7,7 @@ import (
 
 	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/background"
+	"github.com/mishamsk/mina/internal/services/backups"
 	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 	"github.com/mishamsk/mina/internal/store"
 )
@@ -40,6 +41,7 @@ type Clock interface {
 // Dependencies contains side-effect boundary dependencies supplied by composition or tests.
 type Dependencies struct {
 	Clock                              Clock
+	BackupProvider                     backups.Provider
 	ExchangeRateProviderFactory        exchangerateloading.RateProvider
 	StartupExchangeRateProviderFactory exchangerateloading.RateProvider
 }
@@ -59,6 +61,17 @@ func Validate(cfg appconfig.Config, operationsEnabled bool) error {
 		}
 		if err := validateExchangeRateStartupProvider(cfg.ExchangeRates.StartupProvider); err != nil {
 			return err
+		}
+	}
+	if cfg.Backups.File.RetentionCount < 0 {
+		return fmt.Errorf("backup file retention count must be greater than or equal to 0")
+	}
+	if operationsEnabled && cfg.Backups.File.ScheduleUTC != "" {
+		if err := validateBackupFileSchedule(cfg.Backups.File.ScheduleUTC); err != nil {
+			return err
+		}
+		if cfg.Backups.File.Directory == "" {
+			return fmt.Errorf("backup file directory is required when backup file schedule is configured")
 		}
 	}
 	return nil
@@ -112,6 +125,14 @@ func accountingSchemaOrDefault(cfg appconfig.Config, defaultSchema string) strin
 func validateExchangeRateLoadSchedule(schedule string) error {
 	if err := background.ValidateSchedule(schedule); err != nil {
 		return fmt.Errorf("exchange-rate load schedule: %w", err)
+	}
+
+	return nil
+}
+
+func validateBackupFileSchedule(schedule string) error {
+	if err := background.ValidateSchedule(schedule); err != nil {
+		return fmt.Errorf("backup file schedule: %w", err)
 	}
 
 	return nil

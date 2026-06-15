@@ -83,3 +83,20 @@ wait server
 # File-backed demo startup refuses when the configured schema already exists.
 ! exec mina serve --demo --db $WORK/rest-demo.db --yes --host 127.0.0.1 --port 0 --quiet
 stderr 'demo seeding requires schema "main" to not already exist'
+
+# Configured backup files can be created through the real REST listener.
+freeport
+exec mina serve --config-file backup-rest.toml --db $WORK/backup-rest.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpget http://127.0.0.1:$PORT/health
+stdout '"status":"ok"'
+httpget -method POST -status 202 http://127.0.0.1:$PORT/background-operations/database-backup/runs
+stdout '"operation_id":"database-backup"'
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$PORT/background-operations/database-backup/status
+stdout '"completed_run_revision":1'
+glob backup-rest-files/mina-backup-*.duckdb
+kill -INT server
+wait server
+
+-- backup-rest.toml --
+[backups.file]
+directory = "backup-rest-files"

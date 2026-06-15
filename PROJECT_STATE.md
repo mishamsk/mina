@@ -10,12 +10,13 @@
   - Transaction creation, read, list, full replacement, and tombstone deletion with nested journal records.
   - Journal-record search and account-record search.
   - Bulk journal-record category, tag, account, and status updates.
-  - Background operation status, run lookup, and manual exchange-rate loading trigger flows.
+  - Background operation status, run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
   - OpenAPI discovery through `GET /openapi.json`.
 - Implemented runtime/demo behavior:
   - Runtime opens one app for the process lifetime and wires its REST handler directly.
   - Runtime runs non-blocking startup and recurring operations in `serve`, with public operation status and manual trigger APIs.
   - Exchange-rate startup loading uses a Frankfurter USD NDJSON cache file by default; scheduled and manual REST-triggered loading use targeted Frankfurter API requests.
+  - Database backups copy the selected file-backed DuckDB accounting database to configured local backup files; empty backup config creates no automatic runs.
   - `mina serve --demo` seeds deterministic April-May 2026 demo data for new in-memory state or new file-backed schemas.
   - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Implemented storage behavior:
@@ -24,6 +25,7 @@
   - Upgrade-only DuckDB migrations with schema-version tracking in the selected accounting location.
   - Atomic double-entry transaction persistence and replacement.
   - Ephemeral runtime operation-run status is stored in the in-memory process database outside portable accounting state.
+  - Store-owned database backup sources use DuckDB database copy into provider-owned target files and reject in-memory accounting sources.
   - Exchange-rate loading infers non-USD journal-record needs and upserts active `USD -> currency` rates.
   - Tombstone-aware reads and list defaults for applicable resources.
   - Store-owned allowlists for dynamic filtering and sorting.

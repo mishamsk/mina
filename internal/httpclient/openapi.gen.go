@@ -47,13 +47,49 @@ func (e APIErrorCode) Valid() bool {
 
 // Defines values for BackgroundOperationSummaryOperationId.
 const (
+	BackgroundOperationSummaryOperationIdDatabaseBackup      BackgroundOperationSummaryOperationId = "database-backup"
 	BackgroundOperationSummaryOperationIdExchangeRateLoading BackgroundOperationSummaryOperationId = "exchange-rate-loading"
 )
 
 // Valid indicates whether the value is a known member of the BackgroundOperationSummaryOperationId enum.
 func (e BackgroundOperationSummaryOperationId) Valid() bool {
 	switch e {
+	case BackgroundOperationSummaryOperationIdDatabaseBackup:
+		return true
 	case BackgroundOperationSummaryOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DatabaseBackupStatusResponseOperationId.
+const (
+	DatabaseBackupStatusResponseOperationIdDatabaseBackup DatabaseBackupStatusResponseOperationId = "database-backup"
+)
+
+// Valid indicates whether the value is a known member of the DatabaseBackupStatusResponseOperationId enum.
+func (e DatabaseBackupStatusResponseOperationId) Valid() bool {
+	switch e {
+	case DatabaseBackupStatusResponseOperationIdDatabaseBackup:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DatabaseBackupStatusResponseState.
+const (
+	DatabaseBackupStatusResponseStateIdle    DatabaseBackupStatusResponseState = "idle"
+	DatabaseBackupStatusResponseStateRunning DatabaseBackupStatusResponseState = "running"
+)
+
+// Valid indicates whether the value is a known member of the DatabaseBackupStatusResponseState enum.
+func (e DatabaseBackupStatusResponseState) Valid() bool {
+	switch e {
+	case DatabaseBackupStatusResponseStateIdle:
+		return true
+	case DatabaseBackupStatusResponseStateRunning:
 		return true
 	default:
 		return false
@@ -110,12 +146,15 @@ func (e HealthResponseStatus) Valid() bool {
 
 // Defines values for OperationRunReferenceResponseOperationId.
 const (
+	OperationRunReferenceResponseOperationIdDatabaseBackup      OperationRunReferenceResponseOperationId = "database-backup"
 	OperationRunReferenceResponseOperationIdExchangeRateLoading OperationRunReferenceResponseOperationId = "exchange-rate-loading"
 )
 
 // Valid indicates whether the value is a known member of the OperationRunReferenceResponseOperationId enum.
 func (e OperationRunReferenceResponseOperationId) Valid() bool {
 	switch e {
+	case OperationRunReferenceResponseOperationIdDatabaseBackup:
+		return true
 	case OperationRunReferenceResponseOperationIdExchangeRateLoading:
 		return true
 	default:
@@ -125,12 +164,15 @@ func (e OperationRunReferenceResponseOperationId) Valid() bool {
 
 // Defines values for OperationRunResponseOperationId.
 const (
+	OperationRunResponseOperationIdDatabaseBackup      OperationRunResponseOperationId = "database-backup"
 	OperationRunResponseOperationIdExchangeRateLoading OperationRunResponseOperationId = "exchange-rate-loading"
 )
 
 // Valid indicates whether the value is a known member of the OperationRunResponseOperationId enum.
 func (e OperationRunResponseOperationId) Valid() bool {
 	switch e {
+	case OperationRunResponseOperationIdDatabaseBackup:
+		return true
 	case OperationRunResponseOperationIdExchangeRateLoading:
 		return true
 	default:
@@ -643,6 +685,28 @@ type CreditLimitHistory struct {
 type CreditLimitHistoryListResponse struct {
 	CreditLimitHistory []CreditLimitHistory `json:"credit_limit_history"`
 }
+
+// DatabaseBackupStatusResponse defines model for DatabaseBackupStatusResponse.
+type DatabaseBackupStatusResponse struct {
+	CompletedRunRevision int64                                   `json:"completed_run_revision"`
+	Enabled              bool                                    `json:"enabled"`
+	LastCompletedAt      *time.Time                              `json:"last_completed_at,omitempty"`
+	LastError            *string                                 `json:"last_error,omitempty"`
+	LastStartedAt        *time.Time                              `json:"last_started_at,omitempty"`
+	LastSuccess          *bool                                   `json:"last_success,omitempty"`
+	OperationId          DatabaseBackupStatusResponseOperationId `json:"operation_id"`
+	RunCount             int64                                   `json:"run_count"`
+
+	// ScheduleUtc Five-field cron-style schedule interpreted in UTC, or empty when automatic backups are disabled.
+	ScheduleUtc string                            `json:"schedule_utc"`
+	State       DatabaseBackupStatusResponseState `json:"state"`
+}
+
+// DatabaseBackupStatusResponseOperationId defines model for DatabaseBackupStatusResponse.OperationId.
+type DatabaseBackupStatusResponseOperationId string
+
+// DatabaseBackupStatusResponseState defines model for DatabaseBackupStatusResponse.State.
+type DatabaseBackupStatusResponseState string
 
 // DemoSeedResponse defines model for DemoSeedResponse.
 type DemoSeedResponse struct {
@@ -1219,6 +1283,15 @@ type ClientInterface interface {
 	// ListBackgroundOperations request
 	ListBackgroundOperations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// StartDatabaseBackupRun request
+	StartDatabaseBackupRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetDatabaseBackupRun request
+	GetDatabaseBackupRun(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetDatabaseBackupStatus request
+	GetDatabaseBackupStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// StartExchangeRateLoadingRun request
 	StartExchangeRateLoadingRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1502,6 +1575,42 @@ func (c *Client) SeedDemo(ctx context.Context, reqEditors ...RequestEditorFn) (*
 
 func (c *Client) ListBackgroundOperations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListBackgroundOperationsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) StartDatabaseBackupRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartDatabaseBackupRunRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetDatabaseBackupRun(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDatabaseBackupRunRequest(c.Server, operationRunId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetDatabaseBackupStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDatabaseBackupStatusRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -2842,6 +2951,94 @@ func NewListBackgroundOperationsRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/background-operations")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartDatabaseBackupRunRequest generates requests for StartDatabaseBackupRun
+func NewStartDatabaseBackupRunRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/background-operations/database-backup/runs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetDatabaseBackupRunRequest generates requests for GetDatabaseBackupRun
+func NewGetDatabaseBackupRunRequest(server string, operationRunId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "operation_run_id", operationRunId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/background-operations/database-backup/runs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetDatabaseBackupStatusRequest generates requests for GetDatabaseBackupStatus
+func NewGetDatabaseBackupStatusRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/background-operations/database-backup/status")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4932,6 +5129,15 @@ type ClientWithResponsesInterface interface {
 	// ListBackgroundOperationsWithResponse request
 	ListBackgroundOperationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBackgroundOperationsResponse, error)
 
+	// StartDatabaseBackupRunWithResponse request
+	StartDatabaseBackupRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartDatabaseBackupRunResponse, error)
+
+	// GetDatabaseBackupRunWithResponse request
+	GetDatabaseBackupRunWithResponse(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*GetDatabaseBackupRunResponse, error)
+
+	// GetDatabaseBackupStatusWithResponse request
+	GetDatabaseBackupStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDatabaseBackupStatusResponse, error)
+
 	// StartExchangeRateLoadingRunWithResponse request
 	StartExchangeRateLoadingRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartExchangeRateLoadingRunResponse, error)
 
@@ -5382,6 +5588,102 @@ func (r ListBackgroundOperationsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListBackgroundOperationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StartDatabaseBackupRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON202      *OperationRunReferenceResponse
+	JSON400      *InvalidRequest
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r StartDatabaseBackupRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartDatabaseBackupRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StartDatabaseBackupRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetDatabaseBackupRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OperationRunResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetDatabaseBackupRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetDatabaseBackupRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetDatabaseBackupRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetDatabaseBackupStatusResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DatabaseBackupStatusResponse
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetDatabaseBackupStatusResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetDatabaseBackupStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetDatabaseBackupStatusResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -6635,6 +6937,33 @@ func (c *ClientWithResponses) ListBackgroundOperationsWithResponse(ctx context.C
 	return ParseListBackgroundOperationsResponse(rsp)
 }
 
+// StartDatabaseBackupRunWithResponse request returning *StartDatabaseBackupRunResponse
+func (c *ClientWithResponses) StartDatabaseBackupRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartDatabaseBackupRunResponse, error) {
+	rsp, err := c.StartDatabaseBackupRun(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartDatabaseBackupRunResponse(rsp)
+}
+
+// GetDatabaseBackupRunWithResponse request returning *GetDatabaseBackupRunResponse
+func (c *ClientWithResponses) GetDatabaseBackupRunWithResponse(ctx context.Context, operationRunId int64, reqEditors ...RequestEditorFn) (*GetDatabaseBackupRunResponse, error) {
+	rsp, err := c.GetDatabaseBackupRun(ctx, operationRunId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetDatabaseBackupRunResponse(rsp)
+}
+
+// GetDatabaseBackupStatusWithResponse request returning *GetDatabaseBackupStatusResponse
+func (c *ClientWithResponses) GetDatabaseBackupStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDatabaseBackupStatusResponse, error) {
+	rsp, err := c.GetDatabaseBackupStatus(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetDatabaseBackupStatusResponse(rsp)
+}
+
 // StartExchangeRateLoadingRunWithResponse request returning *StartExchangeRateLoadingRunResponse
 func (c *ClientWithResponses) StartExchangeRateLoadingRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartExchangeRateLoadingRunResponse, error) {
 	rsp, err := c.StartExchangeRateLoadingRun(ctx, reqEditors...)
@@ -7447,6 +7776,126 @@ func ParseListBackgroundOperationsResponse(rsp *http.Response) (*ListBackgroundO
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest BackgroundOperationListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStartDatabaseBackupRunResponse parses an HTTP response from a StartDatabaseBackupRunWithResponse call
+func ParseStartDatabaseBackupRunResponse(rsp *http.Response) (*StartDatabaseBackupRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartDatabaseBackupRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest OperationRunReferenceResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetDatabaseBackupRunResponse parses an HTTP response from a GetDatabaseBackupRunWithResponse call
+func ParseGetDatabaseBackupRunResponse(rsp *http.Response) (*GetDatabaseBackupRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetDatabaseBackupRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperationRunResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetDatabaseBackupStatusResponse parses an HTTP response from a GetDatabaseBackupStatusWithResponse call
+func ParseGetDatabaseBackupStatusResponse(rsp *http.Response) (*GetDatabaseBackupStatusResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetDatabaseBackupStatusResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DatabaseBackupStatusResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

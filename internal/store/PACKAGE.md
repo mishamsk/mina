@@ -11,6 +11,7 @@
 - Shared process-local runtime state lives in ephemeral `memory._mina_internal` tables, outside the portable accounting schema.
 - Operation runs use numeric IDs from a `_mina_internal` sequence and a store-owned DuckDB status enum.
 - Accounting open helpers perform DuckDB-specific process DB open/reuse and file attach lifecycle.
+- Backup sources perform DuckDB attach/copy/detach mechanics and reject in-memory accounting sources.
 - Closing an owned accounting DB closes its DuckDB process handle; closing a borrowed process DB detaches any attached accounting file and leaves the caller's process handle open.
 - Accounting locations cache rendered database and schema identifiers resolved with DuckDB keyword metadata at open time.
 - Schema-existence checks report the selected accounting schema before migration creates missing schemas.
@@ -18,7 +19,7 @@
 - Repository methods execute SQL only through `AccountingDB.query()` or `AccountingDB.withTx()`.
 - `AccountingDB.query()` routes direct repository queries to the active transaction when one exists.
 - `AccountingDB.withTx()` starts a transaction or reuses the active one on transaction-scoped handles.
-- Direct `AccountingDB.db` access is limited to open, attach, detach, migration setup, transaction creation, and close paths.
+- Direct `AccountingDB.db` access is limited to open, attach, detach, migration setup, transaction creation, backup database copy, and close paths.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.
 - Repositories bind and scan DuckDB `DATE`, `TIMESTAMP`, and `DECIMAL(18,8)` columns through app service value types.
@@ -32,7 +33,7 @@
 
 ## Boundaries
 
-- Owns: SQL execution helpers, migration wiring, transactions, ephemeral runtime-operation tables, row types, and app-to-DB type conversion.
+- Owns: SQL execution helpers, migration wiring, transactions, backup database copy mechanics, ephemeral runtime-operation tables, row types, and app-to-DB type conversion.
 - Does not own: process configuration, HTTP behavior, REST DTOs, or domain validation.
 
 ## Testing Notes

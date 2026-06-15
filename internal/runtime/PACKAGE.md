@@ -19,6 +19,8 @@
 - Runtime dependencies carry only true side-effect seams such as clocks and network provider factories.
 - Runtime operations start after app composition, publish operation status, and do not block app creation.
 - Runtime registers exchange-rate loading as startup, recurring, and manual-started work against one operation status surface.
+- Runtime registers database backup as manual-started work when configured and recurring work only when a backup schedule is configured.
+- Runtime wires the concrete store backup source and file backup provider together.
 - Startup exchange-rate loading ensures and uses the configured Frankfurter file cache by default.
 - Recurring and manual exchange-rate loading use the targeted Frankfurter API provider.
 - Runtime operation status reads operation-run rows from ephemeral store-owned process tables.
