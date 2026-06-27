@@ -59,12 +59,13 @@ var (
 )
 
 type config struct {
-	root               string
-	goal               string
-	previousReviewFile string
-	reviewTarget       reviewTarget
-	templates          reviewTemplates
-	reviewerPrompts    map[string]reviewerPrompt
+	root                    string
+	goal                    string
+	previousReviewFile      string
+	reviewTarget            reviewTarget
+	templates               reviewTemplates
+	reviewerPrompts         map[string]reviewerPrompt
+	frontendReviewerPrompts map[string]reviewerPrompt
 }
 
 type reviewTarget struct {
@@ -82,6 +83,11 @@ type reviewTemplates struct {
 type reviewerPrompt struct {
 	name  string
 	focus string
+}
+
+type reviewerSelection struct {
+	frontend bool
+	name     string
 }
 
 type reviewerResult struct {
@@ -150,7 +156,7 @@ func run(args []string) (int, error) {
 		if err != nil {
 			return 2, err
 		}
-		reviewerNames := selectReviewerNames(changedFiles)
+		reviewerNames := cfg.selectReviewerNames(changedFiles)
 		if len(reviewerNames) == 0 {
 			fmt.Printf("review loop successful: no review findings; no reviewers selected for changed files in %s\n", cfg.reviewTarget.diffRange(iteration))
 			return 0, nil
@@ -159,7 +165,7 @@ func run(args []string) (int, error) {
 		if err != nil {
 			return 2, err
 		}
-		writeProgressLine("selected reviewers: %s", strings.Join(reviewerNames, ", "))
+		writeProgressLine("selected reviewers: %s", strings.Join(reviewerSelectionNames(reviewerNames), ", "))
 
 		rawReviews, err := runReviewers(cfg, reviewScope, reviewers)
 		if err != nil {
@@ -267,14 +273,19 @@ func loadConfig(args []string) (config, error) {
 	if err != nil {
 		return config{}, err
 	}
+	frontendReviewerPrompts, err := loadFrontendReviewerPrompts(root)
+	if err != nil {
+		return config{}, err
+	}
 
 	return config{
-		root:               root,
-		goal:               goal,
-		previousReviewFile: previousReviewFile,
-		reviewTarget:       target,
-		templates:          templates,
-		reviewerPrompts:    reviewerPrompts,
+		root:                    root,
+		goal:                    goal,
+		previousReviewFile:      previousReviewFile,
+		reviewTarget:            target,
+		templates:               templates,
+		reviewerPrompts:         reviewerPrompts,
+		frontendReviewerPrompts: frontendReviewerPrompts,
 	}, nil
 }
 
@@ -503,12 +514,21 @@ func readTemplate(path string) (string, error) {
 
 func loadReviewerPrompts(root string) (map[string]reviewerPrompt, error) {
 	pattern := filepath.Join(root, "docs", "agents", "review", "reviewer-prompts", "*.md")
+	return loadReviewerPromptSet(pattern, true)
+}
+
+func loadFrontendReviewerPrompts(root string) (map[string]reviewerPrompt, error) {
+	pattern := filepath.Join(root, "docs", "agents", "review", "frontend-reviewer-prompts", "*.md")
+	return loadReviewerPromptSet(pattern, false)
+}
+
+func loadReviewerPromptSet(pattern string, requirePrompts bool) (map[string]reviewerPrompt, error) {
 	paths, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("list reviewer prompts: %w", err)
 	}
 	sort.Strings(paths)
-	if len(paths) == 0 {
+	if requirePrompts && len(paths) == 0 {
 		return nil, fmt.Errorf("no reviewer prompts found for %s", pattern)
 	}
 
@@ -527,45 +547,64 @@ func loadReviewerPrompts(root string) (map[string]reviewerPrompt, error) {
 	return reviewers, nil
 }
 
-func (cfg config) selectedReviewers(names []string) ([]reviewerPrompt, error) {
+func (cfg config) selectedReviewers(names []reviewerSelection) ([]reviewerPrompt, error) {
 	reviewers := make([]reviewerPrompt, 0, len(names))
-	for _, name := range names {
-		reviewer, ok := cfg.reviewerPrompts[name]
-		if !ok {
-			return nil, fmt.Errorf("reviewer prompt %q is selected but missing", name)
+	for _, selection := range names {
+		prompts := cfg.reviewerPrompts
+		if selection.frontend {
+			prompts = cfg.frontendReviewerPrompts
 		}
+		reviewer, ok := prompts[selection.name]
+		if !ok {
+			return nil, fmt.Errorf("reviewer prompt %q is selected but missing", selection.displayName())
+		}
+		reviewer.name = selection.displayName()
 		reviewers = append(reviewers, reviewer)
 	}
 	return reviewers, nil
 }
 
-func selectReviewerNames(paths []string) []string {
-	selected := map[string]bool{}
+func (cfg config) selectReviewerNames(paths []string) []reviewerSelection {
+	selected := reviewerSelectionState{
+		repo: map[string]bool{},
+	}
 	for _, path := range paths {
-		selectReviewersForPath(selected, filepath.ToSlash(path))
+		selectReviewersForPath(&selected, filepath.ToSlash(path))
 	}
 
-	var names []string
+	var names []reviewerSelection
 	for _, name := range stableReviewerOrder {
-		if selected[name] {
-			names = append(names, name)
+		if selected.repo[name] {
+			names = append(names, reviewerSelection{name: name})
+		}
+	}
+	if selected.frontend {
+		for _, name := range reviewerPromptNames(cfg.frontendReviewerPrompts) {
+			names = append(names, reviewerSelection{frontend: true, name: name})
 		}
 	}
 	return names
 }
 
-func selectReviewersForPath(selected map[string]bool, path string) {
+type reviewerSelectionState struct {
+	repo     map[string]bool
+	frontend bool
+}
+
+func selectReviewersForPath(selected *reviewerSelectionState, path string) {
 	switch {
 	case path == "", isReviewExcludedPath(path):
 		return
-	case isDevToolingPath(path):
-		selected["dev-tooling"] = true
-	case strings.EqualFold(filepath.Ext(path), ".md"):
-		selected["docs"] = true
+	case isDocumentationPath(path):
+		selected.repo["docs"] = true
+	case isFrontendPath(path):
+		selected.frontend = true
 	case isAppCodePath(path):
 		for _, name := range appCodeReviewers {
-			selected[name] = true
+			selected.repo[name] = true
 		}
+	case isDevToolingPath(path):
+		selected.repo["dev-tooling"] = true
 	}
 }
 
@@ -586,6 +625,16 @@ func isPlanPath(path string) bool {
 
 func isCodexPath(path string) bool {
 	return path == ".codex" || strings.HasPrefix(path, ".codex/")
+}
+
+func isFrontendPath(path string) bool {
+	return path == "frontend" || strings.HasPrefix(path, "frontend/")
+}
+
+func isDocumentationPath(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".md") ||
+		path == "docs" ||
+		strings.HasPrefix(path, "docs/")
 }
 
 func isDevToolingPath(path string) bool {
@@ -625,6 +674,52 @@ func isAppCodePath(path string) bool {
 		}
 	}
 	return false
+}
+
+func reviewerPromptNames(prompts map[string]reviewerPrompt) []string {
+	names := make([]string, 0, len(prompts))
+	for name := range prompts {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func reviewerSelectionNames(selections []reviewerSelection) []string {
+	names := make([]string, 0, len(selections))
+	for _, selection := range selections {
+		names = append(names, selection.displayName())
+	}
+	return names
+}
+
+func (selection reviewerSelection) displayName() string {
+	if selection.frontend {
+		return "frontend/" + selection.name
+	}
+	return selection.name
+}
+
+func reviewerScopedReviewScope(reviewScope string, reviewer reviewerPrompt) string {
+	scopeLines := []string{reviewScope, "", "Reviewer path scope:"}
+	switch {
+	case strings.HasPrefix(reviewer.name, "frontend/"):
+		scopeLines = append(scopeLines,
+			"- Review only changed paths under `frontend/`.",
+			"- Use the range above with `-- frontend/` for focused diffs.",
+		)
+	case reviewer.name == "docs":
+		scopeLines = append(scopeLines,
+			"- Review documentation changes in any path, including documentation under `frontend/`.",
+			"- Use the range above with focused documentation paths, such as `-- '*.md'` and `-- docs/`.",
+		)
+	default:
+		scopeLines = append(scopeLines,
+			"- Do not review changed paths under `frontend/`.",
+			"- You may inspect documentation changes for context.",
+		)
+	}
+	return strings.Join(scopeLines, "\n")
 }
 
 func (cfg config) placeholderValues(overrides map[string]string) map[string]string {
@@ -688,7 +783,7 @@ func runReviewers(cfg config, reviewScope string, reviewers []reviewerPrompt) (s
 			prompt, err := interpolate(cfg.templates.reviewer, cfg.placeholderValues(map[string]string{
 				"REVIEWER_NAME": reviewer.name,
 				"REVIEW_FOCUS":  reviewer.focus,
-				"REVIEW_SCOPE":  reviewScope,
+				"REVIEW_SCOPE":  reviewerScopedReviewScope(reviewScope, reviewer),
 			}))
 			if err != nil {
 				results[i] = reviewerResult{name: reviewer.name, err: fmt.Errorf("build reviewer %s prompt: %w", reviewer.name, err)}

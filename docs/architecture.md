@@ -6,8 +6,7 @@ Mina is a local-first personal finance system for one household.
 
 - Go 1.26+ application.
 - One `cmd/mina` binary.
-- REST API only.
-- No TUI or web UI implementation.
+- REST API with web UI served from the binary and later a TUI.
 - Portable accounting state stored in a DuckDB database (file or in-memory).
 
 ## Hard Rules
@@ -36,7 +35,7 @@ Imports and runtime knowledge flow inward toward app-owned service packages. Com
 
 Rules:
 
-- Service packages must not import HTTP, OpenAPI, TUI, scheduler, SQL, generated DB, Cobra, process I/O, or runtime composition packages.
+- Service packages must not import HTTP, OpenAPI, web UI, TUI, scheduler, SQL, generated DB, Cobra, process I/O, or runtime composition packages.
 - Service packages own domain validation and use-case decisions.
 - `internal/httpapi` calls services and maps generated OpenAPI request/response DTOs. Strict-server implementations map generated OpenAPI request objects to service inputs, call services, and map service outputs, errors, and statuses to generated OpenAPI response objects.
 - `internal/httpapi` does not open databases, parse CLI flags, own SQL, make domain decisions, or duplicate service-owned domain validation.

@@ -21,7 +21,7 @@ Technical users who appreciate text-based accounting systems (like ledger-cli, h
 ### Deployment Mode
 
 - **Local CLI**: Runs as a local command-line application serving a REST API on localhost
-- Later stages may add a local UI served by the same process
+- Phase 2 adds a minimal local web UI served for local use
 - The local database file is the only required accounting state
 
 ### Data Portability
@@ -38,28 +38,23 @@ Technical users who appreciate text-based accounting systems (like ledger-cli, h
 
 ## Development Phases
 
-### Phase 1: Core Double-Entry System
-Foundation with accounts, transactions, categories, tags, household members, basic search/filtering, and bulk operations.
+### Phase 1: Core Double-Entry System - Closed
+Delivered REST API foundation with accounts, transactions, categories, tags, household members, basic search/filtering, and bulk operations.
 
-Delivered in the 3 stages:
-Stage 1. CRUD REST API only
-Stage 2. Basic TUI for manual entry and search
-Stage 3. Full web UI with table-based views and in-table search/filtering
+### Phase 2: Minimal Web UI, Templates, and Recurring Transactions
+Minimal local web UI, development infrastructure for web UI iteration, transaction templates, and recurring transaction support.
 
-### Phase 2: Basic Reporting
+### Phase 3: Basic Reporting
 Requirements TBD. Candidate areas include account balances, monthly spend/income summaries, saved searches, tag/category/member summaries, and personal vs. shared expense views.
 
-### Phase 3: Recurring Transactions & Budgeting
-Transaction templates, scheduling, and monthly category-based budgeting.
+### Phase 4: Budgeting
+Monthly category-based budgeting.
 
-### Phase 4: Bank Import & Reconciliation
+### Phase 5: Bank Import & Reconciliation
 Plaid integration for importing bank transactions and reconciliation with manual entries.
 
-### Phase 5: Advanced Features
+### Phase 6: Advanced Features
 Cash flow forecasting and advanced analytical reporting.
-
-### Possible Later Phase: Client-Side Browser App
-A fully client-side browser application may be considered later as a separate delivery phase, after the local CLI product is stable.
 
 ---
 
@@ -120,9 +115,8 @@ Three dates track the lifecycle:
 
 ### Transaction Entry
 
-- Manual entry through forms
+- Manual entry through the REST API
 - Support for complex multi-account transactions
-- Templates for common transaction patterns
 - Full editing of historical transactions with no period locking
 - Bulk operations for categorization, tagging, and account reassignment
 
@@ -132,7 +126,7 @@ Three dates track the lifecycle:
 
 - **Hierarchical structure**: Path-based names (e.g., `Food:Restaurants:FastFood`)
 - **One category per record**: Each record has exactly one category assignment
-- **Budget integration**: Categories serve as budget line items (Phase 3)
+- **Budget integration**: Categories serve as budget line items (Phase 4)
 - **Hidden state**: Hidden categories excluded from input and default queries, but selectable for explicit queries
 
 ### Tags
@@ -162,13 +156,12 @@ Three dates track the lifecycle:
 
 ## Search & Filtering
 
-### Table-Based Views
+### Record Search
 
-Primary interface is table-based with Excel-like behavior:
-- Columns matching data fields
-- Sortable columns
-- Filterable columns
-- In-table search
+API search supports tabular clients:
+- Sortable fields
+- Filterable fields
+- Text search
 
 ### Transaction & Record Display
 
@@ -205,16 +198,19 @@ Search and filter records by:
 
 # Future Phases
 
-## Phase 2: Basic Reporting
+## Phase 2: Minimal Web UI, Templates, and Recurring Transactions
+*Requirements TBD. Candidate areas include local web UI development infrastructure, minimal transaction entry/search flows, transaction templates, recurring transaction scheduling, and API parity for UI workflows.*
+
+## Phase 3: Basic Reporting
 *Requirements TBD. Candidate areas include account balances, monthly spend/income summaries, saved searches, tag/category/member summaries, and personal vs. shared expense views.*
 
-## Phase 3: Recurring Transactions & Budgeting
+## Phase 4: Budgeting
 *Requirements TBD*
 
-## Phase 4: Bank Import & Reconciliation
+## Phase 5: Bank Import & Reconciliation
 *Requirements TBD*
 
-## Phase 5: Advanced Features
+## Phase 6: Advanced Features
 *Requirements TBD*
 
 ---

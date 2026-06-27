@@ -6,6 +6,7 @@ boundary:
 - `app-tests`: normal in-process app tests in `internal/apptest/runtime`.
 - `e2e-tests`: testscript-driven launched-process tests in `cmd/mina/testdata/script`, driven by `cmd/mina/cli_smoke_test.go`.
 - No unit tests and no other app test locations.
+- No test code under `internal/tools/**`; validate tool changes with manual smoke checks, `just pre-commit`, and review.
 
 ## App-Tests
 
@@ -147,7 +148,7 @@ Use them as a small smoke suite for process-boundary and IO-bound checks only:
 - Real network listeners.
 - Database files.
 - External IO protection, such as not destroying an existing user database.
-- Later TUI process behavior.
+- Later local web UI and TUI process behavior.
 
 Do not use `e2e-tests` for:
 

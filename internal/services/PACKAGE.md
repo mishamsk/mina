@@ -2,13 +2,13 @@
 
 ## Purpose
 
-- Documents the app-owned service package pattern for Stage 1 domain use cases.
-- Implemented Stage 1 service packages are `accounts`, `operationruns`, `categories`, `tags`, `members`, `exchangerates`, `exchangerateloading`, `backups`, `creditlimits`, `transactions`, and `values`; `journalrecords` and `recordbulk` remain target packages.
+- Documents the app-owned service package pattern for domain use cases.
+- Implemented service packages are `accounts`, `operationruns`, `categories`, `tags`, `members`, `exchangerates`, `exchangerateloading`, `backups`, `creditlimits`, `transactions`, `journalrecords`, `recordbulk`, `health`, `demo`, and `values`.
 
 ## Implicit Contracts
 
 - Service packages own domain types, validation, use cases, and repository interfaces.
-- Service packages must not import HTTP, OpenAPI, TUI, scheduler, SQL, generated DB, Cobra, process I/O, store, or runtime packages.
+- Service packages must not import HTTP, OpenAPI, web UI, TUI, scheduler, SQL, generated DB, Cobra, process I/O, store, or runtime packages.
 - Public service structs and repository contracts carry app-owned value types for civil dates, audit timestamps, and decimals.
 - Callers must provide service-declared types; transport string parsing belongs to the owning adapter.
 

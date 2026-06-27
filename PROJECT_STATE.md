@@ -1,6 +1,7 @@
 # Project State
 
-- Active scope: Phase 1 Stage 1 REST APIs in one Go `cmd/mina` binary.
+- Phase 1 REST API foundation is closed.
+- Active scope: Phase 2 minimal local web UI infrastructure, transaction templates, and recurring transactions.
 - Default operator workflow: start the REST API with `mina serve --db PATH`
 - Implemented API capability groups:
   - Health checks and stable JSON error envelopes.
