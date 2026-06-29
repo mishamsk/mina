@@ -732,6 +732,28 @@ type CreateExchangeRateRequest struct {
 	ToCurrency string `json:"to_currency"`
 }
 
+// CreateIncomeTransactionRequest defines model for CreateIncomeTransactionRequest.
+type CreateIncomeTransactionRequest struct {
+	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount               string             `json:"amount"`
+	CategoryId           int64              `json:"category_id"`
+	Currency             string             `json:"currency"`
+	DestinationAccountId int64              `json:"destination_account_id"`
+	InitiatedDate        openapi_types.Date `json:"initiated_date"`
+	MemberId             *int64             `json:"member_id,omitempty"`
+	Memo                 *string            `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate           *time.Time            `json:"posted_date,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	SourceAccountId      int64                 `json:"source_account_id"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+}
+
 // CreateJournalRecordRequest defines model for CreateJournalRecordRequest.
 type CreateJournalRecordRequest struct {
 	AccountId int64 `json:"account_id"`
@@ -764,6 +786,50 @@ type CreateMemberRequest struct {
 	Name string `json:"name"`
 }
 
+// CreateRefundTransactionRequest defines model for CreateRefundTransactionRequest.
+type CreateRefundTransactionRequest struct {
+	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount                string             `json:"amount"`
+	CategoryId            int64              `json:"category_id"`
+	CounterpartyAccountId int64              `json:"counterparty_account_id"`
+	Currency              string             `json:"currency"`
+	DestinationAccountId  int64              `json:"destination_account_id"`
+	InitiatedDate         openapi_types.Date `json:"initiated_date"`
+	MemberId              *int64             `json:"member_id,omitempty"`
+	Memo                  *string            `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate           *time.Time            `json:"posted_date,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+}
+
+// CreateSpendTransactionRequest defines model for CreateSpendTransactionRequest.
+type CreateSpendTransactionRequest struct {
+	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount                string             `json:"amount"`
+	CategoryId            int64              `json:"category_id"`
+	CounterpartyAccountId int64              `json:"counterparty_account_id"`
+	Currency              string             `json:"currency"`
+	FundingAccountId      int64              `json:"funding_account_id"`
+	InitiatedDate         openapi_types.Date `json:"initiated_date"`
+	MemberId              *int64             `json:"member_id,omitempty"`
+	Memo                  *string            `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate           *time.Time            `json:"posted_date,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+}
+
 // CreateTagRequest defines model for CreateTagRequest.
 type CreateTagRequest struct {
 	Fqn      string `json:"fqn"`
@@ -774,6 +840,28 @@ type CreateTagRequest struct {
 type CreateTransactionRequest struct {
 	InitiatedDate openapi_types.Date           `json:"initiated_date"`
 	Records       []CreateJournalRecordRequest `json:"records"`
+}
+
+// CreateTransferTransactionRequest defines model for CreateTransferTransactionRequest.
+type CreateTransferTransactionRequest struct {
+	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount               string             `json:"amount"`
+	CategoryId           int64              `json:"category_id"`
+	Currency             string             `json:"currency"`
+	DestinationAccountId int64              `json:"destination_account_id"`
+	InitiatedDate        openapi_types.Date `json:"initiated_date"`
+	MemberId             *int64             `json:"member_id,omitempty"`
+	Memo                 *string            `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate           *time.Time            `json:"posted_date,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	SourceAccountId      int64                 `json:"source_account_id"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
 }
 
 // CreditLimitHistory defines model for CreditLimitHistory.
@@ -1308,6 +1396,18 @@ type UpdateTagJSONRequestBody = UpdateTagRequest
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = CreateTransactionRequest
 
+// CreateIncomeTransactionJSONRequestBody defines body for CreateIncomeTransaction for application/json ContentType.
+type CreateIncomeTransactionJSONRequestBody = CreateIncomeTransactionRequest
+
+// CreateRefundTransactionJSONRequestBody defines body for CreateRefundTransaction for application/json ContentType.
+type CreateRefundTransactionJSONRequestBody = CreateRefundTransactionRequest
+
+// CreateSpendTransactionJSONRequestBody defines body for CreateSpendTransaction for application/json ContentType.
+type CreateSpendTransactionJSONRequestBody = CreateSpendTransactionRequest
+
+// CreateTransferTransactionJSONRequestBody defines body for CreateTransferTransaction for application/json ContentType.
+type CreateTransferTransactionJSONRequestBody = CreateTransferTransactionRequest
+
 // ReplaceTransactionJSONRequestBody defines body for ReplaceTransaction for application/json ContentType.
 type ReplaceTransactionJSONRequestBody = UpdateTransactionRequest
 
@@ -1451,6 +1551,18 @@ type ServerInterface interface {
 	// Create a per-currency balanced transaction.
 	// (POST /api/transactions)
 	CreateTransaction(w http.ResponseWriter, r *http.Request)
+	// Create a same-currency income transaction.
+	// (POST /api/transactions/income)
+	CreateIncomeTransaction(w http.ResponseWriter, r *http.Request)
+	// Create a same-currency refund transaction.
+	// (POST /api/transactions/refund)
+	CreateRefundTransaction(w http.ResponseWriter, r *http.Request)
+	// Create a same-currency spend transaction.
+	// (POST /api/transactions/spend)
+	CreateSpendTransaction(w http.ResponseWriter, r *http.Request)
+	// Create a same-currency transfer transaction.
+	// (POST /api/transactions/transfer)
+	CreateTransferTransaction(w http.ResponseWriter, r *http.Request)
 	// Tombstone a transaction and its journal records.
 	// (DELETE /api/transactions/{transaction_id})
 	DeleteTransaction(w http.ResponseWriter, r *http.Request, transactionId int64)
@@ -1739,6 +1851,30 @@ func (_ Unimplemented) ListTransactions(w http.ResponseWriter, r *http.Request, 
 // Create a per-currency balanced transaction.
 // (POST /api/transactions)
 func (_ Unimplemented) CreateTransaction(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a same-currency income transaction.
+// (POST /api/transactions/income)
+func (_ Unimplemented) CreateIncomeTransaction(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a same-currency refund transaction.
+// (POST /api/transactions/refund)
+func (_ Unimplemented) CreateRefundTransaction(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a same-currency spend transaction.
+// (POST /api/transactions/spend)
+func (_ Unimplemented) CreateSpendTransaction(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a same-currency transfer transaction.
+// (POST /api/transactions/transfer)
+func (_ Unimplemented) CreateTransferTransaction(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3809,6 +3945,62 @@ func (siw *ServerInterfaceWrapper) CreateTransaction(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// CreateIncomeTransaction operation middleware
+func (siw *ServerInterfaceWrapper) CreateIncomeTransaction(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIncomeTransaction(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRefundTransaction operation middleware
+func (siw *ServerInterfaceWrapper) CreateRefundTransaction(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRefundTransaction(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSpendTransaction operation middleware
+func (siw *ServerInterfaceWrapper) CreateSpendTransaction(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSpendTransaction(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTransferTransaction operation middleware
+func (siw *ServerInterfaceWrapper) CreateTransferTransaction(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTransferTransaction(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteTransaction operation middleware
 func (siw *ServerInterfaceWrapper) DeleteTransaction(w http.ResponseWriter, r *http.Request) {
 
@@ -4137,6 +4329,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/transactions", wrapper.CreateTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/transactions/income", wrapper.CreateIncomeTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/transactions/refund", wrapper.CreateRefundTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/transactions/spend", wrapper.CreateSpendTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/transactions/transfer", wrapper.CreateTransferTransaction)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/api/transactions/{transaction_id}", wrapper.DeleteTransaction)
@@ -6264,6 +6468,150 @@ func (response CreateTransaction400JSONResponse) VisitCreateTransactionResponse(
 	return err
 }
 
+type CreateIncomeTransactionRequestObject struct {
+	Body *CreateIncomeTransactionJSONRequestBody
+}
+
+type CreateIncomeTransactionResponseObject interface {
+	VisitCreateIncomeTransactionResponse(w http.ResponseWriter) error
+}
+
+type CreateIncomeTransaction201JSONResponse Transaction
+
+func (response CreateIncomeTransaction201JSONResponse) VisitCreateIncomeTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIncomeTransaction400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response CreateIncomeTransaction400JSONResponse) VisitCreateIncomeTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRefundTransactionRequestObject struct {
+	Body *CreateRefundTransactionJSONRequestBody
+}
+
+type CreateRefundTransactionResponseObject interface {
+	VisitCreateRefundTransactionResponse(w http.ResponseWriter) error
+}
+
+type CreateRefundTransaction201JSONResponse Transaction
+
+func (response CreateRefundTransaction201JSONResponse) VisitCreateRefundTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRefundTransaction400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response CreateRefundTransaction400JSONResponse) VisitCreateRefundTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSpendTransactionRequestObject struct {
+	Body *CreateSpendTransactionJSONRequestBody
+}
+
+type CreateSpendTransactionResponseObject interface {
+	VisitCreateSpendTransactionResponse(w http.ResponseWriter) error
+}
+
+type CreateSpendTransaction201JSONResponse Transaction
+
+func (response CreateSpendTransaction201JSONResponse) VisitCreateSpendTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSpendTransaction400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response CreateSpendTransaction400JSONResponse) VisitCreateSpendTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransferTransactionRequestObject struct {
+	Body *CreateTransferTransactionJSONRequestBody
+}
+
+type CreateTransferTransactionResponseObject interface {
+	VisitCreateTransferTransactionResponse(w http.ResponseWriter) error
+}
+
+type CreateTransferTransaction201JSONResponse Transaction
+
+func (response CreateTransferTransaction201JSONResponse) VisitCreateTransferTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransferTransaction400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response CreateTransferTransaction400JSONResponse) VisitCreateTransferTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteTransactionRequestObject struct {
 	TransactionId int64 `json:"transaction_id"`
 }
@@ -6549,6 +6897,18 @@ type StrictServerInterface interface {
 	// Create a per-currency balanced transaction.
 	// (POST /api/transactions)
 	CreateTransaction(ctx context.Context, request CreateTransactionRequestObject) (CreateTransactionResponseObject, error)
+	// Create a same-currency income transaction.
+	// (POST /api/transactions/income)
+	CreateIncomeTransaction(ctx context.Context, request CreateIncomeTransactionRequestObject) (CreateIncomeTransactionResponseObject, error)
+	// Create a same-currency refund transaction.
+	// (POST /api/transactions/refund)
+	CreateRefundTransaction(ctx context.Context, request CreateRefundTransactionRequestObject) (CreateRefundTransactionResponseObject, error)
+	// Create a same-currency spend transaction.
+	// (POST /api/transactions/spend)
+	CreateSpendTransaction(ctx context.Context, request CreateSpendTransactionRequestObject) (CreateSpendTransactionResponseObject, error)
+	// Create a same-currency transfer transaction.
+	// (POST /api/transactions/transfer)
+	CreateTransferTransaction(ctx context.Context, request CreateTransferTransactionRequestObject) (CreateTransferTransactionResponseObject, error)
 	// Tombstone a transaction and its journal records.
 	// (DELETE /api/transactions/{transaction_id})
 	DeleteTransaction(ctx context.Context, request DeleteTransactionRequestObject) (DeleteTransactionResponseObject, error)
@@ -7871,6 +8231,130 @@ func (sh *strictHandler) CreateTransaction(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// CreateIncomeTransaction operation middleware
+func (sh *strictHandler) CreateIncomeTransaction(w http.ResponseWriter, r *http.Request) {
+	var request CreateIncomeTransactionRequestObject
+
+	var body CreateIncomeTransactionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateIncomeTransaction(ctx, request.(CreateIncomeTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateIncomeTransaction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateIncomeTransactionResponseObject); ok {
+		if err := validResponse.VisitCreateIncomeTransactionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRefundTransaction operation middleware
+func (sh *strictHandler) CreateRefundTransaction(w http.ResponseWriter, r *http.Request) {
+	var request CreateRefundTransactionRequestObject
+
+	var body CreateRefundTransactionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRefundTransaction(ctx, request.(CreateRefundTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRefundTransaction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRefundTransactionResponseObject); ok {
+		if err := validResponse.VisitCreateRefundTransactionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSpendTransaction operation middleware
+func (sh *strictHandler) CreateSpendTransaction(w http.ResponseWriter, r *http.Request) {
+	var request CreateSpendTransactionRequestObject
+
+	var body CreateSpendTransactionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSpendTransaction(ctx, request.(CreateSpendTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSpendTransaction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSpendTransactionResponseObject); ok {
+		if err := validResponse.VisitCreateSpendTransactionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTransferTransaction operation middleware
+func (sh *strictHandler) CreateTransferTransaction(w http.ResponseWriter, r *http.Request) {
+	var request CreateTransferTransactionRequestObject
+
+	var body CreateTransferTransactionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTransferTransaction(ctx, request.(CreateTransferTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTransferTransaction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTransferTransactionResponseObject); ok {
+		if err := validResponse.VisitCreateTransferTransactionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DeleteTransaction operation middleware
 func (sh *strictHandler) DeleteTransaction(w http.ResponseWriter, r *http.Request, transactionId int64) {
 	var request DeleteTransactionRequestObject
@@ -7961,93 +8445,98 @@ func (sh *strictHandler) ReplaceTransaction(w http.ResponseWriter, r *http.Reque
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

@@ -10,6 +10,7 @@
   - Account type and category economic-intent metadata for accounting semantics.
   - Exchange-rate and account credit-limit-history flows.
   - Transaction creation, read, paginated list, full replacement, and tombstone deletion with nested journal records.
+  - Shorthand transaction creation endpoints for spend, income, refund, and transfer.
   - Transaction semantic shape validation with derived transaction class, component summaries, and display amounts in REST responses.
   - Paginated journal-record search and account-record search.
   - Bulk journal-record category, tag, account, and status updates.

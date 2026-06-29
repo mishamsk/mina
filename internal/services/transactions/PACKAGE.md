@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Create/replace and bulk category/account use cases prevalidate semantic classification from active account/category dictionaries before writes.
+- Shorthand create use cases build ordinary same-currency two-record transactions before delegating to full create validation and persistence.
 
 ## Boundaries
 

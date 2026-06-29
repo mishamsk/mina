@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BulkCategorizeJournalRecordsData, BulkCategorizeJournalRecordsErrors, BulkCategorizeJournalRecordsResponses, BulkReassignJournalRecordAccountData, BulkReassignJournalRecordAccountErrors, BulkReassignJournalRecordAccountResponses, BulkUpdateJournalRecordStatusesData, BulkUpdateJournalRecordStatusesErrors, BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordTagsData, BulkUpdateJournalRecordTagsErrors, BulkUpdateJournalRecordTagsResponses, CreateAccountData, CreateAccountErrors, CreateAccountResponses, CreateCategoryData, CreateCategoryErrors, CreateCategoryResponses, CreateCreditLimitHistoryData, CreateCreditLimitHistoryErrors, CreateCreditLimitHistoryResponses, CreateExchangeRateData, CreateExchangeRateErrors, CreateExchangeRateResponses, CreateMemberData, CreateMemberErrors, CreateMemberResponses, CreateTagData, CreateTagErrors, CreateTagResponses, CreateTransactionData, CreateTransactionErrors, CreateTransactionResponses, DeleteAccountData, DeleteAccountErrors, DeleteAccountResponses, DeleteCategoryData, DeleteCategoryErrors, DeleteCategoryResponses, DeleteCreditLimitHistoryData, DeleteCreditLimitHistoryErrors, DeleteCreditLimitHistoryResponses, DeleteExchangeRateData, DeleteExchangeRateErrors, DeleteExchangeRateResponses, DeleteMemberData, DeleteMemberErrors, DeleteMemberResponses, DeleteTagData, DeleteTagErrors, DeleteTagResponses, DeleteTransactionData, DeleteTransactionErrors, DeleteTransactionResponses, GetAccountData, GetAccountErrors, GetAccountResponses, GetCategoryData, GetCategoryErrors, GetCategoryResponses, GetCreditLimitHistoryData, GetCreditLimitHistoryErrors, GetCreditLimitHistoryResponses, GetDatabaseBackupRunData, GetDatabaseBackupRunErrors, GetDatabaseBackupRunResponses, GetDatabaseBackupStatusData, GetDatabaseBackupStatusErrors, GetDatabaseBackupStatusResponses, GetExchangeRateData, GetExchangeRateErrors, GetExchangeRateLoadingRunData, GetExchangeRateLoadingRunErrors, GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingStatusData, GetExchangeRateLoadingStatusErrors, GetExchangeRateLoadingStatusResponses, GetExchangeRateResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetMemberData, GetMemberErrors, GetMemberResponses, GetTagData, GetTagErrors, GetTagResponses, GetTransactionData, GetTransactionErrors, GetTransactionResponses, ListAccountsData, ListAccountsErrors, ListAccountsResponses, ListBackgroundOperationsData, ListBackgroundOperationsErrors, ListBackgroundOperationsResponses, ListCategoriesData, ListCategoriesErrors, ListCategoriesResponses, ListCreditLimitHistoryData, ListCreditLimitHistoryErrors, ListCreditLimitHistoryResponses, ListExchangeRatesData, ListExchangeRatesErrors, ListExchangeRatesResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListTagsData, ListTagsErrors, ListTagsResponses, ListTransactionsData, ListTransactionsErrors, ListTransactionsResponses, ReplaceTransactionData, ReplaceTransactionErrors, ReplaceTransactionResponses, SearchAccountJournalRecordsData, SearchAccountJournalRecordsErrors, SearchAccountJournalRecordsResponses, SearchJournalRecordsData, SearchJournalRecordsErrors, SearchJournalRecordsResponses, SeedDemoData, SeedDemoErrors, SeedDemoResponses, StartDatabaseBackupRunData, StartDatabaseBackupRunErrors, StartDatabaseBackupRunResponses, StartExchangeRateLoadingRunData, StartExchangeRateLoadingRunErrors, StartExchangeRateLoadingRunResponses, UpdateAccountData, UpdateAccountErrors, UpdateAccountResponses, UpdateCategoryData, UpdateCategoryErrors, UpdateCategoryResponses, UpdateExchangeRateData, UpdateExchangeRateErrors, UpdateExchangeRateResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberResponses, UpdateTagData, UpdateTagErrors, UpdateTagResponses } from './types.gen';
+import type { BulkCategorizeJournalRecordsData, BulkCategorizeJournalRecordsErrors, BulkCategorizeJournalRecordsResponses, BulkReassignJournalRecordAccountData, BulkReassignJournalRecordAccountErrors, BulkReassignJournalRecordAccountResponses, BulkUpdateJournalRecordStatusesData, BulkUpdateJournalRecordStatusesErrors, BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordTagsData, BulkUpdateJournalRecordTagsErrors, BulkUpdateJournalRecordTagsResponses, CreateAccountData, CreateAccountErrors, CreateAccountResponses, CreateCategoryData, CreateCategoryErrors, CreateCategoryResponses, CreateCreditLimitHistoryData, CreateCreditLimitHistoryErrors, CreateCreditLimitHistoryResponses, CreateExchangeRateData, CreateExchangeRateErrors, CreateExchangeRateResponses, CreateIncomeTransactionData, CreateIncomeTransactionErrors, CreateIncomeTransactionResponses, CreateMemberData, CreateMemberErrors, CreateMemberResponses, CreateRefundTransactionData, CreateRefundTransactionErrors, CreateRefundTransactionResponses, CreateSpendTransactionData, CreateSpendTransactionErrors, CreateSpendTransactionResponses, CreateTagData, CreateTagErrors, CreateTagResponses, CreateTransactionData, CreateTransactionErrors, CreateTransactionResponses, CreateTransferTransactionData, CreateTransferTransactionErrors, CreateTransferTransactionResponses, DeleteAccountData, DeleteAccountErrors, DeleteAccountResponses, DeleteCategoryData, DeleteCategoryErrors, DeleteCategoryResponses, DeleteCreditLimitHistoryData, DeleteCreditLimitHistoryErrors, DeleteCreditLimitHistoryResponses, DeleteExchangeRateData, DeleteExchangeRateErrors, DeleteExchangeRateResponses, DeleteMemberData, DeleteMemberErrors, DeleteMemberResponses, DeleteTagData, DeleteTagErrors, DeleteTagResponses, DeleteTransactionData, DeleteTransactionErrors, DeleteTransactionResponses, GetAccountData, GetAccountErrors, GetAccountResponses, GetCategoryData, GetCategoryErrors, GetCategoryResponses, GetCreditLimitHistoryData, GetCreditLimitHistoryErrors, GetCreditLimitHistoryResponses, GetDatabaseBackupRunData, GetDatabaseBackupRunErrors, GetDatabaseBackupRunResponses, GetDatabaseBackupStatusData, GetDatabaseBackupStatusErrors, GetDatabaseBackupStatusResponses, GetExchangeRateData, GetExchangeRateErrors, GetExchangeRateLoadingRunData, GetExchangeRateLoadingRunErrors, GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingStatusData, GetExchangeRateLoadingStatusErrors, GetExchangeRateLoadingStatusResponses, GetExchangeRateResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetMemberData, GetMemberErrors, GetMemberResponses, GetTagData, GetTagErrors, GetTagResponses, GetTransactionData, GetTransactionErrors, GetTransactionResponses, ListAccountsData, ListAccountsErrors, ListAccountsResponses, ListBackgroundOperationsData, ListBackgroundOperationsErrors, ListBackgroundOperationsResponses, ListCategoriesData, ListCategoriesErrors, ListCategoriesResponses, ListCreditLimitHistoryData, ListCreditLimitHistoryErrors, ListCreditLimitHistoryResponses, ListExchangeRatesData, ListExchangeRatesErrors, ListExchangeRatesResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListTagsData, ListTagsErrors, ListTagsResponses, ListTransactionsData, ListTransactionsErrors, ListTransactionsResponses, ReplaceTransactionData, ReplaceTransactionErrors, ReplaceTransactionResponses, SearchAccountJournalRecordsData, SearchAccountJournalRecordsErrors, SearchAccountJournalRecordsResponses, SearchJournalRecordsData, SearchJournalRecordsErrors, SearchJournalRecordsResponses, SeedDemoData, SeedDemoErrors, SeedDemoResponses, StartDatabaseBackupRunData, StartDatabaseBackupRunErrors, StartDatabaseBackupRunResponses, StartExchangeRateLoadingRunData, StartExchangeRateLoadingRunErrors, StartExchangeRateLoadingRunResponses, UpdateAccountData, UpdateAccountErrors, UpdateAccountResponses, UpdateCategoryData, UpdateCategoryErrors, UpdateCategoryResponses, UpdateExchangeRateData, UpdateExchangeRateErrors, UpdateExchangeRateResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberResponses, UpdateTagData, UpdateTagErrors, UpdateTagResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -295,6 +295,54 @@ export const listTransactions = <ThrowOnError extends boolean = false>(options?:
  */
 export const createTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateTransactionData, ThrowOnError>): RequestResult<CreateTransactionResponses, CreateTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateTransactionResponses, CreateTransactionErrors, ThrowOnError>({
     url: '/api/transactions',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create a same-currency spend transaction.
+ */
+export const createSpendTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateSpendTransactionData, ThrowOnError>): RequestResult<CreateSpendTransactionResponses, CreateSpendTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateSpendTransactionResponses, CreateSpendTransactionErrors, ThrowOnError>({
+    url: '/api/transactions/spend',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create a same-currency income transaction.
+ */
+export const createIncomeTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateIncomeTransactionData, ThrowOnError>): RequestResult<CreateIncomeTransactionResponses, CreateIncomeTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateIncomeTransactionResponses, CreateIncomeTransactionErrors, ThrowOnError>({
+    url: '/api/transactions/income',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create a same-currency refund transaction.
+ */
+export const createRefundTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateRefundTransactionData, ThrowOnError>): RequestResult<CreateRefundTransactionResponses, CreateRefundTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateRefundTransactionResponses, CreateRefundTransactionErrors, ThrowOnError>({
+    url: '/api/transactions/refund',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Create a same-currency transfer transaction.
+ */
+export const createTransferTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateTransferTransactionData, ThrowOnError>): RequestResult<CreateTransferTransactionResponses, CreateTransferTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateTransferTransactionResponses, CreateTransferTransactionErrors, ThrowOnError>({
+    url: '/api/transactions/transfer',
     ...options,
     headers: {
         'Content-Type': 'application/json',

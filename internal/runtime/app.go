@@ -244,6 +244,7 @@ func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Option
 	)
 	accountStore := store.NewAccountStore(appDB)
 	categoryStore := store.NewCategoryStore(appDB)
+	exchangeRates := exchangerates.NewService(exchangeRateStore)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			Health:        health.NewService(store.NewHealthStore(appDB)),
@@ -253,8 +254,8 @@ func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Option
 			Members:       members.NewService(store.NewMemberStore(appDB)),
 			Accounts:      accounts.NewService(accountStore),
 			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB)),
-			ExchangeRates: exchangerates.NewService(exchangeRateStore),
-			Transactions:  transactions.NewService(store.NewTransactionStore(appDB), accountStore, categoryStore),
+			ExchangeRates: exchangeRates,
+			Transactions:  transactions.NewService(store.NewTransactionStore(appDB), accountStore, categoryStore, exchangeRates),
 		},
 		Backup:                     backupService,
 		ExchangeRateLoading:        exchangeRateLoading,

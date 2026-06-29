@@ -1025,6 +1025,82 @@ paths:
                 $ref: "#/components/schemas/Transaction"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+  /api/transactions/spend:
+    post:
+      operationId: createSpendTransaction
+      summary: Create a same-currency spend transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSpendTransactionRequest"
+      responses:
+        "201":
+          description: Spend transaction created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /api/transactions/income:
+    post:
+      operationId: createIncomeTransaction
+      summary: Create a same-currency income transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIncomeTransactionRequest"
+      responses:
+        "201":
+          description: Income transaction created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /api/transactions/refund:
+    post:
+      operationId: createRefundTransaction
+      summary: Create a same-currency refund transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRefundTransactionRequest"
+      responses:
+        "201":
+          description: Refund transaction created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /api/transactions/transfer:
+    post:
+      operationId: createTransferTransaction
+      summary: Create a same-currency transfer transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransferTransactionRequest"
+      responses:
+        "201":
+          description: Transfer transaction created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
   /api/records:
     get:
       operationId: searchJournalRecords
@@ -1990,6 +2066,270 @@ components:
         updated_count:
           type: integer
           minimum: 0
+    CreateSpendTransactionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - initiated_date
+        - funding_account_id
+        - counterparty_account_id
+        - category_id
+        - currency
+        - amount
+      properties:
+        initiated_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+        funding_account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        counterparty_account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          description: JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
+          not:
+            pattern: ^0{1,10}(\.0{1,8})?$
+          maxLength: 19
+        member_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        tag_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        memo:
+          type: string
+          nullable: true
+        pending_date:
+          type: string
+          description: UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+          nullable: true
+          format: date-time
+        posted_date:
+          type: string
+          description: UTC timestamp when the generated records posted.
+          nullable: true
+          format: date-time
+        posting_status:
+          $ref: "#/components/schemas/PostingStatus"
+        reconciliation_status:
+          $ref: "#/components/schemas/ReconciliationStatus"
+    CreateIncomeTransactionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - initiated_date
+        - destination_account_id
+        - source_account_id
+        - category_id
+        - currency
+        - amount
+      properties:
+        initiated_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+        destination_account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        source_account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          description: JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
+          not:
+            pattern: ^0{1,10}(\.0{1,8})?$
+          maxLength: 19
+        member_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        tag_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        memo:
+          type: string
+          nullable: true
+        pending_date:
+          type: string
+          description: UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+          nullable: true
+          format: date-time
+        posted_date:
+          type: string
+          description: UTC timestamp when the generated records posted.
+          nullable: true
+          format: date-time
+        posting_status:
+          $ref: "#/components/schemas/PostingStatus"
+        reconciliation_status:
+          $ref: "#/components/schemas/ReconciliationStatus"
+    CreateRefundTransactionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - initiated_date
+        - destination_account_id
+        - counterparty_account_id
+        - category_id
+        - currency
+        - amount
+      properties:
+        initiated_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+        destination_account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        counterparty_account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          description: JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
+          not:
+            pattern: ^0{1,10}(\.0{1,8})?$
+          maxLength: 19
+        member_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        tag_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        memo:
+          type: string
+          nullable: true
+        pending_date:
+          type: string
+          description: UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+          nullable: true
+          format: date-time
+        posted_date:
+          type: string
+          description: UTC timestamp when the generated records posted.
+          nullable: true
+          format: date-time
+        posting_status:
+          $ref: "#/components/schemas/PostingStatus"
+        reconciliation_status:
+          $ref: "#/components/schemas/ReconciliationStatus"
+    CreateTransferTransactionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - initiated_date
+        - source_account_id
+        - destination_account_id
+        - category_id
+        - currency
+        - amount
+      properties:
+        initiated_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+        source_account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        destination_account_id:
+          type: integer
+          format: int64
+          minimum: 1
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          description: JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
+          not:
+            pattern: ^0{1,10}(\.0{1,8})?$
+          maxLength: 19
+        member_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        tag_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        memo:
+          type: string
+          nullable: true
+        pending_date:
+          type: string
+          description: UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+          nullable: true
+          format: date-time
+        posted_date:
+          type: string
+          description: UTC timestamp when the generated records posted.
+          nullable: true
+          format: date-time
+        posting_status:
+          $ref: "#/components/schemas/PostingStatus"
+        reconciliation_status:
+          $ref: "#/components/schemas/ReconciliationStatus"
     CreateTransactionRequest:
       type: object
       additionalProperties: false

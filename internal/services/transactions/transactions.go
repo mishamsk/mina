@@ -200,16 +200,27 @@ type CategoryReader interface {
 	List(context.Context, categories.ListOptions) ([]categories.Category, error)
 }
 
+// AmountUSDDeriver derives signed USD amounts for generated journal records.
+type AmountUSDDeriver interface {
+	SignedAmountUSD(context.Context, string, values.Decimal, values.CivilDate) (*values.Decimal, error)
+}
+
 // Service owns transaction, journal record, and bulk record use cases.
 type Service struct {
-	repo       Repository
-	accounts   AccountReader
-	categories CategoryReader
+	repo             Repository
+	accounts         AccountReader
+	categories       CategoryReader
+	amountUSDDeriver AmountUSDDeriver
 }
 
 // NewService creates a transaction service backed by repositories.
-func NewService(repo Repository, accounts AccountReader, categories CategoryReader) *Service {
-	return &Service{repo: repo, accounts: accounts, categories: categories}
+func NewService(repo Repository, accounts AccountReader, categories CategoryReader, amountUSDDeriver AmountUSDDeriver) *Service {
+	return &Service{
+		repo:             repo,
+		accounts:         accounts,
+		categories:       categories,
+		amountUSDDeriver: amountUSDDeriver,
+	}
 }
 
 type semanticDictionaries struct {

@@ -61,6 +61,22 @@ func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
 }
 
+// SignedAmountUSD derives the signed USD value for a journal record amount.
+func (s *Service) SignedAmountUSD(
+	ctx context.Context,
+	currency string,
+	amount values.Decimal,
+	effectiveDate values.CivilDate,
+) (*values.Decimal, error) {
+	if currency == "USD" {
+		amountUSD := amount
+		return &amountUSD, nil
+	}
+
+	// TODO(Kata 56ee): infer non-USD amounts, select rates, and backfill amount_usd.
+	return nil, nil
+}
+
 // Create validates and creates an exchange rate.
 func (s *Service) Create(ctx context.Context, input CreateInput) (ExchangeRate, error) {
 	if err := validateCurrencyCode("from_currency", input.FromCurrency); err != nil {

@@ -727,6 +727,28 @@ type CreateExchangeRateRequest struct {
 	ToCurrency string `json:"to_currency"`
 }
 
+// CreateIncomeTransactionRequest defines model for CreateIncomeTransactionRequest.
+type CreateIncomeTransactionRequest struct {
+	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount               string             `json:"amount"`
+	CategoryId           int64              `json:"category_id"`
+	Currency             string             `json:"currency"`
+	DestinationAccountId int64              `json:"destination_account_id"`
+	InitiatedDate        openapi_types.Date `json:"initiated_date"`
+	MemberId             *int64             `json:"member_id,omitempty"`
+	Memo                 *string            `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate           *time.Time            `json:"posted_date,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	SourceAccountId      int64                 `json:"source_account_id"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+}
+
 // CreateJournalRecordRequest defines model for CreateJournalRecordRequest.
 type CreateJournalRecordRequest struct {
 	AccountId int64 `json:"account_id"`
@@ -759,6 +781,50 @@ type CreateMemberRequest struct {
 	Name string `json:"name"`
 }
 
+// CreateRefundTransactionRequest defines model for CreateRefundTransactionRequest.
+type CreateRefundTransactionRequest struct {
+	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount                string             `json:"amount"`
+	CategoryId            int64              `json:"category_id"`
+	CounterpartyAccountId int64              `json:"counterparty_account_id"`
+	Currency              string             `json:"currency"`
+	DestinationAccountId  int64              `json:"destination_account_id"`
+	InitiatedDate         openapi_types.Date `json:"initiated_date"`
+	MemberId              *int64             `json:"member_id,omitempty"`
+	Memo                  *string            `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate           *time.Time            `json:"posted_date,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+}
+
+// CreateSpendTransactionRequest defines model for CreateSpendTransactionRequest.
+type CreateSpendTransactionRequest struct {
+	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount                string             `json:"amount"`
+	CategoryId            int64              `json:"category_id"`
+	CounterpartyAccountId int64              `json:"counterparty_account_id"`
+	Currency              string             `json:"currency"`
+	FundingAccountId      int64              `json:"funding_account_id"`
+	InitiatedDate         openapi_types.Date `json:"initiated_date"`
+	MemberId              *int64             `json:"member_id,omitempty"`
+	Memo                  *string            `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate           *time.Time            `json:"posted_date,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+}
+
 // CreateTagRequest defines model for CreateTagRequest.
 type CreateTagRequest struct {
 	Fqn      string `json:"fqn"`
@@ -769,6 +835,28 @@ type CreateTagRequest struct {
 type CreateTransactionRequest struct {
 	InitiatedDate openapi_types.Date           `json:"initiated_date"`
 	Records       []CreateJournalRecordRequest `json:"records"`
+}
+
+// CreateTransferTransactionRequest defines model for CreateTransferTransactionRequest.
+type CreateTransferTransactionRequest struct {
+	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount               string             `json:"amount"`
+	CategoryId           int64              `json:"category_id"`
+	Currency             string             `json:"currency"`
+	DestinationAccountId int64              `json:"destination_account_id"`
+	InitiatedDate        openapi_types.Date `json:"initiated_date"`
+	MemberId             *int64             `json:"member_id,omitempty"`
+	Memo                 *string            `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate           *time.Time            `json:"posted_date,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	SourceAccountId      int64                 `json:"source_account_id"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
 }
 
 // CreditLimitHistory defines model for CreditLimitHistory.
@@ -1303,6 +1391,18 @@ type UpdateTagJSONRequestBody = UpdateTagRequest
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = CreateTransactionRequest
 
+// CreateIncomeTransactionJSONRequestBody defines body for CreateIncomeTransaction for application/json ContentType.
+type CreateIncomeTransactionJSONRequestBody = CreateIncomeTransactionRequest
+
+// CreateRefundTransactionJSONRequestBody defines body for CreateRefundTransaction for application/json ContentType.
+type CreateRefundTransactionJSONRequestBody = CreateRefundTransactionRequest
+
+// CreateSpendTransactionJSONRequestBody defines body for CreateSpendTransaction for application/json ContentType.
+type CreateSpendTransactionJSONRequestBody = CreateSpendTransactionRequest
+
+// CreateTransferTransactionJSONRequestBody defines body for CreateTransferTransaction for application/json ContentType.
+type CreateTransferTransactionJSONRequestBody = CreateTransferTransactionRequest
+
 // ReplaceTransactionJSONRequestBody defines body for ReplaceTransaction for application/json ContentType.
 type ReplaceTransactionJSONRequestBody = UpdateTransactionRequest
 
@@ -1548,6 +1648,26 @@ type ClientInterface interface {
 	CreateTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateTransaction(ctx context.Context, body CreateTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateIncomeTransactionWithBody request with any body
+	CreateIncomeTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateIncomeTransaction(ctx context.Context, body CreateIncomeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRefundTransactionWithBody request with any body
+	CreateRefundTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRefundTransaction(ctx context.Context, body CreateRefundTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateSpendTransactionWithBody request with any body
+	CreateSpendTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateSpendTransaction(ctx context.Context, body CreateSpendTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateTransferTransactionWithBody request with any body
+	CreateTransferTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateTransferTransaction(ctx context.Context, body CreateTransferTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteTransaction request
 	DeleteTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2295,6 +2415,102 @@ func (c *Client) CreateTransactionWithBody(ctx context.Context, contentType stri
 
 func (c *Client) CreateTransaction(ctx context.Context, body CreateTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateTransactionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateIncomeTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateIncomeTransactionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateIncomeTransaction(ctx context.Context, body CreateIncomeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateIncomeTransactionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRefundTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRefundTransactionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRefundTransaction(ctx context.Context, body CreateRefundTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRefundTransactionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSpendTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSpendTransactionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateSpendTransaction(ctx context.Context, body CreateSpendTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateSpendTransactionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTransferTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTransferTransactionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTransferTransaction(ctx context.Context, body CreateTransferTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTransferTransactionRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5166,6 +5382,166 @@ func NewCreateTransactionRequestWithBody(server string, contentType string, body
 	return req, nil
 }
 
+// NewCreateIncomeTransactionRequest calls the generic CreateIncomeTransaction builder with application/json body
+func NewCreateIncomeTransactionRequest(server string, body CreateIncomeTransactionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateIncomeTransactionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateIncomeTransactionRequestWithBody generates requests for CreateIncomeTransaction with any type of body
+func NewCreateIncomeTransactionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/income")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateRefundTransactionRequest calls the generic CreateRefundTransaction builder with application/json body
+func NewCreateRefundTransactionRequest(server string, body CreateRefundTransactionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRefundTransactionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateRefundTransactionRequestWithBody generates requests for CreateRefundTransaction with any type of body
+func NewCreateRefundTransactionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/refund")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateSpendTransactionRequest calls the generic CreateSpendTransaction builder with application/json body
+func NewCreateSpendTransactionRequest(server string, body CreateSpendTransactionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateSpendTransactionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateSpendTransactionRequestWithBody generates requests for CreateSpendTransaction with any type of body
+func NewCreateSpendTransactionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/spend")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateTransferTransactionRequest calls the generic CreateTransferTransaction builder with application/json body
+func NewCreateTransferTransactionRequest(server string, body CreateTransferTransactionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateTransferTransactionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateTransferTransactionRequestWithBody generates requests for CreateTransferTransaction with any type of body
+func NewCreateTransferTransactionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/transfer")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewDeleteTransactionRequest generates requests for DeleteTransaction
 func NewDeleteTransactionRequest(server string, transactionId int64) (*http.Request, error) {
 	var err error
@@ -5493,6 +5869,26 @@ type ClientWithResponsesInterface interface {
 	CreateTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTransactionResponse, error)
 
 	CreateTransactionWithResponse(ctx context.Context, body CreateTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTransactionResponse, error)
+
+	// CreateIncomeTransactionWithBodyWithResponse request with any body
+	CreateIncomeTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateIncomeTransactionResponse, error)
+
+	CreateIncomeTransactionWithResponse(ctx context.Context, body CreateIncomeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateIncomeTransactionResponse, error)
+
+	// CreateRefundTransactionWithBodyWithResponse request with any body
+	CreateRefundTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRefundTransactionResponse, error)
+
+	CreateRefundTransactionWithResponse(ctx context.Context, body CreateRefundTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRefundTransactionResponse, error)
+
+	// CreateSpendTransactionWithBodyWithResponse request with any body
+	CreateSpendTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSpendTransactionResponse, error)
+
+	CreateSpendTransactionWithResponse(ctx context.Context, body CreateSpendTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSpendTransactionResponse, error)
+
+	// CreateTransferTransactionWithBodyWithResponse request with any body
+	CreateTransferTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTransferTransactionResponse, error)
+
+	CreateTransferTransactionWithResponse(ctx context.Context, body CreateTransferTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTransferTransactionResponse, error)
 
 	// DeleteTransactionWithResponse request
 	DeleteTransactionWithResponse(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*DeleteTransactionResponse, error)
@@ -6960,6 +7356,130 @@ func (r CreateTransactionResponse) ContentType() string {
 	return ""
 }
 
+type CreateIncomeTransactionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Transaction
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateIncomeTransactionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateIncomeTransactionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateIncomeTransactionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateRefundTransactionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Transaction
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRefundTransactionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRefundTransactionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateRefundTransactionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateSpendTransactionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Transaction
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateSpendTransactionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateSpendTransactionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateSpendTransactionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateTransferTransactionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Transaction
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateTransferTransactionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateTransferTransactionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateTransferTransactionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type DeleteTransactionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -7595,6 +8115,74 @@ func (c *ClientWithResponses) CreateTransactionWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseCreateTransactionResponse(rsp)
+}
+
+// CreateIncomeTransactionWithBodyWithResponse request with arbitrary body returning *CreateIncomeTransactionResponse
+func (c *ClientWithResponses) CreateIncomeTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateIncomeTransactionResponse, error) {
+	rsp, err := c.CreateIncomeTransactionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateIncomeTransactionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateIncomeTransactionWithResponse(ctx context.Context, body CreateIncomeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateIncomeTransactionResponse, error) {
+	rsp, err := c.CreateIncomeTransaction(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateIncomeTransactionResponse(rsp)
+}
+
+// CreateRefundTransactionWithBodyWithResponse request with arbitrary body returning *CreateRefundTransactionResponse
+func (c *ClientWithResponses) CreateRefundTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRefundTransactionResponse, error) {
+	rsp, err := c.CreateRefundTransactionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRefundTransactionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRefundTransactionWithResponse(ctx context.Context, body CreateRefundTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRefundTransactionResponse, error) {
+	rsp, err := c.CreateRefundTransaction(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRefundTransactionResponse(rsp)
+}
+
+// CreateSpendTransactionWithBodyWithResponse request with arbitrary body returning *CreateSpendTransactionResponse
+func (c *ClientWithResponses) CreateSpendTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSpendTransactionResponse, error) {
+	rsp, err := c.CreateSpendTransactionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSpendTransactionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateSpendTransactionWithResponse(ctx context.Context, body CreateSpendTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateSpendTransactionResponse, error) {
+	rsp, err := c.CreateSpendTransaction(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateSpendTransactionResponse(rsp)
+}
+
+// CreateTransferTransactionWithBodyWithResponse request with arbitrary body returning *CreateTransferTransactionResponse
+func (c *ClientWithResponses) CreateTransferTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTransferTransactionResponse, error) {
+	rsp, err := c.CreateTransferTransactionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTransferTransactionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateTransferTransactionWithResponse(ctx context.Context, body CreateTransferTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTransferTransactionResponse, error) {
+	rsp, err := c.CreateTransferTransaction(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTransferTransactionResponse(rsp)
 }
 
 // DeleteTransactionWithResponse request returning *DeleteTransactionResponse
@@ -9322,6 +9910,138 @@ func ParseCreateTransactionResponse(rsp *http.Response) (*CreateTransactionRespo
 	}
 
 	response := &CreateTransactionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Transaction
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateIncomeTransactionResponse parses an HTTP response from a CreateIncomeTransactionWithResponse call
+func ParseCreateIncomeTransactionResponse(rsp *http.Response) (*CreateIncomeTransactionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateIncomeTransactionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Transaction
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRefundTransactionResponse parses an HTTP response from a CreateRefundTransactionWithResponse call
+func ParseCreateRefundTransactionResponse(rsp *http.Response) (*CreateRefundTransactionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRefundTransactionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Transaction
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateSpendTransactionResponse parses an HTTP response from a CreateSpendTransactionWithResponse call
+func ParseCreateSpendTransactionResponse(rsp *http.Response) (*CreateSpendTransactionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateSpendTransactionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Transaction
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateTransferTransactionResponse parses an HTTP response from a CreateTransferTransactionWithResponse call
+func ParseCreateTransferTransactionResponse(rsp *http.Response) (*CreateTransferTransactionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateTransferTransactionResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

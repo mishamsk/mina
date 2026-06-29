@@ -189,6 +189,106 @@ export type BulkRecordOperationResponse = {
     updated_count: number;
 };
 
+export type CreateSpendTransactionRequest = {
+    initiated_date: string;
+    funding_account_id: number;
+    counterparty_account_id: number;
+    category_id: number;
+    currency: string;
+    /**
+     * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount: string;
+    member_id?: number | null;
+    tag_ids?: Array<number>;
+    memo?: string | null;
+    /**
+     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     */
+    pending_date?: string | null;
+    /**
+     * UTC timestamp when the generated records posted.
+     */
+    posted_date?: string | null;
+    posting_status?: PostingStatus;
+    reconciliation_status?: ReconciliationStatus;
+};
+
+export type CreateIncomeTransactionRequest = {
+    initiated_date: string;
+    destination_account_id: number;
+    source_account_id: number;
+    category_id: number;
+    currency: string;
+    /**
+     * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount: string;
+    member_id?: number | null;
+    tag_ids?: Array<number>;
+    memo?: string | null;
+    /**
+     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     */
+    pending_date?: string | null;
+    /**
+     * UTC timestamp when the generated records posted.
+     */
+    posted_date?: string | null;
+    posting_status?: PostingStatus;
+    reconciliation_status?: ReconciliationStatus;
+};
+
+export type CreateRefundTransactionRequest = {
+    initiated_date: string;
+    destination_account_id: number;
+    counterparty_account_id: number;
+    category_id: number;
+    currency: string;
+    /**
+     * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount: string;
+    member_id?: number | null;
+    tag_ids?: Array<number>;
+    memo?: string | null;
+    /**
+     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     */
+    pending_date?: string | null;
+    /**
+     * UTC timestamp when the generated records posted.
+     */
+    posted_date?: string | null;
+    posting_status?: PostingStatus;
+    reconciliation_status?: ReconciliationStatus;
+};
+
+export type CreateTransferTransactionRequest = {
+    initiated_date: string;
+    source_account_id: number;
+    destination_account_id: number;
+    category_id: number;
+    currency: string;
+    /**
+     * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount: string;
+    member_id?: number | null;
+    tag_ids?: Array<number>;
+    memo?: string | null;
+    /**
+     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     */
+    pending_date?: string | null;
+    /**
+     * UTC timestamp when the generated records posted.
+     */
+    posted_date?: string | null;
+    posting_status?: PostingStatus;
+    reconciliation_status?: ReconciliationStatus;
+};
+
 export type CreateTransactionRequest = {
     initiated_date: string;
     records: Array<CreateJournalRecordRequest>;
@@ -1636,6 +1736,106 @@ export type CreateTransactionResponses = {
 };
 
 export type CreateTransactionResponse = CreateTransactionResponses[keyof CreateTransactionResponses];
+
+export type CreateSpendTransactionData = {
+    body: CreateSpendTransactionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/transactions/spend';
+};
+
+export type CreateSpendTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type CreateSpendTransactionError = CreateSpendTransactionErrors[keyof CreateSpendTransactionErrors];
+
+export type CreateSpendTransactionResponses = {
+    /**
+     * Spend transaction created.
+     */
+    201: Transaction;
+};
+
+export type CreateSpendTransactionResponse = CreateSpendTransactionResponses[keyof CreateSpendTransactionResponses];
+
+export type CreateIncomeTransactionData = {
+    body: CreateIncomeTransactionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/transactions/income';
+};
+
+export type CreateIncomeTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type CreateIncomeTransactionError = CreateIncomeTransactionErrors[keyof CreateIncomeTransactionErrors];
+
+export type CreateIncomeTransactionResponses = {
+    /**
+     * Income transaction created.
+     */
+    201: Transaction;
+};
+
+export type CreateIncomeTransactionResponse = CreateIncomeTransactionResponses[keyof CreateIncomeTransactionResponses];
+
+export type CreateRefundTransactionData = {
+    body: CreateRefundTransactionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/transactions/refund';
+};
+
+export type CreateRefundTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type CreateRefundTransactionError = CreateRefundTransactionErrors[keyof CreateRefundTransactionErrors];
+
+export type CreateRefundTransactionResponses = {
+    /**
+     * Refund transaction created.
+     */
+    201: Transaction;
+};
+
+export type CreateRefundTransactionResponse = CreateRefundTransactionResponses[keyof CreateRefundTransactionResponses];
+
+export type CreateTransferTransactionData = {
+    body: CreateTransferTransactionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/transactions/transfer';
+};
+
+export type CreateTransferTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type CreateTransferTransactionError = CreateTransferTransactionErrors[keyof CreateTransferTransactionErrors];
+
+export type CreateTransferTransactionResponses = {
+    /**
+     * Transfer transaction created.
+     */
+    201: Transaction;
+};
+
+export type CreateTransferTransactionResponse = CreateTransferTransactionResponses[keyof CreateTransferTransactionResponses];
 
 export type SearchJournalRecordsData = {
     body?: never;

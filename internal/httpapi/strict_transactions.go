@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 	"github.com/mishamsk/mina/internal/services/transactions"
@@ -34,6 +35,126 @@ func (s *strictServer) CreateTransaction(ctx context.Context, request openapi.Cr
 	}
 
 	return openapi.CreateTransaction201JSONResponse(transactionAPIResponse(transaction)), nil
+}
+
+func (s *strictServer) CreateSpendTransaction(ctx context.Context, request openapi.CreateSpendTransactionRequestObject) (openapi.CreateSpendTransactionResponseObject, error) {
+	fields, err := shorthandCreateFields(
+		request.Body.InitiatedDate,
+		request.Body.Currency,
+		request.Body.Amount,
+		request.Body.MemberId,
+		request.Body.TagIds,
+		request.Body.Memo,
+		request.Body.PendingDate,
+		request.Body.PostedDate,
+		request.Body.PostingStatus,
+		request.Body.ReconciliationStatus,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	transaction, err := s.deps.Transactions.CreateSpend(ctx, transactions.SpendInput{
+		ShorthandCreateFields: fields,
+		FundingAccountID:      request.Body.FundingAccountId,
+		CounterpartyAccountID: request.Body.CounterpartyAccountId,
+		ExpenseCategoryID:     request.Body.CategoryId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.CreateSpendTransaction201JSONResponse(transactionAPIResponse(transaction)), nil
+}
+
+func (s *strictServer) CreateIncomeTransaction(ctx context.Context, request openapi.CreateIncomeTransactionRequestObject) (openapi.CreateIncomeTransactionResponseObject, error) {
+	fields, err := shorthandCreateFields(
+		request.Body.InitiatedDate,
+		request.Body.Currency,
+		request.Body.Amount,
+		request.Body.MemberId,
+		request.Body.TagIds,
+		request.Body.Memo,
+		request.Body.PendingDate,
+		request.Body.PostedDate,
+		request.Body.PostingStatus,
+		request.Body.ReconciliationStatus,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	transaction, err := s.deps.Transactions.CreateIncome(ctx, transactions.IncomeInput{
+		ShorthandCreateFields: fields,
+		DestinationAccountID:  request.Body.DestinationAccountId,
+		SourceAccountID:       request.Body.SourceAccountId,
+		IncomeCategoryID:      request.Body.CategoryId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.CreateIncomeTransaction201JSONResponse(transactionAPIResponse(transaction)), nil
+}
+
+func (s *strictServer) CreateRefundTransaction(ctx context.Context, request openapi.CreateRefundTransactionRequestObject) (openapi.CreateRefundTransactionResponseObject, error) {
+	fields, err := shorthandCreateFields(
+		request.Body.InitiatedDate,
+		request.Body.Currency,
+		request.Body.Amount,
+		request.Body.MemberId,
+		request.Body.TagIds,
+		request.Body.Memo,
+		request.Body.PendingDate,
+		request.Body.PostedDate,
+		request.Body.PostingStatus,
+		request.Body.ReconciliationStatus,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	transaction, err := s.deps.Transactions.CreateRefund(ctx, transactions.RefundInput{
+		ShorthandCreateFields: fields,
+		DestinationAccountID:  request.Body.DestinationAccountId,
+		CounterpartyAccountID: request.Body.CounterpartyAccountId,
+		RefundCategoryID:      request.Body.CategoryId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.CreateRefundTransaction201JSONResponse(transactionAPIResponse(transaction)), nil
+}
+
+func (s *strictServer) CreateTransferTransaction(ctx context.Context, request openapi.CreateTransferTransactionRequestObject) (openapi.CreateTransferTransactionResponseObject, error) {
+	fields, err := shorthandCreateFields(
+		request.Body.InitiatedDate,
+		request.Body.Currency,
+		request.Body.Amount,
+		request.Body.MemberId,
+		request.Body.TagIds,
+		request.Body.Memo,
+		request.Body.PendingDate,
+		request.Body.PostedDate,
+		request.Body.PostingStatus,
+		request.Body.ReconciliationStatus,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	transaction, err := s.deps.Transactions.CreateTransfer(ctx, transactions.TransferInput{
+		ShorthandCreateFields: fields,
+		SourceAccountID:       request.Body.SourceAccountId,
+		DestinationAccountID:  request.Body.DestinationAccountId,
+		TransferCategoryID:    request.Body.CategoryId,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.CreateTransferTransaction201JSONResponse(transactionAPIResponse(transaction)), nil
 }
 
 func (s *strictServer) DeleteTransaction(ctx context.Context, request openapi.DeleteTransactionRequestObject) (openapi.DeleteTransactionResponseObject, error) {
@@ -233,6 +354,37 @@ func transactionAPIInput(initiatedDate openapi_types.Date, records []openapi.Cre
 	return transactions.CreateInput{
 		InitiatedDate: civilDateFromOpenAPI(initiatedDate),
 		Records:       recordInputs,
+	}, nil
+}
+
+func shorthandCreateFields(
+	initiatedDate openapi_types.Date,
+	currency string,
+	amountValue string,
+	memberID *int64,
+	tagIDs *[]int64,
+	memo *string,
+	pendingDate *time.Time,
+	postedDate *time.Time,
+	postingStatus *openapi.PostingStatus,
+	reconciliationStatus *openapi.ReconciliationStatus,
+) (transactions.ShorthandCreateFields, error) {
+	amount, err := decimalField("amount", amountValue)
+	if err != nil {
+		return transactions.ShorthandCreateFields{}, err
+	}
+
+	return transactions.ShorthandCreateFields{
+		InitiatedDate:        civilDateFromOpenAPI(initiatedDate),
+		Currency:             currency,
+		Amount:               amount,
+		MemberID:             memberID,
+		TagIDs:               cloneOptionalInt64Slice(tagIDs),
+		Memo:                 memo,
+		PendingDate:          nullableTimestampFromOpenAPI(pendingDate),
+		PostedDate:           nullableTimestampFromOpenAPI(postedDate),
+		PostingStatus:        transactionAPIPostingStatusPtr(postingStatus),
+		ReconciliationStatus: transactionAPIReconciliationStatusPtr(reconciliationStatus),
 	}, nil
 }
 
