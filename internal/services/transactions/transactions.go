@@ -106,6 +106,12 @@ type JournalRecordInput struct {
 	ExternalSystem       *string
 }
 
+// ListOptions controls transaction list pagination.
+type ListOptions struct {
+	Limit  *int
+	Offset int
+}
+
 // RecordSearchOptions controls journal record search filters.
 type RecordSearchOptions struct {
 	AccountID            *int64
@@ -125,6 +131,8 @@ type RecordSearchOptions struct {
 	PostedDateFrom       *time.Time
 	PostedDateTo         *time.Time
 	MemoContains         *string
+	Limit                *int
+	Offset               int
 }
 
 // BulkRecordOperationResponse reports the selected and updated record counts.
@@ -172,7 +180,7 @@ type Repository interface {
 	Create(context.Context, CreateInput) (Transaction, error)
 	Replace(context.Context, int64, CreateInput) (Transaction, error)
 	Get(context.Context, int64) (Transaction, error)
-	List(context.Context) ([]Transaction, error)
+	List(context.Context, ListOptions) ([]Transaction, error)
 	Tombstone(context.Context, int64) error
 	SearchRecords(context.Context, RecordSearchOptions) ([]JournalRecord, error)
 	TransactionsByRecordIDs(context.Context, []int64) ([]Transaction, error)
@@ -273,8 +281,8 @@ func (s *Service) Get(ctx context.Context, id int64) (Transaction, error) {
 }
 
 // List returns transactions with nested journal records.
-func (s *Service) List(ctx context.Context) ([]Transaction, error) {
-	transactions, err := s.repo.List(ctx)
+func (s *Service) List(ctx context.Context, opts ListOptions) ([]Transaction, error) {
+	transactions, err := s.repo.List(ctx, opts)
 	if err != nil {
 		return nil, err
 	}

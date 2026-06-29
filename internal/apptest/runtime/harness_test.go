@@ -57,7 +57,7 @@ func TestScenarioCreatesFixturesThroughClient(t *testing.T) {
 	refs := scenario.TransactionRefs()
 	transaction := scenario.BalancedTransaction(refs)
 
-	response, err := client.REST().ListTransactionsWithResponse(context.Background())
+	response, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("list transactions request: %v", err)
 	}

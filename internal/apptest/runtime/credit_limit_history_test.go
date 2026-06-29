@@ -61,6 +61,20 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 	}
 	assertCreditLimitHistoryIDs(t, list.JSON200.CreditLimitHistory, []int64{earlier.JSON201.CreditLimitHistoryId, later.JSON201.CreditLimitHistoryId})
 
+	limitOne := 1
+	offsetOne := 1
+	page, err := client.REST().ListCreditLimitHistoryWithResponse(context.Background(), account.AccountId, &httpclient.ListCreditLimitHistoryParams{
+		Limit:  &limitOne,
+		Offset: &offsetOne,
+	})
+	if err != nil {
+		t.Fatalf("page request: %v", err)
+	}
+	if page.StatusCode() != http.StatusOK {
+		t.Fatalf("page status = %d, want %d; body %s", page.StatusCode(), http.StatusOK, page.Body)
+	}
+	assertCreditLimitHistoryIDs(t, page.JSON200.CreditLimitHistory, []int64{later.JSON201.CreditLimitHistoryId})
+
 	deleted, err := client.REST().DeleteCreditLimitHistoryWithResponse(context.Background(), earlier.JSON201.CreditLimitHistoryId)
 	if err != nil {
 		t.Fatalf("delete request: %v", err)

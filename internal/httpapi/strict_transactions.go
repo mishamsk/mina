@@ -10,8 +10,11 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-func (s *strictServer) ListTransactions(ctx context.Context, _ openapi.ListTransactionsRequestObject) (openapi.ListTransactionsResponseObject, error) {
-	transactionList, err := s.deps.Transactions.List(ctx)
+func (s *strictServer) ListTransactions(ctx context.Context, request openapi.ListTransactionsRequestObject) (openapi.ListTransactionsResponseObject, error) {
+	transactionList, err := s.deps.Transactions.List(ctx, transactions.ListOptions{
+		Limit:  request.Params.Limit,
+		Offset: offsetParam(request.Params.Offset),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +155,8 @@ func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (t
 		PostedDateFrom:    nullableTimestampFromOpenAPI(params.PostedDateFrom),
 		PostedDateTo:      nullableTimestampFromOpenAPI(params.PostedDateTo),
 		MemoContains:      params.MemoContains,
+		Limit:             params.Limit,
+		Offset:            offsetParam(params.Offset),
 	}
 	var err error
 	if opts.AmountMin, err = optionalDecimalField("amount_min", params.AmountMin); err != nil {
@@ -183,6 +188,8 @@ func recordSearchOptionsFromAccountParams(params openapi.SearchAccountJournalRec
 		PostedDateFrom:    nullableTimestampFromOpenAPI(params.PostedDateFrom),
 		PostedDateTo:      nullableTimestampFromOpenAPI(params.PostedDateTo),
 		MemoContains:      params.MemoContains,
+		Limit:             params.Limit,
+		Offset:            offsetParam(params.Offset),
 	}
 	var err error
 	if opts.AmountMin, err = optionalDecimalField("amount_min", params.AmountMin); err != nil {

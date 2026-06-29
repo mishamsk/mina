@@ -1124,6 +1124,8 @@ type SearchAccountJournalRecordsParams struct {
 	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
 	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+	Limit             *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset            *int                `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListCategoriesParams defines parameters for ListCategories.
@@ -1222,6 +1224,8 @@ type SearchJournalRecordsParams struct {
 	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
 	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+	Limit             *int                `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset            *int                `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListTagsParams defines parameters for ListTags.
@@ -1243,6 +1247,12 @@ type ListTagsParamsSortDir string
 // GetTagParams defines parameters for GetTag.
 type GetTagParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+}
+
+// ListTransactionsParams defines parameters for ListTransactions.
+type ListTransactionsParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
@@ -1532,7 +1542,7 @@ type ClientInterface interface {
 	UpdateTag(ctx context.Context, tagId int64, body UpdateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTransactions request
-	ListTransactions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListTransactions(ctx context.Context, params *ListTransactionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateTransactionWithBody request with any body
 	CreateTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2259,8 +2269,8 @@ func (c *Client) UpdateTag(ctx context.Context, tagId int64, body UpdateTagJSONR
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListTransactions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListTransactionsRequest(c.Server)
+func (c *Client) ListTransactions(ctx context.Context, params *ListTransactionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTransactionsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3025,6 +3035,30 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 		if params.MemoContains != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "memo_contains", *params.MemoContains, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -4532,6 +4566,30 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		}
 
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -5003,7 +5061,7 @@ func NewUpdateTagRequestWithBody(server string, tagId int64, contentType string,
 }
 
 // NewListTransactionsRequest generates requests for ListTransactions
-func NewListTransactionsRequest(server string) (*http.Request, error) {
+func NewListTransactionsRequest(server string, params *ListTransactionsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5019,6 +5077,45 @@ func NewListTransactionsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5390,7 +5487,7 @@ type ClientWithResponsesInterface interface {
 	UpdateTagWithResponse(ctx context.Context, tagId int64, body UpdateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTagResponse, error)
 
 	// ListTransactionsWithResponse request
-	ListTransactionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTransactionsResponse, error)
+	ListTransactionsWithResponse(ctx context.Context, params *ListTransactionsParams, reqEditors ...RequestEditorFn) (*ListTransactionsResponse, error)
 
 	// CreateTransactionWithBodyWithResponse request with any body
 	CreateTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTransactionResponse, error)
@@ -6805,6 +6902,7 @@ type ListTransactionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *TransactionListResponse
+	JSON400      *InvalidRequest
 }
 
 // Status returns HTTPResponse.Status
@@ -7474,8 +7572,8 @@ func (c *ClientWithResponses) UpdateTagWithResponse(ctx context.Context, tagId i
 }
 
 // ListTransactionsWithResponse request returning *ListTransactionsResponse
-func (c *ClientWithResponses) ListTransactionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTransactionsResponse, error) {
-	rsp, err := c.ListTransactions(ctx, reqEditors...)
+func (c *ClientWithResponses) ListTransactionsWithResponse(ctx context.Context, params *ListTransactionsParams, reqEditors ...RequestEditorFn) (*ListTransactionsResponse, error) {
+	rsp, err := c.ListTransactions(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9202,6 +9300,13 @@ func ParseListTransactionsResponse(rsp *http.Response) (*ListTransactionsRespons
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	}
 

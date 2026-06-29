@@ -123,6 +123,29 @@ func TestSharedListQueryCompositeSortDirection(t *testing.T) {
 		t.Fatalf("exchange rate desc status = %d, want %d; body %s", desc.StatusCode(), http.StatusOK, desc.Body)
 	}
 	assertExchangeRateIDs(t, desc.JSON200.ExchangeRates, []int64{gbpEarly.ExchangeRateId, eurLate.ExchangeRateId, eurEarly.ExchangeRateId})
+
+	limitOne := 1
+	offsetOne := 1
+	page, err := client.REST().ListExchangeRatesWithResponse(context.Background(), &httpclient.ListExchangeRatesParams{
+		Limit:  &limitOne,
+		Offset: &offsetOne,
+	})
+	if err != nil {
+		t.Fatalf("exchange rate page request: %v", err)
+	}
+	if page.StatusCode() != http.StatusOK {
+		t.Fatalf("exchange rate page status = %d, want %d; body %s", page.StatusCode(), http.StatusOK, page.Body)
+	}
+	assertExchangeRateIDs(t, page.JSON200.ExchangeRates, []int64{eurLate.ExchangeRateId})
+
+	offsetPage, err := client.REST().ListExchangeRatesWithResponse(context.Background(), &httpclient.ListExchangeRatesParams{Offset: &offsetOne})
+	if err != nil {
+		t.Fatalf("exchange rate offset page request: %v", err)
+	}
+	if offsetPage.StatusCode() != http.StatusOK {
+		t.Fatalf("exchange rate offset page status = %d, want %d; body %s", offsetPage.StatusCode(), http.StatusOK, offsetPage.Body)
+	}
+	assertExchangeRateIDs(t, offsetPage.JSON200.ExchangeRates, []int64{eurLate.ExchangeRateId, gbpEarly.ExchangeRateId})
 }
 
 func createListQueryCategory(t *testing.T, client *apptest.Client, fqn string, hidden bool) httpclient.Category {

@@ -101,7 +101,7 @@ func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpcli
 		t.Fatalf("listed credit limit entries = %d, want %d", creditLimitEntries, seeded.CreditLimitEntries)
 	}
 
-	transactions, err := client.REST().ListTransactionsWithResponse(ctx)
+	transactions, err := client.REST().ListTransactionsWithResponse(ctx, nil)
 	if err != nil {
 		t.Fatalf("list transactions request: %v", err)
 	}

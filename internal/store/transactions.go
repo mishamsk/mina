@@ -156,13 +156,18 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 }
 
 // List returns transactions with nested journal records in deterministic date order.
-func (s *TransactionStore) List(ctx context.Context) ([]transactions.Transaction, error) {
+func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptions) ([]transactions.Transaction, error) {
+	query := `SELECT transaction_id, initiated_date, created_at, tombstoned_at
+FROM ` + s.db.accountingName("transaction") + `
+WHERE tombstoned_at IS NULL
+ORDER BY initiated_date ASC, transaction_id ASC`
+	args := []any{}
+	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
+
 	rows, err := s.db.query().QueryContext(
 		ctx,
-		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
-FROM `+s.db.accountingName("transaction")+`
-WHERE tombstoned_at IS NULL
-ORDER BY initiated_date ASC, transaction_id ASC`,
+		query,
+		args...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list transactions: %w", err)
@@ -315,6 +320,7 @@ WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 		args = append(args, "%"+escapeLikePattern(*opts.MemoContains)+"%")
 	}
 	query += " ORDER BY tx.initiated_date ASC, jr.transaction_id ASC, jr.record_id ASC"
+	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
 
 	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {

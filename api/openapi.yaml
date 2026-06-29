@@ -984,6 +984,20 @@ paths:
     get:
       operationId: listTransactions
       summary: List transactions with journal records.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
           description: Transactions in initiated-date order.
@@ -991,6 +1005,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TransactionListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
     post:
       operationId: createTransaction
       summary: Create a per-currency balanced transaction.
@@ -1127,6 +1143,19 @@ paths:
           required: false
           schema:
             type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
           description: Matching active journal records in transaction date order.
@@ -1255,6 +1284,19 @@ paths:
           required: false
           schema:
             type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
       responses:
         "200":
           description: Matching active account records with containing transaction identity.

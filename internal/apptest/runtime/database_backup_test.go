@@ -328,7 +328,7 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 			t.Fatalf("restored accounts = %+v, want fixture accounts", accounts.JSON200.Accounts)
 		}
 
-		transactions, err := restored.REST().ListTransactionsWithResponse(context.Background())
+		transactions, err := restored.REST().ListTransactionsWithResponse(context.Background(), nil)
 		requireClientResponse(t, "list restored transactions", err, transactions.StatusCode(), http.StatusOK, transactions.Body)
 		if len(transactions.JSON200.Transactions) != 1 ||
 			transactions.JSON200.Transactions[0].TransactionId != transaction.TransactionId ||

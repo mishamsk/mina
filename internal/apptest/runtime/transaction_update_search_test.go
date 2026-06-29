@@ -103,7 +103,7 @@ func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
 		t.Fatalf("read tombstoned transaction status = %d, want %d; body %s", read.StatusCode(), http.StatusNotFound, read.Body)
 	}
 
-	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	requireNoTransportError(t, "list transactions", err)
 	if list.StatusCode() != http.StatusOK {
 		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
@@ -295,6 +295,90 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	}
 }
 
+func TestRecordSearchPaginationBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+	third := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-03", "Third")
+	first := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-01", "First")
+	second := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-02", "Second")
+
+	limitThree := 3
+	offsetOne := 1
+	allRecordsPage, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		Limit:  &limitThree,
+		Offset: &offsetOne,
+	})
+	requireNoTransportError(t, "search records page", err)
+	if allRecordsPage.StatusCode() != http.StatusOK {
+		t.Fatalf("search records page status = %d, want %d; body %s", allRecordsPage.StatusCode(), http.StatusOK, allRecordsPage.Body)
+	}
+	assertRecordIDs(t, allRecordsPage.JSON200.Records, []int64{
+		first.JSON201.Records[1].RecordId,
+		second.JSON201.Records[0].RecordId,
+		second.JSON201.Records[1].RecordId,
+	})
+
+	offsetOnlyAllRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		Offset: &offsetOne,
+	})
+	requireNoTransportError(t, "search records offset-only page", err)
+	if offsetOnlyAllRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("search records offset-only page status = %d, want %d; body %s", offsetOnlyAllRecords.StatusCode(), http.StatusOK, offsetOnlyAllRecords.Body)
+	}
+	assertRecordIDs(t, offsetOnlyAllRecords.JSON200.Records, []int64{
+		first.JSON201.Records[1].RecordId,
+		second.JSON201.Records[0].RecordId,
+		second.JSON201.Records[1].RecordId,
+		third.JSON201.Records[0].RecordId,
+		third.JSON201.Records[1].RecordId,
+	})
+
+	limitTwo := 2
+	accountRecordsPage, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		Limit:  &limitTwo,
+		Offset: &offsetOne,
+	})
+	requireNoTransportError(t, "search account records page", err)
+	if accountRecordsPage.StatusCode() != http.StatusOK {
+		t.Fatalf("search account records page status = %d, want %d; body %s", accountRecordsPage.StatusCode(), http.StatusOK, accountRecordsPage.Body)
+	}
+	assertRecordIDs(t, accountRecordsPage.JSON200.Records, []int64{
+		second.JSON201.Records[0].RecordId,
+		third.JSON201.Records[0].RecordId,
+	})
+
+	offsetOnlyAccountRecords, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		Offset: &offsetOne,
+	})
+	requireNoTransportError(t, "search account records offset-only page", err)
+	if offsetOnlyAccountRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("search account records offset-only page status = %d, want %d; body %s", offsetOnlyAccountRecords.StatusCode(), http.StatusOK, offsetOnlyAccountRecords.Body)
+	}
+	assertRecordIDs(t, offsetOnlyAccountRecords.JSON200.Records, []int64{
+		second.JSON201.Records[0].RecordId,
+		third.JSON201.Records[0].RecordId,
+	})
+
+	limitOne := 1
+	filteredPage, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		AccountId: &refs.CheckingAccountId,
+		Limit:     &limitOne,
+		Offset:    &offsetOne,
+	})
+	requireNoTransportError(t, "search filtered records page", err)
+	if filteredPage.StatusCode() != http.StatusOK {
+		t.Fatalf("search filtered records page status = %d, want %d; body %s", filteredPage.StatusCode(), http.StatusOK, filteredPage.Body)
+	}
+	assertRecordIDs(t, filteredPage.JSON200.Records, []int64{second.JSON201.Records[0].RecordId})
+
+	assertInvalidRecordSearchQuery(t, client, "limit=0")
+	assertInvalidRecordSearchQuery(t, client, "limit=501")
+	assertInvalidRecordSearchQuery(t, client, "offset=-1")
+	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "limit=0")
+	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "limit=501")
+	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "offset=-1")
+}
+
 func ptrTo[T any](value T) *T {
 	return new(value)
 }
@@ -375,6 +459,32 @@ func assertRecordIDs(t *testing.T, records []httpclient.JournalRecord, want []in
 	t.Helper()
 
 	assertInt64s(t, recordIDs(records), want)
+}
+
+func assertInvalidRecordSearchQuery(t *testing.T, client *apptest.Client, rawQuery string) {
+	t.Helper()
+
+	response, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery(rawQuery))
+	requireNoTransportError(t, "invalid search records", err)
+	if response.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid search records query %q status = %d, want %d; body %s", rawQuery, response.StatusCode(), http.StatusBadRequest, response.Body)
+	}
+	if response.JSON400 == nil || response.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid search records query %q code = %+v, want %q", rawQuery, response.JSON400, httpclient.APIErrorCodeInvalidRequest)
+	}
+}
+
+func assertInvalidAccountRecordSearchQuery(t *testing.T, client *apptest.Client, accountID int64, rawQuery string) {
+	t.Helper()
+
+	response, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), accountID, nil, apptest.ReplaceRawQuery(rawQuery))
+	requireNoTransportError(t, "invalid search account records", err)
+	if response.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid search account records query %q status = %d, want %d; body %s", rawQuery, response.StatusCode(), http.StatusBadRequest, response.Body)
+	}
+	if response.JSON400 == nil || response.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid search account records query %q code = %+v, want %q", rawQuery, response.JSON400, httpclient.APIErrorCodeInvalidRequest)
+	}
 }
 
 func assertNoRecordIDs(t *testing.T, records []httpclient.JournalRecord, blocked []int64) {

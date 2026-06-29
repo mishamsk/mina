@@ -1587,9 +1587,21 @@ export type UpdateExchangeRateResponse = UpdateExchangeRateResponses[keyof Updat
 export type ListTransactionsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        limit?: number;
+        offset?: number;
+    };
     url: '/api/transactions';
 };
+
+export type ListTransactionsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type ListTransactionsError = ListTransactionsErrors[keyof ListTransactionsErrors];
 
 export type ListTransactionsResponses = {
     /**
@@ -1658,6 +1670,8 @@ export type SearchJournalRecordsData = {
         posted_date_from?: string;
         posted_date_to?: string;
         memo_contains?: string;
+        limit?: number;
+        offset?: number;
     };
     url: '/api/records';
 };
@@ -1714,6 +1728,8 @@ export type SearchAccountJournalRecordsData = {
         posted_date_from?: string;
         posted_date_to?: string;
         memo_contains?: string;
+        limit?: number;
+        offset?: number;
     };
     url: '/api/accounts/{account_id}/records';
 };

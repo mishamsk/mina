@@ -53,7 +53,7 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 		t.Fatalf("read memo = %v, want Lunch", read.JSON200.Records[0].Memo)
 	}
 
-	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("list request: %v", err)
 	}
@@ -66,6 +66,62 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	if list.JSON200.Transactions[0].TransactionId != created.JSON201.TransactionId || len(list.JSON200.Transactions[0].Records) != 2 {
 		t.Fatalf("listed transaction = %+v, want id %d with 2 records", list.JSON200.Transactions[0], created.JSON201.TransactionId)
 	}
+}
+
+func TestTransactionListPaginationBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	third := createTransactionForDate(t, client, refs, "2024-01-03", "Third")
+	first := createTransactionForDate(t, client, refs, "2024-01-01", "First")
+	second := createTransactionForDate(t, client, refs, "2024-01-02", "Second")
+
+	defaultList, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default list request: %v", err)
+	}
+	if defaultList.StatusCode() != http.StatusOK {
+		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
+	}
+	assertTransactionIDs(t, defaultList.JSON200.Transactions, []int64{first.JSON201.TransactionId, second.JSON201.TransactionId, third.JSON201.TransactionId})
+
+	limitOne := 1
+	limitPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{Limit: &limitOne})
+	if err != nil {
+		t.Fatalf("limit page request: %v", err)
+	}
+	if limitPage.StatusCode() != http.StatusOK {
+		t.Fatalf("limit page status = %d, want %d; body %s", limitPage.StatusCode(), http.StatusOK, limitPage.Body)
+	}
+	assertTransactionIDs(t, limitPage.JSON200.Transactions, []int64{first.JSON201.TransactionId})
+
+	offsetOne := 1
+	offsetPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{Offset: &offsetOne})
+	if err != nil {
+		t.Fatalf("offset page request: %v", err)
+	}
+	if offsetPage.StatusCode() != http.StatusOK {
+		t.Fatalf("offset page status = %d, want %d; body %s", offsetPage.StatusCode(), http.StatusOK, offsetPage.Body)
+	}
+	assertTransactionIDs(t, offsetPage.JSON200.Transactions, []int64{second.JSON201.TransactionId, third.JSON201.TransactionId})
+
+	window, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Limit:  &limitOne,
+		Offset: &offsetOne,
+	})
+	if err != nil {
+		t.Fatalf("window request: %v", err)
+	}
+	if window.StatusCode() != http.StatusOK {
+		t.Fatalf("window status = %d, want %d; body %s", window.StatusCode(), http.StatusOK, window.Body)
+	}
+	assertTransactionIDs(t, window.JSON200.Transactions, []int64{second.JSON201.TransactionId})
+	if len(window.JSON200.Transactions[0].Records) != 2 {
+		t.Fatalf("window nested record count = %d, want 2; body %+v", len(window.JSON200.Transactions[0].Records), window.JSON200.Transactions[0])
+	}
+
+	assertInvalidTransactionListQuery(t, client, "limit=0")
+	assertInvalidTransactionListQuery(t, client, "limit=501")
+	assertInvalidTransactionListQuery(t, client, "offset=-1")
 }
 
 func TestTransactionRecordFieldsBoundary(t *testing.T) {
@@ -204,7 +260,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 	assertBodyContains(t, "read", read.Body, wantPendingJSON)
 	assertBodyContains(t, "read", read.Body, wantPostedJSON)
 
-	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("list request: %v", err)
 	}
@@ -259,7 +315,7 @@ func TestTransactionAllowsNullAndUnbalancedAmountUSD(t *testing.T) {
 		t.Fatalf("second amount_usd = %v, want 11.00000000", created.JSON201.Records[1].AmountUsd)
 	}
 
-	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("list request: %v", err)
 	}
@@ -354,7 +410,7 @@ func TestTransactionRejectsPerCurrencyImbalanceAndDoesNotPersist(t *testing.T) {
 		t.Fatalf("imbalance status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
 	}
 
-	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("list request: %v", err)
 	}
@@ -472,12 +528,12 @@ func TestTransactionValidationErrors(t *testing.T) {
 		t.Fatalf("too many integer digits status = %d, want %d; body %s", tooManyIntegerDigitsResponse.StatusCode(), http.StatusBadRequest, tooManyIntegerDigitsResponse.Body)
 	}
 
-	unsupportedListQuery, err := client.REST().ListTransactionsWithResponse(context.Background(), apptest.ReplaceRawQuery("limit=1"))
+	pagedListQuery, err := client.REST().ListTransactionsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("limit=1"))
 	if err != nil {
-		t.Fatalf("unsupported list query request: %v", err)
+		t.Fatalf("paged list query request: %v", err)
 	}
-	if unsupportedListQuery.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("unsupported list query status = %d, want %d; body %s", unsupportedListQuery.StatusCode(), http.StatusBadRequest, unsupportedListQuery.Body)
+	if pagedListQuery.StatusCode() != http.StatusOK {
+		t.Fatalf("paged list query status = %d, want %d; body %s", pagedListQuery.StatusCode(), http.StatusOK, pagedListQuery.Body)
 	}
 }
 
@@ -574,6 +630,23 @@ func createTransactionRefs(t *testing.T, client *apptest.Client) transactionRefs
 	}
 }
 
+func createTransactionForDate(t *testing.T, client *apptest.Client, refs transactionRefs, date string, memo string) *httpclient.CreateTransactionResponse {
+	t.Helper()
+
+	request := balancedTransactionRequest(refs)
+	request.InitiatedDate = apptest.Date(date)
+	request.Records[0].Memo = &memo
+	response, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
+	if err != nil {
+		t.Fatalf("create transaction for %s request: %v", date, err)
+	}
+	if response.StatusCode() != http.StatusCreated {
+		t.Fatalf("create transaction for %s status = %d, want %d; body %s", date, response.StatusCode(), http.StatusCreated, response.Body)
+	}
+
+	return response
+}
+
 func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransactionRequest {
 	memo := "Lunch"
 	pendingDate := apptest.Timestamp("2024-03-10T00:00:00Z")
@@ -607,6 +680,31 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				Source:               httpclient.Manual,
 			},
 		},
+	}
+}
+
+func assertTransactionIDs(t *testing.T, transactions []httpclient.Transaction, want []int64) {
+	t.Helper()
+
+	got := make([]int64, 0, len(transactions))
+	for _, transaction := range transactions {
+		got = append(got, transaction.TransactionId)
+	}
+	assertInt64s(t, got, want)
+}
+
+func assertInvalidTransactionListQuery(t *testing.T, client *apptest.Client, rawQuery string) {
+	t.Helper()
+
+	response, err := client.REST().ListTransactionsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery(rawQuery))
+	if err != nil {
+		t.Fatalf("invalid transaction list query %q request: %v", rawQuery, err)
+	}
+	if response.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid transaction list query %q status = %d, want %d; body %s", rawQuery, response.StatusCode(), http.StatusBadRequest, response.Body)
+	}
+	if response.JSON400 == nil || response.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid transaction list query %q code = %+v, want %q", rawQuery, response.JSON400, httpclient.APIErrorCodeInvalidRequest)
 	}
 }
 

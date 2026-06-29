@@ -9,9 +9,9 @@
   - Account, category, tag, and household member CRUD/list flows.
   - Account type and category economic-intent metadata for accounting semantics.
   - Exchange-rate and account credit-limit-history flows.
-  - Transaction creation, read, list, full replacement, and tombstone deletion with nested journal records.
+  - Transaction creation, read, paginated list, full replacement, and tombstone deletion with nested journal records.
   - Transaction semantic shape validation with derived transaction class, component summaries, and display amounts in REST responses.
-  - Journal-record search and account-record search.
+  - Paginated journal-record search and account-record search.
   - Bulk journal-record category, tag, account, and status updates.
   - Background operation status, run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
   - OpenAPI discovery through `GET /openapi.json`.

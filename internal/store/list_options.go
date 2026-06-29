@@ -23,16 +23,22 @@ func appendServiceListOrderAndPage(query string, args []any, opts services.ListO
 		query += column + " " + direction
 	}
 	query += ", " + tieBreaker + " ASC"
-	if opts.Limit != nil {
+	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
+
+	return query, args
+}
+
+func appendLimitOffset(query string, args []any, limit *int, offset int) (string, []any) {
+	if limit != nil {
 		query += " LIMIT ?"
-		args = append(args, *opts.Limit)
-		if opts.Offset > 0 {
+		args = append(args, *limit)
+		if offset > 0 {
 			query += " OFFSET ?"
-			args = append(args, opts.Offset)
+			args = append(args, offset)
 		}
-	} else if opts.Offset > 0 {
-		query += " LIMIT -1 OFFSET ?"
-		args = append(args, opts.Offset)
+	} else if offset > 0 {
+		query += " OFFSET ?"
+		args = append(args, offset)
 	}
 
 	return query, args

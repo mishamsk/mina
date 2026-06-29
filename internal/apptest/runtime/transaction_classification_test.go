@@ -47,7 +47,7 @@ func TestTransactionClassificationClassesBoundary(t *testing.T) {
 			}
 			assertTransactionClass(t, "read", *read.JSON200, tc.wantClass)
 
-			list, err := client.REST().ListTransactionsWithResponse(context.Background())
+			list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 			requireNoTransportError(t, "list transactions", err)
 			if list.StatusCode() != http.StatusOK {
 				t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
@@ -78,7 +78,7 @@ func TestTransactionClassificationDisplayAmountsBoundary(t *testing.T) {
 	}
 	assertSpendDisplayAmounts(t, "read", *read.JSON200)
 
-	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	requireNoTransportError(t, "list transactions", err)
 	if list.StatusCode() != http.StatusOK {
 		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
@@ -107,7 +107,7 @@ func TestTransactionMultiComponentDisplayAmountsBoundary(t *testing.T) {
 	}
 	assertExchangeWithFeeAndFXDisplayAmounts(t, "read", *read.JSON200)
 
-	list, err := client.REST().ListTransactionsWithResponse(context.Background())
+	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	requireNoTransportError(t, "list transactions", err)
 	if list.StatusCode() != http.StatusOK {
 		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
