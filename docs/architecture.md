@@ -8,6 +8,7 @@ Mina is a local-first personal finance system for one household.
 - One `cmd/mina` binary.
 - REST API with web UI served from the binary and later a TUI.
 - Portable accounting state stored in a DuckDB database (file or in-memory).
+- Frontend architecture is owned by `docs/frontend-architecture.md`.
 
 ## Hard Rules
 
@@ -27,6 +28,7 @@ Imports and runtime knowledge flow inward toward app-owned service packages. Com
 
 - `cmd/mina`: one binary and Cobra command tree. Cobra owns CLI parsing and command help. Should delegate all operations to runtime.
 - `internal/httpclient`: generated REST client code from the OpenAPI source.
+- `internal/webui`: embedded web UI assets and root browser routing boundary.
 - `internal/appconfig`: local app config source loading, config-file discovery, env parsing, explicit overrides, source precedence, defaults, and source metadata.
 - `internal/runtime`: database lifecycle policy, runtime option handling, and manual composition root.
 - `internal/httpapi`: REST/OpenAPI adapter, generated REST contract code, generated route registration, generated request binding, OpenAPI request validation for transport shape, HTTP DTO mapping, and HTTP status/error mapping.
@@ -41,6 +43,7 @@ Rules:
 - `internal/httpapi` does not open databases, parse CLI flags, own SQL, make domain decisions, or duplicate service-owned domain validation.
 - `internal/store` owns DB-facing row types, migrations, transactions, DuckDB-specific error mapping, and app-to-DB type conversion.
 - `internal/store` does not know HTTP, OpenAPI, Cobra, or runtime composition.
+- `internal/webui` serves embedded frontend assets and does not own REST handlers, database access, or domain behavior.
 - `internal/runtime` wires concrete implementations manually. Avoid hidden global state for database handles, config, clocks, listeners, or services.
 - `internal/appconfig` does not import runtime, store, HTTP, OpenAPI, background, provider, service, Cobra, or pflag packages.
 - Shared contracts belong at the lowest layer that can own them.

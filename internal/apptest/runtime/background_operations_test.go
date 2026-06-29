@@ -60,7 +60,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if started.JSON202.OperationRunId <= 0 {
 			t.Fatalf("operation_run_id = %d, want positive generated id", started.JSON202.OperationRunId)
 		}
-		wantStatusURL := fmt.Sprintf("/background-operations/exchange-rate-loading/runs/%d", started.JSON202.OperationRunId)
+		wantStatusURL := fmt.Sprintf("/api/background-operations/exchange-rate-loading/runs/%d", started.JSON202.OperationRunId)
 		if started.JSON202.StatusUrl != wantStatusURL {
 			t.Fatalf("status_url = %q, want %q", started.JSON202.StatusUrl, wantStatusURL)
 		}

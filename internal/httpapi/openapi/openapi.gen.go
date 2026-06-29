@@ -1304,151 +1304,151 @@ type ReplaceTransactionJSONRequestBody = UpdateTransactionRequest
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// List accounts.
-	// (GET /accounts)
+	// (GET /api/accounts)
 	ListAccounts(w http.ResponseWriter, r *http.Request, params ListAccountsParams)
 	// Create an account.
-	// (POST /accounts)
+	// (POST /api/accounts)
 	CreateAccount(w http.ResponseWriter, r *http.Request)
 	// Tombstone an account.
-	// (DELETE /accounts/{account_id})
+	// (DELETE /api/accounts/{account_id})
 	DeleteAccount(w http.ResponseWriter, r *http.Request, accountId int64)
 	// Get an account.
-	// (GET /accounts/{account_id})
+	// (GET /api/accounts/{account_id})
 	GetAccount(w http.ResponseWriter, r *http.Request, accountId int64, params GetAccountParams)
 	// Update account hidden state and external identifiers.
-	// (PATCH /accounts/{account_id})
+	// (PATCH /api/accounts/{account_id})
 	UpdateAccount(w http.ResponseWriter, r *http.Request, accountId int64)
 	// List credit limit history for an account.
-	// (GET /accounts/{account_id}/credit-limit-history)
+	// (GET /api/accounts/{account_id}/credit-limit-history)
 	ListCreditLimitHistory(w http.ResponseWriter, r *http.Request, accountId int64, params ListCreditLimitHistoryParams)
 	// Create a credit limit history entry.
-	// (POST /accounts/{account_id}/credit-limit-history)
+	// (POST /api/accounts/{account_id}/credit-limit-history)
 	CreateCreditLimitHistory(w http.ResponseWriter, r *http.Request, accountId int64)
 	// Search active journal records for one account.
-	// (GET /accounts/{account_id}/records)
+	// (GET /api/accounts/{account_id}/records)
 	SearchAccountJournalRecords(w http.ResponseWriter, r *http.Request, accountId int64, params SearchAccountJournalRecordsParams)
 	// Seed demo data into the opened app.
-	// (POST /app/demo-seed)
+	// (POST /api/app/demo-seed)
 	SeedDemo(w http.ResponseWriter, r *http.Request)
 	// List registered background operations.
-	// (GET /background-operations)
+	// (GET /api/background-operations)
 	ListBackgroundOperations(w http.ResponseWriter, r *http.Request)
 	// Start a database backup run.
-	// (POST /background-operations/database-backup/runs)
+	// (POST /api/background-operations/database-backup/runs)
 	StartDatabaseBackupRun(w http.ResponseWriter, r *http.Request)
 	// Get one database backup run.
-	// (GET /background-operations/database-backup/runs/{operation_run_id})
+	// (GET /api/background-operations/database-backup/runs/{operation_run_id})
 	GetDatabaseBackupRun(w http.ResponseWriter, r *http.Request, operationRunId int64)
 	// Get database backup operation status.
-	// (GET /background-operations/database-backup/status)
+	// (GET /api/background-operations/database-backup/status)
 	GetDatabaseBackupStatus(w http.ResponseWriter, r *http.Request)
 	// Start an exchange-rate loading run.
-	// (POST /background-operations/exchange-rate-loading/runs)
+	// (POST /api/background-operations/exchange-rate-loading/runs)
 	StartExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request)
 	// Get one exchange-rate loading run.
-	// (GET /background-operations/exchange-rate-loading/runs/{operation_run_id})
+	// (GET /api/background-operations/exchange-rate-loading/runs/{operation_run_id})
 	GetExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request, operationRunId int64)
 	// Get exchange-rate loading operation status.
-	// (GET /background-operations/exchange-rate-loading/status)
+	// (GET /api/background-operations/exchange-rate-loading/status)
 	GetExchangeRateLoadingStatus(w http.ResponseWriter, r *http.Request)
 	// List categories.
-	// (GET /categories)
+	// (GET /api/categories)
 	ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams)
 	// Create a category.
-	// (POST /categories)
+	// (POST /api/categories)
 	CreateCategory(w http.ResponseWriter, r *http.Request)
 	// Tombstone a category.
-	// (DELETE /categories/{category_id})
+	// (DELETE /api/categories/{category_id})
 	DeleteCategory(w http.ResponseWriter, r *http.Request, categoryId int64)
 	// Get a category.
-	// (GET /categories/{category_id})
+	// (GET /api/categories/{category_id})
 	GetCategory(w http.ResponseWriter, r *http.Request, categoryId int64, params GetCategoryParams)
 	// Update category hidden state.
-	// (PATCH /categories/{category_id})
+	// (PATCH /api/categories/{category_id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, categoryId int64)
 	// Tombstone a credit limit history entry.
-	// (DELETE /credit-limit-history/{credit_limit_history_id})
+	// (DELETE /api/credit-limit-history/{credit_limit_history_id})
 	DeleteCreditLimitHistory(w http.ResponseWriter, r *http.Request, creditLimitHistoryId int64)
 	// Get a credit limit history entry.
-	// (GET /credit-limit-history/{credit_limit_history_id})
+	// (GET /api/credit-limit-history/{credit_limit_history_id})
 	GetCreditLimitHistory(w http.ResponseWriter, r *http.Request, creditLimitHistoryId int64, params GetCreditLimitHistoryParams)
 	// List exchange rates.
-	// (GET /exchange-rates)
+	// (GET /api/exchange-rates)
 	ListExchangeRates(w http.ResponseWriter, r *http.Request, params ListExchangeRatesParams)
 	// Create an exchange rate.
-	// (POST /exchange-rates)
+	// (POST /api/exchange-rates)
 	CreateExchangeRate(w http.ResponseWriter, r *http.Request)
 	// Tombstone an exchange rate.
-	// (DELETE /exchange-rates/{exchange_rate_id})
+	// (DELETE /api/exchange-rates/{exchange_rate_id})
 	DeleteExchangeRate(w http.ResponseWriter, r *http.Request, exchangeRateId int64)
 	// Get an exchange rate.
-	// (GET /exchange-rates/{exchange_rate_id})
+	// (GET /api/exchange-rates/{exchange_rate_id})
 	GetExchangeRate(w http.ResponseWriter, r *http.Request, exchangeRateId int64, params GetExchangeRateParams)
 	// Update an exchange rate value.
-	// (PATCH /exchange-rates/{exchange_rate_id})
+	// (PATCH /api/exchange-rates/{exchange_rate_id})
 	UpdateExchangeRate(w http.ResponseWriter, r *http.Request, exchangeRateId int64)
 	// Report process health.
-	// (GET /health)
+	// (GET /api/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
 	// List household members.
-	// (GET /members)
+	// (GET /api/members)
 	ListMembers(w http.ResponseWriter, r *http.Request, params ListMembersParams)
 	// Create a household member.
-	// (POST /members)
+	// (POST /api/members)
 	CreateMember(w http.ResponseWriter, r *http.Request)
 	// Tombstone a household member.
-	// (DELETE /members/{member_id})
+	// (DELETE /api/members/{member_id})
 	DeleteMember(w http.ResponseWriter, r *http.Request, memberId int64)
 	// Get a household member.
-	// (GET /members/{member_id})
+	// (GET /api/members/{member_id})
 	GetMember(w http.ResponseWriter, r *http.Request, memberId int64, params GetMemberParams)
 	// Update household member name.
-	// (PATCH /members/{member_id})
+	// (PATCH /api/members/{member_id})
 	UpdateMember(w http.ResponseWriter, r *http.Request, memberId int64)
 	// Search active journal records.
-	// (GET /records)
+	// (GET /api/records)
 	SearchJournalRecords(w http.ResponseWriter, r *http.Request, params SearchJournalRecordsParams)
 	// Assign one account to selected journal records.
-	// (POST /records/bulk/account)
+	// (POST /api/records/bulk/account)
 	BulkReassignJournalRecordAccount(w http.ResponseWriter, r *http.Request)
 	// Assign one category to selected journal records.
-	// (POST /records/bulk/category)
+	// (POST /api/records/bulk/category)
 	BulkCategorizeJournalRecords(w http.ResponseWriter, r *http.Request)
 	// Update posting and reconciliation statuses on selected journal records.
-	// (POST /records/bulk/status)
+	// (POST /api/records/bulk/status)
 	BulkUpdateJournalRecordStatuses(w http.ResponseWriter, r *http.Request)
 	// Add and remove tags on selected journal records.
-	// (POST /records/bulk/tags)
+	// (POST /api/records/bulk/tags)
 	BulkUpdateJournalRecordTags(w http.ResponseWriter, r *http.Request)
 	// List tags.
-	// (GET /tags)
+	// (GET /api/tags)
 	ListTags(w http.ResponseWriter, r *http.Request, params ListTagsParams)
 	// Create a tag.
-	// (POST /tags)
+	// (POST /api/tags)
 	CreateTag(w http.ResponseWriter, r *http.Request)
 	// Tombstone a tag.
-	// (DELETE /tags/{tag_id})
+	// (DELETE /api/tags/{tag_id})
 	DeleteTag(w http.ResponseWriter, r *http.Request, tagId int64)
 	// Get a tag.
-	// (GET /tags/{tag_id})
+	// (GET /api/tags/{tag_id})
 	GetTag(w http.ResponseWriter, r *http.Request, tagId int64, params GetTagParams)
 	// Update tag hidden state.
-	// (PATCH /tags/{tag_id})
+	// (PATCH /api/tags/{tag_id})
 	UpdateTag(w http.ResponseWriter, r *http.Request, tagId int64)
 	// List transactions with journal records.
-	// (GET /transactions)
+	// (GET /api/transactions)
 	ListTransactions(w http.ResponseWriter, r *http.Request)
 	// Create a per-currency balanced transaction.
-	// (POST /transactions)
+	// (POST /api/transactions)
 	CreateTransaction(w http.ResponseWriter, r *http.Request)
 	// Tombstone a transaction and its journal records.
-	// (DELETE /transactions/{transaction_id})
+	// (DELETE /api/transactions/{transaction_id})
 	DeleteTransaction(w http.ResponseWriter, r *http.Request, transactionId int64)
 	// Get a transaction with journal records.
-	// (GET /transactions/{transaction_id})
+	// (GET /api/transactions/{transaction_id})
 	GetTransaction(w http.ResponseWriter, r *http.Request, transactionId int64)
 	// Replace a transaction and its journal records.
-	// (PUT /transactions/{transaction_id})
+	// (PUT /api/transactions/{transaction_id})
 	ReplaceTransaction(w http.ResponseWriter, r *http.Request, transactionId int64)
 }
 
@@ -1457,295 +1457,295 @@ type ServerInterface interface {
 type Unimplemented struct{}
 
 // List accounts.
-// (GET /accounts)
+// (GET /api/accounts)
 func (_ Unimplemented) ListAccounts(w http.ResponseWriter, r *http.Request, params ListAccountsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Create an account.
-// (POST /accounts)
+// (POST /api/accounts)
 func (_ Unimplemented) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Tombstone an account.
-// (DELETE /accounts/{account_id})
+// (DELETE /api/accounts/{account_id})
 func (_ Unimplemented) DeleteAccount(w http.ResponseWriter, r *http.Request, accountId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get an account.
-// (GET /accounts/{account_id})
+// (GET /api/accounts/{account_id})
 func (_ Unimplemented) GetAccount(w http.ResponseWriter, r *http.Request, accountId int64, params GetAccountParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Update account hidden state and external identifiers.
-// (PATCH /accounts/{account_id})
+// (PATCH /api/accounts/{account_id})
 func (_ Unimplemented) UpdateAccount(w http.ResponseWriter, r *http.Request, accountId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List credit limit history for an account.
-// (GET /accounts/{account_id}/credit-limit-history)
+// (GET /api/accounts/{account_id}/credit-limit-history)
 func (_ Unimplemented) ListCreditLimitHistory(w http.ResponseWriter, r *http.Request, accountId int64, params ListCreditLimitHistoryParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Create a credit limit history entry.
-// (POST /accounts/{account_id}/credit-limit-history)
+// (POST /api/accounts/{account_id}/credit-limit-history)
 func (_ Unimplemented) CreateCreditLimitHistory(w http.ResponseWriter, r *http.Request, accountId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Search active journal records for one account.
-// (GET /accounts/{account_id}/records)
+// (GET /api/accounts/{account_id}/records)
 func (_ Unimplemented) SearchAccountJournalRecords(w http.ResponseWriter, r *http.Request, accountId int64, params SearchAccountJournalRecordsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Seed demo data into the opened app.
-// (POST /app/demo-seed)
+// (POST /api/app/demo-seed)
 func (_ Unimplemented) SeedDemo(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List registered background operations.
-// (GET /background-operations)
+// (GET /api/background-operations)
 func (_ Unimplemented) ListBackgroundOperations(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Start a database backup run.
-// (POST /background-operations/database-backup/runs)
+// (POST /api/background-operations/database-backup/runs)
 func (_ Unimplemented) StartDatabaseBackupRun(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get one database backup run.
-// (GET /background-operations/database-backup/runs/{operation_run_id})
+// (GET /api/background-operations/database-backup/runs/{operation_run_id})
 func (_ Unimplemented) GetDatabaseBackupRun(w http.ResponseWriter, r *http.Request, operationRunId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get database backup operation status.
-// (GET /background-operations/database-backup/status)
+// (GET /api/background-operations/database-backup/status)
 func (_ Unimplemented) GetDatabaseBackupStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Start an exchange-rate loading run.
-// (POST /background-operations/exchange-rate-loading/runs)
+// (POST /api/background-operations/exchange-rate-loading/runs)
 func (_ Unimplemented) StartExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get one exchange-rate loading run.
-// (GET /background-operations/exchange-rate-loading/runs/{operation_run_id})
+// (GET /api/background-operations/exchange-rate-loading/runs/{operation_run_id})
 func (_ Unimplemented) GetExchangeRateLoadingRun(w http.ResponseWriter, r *http.Request, operationRunId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get exchange-rate loading operation status.
-// (GET /background-operations/exchange-rate-loading/status)
+// (GET /api/background-operations/exchange-rate-loading/status)
 func (_ Unimplemented) GetExchangeRateLoadingStatus(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List categories.
-// (GET /categories)
+// (GET /api/categories)
 func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request, params ListCategoriesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Create a category.
-// (POST /categories)
+// (POST /api/categories)
 func (_ Unimplemented) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Tombstone a category.
-// (DELETE /categories/{category_id})
+// (DELETE /api/categories/{category_id})
 func (_ Unimplemented) DeleteCategory(w http.ResponseWriter, r *http.Request, categoryId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get a category.
-// (GET /categories/{category_id})
+// (GET /api/categories/{category_id})
 func (_ Unimplemented) GetCategory(w http.ResponseWriter, r *http.Request, categoryId int64, params GetCategoryParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Update category hidden state.
-// (PATCH /categories/{category_id})
+// (PATCH /api/categories/{category_id})
 func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, categoryId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Tombstone a credit limit history entry.
-// (DELETE /credit-limit-history/{credit_limit_history_id})
+// (DELETE /api/credit-limit-history/{credit_limit_history_id})
 func (_ Unimplemented) DeleteCreditLimitHistory(w http.ResponseWriter, r *http.Request, creditLimitHistoryId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get a credit limit history entry.
-// (GET /credit-limit-history/{credit_limit_history_id})
+// (GET /api/credit-limit-history/{credit_limit_history_id})
 func (_ Unimplemented) GetCreditLimitHistory(w http.ResponseWriter, r *http.Request, creditLimitHistoryId int64, params GetCreditLimitHistoryParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List exchange rates.
-// (GET /exchange-rates)
+// (GET /api/exchange-rates)
 func (_ Unimplemented) ListExchangeRates(w http.ResponseWriter, r *http.Request, params ListExchangeRatesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Create an exchange rate.
-// (POST /exchange-rates)
+// (POST /api/exchange-rates)
 func (_ Unimplemented) CreateExchangeRate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Tombstone an exchange rate.
-// (DELETE /exchange-rates/{exchange_rate_id})
+// (DELETE /api/exchange-rates/{exchange_rate_id})
 func (_ Unimplemented) DeleteExchangeRate(w http.ResponseWriter, r *http.Request, exchangeRateId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get an exchange rate.
-// (GET /exchange-rates/{exchange_rate_id})
+// (GET /api/exchange-rates/{exchange_rate_id})
 func (_ Unimplemented) GetExchangeRate(w http.ResponseWriter, r *http.Request, exchangeRateId int64, params GetExchangeRateParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Update an exchange rate value.
-// (PATCH /exchange-rates/{exchange_rate_id})
+// (PATCH /api/exchange-rates/{exchange_rate_id})
 func (_ Unimplemented) UpdateExchangeRate(w http.ResponseWriter, r *http.Request, exchangeRateId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Report process health.
-// (GET /health)
+// (GET /api/health)
 func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List household members.
-// (GET /members)
+// (GET /api/members)
 func (_ Unimplemented) ListMembers(w http.ResponseWriter, r *http.Request, params ListMembersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Create a household member.
-// (POST /members)
+// (POST /api/members)
 func (_ Unimplemented) CreateMember(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Tombstone a household member.
-// (DELETE /members/{member_id})
+// (DELETE /api/members/{member_id})
 func (_ Unimplemented) DeleteMember(w http.ResponseWriter, r *http.Request, memberId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get a household member.
-// (GET /members/{member_id})
+// (GET /api/members/{member_id})
 func (_ Unimplemented) GetMember(w http.ResponseWriter, r *http.Request, memberId int64, params GetMemberParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Update household member name.
-// (PATCH /members/{member_id})
+// (PATCH /api/members/{member_id})
 func (_ Unimplemented) UpdateMember(w http.ResponseWriter, r *http.Request, memberId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Search active journal records.
-// (GET /records)
+// (GET /api/records)
 func (_ Unimplemented) SearchJournalRecords(w http.ResponseWriter, r *http.Request, params SearchJournalRecordsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Assign one account to selected journal records.
-// (POST /records/bulk/account)
+// (POST /api/records/bulk/account)
 func (_ Unimplemented) BulkReassignJournalRecordAccount(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Assign one category to selected journal records.
-// (POST /records/bulk/category)
+// (POST /api/records/bulk/category)
 func (_ Unimplemented) BulkCategorizeJournalRecords(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Update posting and reconciliation statuses on selected journal records.
-// (POST /records/bulk/status)
+// (POST /api/records/bulk/status)
 func (_ Unimplemented) BulkUpdateJournalRecordStatuses(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Add and remove tags on selected journal records.
-// (POST /records/bulk/tags)
+// (POST /api/records/bulk/tags)
 func (_ Unimplemented) BulkUpdateJournalRecordTags(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List tags.
-// (GET /tags)
+// (GET /api/tags)
 func (_ Unimplemented) ListTags(w http.ResponseWriter, r *http.Request, params ListTagsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Create a tag.
-// (POST /tags)
+// (POST /api/tags)
 func (_ Unimplemented) CreateTag(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Tombstone a tag.
-// (DELETE /tags/{tag_id})
+// (DELETE /api/tags/{tag_id})
 func (_ Unimplemented) DeleteTag(w http.ResponseWriter, r *http.Request, tagId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get a tag.
-// (GET /tags/{tag_id})
+// (GET /api/tags/{tag_id})
 func (_ Unimplemented) GetTag(w http.ResponseWriter, r *http.Request, tagId int64, params GetTagParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Update tag hidden state.
-// (PATCH /tags/{tag_id})
+// (PATCH /api/tags/{tag_id})
 func (_ Unimplemented) UpdateTag(w http.ResponseWriter, r *http.Request, tagId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // List transactions with journal records.
-// (GET /transactions)
+// (GET /api/transactions)
 func (_ Unimplemented) ListTransactions(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Create a per-currency balanced transaction.
-// (POST /transactions)
+// (POST /api/transactions)
 func (_ Unimplemented) CreateTransaction(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Tombstone a transaction and its journal records.
-// (DELETE /transactions/{transaction_id})
+// (DELETE /api/transactions/{transaction_id})
 func (_ Unimplemented) DeleteTransaction(w http.ResponseWriter, r *http.Request, transactionId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get a transaction with journal records.
-// (GET /transactions/{transaction_id})
+// (GET /api/transactions/{transaction_id})
 func (_ Unimplemented) GetTransaction(w http.ResponseWriter, r *http.Request, transactionId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Replace a transaction and its journal records.
-// (PUT /transactions/{transaction_id})
+// (PUT /api/transactions/{transaction_id})
 func (_ Unimplemented) ReplaceTransaction(w http.ResponseWriter, r *http.Request, transactionId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
@@ -3907,151 +3907,151 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/accounts", wrapper.ListAccounts)
+		r.Get(options.BaseURL+"/api/accounts", wrapper.ListAccounts)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/accounts", wrapper.CreateAccount)
+		r.Post(options.BaseURL+"/api/accounts", wrapper.CreateAccount)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/accounts/{account_id}", wrapper.DeleteAccount)
+		r.Delete(options.BaseURL+"/api/accounts/{account_id}", wrapper.DeleteAccount)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/accounts/{account_id}", wrapper.GetAccount)
+		r.Get(options.BaseURL+"/api/accounts/{account_id}", wrapper.GetAccount)
 	})
 	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/accounts/{account_id}", wrapper.UpdateAccount)
+		r.Patch(options.BaseURL+"/api/accounts/{account_id}", wrapper.UpdateAccount)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/accounts/{account_id}/credit-limit-history", wrapper.ListCreditLimitHistory)
+		r.Get(options.BaseURL+"/api/accounts/{account_id}/credit-limit-history", wrapper.ListCreditLimitHistory)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/accounts/{account_id}/credit-limit-history", wrapper.CreateCreditLimitHistory)
+		r.Post(options.BaseURL+"/api/accounts/{account_id}/credit-limit-history", wrapper.CreateCreditLimitHistory)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/accounts/{account_id}/records", wrapper.SearchAccountJournalRecords)
+		r.Get(options.BaseURL+"/api/accounts/{account_id}/records", wrapper.SearchAccountJournalRecords)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/app/demo-seed", wrapper.SeedDemo)
+		r.Post(options.BaseURL+"/api/app/demo-seed", wrapper.SeedDemo)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/background-operations", wrapper.ListBackgroundOperations)
+		r.Get(options.BaseURL+"/api/background-operations", wrapper.ListBackgroundOperations)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/background-operations/database-backup/runs", wrapper.StartDatabaseBackupRun)
+		r.Post(options.BaseURL+"/api/background-operations/database-backup/runs", wrapper.StartDatabaseBackupRun)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/background-operations/database-backup/runs/{operation_run_id}", wrapper.GetDatabaseBackupRun)
+		r.Get(options.BaseURL+"/api/background-operations/database-backup/runs/{operation_run_id}", wrapper.GetDatabaseBackupRun)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/background-operations/database-backup/status", wrapper.GetDatabaseBackupStatus)
+		r.Get(options.BaseURL+"/api/background-operations/database-backup/status", wrapper.GetDatabaseBackupStatus)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/background-operations/exchange-rate-loading/runs", wrapper.StartExchangeRateLoadingRun)
+		r.Post(options.BaseURL+"/api/background-operations/exchange-rate-loading/runs", wrapper.StartExchangeRateLoadingRun)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/background-operations/exchange-rate-loading/runs/{operation_run_id}", wrapper.GetExchangeRateLoadingRun)
+		r.Get(options.BaseURL+"/api/background-operations/exchange-rate-loading/runs/{operation_run_id}", wrapper.GetExchangeRateLoadingRun)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/background-operations/exchange-rate-loading/status", wrapper.GetExchangeRateLoadingStatus)
+		r.Get(options.BaseURL+"/api/background-operations/exchange-rate-loading/status", wrapper.GetExchangeRateLoadingStatus)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/categories", wrapper.ListCategories)
+		r.Get(options.BaseURL+"/api/categories", wrapper.ListCategories)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/categories", wrapper.CreateCategory)
+		r.Post(options.BaseURL+"/api/categories", wrapper.CreateCategory)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/categories/{category_id}", wrapper.DeleteCategory)
+		r.Delete(options.BaseURL+"/api/categories/{category_id}", wrapper.DeleteCategory)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/categories/{category_id}", wrapper.GetCategory)
+		r.Get(options.BaseURL+"/api/categories/{category_id}", wrapper.GetCategory)
 	})
 	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/categories/{category_id}", wrapper.UpdateCategory)
+		r.Patch(options.BaseURL+"/api/categories/{category_id}", wrapper.UpdateCategory)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/credit-limit-history/{credit_limit_history_id}", wrapper.DeleteCreditLimitHistory)
+		r.Delete(options.BaseURL+"/api/credit-limit-history/{credit_limit_history_id}", wrapper.DeleteCreditLimitHistory)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/credit-limit-history/{credit_limit_history_id}", wrapper.GetCreditLimitHistory)
+		r.Get(options.BaseURL+"/api/credit-limit-history/{credit_limit_history_id}", wrapper.GetCreditLimitHistory)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/exchange-rates", wrapper.ListExchangeRates)
+		r.Get(options.BaseURL+"/api/exchange-rates", wrapper.ListExchangeRates)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/exchange-rates", wrapper.CreateExchangeRate)
+		r.Post(options.BaseURL+"/api/exchange-rates", wrapper.CreateExchangeRate)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/exchange-rates/{exchange_rate_id}", wrapper.DeleteExchangeRate)
+		r.Delete(options.BaseURL+"/api/exchange-rates/{exchange_rate_id}", wrapper.DeleteExchangeRate)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/exchange-rates/{exchange_rate_id}", wrapper.GetExchangeRate)
+		r.Get(options.BaseURL+"/api/exchange-rates/{exchange_rate_id}", wrapper.GetExchangeRate)
 	})
 	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/exchange-rates/{exchange_rate_id}", wrapper.UpdateExchangeRate)
+		r.Patch(options.BaseURL+"/api/exchange-rates/{exchange_rate_id}", wrapper.UpdateExchangeRate)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/health", wrapper.GetHealth)
+		r.Get(options.BaseURL+"/api/health", wrapper.GetHealth)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/members", wrapper.ListMembers)
+		r.Get(options.BaseURL+"/api/members", wrapper.ListMembers)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/members", wrapper.CreateMember)
+		r.Post(options.BaseURL+"/api/members", wrapper.CreateMember)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/members/{member_id}", wrapper.DeleteMember)
+		r.Delete(options.BaseURL+"/api/members/{member_id}", wrapper.DeleteMember)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/members/{member_id}", wrapper.GetMember)
+		r.Get(options.BaseURL+"/api/members/{member_id}", wrapper.GetMember)
 	})
 	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/members/{member_id}", wrapper.UpdateMember)
+		r.Patch(options.BaseURL+"/api/members/{member_id}", wrapper.UpdateMember)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/records", wrapper.SearchJournalRecords)
+		r.Get(options.BaseURL+"/api/records", wrapper.SearchJournalRecords)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/records/bulk/account", wrapper.BulkReassignJournalRecordAccount)
+		r.Post(options.BaseURL+"/api/records/bulk/account", wrapper.BulkReassignJournalRecordAccount)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/records/bulk/category", wrapper.BulkCategorizeJournalRecords)
+		r.Post(options.BaseURL+"/api/records/bulk/category", wrapper.BulkCategorizeJournalRecords)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/records/bulk/status", wrapper.BulkUpdateJournalRecordStatuses)
+		r.Post(options.BaseURL+"/api/records/bulk/status", wrapper.BulkUpdateJournalRecordStatuses)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/records/bulk/tags", wrapper.BulkUpdateJournalRecordTags)
+		r.Post(options.BaseURL+"/api/records/bulk/tags", wrapper.BulkUpdateJournalRecordTags)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/tags", wrapper.ListTags)
+		r.Get(options.BaseURL+"/api/tags", wrapper.ListTags)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/tags", wrapper.CreateTag)
+		r.Post(options.BaseURL+"/api/tags", wrapper.CreateTag)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/tags/{tag_id}", wrapper.DeleteTag)
+		r.Delete(options.BaseURL+"/api/tags/{tag_id}", wrapper.DeleteTag)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/tags/{tag_id}", wrapper.GetTag)
+		r.Get(options.BaseURL+"/api/tags/{tag_id}", wrapper.GetTag)
 	})
 	r.Group(func(r chi.Router) {
-		r.Patch(options.BaseURL+"/tags/{tag_id}", wrapper.UpdateTag)
+		r.Patch(options.BaseURL+"/api/tags/{tag_id}", wrapper.UpdateTag)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/transactions", wrapper.ListTransactions)
+		r.Get(options.BaseURL+"/api/transactions", wrapper.ListTransactions)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/transactions", wrapper.CreateTransaction)
+		r.Post(options.BaseURL+"/api/transactions", wrapper.CreateTransaction)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/transactions/{transaction_id}", wrapper.DeleteTransaction)
+		r.Delete(options.BaseURL+"/api/transactions/{transaction_id}", wrapper.DeleteTransaction)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/transactions/{transaction_id}", wrapper.GetTransaction)
+		r.Get(options.BaseURL+"/api/transactions/{transaction_id}", wrapper.GetTransaction)
 	})
 	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/transactions/{transaction_id}", wrapper.ReplaceTransaction)
+		r.Put(options.BaseURL+"/api/transactions/{transaction_id}", wrapper.ReplaceTransaction)
 	})
 
 	return r
@@ -6303,151 +6303,151 @@ func (response ReplaceTransaction404JSONResponse) VisitReplaceTransactionRespons
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// List accounts.
-	// (GET /accounts)
+	// (GET /api/accounts)
 	ListAccounts(ctx context.Context, request ListAccountsRequestObject) (ListAccountsResponseObject, error)
 	// Create an account.
-	// (POST /accounts)
+	// (POST /api/accounts)
 	CreateAccount(ctx context.Context, request CreateAccountRequestObject) (CreateAccountResponseObject, error)
 	// Tombstone an account.
-	// (DELETE /accounts/{account_id})
+	// (DELETE /api/accounts/{account_id})
 	DeleteAccount(ctx context.Context, request DeleteAccountRequestObject) (DeleteAccountResponseObject, error)
 	// Get an account.
-	// (GET /accounts/{account_id})
+	// (GET /api/accounts/{account_id})
 	GetAccount(ctx context.Context, request GetAccountRequestObject) (GetAccountResponseObject, error)
 	// Update account hidden state and external identifiers.
-	// (PATCH /accounts/{account_id})
+	// (PATCH /api/accounts/{account_id})
 	UpdateAccount(ctx context.Context, request UpdateAccountRequestObject) (UpdateAccountResponseObject, error)
 	// List credit limit history for an account.
-	// (GET /accounts/{account_id}/credit-limit-history)
+	// (GET /api/accounts/{account_id}/credit-limit-history)
 	ListCreditLimitHistory(ctx context.Context, request ListCreditLimitHistoryRequestObject) (ListCreditLimitHistoryResponseObject, error)
 	// Create a credit limit history entry.
-	// (POST /accounts/{account_id}/credit-limit-history)
+	// (POST /api/accounts/{account_id}/credit-limit-history)
 	CreateCreditLimitHistory(ctx context.Context, request CreateCreditLimitHistoryRequestObject) (CreateCreditLimitHistoryResponseObject, error)
 	// Search active journal records for one account.
-	// (GET /accounts/{account_id}/records)
+	// (GET /api/accounts/{account_id}/records)
 	SearchAccountJournalRecords(ctx context.Context, request SearchAccountJournalRecordsRequestObject) (SearchAccountJournalRecordsResponseObject, error)
 	// Seed demo data into the opened app.
-	// (POST /app/demo-seed)
+	// (POST /api/app/demo-seed)
 	SeedDemo(ctx context.Context, request SeedDemoRequestObject) (SeedDemoResponseObject, error)
 	// List registered background operations.
-	// (GET /background-operations)
+	// (GET /api/background-operations)
 	ListBackgroundOperations(ctx context.Context, request ListBackgroundOperationsRequestObject) (ListBackgroundOperationsResponseObject, error)
 	// Start a database backup run.
-	// (POST /background-operations/database-backup/runs)
+	// (POST /api/background-operations/database-backup/runs)
 	StartDatabaseBackupRun(ctx context.Context, request StartDatabaseBackupRunRequestObject) (StartDatabaseBackupRunResponseObject, error)
 	// Get one database backup run.
-	// (GET /background-operations/database-backup/runs/{operation_run_id})
+	// (GET /api/background-operations/database-backup/runs/{operation_run_id})
 	GetDatabaseBackupRun(ctx context.Context, request GetDatabaseBackupRunRequestObject) (GetDatabaseBackupRunResponseObject, error)
 	// Get database backup operation status.
-	// (GET /background-operations/database-backup/status)
+	// (GET /api/background-operations/database-backup/status)
 	GetDatabaseBackupStatus(ctx context.Context, request GetDatabaseBackupStatusRequestObject) (GetDatabaseBackupStatusResponseObject, error)
 	// Start an exchange-rate loading run.
-	// (POST /background-operations/exchange-rate-loading/runs)
+	// (POST /api/background-operations/exchange-rate-loading/runs)
 	StartExchangeRateLoadingRun(ctx context.Context, request StartExchangeRateLoadingRunRequestObject) (StartExchangeRateLoadingRunResponseObject, error)
 	// Get one exchange-rate loading run.
-	// (GET /background-operations/exchange-rate-loading/runs/{operation_run_id})
+	// (GET /api/background-operations/exchange-rate-loading/runs/{operation_run_id})
 	GetExchangeRateLoadingRun(ctx context.Context, request GetExchangeRateLoadingRunRequestObject) (GetExchangeRateLoadingRunResponseObject, error)
 	// Get exchange-rate loading operation status.
-	// (GET /background-operations/exchange-rate-loading/status)
+	// (GET /api/background-operations/exchange-rate-loading/status)
 	GetExchangeRateLoadingStatus(ctx context.Context, request GetExchangeRateLoadingStatusRequestObject) (GetExchangeRateLoadingStatusResponseObject, error)
 	// List categories.
-	// (GET /categories)
+	// (GET /api/categories)
 	ListCategories(ctx context.Context, request ListCategoriesRequestObject) (ListCategoriesResponseObject, error)
 	// Create a category.
-	// (POST /categories)
+	// (POST /api/categories)
 	CreateCategory(ctx context.Context, request CreateCategoryRequestObject) (CreateCategoryResponseObject, error)
 	// Tombstone a category.
-	// (DELETE /categories/{category_id})
+	// (DELETE /api/categories/{category_id})
 	DeleteCategory(ctx context.Context, request DeleteCategoryRequestObject) (DeleteCategoryResponseObject, error)
 	// Get a category.
-	// (GET /categories/{category_id})
+	// (GET /api/categories/{category_id})
 	GetCategory(ctx context.Context, request GetCategoryRequestObject) (GetCategoryResponseObject, error)
 	// Update category hidden state.
-	// (PATCH /categories/{category_id})
+	// (PATCH /api/categories/{category_id})
 	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
 	// Tombstone a credit limit history entry.
-	// (DELETE /credit-limit-history/{credit_limit_history_id})
+	// (DELETE /api/credit-limit-history/{credit_limit_history_id})
 	DeleteCreditLimitHistory(ctx context.Context, request DeleteCreditLimitHistoryRequestObject) (DeleteCreditLimitHistoryResponseObject, error)
 	// Get a credit limit history entry.
-	// (GET /credit-limit-history/{credit_limit_history_id})
+	// (GET /api/credit-limit-history/{credit_limit_history_id})
 	GetCreditLimitHistory(ctx context.Context, request GetCreditLimitHistoryRequestObject) (GetCreditLimitHistoryResponseObject, error)
 	// List exchange rates.
-	// (GET /exchange-rates)
+	// (GET /api/exchange-rates)
 	ListExchangeRates(ctx context.Context, request ListExchangeRatesRequestObject) (ListExchangeRatesResponseObject, error)
 	// Create an exchange rate.
-	// (POST /exchange-rates)
+	// (POST /api/exchange-rates)
 	CreateExchangeRate(ctx context.Context, request CreateExchangeRateRequestObject) (CreateExchangeRateResponseObject, error)
 	// Tombstone an exchange rate.
-	// (DELETE /exchange-rates/{exchange_rate_id})
+	// (DELETE /api/exchange-rates/{exchange_rate_id})
 	DeleteExchangeRate(ctx context.Context, request DeleteExchangeRateRequestObject) (DeleteExchangeRateResponseObject, error)
 	// Get an exchange rate.
-	// (GET /exchange-rates/{exchange_rate_id})
+	// (GET /api/exchange-rates/{exchange_rate_id})
 	GetExchangeRate(ctx context.Context, request GetExchangeRateRequestObject) (GetExchangeRateResponseObject, error)
 	// Update an exchange rate value.
-	// (PATCH /exchange-rates/{exchange_rate_id})
+	// (PATCH /api/exchange-rates/{exchange_rate_id})
 	UpdateExchangeRate(ctx context.Context, request UpdateExchangeRateRequestObject) (UpdateExchangeRateResponseObject, error)
 	// Report process health.
-	// (GET /health)
+	// (GET /api/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
 	// List household members.
-	// (GET /members)
+	// (GET /api/members)
 	ListMembers(ctx context.Context, request ListMembersRequestObject) (ListMembersResponseObject, error)
 	// Create a household member.
-	// (POST /members)
+	// (POST /api/members)
 	CreateMember(ctx context.Context, request CreateMemberRequestObject) (CreateMemberResponseObject, error)
 	// Tombstone a household member.
-	// (DELETE /members/{member_id})
+	// (DELETE /api/members/{member_id})
 	DeleteMember(ctx context.Context, request DeleteMemberRequestObject) (DeleteMemberResponseObject, error)
 	// Get a household member.
-	// (GET /members/{member_id})
+	// (GET /api/members/{member_id})
 	GetMember(ctx context.Context, request GetMemberRequestObject) (GetMemberResponseObject, error)
 	// Update household member name.
-	// (PATCH /members/{member_id})
+	// (PATCH /api/members/{member_id})
 	UpdateMember(ctx context.Context, request UpdateMemberRequestObject) (UpdateMemberResponseObject, error)
 	// Search active journal records.
-	// (GET /records)
+	// (GET /api/records)
 	SearchJournalRecords(ctx context.Context, request SearchJournalRecordsRequestObject) (SearchJournalRecordsResponseObject, error)
 	// Assign one account to selected journal records.
-	// (POST /records/bulk/account)
+	// (POST /api/records/bulk/account)
 	BulkReassignJournalRecordAccount(ctx context.Context, request BulkReassignJournalRecordAccountRequestObject) (BulkReassignJournalRecordAccountResponseObject, error)
 	// Assign one category to selected journal records.
-	// (POST /records/bulk/category)
+	// (POST /api/records/bulk/category)
 	BulkCategorizeJournalRecords(ctx context.Context, request BulkCategorizeJournalRecordsRequestObject) (BulkCategorizeJournalRecordsResponseObject, error)
 	// Update posting and reconciliation statuses on selected journal records.
-	// (POST /records/bulk/status)
+	// (POST /api/records/bulk/status)
 	BulkUpdateJournalRecordStatuses(ctx context.Context, request BulkUpdateJournalRecordStatusesRequestObject) (BulkUpdateJournalRecordStatusesResponseObject, error)
 	// Add and remove tags on selected journal records.
-	// (POST /records/bulk/tags)
+	// (POST /api/records/bulk/tags)
 	BulkUpdateJournalRecordTags(ctx context.Context, request BulkUpdateJournalRecordTagsRequestObject) (BulkUpdateJournalRecordTagsResponseObject, error)
 	// List tags.
-	// (GET /tags)
+	// (GET /api/tags)
 	ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error)
 	// Create a tag.
-	// (POST /tags)
+	// (POST /api/tags)
 	CreateTag(ctx context.Context, request CreateTagRequestObject) (CreateTagResponseObject, error)
 	// Tombstone a tag.
-	// (DELETE /tags/{tag_id})
+	// (DELETE /api/tags/{tag_id})
 	DeleteTag(ctx context.Context, request DeleteTagRequestObject) (DeleteTagResponseObject, error)
 	// Get a tag.
-	// (GET /tags/{tag_id})
+	// (GET /api/tags/{tag_id})
 	GetTag(ctx context.Context, request GetTagRequestObject) (GetTagResponseObject, error)
 	// Update tag hidden state.
-	// (PATCH /tags/{tag_id})
+	// (PATCH /api/tags/{tag_id})
 	UpdateTag(ctx context.Context, request UpdateTagRequestObject) (UpdateTagResponseObject, error)
 	// List transactions with journal records.
-	// (GET /transactions)
+	// (GET /api/transactions)
 	ListTransactions(ctx context.Context, request ListTransactionsRequestObject) (ListTransactionsResponseObject, error)
 	// Create a per-currency balanced transaction.
-	// (POST /transactions)
+	// (POST /api/transactions)
 	CreateTransaction(ctx context.Context, request CreateTransactionRequestObject) (CreateTransactionResponseObject, error)
 	// Tombstone a transaction and its journal records.
-	// (DELETE /transactions/{transaction_id})
+	// (DELETE /api/transactions/{transaction_id})
 	DeleteTransaction(ctx context.Context, request DeleteTransactionRequestObject) (DeleteTransactionResponseObject, error)
 	// Get a transaction with journal records.
-	// (GET /transactions/{transaction_id})
+	// (GET /api/transactions/{transaction_id})
 	GetTransaction(ctx context.Context, request GetTransactionRequestObject) (GetTransactionResponseObject, error)
 	// Replace a transaction and its journal records.
-	// (PUT /transactions/{transaction_id})
+	// (PUT /api/transactions/{transaction_id})
 	ReplaceTransaction(ctx context.Context, request ReplaceTransactionRequestObject) (ReplaceTransactionResponseObject, error)
 }
 
@@ -7850,93 +7850,93 @@ func (sh *strictHandler) ReplaceTransaction(w http.ResponseWriter, r *http.Reque
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"RPTQBsfw1ZNR/MkWUMabwZrp8fHx/wIAAP//",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

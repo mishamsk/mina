@@ -3,25 +3,25 @@ frankfurter FRANKFURTER_URL
 env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
 freeport
 exec mina serve --config-file exchange-rate-loading.toml --db $WORK/rates.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
-httpget http://127.0.0.1:$PORT/health
+httpget http://127.0.0.1:$PORT/api/health
 stdout '"status":"ok"'
 
-httpget -method POST -status 201 -body account_eur.json http://127.0.0.1:$PORT/accounts
+httpget -method POST -status 201 -body account_eur.json http://127.0.0.1:$PORT/api/accounts
 stdout '"account_id":1'
-httpget -method POST -status 201 -body account_counterparty.json http://127.0.0.1:$PORT/accounts
+httpget -method POST -status 201 -body account_counterparty.json http://127.0.0.1:$PORT/api/accounts
 stdout '"account_id":2'
-httpget -method POST -status 201 -body category.json http://127.0.0.1:$PORT/categories
+httpget -method POST -status 201 -body category.json http://127.0.0.1:$PORT/api/categories
 stdout '"category_id":3'
-httpget -method POST -status 201 -body transaction.json http://127.0.0.1:$PORT/transactions
+httpget -method POST -status 201 -body transaction.json http://127.0.0.1:$PORT/api/transactions
 stdout '"transaction_id"'
 
-httpget -method POST -status 202 http://127.0.0.1:$PORT/background-operations/exchange-rate-loading/runs
+httpget -method POST -status 202 http://127.0.0.1:$PORT/api/background-operations/exchange-rate-loading/runs
 stdout '"operation_id":"exchange-rate-loading"'
-httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$PORT/background-operations/exchange-rate-loading/status
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$PORT/api/background-operations/exchange-rate-loading/status
 stdout '"last_success":true'
 stdout '"completed_run_revision":1'
 
-httpget 'http://127.0.0.1:'$PORT'/exchange-rates?from_currency=USD&to_currency=EUR&effective_date=2024-04-02T00:00:00Z'
+httpget 'http://127.0.0.1:'$PORT'/api/exchange-rates?from_currency=USD&to_currency=EUR&effective_date=2024-04-02T00:00:00Z'
 stdout '"exchange_rates":\['
 stdout '"from_currency":"USD"'
 stdout '"to_currency":"EUR"'
@@ -37,9 +37,9 @@ frankfurter FRANKFURTER_URL
 env XDG_CACHE_HOME=$WORK/cache HOME=$WORK/home MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
 freeport STARTUP_PORT
 exec mina serve --config-file startup-loading.toml --db $WORK/startup-rates.db --yes --host 127.0.0.1 --port $STARTUP_PORT --quiet &startup_server&
-httpget http://127.0.0.1:$STARTUP_PORT/health
+httpget http://127.0.0.1:$STARTUP_PORT/api/health
 stdout '"status":"ok"'
-httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$STARTUP_PORT/background-operations/exchange-rate-loading/status
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$STARTUP_PORT/api/background-operations/exchange-rate-loading/status
 stdout '"completed_run_revision":1'
 kill -INT startup_server
 wait startup_server

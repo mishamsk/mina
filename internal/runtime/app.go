@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,9 +30,10 @@ import (
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/store"
+	"github.com/mishamsk/mina/internal/webui"
 )
 
-// App owns one opened accounting state, app services, and REST handler.
+// App owns one opened accounting state, app services, and composed HTTP handler.
 type App struct {
 	appDB             *store.AppDB
 	services          appServices
@@ -48,12 +50,12 @@ type appServices struct {
 	StartupExchangeRateLoading *exchangerateloading.Service
 }
 
-// New opens the configured database, applies migrations, and wires the REST handler.
+// New opens the configured database, applies migrations, and wires the composed HTTP handler.
 func New(ctx context.Context, cfg appconfig.Config, opts Options) (*App, error) {
 	return newApp(ctx, cfg, opts, store.OpenAppDB)
 }
 
-// NewWithProcessDB applies migrations using an existing DuckDB process handle and wires the REST handler.
+// NewWithProcessDB applies migrations using an existing DuckDB process handle and wires the composed HTTP handler.
 func NewWithProcessDB(ctx context.Context, db *sql.DB, cfg appconfig.Config, opts Options) (*App, error) {
 	return newApp(ctx, cfg, opts, func(ctx context.Context, request store.AppDBOpenRequest) (*store.AppDB, error) {
 		return store.OpenAppDBWithProcessDB(ctx, db, request)
@@ -145,7 +147,7 @@ func AccountingSchemaExists(ctx context.Context, cfg appconfig.Config, operation
 	return store.AccountingLocationExists(ctx, appDB)
 }
 
-// NewWithAppDB wires services and the REST handler around an already-opened migrated AppDB.
+// NewWithAppDB wires services and the composed HTTP handler around an already-opened migrated AppDB.
 func NewWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config, opts Options) (*App, error) {
 	operationRepo, err := store.NewOperationRunRepository(ctx, appDB)
 	if err != nil {
@@ -159,10 +161,13 @@ func NewWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	if err != nil {
 		return nil, err
 	}
-	handler := httpapi.NewWithOptions(services.Dependencies, httpapi.Options{
-		AccessLog: opts.HTTP.AccessLog,
-		Timeout:   opts.HTTP.Timeout,
+	restHandler := httpapi.NewWithOptions(services.Dependencies, httpapi.Options{
+		Timeout: opts.HTTP.Timeout,
 	})
+	handler := composeHTTPHandler(restHandler, webui.New())
+	if opts.HTTP.AccessLog != nil {
+		handler = httpapi.AccessLogger(opts.HTTP.AccessLog)(handler)
+	}
 
 	app := &App{
 		appDB:      appDB,
@@ -185,6 +190,17 @@ func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, oper
 	services.Demo = newDemoService(appDB, cfg, opts)
 
 	return services, nil
+}
+
+func composeHTTPHandler(restHandler http.Handler, webUIHandler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
+			restHandler.ServeHTTP(w, r)
+			return
+		}
+
+		webUIHandler.ServeHTTP(w, r)
+	})
 }
 
 func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
@@ -340,7 +356,7 @@ func (a *App) StartOperations() {
 	a.background.Start()
 }
 
-// Handler returns the composed REST API handler.
+// Handler returns the composed HTTP handler.
 func (a *App) Handler() http.Handler {
 	return a.handler
 }

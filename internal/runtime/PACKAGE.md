@@ -8,7 +8,7 @@
 ## Implicit Contracts
 
 - Runtime composition is the only place that wires concrete service, store, and adapter implementations.
-- App instances own one initialized `AppDB`, app service bundle, and REST handler.
+- App instances own one initialized `AppDB`, app service bundle, REST handler, and web UI handler.
 - Startup demo seeding runs after app composition and before HTTP listen.
 - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Runtime decides database lifecycle policy, then delegates DuckDB mechanics to store `AppDB` open helpers.
@@ -26,12 +26,14 @@
 - Runtime operation status reads operation-run rows from ephemeral store-owned process tables.
 - Runtime operation failures are recorded and logged without failing app creation or normal HTTP readiness.
 - Runtime cancels operations and waits for them before closing `AppDB`.
+- Runtime composes REST and embedded UI handlers without changing REST ownership.
+- Runtime applies configured HTTP access logging around the composed REST and embedded UI handler.
 - Runtime may import every app layer, but app service packages must not import runtime.
 
 ## Boundaries
 
-- Owns: runtime options, database lifecycle policy, HTTP adapter configuration, app composition, background operation lifecycle, and mode-ready runtime values.
-- Does not own: source-loaded app config, CLI flags, SQL statements, domain validation, REST DTO mapping, or CLI command help.
+- Owns: runtime options, database lifecycle policy, HTTP adapter configuration, app composition, REST/UI handler composition, background operation lifecycle, and mode-ready runtime values.
+- Does not own: source-loaded app config, CLI flags, SQL statements, domain validation, REST DTO mapping, UI asset serving behavior, or CLI command help.
 
 ## Testing Notes
 

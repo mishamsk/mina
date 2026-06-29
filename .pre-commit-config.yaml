@@ -27,13 +27,40 @@ repos:
         entry: just fmt-check
         language: system
         pass_filenames: false
+        files: \.go$
       - id: mina-openapi-check
         name: mina openapi check
         entry: just openapi-check
         language: system
         pass_filenames: false
+        files: ^(api/openapi\.yaml|api/oapi-codegen(-httpclient)?\.yaml|internal/httpapi/openapi/openapi\.gen\.go|internal/httpclient/openapi\.gen\.go|go\.mod|go\.sum)$
+      - id: mina-frontend-openapi-check
+        name: mina frontend openapi check
+        entry: just frontend-openapi-check
+        language: system
+        pass_filenames: false
+        files: ^(api/openapi\.yaml|frontend/openapi-ts\.config\.ts|frontend/src/api/generated/.*|frontend/package\.json|frontend/pnpm-lock\.yaml)$
+      - id: mina-frontend-fmt-check
+        name: mina frontend fmt check
+        entry: just frontend-fmt-check
+        language: system
+        pass_filenames: false
+        files: ^frontend/
+      - id: mina-frontend-lint
+        name: mina frontend lint
+        entry: just frontend-lint
+        language: system
+        pass_filenames: false
+        files: ^frontend/
+      - id: mina-frontend-typecheck
+        name: mina frontend typecheck
+        entry: just frontend-typecheck
+        language: system
+        pass_filenames: false
+        files: ^frontend/
       - id: mina-lint
         name: mina lint
         entry: just lint
         language: system
         pass_filenames: false
+        files: ^(.*\.go|go\.mod|go\.sum|\.golangci\.yml)$

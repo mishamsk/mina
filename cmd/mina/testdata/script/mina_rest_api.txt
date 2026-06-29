@@ -2,9 +2,17 @@
 env MINA_FX_AUTO_LOAD_ENABLED=false
 freeport
 exec mina serve --db $WORK/rest.db --yes --host 127.0.0.1 --port $PORT &server&
-httpget http://127.0.0.1:$PORT/health
+httpget http://127.0.0.1:$PORT/api/health
 stdout '"status":"ok"'
 stdout '"schema_version":[1-9][0-9]*'
+httpget -accept text/html http://127.0.0.1:$PORT/
+stdout '<div id="root"></div>'
+httpget http://127.0.0.1:$PORT/status
+stdout '<div id="root"></div>'
+httpget http://127.0.0.1:$PORT/reports/2026.06
+stdout '<div id="root"></div>'
+httpget -status 404 http://127.0.0.1:$PORT/favicon.ico
+httpget -status 404 http://127.0.0.1:$PORT/assets/missing.js
 kill -INT server
 wait server
 
@@ -15,16 +23,18 @@ stderr 'demo seeding requires schema "main" to not already exist'
 # Access logs can be redirected to a file.
 freeport
 exec mina serve --db $WORK/rest-file-log.db --yes --host 127.0.0.1 --port $PORT --access-log $WORK/access.log &server&
-httpget http://127.0.0.1:$PORT/health
+httpget http://127.0.0.1:$PORT/api/health
+httpget http://127.0.0.1:$PORT/
 kill -INT server
 wait server
 ! stderr .
-grep 'GET /health 200' $WORK/access.log
+grep 'GET /api/health 200' $WORK/access.log
+grep 'GET / 200' $WORK/access.log
 
 # Demo startup seeding binds the listener and exposes REST data.
 freeport
 exec mina serve --demo --db $WORK/rest-demo.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
-httpget http://127.0.0.1:$PORT/transactions
+httpget http://127.0.0.1:$PORT/api/transactions
 stdout '"transactions":\['
 stdout '"transaction_id"'
 kill -INT server
@@ -33,11 +43,11 @@ wait server
 # Configured backup files can be created through the real REST listener.
 freeport
 exec mina serve --config-file backup-rest.toml --db $WORK/backup-rest.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
-httpget http://127.0.0.1:$PORT/health
+httpget http://127.0.0.1:$PORT/api/health
 stdout '"status":"ok"'
-httpget -method POST -status 202 http://127.0.0.1:$PORT/background-operations/database-backup/runs
+httpget -method POST -status 202 http://127.0.0.1:$PORT/api/background-operations/database-backup/runs
 stdout '"operation_id":"database-backup"'
-httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$PORT/background-operations/database-backup/status
+httpwait -timeout 10s '"last_success":true' http://127.0.0.1:$PORT/api/background-operations/database-backup/status
 stdout '"completed_run_revision":1'
 glob backup-rest-files/mina-backup-*.duckdb
 kill -INT server

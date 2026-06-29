@@ -1,10 +1,11 @@
 # Testing
 
-Mina has exactly two app test classes. Both exercise Mina at a high-level app
+Mina has exactly three app test classes. All exercise Mina at a high-level app
 boundary:
 
 - `app-tests`: normal in-process app tests in `internal/apptest/runtime`.
 - `e2e-tests`: testscript-driven launched-process tests in `cmd/mina/testdata/script`, driven by `cmd/mina/cli_smoke_test.go`.
+- `frontend-e2e-tests`: Playwright-driven embedded UI checks in `frontend/tests/e2e`.
 - No unit tests and no other app test locations.
 - No test code under `internal/tools/**`; validate tool changes with manual smoke checks, `just pre-commit`, and review.
 
@@ -148,7 +149,7 @@ Use them as a small smoke suite for process-boundary and IO-bound checks only:
 - Real network listeners.
 - Database files.
 - External IO protection, such as not destroying an existing user database.
-- Later local web UI and TUI process behavior.
+- Later TUI process behavior.
 
 Do not use `e2e-tests` for:
 
@@ -160,3 +161,24 @@ Do not use `e2e-tests` for:
 
 Do not duplicate `app-test` scenario coverage in `e2e-tests`. `e2e-tests`
 prove wiring and external boundaries; `app-tests` prove app behavior.
+
+## Frontend-E2E-Tests
+
+`frontend-e2e-tests` run only through Playwright and are not run by default.
+
+Use them as a small smoke suite for embedded browser UI wiring:
+
+- Browser rendering.
+- Built `mina` binary startup.
+- Embedded Vite assets.
+- Real local network listener wiring.
+- Browser persistence for UI-only IndexedDB state.
+
+Do not use `frontend-e2e-tests` for:
+
+- REST scenario coverage already covered by `app-tests`.
+- Exhaustive frontend state combinations.
+- Direct database, service, store, or handler assertions.
+
+Frontend e2e tests prove browser, binary, embedded assets, and listener wiring.
+They must not duplicate REST scenario coverage.

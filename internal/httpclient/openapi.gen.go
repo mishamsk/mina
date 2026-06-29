@@ -2352,7 +2352,7 @@ func NewListAccountsRequest(server string, params *ListAccountsParams) (*http.Re
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/accounts")
+	operationPath := fmt.Sprintf("/api/accounts")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2489,7 +2489,7 @@ func NewCreateAccountRequestWithBody(server string, contentType string, body io.
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/accounts")
+	operationPath := fmt.Sprintf("/api/accounts")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2525,7 +2525,7 @@ func NewDeleteAccountRequest(server string, accountId int64) (*http.Request, err
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/accounts/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/accounts/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2559,7 +2559,7 @@ func NewGetAccountRequest(server string, accountId int64, params *GetAccountPara
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/accounts/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/accounts/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2631,7 +2631,7 @@ func NewUpdateAccountRequestWithBody(server string, accountId int64, contentType
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/accounts/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/accounts/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2667,7 +2667,7 @@ func NewListCreditLimitHistoryRequest(server string, accountId int64, params *Li
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/accounts/%s/credit-limit-history", pathParam0)
+	operationPath := fmt.Sprintf("/api/accounts/%s/credit-limit-history", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2787,7 +2787,7 @@ func NewCreateCreditLimitHistoryRequestWithBody(server string, accountId int64, 
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/accounts/%s/credit-limit-history", pathParam0)
+	operationPath := fmt.Sprintf("/api/accounts/%s/credit-limit-history", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -2823,7 +2823,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/accounts/%s/records", pathParam0)
+	operationPath := fmt.Sprintf("/api/accounts/%s/records", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3057,7 +3057,7 @@ func NewSeedDemoRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/app/demo-seed")
+	operationPath := fmt.Sprintf("/api/app/demo-seed")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3084,7 +3084,7 @@ func NewListBackgroundOperationsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/background-operations")
+	operationPath := fmt.Sprintf("/api/background-operations")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3111,7 +3111,7 @@ func NewStartDatabaseBackupRunRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/background-operations/database-backup/runs")
+	operationPath := fmt.Sprintf("/api/background-operations/database-backup/runs")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3145,7 +3145,7 @@ func NewGetDatabaseBackupRunRequest(server string, operationRunId int64) (*http.
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/background-operations/database-backup/runs/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/background-operations/database-backup/runs/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3172,7 +3172,7 @@ func NewGetDatabaseBackupStatusRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/background-operations/database-backup/status")
+	operationPath := fmt.Sprintf("/api/background-operations/database-backup/status")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3199,7 +3199,7 @@ func NewStartExchangeRateLoadingRunRequest(server string) (*http.Request, error)
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/background-operations/exchange-rate-loading/runs")
+	operationPath := fmt.Sprintf("/api/background-operations/exchange-rate-loading/runs")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3233,7 +3233,7 @@ func NewGetExchangeRateLoadingRunRequest(server string, operationRunId int64) (*
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/background-operations/exchange-rate-loading/runs/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/background-operations/exchange-rate-loading/runs/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3260,7 +3260,7 @@ func NewGetExchangeRateLoadingStatusRequest(server string) (*http.Request, error
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/background-operations/exchange-rate-loading/status")
+	operationPath := fmt.Sprintf("/api/background-operations/exchange-rate-loading/status")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3287,7 +3287,7 @@ func NewListCategoriesRequest(server string, params *ListCategoriesParams) (*htt
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/categories")
+	operationPath := fmt.Sprintf("/api/categories")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3412,7 +3412,7 @@ func NewCreateCategoryRequestWithBody(server string, contentType string, body io
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/categories")
+	operationPath := fmt.Sprintf("/api/categories")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3448,7 +3448,7 @@ func NewDeleteCategoryRequest(server string, categoryId int64) (*http.Request, e
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/categories/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/categories/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3482,7 +3482,7 @@ func NewGetCategoryRequest(server string, categoryId int64, params *GetCategoryP
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/categories/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/categories/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3554,7 +3554,7 @@ func NewUpdateCategoryRequestWithBody(server string, categoryId int64, contentTy
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/categories/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/categories/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3590,7 +3590,7 @@ func NewDeleteCreditLimitHistoryRequest(server string, creditLimitHistoryId int6
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/credit-limit-history/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/credit-limit-history/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3624,7 +3624,7 @@ func NewGetCreditLimitHistoryRequest(server string, creditLimitHistoryId int64, 
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/credit-limit-history/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/credit-limit-history/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3678,7 +3678,7 @@ func NewListExchangeRatesRequest(server string, params *ListExchangeRatesParams)
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/exchange-rates")
+	operationPath := fmt.Sprintf("/api/exchange-rates")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3827,7 +3827,7 @@ func NewCreateExchangeRateRequestWithBody(server string, contentType string, bod
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/exchange-rates")
+	operationPath := fmt.Sprintf("/api/exchange-rates")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3863,7 +3863,7 @@ func NewDeleteExchangeRateRequest(server string, exchangeRateId int64) (*http.Re
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/exchange-rates/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/exchange-rates/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3897,7 +3897,7 @@ func NewGetExchangeRateRequest(server string, exchangeRateId int64, params *GetE
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/exchange-rates/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/exchange-rates/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3969,7 +3969,7 @@ func NewUpdateExchangeRateRequestWithBody(server string, exchangeRateId int64, c
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/exchange-rates/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/exchange-rates/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -3998,7 +3998,7 @@ func NewGetHealthRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/health")
+	operationPath := fmt.Sprintf("/api/health")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4025,7 +4025,7 @@ func NewListMembersRequest(server string, params *ListMembersParams) (*http.Requ
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/members")
+	operationPath := fmt.Sprintf("/api/members")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4138,7 +4138,7 @@ func NewCreateMemberRequestWithBody(server string, contentType string, body io.R
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/members")
+	operationPath := fmt.Sprintf("/api/members")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4174,7 +4174,7 @@ func NewDeleteMemberRequest(server string, memberId int64) (*http.Request, error
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/members/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/members/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4208,7 +4208,7 @@ func NewGetMemberRequest(server string, memberId int64, params *GetMemberParams)
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/members/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/members/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4280,7 +4280,7 @@ func NewUpdateMemberRequestWithBody(server string, memberId int64, contentType s
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/members/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/members/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4309,7 +4309,7 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/records")
+	operationPath := fmt.Sprintf("/api/records")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4566,7 +4566,7 @@ func NewBulkReassignJournalRecordAccountRequestWithBody(server string, contentTy
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/records/bulk/account")
+	operationPath := fmt.Sprintf("/api/records/bulk/account")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4606,7 +4606,7 @@ func NewBulkCategorizeJournalRecordsRequestWithBody(server string, contentType s
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/records/bulk/category")
+	operationPath := fmt.Sprintf("/api/records/bulk/category")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4646,7 +4646,7 @@ func NewBulkUpdateJournalRecordStatusesRequestWithBody(server string, contentTyp
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/records/bulk/status")
+	operationPath := fmt.Sprintf("/api/records/bulk/status")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4686,7 +4686,7 @@ func NewBulkUpdateJournalRecordTagsRequestWithBody(server string, contentType st
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/records/bulk/tags")
+	operationPath := fmt.Sprintf("/api/records/bulk/tags")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4715,7 +4715,7 @@ func NewListTagsRequest(server string, params *ListTagsParams) (*http.Request, e
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/tags")
+	operationPath := fmt.Sprintf("/api/tags")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4840,7 +4840,7 @@ func NewCreateTagRequestWithBody(server string, contentType string, body io.Read
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/tags")
+	operationPath := fmt.Sprintf("/api/tags")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4876,7 +4876,7 @@ func NewDeleteTagRequest(server string, tagId int64) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/tags/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/tags/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4910,7 +4910,7 @@ func NewGetTagRequest(server string, tagId int64, params *GetTagParams) (*http.R
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/tags/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/tags/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4982,7 +4982,7 @@ func NewUpdateTagRequestWithBody(server string, tagId int64, contentType string,
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/tags/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/tags/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5011,7 +5011,7 @@ func NewListTransactionsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/transactions")
+	operationPath := fmt.Sprintf("/api/transactions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5049,7 +5049,7 @@ func NewCreateTransactionRequestWithBody(server string, contentType string, body
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/transactions")
+	operationPath := fmt.Sprintf("/api/transactions")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5085,7 +5085,7 @@ func NewDeleteTransactionRequest(server string, transactionId int64) (*http.Requ
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/transactions/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/transactions/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5119,7 +5119,7 @@ func NewGetTransactionRequest(server string, transactionId int64) (*http.Request
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/transactions/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/transactions/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5164,7 +5164,7 @@ func NewReplaceTransactionRequestWithBody(server string, transactionId int64, co
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/transactions/%s", pathParam0)
+	operationPath := fmt.Sprintf("/api/transactions/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}

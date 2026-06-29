@@ -6,9 +6,10 @@ Phase 1 REST APIs are closed. The active build scope is Phase 2: minimal local w
 ## Project Documentation
 
 - `docs/architecture.md`: mandatory read at the beginning of any work. Never make changes to it, unless you are specifically instructed to edit this file.
+- `docs/frontend-architecture.md`: mandatory read before frontend or `internal/webui` changes.
 - `docs/business-requirements.md`: product scope. Read before changing user-visible behavior or API semantics.
 - `PROJECT_STATE.md`: concise current implementation phase/stage state. Read when checking what exists now. Update only when progress against business requirements are made. Do not update on refactors and internal API chagnes.
-- Package/module docs: exported Go APIs that cross package boundaries must be documented in code. Add a short package markdown doc only for implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs. If there are no implicit contracts, say `No implicit contracts.` Use `docs/package_doc_template.md`.
+- Package/module docs for backend and frontend: exported Go APIs that cross package boundaries must be documented in code. Add a short package markdown doc only for implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs. If there are no implicit contracts, say `No implicit contracts.` Use `docs/package_doc_template.md`.
 - All docs must stay short. Prefer bullets, with one liners. Prefer replacing old statements to adding net new. Link to owning docs instead of repeating details.
 - Documentation is evergreen. Never keep history, migration notes, or references to previous doc/code states.
 - `docs/plan_template.md`: reusable template for active implementation checklists. Do not read.
@@ -35,6 +36,7 @@ For every commit:
 
 - For application code changes, run `just pre-commit`, `just test` during developement and before committing.
 - For code changes that touch CLI, real-network REST, process startup, JSON-over-HTTP behavior, run `just test-integration` before commit.
+- For changes that touch frontend runtime behavior, embedded UI assets, browser behavior, or JSON-over-HTTP behavior used by the frontend, run `just test-frontend-e2e` before commit.
 - Do not run tests or broad validation for pure documentation changes, or for tooling/developer-recipe changes that do not touch application code.
 - For changes that alter implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs update the relevant package docs in the same commit.
 

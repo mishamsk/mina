@@ -322,26 +322,40 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 
 	method := http.MethodGet
 	status := http.StatusOK
+	accept := ""
+	location := ""
 	var body []byte
 	for len(args) > 0 && args[0] != "" && args[0][0] == '-' {
 		switch args[0] {
+		case "-accept":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
+			}
+			accept = args[1]
+			args = args[2:]
 		case "-method":
 			if len(args) < 2 {
-				ts.Fatalf("usage: httpget [-method method] [-status status] url")
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
 			}
 			method = args[1]
 			args = args[2:]
 		case "-status":
 			if len(args) < 2 {
-				ts.Fatalf("usage: httpget [-method method] [-status status] url")
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
 			}
 			var err error
 			status, err = strconv.Atoi(args[1])
 			ts.Check(err)
 			args = args[2:]
+		case "-location":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
+			}
+			location = args[1]
+			args = args[2:]
 		case "-body":
 			if len(args) < 2 {
-				ts.Fatalf("usage: httpget [-method method] [-status status] [-body file] url")
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
 			}
 			body = []byte(ts.ReadFile(args[1]))
 			args = args[2:]
@@ -350,11 +364,16 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 		}
 	}
 	if len(args) != 1 {
-		ts.Fatalf("usage: httpget [-method method] [-status status] [-body file] url")
+		ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
 	}
 
 	url := args[0]
 	client := http.Client{Timeout: 500 * time.Millisecond}
+	if location != "" || (status >= http.StatusMultipleChoices && status < http.StatusBadRequest) {
+		client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+	}
 	deadline := time.Now().Add(5 * time.Second)
 	var lastErr error
 	for {
@@ -364,6 +383,9 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 		}
 		request, err := http.NewRequest(method, url, requestBody)
 		ts.Check(err)
+		if accept != "" {
+			request.Header.Set("Accept", accept)
+		}
 		if body != nil {
 			request.Header.Set("Content-Type", "application/json")
 		}
@@ -376,6 +398,9 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 			ts.Check(closeErr)
 			if response.StatusCode != status {
 				ts.Fatalf("%s %s status = %d, want %d; body: %s", method, url, response.StatusCode, status, string(body))
+			}
+			if location != "" && response.Header.Get("Location") != location {
+				ts.Fatalf("%s %s location = %q, want %q", method, url, response.Header.Get("Location"), location)
 			}
 			_, err = ts.Stdout().Write(body)
 			ts.Check(err)

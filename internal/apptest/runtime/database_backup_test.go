@@ -23,7 +23,7 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 
 		for _, operation := range response.JSON200.Operations {
 			if operation.OperationId == httpclient.BackgroundOperationSummaryOperationIdDatabaseBackup &&
-				operation.StatusUrl == "/background-operations/database-backup/status" {
+				operation.StatusUrl == "/api/background-operations/database-backup/status" {
 				return
 			}
 		}
@@ -124,7 +124,7 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 		if started.JSON202.OperationId != httpclient.OperationRunReferenceResponseOperationIdDatabaseBackup {
 			t.Fatalf("operation_id = %q, want database-backup", started.JSON202.OperationId)
 		}
-		wantStatusURL := fmt.Sprintf("/background-operations/database-backup/runs/%d", started.JSON202.OperationRunId)
+		wantStatusURL := fmt.Sprintf("/api/background-operations/database-backup/runs/%d", started.JSON202.OperationRunId)
 		if started.JSON202.StatusUrl != wantStatusURL {
 			t.Fatalf("status_url = %q, want %q", started.JSON202.StatusUrl, wantStatusURL)
 		}

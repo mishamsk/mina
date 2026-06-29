@@ -2,7 +2,7 @@
 
 - Phase 1 REST API foundation is closed.
 - Active scope: Phase 2 minimal local web UI infrastructure, transaction templates, and recurring transactions.
-- Default operator workflow: start the REST API with `mina serve --db PATH`
+- Default operator workflow: start the REST API and local web UI with `mina serve --db PATH`
 - Implemented API capability groups:
   - Health checks and stable JSON error envelopes.
   - App administration for seeding demo data.
@@ -16,12 +16,16 @@
   - Background operation status, run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
   - OpenAPI discovery through `GET /openapi.json`.
 - Implemented runtime/demo behavior:
-  - Runtime opens one app for the process lifetime and wires its REST handler directly.
+  - Runtime opens one app for the process lifetime and composes REST and embedded web UI handlers.
   - Runtime runs non-blocking startup and recurring operations in `serve`, with public operation status and manual trigger APIs.
   - Exchange-rate startup loading uses a Frankfurter USD NDJSON cache file by default; scheduled and manual REST-triggered loading use targeted Frankfurter API requests.
   - Database backups copy the selected file-backed DuckDB accounting database to configured local backup files; empty backup config creates no automatic runs.
   - `mina serve --demo` seeds deterministic April-May 2026 demo data for new in-memory state or new file-backed schemas.
   - File-backed startup demo seeding refuses when the selected accounting schema already exists.
+- Implemented web UI behavior:
+  - Minimal embedded web UI infrastructure is built from `frontend/` and served under `/ui/`.
+  - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.
+  - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:
   - Runtime owns accounting location defaults, opens an in-memory DuckDB process database, and selects either an attached accounting database file or the in-memory accounting database with configurable schema fallback.
   - Store-owned accounting locations qualify migration and repository SQL against the selected database and schema.

@@ -1,0 +1,7 @@
+dist
+node_modules
+package.json
+playwright-report
+test-results
+src/api/generated
+tsconfig.json

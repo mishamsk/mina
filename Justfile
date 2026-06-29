@@ -12,6 +12,8 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 init:
     command -v mise >/dev/null || { echo "missing required tool: mise" >&2; exit 1; }
     command -v prek >/dev/null || { echo "missing required tool: prek" >&2; exit 1; }
+    mise install
+    just frontend-install
     prek install --hook-type pre-commit
 
 # Format Go source files.
@@ -52,11 +54,73 @@ openapi-check:
 tidy:
     go mod tidy
 
-# Build the mina binary.
+# Install the frontend package dependencies.
+[group('frontend')]
+[working-directory: 'frontend']
+frontend-install:
+    mise exec -- pnpm install
+
+# Format frontend source files.
+[group('frontend')]
+[working-directory: 'frontend']
+frontend-fmt:
+    mise exec -- pnpm run format
+
+# Check frontend source formatting.
+[group('frontend')]
+[working-directory: 'frontend']
+frontend-fmt-check:
+    mise exec -- pnpm run format:check
+
+# Run frontend static analysis checks.
+[group('frontend')]
+[working-directory: 'frontend']
+frontend-lint:
+    mise exec -- pnpm run lint
+
+# Run frontend TypeScript compiler checks.
+[group('frontend')]
+[working-directory: 'frontend']
+frontend-typecheck:
+    mise exec -- pnpm run typecheck
+
+# Build frontend assets.
+[group('frontend')]
+[working-directory: 'frontend']
+frontend-build:
+    mise exec -- pnpm run build
+
+# Start the Vite dev server against a running Mina backend.
+[group('frontend')]
+[working-directory: 'frontend']
+frontend-dev backend_url="http://127.0.0.1:8080":
+    MINA_FRONTEND_BACKEND_URL={{ quote(backend_url) }} mise exec -- pnpm run dev
+
+# Run all frontend static checks.
+[group('frontend')]
+frontend-check: frontend-openapi-check frontend-fmt-check frontend-lint frontend-typecheck
+
+# Regenerate frontend REST client code.
+[group('codegen')]
+[working-directory: 'frontend']
+frontend-openapi:
+    mise exec -- pnpm exec openapi-ts -f openapi-ts.config.ts --no-log-file
+
+# Verify frontend REST client generated code freshness.
+[group('codegen')]
+frontend-openapi-check:
+    tmpdir="$(mktemp -d)"; trap 'rm -rf "$tmpdir"' EXIT; cd frontend; mise exec -- pnpm exec openapi-ts -f openapi-ts.config.ts -o "$tmpdir/generated" --no-log-file >/dev/null; diff -qr src/api/generated "$tmpdir/generated" >/dev/null || { echo 'generated frontend OpenAPI client output is stale; run `just frontend-openapi`' >&2; diff -ru src/api/generated "$tmpdir/generated" >&2; exit 1; }
+
+# Build the mina binary without rebuilding frontend assets.
 [group('dev-tooling')]
-build:
+build-go:
+    test -f internal/webui/dist/index.html || { echo 'missing embedded frontend assets; run `just frontend-build` or `just build`' >&2; exit 1; }
     mkdir -p bin
     go build -o bin/mina ./cmd/mina
+
+# Build frontend assets and the mina binary.
+[group('dev-tooling')]
+build: frontend-build build-go
 
 [doc('''Start the REST API in the background; pass -p to persist data in build/dev/mina.db.
 Pass --demo to seed deterministic demo data at startup.''')]
@@ -228,10 +292,17 @@ test:
 
 # Run REST integration tests.
 [group('dev-tooling')]
-test-integration:
+test-integration: frontend-build
     go test -tags=integration ./cmd/mina -run TestIntegrationScripts -count=1
 
-# Run configured pre-commit checks.
+# Run frontend browser end-to-end tests against the embedded UI.
+[group('dev-tooling')]
+[working-directory: 'frontend']
+test-frontend-e2e: build
+    mise exec -- pnpm exec playwright install chromium webkit
+    mise exec -- pnpm exec playwright test
+
+# Run configured pre-commit checks against all tracked files.
 [group('dev-tooling')]
 pre-commit:
     prek run --all-files

@@ -19,7 +19,8 @@ import (
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
-func accessLogger(out io.Writer) func(http.Handler) http.Handler {
+// AccessLogger writes one access-log line for each handled request.
+func AccessLogger(out io.Writer) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			wrapped := middleware.NewWrapResponseWriter(w, r.ProtoMajor)

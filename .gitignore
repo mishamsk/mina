@@ -11,3 +11,12 @@
 *.pprof
 /coverage/
 coverage.*
+
+# Frontend local dependencies and build outputs
+/frontend/node_modules/
+/frontend/dist/*
+/frontend/playwright-report/
+/frontend/test-results/
+/.playwright-mcp/
+/internal/webui/dist/*
+!/internal/webui/dist/README.md

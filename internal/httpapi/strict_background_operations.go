@@ -151,19 +151,19 @@ func operationRunStatus(status operationruns.RunStatus) openapi.OperationRunResp
 }
 
 func exchangeRateLoadingRunURL(runID int64) string {
-	return fmt.Sprintf("/background-operations/exchange-rate-loading/runs/%d", runID)
+	return fmt.Sprintf("/api/background-operations/exchange-rate-loading/runs/%d", runID)
 }
 
 func databaseBackupRunURL(runID int64) string {
-	return fmt.Sprintf("/background-operations/database-backup/runs/%d", runID)
+	return fmt.Sprintf("/api/background-operations/database-backup/runs/%d", runID)
 }
 
 func operationStatusURL(operationID operationruns.OperationID) string {
 	switch operationID {
 	case operationruns.ExchangeRateLoadingOperationID:
-		return "/background-operations/exchange-rate-loading/status"
+		return "/api/background-operations/exchange-rate-loading/status"
 	case operationruns.DatabaseBackupOperationID:
-		return "/background-operations/database-backup/status"
+		return "/api/background-operations/database-backup/status"
 	default:
 		return ""
 	}
