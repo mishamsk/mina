@@ -25,6 +25,86 @@ func TestSeedDemoThroughREST(t *testing.T) {
 	assertSeededRESTCounts(t, client, *seeded.JSON200)
 }
 
+func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
+	client := newSharedClient(t, apptest.WithAccountingSchema("app_admin_demo_seed_warmed_caches"))
+	ctx := context.Background()
+	missingMemberID := int64(900004)
+
+	warm, err := client.REST().CreateTransactionWithResponse(ctx, httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2026-06-01"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            900001,
+				Amount:               "-12.34",
+				CategoryId:           900003,
+				Currency:             "USD",
+				MemberId:             &missingMemberID,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+				TagIds:               apptest.Int64SlicePtr(900005),
+			},
+			{
+				AccountId:            900002,
+				Amount:               "12.34",
+				CategoryId:           900003,
+				Currency:             "USD",
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("warm reference cache request: %v", err)
+	}
+	if warm.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("warm reference cache status = %d, want %d; body %s", warm.StatusCode(), http.StatusBadRequest, warm.Body)
+	}
+
+	seeded, err := client.REST().SeedDemoWithResponse(ctx)
+	if err != nil {
+		t.Fatalf("seed demo request: %v", err)
+	}
+	if seeded.StatusCode() != http.StatusOK {
+		t.Fatalf("seed demo status = %d, want %d; body %s", seeded.StatusCode(), http.StatusOK, seeded.Body)
+	}
+
+	refs := seededDemoTransactionRefs(t, client)
+	tagIDs := []int64{refs.tagID}
+	created, err := client.REST().CreateTransactionWithResponse(ctx, httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2026-06-02"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            refs.checkingAccountID,
+				Amount:               "-12.34",
+				CategoryId:           refs.categoryID,
+				Currency:             "USD",
+				MemberId:             &refs.memberID,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+				TagIds:               &tagIDs,
+			},
+			{
+				AccountId:            refs.merchantAccountID,
+				Amount:               "12.34",
+				CategoryId:           refs.categoryID,
+				Currency:             "USD",
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create transaction after demo seed request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create transaction after demo seed status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+}
+
 func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpclient.DemoSeedResponse) {
 	t.Helper()
 
@@ -156,4 +236,102 @@ func assertDemoSemanticCoverage(t *testing.T, categories []httpclient.Category, 
 			t.Fatalf("seeded demo missing transaction class %q", class)
 		}
 	}
+}
+
+type seededDemoRefs struct {
+	checkingAccountID int64
+	merchantAccountID int64
+	categoryID        int64
+	tagID             int64
+	memberID          int64
+}
+
+func seededDemoTransactionRefs(t *testing.T, client *apptest.Client) seededDemoRefs {
+	t.Helper()
+	ctx := context.Background()
+
+	includeHidden := true
+	accounts, err := client.REST().ListAccountsWithResponse(ctx, &httpclient.ListAccountsParams{IncludeHidden: &includeHidden})
+	if err != nil {
+		t.Fatalf("list accounts request: %v", err)
+	}
+	if accounts.StatusCode() != http.StatusOK {
+		t.Fatalf("list accounts status = %d, want %d; body %s", accounts.StatusCode(), http.StatusOK, accounts.Body)
+	}
+
+	categories, err := client.REST().ListCategoriesWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list categories request: %v", err)
+	}
+	if categories.StatusCode() != http.StatusOK {
+		t.Fatalf("list categories status = %d, want %d; body %s", categories.StatusCode(), http.StatusOK, categories.Body)
+	}
+
+	tags, err := client.REST().ListTagsWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list tags request: %v", err)
+	}
+	if tags.StatusCode() != http.StatusOK {
+		t.Fatalf("list tags status = %d, want %d; body %s", tags.StatusCode(), http.StatusOK, tags.Body)
+	}
+
+	members, err := client.REST().ListMembersWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list members request: %v", err)
+	}
+	if members.StatusCode() != http.StatusOK {
+		t.Fatalf("list members status = %d, want %d; body %s", members.StatusCode(), http.StatusOK, members.Body)
+	}
+
+	return seededDemoRefs{
+		checkingAccountID: accountIDByFQN(t, accounts.JSON200.Accounts, "checking:Chase:Joint"),
+		merchantAccountID: accountIDByFQN(t, accounts.JSON200.Accounts, "merchant:TraderJoes"),
+		categoryID:        categoryIDByFQN(t, categories.JSON200.Categories, "Food:Groceries"),
+		tagID:             tagIDByFQN(t, tags.JSON200.Tags, "Shared:Family"),
+		memberID:          memberIDByName(t, members.JSON200.Members, "Avery"),
+	}
+}
+
+func accountIDByFQN(t *testing.T, accounts []httpclient.Account, fqn string) int64 {
+	t.Helper()
+	for _, account := range accounts {
+		if account.Fqn == fqn {
+			return account.AccountId
+		}
+	}
+	t.Fatalf("account %q not found", fqn)
+	return 0
+}
+
+func categoryIDByFQN(t *testing.T, categories []httpclient.Category, fqn string) int64 {
+	t.Helper()
+	for _, category := range categories {
+		if category.Fqn == fqn {
+			return category.CategoryId
+		}
+	}
+	t.Fatalf("category %q not found", fqn)
+	return 0
+}
+
+func tagIDByFQN(t *testing.T, tags []httpclient.Tag, fqn string) int64 {
+	t.Helper()
+	for _, tag := range tags {
+		if tag.Fqn == fqn {
+			return tag.TagId
+		}
+	}
+	t.Fatalf("tag %q not found", fqn)
+	return 0
+}
+
+func memberIDByName(t *testing.T, members []httpclient.Member, name string) int64 {
+	t.Helper()
+	for _, member := range members {
+		if member.Name == name {
+			return member.MemberId
+		}
+	}
+	t.Fatalf("member %q not found", name)
+	return 0
 }

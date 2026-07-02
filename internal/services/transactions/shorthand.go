@@ -193,20 +193,16 @@ func (s *Service) requireShorthandCategoryIntent(ctx context.Context, categoryID
 		return services.InvalidRequest("category_id must be positive")
 	}
 
-	categoryList, err := s.categories.List(ctx, categories.ListOptions{IncludeHidden: true})
+	category, err := s.categories.ValidateActiveReference(ctx, categoryID, categories.ReferenceOptions{AllowHidden: true})
 	if err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidTransactionReferenceError()
+		}
 		return err
 	}
-	for _, category := range categoryList {
-		if category.ID != categoryID {
-			continue
-		}
-		if category.EconomicIntent != expected {
-			return services.InvalidRequest("category_id economic_intent must be " + string(expected))
-		}
-
-		return nil
+	if category.EconomicIntent != expected {
+		return services.InvalidRequest("category_id economic_intent must be " + string(expected))
 	}
 
-	return invalidTransactionReferenceError()
+	return nil
 }

@@ -204,6 +204,68 @@ func TestShorthandTransactionValidationErrors(t *testing.T) {
 	}
 	assertShorthandInvalidRequest(t, "missing reference", missingReference.StatusCode(), missingReference.JSON400, missingReference.Body)
 
+	missingMemberID := int64(999999)
+	missingMember, err := client.REST().CreateSpendTransactionWithResponse(context.Background(), httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-01"),
+		FundingAccountId:      refs.checkingAccountID,
+		CounterpartyAccountId: refs.merchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "USD",
+		Amount:                "1.00",
+		MemberId:              &missingMemberID,
+	})
+	if err != nil {
+		t.Fatalf("missing member request: %v", err)
+	}
+	assertShorthandInvalidRequest(t, "missing member", missingMember.StatusCode(), missingMember.JSON400, missingMember.Body)
+
+	missingTag, err := client.REST().CreateSpendTransactionWithResponse(context.Background(), httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-01"),
+		FundingAccountId:      refs.checkingAccountID,
+		CounterpartyAccountId: refs.merchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "USD",
+		Amount:                "1.00",
+		TagIds:                apptest.Int64SlicePtr(999999),
+	})
+	if err != nil {
+		t.Fatalf("missing tag request: %v", err)
+	}
+	assertShorthandInvalidRequest(t, "missing tag", missingTag.StatusCode(), missingTag.JSON400, missingTag.Body)
+
+	tombstonedMember := client.Scenario().Member("Tombstoned Shorthand Member")
+	deleteMember(t, client, tombstonedMember.MemberId)
+	tombstonedMemberID := tombstonedMember.MemberId
+	tombstonedMemberResponse, err := client.REST().CreateSpendTransactionWithResponse(context.Background(), httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-01"),
+		FundingAccountId:      refs.checkingAccountID,
+		CounterpartyAccountId: refs.merchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "USD",
+		Amount:                "1.00",
+		MemberId:              &tombstonedMemberID,
+	})
+	if err != nil {
+		t.Fatalf("tombstoned member request: %v", err)
+	}
+	assertShorthandInvalidRequest(t, "tombstoned member", tombstonedMemberResponse.StatusCode(), tombstonedMemberResponse.JSON400, tombstonedMemberResponse.Body)
+
+	tombstonedTag := client.Scenario().Tag("References:TombstonedShorthandTag")
+	deleteTag(t, client, tombstonedTag.TagId)
+	tombstonedTagResponse, err := client.REST().CreateSpendTransactionWithResponse(context.Background(), httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-01"),
+		FundingAccountId:      refs.checkingAccountID,
+		CounterpartyAccountId: refs.merchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "USD",
+		Amount:                "1.00",
+		TagIds:                apptest.Int64SlicePtr(tombstonedTag.TagId),
+	})
+	if err != nil {
+		t.Fatalf("tombstoned tag request: %v", err)
+	}
+	assertShorthandInvalidRequest(t, "tombstoned tag", tombstonedTagResponse.StatusCode(), tombstonedTagResponse.JSON400, tombstonedTagResponse.Body)
+
 	wrongCategoryIntent, err := client.REST().CreateIncomeTransactionWithResponse(context.Background(), httpclient.CreateIncomeTransactionRequest{
 		InitiatedDate:        apptest.Date("2024-04-01"),
 		DestinationAccountId: refs.checkingAccountID,

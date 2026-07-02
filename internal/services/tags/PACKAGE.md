@@ -6,11 +6,12 @@
 
 ## Implicit Contracts
 
-- No implicit contracts.
+- Service instances own process-local, write-through tag reference caches for active-reference validation.
+- Hidden active tags are valid references only when callers explicitly allow hidden references.
 
 ## Boundaries
 
-- Owns: tag FQN validation, hidden/tombstoned use-case rules, and active-name conflict mapping.
+- Owns: tag FQN validation, hidden/tombstoned use-case rules, active-reference validation, and active-name conflict mapping.
 - Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
 
 ## Testing Notes

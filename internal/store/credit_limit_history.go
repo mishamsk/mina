@@ -29,14 +29,6 @@ func NewCreditLimitHistoryStore(db *AppDB) *CreditLimitHistoryStore {
 func (s *CreditLimitHistoryStore) Create(ctx context.Context, accountID int64, input creditlimits.CreateInput) (creditlimits.CreditLimitHistory, error) {
 	var history creditlimits.CreditLimitHistory
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		accountExists, err := activeAccountExists(ctx, tx, s.db, accountID)
-		if err != nil {
-			return err
-		}
-		if !accountExists {
-			return services.ErrNotFound
-		}
-
 		exists, err := activeCreditLimitHistoryExists(ctx, tx, s.db, accountID, input.EffectiveDate)
 		if err != nil {
 			return err
@@ -94,14 +86,6 @@ WHERE credit_limit_history_id = ?`
 
 // ListByAccount returns credit limit history for an active account in effective-date order.
 func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID int64, opts creditlimits.ListOptions) ([]creditlimits.CreditLimitHistory, error) {
-	accountExists, err := activeAccountExists(ctx, s.db.query(), s.db, accountID)
-	if err != nil {
-		return nil, err
-	}
-	if !accountExists {
-		return nil, services.ErrNotFound
-	}
-
 	query := `SELECT credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at
 FROM ` + s.db.accountingName("credit_limit_history") + `
 WHERE account_id = ?`
@@ -195,23 +179,6 @@ func scanCreditLimitHistory(scanner creditLimitHistoryScanner) (creditlimits.Cre
 
 type rowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-func activeAccountExists(ctx context.Context, queryer rowQuerier, db *AppDB, accountID int64) (bool, error) {
-	var id int64
-	err := queryer.QueryRowContext(
-		ctx,
-		"SELECT account_id FROM "+db.accountingName("account")+" WHERE account_id = ? AND tombstoned_at IS NULL LIMIT 1",
-		accountID,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check active account: %w", err)
-	}
-
-	return true, nil
 }
 
 func activeCreditLimitHistoryExists(ctx context.Context, queryer rowQuerier, db *AppDB, accountID int64, effectiveDate values.CivilDate) (bool, error) {

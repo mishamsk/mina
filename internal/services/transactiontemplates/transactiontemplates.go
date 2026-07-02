@@ -75,37 +75,43 @@ type Repository interface {
 	Tombstone(context.Context, int64) error
 }
 
-// AccountReader resolves active account references for template validation.
-type AccountReader interface {
-	List(context.Context, accounts.ListOptions) ([]accounts.Account, error)
+// AccountReferenceValidator resolves active account references for template validation.
+type AccountReferenceValidator interface {
+	ValidateActiveReferences(context.Context, []int64, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
 }
 
-// CategoryReader resolves active category references for template validation.
-type CategoryReader interface {
-	List(context.Context, categories.ListOptions) ([]categories.Category, error)
+// CategoryReferenceValidator resolves active category references for template validation.
+type CategoryReferenceValidator interface {
+	ValidateActiveReferences(context.Context, []int64, categories.ReferenceOptions) (map[int64]categories.Reference, error)
 }
 
-// TagReader resolves active tag references for template validation.
-type TagReader interface {
-	List(context.Context, tags.ListOptions) ([]tags.Tag, error)
+// TagReferenceValidator resolves active tag references for template validation.
+type TagReferenceValidator interface {
+	ValidateActiveReferences(context.Context, []int64, tags.ReferenceOptions) (map[int64]tags.Reference, error)
 }
 
-// MemberReader resolves active household-member references for template validation.
-type MemberReader interface {
-	List(context.Context, members.ListOptions) ([]members.Member, error)
+// MemberReferenceValidator resolves active household-member references for template validation.
+type MemberReferenceValidator interface {
+	ValidateActiveReferences(context.Context, []int64) (map[int64]members.Reference, error)
 }
 
 // Service owns transaction-template use cases and validation.
 type Service struct {
 	repo       Repository
-	accounts   AccountReader
-	categories CategoryReader
-	tags       TagReader
-	members    MemberReader
+	accounts   AccountReferenceValidator
+	categories CategoryReferenceValidator
+	tags       TagReferenceValidator
+	members    MemberReferenceValidator
 }
 
 // NewService creates a transaction-template service backed by repositories.
-func NewService(repo Repository, accounts AccountReader, categories CategoryReader, tags TagReader, members MemberReader) *Service {
+func NewService(
+	repo Repository,
+	accounts AccountReferenceValidator,
+	categories CategoryReferenceValidator,
+	tags TagReferenceValidator,
+	members MemberReferenceValidator,
+) *Service {
 	return &Service{
 		repo:       repo,
 		accounts:   accounts,
@@ -275,79 +281,47 @@ func validateTemplateRecordShape(index int, record TemplateRecordInput) error {
 }
 
 func (s *Service) validateTemplateReferences(ctx context.Context, records []TemplateRecordInput) error {
-	references, err := s.referenceDictionaries(ctx)
-	if err != nil {
-		return err
-	}
+	accountIDs := []int64{}
+	categoryIDs := make([]int64, 0, len(records))
+	memberIDs := []int64{}
+	tagIDs := []int64{}
 	for _, record := range records {
-		if _, ok := references.categoryIDs[record.CategoryID]; !ok {
-			return invalidReferenceError()
-		}
+		categoryIDs = append(categoryIDs, record.CategoryID)
 		if record.AccountID != nil {
-			if _, ok := references.accountIDs[*record.AccountID]; !ok {
-				return invalidReferenceError()
-			}
+			accountIDs = append(accountIDs, *record.AccountID)
 		}
 		if record.MemberID != nil {
-			if _, ok := references.memberIDs[*record.MemberID]; !ok {
-				return invalidReferenceError()
-			}
+			memberIDs = append(memberIDs, *record.MemberID)
 		}
-		for _, tagID := range record.TagIDs {
-			if _, ok := references.tagIDs[tagID]; !ok {
-				return invalidReferenceError()
-			}
+		tagIDs = append(tagIDs, record.TagIDs...)
+	}
+
+	if _, err := s.accounts.ValidateActiveReferences(ctx, accountIDs, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidReferenceError()
 		}
+		return err
+	}
+	if _, err := s.categories.ValidateActiveReferences(ctx, categoryIDs, categories.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidReferenceError()
+		}
+		return err
+	}
+	if _, err := s.members.ValidateActiveReferences(ctx, memberIDs); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidReferenceError()
+		}
+		return err
+	}
+	if _, err := s.tags.ValidateActiveReferences(ctx, tagIDs, tags.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidReferenceError()
+		}
+		return err
 	}
 
 	return nil
-}
-
-type referenceDictionaries struct {
-	accountIDs  map[int64]struct{}
-	categoryIDs map[int64]struct{}
-	memberIDs   map[int64]struct{}
-	tagIDs      map[int64]struct{}
-}
-
-func (s *Service) referenceDictionaries(ctx context.Context) (referenceDictionaries, error) {
-	accountList, err := s.accounts.List(ctx, accounts.ListOptions{IncludeHidden: true})
-	if err != nil {
-		return referenceDictionaries{}, err
-	}
-	categoryList, err := s.categories.List(ctx, categories.ListOptions{IncludeHidden: true})
-	if err != nil {
-		return referenceDictionaries{}, err
-	}
-	tagList, err := s.tags.List(ctx, tags.ListOptions{IncludeHidden: true})
-	if err != nil {
-		return referenceDictionaries{}, err
-	}
-	memberList, err := s.members.List(ctx, members.ListOptions{})
-	if err != nil {
-		return referenceDictionaries{}, err
-	}
-
-	references := referenceDictionaries{
-		accountIDs:  make(map[int64]struct{}, len(accountList)),
-		categoryIDs: make(map[int64]struct{}, len(categoryList)),
-		memberIDs:   make(map[int64]struct{}, len(memberList)),
-		tagIDs:      make(map[int64]struct{}, len(tagList)),
-	}
-	for _, account := range accountList {
-		references.accountIDs[account.ID] = struct{}{}
-	}
-	for _, category := range categoryList {
-		references.categoryIDs[category.ID] = struct{}{}
-	}
-	for _, member := range memberList {
-		references.memberIDs[member.ID] = struct{}{}
-	}
-	for _, tag := range tagList {
-		references.tagIDs[tag.ID] = struct{}{}
-	}
-
-	return references, nil
 }
 
 func validateTagIDs(index int, tagIDs []int64) error {

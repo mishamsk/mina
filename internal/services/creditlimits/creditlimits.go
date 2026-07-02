@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
@@ -39,14 +40,23 @@ type Repository interface {
 	Tombstone(context.Context, int64) error
 }
 
+// AccountReferenceValidator resolves active account references for credit-limit validation.
+type AccountReferenceValidator interface {
+	ValidateActiveReference(context.Context, int64, accounts.ReferenceOptions) (accounts.Reference, error)
+}
+
 // Service owns credit limit history use cases and validation.
 type Service struct {
-	repo Repository
+	repo     Repository
+	accounts AccountReferenceValidator
 }
 
 // NewService creates a credit limit history service backed by repo.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository, accounts AccountReferenceValidator) *Service {
+	return &Service{
+		repo:     repo,
+		accounts: accounts,
+	}
 }
 
 // Create validates and creates a credit limit history entry for an account.
@@ -56,6 +66,12 @@ func (s *Service) Create(ctx context.Context, accountID int64, input CreateInput
 	}
 	if input.CreditLimit.Sign() < 0 {
 		return CreditLimitHistory{}, services.InvalidRequest("credit_limit must be a non-negative decimal")
+	}
+	if _, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return CreditLimitHistory{}, services.NotFound("account not found")
+		}
+		return CreditLimitHistory{}, err
 	}
 
 	history, err := s.repo.Create(ctx, accountID, input)
@@ -93,6 +109,12 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Cr
 func (s *Service) ListByAccount(ctx context.Context, accountID int64, opts ListOptions) ([]CreditLimitHistory, error) {
 	if accountID <= 0 {
 		return nil, services.InvalidRequest("account_id must be positive")
+	}
+	if _, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return nil, services.NotFound("account not found")
+		}
+		return nil, err
 	}
 
 	history, err := s.repo.ListByAccount(ctx, accountID, opts)

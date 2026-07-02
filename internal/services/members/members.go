@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
@@ -34,6 +35,11 @@ type ListOptions struct {
 	List              services.ListOptions
 }
 
+// Reference is the household member data needed to validate write references.
+type Reference struct {
+	ID int64
+}
+
 // Repository persists household member state.
 type Repository interface {
 	Create(context.Context, CreateInput) (Member, error)
@@ -45,7 +51,8 @@ type Repository interface {
 
 // Service owns household member use cases and validation.
 type Service struct {
-	repo Repository
+	repo  Repository
+	cache memberReferenceCache
 }
 
 // NewService creates a member service backed by repo.
@@ -67,7 +74,56 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Member, error)
 		return Member{}, err
 	}
 
+	s.cacheActiveReference(member)
+
 	return member, nil
+}
+
+// ValidateActiveReferences returns active household member references keyed by ID.
+//
+// Missing, tombstoned, and non-positive IDs return services.ErrInvalidReference.
+func (s *Service) ValidateActiveReferences(ctx context.Context, ids []int64) (map[int64]Reference, error) {
+	uniqueIDs := deduplicateIDs(ids)
+	if len(uniqueIDs) == 0 {
+		return map[int64]Reference{}, nil
+	}
+
+	if err := s.ensureReferenceCache(ctx); err != nil {
+		return nil, err
+	}
+
+	s.cache.mu.RLock()
+	defer s.cache.mu.RUnlock()
+
+	refs := make(map[int64]Reference, len(uniqueIDs))
+	for _, id := range uniqueIDs {
+		state, ok := s.cache.entries[id]
+		if !ok || !state.active {
+			return nil, services.ErrInvalidReference
+		}
+		refs[id] = state.reference
+	}
+
+	return refs, nil
+}
+
+// ValidateActiveReference returns one active household member reference.
+func (s *Service) ValidateActiveReference(ctx context.Context, id int64) (Reference, error) {
+	refs, err := s.ValidateActiveReferences(ctx, []int64{id})
+	if err != nil {
+		return Reference{}, err
+	}
+
+	return refs[id], nil
+}
+
+// InvalidateReferenceCache forces the next reference validation to reload references.
+func (s *Service) InvalidateReferenceCache() {
+	s.cache.mu.Lock()
+	defer s.cache.mu.Unlock()
+
+	s.cache.loaded = false
+	s.cache.entries = nil
 }
 
 // Get returns a household member by ID.
@@ -112,6 +168,8 @@ func (s *Service) UpdateName(ctx context.Context, id int64, input UpdateInput) (
 		return Member{}, err
 	}
 
+	s.cacheActiveReference(member)
+
 	return member, nil
 }
 
@@ -127,7 +185,99 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 
+	s.cacheInactiveReference(id)
+
 	return nil
+}
+
+type memberReferenceCache struct {
+	mu      sync.RWMutex
+	loaded  bool
+	entries map[int64]memberReferenceState
+}
+
+type memberReferenceState struct {
+	reference Reference
+	active    bool
+}
+
+func (s *Service) ensureReferenceCache(ctx context.Context) error {
+	s.cache.mu.RLock()
+	loaded := s.cache.loaded
+	s.cache.mu.RUnlock()
+	if loaded {
+		return nil
+	}
+
+	s.cache.mu.Lock()
+	defer s.cache.mu.Unlock()
+	if s.cache.loaded {
+		return nil
+	}
+
+	members, err := s.repo.List(ctx, ListOptions{IncludeTombstoned: true})
+	if err != nil {
+		return err
+	}
+
+	entries := make(map[int64]memberReferenceState, len(members))
+	for _, member := range members {
+		entries[member.ID] = memberReferenceState{
+			reference: Reference{
+				ID: member.ID,
+			},
+			active: member.TombstonedAt == nil,
+		}
+	}
+	s.cache.entries = entries
+	s.cache.loaded = true
+
+	return nil
+}
+
+func (s *Service) cacheActiveReference(member Member) {
+	s.cache.mu.Lock()
+	defer s.cache.mu.Unlock()
+
+	if s.cache.entries == nil {
+		s.cache.entries = map[int64]memberReferenceState{}
+	}
+	s.cache.entries[member.ID] = memberReferenceState{
+		reference: Reference{
+			ID: member.ID,
+		},
+		active: member.TombstonedAt == nil,
+	}
+}
+
+func (s *Service) cacheInactiveReference(id int64) {
+	s.cache.mu.Lock()
+	defer s.cache.mu.Unlock()
+
+	if s.cache.entries == nil {
+		s.cache.entries = map[int64]memberReferenceState{}
+	}
+	state := s.cache.entries[id]
+	state.reference.ID = id
+	state.active = false
+	s.cache.entries[id] = state
+}
+
+func deduplicateIDs(ids []int64) []int64 {
+	seen := make(map[int64]struct{}, len(ids))
+	uniqueIDs := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return []int64{id}
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		uniqueIDs = append(uniqueIDs, id)
+	}
+
+	return uniqueIDs
 }
 
 func validateName(name string) error {

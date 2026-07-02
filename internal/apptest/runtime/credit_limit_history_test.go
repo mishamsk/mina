@@ -186,6 +186,33 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 		t.Fatalf("missing account list status = %d, want %d; body %s", missingAccountList.StatusCode(), http.StatusNotFound, missingAccountList.Body)
 	}
 
+	tombstonedAccount := client.Scenario().AccountWithCurrency("credit:TombstonedLimitAccount", "USD")
+	deleteAccount(t, client, tombstonedAccount.AccountId)
+	tombstonedAccountCreate, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), tombstonedAccount.AccountId, httpclient.CreateCreditLimitHistoryRequest{
+		CreditLimit:   "10000",
+		EffectiveDate: apptest.Date("2024-01-01"),
+	})
+	if err != nil {
+		t.Fatalf("tombstoned account create request: %v", err)
+	}
+	if tombstonedAccountCreate.StatusCode() != http.StatusNotFound {
+		t.Fatalf("tombstoned account create status = %d, want %d; body %s", tombstonedAccountCreate.StatusCode(), http.StatusNotFound, tombstonedAccountCreate.Body)
+	}
+	if tombstonedAccountCreate.JSON404 == nil || tombstonedAccountCreate.JSON404.Error.Code != httpclient.APIErrorCodeNotFound {
+		t.Fatalf("tombstoned account create error = %+v, want not_found; body %s", tombstonedAccountCreate.JSON404, tombstonedAccountCreate.Body)
+	}
+
+	tombstonedAccountList, err := client.REST().ListCreditLimitHistoryWithResponse(context.Background(), tombstonedAccount.AccountId, nil)
+	if err != nil {
+		t.Fatalf("tombstoned account list request: %v", err)
+	}
+	if tombstonedAccountList.StatusCode() != http.StatusNotFound {
+		t.Fatalf("tombstoned account list status = %d, want %d; body %s", tombstonedAccountList.StatusCode(), http.StatusNotFound, tombstonedAccountList.Body)
+	}
+	if tombstonedAccountList.JSON404 == nil || tombstonedAccountList.JSON404.Error.Code != httpclient.APIErrorCodeNotFound {
+		t.Fatalf("tombstoned account list error = %+v, want not_found; body %s", tombstonedAccountList.JSON404, tombstonedAccountList.Body)
+	}
+
 	invalidDate, err := client.REST().CreateCreditLimitHistoryWithBodyWithResponse(context.Background(), account.AccountId, "application/json", apptest.JSONReader(map[string]any{
 		"credit_limit":   "10000",
 		"effective_date": "2024-02-30",

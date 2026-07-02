@@ -188,7 +188,7 @@ func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, oper
 	if err != nil {
 		return appServices{}, err
 	}
-	services.Demo = newDemoService(appDB, cfg, opts)
+	services.Demo = newDemoService(appDB, cfg, opts, services)
 
 	return services, nil
 }
@@ -248,23 +248,34 @@ func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Option
 	tagStore := store.NewTagStore(appDB)
 	memberStore := store.NewMemberStore(appDB)
 	exchangeRates := exchangerates.NewService(exchangeRateStore)
+	accountService := accounts.NewService(accountStore)
+	categoryService := categories.NewService(categoryStore)
+	tagService := tags.NewService(tagStore)
+	memberService := members.NewService(memberStore)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			Health:        health.NewService(store.NewHealthStore(appDB)),
 			Operations:    operationRuns,
-			Categories:    categories.NewService(categoryStore),
-			Tags:          tags.NewService(tagStore),
-			Members:       members.NewService(memberStore),
-			Accounts:      accounts.NewService(accountStore),
-			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB)),
+			Categories:    categoryService,
+			Tags:          tagService,
+			Members:       memberService,
+			Accounts:      accountService,
+			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService),
 			ExchangeRates: exchangeRates,
-			Transactions:  transactions.NewService(store.NewTransactionStore(appDB), accountStore, categoryStore, exchangeRates),
+			Transactions: transactions.NewService(
+				store.NewTransactionStore(appDB),
+				accountService,
+				categoryService,
+				tagService,
+				memberService,
+				exchangeRates,
+			),
 			Templates: transactiontemplates.NewService(
 				store.NewTransactionTemplateStore(appDB),
-				accountStore,
-				categoryStore,
-				tagStore,
-				memberStore,
+				accountService,
+				categoryService,
+				tagService,
+				memberService,
 			),
 		},
 		Backup:                     backupService,
@@ -328,19 +339,31 @@ func demoDependencies(s appServices) demo.Services {
 	}
 }
 
-func newDemoService(appDB *store.AppDB, cfg appconfig.Config, opts Options) *demo.Service {
+func newDemoService(appDB *store.AppDB, cfg appconfig.Config, opts Options, mainServices appServices) *demo.Service {
 	return demo.NewService(demo.Dependencies{
 		Atomic: func(ctx context.Context, fn func(demo.Services) error) error {
-			return appDB.WithTx(ctx, nil, func(txAppDB *store.AppDB) error {
+			if err := appDB.WithTx(ctx, nil, func(txAppDB *store.AppDB) error {
 				services, err := newAccountingServices(txAppDB, cfg, opts, nil)
 				if err != nil {
 					return err
 				}
 
 				return fn(demoDependencies(services))
-			})
+			}); err != nil {
+				return err
+			}
+
+			invalidateReferenceCaches(mainServices)
+			return nil
 		},
 	})
+}
+
+func invalidateReferenceCaches(services appServices) {
+	services.Accounts.InvalidateReferenceCache()
+	services.Categories.InvalidateReferenceCache()
+	services.Tags.InvalidateReferenceCache()
+	services.Members.InvalidateReferenceCache()
 }
 
 // AccountingLocation returns the database and schema holding accounting state.

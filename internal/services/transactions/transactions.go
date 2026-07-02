@@ -10,6 +10,8 @@ import (
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
+	"github.com/mishamsk/mina/internal/services/members"
+	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
@@ -190,14 +192,26 @@ type Repository interface {
 	BulkUpdateStatuses(context.Context, []int64, *PostingStatus, *ReconciliationStatus) (int, error)
 }
 
-// AccountReader resolves active account semantics for transaction validation.
-type AccountReader interface {
-	List(context.Context, accounts.ListOptions) ([]accounts.Account, error)
+// AccountReferenceValidator resolves active account references for transaction validation.
+type AccountReferenceValidator interface {
+	ValidateActiveReferences(context.Context, []int64, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
+	ValidateActiveReference(context.Context, int64, accounts.ReferenceOptions) (accounts.Reference, error)
 }
 
-// CategoryReader resolves active category semantics for transaction validation.
-type CategoryReader interface {
-	List(context.Context, categories.ListOptions) ([]categories.Category, error)
+// CategoryReferenceValidator resolves active category references for transaction validation.
+type CategoryReferenceValidator interface {
+	ValidateActiveReferences(context.Context, []int64, categories.ReferenceOptions) (map[int64]categories.Reference, error)
+	ValidateActiveReference(context.Context, int64, categories.ReferenceOptions) (categories.Reference, error)
+}
+
+// TagReferenceValidator resolves active tag references for transaction validation.
+type TagReferenceValidator interface {
+	ValidateActiveReferences(context.Context, []int64, tags.ReferenceOptions) (map[int64]tags.Reference, error)
+}
+
+// MemberReferenceValidator resolves active household-member references for transaction validation.
+type MemberReferenceValidator interface {
+	ValidateActiveReferences(context.Context, []int64) (map[int64]members.Reference, error)
 }
 
 // AmountUSDDeriver derives signed USD amounts for generated journal records.
@@ -208,24 +222,35 @@ type AmountUSDDeriver interface {
 // Service owns transaction, journal record, and bulk record use cases.
 type Service struct {
 	repo             Repository
-	accounts         AccountReader
-	categories       CategoryReader
+	accounts         AccountReferenceValidator
+	categories       CategoryReferenceValidator
+	tags             TagReferenceValidator
+	members          MemberReferenceValidator
 	amountUSDDeriver AmountUSDDeriver
 }
 
 // NewService creates a transaction service backed by repositories.
-func NewService(repo Repository, accounts AccountReader, categories CategoryReader, amountUSDDeriver AmountUSDDeriver) *Service {
+func NewService(
+	repo Repository,
+	accounts AccountReferenceValidator,
+	categories CategoryReferenceValidator,
+	tags TagReferenceValidator,
+	members MemberReferenceValidator,
+	amountUSDDeriver AmountUSDDeriver,
+) *Service {
 	return &Service{
 		repo:             repo,
 		accounts:         accounts,
 		categories:       categories,
+		tags:             tags,
+		members:          members,
 		amountUSDDeriver: amountUSDDeriver,
 	}
 }
 
 type semanticDictionaries struct {
-	accountTypes    map[int64]accounts.AccountType
-	categoryIntents map[int64]categories.CategoryEconomicIntent
+	accounts   map[int64]accounts.Reference
+	categories map[int64]categories.Reference
 }
 
 // Create validates and creates a transaction and its journal records.
@@ -372,6 +397,13 @@ func (s *Service) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagI
 	if err := validateNoIDOverlap("add_tag_ids", addTagIDs, "remove_tag_ids", removeTagIDs); err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
+	tagIDs := append(append([]int64{}, addTagIDs...), removeTagIDs...)
+	if _, err := s.tags.ValidateActiveReferences(ctx, tagIDs, tags.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return BulkRecordOperationResponse{}, services.InvalidRequest("records or tags missing or inactive resource")
+		}
+		return BulkRecordOperationResponse{}, err
+	}
 
 	count, err := s.repo.BulkUpdateTags(ctx, recordIDs, addTagIDs, removeTagIDs)
 	if errors.Is(err, services.ErrInvalidReference) {
@@ -447,25 +479,25 @@ func (s *Service) BulkUpdateStatuses(
 }
 
 func (s *Service) validateInputClassification(ctx context.Context, input CreateInput) error {
-	dictionaries, err := s.semanticDictionaries(ctx)
+	dictionaries, err := s.semanticDictionaries(ctx, input.Records)
 	if err != nil {
 		return err
 	}
 	records := make([]SemanticRecord, 0, len(input.Records))
 	for _, record := range input.Records {
-		accountType, ok := dictionaries.accountTypes[record.AccountID]
+		accountReference, ok := dictionaries.accounts[record.AccountID]
 		if !ok {
 			return invalidTransactionReferenceError()
 		}
-		economicIntent, ok := dictionaries.categoryIntents[record.CategoryID]
+		categoryReference, ok := dictionaries.categories[record.CategoryID]
 		if !ok {
 			return invalidTransactionReferenceError()
 		}
 		records = append(records, SemanticRecord{
 			Currency:       record.Currency,
 			Amount:         record.Amount,
-			AccountType:    accountType,
-			EconomicIntent: economicIntent,
+			AccountType:    accountReference.AccountType,
+			EconomicIntent: categoryReference.EconomicIntent,
 		})
 	}
 	_, err = classifySemanticRecords(records)
@@ -473,13 +505,12 @@ func (s *Service) validateInputClassification(ctx context.Context, input CreateI
 }
 
 func (s *Service) validateBulkCategorizeClassification(ctx context.Context, recordIDs []int64, categoryID int64) error {
-	dictionaries, err := s.semanticDictionaries(ctx)
+	categoryReference, err := s.categories.ValidateActiveReference(ctx, categoryID, categories.ReferenceOptions{AllowHidden: true})
+	if errors.Is(err, services.ErrInvalidReference) {
+		return invalidBulkCategoryReferenceError()
+	}
 	if err != nil {
 		return err
-	}
-	economicIntent, ok := dictionaries.categoryIntents[categoryID]
-	if !ok {
-		return invalidBulkCategoryReferenceError()
 	}
 	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
 	if errors.Is(err, services.ErrInvalidReference) {
@@ -495,7 +526,7 @@ func (s *Service) validateBulkCategorizeClassification(ctx context.Context, reco
 		for recordIndex := range affected[transactionIndex].Records {
 			record := &affected[transactionIndex].Records[recordIndex]
 			if _, ok := selected[record.ID]; ok {
-				record.EconomicIntent = economicIntent
+				record.EconomicIntent = categoryReference.EconomicIntent
 				found[record.ID] = struct{}{}
 			}
 		}
@@ -511,13 +542,12 @@ func (s *Service) validateBulkCategorizeClassification(ctx context.Context, reco
 }
 
 func (s *Service) validateBulkReassignAccountClassification(ctx context.Context, recordIDs []int64, accountID int64) error {
-	dictionaries, err := s.semanticDictionaries(ctx)
+	accountReference, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true})
+	if errors.Is(err, services.ErrInvalidReference) {
+		return invalidBulkAccountReferenceError()
+	}
 	if err != nil {
 		return err
-	}
-	accountType, ok := dictionaries.accountTypes[accountID]
-	if !ok {
-		return invalidBulkAccountReferenceError()
 	}
 	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
 	if errors.Is(err, services.ErrInvalidReference) {
@@ -534,7 +564,7 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 			record := &affected[transactionIndex].Records[recordIndex]
 			if _, ok := selected[record.ID]; ok {
 				record.AccountID = accountID
-				record.AccountType = accountType
+				record.AccountType = accountReference.AccountType
 				found[record.ID] = struct{}{}
 			}
 		}
@@ -549,28 +579,51 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 	return nil
 }
 
-func (s *Service) semanticDictionaries(ctx context.Context) (semanticDictionaries, error) {
-	accountList, err := s.accounts.List(ctx, accounts.ListOptions{IncludeHidden: true})
+func (s *Service) semanticDictionaries(ctx context.Context, records []JournalRecordInput) (semanticDictionaries, error) {
+	accountIDs := make([]int64, 0, len(records))
+	categoryIDs := make([]int64, 0, len(records))
+	memberIDs := []int64{}
+	tagIDs := []int64{}
+	for _, record := range records {
+		accountIDs = append(accountIDs, record.AccountID)
+		categoryIDs = append(categoryIDs, record.CategoryID)
+		if record.MemberID != nil {
+			memberIDs = append(memberIDs, *record.MemberID)
+		}
+		tagIDs = append(tagIDs, record.TagIDs...)
+	}
+
+	accountReferences, err := s.accounts.ValidateActiveReferences(ctx, accountIDs, accounts.ReferenceOptions{AllowHidden: true})
+	if errors.Is(err, services.ErrInvalidReference) {
+		return semanticDictionaries{}, invalidTransactionReferenceError()
+	}
 	if err != nil {
 		return semanticDictionaries{}, err
 	}
-	categoryList, err := s.categories.List(ctx, categories.ListOptions{IncludeHidden: true})
+	categoryReferences, err := s.categories.ValidateActiveReferences(ctx, categoryIDs, categories.ReferenceOptions{AllowHidden: true})
+	if errors.Is(err, services.ErrInvalidReference) {
+		return semanticDictionaries{}, invalidTransactionReferenceError()
+	}
 	if err != nil {
 		return semanticDictionaries{}, err
 	}
+	if _, err := s.members.ValidateActiveReferences(ctx, memberIDs); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return semanticDictionaries{}, invalidTransactionReferenceError()
+		}
+		return semanticDictionaries{}, err
+	}
+	if _, err := s.tags.ValidateActiveReferences(ctx, tagIDs, tags.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return semanticDictionaries{}, invalidTransactionReferenceError()
+		}
+		return semanticDictionaries{}, err
+	}
 
-	dictionaries := semanticDictionaries{
-		accountTypes:    make(map[int64]accounts.AccountType, len(accountList)),
-		categoryIntents: make(map[int64]categories.CategoryEconomicIntent, len(categoryList)),
-	}
-	for _, account := range accountList {
-		dictionaries.accountTypes[account.ID] = account.AccountType
-	}
-	for _, category := range categoryList {
-		dictionaries.categoryIntents[category.ID] = category.EconomicIntent
-	}
-
-	return dictionaries, nil
+	return semanticDictionaries{
+		accounts:   accountReferences,
+		categories: categoryReferences,
+	}, nil
 }
 
 func invalidTransactionReferenceError() error {

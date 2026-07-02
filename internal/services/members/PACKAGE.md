@@ -6,11 +6,11 @@
 
 ## Implicit Contracts
 
-- No implicit contracts.
+- Service instances own process-local, write-through member reference caches for active-reference validation.
 
 ## Boundaries
 
-- Owns: member name validation, tombstoned use-case rules, and active-name conflict mapping.
+- Owns: member name validation, tombstoned use-case rules, active-reference validation, and active-name conflict mapping.
 - Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
 
 ## Testing Notes

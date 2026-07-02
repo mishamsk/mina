@@ -245,6 +245,8 @@ func TestRecordBulkOperationsRejectTombstonedTargetReferences(t *testing.T) {
 	if deleteAccount.StatusCode() != http.StatusNoContent {
 		t.Fatalf("delete account status = %d, want %d; body %s", deleteAccount.StatusCode(), http.StatusNoContent, deleteAccount.Body)
 	}
+	tombstonedTag := client.Scenario().Tag("Bulk:TombstonedTagTarget")
+	deleteTag(t, client, tombstonedTag.TagId)
 
 	tombstonedBulkCategory, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
 		RecordIds:  []int64{firstRecordID},
@@ -262,6 +264,15 @@ func TestRecordBulkOperationsRejectTombstonedTargetReferences(t *testing.T) {
 	requireNoTransportError(t, "bulk reassign tombstoned account", err)
 	if tombstonedBulkAccount.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("tombstoned account status = %d, want %d; body %s", tombstonedBulkAccount.StatusCode(), http.StatusBadRequest, tombstonedBulkAccount.Body)
+	}
+
+	tombstonedBulkTag, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
+		RecordIds: []int64{firstRecordID},
+		AddTagIds: apptest.Int64SlicePtr(tombstonedTag.TagId),
+	})
+	requireNoTransportError(t, "bulk update tombstoned tag", err)
+	if tombstonedBulkTag.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("tombstoned tag status = %d, want %d; body %s", tombstonedBulkTag.StatusCode(), http.StatusBadRequest, tombstonedBulkTag.Body)
 	}
 }
 

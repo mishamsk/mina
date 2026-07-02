@@ -6,7 +6,8 @@
 
 ## Implicit Contracts
 
-- Create/replace and bulk category/account use cases prevalidate semantic classification from active account/category dictionaries before writes.
+- Create/replace and bulk category/account/tag use cases validate references through dictionary service APIs before writes.
+- Transaction semantic classification uses account/category reference data owned by dictionary service APIs.
 - Shorthand create use cases build ordinary same-currency two-record transactions before delegating to full create validation and persistence.
 
 ## Boundaries

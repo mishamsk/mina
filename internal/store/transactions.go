@@ -33,10 +33,6 @@ func NewTransactionStore(db *AppDB) *TransactionStore {
 func (s *TransactionStore) Create(ctx context.Context, req transactions.CreateInput) (transactions.Transaction, error) {
 	var transaction transactions.Transaction
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		if err := validateTransactionReferences(ctx, tx, s.db, req); err != nil {
-			return err
-		}
-
 		row := tx.QueryRowContext(
 			ctx,
 			`INSERT INTO `+s.db.accountingName("transaction")+` (initiated_date)
@@ -90,13 +86,6 @@ RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
 		}
 		if err != nil {
 			return fmt.Errorf("update transaction: %w", err)
-		}
-
-		if err := validateTransactionReferences(ctx, tx, s.db, req); err != nil {
-			if errors.Is(err, services.ErrNotFound) {
-				return fmt.Errorf("%w: %v", services.ErrInvalidReference, err)
-			}
-			return err
 		}
 
 		if _, err := tx.ExecContext(
@@ -359,13 +348,6 @@ func (s *TransactionStore) BulkCategorize(ctx context.Context, recordIDs []int64
 		if err := validateActiveJournalRecords(ctx, tx, s.db, recordIDs); err != nil {
 			return err
 		}
-		exists, err := activeCategoryExists(ctx, tx, s.db, categoryID)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return services.ErrInvalidReference
-		}
 
 		args := append([]any{categoryID}, int64Args(recordIDs)...)
 		if _, err := tx.ExecContext(
@@ -394,13 +376,6 @@ func (s *TransactionStore) BulkReassignAccount(ctx context.Context, recordIDs []
 		if err := validateActiveJournalRecords(ctx, tx, s.db, recordIDs); err != nil {
 			return err
 		}
-		exists, err := activeAccountExists(ctx, tx, s.db, accountID)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return services.ErrInvalidReference
-		}
 
 		args := append([]any{accountID}, int64Args(recordIDs)...)
 		if _, err := tx.ExecContext(
@@ -427,9 +402,6 @@ WHERE record_id IN (`+placeholders(len(recordIDs))+`)`,
 func (s *TransactionStore) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagIDs []int64, removeTagIDs []int64) (int, error) {
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		if err := validateActiveJournalRecords(ctx, tx, s.db, recordIDs); err != nil {
-			return err
-		}
-		if err := validateActiveTags(ctx, tx, s.db, append(append([]int64{}, addTagIDs...), removeTagIDs...)); err != nil {
 			return err
 		}
 
@@ -754,48 +726,6 @@ ORDER BY tag_id ASC`,
 	return tagIDs, nil
 }
 
-func validateTransactionReferences(ctx context.Context, tx *sql.Tx, db *AppDB, req transactions.CreateInput) error {
-	for _, record := range req.Records {
-		exists, err := activeAccountExists(ctx, tx, db, record.AccountID)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return fmt.Errorf("%w: active account not found", services.ErrNotFound)
-		}
-
-		exists, err = activeCategoryExists(ctx, tx, db, record.CategoryID)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return fmt.Errorf("%w: active category not found", services.ErrNotFound)
-		}
-
-		if record.MemberID != nil {
-			exists, err = activeMemberExists(ctx, tx, db, *record.MemberID)
-			if err != nil {
-				return err
-			}
-			if !exists {
-				return fmt.Errorf("%w: active member not found", services.ErrNotFound)
-			}
-		}
-
-		for _, tagID := range record.TagIDs {
-			exists, err = activeTagExists(ctx, tx, db, tagID)
-			if err != nil {
-				return err
-			}
-			if !exists {
-				return fmt.Errorf("%w: active tag not found", services.ErrNotFound)
-			}
-		}
-	}
-
-	return nil
-}
-
 func transactionsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, recordIDs []int64) ([]transactions.Transaction, error) {
 	transactionIDs, err := transactionIDsByRecordIDs(ctx, queryer, db, recordIDs)
 	if err != nil {
@@ -883,30 +813,6 @@ WHERE jr.record_id IN (`+placeholders(len(recordIDs))+`)
 	return nil
 }
 
-func validateActiveTags(ctx context.Context, queryer rowQuerier, db *AppDB, tagIDs []int64) error {
-	if len(tagIDs) == 0 {
-		return nil
-	}
-
-	var count int
-	err := queryer.QueryRowContext(
-		ctx,
-		`SELECT COUNT(DISTINCT tag_id)
-FROM `+db.accountingName("tag")+`
-WHERE tag_id IN (`+placeholders(len(tagIDs))+`)
-  AND tombstoned_at IS NULL`,
-		int64Args(tagIDs)...,
-	).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("check active tags: %w", err)
-	}
-	if count != len(tagIDs) {
-		return services.ErrInvalidReference
-	}
-
-	return nil
-}
-
 func tagListExpression(tagIDs []int64) (string, []any) {
 	if len(tagIDs) == 0 {
 		return "CAST([] AS INTEGER[])", nil
@@ -938,57 +844,6 @@ func updatedTagIDs(current []int64, add []int64, remove []int64) []int64 {
 
 func enumValue(value any) string {
 	return strings.ToUpper(fmt.Sprint(value))
-}
-
-func activeCategoryExists(ctx context.Context, queryer rowQuerier, db *AppDB, categoryID int64) (bool, error) {
-	var id int64
-	err := queryer.QueryRowContext(
-		ctx,
-		"SELECT category_id FROM "+db.accountingName("category")+" WHERE category_id = ? AND tombstoned_at IS NULL LIMIT 1",
-		categoryID,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check active category: %w", err)
-	}
-
-	return true, nil
-}
-
-func activeMemberExists(ctx context.Context, queryer rowQuerier, db *AppDB, memberID int64) (bool, error) {
-	var id int64
-	err := queryer.QueryRowContext(
-		ctx,
-		"SELECT member_id FROM "+db.accountingName("member")+" WHERE member_id = ? AND tombstoned_at IS NULL LIMIT 1",
-		memberID,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check active member: %w", err)
-	}
-
-	return true, nil
-}
-
-func activeTagExists(ctx context.Context, queryer rowQuerier, db *AppDB, tagID int64) (bool, error) {
-	var id int64
-	err := queryer.QueryRowContext(
-		ctx,
-		"SELECT tag_id FROM "+db.accountingName("tag")+" WHERE tag_id = ? AND tombstoned_at IS NULL LIMIT 1",
-		tagID,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check active tag: %w", err)
-	}
-
-	return true, nil
 }
 
 func int64ListFromDuckDB(values []any) ([]int64, error) {

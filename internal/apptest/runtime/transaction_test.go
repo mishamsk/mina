@@ -608,6 +608,135 @@ func TestTransactionRejectsTombstonedAccountAndCategoryReferences(t *testing.T) 
 	}
 }
 
+func TestTransactionRejectsTombstonedMemberAndTagReferences(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+
+	tombstonedMember := client.Scenario().Member("Tombstoned Transaction Member")
+	deleteMember(t, client, tombstonedMember.MemberId)
+	tombstonedTag := client.Scenario().Tag("References:TombstonedTransactionTag")
+	deleteTag(t, client, tombstonedTag.TagId)
+
+	createWithTombstonedMember := balancedTransactionRequest(refs)
+	createWithTombstonedMember.Records[0].MemberId = &tombstonedMember.MemberId
+	rejectedCreateMember, err := client.REST().CreateTransactionWithResponse(context.Background(), createWithTombstonedMember)
+	if err != nil {
+		t.Fatalf("create with tombstoned member request: %v", err)
+	}
+	if rejectedCreateMember.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("create with tombstoned member status = %d, want %d; body %s", rejectedCreateMember.StatusCode(), http.StatusBadRequest, rejectedCreateMember.Body)
+	}
+
+	createWithTombstonedTag := balancedTransactionRequest(refs)
+	createWithTombstonedTag.Records[0].TagIds = apptest.Int64SlicePtr(tombstonedTag.TagId)
+	rejectedCreateTag, err := client.REST().CreateTransactionWithResponse(context.Background(), createWithTombstonedTag)
+	if err != nil {
+		t.Fatalf("create with tombstoned tag request: %v", err)
+	}
+	if rejectedCreateTag.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("create with tombstoned tag status = %d, want %d; body %s", rejectedCreateTag.StatusCode(), http.StatusBadRequest, rejectedCreateTag.Body)
+	}
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs))
+	if err != nil {
+		t.Fatalf("create base transaction request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create base transaction status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+
+	replaceWithTombstonedMember := replacementTransactionRequest(refs)
+	replaceWithTombstonedMember.Records[0].MemberId = &tombstonedMember.MemberId
+	rejectedReplaceMember, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replaceWithTombstonedMember)
+	if err != nil {
+		t.Fatalf("replace with tombstoned member request: %v", err)
+	}
+	if rejectedReplaceMember.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("replace with tombstoned member status = %d, want %d; body %s", rejectedReplaceMember.StatusCode(), http.StatusBadRequest, rejectedReplaceMember.Body)
+	}
+
+	replaceWithTombstonedTag := replacementTransactionRequest(refs)
+	replaceWithTombstonedTag.Records[0].TagIds = apptest.Int64SlicePtr(tombstonedTag.TagId)
+	rejectedReplaceTag, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replaceWithTombstonedTag)
+	if err != nil {
+		t.Fatalf("replace with tombstoned tag request: %v", err)
+	}
+	if rejectedReplaceTag.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("replace with tombstoned tag status = %d, want %d; body %s", rejectedReplaceTag.StatusCode(), http.StatusBadRequest, rejectedReplaceTag.Body)
+	}
+}
+
+func TestTransactionAcceptsHiddenActiveReferences(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	hidden := true
+
+	hiddenChecking, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "checking:HiddenTransactionReference",
+		AccountType: httpclient.Balance,
+		Currency:    apptest.StringPtr("USD"),
+		IsHidden:    &hidden,
+	})
+	if err != nil {
+		t.Fatalf("create hidden checking account request: %v", err)
+	}
+	if hiddenChecking.StatusCode() != http.StatusCreated {
+		t.Fatalf("create hidden checking account status = %d, want %d; body %s", hiddenChecking.StatusCode(), http.StatusCreated, hiddenChecking.Body)
+	}
+	hiddenMerchant, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "merchant:HiddenTransactionReference",
+		AccountType: httpclient.Flow,
+		IsHidden:    &hidden,
+	})
+	if err != nil {
+		t.Fatalf("create hidden merchant account request: %v", err)
+	}
+	if hiddenMerchant.StatusCode() != http.StatusCreated {
+		t.Fatalf("create hidden merchant account status = %d, want %d; body %s", hiddenMerchant.StatusCode(), http.StatusCreated, hiddenMerchant.Body)
+	}
+	hiddenCategory := client.Scenario().CategoryWithHidden("Food:HiddenTransactionReference", hidden)
+	hiddenTagResponse, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn:      "References:HiddenTransactionTag",
+		IsHidden: &hidden,
+	})
+	if err != nil {
+		t.Fatalf("create hidden tag request: %v", err)
+	}
+	if hiddenTagResponse.StatusCode() != http.StatusCreated {
+		t.Fatalf("create hidden tag status = %d, want %d; body %s", hiddenTagResponse.StatusCode(), http.StatusCreated, hiddenTagResponse.Body)
+	}
+
+	request := balancedTransactionRequest(refs)
+	request.Records[0].AccountId = hiddenChecking.JSON201.AccountId
+	request.Records[0].CategoryId = hiddenCategory.CategoryId
+	request.Records[0].TagIds = apptest.Int64SlicePtr(hiddenTagResponse.JSON201.TagId)
+	request.Records[1].AccountId = hiddenMerchant.JSON201.AccountId
+	request.Records[1].CategoryId = hiddenCategory.CategoryId
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
+	if err != nil {
+		t.Fatalf("create with hidden references request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create with hidden references status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertInt64s(t, created.JSON201.Records[0].TagIds, []int64{hiddenTagResponse.JSON201.TagId})
+
+	replacement := replacementTransactionRequest(refs)
+	replacement.Records[0].AccountId = hiddenChecking.JSON201.AccountId
+	replacement.Records[0].CategoryId = hiddenCategory.CategoryId
+	replacement.Records[0].TagIds = apptest.Int64SlicePtr(hiddenTagResponse.JSON201.TagId)
+	replacement.Records[1].AccountId = hiddenMerchant.JSON201.AccountId
+	replacement.Records[1].CategoryId = hiddenCategory.CategoryId
+	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacement)
+	if err != nil {
+		t.Fatalf("replace with hidden references request: %v", err)
+	}
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("replace with hidden references status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	assertInt64s(t, replaced.JSON200.Records[0].TagIds, []int64{hiddenTagResponse.JSON201.TagId})
+}
+
 type transactionRefs struct {
 	CheckingAccountId int64
 	MerchantAccountId int64
