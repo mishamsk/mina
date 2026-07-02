@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kata Plan Worktree"
+  short_description: "Claim Kata work and draft a plan"
+  default_prompt: "Use $kata-plan-worktree to claim the matching Kata issue and create a plan-only worktree."
