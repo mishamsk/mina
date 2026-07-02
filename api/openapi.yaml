@@ -980,6 +980,128 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/transaction-templates:
+    get:
+      operationId: listTransactionTemplates
+      summary: List transaction templates.
+      parameters:
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: fqn
+            enum:
+              - fqn
+              - created_at
+              - updated_at
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Active transaction templates in caller-selected deterministic order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionTemplateListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+    post:
+      operationId: createTransactionTemplate
+      summary: Create a transaction template.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionTemplateWriteRequest"
+      responses:
+        "201":
+          description: Transaction template created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionTemplate"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/transaction-templates/{transaction_template_id}:
+    parameters:
+      - name: transaction_template_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getTransactionTemplate
+      summary: Get a transaction template.
+      responses:
+        "200":
+          description: Transaction template found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionTemplate"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: replaceTransactionTemplate
+      summary: Replace a transaction template.
+      description: Replaces fqn and the full date-free template record set atomically. The transaction_template_id is preserved, previous active record defaults are tombstoned, and replacement records are partial defaults that do not need to balance.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionTemplateWriteRequest"
+      responses:
+        "200":
+          description: Transaction template replaced.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionTemplate"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: deleteTransactionTemplate
+      summary: Tombstone a transaction template and its record defaults.
+      responses:
+        "204":
+          description: Transaction template tombstoned.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/transactions:
     get:
       operationId: listTransactions
@@ -2401,6 +2523,68 @@ components:
           minItems: 2
           items:
             $ref: "#/components/schemas/CreateJournalRecordRequest"
+    TransactionTemplateWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - fqn
+        - records
+      properties:
+        fqn:
+          type: string
+        records:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/TransactionTemplateRecordRequest"
+    TransactionTemplateRecordRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - category_id
+      properties:
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+        account_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        member_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          nullable: true
+          description: JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        tag_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        memo:
+          type: string
+          nullable: true
+        posting_status:
+          allOf:
+            - $ref: "#/components/schemas/PostingStatus"
+          nullable: true
+        reconciliation_status:
+          allOf:
+            - $ref: "#/components/schemas/ReconciliationStatus"
+          nullable: true
     CreateTagRequest:
       type: object
       additionalProperties: false
@@ -2818,6 +3002,126 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Tag"
+    TransactionTemplate:
+      type: object
+      additionalProperties: false
+      required:
+        - transaction_template_id
+        - fqn
+        - parent_fqn
+        - name
+        - level
+        - created_at
+        - updated_at
+        - records
+      properties:
+        transaction_template_id:
+          type: integer
+          format: int64
+        fqn:
+          type: string
+        parent_fqn:
+          type: string
+          nullable: true
+        name:
+          type: string
+        level:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        tombstoned_at:
+          type: string
+          format: date-time
+          nullable: true
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionTemplateRecord"
+    TransactionTemplateRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - transaction_template_record_id
+        - transaction_template_id
+        - category_id
+        - account_id
+        - member_id
+        - currency
+        - amount
+        - tag_ids
+        - memo
+        - posting_status
+        - reconciliation_status
+        - created_at
+        - updated_at
+      properties:
+        transaction_template_record_id:
+          type: integer
+          format: int64
+        transaction_template_id:
+          type: integer
+          format: int64
+        category_id:
+          type: integer
+          format: int64
+        account_id:
+          type: integer
+          format: int64
+          nullable: true
+        member_id:
+          type: integer
+          format: int64
+          nullable: true
+        currency:
+          type: string
+          nullable: true
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          nullable: true
+          description: JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        tag_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        memo:
+          type: string
+          nullable: true
+        posting_status:
+          allOf:
+            - $ref: "#/components/schemas/PostingStatus"
+          nullable: true
+        reconciliation_status:
+          allOf:
+            - $ref: "#/components/schemas/ReconciliationStatus"
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        tombstoned_at:
+          type: string
+          format: date-time
+          nullable: true
+    TransactionTemplateListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - transaction_templates
+      properties:
+        transaction_templates:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionTemplate"
     Transaction:
       type: object
       additionalProperties: false

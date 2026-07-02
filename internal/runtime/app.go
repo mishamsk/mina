@@ -29,6 +29,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/operationruns"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
+	"github.com/mishamsk/mina/internal/services/transactiontemplates"
 	"github.com/mishamsk/mina/internal/store"
 	"github.com/mishamsk/mina/internal/webui"
 )
@@ -244,18 +245,27 @@ func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Option
 	)
 	accountStore := store.NewAccountStore(appDB)
 	categoryStore := store.NewCategoryStore(appDB)
+	tagStore := store.NewTagStore(appDB)
+	memberStore := store.NewMemberStore(appDB)
 	exchangeRates := exchangerates.NewService(exchangeRateStore)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			Health:        health.NewService(store.NewHealthStore(appDB)),
 			Operations:    operationRuns,
 			Categories:    categories.NewService(categoryStore),
-			Tags:          tags.NewService(store.NewTagStore(appDB)),
-			Members:       members.NewService(store.NewMemberStore(appDB)),
+			Tags:          tags.NewService(tagStore),
+			Members:       members.NewService(memberStore),
 			Accounts:      accounts.NewService(accountStore),
 			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB)),
 			ExchangeRates: exchangeRates,
 			Transactions:  transactions.NewService(store.NewTransactionStore(appDB), accountStore, categoryStore, exchangeRates),
+			Templates: transactiontemplates.NewService(
+				store.NewTransactionTemplateStore(appDB),
+				accountStore,
+				categoryStore,
+				tagStore,
+				memberStore,
+			),
 		},
 		Backup:                     backupService,
 		ExchangeRateLoading:        exchangeRateLoading,

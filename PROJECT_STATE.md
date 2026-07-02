@@ -11,6 +11,7 @@
   - Exchange-rate and account credit-limit-history flows.
   - Transaction creation, read, paginated list, full replacement, and tombstone deletion with nested journal records.
   - Shorthand transaction creation endpoints for spend, income, refund, and transfer.
+  - Transaction-template creation, read, paginated list, full replacement, and tombstone deletion with nested partial record defaults.
   - Transaction semantic shape validation with derived transaction class, component summaries, and display amounts in REST responses.
   - Paginated journal-record search and account-record search.
   - Bulk journal-record category, tag, account, and status updates.
@@ -35,5 +36,6 @@
   - Ephemeral runtime operation-run status is stored in the in-memory process database outside portable accounting state.
   - Store-owned database backup sources use DuckDB database copy into provider-owned target files and reject in-memory accounting sources.
   - Exchange-rate loading infers non-USD journal-record needs and upserts active `USD -> currency` rates.
+  - Transaction templates are stored as normalized active/tombstoned template and record-default rows with write-time reference checks.
   - Tombstone-aware reads and list defaults for applicable resources.
   - Store-owned allowlists for dynamic filtering and sorting.

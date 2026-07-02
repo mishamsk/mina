@@ -314,6 +314,26 @@ export type UpdateTransactionRequest = {
     records: Array<CreateJournalRecordRequest>;
 };
 
+export type TransactionTemplateWriteRequest = {
+    fqn: string;
+    records: Array<TransactionTemplateRecordRequest>;
+};
+
+export type TransactionTemplateRecordRequest = {
+    category_id: number;
+    account_id?: number | null;
+    member_id?: number | null;
+    currency?: string | null;
+    /**
+     * JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount?: string | null;
+    tag_ids?: Array<number>;
+    memo?: string | null;
+    posting_status?: PostingStatus | null;
+    reconciliation_status?: ReconciliationStatus | null;
+};
+
 export type CreateTagRequest = {
     fqn: string;
     is_hidden?: boolean;
@@ -459,6 +479,42 @@ export type Tag = {
 
 export type TagListResponse = {
     tags: Array<Tag>;
+};
+
+export type TransactionTemplate = {
+    transaction_template_id: number;
+    fqn: string;
+    parent_fqn: string | null;
+    name: string;
+    level: number;
+    created_at: string;
+    updated_at: string;
+    tombstoned_at?: string | null;
+    records: Array<TransactionTemplateRecord>;
+};
+
+export type TransactionTemplateRecord = {
+    transaction_template_record_id: number;
+    transaction_template_id: number;
+    category_id: number;
+    account_id: number | null;
+    member_id: number | null;
+    currency: string | null;
+    /**
+     * JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount: string | null;
+    tag_ids: Array<number>;
+    memo: string | null;
+    posting_status: PostingStatus | null;
+    reconciliation_status: ReconciliationStatus | null;
+    created_at: string;
+    updated_at: string;
+    tombstoned_at?: string | null;
+};
+
+export type TransactionTemplateListResponse = {
+    transaction_templates: Array<TransactionTemplate>;
 };
 
 export type Transaction = {
@@ -1683,6 +1739,162 @@ export type UpdateExchangeRateResponses = {
 };
 
 export type UpdateExchangeRateResponse = UpdateExchangeRateResponses[keyof UpdateExchangeRateResponses];
+
+export type ListTransactionTemplatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        sort?: 'fqn' | 'created_at' | 'updated_at';
+        sort_dir?: 'asc' | 'desc';
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/transaction-templates';
+};
+
+export type ListTransactionTemplatesErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type ListTransactionTemplatesError = ListTransactionTemplatesErrors[keyof ListTransactionTemplatesErrors];
+
+export type ListTransactionTemplatesResponses = {
+    /**
+     * Active transaction templates in caller-selected deterministic order.
+     */
+    200: TransactionTemplateListResponse;
+};
+
+export type ListTransactionTemplatesResponse = ListTransactionTemplatesResponses[keyof ListTransactionTemplatesResponses];
+
+export type CreateTransactionTemplateData = {
+    body: TransactionTemplateWriteRequest;
+    path?: never;
+    query?: never;
+    url: '/api/transaction-templates';
+};
+
+export type CreateTransactionTemplateErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
+};
+
+export type CreateTransactionTemplateError = CreateTransactionTemplateErrors[keyof CreateTransactionTemplateErrors];
+
+export type CreateTransactionTemplateResponses = {
+    /**
+     * Transaction template created.
+     */
+    201: TransactionTemplate;
+};
+
+export type CreateTransactionTemplateResponse = CreateTransactionTemplateResponses[keyof CreateTransactionTemplateResponses];
+
+export type DeleteTransactionTemplateData = {
+    body?: never;
+    path: {
+        transaction_template_id: number;
+    };
+    query?: never;
+    url: '/api/transaction-templates/{transaction_template_id}';
+};
+
+export type DeleteTransactionTemplateErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type DeleteTransactionTemplateError = DeleteTransactionTemplateErrors[keyof DeleteTransactionTemplateErrors];
+
+export type DeleteTransactionTemplateResponses = {
+    /**
+     * Transaction template tombstoned.
+     */
+    204: void;
+};
+
+export type DeleteTransactionTemplateResponse = DeleteTransactionTemplateResponses[keyof DeleteTransactionTemplateResponses];
+
+export type GetTransactionTemplateData = {
+    body?: never;
+    path: {
+        transaction_template_id: number;
+    };
+    query?: never;
+    url: '/api/transaction-templates/{transaction_template_id}';
+};
+
+export type GetTransactionTemplateErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type GetTransactionTemplateError = GetTransactionTemplateErrors[keyof GetTransactionTemplateErrors];
+
+export type GetTransactionTemplateResponses = {
+    /**
+     * Transaction template found.
+     */
+    200: TransactionTemplate;
+};
+
+export type GetTransactionTemplateResponse = GetTransactionTemplateResponses[keyof GetTransactionTemplateResponses];
+
+export type ReplaceTransactionTemplateData = {
+    body: TransactionTemplateWriteRequest;
+    path: {
+        transaction_template_id: number;
+    };
+    query?: never;
+    url: '/api/transaction-templates/{transaction_template_id}';
+};
+
+export type ReplaceTransactionTemplateErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
+};
+
+export type ReplaceTransactionTemplateError = ReplaceTransactionTemplateErrors[keyof ReplaceTransactionTemplateErrors];
+
+export type ReplaceTransactionTemplateResponses = {
+    /**
+     * Transaction template replaced.
+     */
+    200: TransactionTemplate;
+};
+
+export type ReplaceTransactionTemplateResponse = ReplaceTransactionTemplateResponses[keyof ReplaceTransactionTemplateResponses];
 
 export type ListTransactionsData = {
     body?: never;

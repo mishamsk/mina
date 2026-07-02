@@ -596,6 +596,45 @@ func (e ListTagsParamsSortDir) Valid() bool {
 	}
 }
 
+// Defines values for ListTransactionTemplatesParamsSort.
+const (
+	CreatedAt ListTransactionTemplatesParamsSort = "created_at"
+	Fqn       ListTransactionTemplatesParamsSort = "fqn"
+	UpdatedAt ListTransactionTemplatesParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListTransactionTemplatesParamsSort enum.
+func (e ListTransactionTemplatesParamsSort) Valid() bool {
+	switch e {
+	case CreatedAt:
+		return true
+	case Fqn:
+		return true
+	case UpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListTransactionTemplatesParamsSortDir.
+const (
+	Asc  ListTransactionTemplatesParamsSortDir = "asc"
+	Desc ListTransactionTemplatesParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListTransactionTemplatesParamsSortDir enum.
+func (e ListTransactionTemplatesParamsSortDir) Valid() bool {
+	switch e {
+	case Asc:
+		return true
+	case Desc:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIError defines model for APIError.
 type APIError struct {
 	Code    APIErrorCode `json:"code"`
@@ -1105,6 +1144,65 @@ type TransactionListResponse struct {
 	Transactions []Transaction `json:"transactions"`
 }
 
+// TransactionTemplate defines model for TransactionTemplate.
+type TransactionTemplate struct {
+	CreatedAt             time.Time                   `json:"created_at"`
+	Fqn                   string                      `json:"fqn"`
+	Level                 int                         `json:"level"`
+	Name                  string                      `json:"name"`
+	ParentFqn             *string                     `json:"parent_fqn"`
+	Records               []TransactionTemplateRecord `json:"records"`
+	TombstonedAt          *time.Time                  `json:"tombstoned_at,omitempty"`
+	TransactionTemplateId int64                       `json:"transaction_template_id"`
+	UpdatedAt             time.Time                   `json:"updated_at"`
+}
+
+// TransactionTemplateListResponse defines model for TransactionTemplateListResponse.
+type TransactionTemplateListResponse struct {
+	TransactionTemplates []TransactionTemplate `json:"transaction_templates"`
+}
+
+// TransactionTemplateRecord defines model for TransactionTemplateRecord.
+type TransactionTemplateRecord struct {
+	AccountId *int64 `json:"account_id"`
+
+	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount                      *string               `json:"amount"`
+	CategoryId                  int64                 `json:"category_id"`
+	CreatedAt                   time.Time             `json:"created_at"`
+	Currency                    *string               `json:"currency"`
+	MemberId                    *int64                `json:"member_id"`
+	Memo                        *string               `json:"memo"`
+	PostingStatus               *PostingStatus        `json:"posting_status"`
+	ReconciliationStatus        *ReconciliationStatus `json:"reconciliation_status"`
+	TagIds                      []int64               `json:"tag_ids"`
+	TombstonedAt                *time.Time            `json:"tombstoned_at,omitempty"`
+	TransactionTemplateId       int64                 `json:"transaction_template_id"`
+	TransactionTemplateRecordId int64                 `json:"transaction_template_record_id"`
+	UpdatedAt                   time.Time             `json:"updated_at"`
+}
+
+// TransactionTemplateRecordRequest defines model for TransactionTemplateRecordRequest.
+type TransactionTemplateRecordRequest struct {
+	AccountId *int64 `json:"account_id,omitempty"`
+
+	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount               *string               `json:"amount,omitempty"`
+	CategoryId           int64                 `json:"category_id"`
+	Currency             *string               `json:"currency,omitempty"`
+	MemberId             *int64                `json:"member_id,omitempty"`
+	Memo                 *string               `json:"memo,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+}
+
+// TransactionTemplateWriteRequest defines model for TransactionTemplateWriteRequest.
+type TransactionTemplateWriteRequest struct {
+	Fqn     string                             `json:"fqn"`
+	Records []TransactionTemplateRecordRequest `json:"records"`
+}
+
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
 	ExternalId     *string `json:"external_id,omitempty"`
@@ -1342,6 +1440,20 @@ type GetTagParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
+// ListTransactionTemplatesParams defines parameters for ListTransactionTemplates.
+type ListTransactionTemplatesParams struct {
+	Sort    *ListTransactionTemplatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir *ListTransactionTemplatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit   *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset  *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListTransactionTemplatesParamsSort defines parameters for ListTransactionTemplates.
+type ListTransactionTemplatesParamsSort string
+
+// ListTransactionTemplatesParamsSortDir defines parameters for ListTransactionTemplates.
+type ListTransactionTemplatesParamsSortDir string
+
 // ListTransactionsParams defines parameters for ListTransactions.
 type ListTransactionsParams struct {
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1392,6 +1504,12 @@ type CreateTagJSONRequestBody = CreateTagRequest
 
 // UpdateTagJSONRequestBody defines body for UpdateTag for application/json ContentType.
 type UpdateTagJSONRequestBody = UpdateTagRequest
+
+// CreateTransactionTemplateJSONRequestBody defines body for CreateTransactionTemplate for application/json ContentType.
+type CreateTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
+
+// ReplaceTransactionTemplateJSONRequestBody defines body for ReplaceTransactionTemplate for application/json ContentType.
+type ReplaceTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
 
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = CreateTransactionRequest
@@ -1545,6 +1663,21 @@ type ServerInterface interface {
 	// Update tag hidden state.
 	// (PATCH /api/tags/{tag_id})
 	UpdateTag(w http.ResponseWriter, r *http.Request, tagId int64)
+	// List transaction templates.
+	// (GET /api/transaction-templates)
+	ListTransactionTemplates(w http.ResponseWriter, r *http.Request, params ListTransactionTemplatesParams)
+	// Create a transaction template.
+	// (POST /api/transaction-templates)
+	CreateTransactionTemplate(w http.ResponseWriter, r *http.Request)
+	// Tombstone a transaction template and its record defaults.
+	// (DELETE /api/transaction-templates/{transaction_template_id})
+	DeleteTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64)
+	// Get a transaction template.
+	// (GET /api/transaction-templates/{transaction_template_id})
+	GetTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64)
+	// Replace a transaction template.
+	// (PUT /api/transaction-templates/{transaction_template_id})
+	ReplaceTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64)
 	// List transactions with journal records.
 	// (GET /api/transactions)
 	ListTransactions(w http.ResponseWriter, r *http.Request, params ListTransactionsParams)
@@ -1839,6 +1972,36 @@ func (_ Unimplemented) GetTag(w http.ResponseWriter, r *http.Request, tagId int6
 // Update tag hidden state.
 // (PATCH /api/tags/{tag_id})
 func (_ Unimplemented) UpdateTag(w http.ResponseWriter, r *http.Request, tagId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List transaction templates.
+// (GET /api/transaction-templates)
+func (_ Unimplemented) ListTransactionTemplates(w http.ResponseWriter, r *http.Request, params ListTransactionTemplatesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a transaction template.
+// (POST /api/transaction-templates)
+func (_ Unimplemented) CreateTransactionTemplate(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Tombstone a transaction template and its record defaults.
+// (DELETE /api/transaction-templates/{transaction_template_id})
+func (_ Unimplemented) DeleteTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get a transaction template.
+// (GET /api/transaction-templates/{transaction_template_id})
+func (_ Unimplemented) GetTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a transaction template.
+// (PUT /api/transaction-templates/{transaction_template_id})
+func (_ Unimplemented) ReplaceTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -3885,6 +4048,170 @@ func (siw *ServerInterfaceWrapper) UpdateTag(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListTransactionTemplates operation middleware
+func (siw *ServerInterfaceWrapper) ListTransactionTemplates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTransactionTemplatesParams
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort_dir" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort_dir", r.URL.Query(), &params.SortDir, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort_dir"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_dir", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTransactionTemplates(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateTransactionTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreateTransactionTemplate(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateTransactionTemplate(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteTransactionTemplate operation middleware
+func (siw *ServerInterfaceWrapper) DeleteTransactionTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "transaction_template_id" -------------
+	var transactionTemplateId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "transaction_template_id", chi.URLParam(r, "transaction_template_id"), &transactionTemplateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaction_template_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteTransactionTemplate(w, r, transactionTemplateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTransactionTemplate operation middleware
+func (siw *ServerInterfaceWrapper) GetTransactionTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "transaction_template_id" -------------
+	var transactionTemplateId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "transaction_template_id", chi.URLParam(r, "transaction_template_id"), &transactionTemplateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaction_template_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTransactionTemplate(w, r, transactionTemplateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceTransactionTemplate operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceTransactionTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "transaction_template_id" -------------
+	var transactionTemplateId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "transaction_template_id", chi.URLParam(r, "transaction_template_id"), &transactionTemplateId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaction_template_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceTransactionTemplate(w, r, transactionTemplateId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTransactions operation middleware
 func (siw *ServerInterfaceWrapper) ListTransactions(w http.ResponseWriter, r *http.Request) {
 
@@ -4323,6 +4650,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/api/tags/{tag_id}", wrapper.UpdateTag)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/transaction-templates", wrapper.ListTransactionTemplates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/transaction-templates", wrapper.CreateTransactionTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/transaction-templates/{transaction_template_id}", wrapper.DeleteTransactionTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/transaction-templates/{transaction_template_id}", wrapper.GetTransactionTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/transaction-templates/{transaction_template_id}", wrapper.ReplaceTransactionTemplate)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/transactions", wrapper.ListTransactions)
@@ -6396,6 +6738,251 @@ func (response UpdateTag404JSONResponse) VisitUpdateTagResponse(w http.ResponseW
 	return err
 }
 
+type ListTransactionTemplatesRequestObject struct {
+	Params ListTransactionTemplatesParams
+}
+
+type ListTransactionTemplatesResponseObject interface {
+	VisitListTransactionTemplatesResponse(w http.ResponseWriter) error
+}
+
+type ListTransactionTemplates200JSONResponse TransactionTemplateListResponse
+
+func (response ListTransactionTemplates200JSONResponse) VisitListTransactionTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTransactionTemplates400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response ListTransactionTemplates400JSONResponse) VisitListTransactionTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransactionTemplateRequestObject struct {
+	Body *CreateTransactionTemplateJSONRequestBody
+}
+
+type CreateTransactionTemplateResponseObject interface {
+	VisitCreateTransactionTemplateResponse(w http.ResponseWriter) error
+}
+
+type CreateTransactionTemplate201JSONResponse TransactionTemplate
+
+func (response CreateTransactionTemplate201JSONResponse) VisitCreateTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransactionTemplate400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response CreateTransactionTemplate400JSONResponse) VisitCreateTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateTransactionTemplate409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateTransactionTemplate409JSONResponse) VisitCreateTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTransactionTemplateRequestObject struct {
+	TransactionTemplateId int64 `json:"transaction_template_id"`
+}
+
+type DeleteTransactionTemplateResponseObject interface {
+	VisitDeleteTransactionTemplateResponse(w http.ResponseWriter) error
+}
+
+type DeleteTransactionTemplate204Response struct {
+}
+
+func (response DeleteTransactionTemplate204Response) VisitDeleteTransactionTemplateResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteTransactionTemplate400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response DeleteTransactionTemplate400JSONResponse) VisitDeleteTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteTransactionTemplate404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteTransactionTemplate404JSONResponse) VisitDeleteTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTransactionTemplateRequestObject struct {
+	TransactionTemplateId int64 `json:"transaction_template_id"`
+}
+
+type GetTransactionTemplateResponseObject interface {
+	VisitGetTransactionTemplateResponse(w http.ResponseWriter) error
+}
+
+type GetTransactionTemplate200JSONResponse TransactionTemplate
+
+func (response GetTransactionTemplate200JSONResponse) VisitGetTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTransactionTemplate400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response GetTransactionTemplate400JSONResponse) VisitGetTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTransactionTemplate404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetTransactionTemplate404JSONResponse) VisitGetTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceTransactionTemplateRequestObject struct {
+	TransactionTemplateId int64 `json:"transaction_template_id"`
+	Body                  *ReplaceTransactionTemplateJSONRequestBody
+}
+
+type ReplaceTransactionTemplateResponseObject interface {
+	VisitReplaceTransactionTemplateResponse(w http.ResponseWriter) error
+}
+
+type ReplaceTransactionTemplate200JSONResponse TransactionTemplate
+
+func (response ReplaceTransactionTemplate200JSONResponse) VisitReplaceTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceTransactionTemplate400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response ReplaceTransactionTemplate400JSONResponse) VisitReplaceTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceTransactionTemplate404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplaceTransactionTemplate404JSONResponse) VisitReplaceTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceTransactionTemplate409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplaceTransactionTemplate409JSONResponse) VisitReplaceTransactionTemplateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTransactionsRequestObject struct {
 	Params ListTransactionsParams
 }
@@ -6891,6 +7478,21 @@ type StrictServerInterface interface {
 	// Update tag hidden state.
 	// (PATCH /api/tags/{tag_id})
 	UpdateTag(ctx context.Context, request UpdateTagRequestObject) (UpdateTagResponseObject, error)
+	// List transaction templates.
+	// (GET /api/transaction-templates)
+	ListTransactionTemplates(ctx context.Context, request ListTransactionTemplatesRequestObject) (ListTransactionTemplatesResponseObject, error)
+	// Create a transaction template.
+	// (POST /api/transaction-templates)
+	CreateTransactionTemplate(ctx context.Context, request CreateTransactionTemplateRequestObject) (CreateTransactionTemplateResponseObject, error)
+	// Tombstone a transaction template and its record defaults.
+	// (DELETE /api/transaction-templates/{transaction_template_id})
+	DeleteTransactionTemplate(ctx context.Context, request DeleteTransactionTemplateRequestObject) (DeleteTransactionTemplateResponseObject, error)
+	// Get a transaction template.
+	// (GET /api/transaction-templates/{transaction_template_id})
+	GetTransactionTemplate(ctx context.Context, request GetTransactionTemplateRequestObject) (GetTransactionTemplateResponseObject, error)
+	// Replace a transaction template.
+	// (PUT /api/transaction-templates/{transaction_template_id})
+	ReplaceTransactionTemplate(ctx context.Context, request ReplaceTransactionTemplateRequestObject) (ReplaceTransactionTemplateResponseObject, error)
 	// List transactions with journal records.
 	// (GET /api/transactions)
 	ListTransactions(ctx context.Context, request ListTransactionsRequestObject) (ListTransactionsResponseObject, error)
@@ -8174,6 +8776,148 @@ func (sh *strictHandler) UpdateTag(w http.ResponseWriter, r *http.Request, tagId
 	}
 }
 
+// ListTransactionTemplates operation middleware
+func (sh *strictHandler) ListTransactionTemplates(w http.ResponseWriter, r *http.Request, params ListTransactionTemplatesParams) {
+	var request ListTransactionTemplatesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTransactionTemplates(ctx, request.(ListTransactionTemplatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTransactionTemplates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTransactionTemplatesResponseObject); ok {
+		if err := validResponse.VisitListTransactionTemplatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateTransactionTemplate operation middleware
+func (sh *strictHandler) CreateTransactionTemplate(w http.ResponseWriter, r *http.Request) {
+	var request CreateTransactionTemplateRequestObject
+
+	var body CreateTransactionTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateTransactionTemplate(ctx, request.(CreateTransactionTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateTransactionTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateTransactionTemplateResponseObject); ok {
+		if err := validResponse.VisitCreateTransactionTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteTransactionTemplate operation middleware
+func (sh *strictHandler) DeleteTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64) {
+	var request DeleteTransactionTemplateRequestObject
+
+	request.TransactionTemplateId = transactionTemplateId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteTransactionTemplate(ctx, request.(DeleteTransactionTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteTransactionTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteTransactionTemplateResponseObject); ok {
+		if err := validResponse.VisitDeleteTransactionTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTransactionTemplate operation middleware
+func (sh *strictHandler) GetTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64) {
+	var request GetTransactionTemplateRequestObject
+
+	request.TransactionTemplateId = transactionTemplateId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTransactionTemplate(ctx, request.(GetTransactionTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTransactionTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTransactionTemplateResponseObject); ok {
+		if err := validResponse.VisitGetTransactionTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceTransactionTemplate operation middleware
+func (sh *strictHandler) ReplaceTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64) {
+	var request ReplaceTransactionTemplateRequestObject
+
+	request.TransactionTemplateId = transactionTemplateId
+
+	var body ReplaceTransactionTemplateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceTransactionTemplate(ctx, request.(ReplaceTransactionTemplateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceTransactionTemplate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceTransactionTemplateResponseObject); ok {
+		if err := validResponse.VisitReplaceTransactionTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListTransactions operation middleware
 func (sh *strictHandler) ListTransactions(w http.ResponseWriter, r *http.Request, params ListTransactionsParams) {
 	var request ListTransactionsRequestObject
@@ -8445,98 +9189,105 @@ func (sh *strictHandler) ReplaceTransaction(w http.ResponseWriter, r *http.Reque
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"AAAA//8=",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

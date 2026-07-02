@@ -1,6 +1,6 @@
-# Target Data Model
+# Data Model
 
-This file represents the anticipated data model for phase 1 of the project and should be eventually superseded by an actual in-source database schema scripts and migrations.
+This file is the target accounting-state data model. Keep it aligned with implemented migrations.
 
 ## Full SQL Schema of the Core Entities
 
@@ -254,6 +254,71 @@ COMMENT ON COLUMN journal_record.source IS 'Origin of this record.';
 COMMENT ON COLUMN journal_record.external_id IS 'Identifier assigned by an external system when this record is linked outside Mina.';
 COMMENT ON COLUMN journal_record.external_system IS 'External system namespace for external_id.';
 
+-- Transaction template table for date-free manual-entry defaults
+CREATE TABLE transaction_template (
+    transaction_template_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+    -- Colon-separated hierarchical template path, e.g. Utilities:Electric.
+    fqn TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tombstoned_at TIMESTAMP,
+
+    -- Parent template path derived from fqn, or NULL for root templates.
+    parent_fqn TEXT GENERATED ALWAYS AS (
+        CASE
+            WHEN instr(fqn, ':') > 0
+            THEN regexp_replace(fqn, ':[^:]+$', '')
+            ELSE NULL
+        END
+    ) VIRTUAL,
+
+    -- Leaf template name derived from fqn.
+    name TEXT GENERATED ALWAYS AS (
+        regexp_extract(fqn, '[^:]+$')
+    ) VIRTUAL,
+
+    -- Zero-based template depth derived from fqn.
+    level INTEGER GENERATED ALWAYS AS (
+        ARRAY_LENGTH(SPLIT(fqn, ':')) - 1
+    ) VIRTUAL,
+
+    UNIQUE(fqn, tombstoned_at)
+);
+
+COMMENT ON COLUMN transaction_template.fqn IS 'Colon-separated hierarchical template path, e.g. Utilities:Electric.';
+COMMENT ON COLUMN transaction_template.parent_fqn IS 'Parent template path derived from fqn, or NULL for root templates.';
+COMMENT ON COLUMN transaction_template.name IS 'Leaf template name derived from fqn.';
+COMMENT ON COLUMN transaction_template.level IS 'Zero-based template depth derived from fqn.';
+
+-- Transaction template records for normalized partial defaults
+CREATE TABLE transaction_template_record (
+    transaction_template_record_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+    transaction_template_id INTEGER NOT NULL,
+    -- Category is the minimum record default required for manual-entry templates.
+    category_id INTEGER NOT NULL,
+    -- Optional account default for partial manual-entry templates.
+    account_id INTEGER,
+    -- Optional household-member default for partial manual-entry templates.
+    member_id INTEGER,
+    -- Optional currency default; templates do not store converted amount_usd.
+    currency TEXT,
+    -- Optional signed amount default; templates do not need to balance.
+    amount DECIMAL(18,8),
+    tag_ids INTEGER[] NOT NULL DEFAULT [],
+    memo TEXT,
+    posting_status posting_status,
+    reconciliation_status reconciliation_status,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tombstoned_at TIMESTAMP
+);
+
+COMMENT ON COLUMN transaction_template_record.category_id IS 'Category is the minimum record default required for manual-entry templates.';
+COMMENT ON COLUMN transaction_template_record.account_id IS 'Optional account default for partial manual-entry templates.';
+COMMENT ON COLUMN transaction_template_record.member_id IS 'Optional household-member default for partial manual-entry templates.';
+COMMENT ON COLUMN transaction_template_record.currency IS 'Optional currency default; templates do not store converted amount_usd.';
+COMMENT ON COLUMN transaction_template_record.amount IS 'Optional signed amount default; templates do not need to balance.';
+
 -- Exchange rate table for historical currency conversion
 CREATE TABLE exchange_rate (
     exchange_rate_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
@@ -327,6 +392,9 @@ ON member ((CASE WHEN tombstoned_at IS NULL THEN name ELSE NULL END));
 CREATE UNIQUE INDEX account_active_fqn_unique
 ON account ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));
 
+CREATE UNIQUE INDEX transaction_template_active_fqn_unique
+ON transaction_template ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));
+
 CREATE UNIQUE INDEX credit_limit_history_active_account_date_unique
 ON credit_limit_history ((CASE WHEN tombstoned_at IS NULL THEN CAST(account_id AS VARCHAR) || ':' || CAST(effective_date AS VARCHAR) ELSE NULL END));
 
@@ -339,13 +407,14 @@ ON budget ((CASE WHEN tombstoned_at IS NULL THEN category_fqn || ':' || CAST(mon
 
 ## Hierarchical Names Encoding
 
-Accounts, categories, and tags use hierarchical naming with colon-separated paths:
+Accounts, categories, tags, and transaction templates use hierarchical naming with colon-separated paths:
 
 - `banks:Chase:checking:Joint`
 - `people:Jordan:balance`
 - `system:opening_balance`
 - `Food:Restaurants`
 - `Trips:Vacation:Summer2024`
+- `Utilities:Electric`
 
 Hierarchy is encoded directly in the name string. Tree structure is derived at query time when needed.
 Account type and category economic intent are explicit metadata; they are not inferred from FQN prefixes.

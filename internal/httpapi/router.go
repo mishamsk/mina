@@ -19,6 +19,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/operationruns"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
+	"github.com/mishamsk/mina/internal/services/transactiontemplates"
 )
 
 const defaultLocalAPITimeout = 30 * time.Second
@@ -34,6 +35,7 @@ type Dependencies struct {
 	CreditLimits  *creditlimits.Service
 	ExchangeRates *exchangerates.Service
 	Transactions  *transactions.Service
+	Templates     *transactiontemplates.Service
 	Demo          *demo.Service
 }
 

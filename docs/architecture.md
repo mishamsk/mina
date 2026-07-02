@@ -39,6 +39,7 @@ Rules:
 
 - Service packages must not import HTTP, OpenAPI, web UI, TUI, scheduler, SQL, generated DB, Cobra, process I/O, or runtime composition packages.
 - Service packages own domain validation and use-case decisions.
+- Reference integrity is not enforced by foreign keys or store prechecks; services validate referenced IDs, active/tombstoned semantics, and hidden-resource rules before writes.
 - `internal/httpapi` calls services and maps generated OpenAPI request/response DTOs. Strict-server implementations map generated OpenAPI request objects to service inputs, call services, and map service outputs, errors, and statuses to generated OpenAPI response objects.
 - `internal/httpapi` does not open databases, parse CLI flags, own SQL, make domain decisions, or duplicate service-owned domain validation.
 - `internal/store` owns DB-facing row types, migrations, transactions, DuckDB-specific error mapping, and app-to-DB type conversion.
@@ -57,7 +58,7 @@ Rules:
 - Accounting state lives in one DuckDB schema selected by app config plus explicit CLI overrides.
 - When no accounting-state database file is provided (e.g. for demos and tests) accounting state stored in a schema of the in-memory database.
 - Store state owns the fully qualified accounting schema name, whether attached or in-memory.
-- `docs/phase-1-data-model.md` is the source of truth for accounting-state tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
+- `docs/data-model.md` is the source of truth for accounting-state tables, column types, generated columns, enum values, sequence use, arrays, timestamps, dates, and decimal precision.
 - Migrations are versioned and upgrade-only.
 - The database stores its schema version.
 - Database open/create/migrate policy belongs to `internal/runtime`.

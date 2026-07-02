@@ -591,6 +591,45 @@ func (e ListTagsParamsSortDir) Valid() bool {
 	}
 }
 
+// Defines values for ListTransactionTemplatesParamsSort.
+const (
+	CreatedAt ListTransactionTemplatesParamsSort = "created_at"
+	Fqn       ListTransactionTemplatesParamsSort = "fqn"
+	UpdatedAt ListTransactionTemplatesParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListTransactionTemplatesParamsSort enum.
+func (e ListTransactionTemplatesParamsSort) Valid() bool {
+	switch e {
+	case CreatedAt:
+		return true
+	case Fqn:
+		return true
+	case UpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListTransactionTemplatesParamsSortDir.
+const (
+	Asc  ListTransactionTemplatesParamsSortDir = "asc"
+	Desc ListTransactionTemplatesParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListTransactionTemplatesParamsSortDir enum.
+func (e ListTransactionTemplatesParamsSortDir) Valid() bool {
+	switch e {
+	case Asc:
+		return true
+	case Desc:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIError defines model for APIError.
 type APIError struct {
 	Code    APIErrorCode `json:"code"`
@@ -1100,6 +1139,65 @@ type TransactionListResponse struct {
 	Transactions []Transaction `json:"transactions"`
 }
 
+// TransactionTemplate defines model for TransactionTemplate.
+type TransactionTemplate struct {
+	CreatedAt             time.Time                   `json:"created_at"`
+	Fqn                   string                      `json:"fqn"`
+	Level                 int                         `json:"level"`
+	Name                  string                      `json:"name"`
+	ParentFqn             *string                     `json:"parent_fqn"`
+	Records               []TransactionTemplateRecord `json:"records"`
+	TombstonedAt          *time.Time                  `json:"tombstoned_at,omitempty"`
+	TransactionTemplateId int64                       `json:"transaction_template_id"`
+	UpdatedAt             time.Time                   `json:"updated_at"`
+}
+
+// TransactionTemplateListResponse defines model for TransactionTemplateListResponse.
+type TransactionTemplateListResponse struct {
+	TransactionTemplates []TransactionTemplate `json:"transaction_templates"`
+}
+
+// TransactionTemplateRecord defines model for TransactionTemplateRecord.
+type TransactionTemplateRecord struct {
+	AccountId *int64 `json:"account_id"`
+
+	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount                      *string               `json:"amount"`
+	CategoryId                  int64                 `json:"category_id"`
+	CreatedAt                   time.Time             `json:"created_at"`
+	Currency                    *string               `json:"currency"`
+	MemberId                    *int64                `json:"member_id"`
+	Memo                        *string               `json:"memo"`
+	PostingStatus               *PostingStatus        `json:"posting_status"`
+	ReconciliationStatus        *ReconciliationStatus `json:"reconciliation_status"`
+	TagIds                      []int64               `json:"tag_ids"`
+	TombstonedAt                *time.Time            `json:"tombstoned_at,omitempty"`
+	TransactionTemplateId       int64                 `json:"transaction_template_id"`
+	TransactionTemplateRecordId int64                 `json:"transaction_template_record_id"`
+	UpdatedAt                   time.Time             `json:"updated_at"`
+}
+
+// TransactionTemplateRecordRequest defines model for TransactionTemplateRecordRequest.
+type TransactionTemplateRecordRequest struct {
+	AccountId *int64 `json:"account_id,omitempty"`
+
+	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount               *string               `json:"amount,omitempty"`
+	CategoryId           int64                 `json:"category_id"`
+	Currency             *string               `json:"currency,omitempty"`
+	MemberId             *int64                `json:"member_id,omitempty"`
+	Memo                 *string               `json:"memo,omitempty"`
+	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+}
+
+// TransactionTemplateWriteRequest defines model for TransactionTemplateWriteRequest.
+type TransactionTemplateWriteRequest struct {
+	Fqn     string                             `json:"fqn"`
+	Records []TransactionTemplateRecordRequest `json:"records"`
+}
+
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
 	ExternalId     *string `json:"external_id,omitempty"`
@@ -1337,6 +1435,20 @@ type GetTagParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
+// ListTransactionTemplatesParams defines parameters for ListTransactionTemplates.
+type ListTransactionTemplatesParams struct {
+	Sort    *ListTransactionTemplatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir *ListTransactionTemplatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit   *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset  *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListTransactionTemplatesParamsSort defines parameters for ListTransactionTemplates.
+type ListTransactionTemplatesParamsSort string
+
+// ListTransactionTemplatesParamsSortDir defines parameters for ListTransactionTemplates.
+type ListTransactionTemplatesParamsSortDir string
+
 // ListTransactionsParams defines parameters for ListTransactions.
 type ListTransactionsParams struct {
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1387,6 +1499,12 @@ type CreateTagJSONRequestBody = CreateTagRequest
 
 // UpdateTagJSONRequestBody defines body for UpdateTag for application/json ContentType.
 type UpdateTagJSONRequestBody = UpdateTagRequest
+
+// CreateTransactionTemplateJSONRequestBody defines body for CreateTransactionTemplate for application/json ContentType.
+type CreateTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
+
+// ReplaceTransactionTemplateJSONRequestBody defines body for ReplaceTransactionTemplate for application/json ContentType.
+type ReplaceTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
 
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = CreateTransactionRequest
@@ -1640,6 +1758,25 @@ type ClientInterface interface {
 	UpdateTagWithBody(ctx context.Context, tagId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateTag(ctx context.Context, tagId int64, body UpdateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListTransactionTemplates request
+	ListTransactionTemplates(ctx context.Context, params *ListTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateTransactionTemplateWithBody request with any body
+	CreateTransactionTemplateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateTransactionTemplate(ctx context.Context, body CreateTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteTransactionTemplate request
+	DeleteTransactionTemplate(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTransactionTemplate request
+	GetTransactionTemplate(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceTransactionTemplateWithBody request with any body
+	ReplaceTransactionTemplateWithBody(ctx context.Context, transactionTemplateId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceTransactionTemplate(ctx context.Context, transactionTemplateId int64, body ReplaceTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTransactions request
 	ListTransactions(ctx context.Context, params *ListTransactionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2379,6 +2516,90 @@ func (c *Client) UpdateTagWithBody(ctx context.Context, tagId int64, contentType
 
 func (c *Client) UpdateTag(ctx context.Context, tagId int64, body UpdateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateTagRequest(c.Server, tagId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListTransactionTemplates(ctx context.Context, params *ListTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTransactionTemplatesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTransactionTemplateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTransactionTemplateRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateTransactionTemplate(ctx context.Context, body CreateTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateTransactionTemplateRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteTransactionTemplate(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteTransactionTemplateRequest(c.Server, transactionTemplateId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetTransactionTemplate(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTransactionTemplateRequest(c.Server, transactionTemplateId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceTransactionTemplateWithBody(ctx context.Context, transactionTemplateId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceTransactionTemplateRequestWithBody(c.Server, transactionTemplateId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceTransactionTemplate(ctx context.Context, transactionTemplateId int64, body ReplaceTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceTransactionTemplateRequest(c.Server, transactionTemplateId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5276,6 +5497,251 @@ func NewUpdateTagRequestWithBody(server string, tagId int64, contentType string,
 	return req, nil
 }
 
+// NewListTransactionTemplatesRequest generates requests for ListTransactionTemplates
+func NewListTransactionTemplatesRequest(server string, params *ListTransactionTemplatesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transaction-templates")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.SortDir != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort_dir", *params.SortDir, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateTransactionTemplateRequest calls the generic CreateTransactionTemplate builder with application/json body
+func NewCreateTransactionTemplateRequest(server string, body CreateTransactionTemplateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateTransactionTemplateRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateTransactionTemplateRequestWithBody generates requests for CreateTransactionTemplate with any type of body
+func NewCreateTransactionTemplateRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transaction-templates")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteTransactionTemplateRequest generates requests for DeleteTransactionTemplate
+func NewDeleteTransactionTemplateRequest(server string, transactionTemplateId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "transaction_template_id", transactionTemplateId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transaction-templates/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetTransactionTemplateRequest generates requests for GetTransactionTemplate
+func NewGetTransactionTemplateRequest(server string, transactionTemplateId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "transaction_template_id", transactionTemplateId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transaction-templates/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceTransactionTemplateRequest calls the generic ReplaceTransactionTemplate builder with application/json body
+func NewReplaceTransactionTemplateRequest(server string, transactionTemplateId int64, body ReplaceTransactionTemplateJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceTransactionTemplateRequestWithBody(server, transactionTemplateId, "application/json", bodyReader)
+}
+
+// NewReplaceTransactionTemplateRequestWithBody generates requests for ReplaceTransactionTemplate with any type of body
+func NewReplaceTransactionTemplateRequestWithBody(server string, transactionTemplateId int64, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "transaction_template_id", transactionTemplateId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transaction-templates/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListTransactionsRequest generates requests for ListTransactions
 func NewListTransactionsRequest(server string, params *ListTransactionsParams) (*http.Request, error) {
 	var err error
@@ -5861,6 +6327,25 @@ type ClientWithResponsesInterface interface {
 	UpdateTagWithBodyWithResponse(ctx context.Context, tagId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateTagResponse, error)
 
 	UpdateTagWithResponse(ctx context.Context, tagId int64, body UpdateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTagResponse, error)
+
+	// ListTransactionTemplatesWithResponse request
+	ListTransactionTemplatesWithResponse(ctx context.Context, params *ListTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*ListTransactionTemplatesResponse, error)
+
+	// CreateTransactionTemplateWithBodyWithResponse request with any body
+	CreateTransactionTemplateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTransactionTemplateResponse, error)
+
+	CreateTransactionTemplateWithResponse(ctx context.Context, body CreateTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTransactionTemplateResponse, error)
+
+	// DeleteTransactionTemplateWithResponse request
+	DeleteTransactionTemplateWithResponse(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*DeleteTransactionTemplateResponse, error)
+
+	// GetTransactionTemplateWithResponse request
+	GetTransactionTemplateWithResponse(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*GetTransactionTemplateResponse, error)
+
+	// ReplaceTransactionTemplateWithBodyWithResponse request with any body
+	ReplaceTransactionTemplateWithBodyWithResponse(ctx context.Context, transactionTemplateId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceTransactionTemplateResponse, error)
+
+	ReplaceTransactionTemplateWithResponse(ctx context.Context, transactionTemplateId int64, body ReplaceTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceTransactionTemplateResponse, error)
 
 	// ListTransactionsWithResponse request
 	ListTransactionsWithResponse(ctx context.Context, params *ListTransactionsParams, reqEditors ...RequestEditorFn) (*ListTransactionsResponse, error)
@@ -7294,6 +7779,165 @@ func (r UpdateTagResponse) ContentType() string {
 	return ""
 }
 
+type ListTransactionTemplatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TransactionTemplateListResponse
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTransactionTemplatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTransactionTemplatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListTransactionTemplatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateTransactionTemplateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *TransactionTemplate
+	JSON400      *InvalidRequest
+	JSON409      *Conflict
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateTransactionTemplateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateTransactionTemplateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateTransactionTemplateResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteTransactionTemplateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteTransactionTemplateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteTransactionTemplateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteTransactionTemplateResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetTransactionTemplateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TransactionTemplate
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTransactionTemplateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTransactionTemplateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTransactionTemplateResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ReplaceTransactionTemplateResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TransactionTemplate
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON409      *Conflict
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceTransactionTemplateResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceTransactionTemplateResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReplaceTransactionTemplateResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListTransactionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8089,6 +8733,67 @@ func (c *ClientWithResponses) UpdateTagWithResponse(ctx context.Context, tagId i
 		return nil, err
 	}
 	return ParseUpdateTagResponse(rsp)
+}
+
+// ListTransactionTemplatesWithResponse request returning *ListTransactionTemplatesResponse
+func (c *ClientWithResponses) ListTransactionTemplatesWithResponse(ctx context.Context, params *ListTransactionTemplatesParams, reqEditors ...RequestEditorFn) (*ListTransactionTemplatesResponse, error) {
+	rsp, err := c.ListTransactionTemplates(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTransactionTemplatesResponse(rsp)
+}
+
+// CreateTransactionTemplateWithBodyWithResponse request with arbitrary body returning *CreateTransactionTemplateResponse
+func (c *ClientWithResponses) CreateTransactionTemplateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTransactionTemplateResponse, error) {
+	rsp, err := c.CreateTransactionTemplateWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTransactionTemplateResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateTransactionTemplateWithResponse(ctx context.Context, body CreateTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTransactionTemplateResponse, error) {
+	rsp, err := c.CreateTransactionTemplate(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateTransactionTemplateResponse(rsp)
+}
+
+// DeleteTransactionTemplateWithResponse request returning *DeleteTransactionTemplateResponse
+func (c *ClientWithResponses) DeleteTransactionTemplateWithResponse(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*DeleteTransactionTemplateResponse, error) {
+	rsp, err := c.DeleteTransactionTemplate(ctx, transactionTemplateId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteTransactionTemplateResponse(rsp)
+}
+
+// GetTransactionTemplateWithResponse request returning *GetTransactionTemplateResponse
+func (c *ClientWithResponses) GetTransactionTemplateWithResponse(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*GetTransactionTemplateResponse, error) {
+	rsp, err := c.GetTransactionTemplate(ctx, transactionTemplateId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTransactionTemplateResponse(rsp)
+}
+
+// ReplaceTransactionTemplateWithBodyWithResponse request with arbitrary body returning *ReplaceTransactionTemplateResponse
+func (c *ClientWithResponses) ReplaceTransactionTemplateWithBodyWithResponse(ctx context.Context, transactionTemplateId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceTransactionTemplateResponse, error) {
+	rsp, err := c.ReplaceTransactionTemplateWithBody(ctx, transactionTemplateId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceTransactionTemplateResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceTransactionTemplateWithResponse(ctx context.Context, transactionTemplateId int64, body ReplaceTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceTransactionTemplateResponse, error) {
+	rsp, err := c.ReplaceTransactionTemplate(ctx, transactionTemplateId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceTransactionTemplateResponse(rsp)
 }
 
 // ListTransactionsWithResponse request returning *ListTransactionsResponse
@@ -9862,6 +10567,199 @@ func ParseUpdateTagResponse(rsp *http.Response) (*UpdateTagResponse, error) {
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListTransactionTemplatesResponse parses an HTTP response from a ListTransactionTemplatesWithResponse call
+func ParseListTransactionTemplatesResponse(rsp *http.Response) (*ListTransactionTemplatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTransactionTemplatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TransactionTemplateListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateTransactionTemplateResponse parses an HTTP response from a CreateTransactionTemplateWithResponse call
+func ParseCreateTransactionTemplateResponse(rsp *http.Response) (*CreateTransactionTemplateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateTransactionTemplateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest TransactionTemplate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteTransactionTemplateResponse parses an HTTP response from a DeleteTransactionTemplateWithResponse call
+func ParseDeleteTransactionTemplateResponse(rsp *http.Response) (*DeleteTransactionTemplateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteTransactionTemplateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetTransactionTemplateResponse parses an HTTP response from a GetTransactionTemplateWithResponse call
+func ParseGetTransactionTemplateResponse(rsp *http.Response) (*GetTransactionTemplateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTransactionTemplateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TransactionTemplate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceTransactionTemplateResponse parses an HTTP response from a ReplaceTransactionTemplateWithResponse call
+func ParseReplaceTransactionTemplateResponse(rsp *http.Response) (*ReplaceTransactionTemplateResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceTransactionTemplateResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TransactionTemplate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 

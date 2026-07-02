@@ -3,7 +3,7 @@
 ## Purpose
 
 - Documents the app-owned service package pattern for domain use cases.
-- Implemented service packages are `accounts`, `operationruns`, `categories`, `tags`, `members`, `exchangerates`, `exchangerateloading`, `backups`, `creditlimits`, `transactions`, `journalrecords`, `recordbulk`, `health`, `demo`, and `values`.
+- Implemented service packages are `accounts`, `operationruns`, `categories`, `tags`, `members`, `exchangerates`, `exchangerateloading`, `backups`, `creditlimits`, `transactions`, `transactiontemplates`, `journalrecords`, `recordbulk`, `health`, `demo`, and `values`.
 
 ## Implicit Contracts
 

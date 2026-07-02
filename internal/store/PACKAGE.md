@@ -30,8 +30,9 @@
 - Query generation is not selected because the required DuckDB SQL features are not yet proven against a repo-owned generator. Manual query code must keep user values parameter-bound and dynamic identifiers selected from store-owned allowlists.
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
 - Transaction services prevalidate create/replace account/category references from active semantic dictionaries; transaction repositories recheck write targets inside DB transactions and own member/tag/record persistence checks.
+- Transaction-template repositories store normalized partial record defaults and recheck active account/category/member/tag references inside DB transactions.
 - Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; repositories also pre-check active uniqueness to return stable conflict messages.
-- Account, category, and tag hierarchy fields are read from DuckDB generated virtual columns.
+- Account, category, tag, and transaction-template hierarchy fields are read from DuckDB generated virtual columns.
 
 ## Boundaries
 
