@@ -20,3 +20,4 @@ coverage.*
 /.playwright-mcp/
 /internal/webui/dist/*
 !/internal/webui/dist/README.md
+!.claude/

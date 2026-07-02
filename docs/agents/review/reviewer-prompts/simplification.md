@@ -1,4 +1,4 @@
-Detect over-engineered and overcomplicated code - code that works but is more complex than necessary.
+Detect over-engineered and overcomplicated code - code that works but is more complex than necessary. YAGNI ruthlessly.
 
 ## Excessive Abstraction Layers
 

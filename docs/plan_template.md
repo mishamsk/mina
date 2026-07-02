@@ -1,4 +1,6 @@
-# <Replace with a short project name/goal description> <optional: Kata issue>
+# Plan: <Replace with a short project name/goal description> <optional: Kata issue>
+
+<Brief description of the feature and overall goal - the overview section>
 
 ## Plan Context
 
@@ -6,47 +8,42 @@
 
 ## Tasks
 
-> Keep commits small, self-contained, and individually verifiable when practical.
-> Run review-loop only after committing.
+> Keep tasks/commits small, self-contained, and individually verifiable when practical.
+> Make sure that review-loop steps always come after committing.
 > Do not include this note in the resulting plan.
 
-### Commit 1: [commit desc]
-- [ ] Task 1
+### Task/Commit 1: [First Task Title]
+
+<2-4 sentences of context: what this task accomplishes, key components involved, what becomes possible after this task completes>
+
+- [ ] Implement X
 - [ ] ...
-- [ ] Task N
+- [ ] Add tests for Y
 - [ ] Verification
-  - [ ] `just fmt` passes
   - [ ] `just test` passes
-  - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
-  - [ ] <optional: Required docs updated>
-  - [ ] <optional: If a Kata issue exists, update progress>
+  - [ ] <OPTIONAL, only when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, UI: `just test-integration` passes>
+  - [ ] <OPTIONAL, if a Kata issue exists: update progress in the Kata issue>
   - [ ] Commit changes
-  - [ ] <optional. only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
+  - [ ] <OPTIONAL, only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
 
-### Commit 2: [commit desc]
-- [ ] Task 1
+### Task/Commit 2: [Second Task/Commit Title]
+
+<Context for task 2...>
+
+- [ ] Implement Z
 - [ ] ...
-- [ ] Task N
+- [ ] Update documentation
 - [ ] Verification
-  - [ ] `just fmt` passes
   - [ ] `just test` passes
-  - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
-  - [ ] <optional: Required docs updated>
-  - [ ] <optional: If a Kata issue exists, update progress>
+  - [ ] <OPTIONAL, only when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, UI: `just test-integration` passes>
+  - [ ] <OPTIONAL, if a Kata issue exists: update progress in the Kata issue>
   - [ ] Commit changes
-  - [ ] <optional. only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
-
-## <Optional: Deferred Verification>
-
-- [ ] `just test-integration` passes after CLI, real-network REST, process startup, JSON-over-HTTP, or later TUI changes.
-- [ ] Manual smoke commands are run only when a concrete uncovered risk remains, and are added as explicit temporary commands or comments.
+  - [ ] <OPTIONAL, only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
 
 ## Final Verification
 
-- [ ] `just init` passes on a clean checkout with required local tools available
-- [ ] `just fmt` passes
 - [ ] `just test` passes
 - [ ] `just test-integration` passes
 - [ ] `just pre-commit` passes

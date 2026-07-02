@@ -30,12 +30,10 @@ When invoked, rebase the current branch onto the latest main branch without need
 
 ## Verification And Fixes
 
-1. Run the repository's full verification commands through the project-owned recipes.
-2. For this repository, run `just pre-commit`, `just test`, and `just test-integration` after the rebase.
-3. Fix any failures caused by the rebase.
-4. Commit post-rebase fixes as follow-up commits instead of silently folding them into replayed commits, unless the user explicitly asks to rewrite or squash.
-5. If code changes were committed, run a Codex review subagent after the commit when the repo instructions require it, then apply and commit valid fixes.
-6. Finish with `git status --short`, the new branch tip, the main ref used, verification results, and any follow-up commits created.
+1. Run the repository's recipe based verification commands: `just pre-commit`, `just test`, and `just test-integration` after the rebase. Do NOT run review-loop!
+2. Fix any failures caused by the rebase.
+3. Commit post-rebase fixes as follow-up commits instead of silently folding them into replayed commits, unless the user explicitly asks to rewrite or squash.
+4. Finish with `git status --short`, the new branch tip, the main ref used, verification results, and any follow-up commits created.
 
 ## Stop Conditions
 
