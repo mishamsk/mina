@@ -1,4 +1,4 @@
-# <Replace with a short project name/goal description>
+# <Replace with a short project name/goal description> <optional: Kata issue>
 
 ## Plan Context
 
@@ -20,6 +20,7 @@
   - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
   - [ ] <optional: Required docs updated>
+  - [ ] <optional: If a Kata issue exists, update progress>
   - [ ] Commit changes
   - [ ] <optional. only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
 
@@ -33,6 +34,7 @@
   - [ ] `just test-integration` passes when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, or later TUI behavior
   - [ ] `just pre-commit` passes
   - [ ] <optional: Required docs updated>
+  - [ ] <optional: If a Kata issue exists, update progress>
   - [ ] Commit changes
   - [ ] <optional. only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
 
@@ -51,3 +53,4 @@
 - [ ] Commit final changes
 - [ ] Run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>"`
 - [ ] Move this plan to `docs/plans/completed/`
+- [ ] <optional: If a Kata issue exists, close it after the plan is moved to completed>
