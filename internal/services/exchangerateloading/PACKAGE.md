@@ -13,6 +13,8 @@
 - Forward loading is unconditional for tracked currencies, even when all records already have `amount_usd`.
 - Historical back-loading starts only from unresolved record dates that lack exact active rates.
 - A newly tracked currency with no unresolved missing dates starts at the provider-settled date, not its earliest record date.
+- Composition must invalidate the needed-currency cache after journal writes or restores can introduce tracked currencies.
+- Shrinking-only journal changes may leave harmless over-inclusion and do not require invalidation.
 
 ## Boundaries
 

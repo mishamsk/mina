@@ -249,6 +249,16 @@ linters:
               desc: appconfig must not know CLI parsing
             - pkg: github.com/spf13/pflag
               desc: appconfig must not know CLI flags
+        x-library-boundaries:
+          list-mode: lax
+          files:
+            - internal/x/*.go
+            - internal/x/**/*.go
+            - "**/internal/x/*.go"
+            - "**/internal/x/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina
+              desc: internal/x packages must stay app-agnostic
         runtime-store-boundaries:
           list-mode: lax
           files:

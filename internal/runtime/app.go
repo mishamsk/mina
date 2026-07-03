@@ -231,6 +231,10 @@ func newAccountingServices(
 		startupProvider,
 		opts.clock(),
 	)
+	currencyUsageChanged := func() {
+		exchangeRateLoading.InvalidateCurrencyCache()
+		startupExchangeRateLoading.InvalidateCurrencyCache()
+	}
 	backupProvider, err := fileBackupProvider(cfg, opts)
 	if err != nil {
 		return appServices{}, err
@@ -280,6 +284,7 @@ func newAccountingServices(
 				memberService,
 				exchangeRates,
 				referenceSerializer,
+				currencyUsageChanged,
 			),
 			Templates: transactiontemplates.NewService(
 				store.NewTransactionTemplateStore(appDB),
@@ -377,6 +382,8 @@ func invalidateReferenceCaches(services appServices) {
 	services.Categories.InvalidateReferenceCache()
 	services.Tags.InvalidateReferenceCache()
 	services.Members.InvalidateReferenceCache()
+	services.ExchangeRateLoading.InvalidateCurrencyCache()
+	services.StartupExchangeRateLoading.InvalidateCurrencyCache()
 }
 
 // AccountingLocation returns the database and schema holding accounting state.

@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/x/refcache"
 )
 
 // Tag is a hierarchical label used for flexible journal record grouping.
@@ -78,12 +78,14 @@ type ReferenceSerializer interface {
 type Service struct {
 	repo  Repository
 	refs  ReferenceSerializer
-	cache tagReferenceCache
+	cache *refcache.Dictionary[int64, tagReferenceState]
 }
 
 // NewService creates a tag service backed by repo.
 func NewService(repo Repository, refs ReferenceSerializer) *Service {
-	return &Service{repo: repo, refs: refs}
+	service := &Service{repo: repo, refs: refs}
+	service.cache = refcache.NewDictionary(service.loadReferenceCache)
+	return service
 }
 
 // Create validates and creates a tag.
@@ -116,16 +118,14 @@ func (s *Service) ValidateActiveReferences(ctx context.Context, ids []int64, opt
 		return map[int64]Reference{}, nil
 	}
 
-	if err := s.ensureReferenceCache(ctx); err != nil {
+	states, err := s.cache.GetMany(ctx, uniqueIDs)
+	if err != nil {
 		return nil, err
 	}
 
-	s.cache.mu.RLock()
-	defer s.cache.mu.RUnlock()
-
 	refs := make(map[int64]Reference, len(uniqueIDs))
 	for _, id := range uniqueIDs {
-		state, ok := s.cache.entries[id]
+		state, ok := states[id]
 		if !ok || !state.active || (!opts.AllowHidden && state.reference.IsHidden) {
 			return nil, services.ErrInvalidReference
 		}
@@ -149,11 +149,7 @@ func (s *Service) ValidateActiveReference(ctx context.Context, id int64, opts Re
 
 // InvalidateReferenceCache forces the next reference validation to reload references.
 func (s *Service) InvalidateReferenceCache() {
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-
-	s.cache.loaded = false
-	s.cache.entries = nil
+	s.cache.Invalidate()
 }
 
 // Get returns a tag by ID.
@@ -243,60 +239,31 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-type tagReferenceCache struct {
-	mu      sync.RWMutex
-	loaded  bool
-	entries map[int64]tagReferenceState
-}
-
 type tagReferenceState struct {
 	reference Reference
 	active    bool
 }
 
-func (s *Service) ensureReferenceCache(ctx context.Context) error {
-	s.cache.mu.RLock()
-	loaded := s.cache.loaded
-	s.cache.mu.RUnlock()
-	if loaded {
-		return nil
-	}
-
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-	if s.cache.loaded {
-		return nil
-	}
-
+func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]tagReferenceState, error) {
 	tags, err := s.repo.List(ctx, ListOptions{IncludeHidden: true, IncludeTombstoned: true})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	entries := make(map[int64]tagReferenceState, len(tags))
 	for _, tag := range tags {
-		entries[tag.ID] = tagReferenceState{
-			reference: Reference{
-				ID:       tag.ID,
-				IsHidden: tag.IsHidden,
-			},
-			active: tag.TombstonedAt == nil,
-		}
+		entries[tag.ID] = tagReferenceStateFromTag(tag)
 	}
-	s.cache.entries = entries
-	s.cache.loaded = true
 
-	return nil
+	return entries, nil
 }
 
 func (s *Service) cacheActiveReference(tag Tag) {
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
+	s.cache.Put(tag.ID, tagReferenceStateFromTag(tag))
+}
 
-	if s.cache.entries == nil {
-		s.cache.entries = map[int64]tagReferenceState{}
-	}
-	s.cache.entries[tag.ID] = tagReferenceState{
+func tagReferenceStateFromTag(tag Tag) tagReferenceState {
+	return tagReferenceState{
 		reference: Reference{
 			ID:       tag.ID,
 			IsHidden: tag.IsHidden,
@@ -306,16 +273,13 @@ func (s *Service) cacheActiveReference(tag Tag) {
 }
 
 func (s *Service) cacheInactiveReference(id int64) {
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-
-	if s.cache.entries == nil {
-		s.cache.entries = map[int64]tagReferenceState{}
-	}
-	state := s.cache.entries[id]
-	state.reference.ID = id
-	state.active = false
-	s.cache.entries[id] = state
+	s.cache.Modify(id, func(state tagReferenceState, ok bool) tagReferenceState {
+		if !ok {
+			state.reference.ID = id
+		}
+		state.active = false
+		return state
+	})
 }
 
 func deduplicateIDs(ids []int64) []int64 {

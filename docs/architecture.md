@@ -34,6 +34,7 @@ Imports and runtime knowledge flow inward toward app-owned service packages. Com
 - `internal/httpapi`: REST/OpenAPI adapter, generated REST contract code, generated route registration, generated request binding, OpenAPI request validation for transport shape, HTTP DTO mapping, and HTTP status/error mapping.
 - App-owned service packages: domain types, validation, use cases, and repository interfaces.
 - `internal/store`: DuckDB driver access, migrations, transactions, query code, and repository implementations.
+- `internal/x`: pure in-process library packages with app-agnostic data structures and helpers.
 
 Rules:
 
@@ -47,6 +48,7 @@ Rules:
 - `internal/webui` serves embedded frontend assets and does not own REST handlers, database access, or domain behavior.
 - `internal/runtime` wires concrete implementations manually. Avoid hidden global state for database handles, config, clocks, listeners, or services.
 - `internal/appconfig` does not import runtime, store, HTTP, OpenAPI, background, provider, service, Cobra, or pflag packages.
+- `internal/x` packages do not import app packages or own side-effect boundaries.
 - Shared contracts belong at the lowest layer that can own them.
 
 ## Store / Database

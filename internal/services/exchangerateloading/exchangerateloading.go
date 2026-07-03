@@ -7,6 +7,7 @@ import (
 
 	"github.com/mishamsk/mina/internal/services/exchangerates"
 	"github.com/mishamsk/mina/internal/services/values"
+	"github.com/mishamsk/mina/internal/x/refcache"
 )
 
 const usdCurrency = "USD"
@@ -68,15 +69,18 @@ type Clock interface {
 
 // Service owns exchange-rate loading planning and execution.
 type Service struct {
-	repo       Repository
-	rateWriter RateWriter
-	provider   RateProvider
-	clock      Clock
+	repo             Repository
+	rateWriter       RateWriter
+	provider         RateProvider
+	clock            Clock
+	neededCurrencies *refcache.Value[[]NeededCurrency]
 }
 
 // NewService creates an exchange-rate loading service.
 func NewService(repo Repository, rateWriter RateWriter, provider RateProvider, clock Clock) *Service {
-	return &Service{repo: repo, rateWriter: rateWriter, provider: provider, clock: clock}
+	service := &Service{repo: repo, rateWriter: rateWriter, provider: provider, clock: clock}
+	service.neededCurrencies = refcache.NewValue(service.repo.NeededCurrencies)
+	return service
 }
 
 // Load plans and loads needed exchange rates.
@@ -85,7 +89,7 @@ func (s *Service) Load(ctx context.Context) error {
 		return errProviderRequired
 	}
 
-	needed, err := s.repo.NeededCurrencies(ctx)
+	needed, err := s.neededCurrencies.Get(ctx)
 	if err != nil {
 		return err
 	}
@@ -142,6 +146,11 @@ func (s *Service) Load(ctx context.Context) error {
 	}
 
 	return firstErr
+}
+
+// InvalidateCurrencyCache forces the next load to reload needed currencies.
+func (s *Service) InvalidateCurrencyCache() {
+	s.neededCurrencies.Invalidate()
 }
 
 func providerSkipError(err error) bool {

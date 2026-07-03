@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/values"
+	"github.com/mishamsk/mina/internal/x/refcache"
 )
 
 // AccountType identifies how an account participates in accounting semantics.
@@ -126,12 +126,14 @@ type ReferenceSerializer interface {
 type Service struct {
 	repo  Repository
 	refs  ReferenceSerializer
-	cache accountReferenceCache
+	cache *refcache.Dictionary[int64, accountReferenceState]
 }
 
 // NewService creates an account service backed by repo.
 func NewService(repo Repository, refs ReferenceSerializer) *Service {
-	return &Service{repo: repo, refs: refs}
+	service := &Service{repo: repo, refs: refs}
+	service.cache = refcache.NewDictionary(service.loadReferenceCache)
+	return service
 }
 
 // Create validates and creates an account.
@@ -173,16 +175,14 @@ func (s *Service) ValidateActiveReferences(ctx context.Context, ids []int64, opt
 		return map[int64]Reference{}, nil
 	}
 
-	if err := s.ensureReferenceCache(ctx); err != nil {
+	states, err := s.cache.GetMany(ctx, uniqueIDs)
+	if err != nil {
 		return nil, err
 	}
 
-	s.cache.mu.RLock()
-	defer s.cache.mu.RUnlock()
-
 	refs := make(map[int64]Reference, len(uniqueIDs))
 	for _, id := range uniqueIDs {
-		state, ok := s.cache.entries[id]
+		state, ok := states[id]
 		if !ok || !state.active || (!opts.AllowHidden && state.reference.IsHidden) {
 			return nil, services.ErrInvalidReference
 		}
@@ -206,11 +206,7 @@ func (s *Service) ValidateActiveReference(ctx context.Context, id int64, opts Re
 
 // InvalidateReferenceCache forces the next reference validation to reload references.
 func (s *Service) InvalidateReferenceCache() {
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-
-	s.cache.loaded = false
-	s.cache.entries = nil
+	s.cache.Invalidate()
 }
 
 // Get returns an account by ID.
@@ -334,61 +330,31 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-type accountReferenceCache struct {
-	mu      sync.RWMutex
-	loaded  bool
-	entries map[int64]accountReferenceState
-}
-
 type accountReferenceState struct {
 	reference Reference
 	active    bool
 }
 
-func (s *Service) ensureReferenceCache(ctx context.Context) error {
-	s.cache.mu.RLock()
-	loaded := s.cache.loaded
-	s.cache.mu.RUnlock()
-	if loaded {
-		return nil
-	}
-
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-	if s.cache.loaded {
-		return nil
-	}
-
+func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]accountReferenceState, error) {
 	accounts, err := s.repo.List(ctx, ListOptions{IncludeHidden: true, IncludeTombstoned: true})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	entries := make(map[int64]accountReferenceState, len(accounts))
 	for _, account := range accounts {
-		entries[account.ID] = accountReferenceState{
-			reference: Reference{
-				ID:          account.ID,
-				AccountType: account.AccountType,
-				IsHidden:    account.IsHidden,
-			},
-			active: account.TombstonedAt == nil,
-		}
+		entries[account.ID] = accountReferenceStateFromAccount(account)
 	}
-	s.cache.entries = entries
-	s.cache.loaded = true
 
-	return nil
+	return entries, nil
 }
 
 func (s *Service) cacheActiveReference(account Account) {
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
+	s.cache.Put(account.ID, accountReferenceStateFromAccount(account))
+}
 
-	if s.cache.entries == nil {
-		s.cache.entries = map[int64]accountReferenceState{}
-	}
-	s.cache.entries[account.ID] = accountReferenceState{
+func accountReferenceStateFromAccount(account Account) accountReferenceState {
+	return accountReferenceState{
 		reference: Reference{
 			ID:          account.ID,
 			AccountType: account.AccountType,
@@ -399,16 +365,13 @@ func (s *Service) cacheActiveReference(account Account) {
 }
 
 func (s *Service) cacheInactiveReference(id int64) {
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-
-	if s.cache.entries == nil {
-		s.cache.entries = map[int64]accountReferenceState{}
-	}
-	state := s.cache.entries[id]
-	state.reference.ID = id
-	state.active = false
-	s.cache.entries[id] = state
+	s.cache.Modify(id, func(state accountReferenceState, ok bool) accountReferenceState {
+		if !ok {
+			state.reference.ID = id
+		}
+		state.active = false
+		return state
+	})
 }
 
 func deduplicateIDs(ids []int64) []int64 {

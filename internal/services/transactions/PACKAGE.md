@@ -12,6 +12,7 @@
 - Shorthand create use cases build ordinary same-currency two-record transactions before delegating to full create validation and persistence.
 - The transactions service owns `amount_usd` backfill for active journal records still storing `NULL`.
 - Runtime may trigger backfill after non-canceled exchange-rate load attempts; backfill never overwrites non-`NULL` values.
+- Composition may subscribe to create/replace currency-usage changes to invalidate dependent planning caches.
 
 ## Boundaries
 

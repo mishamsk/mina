@@ -242,13 +242,14 @@ type ReferenceSerializer interface {
 
 // Service owns transaction, journal record, and bulk record use cases.
 type Service struct {
-	repo             Repository
-	accounts         AccountReferenceValidator
-	categories       CategoryReferenceValidator
-	tags             TagReferenceValidator
-	members          MemberReferenceValidator
-	amountUSDDeriver AmountUSDDeriver
-	refs             ReferenceSerializer
+	repo                 Repository
+	accounts             AccountReferenceValidator
+	categories           CategoryReferenceValidator
+	tags                 TagReferenceValidator
+	members              MemberReferenceValidator
+	amountUSDDeriver     AmountUSDDeriver
+	refs                 ReferenceSerializer
+	currencyUsageChanged func()
 }
 
 // NewService creates a transaction service backed by repositories.
@@ -260,15 +261,17 @@ func NewService(
 	members MemberReferenceValidator,
 	amountUSDDeriver AmountUSDDeriver,
 	refs ReferenceSerializer,
+	currencyUsageChanged func(),
 ) *Service {
 	return &Service{
-		repo:             repo,
-		accounts:         accounts,
-		categories:       categories,
-		tags:             tags,
-		members:          members,
-		amountUSDDeriver: amountUSDDeriver,
-		refs:             refs,
+		repo:                 repo,
+		accounts:             accounts,
+		categories:           categories,
+		tags:                 tags,
+		members:              members,
+		amountUSDDeriver:     amountUSDDeriver,
+		refs:                 refs,
+		currencyUsageChanged: currencyUsageChanged,
 	}
 }
 
@@ -308,6 +311,8 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 	}); err != nil {
 		return Transaction{}, err
 	}
+
+	s.notifyCurrencyUsageChanged()
 
 	return transaction, nil
 }
@@ -350,7 +355,15 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 		return Transaction{}, err
 	}
 
+	s.notifyCurrencyUsageChanged()
+
 	return transaction, nil
+}
+
+func (s *Service) notifyCurrencyUsageChanged() {
+	if s.currencyUsageChanged != nil {
+		s.currencyUsageChanged()
+	}
 }
 
 func (s *Service) inferMissingAmountUSD(ctx context.Context, input *CreateInput) error {

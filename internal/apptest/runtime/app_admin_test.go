@@ -105,6 +105,32 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 	}
 }
 
+func TestSeedDemoRefreshesWarmedNeededCurrencyCache(t *testing.T) {
+	provider := apptest.NewFakeExchangeRateProvider()
+	provider.Set("EUR", "2026-06-01", "1.15000000")
+	client := newSharedClient(
+		t,
+		apptest.WithAccountingSchema("app_admin_demo_seed_warmed_currency_cache"),
+		apptest.WithExchangeRateLoading(false),
+		apptest.WithExchangeRateProviderFactory(provider),
+	)
+	ctx := context.Background()
+
+	triggerAndWaitForExchangeRateLoad(t, client)
+
+	seeded, err := client.REST().SeedDemoWithResponse(ctx)
+	if err != nil {
+		t.Fatalf("seed demo request: %v", err)
+	}
+	if seeded.StatusCode() != http.StatusOK {
+		t.Fatalf("seed demo status = %d, want %d; body %s", seeded.StatusCode(), http.StatusOK, seeded.Body)
+	}
+
+	triggerAndWaitForExchangeRateLoad(t, client)
+
+	assertExchangeRateRateOnDate(t, client, "USD", "EUR", "2026-06-01", "1.15000000")
+}
+
 func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpclient.DemoSeedResponse) {
 	t.Helper()
 

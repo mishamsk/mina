@@ -83,6 +83,81 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 		}
 	})
 
+	t.Run("new transaction currency invalidates needed currency cache", func(t *testing.T) {
+		provider := apptest.NewFakeExchangeRateProvider()
+		provider.Set("EUR", "2026-03-31", "1.12000000")
+		provider.Set("CHF", "2026-04-10", "0.94000000")
+		client := newSharedClient(t, apptest.WithExchangeRateLoading(false), apptest.WithExchangeRateProviderFactory(provider))
+		createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
+			Currency:      "EUR",
+			InitiatedDate: "2026-03-31",
+			PostedAt:      apptest.TimestampPtr("2026-03-31T12:00:00Z"),
+		})
+		triggerAndWaitForExchangeRateLoad(t, client)
+		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-03-31")
+
+		createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
+			Currency:      "CHF",
+			InitiatedDate: "2026-04-10",
+			PostedAt:      apptest.TimestampPtr("2026-04-10T12:00:00Z"),
+		})
+		triggerAndWaitForExchangeRateLoad(t, client)
+
+		assertExchangeRateRateOnDate(t, client, "USD", "CHF", "2026-04-10", "0.94000000")
+	})
+
+	t.Run("replacement transaction currency invalidates needed currency cache", func(t *testing.T) {
+		provider := apptest.NewFakeExchangeRateProvider()
+		provider.Set("EUR", "2026-03-31", "1.12000000")
+		provider.Set("CHF", "2026-04-10", "0.94000000")
+		client := newSharedClient(t, apptest.WithExchangeRateLoading(false), apptest.WithExchangeRateProviderFactory(provider))
+		transaction := createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
+			Currency:      "EUR",
+			InitiatedDate: "2026-03-31",
+			PostedAt:      apptest.TimestampPtr("2026-03-31T12:00:00Z"),
+		})
+		triggerAndWaitForExchangeRateLoad(t, client)
+		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-03-31")
+
+		checking := client.Scenario().AccountWithCurrency("checking:ReplacementCHF", "CHF")
+		counterparty := client.Scenario().Account("counterparty:ReplacementCHF")
+		category := client.Scenario().Category("Transfers:ReplacementCHF")
+		pendingAt := apptest.Timestamp("2026-04-10T12:00:00Z")
+		postedAt := apptest.TimestampPtr("2026-04-10T12:00:00Z")
+		replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), transaction.TransactionId, httpclient.UpdateTransactionRequest{
+			InitiatedDate: apptest.Date("2026-04-10"),
+			Records: []httpclient.CreateJournalRecordRequest{
+				{
+					AccountId:            checking.AccountId,
+					Amount:               "-10.00000000",
+					CategoryId:           category.CategoryId,
+					Currency:             "CHF",
+					PendingDate:          &pendingAt,
+					PostedDate:           postedAt,
+					PostingStatus:        httpclient.Posted,
+					ReconciliationStatus: httpclient.Reconciled,
+					Source:               httpclient.Manual,
+				},
+				{
+					AccountId:            counterparty.AccountId,
+					Amount:               "10.00000000",
+					CategoryId:           category.CategoryId,
+					Currency:             "CHF",
+					PendingDate:          &pendingAt,
+					PostedDate:           postedAt,
+					PostingStatus:        httpclient.Posted,
+					ReconciliationStatus: httpclient.Reconciled,
+					Source:               httpclient.Manual,
+				},
+			},
+		})
+		requireClientResponse(t, "replace transaction with foreign-currency transaction", err, replaced.StatusCode(), http.StatusOK, replaced.Body)
+
+		triggerAndWaitForExchangeRateLoad(t, client)
+
+		assertExchangeRateRateOnDate(t, client, "USD", "CHF", "2026-04-10", "0.94000000")
+	})
+
 	t.Run("loads forward rates for tracked currency whose records are already resolved", func(t *testing.T) {
 		provider := apptest.NewFakeExchangeRateProvider()
 		provider.Set("EUR", "2026-04-02", "1.14000000")

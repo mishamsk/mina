@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/x/refcache"
 )
 
 // Member is a household member used for journal record attribution.
@@ -70,12 +70,14 @@ type ReferenceSerializer interface {
 type Service struct {
 	repo  Repository
 	refs  ReferenceSerializer
-	cache memberReferenceCache
+	cache *refcache.Dictionary[int64, memberReferenceState]
 }
 
 // NewService creates a member service backed by repo.
 func NewService(repo Repository, refs ReferenceSerializer) *Service {
-	return &Service{repo: repo, refs: refs}
+	service := &Service{repo: repo, refs: refs}
+	service.cache = refcache.NewDictionary(service.loadReferenceCache)
+	return service
 }
 
 // Create validates and creates a household member.
@@ -106,16 +108,14 @@ func (s *Service) ValidateActiveReferences(ctx context.Context, ids []int64) (ma
 		return map[int64]Reference{}, nil
 	}
 
-	if err := s.ensureReferenceCache(ctx); err != nil {
+	states, err := s.cache.GetMany(ctx, uniqueIDs)
+	if err != nil {
 		return nil, err
 	}
 
-	s.cache.mu.RLock()
-	defer s.cache.mu.RUnlock()
-
 	refs := make(map[int64]Reference, len(uniqueIDs))
 	for _, id := range uniqueIDs {
-		state, ok := s.cache.entries[id]
+		state, ok := states[id]
 		if !ok || !state.active {
 			return nil, services.ErrInvalidReference
 		}
@@ -137,11 +137,7 @@ func (s *Service) ValidateActiveReference(ctx context.Context, id int64) (Refere
 
 // InvalidateReferenceCache forces the next reference validation to reload references.
 func (s *Service) InvalidateReferenceCache() {
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-
-	s.cache.loaded = false
-	s.cache.entries = nil
+	s.cache.Invalidate()
 }
 
 // Get returns a household member by ID.
@@ -234,59 +230,31 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-type memberReferenceCache struct {
-	mu      sync.RWMutex
-	loaded  bool
-	entries map[int64]memberReferenceState
-}
-
 type memberReferenceState struct {
 	reference Reference
 	active    bool
 }
 
-func (s *Service) ensureReferenceCache(ctx context.Context) error {
-	s.cache.mu.RLock()
-	loaded := s.cache.loaded
-	s.cache.mu.RUnlock()
-	if loaded {
-		return nil
-	}
-
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-	if s.cache.loaded {
-		return nil
-	}
-
+func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]memberReferenceState, error) {
 	members, err := s.repo.List(ctx, ListOptions{IncludeTombstoned: true})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	entries := make(map[int64]memberReferenceState, len(members))
 	for _, member := range members {
-		entries[member.ID] = memberReferenceState{
-			reference: Reference{
-				ID: member.ID,
-			},
-			active: member.TombstonedAt == nil,
-		}
+		entries[member.ID] = memberReferenceStateFromMember(member)
 	}
-	s.cache.entries = entries
-	s.cache.loaded = true
 
-	return nil
+	return entries, nil
 }
 
 func (s *Service) cacheActiveReference(member Member) {
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
+	s.cache.Put(member.ID, memberReferenceStateFromMember(member))
+}
 
-	if s.cache.entries == nil {
-		s.cache.entries = map[int64]memberReferenceState{}
-	}
-	s.cache.entries[member.ID] = memberReferenceState{
+func memberReferenceStateFromMember(member Member) memberReferenceState {
+	return memberReferenceState{
 		reference: Reference{
 			ID: member.ID,
 		},
@@ -295,16 +263,13 @@ func (s *Service) cacheActiveReference(member Member) {
 }
 
 func (s *Service) cacheInactiveReference(id int64) {
-	s.cache.mu.Lock()
-	defer s.cache.mu.Unlock()
-
-	if s.cache.entries == nil {
-		s.cache.entries = map[int64]memberReferenceState{}
-	}
-	state := s.cache.entries[id]
-	state.reference.ID = id
-	state.active = false
-	s.cache.entries[id] = state
+	s.cache.Modify(id, func(state memberReferenceState, ok bool) memberReferenceState {
+		if !ok {
+			state.reference.ID = id
+		}
+		state.active = false
+		return state
+	})
 }
 
 func deduplicateIDs(ids []int64) []int64 {
