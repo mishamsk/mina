@@ -77,6 +77,9 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
 	assertExchangeRateIDs(t, defaultList.JSON200.ExchangeRates, []int64{earlier.JSON201.ExchangeRateId, later.JSON201.ExchangeRateId, other.JSON201.ExchangeRateId})
+	if defaultList.JSON200.TotalCount != 3 {
+		t.Fatalf("default exchange rate total_count = %d, want 3", defaultList.JSON200.TotalCount)
+	}
 
 	fromCurrency := "EUR"
 	toCurrency := "USD"
@@ -88,6 +91,9 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("filtered pair status = %d, want %d; body %s", filteredPair.StatusCode(), http.StatusOK, filteredPair.Body)
 	}
 	assertExchangeRateIDs(t, filteredPair.JSON200.ExchangeRates, []int64{earlier.JSON201.ExchangeRateId, later.JSON201.ExchangeRateId})
+	if filteredPair.JSON200.TotalCount != 2 {
+		t.Fatalf("filtered pair exchange rate total_count = %d, want 2", filteredPair.JSON200.TotalCount)
+	}
 
 	effectiveDate := apptest.Timestamp("2024-02-01T00:00:00Z")
 	filteredDate, err := client.REST().ListExchangeRatesWithResponse(context.Background(), &httpclient.ListExchangeRatesParams{FromCurrency: &fromCurrency, ToCurrency: &toCurrency, EffectiveDate: &effectiveDate})
@@ -98,6 +104,9 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("filtered date status = %d, want %d; body %s", filteredDate.StatusCode(), http.StatusOK, filteredDate.Body)
 	}
 	assertExchangeRateIDs(t, filteredDate.JSON200.ExchangeRates, []int64{later.JSON201.ExchangeRateId})
+	if filteredDate.JSON200.TotalCount != 1 {
+		t.Fatalf("filtered date exchange rate total_count = %d, want 1", filteredDate.JSON200.TotalCount)
+	}
 
 	updated, err := client.REST().UpdateExchangeRateWithResponse(context.Background(), later.JSON201.ExchangeRateId, httpclient.UpdateExchangeRateRequest{
 		Rate: "1.09",
@@ -148,6 +157,9 @@ func TestExchangeRateCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode(), http.StatusOK, withTombstones.Body)
 	}
 	assertExchangeRateIDs(t, withTombstones.JSON200.ExchangeRates, []int64{earlier.JSON201.ExchangeRateId, later.JSON201.ExchangeRateId})
+	if withTombstones.JSON200.TotalCount != 2 {
+		t.Fatalf("include tombstones exchange rate total_count = %d, want 2", withTombstones.JSON200.TotalCount)
+	}
 }
 
 func TestExchangeRateAcceptsCryptoCurrencyBoundary(t *testing.T) {

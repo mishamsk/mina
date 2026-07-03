@@ -12,10 +12,11 @@ func listOptionsFromParams[Sort ~string, SortDirection ~string](
 	defaultSortKey services.SortKey,
 ) services.ListOptions {
 	return services.ListOptions{
-		SortKey:       sortKeyParam(sort, defaultSortKey),
-		SortDirection: sortDirectionParam(sortDirection),
-		Limit:         limit,
-		Offset:        offsetParam(offset),
+		SortKey:           sortKeyParam(sort, defaultSortKey),
+		SortDirection:     sortDirectionParam(sortDirection),
+		Limit:             limit,
+		Offset:            offsetParam(offset),
+		IncludeTotalCount: true,
 	}
 }
 

@@ -60,6 +60,9 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
 	}
 	assertCreditLimitHistoryIDs(t, list.JSON200.CreditLimitHistory, []int64{earlier.JSON201.CreditLimitHistoryId, later.JSON201.CreditLimitHistoryId})
+	if list.JSON200.TotalCount != 2 {
+		t.Fatalf("credit limit history total_count = %d, want 2", list.JSON200.TotalCount)
+	}
 
 	limitOne := 1
 	offsetOne := 1
@@ -74,6 +77,9 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 		t.Fatalf("page status = %d, want %d; body %s", page.StatusCode(), http.StatusOK, page.Body)
 	}
 	assertCreditLimitHistoryIDs(t, page.JSON200.CreditLimitHistory, []int64{later.JSON201.CreditLimitHistoryId})
+	if page.JSON200.TotalCount != 2 {
+		t.Fatalf("credit limit history page total_count = %d, want 2", page.JSON200.TotalCount)
+	}
 
 	deleted, err := client.REST().DeleteCreditLimitHistoryWithResponse(context.Background(), earlier.JSON201.CreditLimitHistoryId)
 	if err != nil {
@@ -122,6 +128,9 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 		t.Fatalf("default after recreate status = %d, want %d; body %s", defaultAfterRecreate.StatusCode(), http.StatusOK, defaultAfterRecreate.Body)
 	}
 	assertCreditLimitHistoryIDs(t, defaultAfterRecreate.JSON200.CreditLimitHistory, []int64{recreated.JSON201.CreditLimitHistoryId, later.JSON201.CreditLimitHistoryId})
+	if defaultAfterRecreate.JSON200.TotalCount != 2 {
+		t.Fatalf("default after recreate credit limit history total_count = %d, want 2", defaultAfterRecreate.JSON200.TotalCount)
+	}
 
 	withTombstones, err := client.REST().ListCreditLimitHistoryWithResponse(context.Background(), account.AccountId, &httpclient.ListCreditLimitHistoryParams{IncludeTombstoned: &includeTombstoned})
 	if err != nil {
@@ -131,6 +140,9 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode(), http.StatusOK, withTombstones.Body)
 	}
 	assertCreditLimitHistoryIDs(t, withTombstones.JSON200.CreditLimitHistory, []int64{earlier.JSON201.CreditLimitHistoryId, recreated.JSON201.CreditLimitHistoryId, later.JSON201.CreditLimitHistoryId})
+	if withTombstones.JSON200.TotalCount != 3 {
+		t.Fatalf("include tombstones credit limit history total_count = %d, want 3", withTombstones.JSON200.TotalCount)
+	}
 }
 
 func TestCreditLimitHistoryRejectsDuplicateActiveAccountDate(t *testing.T) {

@@ -656,6 +656,38 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "409":
           $ref: "#/components/responses/Conflict"
+  /api/accounts/balances:
+    get:
+      operationId: listAccountBalances
+      summary: List current and posted-only balances for active balance accounts.
+      description: Returns server-computed per-currency balances for active `balance` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
+      parameters:
+        - name: include_hidden
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: account_ids
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+      responses:
+        "200":
+          description: Account balances.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountBalanceListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
   /api/accounts/{account_id}:
     parameters:
       - name: account_id
@@ -1008,6 +1040,10 @@ paths:
               - fqn
               - created_at
               - updated_at
+            x-enum-varnames:
+              - Fqn
+              - CreatedAt
+              - UpdatedAt
         - name: sort_dir
           in: query
           required: false
@@ -1017,6 +1053,9 @@ paths:
             enum:
               - asc
               - desc
+            x-enum-varnames:
+              - Asc
+              - Desc
         - name: limit
           in: query
           required: false
@@ -1119,7 +1158,28 @@ paths:
     get:
       operationId: listTransactions
       summary: List transactions with journal records.
+      description: Defaults to `initiated_date` descending with `transaction_id` descending as the stable tiebreaker.
       parameters:
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [initiated_date, created_at]
+            default: initiated_date
+            x-enum-varnames:
+              - ListTransactionsParamsSortInitiatedDate
+              - ListTransactionsParamsSortCreatedAt
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+            x-enum-varnames:
+              - ListTransactionsParamsSortDirAsc
+              - ListTransactionsParamsSortDirDesc
         - name: limit
           in: query
           required: false
@@ -1135,7 +1195,7 @@ paths:
             minimum: 0
       responses:
         "200":
-          description: Transactions in initiated-date order.
+          description: Transactions in requested order.
           content:
             application/json:
               schema:
@@ -1495,6 +1555,13 @@ paths:
           required: false
           schema:
             type: string
+        - name: include_running_balance
+          in: query
+          required: false
+          description: When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.
+          schema:
+            type: boolean
+            default: false
         - name: limit
           in: query
           required: false
@@ -1771,11 +1838,52 @@ components:
       additionalProperties: false
       required:
         - accounts
+        - total_count
       properties:
         accounts:
           type: array
           items:
             $ref: "#/components/schemas/Account"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching accounts before limit and offset are applied.
+    AccountBalance:
+      type: object
+      additionalProperties: false
+      required:
+        - account_id
+        - currency
+        - current_balance
+        - posted_balance
+      properties:
+        account_id:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        current_balance:
+          type: string
+          description: JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
+          maxLength: 40
+        posted_balance:
+          type: string
+          description: JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
+          maxLength: 40
+    AccountBalanceListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - balances
+      properties:
+        balances:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountBalance"
     AccountType:
       type: string
       enum:
@@ -1819,11 +1927,17 @@ components:
       additionalProperties: false
       required:
         - credit_limit_history
+        - total_count
       properties:
         credit_limit_history:
           type: array
           items:
             $ref: "#/components/schemas/CreditLimitHistory"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching credit limit history rows before limit and offset are applied.
     ExchangeRate:
       type: object
       additionalProperties: false
@@ -1866,11 +1980,17 @@ components:
       additionalProperties: false
       required:
         - exchange_rates
+        - total_count
       properties:
         exchange_rates:
           type: array
           items:
             $ref: "#/components/schemas/ExchangeRate"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching exchange rates before limit and offset are applied.
     APIError:
       type: object
       additionalProperties: false
@@ -1933,11 +2053,17 @@ components:
       additionalProperties: false
       required:
         - categories
+        - total_count
       properties:
         categories:
           type: array
           items:
             $ref: "#/components/schemas/Category"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching categories before limit and offset are applied.
     CategoryEconomicIntent:
       type: string
       enum:
@@ -2855,11 +2981,17 @@ components:
       additionalProperties: false
       required:
         - members
+        - total_count
       properties:
         members:
           type: array
           items:
             $ref: "#/components/schemas/Member"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching members before limit and offset are applied.
     JournalRecord:
       type: object
       additionalProperties: false
@@ -2906,6 +3038,12 @@ components:
           description: JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
           pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 20
+        running_balance:
+          type: string
+          nullable: true
+          description: JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
+          maxLength: 40
         category_id:
           type: integer
           format: int64
@@ -2953,11 +3091,17 @@ components:
       additionalProperties: false
       required:
         - records
+        - total_count
       properties:
         records:
           type: array
           items:
             $ref: "#/components/schemas/JournalRecord"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching journal records before limit and offset are applied.
     PostingStatus:
       type: string
       enum:
@@ -3015,11 +3159,17 @@ components:
       additionalProperties: false
       required:
         - tags
+        - total_count
       properties:
         tags:
           type: array
           items:
             $ref: "#/components/schemas/Tag"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching tags before limit and offset are applied.
     TransactionTemplate:
       type: object
       additionalProperties: false
@@ -3135,11 +3285,17 @@ components:
       additionalProperties: false
       required:
         - transaction_templates
+        - total_count
       properties:
         transaction_templates:
           type: array
           items:
             $ref: "#/components/schemas/TransactionTemplate"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching transaction templates before limit and offset are applied.
     Transaction:
       type: object
       additionalProperties: false
@@ -3185,11 +3341,17 @@ components:
       additionalProperties: false
       required:
         - transactions
+        - total_count
       properties:
         transactions:
           type: array
           items:
             $ref: "#/components/schemas/Transaction"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching transactions before limit and offset are applied.
     UpdateCategoryRequest:
       type: object
       additionalProperties: false

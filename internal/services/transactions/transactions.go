@@ -67,6 +67,7 @@ type JournalRecord struct {
 	Currency             string
 	Amount               values.Decimal
 	AmountUSD            *values.Decimal
+	RunningBalance       *values.Decimal
 	CategoryID           int64
 	EconomicIntent       categories.CategoryEconomicIntent
 	TagIDs               []int64
@@ -122,33 +123,29 @@ type AmountUSDBackfillUpdate struct {
 	AmountUSD values.Decimal
 }
 
-// ListOptions controls transaction list pagination.
-type ListOptions struct {
-	Limit  *int
-	Offset int
-}
-
 // RecordSearchOptions controls journal record search filters.
 type RecordSearchOptions struct {
-	AccountID            *int64
-	CategoryID           *int64
-	MemberID             *int64
-	TagID                *int64
-	PostingStatus        *PostingStatus
-	ReconciliationStatus *ReconciliationStatus
-	AmountMin            *values.Decimal
-	AmountMax            *values.Decimal
-	AmountUSDMin         *values.Decimal
-	AmountUSDMax         *values.Decimal
-	InitiatedDateFrom    *values.CivilDate
-	InitiatedDateTo      *values.CivilDate
-	PendingDateFrom      *time.Time
-	PendingDateTo        *time.Time
-	PostedDateFrom       *time.Time
-	PostedDateTo         *time.Time
-	MemoContains         *string
-	Limit                *int
-	Offset               int
+	AccountID             *int64
+	CategoryID            *int64
+	MemberID              *int64
+	TagID                 *int64
+	PostingStatus         *PostingStatus
+	ReconciliationStatus  *ReconciliationStatus
+	AmountMin             *values.Decimal
+	AmountMax             *values.Decimal
+	AmountUSDMin          *values.Decimal
+	AmountUSDMax          *values.Decimal
+	InitiatedDateFrom     *values.CivilDate
+	InitiatedDateTo       *values.CivilDate
+	PendingDateFrom       *time.Time
+	PendingDateTo         *time.Time
+	PostedDateFrom        *time.Time
+	PostedDateTo          *time.Time
+	MemoContains          *string
+	IncludeRunningBalance bool
+	Limit                 *int
+	Offset                int
+	IncludeTotalCount     bool
 }
 
 // BulkRecordOperationResponse reports the selected and updated record counts.
@@ -196,9 +193,9 @@ type Repository interface {
 	Create(context.Context, CreateInput) (Transaction, error)
 	Replace(context.Context, int64, CreateInput) (Transaction, error)
 	Get(context.Context, int64) (Transaction, error)
-	List(context.Context, ListOptions) ([]Transaction, error)
+	List(context.Context, services.ListOptions) (services.PaginatedList[Transaction], error)
 	Tombstone(context.Context, int64) error
-	SearchRecords(context.Context, RecordSearchOptions) ([]JournalRecord, error)
+	SearchRecords(context.Context, RecordSearchOptions) (services.PaginatedList[JournalRecord], error)
 	TransactionsByRecordIDs(context.Context, []int64) ([]Transaction, error)
 	BulkCategorize(context.Context, []int64, int64) (int, error)
 	BulkUpdateTags(context.Context, []int64, []int64, []int64) (int, error)
@@ -442,17 +439,17 @@ func (s *Service) Get(ctx context.Context, id int64) (Transaction, error) {
 }
 
 // List returns transactions with nested journal records.
-func (s *Service) List(ctx context.Context, opts ListOptions) ([]Transaction, error) {
+func (s *Service) List(ctx context.Context, opts services.ListOptions) (services.PaginatedList[Transaction], error) {
 	transactions, err := s.repo.List(ctx, opts)
 	if err != nil {
-		return nil, err
+		return services.PaginatedList[Transaction]{}, err
 	}
-	for index := range transactions {
-		classified, err := classifyTransaction(transactions[index])
+	for index := range transactions.Items {
+		classified, err := classifyTransaction(transactions.Items[index])
 		if err != nil {
-			return nil, err
+			return services.PaginatedList[Transaction]{}, err
 		}
-		transactions[index] = classified
+		transactions.Items[index] = classified
 	}
 
 	return transactions, nil
@@ -474,9 +471,9 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 }
 
 // SearchRecords returns journal records matching validated filters.
-func (s *Service) SearchRecords(ctx context.Context, opts RecordSearchOptions) ([]JournalRecord, error) {
+func (s *Service) SearchRecords(ctx context.Context, opts RecordSearchOptions) (services.PaginatedList[JournalRecord], error) {
 	if err := validateRecordSearchOptions(opts); err != nil {
-		return nil, err
+		return services.PaginatedList[JournalRecord]{}, err
 	}
 
 	return s.repo.SearchRecords(ctx, opts)
@@ -903,6 +900,9 @@ func validateRecordSearchOptions(opts RecordSearchOptions) error {
 	}
 	if opts.MemoContains != nil && *opts.MemoContains == "" {
 		return services.InvalidRequest("memo_contains must be non-empty")
+	}
+	if opts.IncludeRunningBalance && opts.AccountID == nil {
+		return services.InvalidRequest("include_running_balance requires account_id")
 	}
 	return nil
 }

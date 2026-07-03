@@ -362,6 +362,9 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 		second.JSON201.Records[0].RecordId,
 		second.JSON201.Records[1].RecordId,
 	})
+	if allRecordsPage.JSON200.TotalCount != 6 {
+		t.Fatalf("search records page total_count = %d, want 6", allRecordsPage.JSON200.TotalCount)
+	}
 
 	offsetOnlyAllRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
 		Offset: &offsetOne,
@@ -377,6 +380,9 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 		third.JSON201.Records[0].RecordId,
 		third.JSON201.Records[1].RecordId,
 	})
+	if offsetOnlyAllRecords.JSON200.TotalCount != 6 {
+		t.Fatalf("search records offset-only total_count = %d, want 6", offsetOnlyAllRecords.JSON200.TotalCount)
+	}
 
 	limitTwo := 2
 	accountRecordsPage, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
@@ -391,6 +397,9 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 		second.JSON201.Records[0].RecordId,
 		third.JSON201.Records[0].RecordId,
 	})
+	if accountRecordsPage.JSON200.TotalCount != 3 {
+		t.Fatalf("search account records page total_count = %d, want 3", accountRecordsPage.JSON200.TotalCount)
+	}
 
 	offsetOnlyAccountRecords, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
 		Offset: &offsetOne,
@@ -403,6 +412,9 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 		second.JSON201.Records[0].RecordId,
 		third.JSON201.Records[0].RecordId,
 	})
+	if offsetOnlyAccountRecords.JSON200.TotalCount != 3 {
+		t.Fatalf("search account records offset-only total_count = %d, want 3", offsetOnlyAccountRecords.JSON200.TotalCount)
+	}
 
 	limitOne := 1
 	filteredPage, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
@@ -415,6 +427,22 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 		t.Fatalf("search filtered records page status = %d, want %d; body %s", filteredPage.StatusCode(), http.StatusOK, filteredPage.Body)
 	}
 	assertRecordIDs(t, filteredPage.JSON200.Records, []int64{second.JSON201.Records[0].RecordId})
+	if filteredPage.JSON200.TotalCount != 3 {
+		t.Fatalf("search filtered records page total_count = %d, want 3", filteredPage.JSON200.TotalCount)
+	}
+
+	noMatchMemo := "No matching memo"
+	emptyFiltered, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		MemoContains: &noMatchMemo,
+	})
+	requireNoTransportError(t, "search empty filtered records", err)
+	if emptyFiltered.StatusCode() != http.StatusOK {
+		t.Fatalf("search empty filtered records status = %d, want %d; body %s", emptyFiltered.StatusCode(), http.StatusOK, emptyFiltered.Body)
+	}
+	assertRecordIDs(t, emptyFiltered.JSON200.Records, nil)
+	if emptyFiltered.JSON200.TotalCount != 0 {
+		t.Fatalf("search empty filtered records total_count = %d, want 0", emptyFiltered.JSON200.TotalCount)
+	}
 
 	assertInvalidRecordSearchQuery(t, client, "limit=0")
 	assertInvalidRecordSearchQuery(t, client, "limit=501")
@@ -422,6 +450,114 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "limit=0")
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "limit=501")
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "offset=-1")
+}
+
+func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+
+	first := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-01", "First")
+	cancelledRequest := balancedTransactionRequest(refs.transactionRefs)
+	cancelledRequest.InitiatedDate = apptest.Date("2024-01-02")
+	cancelledRequest.Records[0].PostingStatus = httpclient.Cancelled
+	cancelledRequest.Records[1].PostingStatus = httpclient.Cancelled
+	cancelled := createTransaction(t, client, cancelledRequest)
+	pendingRequest := balancedTransactionRequest(refs.transactionRefs)
+	pendingRequest.InitiatedDate = apptest.Date("2024-01-03")
+	pendingRequest.Records[0].PostingStatus = httpclient.Pending
+	pendingRequest.Records[1].PostingStatus = httpclient.Pending
+	pending := createTransaction(t, client, pendingRequest)
+	second := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-04", "Second")
+
+	includeRunningBalance := true
+	limitThree := 3
+	offsetOne := 1
+	page, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		IncludeRunningBalance: &includeRunningBalance,
+		Limit:                 &limitThree,
+		Offset:                &offsetOne,
+	})
+	requireNoTransportError(t, "search account records with running balance", err)
+	if page.StatusCode() != http.StatusOK {
+		t.Fatalf("search account records with running balance status = %d, want %d; body %s", page.StatusCode(), http.StatusOK, page.Body)
+	}
+	assertRecordIDs(t, page.JSON200.Records, []int64{
+		cancelled.JSON201.Records[0].RecordId,
+		pending.JSON201.Records[0].RecordId,
+		second.JSON201.Records[0].RecordId,
+	})
+	assertRecordRunningBalances(t, page.JSON200.Records, []string{"-12.34000000", "-24.68000000", "-37.02000000"})
+
+	filteredMemo := "Second"
+	filtered, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		IncludeRunningBalance: &includeRunningBalance,
+		MemoContains:          &filteredMemo,
+	})
+	requireNoTransportError(t, "search filtered account records with running balance", err)
+	if filtered.StatusCode() != http.StatusOK {
+		t.Fatalf("search filtered account records with running balance status = %d, want %d; body %s", filtered.StatusCode(), http.StatusOK, filtered.Body)
+	}
+	assertRecordIDs(t, filtered.JSON200.Records, []int64{second.JSON201.Records[0].RecordId})
+	assertRecordRunningBalances(t, filtered.JSON200.Records, []string{"-37.02000000"})
+
+	withoutRunningBalance, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, nil)
+	requireNoTransportError(t, "search account records without running balance", err)
+	if withoutRunningBalance.StatusCode() != http.StatusOK {
+		t.Fatalf("search account records without running balance status = %d, want %d; body %s", withoutRunningBalance.StatusCode(), http.StatusOK, withoutRunningBalance.Body)
+	}
+	if withoutRunningBalance.JSON200.Records[0].RunningBalance != nil {
+		t.Fatalf("running_balance without opt-in = %v, want nil", withoutRunningBalance.JSON200.Records[0].RunningBalance)
+	}
+
+	if first.JSON201.Records[0].RunningBalance != nil {
+		t.Fatalf("create response running_balance = %v, want nil", first.JSON201.Records[0].RunningBalance)
+	}
+}
+
+func TestAccountRecordRunningBalanceByCurrency(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+
+	firstUSD := balancedTransactionRequest(refs.transactionRefs)
+	firstUSD.InitiatedDate = apptest.Date("2024-01-01")
+	firstUSD.Records[0].Amount = "-12.34"
+	firstUSD.Records[0].AmountUsd = apptest.StringPtr("-12.34")
+	firstUSD.Records[1].Amount = "12.34"
+	firstUSD.Records[1].AmountUsd = apptest.StringPtr("12.34")
+	firstUSDResponse := createTransaction(t, client, firstUSD)
+
+	firstEUR := balancedTransactionRequest(refs.transactionRefs)
+	firstEUR.InitiatedDate = apptest.Date("2024-01-02")
+	firstEUR.Records[0].Currency = "EUR"
+	firstEUR.Records[0].Amount = "-10.00"
+	firstEUR.Records[0].AmountUsd = apptest.StringPtr("-11.00")
+	firstEUR.Records[1].Currency = "EUR"
+	firstEUR.Records[1].Amount = "10.00"
+	firstEUR.Records[1].AmountUsd = apptest.StringPtr("11.00")
+	firstEURResponse := createTransaction(t, client, firstEUR)
+
+	secondUSD := balancedTransactionRequest(refs.transactionRefs)
+	secondUSD.InitiatedDate = apptest.Date("2024-01-03")
+	secondUSD.Records[0].Amount = "-1.00"
+	secondUSD.Records[0].AmountUsd = apptest.StringPtr("-1.00")
+	secondUSD.Records[1].Amount = "1.00"
+	secondUSD.Records[1].AmountUsd = apptest.StringPtr("1.00")
+	secondUSDResponse := createTransaction(t, client, secondUSD)
+
+	includeRunningBalance := true
+	response, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		IncludeRunningBalance: &includeRunningBalance,
+	})
+	requireNoTransportError(t, "search account records with multi-currency running balance", err)
+	if response.StatusCode() != http.StatusOK {
+		t.Fatalf("search account records with multi-currency running balance status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+	}
+	assertRecordIDs(t, response.JSON200.Records, []int64{
+		firstUSDResponse.JSON201.Records[0].RecordId,
+		firstEURResponse.JSON201.Records[0].RecordId,
+		secondUSDResponse.JSON201.Records[0].RecordId,
+	})
+	assertRecordRunningBalances(t, response.JSON200.Records, []string{"-12.34000000", "-10.00000000", "-13.34000000"})
 }
 
 func ptrTo[T any](value T) *T {
@@ -504,6 +640,31 @@ func assertRecordIDs(t *testing.T, records []httpclient.JournalRecord, want []in
 	t.Helper()
 
 	assertInt64s(t, recordIDs(records), want)
+}
+
+func createTransaction(t *testing.T, client *apptest.Client, request httpclient.CreateTransactionRequest) *httpclient.CreateTransactionResponse {
+	t.Helper()
+
+	response, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
+	requireNoTransportError(t, "create transaction", err)
+	if response.StatusCode() != http.StatusCreated {
+		t.Fatalf("create transaction status = %d, want %d; body %s", response.StatusCode(), http.StatusCreated, response.Body)
+	}
+
+	return response
+}
+
+func assertRecordRunningBalances(t *testing.T, records []httpclient.JournalRecord, want []string) {
+	t.Helper()
+
+	if len(records) != len(want) {
+		t.Fatalf("record count = %d, want %d; records = %+v", len(records), len(want), records)
+	}
+	for index, record := range records {
+		if record.RunningBalance == nil || *record.RunningBalance != want[index] {
+			t.Fatalf("running_balance at %d = %v, want %q; records = %+v", index, record.RunningBalance, want[index], records)
+		}
+	}
 }
 
 func assertInvalidRecordSearchQuery(t *testing.T, client *apptest.Client, rawQuery string) {

@@ -2,9 +2,10 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
+import type { StatusPageUiState } from "@/models/ui-state";
+
 import {
   readStatusPageUiState,
-  type StatusPageUiState,
   writeStatusPageUiState,
 } from "../services/indexeddb";
 import { createSelectors } from "./selectors";

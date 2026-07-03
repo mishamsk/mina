@@ -1,6 +1,7 @@
 import { client } from "./generated/client.gen";
 
 export * from "./generated";
+export * from "./ledger";
 
 export interface NetworkFailure {
   readonly kind: "network_failure";

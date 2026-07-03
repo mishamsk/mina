@@ -97,7 +97,7 @@ func (u ActiveUsage) HasActiveDependents() bool {
 type Repository interface {
 	Create(context.Context, CreateInput) (Category, error)
 	Get(context.Context, int64, bool) (Category, error)
-	List(context.Context, ListOptions) ([]Category, error)
+	List(context.Context, ListOptions) (services.PaginatedList[Category], error)
 	UpdateHidden(context.Context, int64, bool) (Category, error)
 	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
@@ -207,7 +207,7 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ca
 }
 
 // List returns categories using default visibility rules unless explicitly overridden.
-func (s *Service) List(ctx context.Context, opts ListOptions) ([]Category, error) {
+func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Category], error) {
 	return s.repo.List(ctx, opts)
 }
 
@@ -287,8 +287,8 @@ func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]categoryRef
 		return nil, err
 	}
 
-	entries := make(map[int64]categoryReferenceState, len(categories))
-	for _, category := range categories {
+	entries := make(map[int64]categoryReferenceState, len(categories.Items))
+	for _, category := range categories.Items {
 		entries[category.ID] = categoryReferenceStateFromCategory(category)
 	}
 

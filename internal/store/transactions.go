@@ -218,12 +218,29 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 }
 
 // List returns transactions with nested journal records in deterministic date order.
-func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptions) ([]transactions.Transaction, error) {
+func (s *TransactionStore) List(ctx context.Context, opts services.ListOptions) (services.PaginatedList[transactions.Transaction], error) {
+	filterQuery := `FROM ` + s.db.accountingName("transaction") + `
+WHERE tombstoned_at IS NULL`
 	query := `SELECT transaction_id, initiated_date, created_at, tombstoned_at
-FROM ` + s.db.accountingName("transaction") + `
-WHERE tombstoned_at IS NULL
-ORDER BY initiated_date ASC, transaction_id ASC`
+` + filterQuery
 	args := []any{}
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "transactions", opts.IncludeTotalCount)
+	if err != nil {
+		return services.PaginatedList[transactions.Transaction]{}, err
+	}
+	sortColumns, ok := transactionSortColumns[opts.SortKey]
+	if !ok {
+		sortColumns = transactionSortColumns[services.SortKeyInitiatedDate]
+	}
+	direction := serviceListDirection(opts)
+	query += " ORDER BY "
+	for index, column := range sortColumns {
+		if index > 0 {
+			query += ", "
+		}
+		query += column + " " + direction
+	}
+	query += ", transaction_id " + direction
 	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
 
 	rows, err := s.db.query().QueryContext(
@@ -232,38 +249,41 @@ ORDER BY initiated_date ASC, transaction_id ASC`
 		args...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list transactions: %w", err)
+		return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("list transactions: %w", err)
 	}
 
-	transactions := []transactions.Transaction{}
+	transactionItems := []transactions.Transaction{}
 	transactionIDs := []int64{}
 	for rows.Next() {
 		transaction, err := scanTransaction(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan transaction: %w", err)
+			return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("scan transaction: %w", err)
 		}
-		transactions = append(transactions, transaction)
+		transactionItems = append(transactionItems, transaction)
 		transactionIDs = append(transactionIDs, transaction.ID)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate transactions: %w; close transactions rows: %w", err, closeErr)
+			return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("iterate transactions: %w; close transactions rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate transactions: %w", err)
+		return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("iterate transactions: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close transactions rows: %w", err)
+		return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("close transactions rows: %w", err)
 	}
 
 	records, err := s.recordsByTransactionIDs(ctx, transactionIDs)
 	if err != nil {
-		return nil, err
+		return services.PaginatedList[transactions.Transaction]{}, err
 	}
-	for index := range transactions {
-		transactions[index].Records = records[transactions[index].ID]
+	for index := range transactionItems {
+		transactionItems[index].Records = records[transactionItems[index].ID]
 	}
 
-	return transactions, nil
+	return services.PaginatedList[transactions.Transaction]{
+		Items:      transactionItems,
+		TotalCount: totalCount,
+	}, nil
 }
 
 // Tombstone marks a transaction and its active journal records deleted.
@@ -303,111 +323,147 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 }
 
 // SearchRecords returns active journal records matching filters.
-func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.RecordSearchOptions) ([]transactions.JournalRecord, error) {
-	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
-	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, c.economic_intent
-FROM ` + s.db.accountingName("journal_record") + ` jr
+func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.RecordSearchOptions) (services.PaginatedList[transactions.JournalRecord], error) {
+	withQuery := ""
+	runningBalanceSelect := "CAST(NULL AS DECIMAL(18,8)) AS running_balance"
+	runningBalanceJoin := ""
+	runningBalanceArgs := []any{}
+	if opts.IncludeRunningBalance {
+		withQuery = `WITH running_balances AS (
+	SELECT jr.record_id,
+	       SUM(CAST(CASE
+	           WHEN jr.posting_status <> CAST(? AS ` + s.db.accountingName("posting_status") + `) THEN jr.amount
+	           ELSE CAST(0 AS DECIMAL(18,8))
+	       END AS DECIMAL(18,8))) OVER (
+	           PARTITION BY jr.account_id, jr.currency
+	           ORDER BY tx.initiated_date ASC, jr.transaction_id ASC, jr.record_id ASC
+	           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+	       ) AS running_balance
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	JOIN ` + s.db.accountingName("transaction") + ` tx ON tx.transaction_id = jr.transaction_id
+	WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL AND jr.account_id = ?
+)
+`
+		runningBalanceSelect = "rb.running_balance"
+		runningBalanceJoin = "JOIN running_balances rb ON rb.record_id = jr.record_id"
+		runningBalanceArgs = append(runningBalanceArgs, enumValue(transactions.PostingStatusCancelled), *opts.AccountID)
+	}
+
+	fromQuery := `FROM ` + s.db.accountingName("journal_record") + ` jr
 JOIN ` + s.db.accountingName("transaction") + ` tx ON tx.transaction_id = jr.transaction_id
 JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
-JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
-WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
+JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id`
+	whereQuery := `WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	args := []any{}
 	if opts.AccountID != nil {
-		query += " AND jr.account_id = ?"
+		whereQuery += " AND jr.account_id = ?"
 		args = append(args, *opts.AccountID)
 	}
 	if opts.CategoryID != nil {
-		query += " AND jr.category_id = ?"
+		whereQuery += " AND jr.category_id = ?"
 		args = append(args, *opts.CategoryID)
 	}
 	if opts.MemberID != nil {
-		query += " AND jr.member_id = ?"
+		whereQuery += " AND jr.member_id = ?"
 		args = append(args, *opts.MemberID)
 	}
 	if opts.TagID != nil {
-		query += " AND list_contains(jr.tag_ids, ?)"
+		whereQuery += " AND list_contains(jr.tag_ids, ?)"
 		args = append(args, *opts.TagID)
 	}
 	if opts.PostingStatus != nil {
-		query += " AND jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ")"
+		whereQuery += " AND jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ")"
 		args = append(args, enumValue(*opts.PostingStatus))
 	}
 	if opts.ReconciliationStatus != nil {
-		query += " AND jr.reconciliation_status = CAST(? AS " + s.db.accountingName("reconciliation_status") + ")"
+		whereQuery += " AND jr.reconciliation_status = CAST(? AS " + s.db.accountingName("reconciliation_status") + ")"
 		args = append(args, enumValue(*opts.ReconciliationStatus))
 	}
 	if opts.AmountMin != nil {
-		query += " AND jr.amount >= ?"
+		whereQuery += " AND jr.amount >= ?"
 		args = append(args, opts.AmountMin.LibraryDecimal())
 	}
 	if opts.AmountMax != nil {
-		query += " AND jr.amount <= ?"
+		whereQuery += " AND jr.amount <= ?"
 		args = append(args, opts.AmountMax.LibraryDecimal())
 	}
 	if opts.AmountUSDMin != nil {
-		query += " AND jr.amount_usd >= ?"
+		whereQuery += " AND jr.amount_usd >= ?"
 		args = append(args, opts.AmountUSDMin.LibraryDecimal())
 	}
 	if opts.AmountUSDMax != nil {
-		query += " AND jr.amount_usd <= ?"
+		whereQuery += " AND jr.amount_usd <= ?"
 		args = append(args, opts.AmountUSDMax.LibraryDecimal())
 	}
 	if opts.InitiatedDateFrom != nil {
-		query += " AND tx.initiated_date >= ?"
+		whereQuery += " AND tx.initiated_date >= ?"
 		args = append(args, civilDateArg(*opts.InitiatedDateFrom))
 	}
 	if opts.InitiatedDateTo != nil {
-		query += " AND tx.initiated_date <= ?"
+		whereQuery += " AND tx.initiated_date <= ?"
 		args = append(args, civilDateArg(*opts.InitiatedDateTo))
 	}
 	if opts.PendingDateFrom != nil {
-		query += " AND jr.pending_date >= ?"
+		whereQuery += " AND jr.pending_date >= ?"
 		args = append(args, timestampArg(*opts.PendingDateFrom))
 	}
 	if opts.PendingDateTo != nil {
-		query += " AND jr.pending_date <= ?"
+		whereQuery += " AND jr.pending_date <= ?"
 		args = append(args, timestampArg(*opts.PendingDateTo))
 	}
 	if opts.PostedDateFrom != nil {
-		query += " AND jr.posted_date >= ?"
+		whereQuery += " AND jr.posted_date >= ?"
 		args = append(args, timestampArg(*opts.PostedDateFrom))
 	}
 	if opts.PostedDateTo != nil {
-		query += " AND jr.posted_date <= ?"
+		whereQuery += " AND jr.posted_date <= ?"
 		args = append(args, timestampArg(*opts.PostedDateTo))
 	}
 	if opts.MemoContains != nil {
-		query += " AND jr.memo LIKE ? ESCAPE '\\'"
+		whereQuery += " AND jr.memo LIKE ? ESCAPE '\\'"
 		args = append(args, "%"+escapeLikePattern(*opts.MemoContains)+"%")
 	}
+	filterQuery := fromQuery + "\n" + whereQuery
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "journal records", opts.IncludeTotalCount)
+	if err != nil {
+		return services.PaginatedList[transactions.JournalRecord]{}, err
+	}
+
+	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
+	` + runningBalanceSelect + `, jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
+	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, c.economic_intent
+` + fromQuery + "\n" + runningBalanceJoin + "\n" + whereQuery
 	query += " ORDER BY tx.initiated_date ASC, jr.transaction_id ASC, jr.record_id ASC"
 	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
 
-	rows, err := s.db.query().QueryContext(ctx, query, args...)
+	queryArgs := append(append([]any{}, runningBalanceArgs...), args...)
+	rows, err := s.db.query().QueryContext(ctx, withQuery+query, queryArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("search journal records: %w", err)
+		return services.PaginatedList[transactions.JournalRecord]{}, fmt.Errorf("search journal records: %w", err)
 	}
 
 	records := []transactions.JournalRecord{}
 	for rows.Next() {
 		record, err := scanJournalRecord(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan searched journal record: %w", err)
+			return services.PaginatedList[transactions.JournalRecord]{}, fmt.Errorf("scan searched journal record: %w", err)
 		}
 		records = append(records, record)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate searched journal records: %w; close searched journal record rows: %w", err, closeErr)
+			return services.PaginatedList[transactions.JournalRecord]{}, fmt.Errorf("iterate searched journal records: %w; close searched journal record rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate searched journal records: %w", err)
+		return services.PaginatedList[transactions.JournalRecord]{}, fmt.Errorf("iterate searched journal records: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close searched journal record rows: %w", err)
+		return services.PaginatedList[transactions.JournalRecord]{}, fmt.Errorf("close searched journal record rows: %w", err)
 	}
 
-	return records, nil
+	return services.PaginatedList[transactions.JournalRecord]{
+		Items:      records,
+		TotalCount: totalCount,
+	}, nil
 }
 
 // TransactionsByRecordIDs returns active transactions containing selected active records.
@@ -624,6 +680,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	var memberID sql.NullInt64
 	var amount duckdb.Decimal
 	var amountUSD sql.Null[duckdb.Decimal]
+	var runningBalance sql.Null[duckdb.Decimal]
 	var tagIDs []any
 	var memo sql.NullString
 	var pendingDate time.Time
@@ -647,6 +704,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 		&amount,
 		&amountUSD,
 		&record.CategoryID,
+		&runningBalance,
 		&tagIDs,
 		&memo,
 		&pendingDate,
@@ -675,6 +733,13 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 			return transactions.JournalRecord{}, fmt.Errorf("scan journal record amount_usd: %w", err)
 		}
 		record.AmountUSD = &parsedAmountUSD
+	}
+	if runningBalance.Valid {
+		parsedRunningBalance, err := decimalFromDuckDB(runningBalance.V)
+		if err != nil {
+			return transactions.JournalRecord{}, fmt.Errorf("scan journal record running_balance: %w", err)
+		}
+		record.RunningBalance = &parsedRunningBalance
 	}
 	if memberID.Valid {
 		record.MemberID = &memberID.Int64
@@ -724,6 +789,7 @@ func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 	rows, err := queryer.QueryContext(
 		ctx,
 		`SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
+	CAST(NULL AS DECIMAL(18,8)) AS running_balance,
 	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
 	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, c.economic_intent
 FROM `+db.accountingName("journal_record")+` jr
@@ -958,4 +1024,9 @@ func int64Args(values []int64) []any {
 	}
 
 	return args
+}
+
+var transactionSortColumns = map[services.SortKey][]string{
+	services.SortKeyCreatedAt:     {"created_at"},
+	services.SortKeyInitiatedDate: {"initiated_date"},
 }

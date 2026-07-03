@@ -2,6 +2,7 @@ import { RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { getHealth, type HealthResponse, isNetworkFailure } from "../api";
+import { PageHelp } from "../components/page-help";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -12,18 +13,20 @@ import {
 } from "../components/ui/card";
 import { Checkbox } from "../components/ui/checkbox";
 import { Separator } from "../components/ui/separator";
+import { Skeleton } from "../components/ui/skeleton";
+import { PageHeader } from "../features/app-shell";
 import { setStatusPageShowDetails, useStatusPageView } from "../store";
 
 interface HealthState {
   readonly data: HealthResponse | undefined;
-  readonly errorMessage: string | undefined;
+  readonly errorDetails: string | undefined;
   readonly loading: boolean;
   readonly serverTime: string | undefined;
 }
 
 const initialHealthState: HealthState = {
   data: undefined,
-  errorMessage: undefined,
+  errorDetails: undefined,
   loading: true,
   serverTime: undefined,
 };
@@ -46,8 +49,21 @@ const errorMessage = (error: unknown): string => {
   return "API health check failed.";
 };
 
-const formatServerTime = (value: string | undefined): string =>
-  value ?? "Unavailable";
+const formatServerTime = (value: string | undefined): string => {
+  if (!value) {
+    return "Unavailable";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  }).format(parsed);
+};
 
 export const StatusPage = () => {
   const { showDetails } = useStatusPageView();
@@ -60,7 +76,7 @@ export const StatusPage = () => {
     const loadHealth = async () => {
       setHealth((current) => ({
         ...current,
-        errorMessage: undefined,
+        errorDetails: undefined,
         loading: true,
       }));
 
@@ -72,7 +88,7 @@ export const StatusPage = () => {
       if (result.data) {
         setHealth({
           data: result.data,
-          errorMessage: undefined,
+          errorDetails: undefined,
           loading: false,
           serverTime: result.response?.headers.get("Date") ?? undefined,
         });
@@ -81,7 +97,7 @@ export const StatusPage = () => {
 
       setHealth({
         data: undefined,
-        errorMessage: errorMessage(result.error),
+        errorDetails: errorMessage(result.error),
         loading: false,
         serverTime: undefined,
       });
@@ -95,64 +111,68 @@ export const StatusPage = () => {
   }, [refreshRevision]);
 
   return (
-    <section
-      className="mx-auto flex w-full max-w-5xl flex-col gap-6"
-      aria-labelledby="status-title"
-    >
-      <header className="border-border flex flex-col gap-4 border-b pb-6 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-muted-foreground text-sm font-medium">
-            Local web UI
-          </p>
-          <h1
-            id="status-title"
-            className="font-heading mt-1 text-3xl font-semibold tracking-normal"
-          >
-            Mina
-          </h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setRefreshRevision((revision) => revision + 1);
-            }}
-            disabled={health.loading}
-          >
-            <RefreshCw
-              className={health.loading ? "animate-spin" : undefined}
-              aria-hidden="true"
-            />
-            Refresh
-          </Button>
-          <label
-            htmlFor="status-details"
-            className="border-border bg-card flex h-8 items-center gap-2 rounded-lg border px-3 text-sm"
-          >
-            <Checkbox
-              id="status-details"
-              checked={showDetails}
-              onCheckedChange={(checked) => {
-                setStatusPageShowDetails(checked === true);
+    <section className="flex flex-col gap-6" aria-labelledby="status-title">
+      <PageHeader
+        title="Status"
+        titleId="status-title"
+        eyebrow="Local web UI"
+        help={
+          <PageHelp label="Status help">
+            Backend health and local UI state for this Mina process.
+          </PageHelp>
+        }
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRefreshRevision((revision) => revision + 1);
               }}
-            />
-            <span>Details</span>
-          </label>
-        </div>
-      </header>
+              disabled={health.loading}
+            >
+              <RefreshCw aria-hidden="true" />
+              Refresh
+            </Button>
+            <label
+              htmlFor="status-details"
+              className="bg-card text-foreground flex h-8 items-center gap-2 border-2 border-[var(--border-ink)] px-3 text-sm shadow-[var(--shadow-pixel)]"
+            >
+              <Checkbox
+                id="status-details"
+                checked={showDetails}
+                onCheckedChange={(checked) => {
+                  setStatusPageShowDetails(checked === true);
+                }}
+              />
+              <span>Details</span>
+            </label>
+          </>
+        }
+      />
 
       {health.loading ? (
-        <p className="text-muted-foreground text-sm">Checking API status...</p>
+        <div className="grid gap-3 md:grid-cols-3" aria-label="Loading status">
+          <Skeleton className="h-28" />
+          <Skeleton className="h-28" />
+          <Skeleton className="h-28" />
+        </div>
       ) : null}
 
-      {health.errorMessage ? (
-        <p
-          className="border-destructive/30 bg-destructive/5 text-destructive rounded-lg border p-3 text-sm"
-          role="alert"
-        >
-          {health.errorMessage}
-        </p>
+      {health.errorDetails ? (
+        <div className="border-destructive bg-card border-2 p-4" role="alert">
+          <p className="text-destructive font-semibold">
+            Status could not be loaded.
+          </p>
+          <details className="text-muted-foreground mt-3 text-sm">
+            <summary className="text-foreground cursor-pointer">
+              API error
+            </summary>
+            <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
+              {health.errorDetails}
+            </pre>
+          </details>
+        </div>
       ) : null}
 
       {health.data ? (
@@ -163,9 +183,7 @@ export const StatusPage = () => {
             </CardHeader>
             <CardContent>
               <p>
-                <Badge variant="secondary" className="capitalize">
-                  {health.data.status}
-                </Badge>
+                <Badge variant="secondary">{health.data.status}</Badge>
               </p>
             </CardContent>
           </Card>
@@ -199,7 +217,7 @@ export const StatusPage = () => {
           </CardHeader>
           <Separator />
           <CardContent className="flex flex-wrap items-center gap-3">
-            <code className="bg-muted text-muted-foreground rounded-md px-2 py-1 text-sm">
+            <code className="bg-muted text-muted-foreground px-2 py-1 font-mono text-sm">
               /api/health
             </code>
           </CardContent>

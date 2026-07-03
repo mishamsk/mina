@@ -26,7 +26,7 @@
   - `mina serve --demo` seeds deterministic April-May 2026 demo data for new in-memory state or new file-backed schemas.
   - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Implemented web UI behavior:
-  - Minimal embedded web UI infrastructure is built from `frontend/` and served under `/ui/`.
+  - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:

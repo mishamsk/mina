@@ -32,7 +32,24 @@ func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAcc
 		return nil, err
 	}
 
-	return openapi.ListAccounts200JSONResponse{Accounts: accountAPIResponses(accountList)}, nil
+	return openapi.ListAccounts200JSONResponse{
+		Accounts:   accountAPIResponses(accountList.Items),
+		TotalCount: accountList.TotalCount,
+	}, nil
+}
+
+func (s *strictServer) ListAccountBalances(ctx context.Context, request openapi.ListAccountBalancesRequestObject) (openapi.ListAccountBalancesResponseObject, error) {
+	balances, err := s.deps.Accounts.ListBalances(ctx, accounts.BalanceListOptions{
+		IncludeHidden: boolParam(request.Params.IncludeHidden),
+		AccountIDs:    cloneOptionalInt64Slice(request.Params.AccountIds),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.ListAccountBalances200JSONResponse{
+		Balances: accountBalanceAPIResponses(balances),
+	}, nil
 }
 
 func accountTypeParam(value *openapi.AccountType) *accounts.AccountType {
@@ -108,7 +125,10 @@ func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListC
 		return nil, err
 	}
 
-	return openapi.ListCategories200JSONResponse{Categories: categoryAPIResponses(categoryList)}, nil
+	return openapi.ListCategories200JSONResponse{
+		Categories: categoryAPIResponses(categoryList.Items),
+		TotalCount: categoryList.TotalCount,
+	}, nil
 }
 
 func (s *strictServer) CreateCategory(ctx context.Context, request openapi.CreateCategoryRequestObject) (openapi.CreateCategoryResponseObject, error) {
@@ -167,7 +187,10 @@ func (s *strictServer) ListMembers(ctx context.Context, request openapi.ListMemb
 		return nil, err
 	}
 
-	return openapi.ListMembers200JSONResponse{Members: memberAPIResponses(memberList)}, nil
+	return openapi.ListMembers200JSONResponse{
+		Members:    memberAPIResponses(memberList.Items),
+		TotalCount: memberList.TotalCount,
+	}, nil
 }
 
 func (s *strictServer) CreateMember(ctx context.Context, request openapi.CreateMemberRequestObject) (openapi.CreateMemberResponseObject, error) {
@@ -222,7 +245,10 @@ func (s *strictServer) ListTags(ctx context.Context, request openapi.ListTagsReq
 		return nil, err
 	}
 
-	return openapi.ListTags200JSONResponse{Tags: tagAPIResponses(tagList)}, nil
+	return openapi.ListTags200JSONResponse{
+		Tags:       tagAPIResponses(tagList.Items),
+		TotalCount: tagList.TotalCount,
+	}, nil
 }
 
 func (s *strictServer) CreateTag(ctx context.Context, request openapi.CreateTagRequestObject) (openapi.CreateTagResponseObject, error) {
@@ -302,6 +328,24 @@ func accountAPIResponses(accounts []accounts.Account) []openapi.Account {
 	responses := make([]openapi.Account, 0, len(accounts))
 	for _, account := range accounts {
 		responses = append(responses, accountAPIResponse(account))
+	}
+
+	return responses
+}
+
+func accountBalanceAPIResponse(balance accounts.AccountBalance) openapi.AccountBalance {
+	return openapi.AccountBalance{
+		AccountId:      balance.AccountID,
+		Currency:       balance.Currency,
+		CurrentBalance: balance.CurrentBalance.String(),
+		PostedBalance:  balance.PostedBalance.String(),
+	}
+}
+
+func accountBalanceAPIResponses(balances []accounts.AccountBalance) []openapi.AccountBalance {
+	responses := make([]openapi.AccountBalance, 0, len(balances))
+	for _, balance := range balances {
+		responses = append(responses, accountBalanceAPIResponse(balance))
 	}
 
 	return responses

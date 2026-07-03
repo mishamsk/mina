@@ -54,6 +54,9 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
 	assertMemberIDs(t, defaultList.JSON200.Members, []int64{created.JSON201.MemberId, second.JSON201.MemberId})
+	if defaultList.JSON200.TotalCount != 2 {
+		t.Fatalf("default member total_count = %d, want 2", defaultList.JSON200.TotalCount)
+	}
 
 	updated, err := client.REST().UpdateMemberWithResponse(context.Background(), created.JSON201.MemberId, httpclient.UpdateMemberRequest{
 		Name: "Casey",
@@ -92,6 +95,9 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("default after delete status = %d, want %d; body %s", defaultAfterDelete.StatusCode(), http.StatusOK, defaultAfterDelete.Body)
 	}
 	assertMemberIDs(t, defaultAfterDelete.JSON200.Members, []int64{created.JSON201.MemberId})
+	if defaultAfterDelete.JSON200.TotalCount != 1 {
+		t.Fatalf("default after delete member total_count = %d, want 1", defaultAfterDelete.JSON200.TotalCount)
+	}
 
 	includeTombstoned := true
 	deletedRead, err := client.REST().GetMemberWithResponse(context.Background(), second.JSON201.MemberId, &httpclient.GetMemberParams{IncludeTombstoned: &includeTombstoned})
@@ -113,6 +119,9 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("include tombstones status = %d, want %d; body %s", withTombstones.StatusCode(), http.StatusOK, withTombstones.Body)
 	}
 	assertMemberIDs(t, withTombstones.JSON200.Members, []int64{second.JSON201.MemberId, created.JSON201.MemberId})
+	if withTombstones.JSON200.TotalCount != 2 {
+		t.Fatalf("include tombstones member total_count = %d, want 2", withTombstones.JSON200.TotalCount)
+	}
 	if withTombstones.JSON200.Members[0].TombstonedAt == nil {
 		t.Fatal("deleted member tombstoned_at = nil, want timestamp")
 	}

@@ -7,20 +7,34 @@ import (
 	"time"
 
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
+	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 func (s *strictServer) ListTransactions(ctx context.Context, request openapi.ListTransactionsRequestObject) (openapi.ListTransactionsResponseObject, error) {
-	transactionList, err := s.deps.Transactions.List(ctx, transactions.ListOptions{
-		Limit:  request.Params.Limit,
-		Offset: offsetParam(request.Params.Offset),
-	})
+	sortDirection := request.Params.SortDir
+	if sortDirection == nil {
+		defaultSortDirection := openapi.ListTransactionsParamsSortDirDesc
+		sortDirection = &defaultSortDirection
+	}
+	listOptions := listOptionsFromParams(
+		request.Params.Sort,
+		sortDirection,
+		request.Params.Limit,
+		request.Params.Offset,
+		services.SortKeyInitiatedDate,
+	)
+
+	transactionList, err := s.deps.Transactions.List(ctx, listOptions)
 	if err != nil {
 		return nil, err
 	}
 
-	return openapi.ListTransactions200JSONResponse{Transactions: transactionAPIResponses(transactionList)}, nil
+	return openapi.ListTransactions200JSONResponse{
+		Transactions: transactionAPIResponses(transactionList.Items),
+		TotalCount:   transactionList.TotalCount,
+	}, nil
 }
 
 func (s *strictServer) CreateTransaction(ctx context.Context, request openapi.CreateTransactionRequestObject) (openapi.CreateTransactionResponseObject, error) {
@@ -199,7 +213,10 @@ func (s *strictServer) SearchJournalRecords(ctx context.Context, request openapi
 		return nil, err
 	}
 
-	return openapi.SearchJournalRecords200JSONResponse{Records: journalRecordAPIResponses(records)}, nil
+	return openapi.SearchJournalRecords200JSONResponse{
+		Records:    journalRecordAPIResponses(records.Items),
+		TotalCount: records.TotalCount,
+	}, nil
 }
 
 func (s *strictServer) SearchAccountJournalRecords(ctx context.Context, request openapi.SearchAccountJournalRecordsRequestObject) (openapi.SearchAccountJournalRecordsResponseObject, error) {
@@ -214,7 +231,10 @@ func (s *strictServer) SearchAccountJournalRecords(ctx context.Context, request 
 		return nil, err
 	}
 
-	return openapi.SearchAccountJournalRecords200JSONResponse{Records: journalRecordAPIResponses(records)}, nil
+	return openapi.SearchAccountJournalRecords200JSONResponse{
+		Records:    journalRecordAPIResponses(records.Items),
+		TotalCount: records.TotalCount,
+	}, nil
 }
 
 func (s *strictServer) BulkCategorizeJournalRecords(ctx context.Context, request openapi.BulkCategorizeJournalRecordsRequestObject) (openapi.BulkCategorizeJournalRecordsResponseObject, error) {
@@ -278,6 +298,7 @@ func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (t
 		MemoContains:      params.MemoContains,
 		Limit:             params.Limit,
 		Offset:            offsetParam(params.Offset),
+		IncludeTotalCount: true,
 	}
 	var err error
 	if opts.AmountMin, err = optionalDecimalField("amount_min", params.AmountMin); err != nil {
@@ -299,18 +320,20 @@ func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (t
 
 func recordSearchOptionsFromAccountParams(params openapi.SearchAccountJournalRecordsParams) (transactions.RecordSearchOptions, error) {
 	opts := transactions.RecordSearchOptions{
-		CategoryID:        params.CategoryId,
-		MemberID:          params.MemberId,
-		TagID:             params.TagId,
-		InitiatedDateFrom: nullableCivilDateFromOpenAPI(params.InitiatedDateFrom),
-		InitiatedDateTo:   nullableCivilDateFromOpenAPI(params.InitiatedDateTo),
-		PendingDateFrom:   nullableTimestampFromOpenAPI(params.PendingDateFrom),
-		PendingDateTo:     nullableTimestampFromOpenAPI(params.PendingDateTo),
-		PostedDateFrom:    nullableTimestampFromOpenAPI(params.PostedDateFrom),
-		PostedDateTo:      nullableTimestampFromOpenAPI(params.PostedDateTo),
-		MemoContains:      params.MemoContains,
-		Limit:             params.Limit,
-		Offset:            offsetParam(params.Offset),
+		CategoryID:            params.CategoryId,
+		MemberID:              params.MemberId,
+		TagID:                 params.TagId,
+		InitiatedDateFrom:     nullableCivilDateFromOpenAPI(params.InitiatedDateFrom),
+		InitiatedDateTo:       nullableCivilDateFromOpenAPI(params.InitiatedDateTo),
+		PendingDateFrom:       nullableTimestampFromOpenAPI(params.PendingDateFrom),
+		PendingDateTo:         nullableTimestampFromOpenAPI(params.PendingDateTo),
+		PostedDateFrom:        nullableTimestampFromOpenAPI(params.PostedDateFrom),
+		PostedDateTo:          nullableTimestampFromOpenAPI(params.PostedDateTo),
+		MemoContains:          params.MemoContains,
+		IncludeRunningBalance: boolParam(params.IncludeRunningBalance),
+		Limit:                 params.Limit,
+		Offset:                offsetParam(params.Offset),
+		IncludeTotalCount:     true,
 	}
 	var err error
 	if opts.AmountMin, err = optionalDecimalField("amount_min", params.AmountMin); err != nil {
@@ -454,6 +477,7 @@ func journalRecordAPIResponse(record transactions.JournalRecord) openapi.Journal
 		Currency:             record.Currency,
 		Amount:               record.Amount.String(),
 		AmountUsd:            amountUSD,
+		RunningBalance:       nullableDecimalString(record.RunningBalance),
 		CategoryId:           record.CategoryID,
 		TagIds:               cloneInt64Slice(record.TagIDs),
 		Memo:                 record.Memo,

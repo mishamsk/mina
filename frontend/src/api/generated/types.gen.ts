@@ -33,6 +33,27 @@ export type Account = {
 
 export type AccountListResponse = {
     accounts: Array<Account>;
+    /**
+     * Count of matching accounts before limit and offset are applied.
+     */
+    total_count: number;
+};
+
+export type AccountBalance = {
+    account_id: number;
+    currency: string;
+    /**
+     * JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    current_balance: string;
+    /**
+     * JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    posted_balance: string;
+};
+
+export type AccountBalanceListResponse = {
+    balances: Array<AccountBalance>;
 };
 
 export type AccountType = 'balance' | 'flow' | 'system';
@@ -51,6 +72,10 @@ export type CreditLimitHistory = {
 
 export type CreditLimitHistoryListResponse = {
     credit_limit_history: Array<CreditLimitHistory>;
+    /**
+     * Count of matching credit limit history rows before limit and offset are applied.
+     */
+    total_count: number;
 };
 
 export type ExchangeRate = {
@@ -68,6 +93,10 @@ export type ExchangeRate = {
 
 export type ExchangeRateListResponse = {
     exchange_rates: Array<ExchangeRate>;
+    /**
+     * Count of matching exchange rates before limit and offset are applied.
+     */
+    total_count: number;
 };
 
 export type ApiError = {
@@ -90,6 +119,10 @@ export type Category = {
 
 export type CategoryListResponse = {
     categories: Array<Category>;
+    /**
+     * Count of matching categories before limit and offset are applied.
+     */
+    total_count: number;
 };
 
 export type CategoryEconomicIntent = 'expense' | 'fee' | 'income' | 'refund' | 'transfer' | 'exchange' | 'adjustment' | 'fx_gain_loss';
@@ -420,6 +453,10 @@ export type Member = {
 
 export type MemberListResponse = {
     members: Array<Member>;
+    /**
+     * Count of matching members before limit and offset are applied.
+     */
+    total_count: number;
 };
 
 export type JournalRecord = {
@@ -436,6 +473,10 @@ export type JournalRecord = {
      * JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount_usd: string | null;
+    /**
+     * JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    running_balance?: string | null;
     category_id: number;
     tag_ids: Array<number>;
     memo?: string | null;
@@ -459,6 +500,10 @@ export type JournalRecord = {
 
 export type JournalRecordSearchResponse = {
     records: Array<JournalRecord>;
+    /**
+     * Count of matching journal records before limit and offset are applied.
+     */
+    total_count: number;
 };
 
 export type PostingStatus = 'pending' | 'posted' | 'cancelled';
@@ -481,6 +526,10 @@ export type Tag = {
 
 export type TagListResponse = {
     tags: Array<Tag>;
+    /**
+     * Count of matching tags before limit and offset are applied.
+     */
+    total_count: number;
 };
 
 export type TransactionTemplate = {
@@ -517,6 +566,10 @@ export type TransactionTemplateRecord = {
 
 export type TransactionTemplateListResponse = {
     transaction_templates: Array<TransactionTemplate>;
+    /**
+     * Count of matching transaction templates before limit and offset are applied.
+     */
+    total_count: number;
 };
 
 export type Transaction = {
@@ -532,6 +585,10 @@ export type Transaction = {
 
 export type TransactionListResponse = {
     transactions: Array<Transaction>;
+    /**
+     * Count of matching transactions before limit and offset are applied.
+     */
+    total_count: number;
 };
 
 export type UpdateCategoryRequest = {
@@ -1367,6 +1424,34 @@ export type CreateAccountResponses = {
 
 export type CreateAccountResponse = CreateAccountResponses[keyof CreateAccountResponses];
 
+export type ListAccountBalancesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        include_hidden?: boolean;
+        account_ids?: Array<number>;
+    };
+    url: '/api/accounts/balances';
+};
+
+export type ListAccountBalancesErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type ListAccountBalancesError = ListAccountBalancesErrors[keyof ListAccountBalancesErrors];
+
+export type ListAccountBalancesResponses = {
+    /**
+     * Account balances.
+     */
+    200: AccountBalanceListResponse;
+};
+
+export type ListAccountBalancesResponse = ListAccountBalancesResponses[keyof ListAccountBalancesResponses];
+
 export type DeleteAccountData = {
     body?: never;
     path: {
@@ -1920,6 +2005,8 @@ export type ListTransactionsData = {
     body?: never;
     path?: never;
     query?: {
+        sort?: 'initiated_date' | 'created_at';
+        sort_dir?: 'asc' | 'desc';
         limit?: number;
         offset?: number;
     };
@@ -1937,7 +2024,7 @@ export type ListTransactionsError = ListTransactionsErrors[keyof ListTransaction
 
 export type ListTransactionsResponses = {
     /**
-     * Transactions in initiated-date order.
+     * Transactions in requested order.
      */
     200: TransactionListResponse;
 };
@@ -2160,6 +2247,10 @@ export type SearchAccountJournalRecordsData = {
         posted_date_from?: string;
         posted_date_to?: string;
         memo_contains?: string;
+        /**
+         * When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.
+         */
+        include_running_balance?: boolean;
         limit?: number;
         offset?: number;
     };

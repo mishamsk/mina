@@ -24,7 +24,7 @@
 - Store code owns DB-facing row types and conversion between app service types and database column values.
 - Store code reads account-type and category economic-intent metadata for service-owned semantic decisions.
 - Transaction repositories return semantic metadata for service-owned classification and bulk semantic validation.
-- Repositories bind and scan DuckDB `DATE`, `TIMESTAMP`, and `DECIMAL(18,8)` columns through app service value types.
+- Repositories bind and scan DuckDB `DATE`, `TIMESTAMP`, and decimal columns through app service value types.
 - Exchange-rate loading queries infer needed currencies and latest active USD-pair dates from active accounting rows only.
 - SQL casts on typed date/decimal columns are limited to store-owned expression keys such as active uniqueness indexes.
 - Query generation is not selected because the required DuckDB SQL features are not yet proven against a repo-owned generator. Manual query code must keep user values parameter-bound and dynamic identifiers selected from store-owned allowlists.
@@ -32,6 +32,8 @@
 - Transaction repositories store normalized journal records and own active selected-record checks for bulk operations.
 - Transaction-template repositories store normalized partial record defaults.
 - Dictionary usage queries report active dependency facts only; services decide whether those facts block deletes.
+- Account balance aggregation reads active transactions and journal records only, includes pending records in current balances, excludes cancelled records, and casts aggregate sums to `DECIMAL(18,8)` in SQL.
+- Account-record running balances are computed over full active account history, exclude cancelled record amounts, and cast aggregate sums to `DECIMAL(18,8)` in SQL.
 - Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; repositories also pre-check active uniqueness to return stable conflict messages.
 - Account, category, tag, and transaction-template hierarchy fields are read from DuckDB generated virtual columns.
 

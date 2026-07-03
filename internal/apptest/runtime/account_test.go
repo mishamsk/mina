@@ -76,6 +76,9 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 	assertAccountIDs(t, defaultList.JSON200.Accounts, []int64{created.JSON201.AccountId})
 	assertAccountTypes(t, defaultList.JSON200.Accounts, []httpclient.AccountType{httpclient.Balance})
+	if defaultList.JSON200.TotalCount != 1 {
+		t.Fatalf("default account total_count = %d, want 1", defaultList.JSON200.TotalCount)
+	}
 
 	includeHidden, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{IncludeHidden: &hiddenValue})
 	if err != nil {
@@ -87,6 +90,9 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	assertAccountIDs(t, includeHidden.JSON200.Accounts, []int64{created.JSON201.AccountId, hidden.JSON201.AccountId})
 	assertAccountTypes(t, includeHidden.JSON200.Accounts, []httpclient.AccountType{httpclient.Balance, httpclient.Balance})
 	assertAccountFeatured(t, includeHidden.JSON200.Accounts, []bool{false, true})
+	if includeHidden.JSON200.TotalCount != 2 {
+		t.Fatalf("include hidden account total_count = %d, want 2", includeHidden.JSON200.TotalCount)
+	}
 
 	system, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "system:opening_balance",
@@ -111,6 +117,9 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("default after system list status = %d, want %d; body %s", defaultAfterSystem.StatusCode(), http.StatusOK, defaultAfterSystem.Body)
 	}
 	assertAccountIDs(t, defaultAfterSystem.JSON200.Accounts, []int64{created.JSON201.AccountId, system.JSON201.AccountId})
+	if defaultAfterSystem.JSON200.TotalCount != 2 {
+		t.Fatalf("default after system account total_count = %d, want 2", defaultAfterSystem.JSON200.TotalCount)
+	}
 
 	featuredOnly, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{
 		IncludeHidden: &hiddenValue,
@@ -157,6 +166,9 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("balance account type list status = %d, want %d; body %s", balanceAccounts.StatusCode(), http.StatusOK, balanceAccounts.Body)
 	}
 	assertAccountIDs(t, balanceAccounts.JSON200.Accounts, []int64{created.JSON201.AccountId})
+	if balanceAccounts.JSON200.TotalCount != 1 {
+		t.Fatalf("balance account total_count = %d, want 1", balanceAccounts.JSON200.TotalCount)
+	}
 
 	accountTypeSystem := httpclient.System
 	systemAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeSystem})
@@ -167,6 +179,22 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("system account type list status = %d, want %d; body %s", systemAccounts.StatusCode(), http.StatusOK, systemAccounts.Body)
 	}
 	assertAccountIDs(t, systemAccounts.JSON200.Accounts, []int64{system.JSON201.AccountId})
+	if systemAccounts.JSON200.TotalCount != 1 {
+		t.Fatalf("system account total_count = %d, want 1", systemAccounts.JSON200.TotalCount)
+	}
+
+	accountTypeFlow := httpclient.Flow
+	flowAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &accountTypeFlow})
+	if err != nil {
+		t.Fatalf("flow account type list request: %v", err)
+	}
+	if flowAccounts.StatusCode() != http.StatusOK {
+		t.Fatalf("flow account type list status = %d, want %d; body %s", flowAccounts.StatusCode(), http.StatusOK, flowAccounts.Body)
+	}
+	assertAccountIDs(t, flowAccounts.JSON200.Accounts, nil)
+	if flowAccounts.JSON200.TotalCount != 0 {
+		t.Fatalf("flow account total_count = %d, want 0", flowAccounts.JSON200.TotalCount)
+	}
 
 	hideSystem, err := client.REST().UpdateAccountWithResponse(context.Background(), system.JSON201.AccountId, httpclient.UpdateAccountRequest{
 		IsHidden: &hiddenValue,
@@ -397,6 +425,107 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	assertAccountIDs(t, withTombstones.JSON200.Accounts, []int64{created.JSON201.AccountId, hidden.JSON201.AccountId, visibleDeleted.JSON201.AccountId, system.JSON201.AccountId})
 	assertAccountTypes(t, withTombstones.JSON200.Accounts, []httpclient.AccountType{httpclient.Balance, httpclient.Balance, httpclient.Balance, httpclient.System})
 	assertAccountFeatured(t, withTombstones.JSON200.Accounts, []bool{true, true, false, false})
+}
+
+func TestAccountBalancesBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+
+	checking := scenario.AccountWithCurrency("checking:Balances:Primary", "USD")
+	savings := scenario.AccountWithCurrency("savings:Balances:Reserve", "USD")
+	travel := scenario.AccountWithCurrency("cash:Travel", "USD")
+	merchant := scenario.AccountWithType("merchant:Balances", httpclient.Flow)
+	expenseCategory := scenario.Category("BalanceTests:Expense")
+	incomeCategory := scenario.CategoryWithIntent("BalanceTests:Income", httpclient.CategoryEconomicIntentIncome)
+	hiddenValue := true
+	hidden, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "checking:Balances:Hidden",
+		AccountType: httpclient.Balance,
+		IsHidden:    &hiddenValue,
+		Currency:    ptrTo("USD"),
+	})
+	if err != nil {
+		t.Fatalf("hidden balance account request: %v", err)
+	}
+	if hidden.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden balance account status = %d, want %d; body %s", hidden.StatusCode(), http.StatusCreated, hidden.Body)
+	}
+
+	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-100.00", "100.00", httpclient.Posted)
+	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-25.00", "25.00", httpclient.Pending)
+	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-5.00", "5.00", httpclient.Cancelled)
+	createBalanceTransaction(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "USD", "2.00", "-2.00", httpclient.Posted)
+	createBalanceTransaction(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "EUR", "3.00", "-3.00", httpclient.Posted)
+	createBalanceTransaction(t, client, savings.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-7.00", "7.00", httpclient.Cancelled)
+	createBalanceTransaction(t, client, hidden.JSON201.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-9.00", "9.00", httpclient.Posted)
+	deletedTransaction := createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-11.00", "11.00", httpclient.Posted)
+	deleted, err := client.REST().DeleteTransactionWithResponse(context.Background(), deletedTransaction.JSON201.TransactionId)
+	if err != nil {
+		t.Fatalf("delete balance transaction request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete balance transaction status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+
+	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list account balances request: %v", err)
+	}
+	if balances.StatusCode() != http.StatusOK {
+		t.Fatalf("list account balances status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
+	}
+	assertAccountBalances(t, balances.JSON200.Balances, []wantAccountBalance{
+		{accountID: checking.AccountId, currency: "USD", current: "-125.00000000", posted: "-100.00000000"},
+		{accountID: savings.AccountId, currency: "USD", current: "0.00000000", posted: "0.00000000"},
+		{accountID: travel.AccountId, currency: "EUR", current: "3.00000000", posted: "3.00000000"},
+		{accountID: travel.AccountId, currency: "USD", current: "2.00000000", posted: "2.00000000"},
+	})
+
+	includeHidden, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{IncludeHidden: &hiddenValue})
+	if err != nil {
+		t.Fatalf("include hidden account balances request: %v", err)
+	}
+	if includeHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("include hidden account balances status = %d, want %d; body %s", includeHidden.StatusCode(), http.StatusOK, includeHidden.Body)
+	}
+	assertAccountBalances(t, includeHidden.JSON200.Balances, []wantAccountBalance{
+		{accountID: checking.AccountId, currency: "USD", current: "-125.00000000", posted: "-100.00000000"},
+		{accountID: savings.AccountId, currency: "USD", current: "0.00000000", posted: "0.00000000"},
+		{accountID: travel.AccountId, currency: "EUR", current: "3.00000000", posted: "3.00000000"},
+		{accountID: travel.AccountId, currency: "USD", current: "2.00000000", posted: "2.00000000"},
+		{accountID: hidden.JSON201.AccountId, currency: "USD", current: "-9.00000000", posted: "-9.00000000"},
+	})
+
+	accountIDs := []int64{travel.AccountId, merchant.AccountId}
+	filtered, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})
+	if err != nil {
+		t.Fatalf("filtered account balances request: %v", err)
+	}
+	if filtered.StatusCode() != http.StatusOK {
+		t.Fatalf("filtered account balances status = %d, want %d; body %s", filtered.StatusCode(), http.StatusOK, filtered.Body)
+	}
+	assertAccountBalances(t, filtered.JSON200.Balances, []wantAccountBalance{
+		{accountID: travel.AccountId, currency: "EUR", current: "3.00000000", posted: "3.00000000"},
+		{accountID: travel.AccountId, currency: "USD", current: "2.00000000", posted: "2.00000000"},
+	})
+
+	emptyAccountIDs := []int64{merchant.AccountId}
+	empty, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &emptyAccountIDs})
+	if err != nil {
+		t.Fatalf("empty account balances request: %v", err)
+	}
+	if empty.StatusCode() != http.StatusOK {
+		t.Fatalf("empty account balances status = %d, want %d; body %s", empty.StatusCode(), http.StatusOK, empty.Body)
+	}
+	assertAccountBalances(t, empty.JSON200.Balances, nil)
+
+	invalid, err := client.REST().ListAccountBalancesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("account_ids=0"))
+	if err != nil {
+		t.Fatalf("invalid account balances request: %v", err)
+	}
+	if invalid.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid account balances status = %d, want %d; body %s", invalid.StatusCode(), http.StatusBadRequest, invalid.Body)
+	}
 }
 
 func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
@@ -670,6 +799,75 @@ func assertAccountFeatured(t *testing.T, accounts []httpclient.Account, want []b
 	for i, account := range accounts {
 		if account.IsFeatured != want[i] {
 			t.Fatalf("account is_featured at %d = %t, want %t; accounts = %+v", i, account.IsFeatured, want[i], accounts)
+		}
+	}
+}
+
+func createBalanceTransaction(
+	t *testing.T,
+	client *apptest.Client,
+	balanceAccountID int64,
+	counterAccountID int64,
+	categoryID int64,
+	currency string,
+	balanceAmount string,
+	counterAmount string,
+	postingStatus httpclient.PostingStatus,
+) *httpclient.CreateTransactionResponse {
+	t.Helper()
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-03-10"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            balanceAccountID,
+				Currency:             currency,
+				Amount:               balanceAmount,
+				CategoryId:           categoryID,
+				PostingStatus:        postingStatus,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+			{
+				AccountId:            counterAccountID,
+				Currency:             currency,
+				Amount:               counterAmount,
+				CategoryId:           categoryID,
+				PostingStatus:        postingStatus,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create balance transaction request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create balance transaction status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+
+	return created
+}
+
+type wantAccountBalance struct {
+	accountID int64
+	currency  string
+	current   string
+	posted    string
+}
+
+func assertAccountBalances(t *testing.T, balances []httpclient.AccountBalance, want []wantAccountBalance) {
+	t.Helper()
+
+	if len(balances) != len(want) {
+		t.Fatalf("account balance count = %d, want %d; balances = %+v", len(balances), len(want), balances)
+	}
+	for index, balance := range balances {
+		if balance.AccountId != want[index].accountID ||
+			balance.Currency != want[index].currency ||
+			balance.CurrentBalance != want[index].current ||
+			balance.PostedBalance != want[index].posted {
+			t.Fatalf("account balance at %d = %+v, want %+v; balances = %+v", index, balance, want[index], balances)
 		}
 	}
 }

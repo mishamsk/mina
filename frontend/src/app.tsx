@@ -1,4 +1,5 @@
 import { AlertCircle } from "lucide-react";
+import { BrowserRouter } from "react-router";
 
 import { ErrorBoundary } from "./components/error-boundary";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
@@ -37,11 +38,11 @@ export const App = () => {
   }
 
   return (
-    <main className="bg-background text-foreground min-h-svh px-5 py-8 sm:px-8">
-      <ErrorBoundary>
+    <ErrorBoundary>
+      <BrowserRouter>
         <AppRoutes />
-      </ErrorBoundary>
-    </main>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 };
 

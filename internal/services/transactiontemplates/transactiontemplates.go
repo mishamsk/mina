@@ -70,7 +70,7 @@ type TemplateRecordInput struct {
 type Repository interface {
 	Create(context.Context, WriteInput) (Template, error)
 	Get(context.Context, int64) (Template, error)
-	List(context.Context, services.ListOptions) ([]Template, error)
+	List(context.Context, services.ListOptions) (services.PaginatedList[Template], error)
 	Replace(context.Context, int64, WriteInput) (Template, error)
 	Tombstone(context.Context, int64) error
 }
@@ -174,9 +174,9 @@ func (s *Service) Get(ctx context.Context, id int64) (Template, error) {
 }
 
 // List returns active transaction templates with nested active record defaults.
-func (s *Service) List(ctx context.Context, opts services.ListOptions) ([]Template, error) {
+func (s *Service) List(ctx context.Context, opts services.ListOptions) (services.PaginatedList[Template], error) {
 	if err := validateListOptions(opts); err != nil {
-		return nil, err
+		return services.PaginatedList[Template]{}, err
 	}
 
 	return s.repo.List(ctx, opts)

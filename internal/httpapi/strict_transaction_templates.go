@@ -22,7 +22,10 @@ func (s *strictServer) ListTransactionTemplates(ctx context.Context, request ope
 		return nil, err
 	}
 
-	return openapi.ListTransactionTemplates200JSONResponse{TransactionTemplates: transactionTemplateAPIResponses(templateList)}, nil
+	return openapi.ListTransactionTemplates200JSONResponse{
+		TransactionTemplates: transactionTemplateAPIResponses(templateList.Items),
+		TotalCount:           templateList.TotalCount,
+	}, nil
 }
 
 func (s *strictServer) CreateTransactionTemplate(ctx context.Context, request openapi.CreateTransactionTemplateRequestObject) (openapi.CreateTransactionTemplateResponseObject, error) {

@@ -7,6 +7,8 @@ Phase 1 REST APIs are closed. The active build scope is Phase 2: minimal local w
 
 - `docs/architecture.md`: mandatory read at the beginning of any work. Never make changes to it, unless you are specifically instructed to edit this file.
 - `docs/frontend-architecture.md`: mandatory read before frontend or `internal/webui` changes.
+- `docs/webui-design.md`: ground truth for web UI UX — pages, content, interaction and display rules. Mandatory read before planning or changing UI screens or user-facing web UI behavior.
+- `docs/webui-theme-arcade-cabinet.md`: ground truth for the Arcade Cabinet web UI theme. Mandatory read before web UI theme or styling changes.
 - `docs/business-requirements.md`: product scope. Read before changing user-visible behavior or API semantics.
 - `PROJECT_STATE.md`: concise current implementation phase/stage state. Read when checking what exists now. Update only when progress against business requirements are made. Do not update on refactors and internal API chagnes.
 - Package/module docs for backend and frontend: exported Go APIs that cross package boundaries must be documented in code. Add a short package markdown doc only for implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs. If there are no implicit contracts, say `No implicit contracts.` Use `docs/package_doc_template.md`.

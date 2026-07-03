@@ -25,7 +25,10 @@ func (s *strictServer) ListCreditLimitHistory(ctx context.Context, request opena
 		return nil, err
 	}
 
-	return openapi.ListCreditLimitHistory200JSONResponse{CreditLimitHistory: creditLimitHistoryAPIResponses(history)}, nil
+	return openapi.ListCreditLimitHistory200JSONResponse{
+		CreditLimitHistory: creditLimitHistoryAPIResponses(history.Items),
+		TotalCount:         history.TotalCount,
+	}, nil
 }
 
 func (s *strictServer) CreateCreditLimitHistory(ctx context.Context, request openapi.CreateCreditLimitHistoryRequestObject) (openapi.CreateCreditLimitHistoryResponseObject, error) {
@@ -82,7 +85,10 @@ func (s *strictServer) ListExchangeRates(ctx context.Context, request openapi.Li
 		return nil, err
 	}
 
-	return openapi.ListExchangeRates200JSONResponse{ExchangeRates: exchangeRateAPIResponses(rates)}, nil
+	return openapi.ListExchangeRates200JSONResponse{
+		ExchangeRates: exchangeRateAPIResponses(rates.Items),
+		TotalCount:    rates.TotalCount,
+	}, nil
 }
 
 func (s *strictServer) CreateExchangeRate(ctx context.Context, request openapi.CreateExchangeRateRequestObject) (openapi.CreateExchangeRateResponseObject, error) {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
 )
@@ -88,51 +89,124 @@ WHERE account_id = ?`
 }
 
 // List returns accounts in deterministic hierarchy order.
-func (s *AccountStore) List(ctx context.Context, opts accounts.ListOptions) ([]accounts.Account, error) {
-	query := `SELECT account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM ` + s.db.accountingName("account") + `
+func (s *AccountStore) List(ctx context.Context, opts accounts.ListOptions) (services.PaginatedList[accounts.Account], error) {
+	filterQuery := `FROM ` + s.db.accountingName("account") + `
 WHERE 1 = 1`
 	args := []any{}
 	if !opts.IncludeHidden {
-		query += " AND is_hidden = 0"
+		filterQuery += " AND is_hidden = 0"
 	}
 	if !opts.IncludeTombstoned {
-		query += " AND tombstoned_at IS NULL"
+		filterQuery += " AND tombstoned_at IS NULL"
 	}
 	if opts.AccountType != nil {
-		query += " AND account_type = CAST(? AS " + s.db.accountingName("account_type") + ")"
+		filterQuery += " AND account_type = CAST(? AS " + s.db.accountingName("account_type") + ")"
 		args = append(args, enumValue(*opts.AccountType))
 	}
 	if opts.IsFeatured != nil {
-		query += " AND is_featured = ?"
+		filterQuery += " AND is_featured = ?"
 		args = append(args, *opts.IsFeatured)
 	}
+
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "accounts", opts.List.IncludeTotalCount)
+	if err != nil {
+		return services.PaginatedList[accounts.Account]{}, err
+	}
+
+	query := `SELECT account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, accountSortColumns, services.SortKeyFQN, "account_id")
 
 	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list accounts: %w", err)
+		return services.PaginatedList[accounts.Account]{}, fmt.Errorf("list accounts: %w", err)
 	}
 
-	accounts := []accounts.Account{}
+	accountItems := []accounts.Account{}
 	for rows.Next() {
 		account, err := scanAccount(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan account: %w", err)
+			return services.PaginatedList[accounts.Account]{}, fmt.Errorf("scan account: %w", err)
 		}
-		accounts = append(accounts, account)
+		accountItems = append(accountItems, account)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate accounts: %w; close accounts rows: %w", err, closeErr)
+			return services.PaginatedList[accounts.Account]{}, fmt.Errorf("iterate accounts: %w; close accounts rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate accounts: %w", err)
+		return services.PaginatedList[accounts.Account]{}, fmt.Errorf("iterate accounts: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close accounts rows: %w", err)
+		return services.PaginatedList[accounts.Account]{}, fmt.Errorf("close accounts rows: %w", err)
 	}
 
-	return accounts, nil
+	return services.PaginatedList[accounts.Account]{
+		Items:      accountItems,
+		TotalCount: totalCount,
+	}, nil
+}
+
+// ListBalances returns active balance-account balances grouped by currency.
+func (s *AccountStore) ListBalances(ctx context.Context, opts accounts.BalanceListOptions) ([]accounts.AccountBalance, error) {
+	filter := `WHERE a.account_type = CAST(? AS ` + s.db.accountingName("account_type") + `)
+  AND a.tombstoned_at IS NULL
+  AND COALESCE(ar.currency, a.currency) IS NOT NULL`
+	args := []any{enumValue(accounts.AccountTypeBalance)}
+	if !opts.IncludeHidden {
+		filter += " AND a.is_hidden = 0"
+	}
+	if len(opts.AccountIDs) > 0 {
+		filter += " AND a.account_id IN (" + placeholders(len(opts.AccountIDs)) + ")"
+		args = append(args, int64Args(opts.AccountIDs)...)
+	}
+
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`WITH active_records AS (
+	SELECT jr.account_id, jr.currency, jr.amount, jr.posting_status
+	FROM `+s.db.accountingName("journal_record")+` jr
+	JOIN `+s.db.accountingName("transaction")+` tx ON tx.transaction_id = jr.transaction_id
+	WHERE jr.tombstoned_at IS NULL
+	  AND tx.tombstoned_at IS NULL
+	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
+)
+SELECT a.account_id,
+       COALESCE(ar.currency, a.currency) AS currency,
+       COALESCE(CAST(SUM(ar.amount) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS current_balance,
+       COALESCE(CAST(SUM(CASE
+           WHEN ar.posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`) THEN ar.amount
+           ELSE CAST(0 AS DECIMAL(18,8))
+       END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS posted_balance
+FROM `+s.db.accountingName("account")+` a
+LEFT JOIN active_records ar ON ar.account_id = a.account_id
+`+filter+`
+GROUP BY a.account_id, COALESCE(ar.currency, a.currency)
+ORDER BY a.account_id ASC, currency ASC`,
+		append([]any{"CANCELLED", "POSTED"}, args...)...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list account balances: %w", err)
+	}
+
+	balances := []accounts.AccountBalance{}
+	for rows.Next() {
+		balance, err := scanAccountBalance(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan account balance: %w", err)
+		}
+		balances = append(balances, balance)
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate account balances: %w; close account balance rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate account balances: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close account balance rows: %w", err)
+	}
+
+	return balances, nil
 }
 
 // UpdateMutable updates account mutable metadata and external identifiers.
@@ -267,6 +341,33 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 	account.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 
 	return account, nil
+}
+
+func scanAccountBalance(scanner accountScanner) (accounts.AccountBalance, error) {
+	var balance accounts.AccountBalance
+	var current duckdb.Decimal
+	var posted duckdb.Decimal
+	if err := scanner.Scan(
+		&balance.AccountID,
+		&balance.Currency,
+		&current,
+		&posted,
+	); err != nil {
+		return accounts.AccountBalance{}, err
+	}
+
+	currentBalance, err := decimalFromDuckDB(current)
+	if err != nil {
+		return accounts.AccountBalance{}, fmt.Errorf("scan current balance decimal: %w", err)
+	}
+	postedBalance, err := decimalFromDuckDB(posted)
+	if err != nil {
+		return accounts.AccountBalance{}, fmt.Errorf("scan posted balance decimal: %w", err)
+	}
+	balance.CurrentBalance = currentBalance
+	balance.PostedBalance = postedBalance
+
+	return balance, nil
 }
 
 func accountFQNExists(ctx context.Context, tx *sql.Tx, db *AppDB, fqn string) (bool, error) {

@@ -82,43 +82,52 @@ WHERE tag_id = ?`
 }
 
 // List returns tags in deterministic hierarchy order.
-func (s *TagStore) List(ctx context.Context, opts tags.ListOptions) ([]tags.Tag, error) {
-	query := `SELECT tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM ` + s.db.accountingName("tag") + `
+func (s *TagStore) List(ctx context.Context, opts tags.ListOptions) (services.PaginatedList[tags.Tag], error) {
+	filterQuery := `FROM ` + s.db.accountingName("tag") + `
 WHERE 1 = 1`
 	args := []any{}
 	if !opts.IncludeHidden {
-		query += " AND is_hidden = 0"
+		filterQuery += " AND is_hidden = 0"
 	}
 	if !opts.IncludeTombstoned {
-		query += " AND tombstoned_at IS NULL"
+		filterQuery += " AND tombstoned_at IS NULL"
 	}
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "tags", opts.List.IncludeTotalCount)
+	if err != nil {
+		return services.PaginatedList[tags.Tag]{}, err
+	}
+
+	query := `SELECT tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, tagSortColumns, services.SortKeyFQN, "tag_id")
 
 	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list tags: %w", err)
+		return services.PaginatedList[tags.Tag]{}, fmt.Errorf("list tags: %w", err)
 	}
 
-	tags := []tags.Tag{}
+	tagItems := []tags.Tag{}
 	for rows.Next() {
 		tag, err := scanTag(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan tag: %w", err)
+			return services.PaginatedList[tags.Tag]{}, fmt.Errorf("scan tag: %w", err)
 		}
-		tags = append(tags, tag)
+		tagItems = append(tagItems, tag)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate tags: %w; close tags rows: %w", err, closeErr)
+			return services.PaginatedList[tags.Tag]{}, fmt.Errorf("iterate tags: %w; close tags rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate tags: %w", err)
+		return services.PaginatedList[tags.Tag]{}, fmt.Errorf("iterate tags: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close tags rows: %w", err)
+		return services.PaginatedList[tags.Tag]{}, fmt.Errorf("close tags rows: %w", err)
 	}
 
-	return tags, nil
+	return services.PaginatedList[tags.Tag]{
+		Items:      tagItems,
+		TotalCount: totalCount,
+	}, nil
 }
 
 // UpdateHidden updates a tag's hidden state.

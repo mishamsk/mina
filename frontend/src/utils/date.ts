@@ -1,0 +1,37 @@
+export const localTodayISODate = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+export const localCivilDate = (value: string): Date => {
+  const [year = "0", month = "1", day = "1"] = value.split("-");
+  return new Date(Number(year), Number(month) - 1, Number(day));
+};
+
+export const formatLocalCivilDate = (value: string): string => {
+  const date = localCivilDate(value);
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year:
+      date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
+  }).format(date);
+};
+
+export const formatLocalCivilDateParts = (
+  value: string,
+): { readonly day: string; readonly year: string } => {
+  const date = localCivilDate(value);
+  return {
+    day: new Intl.DateTimeFormat(undefined, {
+      day: "numeric",
+      month: "short",
+    }).format(date),
+    year: new Intl.DateTimeFormat(undefined, {
+      year: "numeric",
+    }).format(date),
+  };
+};

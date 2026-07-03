@@ -14,6 +14,8 @@ const (
 	SortKeyFQN SortKey = "fqn"
 	// SortKeyFromCurrency sorts by source currency.
 	SortKeyFromCurrency SortKey = "from_currency"
+	// SortKeyInitiatedDate sorts by transaction initiated date.
+	SortKeyInitiatedDate SortKey = "initiated_date"
 	// SortKeyName sorts by display name.
 	SortKeyName SortKey = "name"
 	// SortKeyToCurrency sorts by target currency.
@@ -34,8 +36,15 @@ const (
 
 // ListOptions carries shared sort and pagination options.
 type ListOptions struct {
-	SortKey       SortKey
-	SortDirection SortDirection
-	Limit         *int
-	Offset        int
+	SortKey           SortKey
+	SortDirection     SortDirection
+	Limit             *int
+	Offset            int
+	IncludeTotalCount bool
+}
+
+// PaginatedList carries one page of list items plus the total matching count when requested.
+type PaginatedList[T any] struct {
+	Items      []T
+	TotalCount int64
 }

@@ -100,16 +100,22 @@ WHERE transaction_template_id = ? AND tombstoned_at IS NULL`,
 }
 
 // List returns active transaction templates with nested active record defaults.
-func (s *TransactionTemplateStore) List(ctx context.Context, opts services.ListOptions) ([]transactiontemplates.Template, error) {
-	query := `SELECT transaction_template_id, fqn, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM ` + s.db.accountingName("transaction_template") + `
+func (s *TransactionTemplateStore) List(ctx context.Context, opts services.ListOptions) (services.PaginatedList[transactiontemplates.Template], error) {
+	filterQuery := `FROM ` + s.db.accountingName("transaction_template") + `
 WHERE tombstoned_at IS NULL`
 	args := []any{}
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "transaction templates", opts.IncludeTotalCount)
+	if err != nil {
+		return services.PaginatedList[transactiontemplates.Template]{}, err
+	}
+
+	query := `SELECT transaction_template_id, fqn, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts, transactionTemplateSortColumns, services.SortKeyFQN, "transaction_template_id")
 
 	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list transaction templates: %w", err)
+		return services.PaginatedList[transactiontemplates.Template]{}, fmt.Errorf("list transaction templates: %w", err)
 	}
 
 	templates := []transactiontemplates.Template{}
@@ -117,30 +123,33 @@ WHERE tombstoned_at IS NULL`
 	for rows.Next() {
 		template, err := scanTransactionTemplate(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan transaction template: %w", err)
+			return services.PaginatedList[transactiontemplates.Template]{}, fmt.Errorf("scan transaction template: %w", err)
 		}
 		templates = append(templates, template)
 		templateIDs = append(templateIDs, template.ID)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate transaction templates: %w; close transaction template rows: %w", err, closeErr)
+			return services.PaginatedList[transactiontemplates.Template]{}, fmt.Errorf("iterate transaction templates: %w; close transaction template rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate transaction templates: %w", err)
+		return services.PaginatedList[transactiontemplates.Template]{}, fmt.Errorf("iterate transaction templates: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close transaction template rows: %w", err)
+		return services.PaginatedList[transactiontemplates.Template]{}, fmt.Errorf("close transaction template rows: %w", err)
 	}
 
 	records, err := s.recordsByTemplateIDs(ctx, templateIDs)
 	if err != nil {
-		return nil, err
+		return services.PaginatedList[transactiontemplates.Template]{}, err
 	}
 	for index := range templates {
 		templates[index].Records = records[templates[index].ID]
 	}
 
-	return templates, nil
+	return services.PaginatedList[transactiontemplates.Template]{
+		Items:      templates,
+		TotalCount: totalCount,
+	}, nil
 }
 
 // Replace atomically replaces a transaction template's metadata and active record defaults.

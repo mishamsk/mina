@@ -84,43 +84,52 @@ WHERE category_id = ?`
 }
 
 // List returns categories in deterministic hierarchy order.
-func (s *CategoryStore) List(ctx context.Context, opts categories.ListOptions) ([]categories.Category, error) {
-	query := `SELECT category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
-FROM ` + s.db.accountingName("category") + `
+func (s *CategoryStore) List(ctx context.Context, opts categories.ListOptions) (services.PaginatedList[categories.Category], error) {
+	filterQuery := `FROM ` + s.db.accountingName("category") + `
 WHERE 1 = 1`
 	args := []any{}
 	if !opts.IncludeHidden {
-		query += " AND is_hidden = 0"
+		filterQuery += " AND is_hidden = 0"
 	}
 	if !opts.IncludeTombstoned {
-		query += " AND tombstoned_at IS NULL"
+		filterQuery += " AND tombstoned_at IS NULL"
 	}
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "categories", opts.List.IncludeTotalCount)
+	if err != nil {
+		return services.PaginatedList[categories.Category]{}, err
+	}
+
+	query := `SELECT category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, categorySortColumns, services.SortKeyFQN, "category_id")
 
 	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list categories: %w", err)
+		return services.PaginatedList[categories.Category]{}, fmt.Errorf("list categories: %w", err)
 	}
 
-	categories := []categories.Category{}
+	categoryItems := []categories.Category{}
 	for rows.Next() {
 		category, err := scanCategory(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan category: %w", err)
+			return services.PaginatedList[categories.Category]{}, fmt.Errorf("scan category: %w", err)
 		}
-		categories = append(categories, category)
+		categoryItems = append(categoryItems, category)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate categories: %w; close categories rows: %w", err, closeErr)
+			return services.PaginatedList[categories.Category]{}, fmt.Errorf("iterate categories: %w; close categories rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate categories: %w", err)
+		return services.PaginatedList[categories.Category]{}, fmt.Errorf("iterate categories: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close categories rows: %w", err)
+		return services.PaginatedList[categories.Category]{}, fmt.Errorf("close categories rows: %w", err)
 	}
 
-	return categories, nil
+	return services.PaginatedList[categories.Category]{
+		Items:      categoryItems,
+		TotalCount: totalCount,
+	}, nil
 }
 
 // UpdateHidden updates a category's hidden state.

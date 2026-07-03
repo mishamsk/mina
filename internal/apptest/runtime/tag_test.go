@@ -54,6 +54,9 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
 	assertTagIDs(t, defaultList.JSON200.Tags, []int64{created.JSON201.TagId})
+	if defaultList.JSON200.TotalCount != 1 {
+		t.Fatalf("default tag total_count = %d, want 1", defaultList.JSON200.TotalCount)
+	}
 
 	includeHidden, err := client.REST().ListTagsWithResponse(context.Background(), &httpclient.ListTagsParams{IncludeHidden: &hiddenValue})
 	if err != nil {
@@ -63,6 +66,9 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("include hidden status = %d, want %d; body %s", includeHidden.StatusCode(), http.StatusOK, includeHidden.Body)
 	}
 	assertTagIDs(t, includeHidden.JSON200.Tags, []int64{hidden.JSON201.TagId, created.JSON201.TagId})
+	if includeHidden.JSON200.TotalCount != 2 {
+		t.Fatalf("include hidden tag total_count = %d, want 2", includeHidden.JSON200.TotalCount)
+	}
 
 	updated, err := client.REST().UpdateTagWithResponse(context.Background(), created.JSON201.TagId, httpclient.UpdateTagRequest{
 		IsHidden: true,
@@ -85,6 +91,9 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatalf("after hide list status = %d, want %d; body %s", afterHide.StatusCode(), http.StatusOK, afterHide.Body)
 	}
 	assertTagIDs(t, afterHide.JSON200.Tags, nil)
+	if afterHide.JSON200.TotalCount != 0 {
+		t.Fatalf("after hide tag total_count = %d, want 0", afterHide.JSON200.TotalCount)
+	}
 
 	visibleDeleted, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
 		Fqn: "Trips:Archive",

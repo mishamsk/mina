@@ -2,15 +2,13 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 
-import {
-  readUiPreferences,
-  type ThemePreference,
-  type UiPreferences,
-  writeUiPreferences,
-} from "../services/indexeddb";
+import type { ThemePreference, UiPreferences } from "@/models/ui-state";
+
+import { readUiPreferences, writeUiPreferences } from "../services/indexeddb";
 import { createSelectors } from "./selectors";
 
 const defaultUiPreferences: UiPreferences = {
+  sidebarCollapsed: false,
   theme: "system",
 };
 
@@ -50,7 +48,7 @@ export const hydrateUiPreferences = async (): Promise<void> => {
     {
       errorMessage: undefined,
       preferences: storedPreferences
-        ? { ...storedPreferences }
+        ? { ...defaultUiPreferences, ...storedPreferences }
         : defaultUiPreferences,
     },
     false,
@@ -74,6 +72,26 @@ export const setThemePreference = (theme: ThemePreference): void => {
       { errorMessage: toErrorMessage(error) },
       false,
       "PreferencesStore/setThemePreferenceError",
+    );
+  });
+};
+
+export const setSidebarCollapsed = (sidebarCollapsed: boolean): void => {
+  const nextPreferences = {
+    ...usePreferencesStore.getState().preferences,
+    sidebarCollapsed,
+  };
+  usePreferencesStore.setState(
+    { errorMessage: undefined, preferences: nextPreferences },
+    false,
+    "PreferencesStore/setSidebarCollapsed",
+  );
+
+  void writeUiPreferences(nextPreferences).catch((error: unknown) => {
+    usePreferencesStore.setState(
+      { errorMessage: toErrorMessage(error) },
+      false,
+      "PreferencesStore/setSidebarCollapsedError",
     );
   });
 };

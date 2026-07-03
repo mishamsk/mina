@@ -36,7 +36,7 @@ type ListOptions struct {
 type Repository interface {
 	Create(context.Context, int64, CreateInput) (CreditLimitHistory, error)
 	Get(context.Context, int64, bool) (CreditLimitHistory, error)
-	ListByAccount(context.Context, int64, ListOptions) ([]CreditLimitHistory, error)
+	ListByAccount(context.Context, int64, ListOptions) (services.PaginatedList[CreditLimitHistory], error)
 	Tombstone(context.Context, int64) error
 }
 
@@ -120,23 +120,23 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Cr
 }
 
 // ListByAccount returns credit limit history for an account.
-func (s *Service) ListByAccount(ctx context.Context, accountID int64, opts ListOptions) ([]CreditLimitHistory, error) {
+func (s *Service) ListByAccount(ctx context.Context, accountID int64, opts ListOptions) (services.PaginatedList[CreditLimitHistory], error) {
 	if accountID <= 0 {
-		return nil, services.InvalidRequest("account_id must be positive")
+		return services.PaginatedList[CreditLimitHistory]{}, services.InvalidRequest("account_id must be positive")
 	}
 	if _, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
 		if errors.Is(err, services.ErrInvalidReference) {
-			return nil, services.NotFound("account not found")
+			return services.PaginatedList[CreditLimitHistory]{}, services.NotFound("account not found")
 		}
-		return nil, err
+		return services.PaginatedList[CreditLimitHistory]{}, err
 	}
 
 	history, err := s.repo.ListByAccount(ctx, accountID, opts)
 	if errors.Is(err, services.ErrNotFound) {
-		return nil, services.NotFound("account not found")
+		return services.PaginatedList[CreditLimitHistory]{}, services.NotFound("account not found")
 	}
 	if err != nil {
-		return nil, err
+		return services.PaginatedList[CreditLimitHistory]{}, err
 	}
 
 	return history, nil

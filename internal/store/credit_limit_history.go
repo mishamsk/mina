@@ -85,40 +85,50 @@ WHERE credit_limit_history_id = ?`
 }
 
 // ListByAccount returns credit limit history for an active account in effective-date order.
-func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID int64, opts creditlimits.ListOptions) ([]creditlimits.CreditLimitHistory, error) {
-	query := `SELECT credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at
-FROM ` + s.db.accountingName("credit_limit_history") + `
+func (s *CreditLimitHistoryStore) ListByAccount(ctx context.Context, accountID int64, opts creditlimits.ListOptions) (services.PaginatedList[creditlimits.CreditLimitHistory], error) {
+	filterQuery := `FROM ` + s.db.accountingName("credit_limit_history") + `
 WHERE account_id = ?`
 	args := []any{accountID}
 	if !opts.IncludeTombstoned {
-		query += " AND tombstoned_at IS NULL"
+		filterQuery += " AND tombstoned_at IS NULL"
 	}
+
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "credit limit history", opts.List.IncludeTotalCount)
+	if err != nil {
+		return services.PaginatedList[creditlimits.CreditLimitHistory]{}, err
+	}
+
+	query := `SELECT credit_limit_history_id, account_id, credit_limit, effective_date, created_at, tombstoned_at
+` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, creditLimitHistorySortColumns, services.SortKeyEffectiveDate, "credit_limit_history_id")
 
 	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list credit limit history: %w", err)
+		return services.PaginatedList[creditlimits.CreditLimitHistory]{}, fmt.Errorf("list credit limit history: %w", err)
 	}
 
 	history := []creditlimits.CreditLimitHistory{}
 	for rows.Next() {
 		entry, err := scanCreditLimitHistory(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan credit limit history: %w", err)
+			return services.PaginatedList[creditlimits.CreditLimitHistory]{}, fmt.Errorf("scan credit limit history: %w", err)
 		}
 		history = append(history, entry)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate credit limit history: %w; close credit limit history rows: %w", err, closeErr)
+			return services.PaginatedList[creditlimits.CreditLimitHistory]{}, fmt.Errorf("iterate credit limit history: %w; close credit limit history rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate credit limit history: %w", err)
+		return services.PaginatedList[creditlimits.CreditLimitHistory]{}, fmt.Errorf("iterate credit limit history: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close credit limit history rows: %w", err)
+		return services.PaginatedList[creditlimits.CreditLimitHistory]{}, fmt.Errorf("close credit limit history rows: %w", err)
 	}
 
-	return history, nil
+	return services.PaginatedList[creditlimits.CreditLimitHistory]{
+		Items:      history,
+		TotalCount: totalCount,
+	}, nil
 }
 
 // Tombstone marks a credit limit history entry deleted without removing its historical row.

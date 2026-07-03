@@ -313,52 +313,62 @@ WHERE exchange_rate_id = ?`
 }
 
 // List returns exchange rates using explicit filters and deterministic ordering.
-func (s *ExchangeRateStore) List(ctx context.Context, opts exchangerates.ListOptions) ([]exchangerates.ExchangeRate, error) {
-	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
-FROM ` + s.db.accountingName("exchange_rate") + `
+func (s *ExchangeRateStore) List(ctx context.Context, opts exchangerates.ListOptions) (services.PaginatedList[exchangerates.ExchangeRate], error) {
+	filterQuery := `FROM ` + s.db.accountingName("exchange_rate") + `
 WHERE 1 = 1`
 	args := []any{}
 	if opts.FromCurrency != nil {
-		query += " AND from_currency = ?"
+		filterQuery += " AND from_currency = ?"
 		args = append(args, *opts.FromCurrency)
 	}
 	if opts.ToCurrency != nil {
-		query += " AND to_currency = ?"
+		filterQuery += " AND to_currency = ?"
 		args = append(args, *opts.ToCurrency)
 	}
 	if opts.EffectiveDate != nil {
-		query += " AND effective_date = ?"
+		filterQuery += " AND effective_date = ?"
 		args = append(args, timestampArg(*opts.EffectiveDate))
 	}
 	if !opts.IncludeTombstoned {
-		query += " AND tombstoned_at IS NULL"
+		filterQuery += " AND tombstoned_at IS NULL"
 	}
+
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "exchange rates", opts.List.IncludeTotalCount)
+	if err != nil {
+		return services.PaginatedList[exchangerates.ExchangeRate]{}, err
+	}
+
+	query := `SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
+` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, exchangeRateSortColumns, services.SortKeyCurrencyPair, "exchange_rate_id")
 
 	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list exchange rates: %w", err)
+		return services.PaginatedList[exchangerates.ExchangeRate]{}, fmt.Errorf("list exchange rates: %w", err)
 	}
 
 	rates := []exchangerates.ExchangeRate{}
 	for rows.Next() {
 		rate, err := scanExchangeRate(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan exchange rate: %w", err)
+			return services.PaginatedList[exchangerates.ExchangeRate]{}, fmt.Errorf("scan exchange rate: %w", err)
 		}
 		rates = append(rates, rate)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate exchange rates: %w; close exchange rate rows: %w", err, closeErr)
+			return services.PaginatedList[exchangerates.ExchangeRate]{}, fmt.Errorf("iterate exchange rates: %w; close exchange rate rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate exchange rates: %w", err)
+		return services.PaginatedList[exchangerates.ExchangeRate]{}, fmt.Errorf("iterate exchange rates: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close exchange rate rows: %w", err)
+		return services.PaginatedList[exchangerates.ExchangeRate]{}, fmt.Errorf("close exchange rate rows: %w", err)
 	}
 
-	return rates, nil
+	return services.PaginatedList[exchangerates.ExchangeRate]{
+		Items:      rates,
+		TotalCount: totalCount,
+	}, nil
 }
 
 // UpdateRate updates an active exchange rate value.

@@ -201,6 +201,15 @@ func composeHTTPHandler(restHandler http.Handler, webUIHandler http.Handler) htt
 			restHandler.ServeHTTP(w, r)
 			return
 		}
+		if r.URL.Path == "/ui" || strings.HasPrefix(r.URL.Path, "/ui/") {
+			target := strings.TrimPrefix(r.URL.Path, "/ui")
+			target = "/" + strings.TrimLeft(target, "/")
+			if r.URL.RawQuery != "" {
+				target += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, target, http.StatusPermanentRedirect)
+			return
+		}
 
 		webUIHandler.ServeHTTP(w, r)
 	})

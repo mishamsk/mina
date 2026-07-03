@@ -21,7 +21,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `MINA_FX_AUTO_LOAD_ENABLED=false ../bin/mina serve --host 127.0.0.1 --port ${port} --quiet`,
+    command: `MINA_FX_AUTO_LOAD_ENABLED=false ../bin/mina serve --host 127.0.0.1 --port ${port} --quiet --demo`,
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
     url: `${baseURL}/api/health`,

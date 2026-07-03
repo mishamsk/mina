@@ -10,6 +10,7 @@ export {
 export {
   getUiPreferencesSnapshot,
   hydrateUiPreferences,
+  setSidebarCollapsed,
   setThemePreference,
   usePreferencesStore,
   usePreferencesView,
@@ -21,3 +22,22 @@ export {
   useStatusPageStore,
   useStatusPageView,
 } from "./status-page";
+export type {
+  LedgerLookupsSnapshot,
+  TransactionPageSnapshot,
+  TransactionsPageParams,
+} from "./transactions";
+export {
+  getTransactionsSnapshot,
+  invalidateTransactionPages,
+  setLedgerLookups,
+  setLedgerLookupsError,
+  setLedgerLookupsLoading,
+  setTransactionPage,
+  setTransactionPageError,
+  setTransactionPageLoading,
+  transactionPageKey,
+  useLedgerLookupsView,
+  useTransactionPageView,
+  useTransactionsStore,
+} from "./transactions";

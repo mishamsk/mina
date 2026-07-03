@@ -48,6 +48,14 @@ type Account struct {
 	TombstonedAt   *time.Time
 }
 
+// AccountBalance is one server-computed account balance row for a currency.
+type AccountBalance struct {
+	AccountID      int64
+	Currency       string
+	CurrentBalance values.Decimal
+	PostedBalance  values.Decimal
+}
+
 // CreateInput contains fields for creating an account.
 type CreateInput struct {
 	FQN            string
@@ -82,6 +90,12 @@ type ListOptions struct {
 	List              services.ListOptions
 }
 
+// BalanceListOptions controls balance account aggregation filters.
+type BalanceListOptions struct {
+	IncludeHidden bool
+	AccountIDs    []int64
+}
+
 // ReferenceOptions controls account reference validation.
 type ReferenceOptions struct {
 	// AllowHidden permits hidden active accounts as valid write references.
@@ -111,7 +125,8 @@ func (u ActiveUsage) HasActiveDependents() bool {
 type Repository interface {
 	Create(context.Context, CreateInput) (Account, error)
 	Get(context.Context, int64, bool) (Account, error)
-	List(context.Context, ListOptions) ([]Account, error)
+	List(context.Context, ListOptions) (services.PaginatedList[Account], error)
+	ListBalances(context.Context, BalanceListOptions) ([]AccountBalance, error)
 	UpdateMutable(context.Context, int64, UpdateInput) (Account, error)
 	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
@@ -227,12 +242,27 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ac
 }
 
 // List returns accounts using default visibility rules unless explicitly overridden.
-func (s *Service) List(ctx context.Context, opts ListOptions) ([]Account, error) {
+func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Account], error) {
 	if opts.AccountType != nil && !ValidAccountType(*opts.AccountType) {
-		return nil, services.InvalidRequest("account_type must be one of balance, flow, or system")
+		return services.PaginatedList[Account]{}, services.InvalidRequest("account_type must be one of balance, flow, or system")
 	}
 
 	return s.repo.List(ctx, opts)
+}
+
+// ListBalances returns server-computed balances for active balance accounts.
+func (s *Service) ListBalances(ctx context.Context, opts BalanceListOptions) ([]AccountBalance, error) {
+	accountIDs := deduplicateIDs(opts.AccountIDs)
+	for _, id := range accountIDs {
+		if id <= 0 {
+			return nil, services.InvalidRequest("account_ids values must be positive")
+		}
+	}
+
+	return s.repo.ListBalances(ctx, BalanceListOptions{
+		IncludeHidden: opts.IncludeHidden,
+		AccountIDs:    accountIDs,
+	})
 }
 
 // UpdateMutable validates and updates account mutable fields.
@@ -341,8 +371,8 @@ func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]accountRefe
 		return nil, err
 	}
 
-	entries := make(map[int64]accountReferenceState, len(accounts))
-	for _, account := range accounts {
+	entries := make(map[int64]accountReferenceState, len(accounts.Items))
+	for _, account := range accounts.Items {
 		entries[account.ID] = accountReferenceStateFromAccount(account)
 	}
 

@@ -106,6 +106,9 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 		full.JSON201.TransactionTemplateId,
 		minimal.JSON201.TransactionTemplateId,
 	})
+	if list.JSON200.TotalCount != 3 {
+		t.Fatalf("transaction template list total_count = %d, want 3", list.JSON200.TotalCount)
+	}
 	minimalListIndex := slices.IndexFunc(list.JSON200.TransactionTemplates, func(template httpclient.TransactionTemplate) bool {
 		return template.TransactionTemplateId == minimal.JSON201.TransactionTemplateId
 	})
@@ -132,6 +135,9 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 		full.JSON201.TransactionTemplateId,
 		partial.JSON201.TransactionTemplateId,
 	})
+	if descPage.JSON200.TotalCount != 3 {
+		t.Fatalf("transaction template page total_count = %d, want 3", descPage.JSON200.TotalCount)
+	}
 
 	deleted, err := client.REST().DeleteTransactionTemplateWithResponse(context.Background(), minimal.JSON201.TransactionTemplateId)
 	if err != nil {

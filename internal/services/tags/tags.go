@@ -63,7 +63,7 @@ func (u ActiveUsage) HasActiveDependents() bool {
 type Repository interface {
 	Create(context.Context, CreateInput) (Tag, error)
 	Get(context.Context, int64, bool) (Tag, error)
-	List(context.Context, ListOptions) ([]Tag, error)
+	List(context.Context, ListOptions) (services.PaginatedList[Tag], error)
 	UpdateHidden(context.Context, int64, bool) (Tag, error)
 	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
@@ -170,7 +170,7 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ta
 }
 
 // List returns tags using default visibility rules unless explicitly overridden.
-func (s *Service) List(ctx context.Context, opts ListOptions) ([]Tag, error) {
+func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Tag], error) {
 	return s.repo.List(ctx, opts)
 }
 
@@ -250,8 +250,8 @@ func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]tagReferenc
 		return nil, err
 	}
 
-	entries := make(map[int64]tagReferenceState, len(tags))
-	for _, tag := range tags {
+	entries := make(map[int64]tagReferenceState, len(tags.Items))
+	for _, tag := range tags.Items {
 		entries[tag.ID] = tagReferenceStateFromTag(tag)
 	}
 

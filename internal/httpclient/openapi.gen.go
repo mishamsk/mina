@@ -631,6 +631,42 @@ func (e ListTransactionTemplatesParamsSortDir) Valid() bool {
 	}
 }
 
+// Defines values for ListTransactionsParamsSort.
+const (
+	ListTransactionsParamsSortCreatedAt     ListTransactionsParamsSort = "created_at"
+	ListTransactionsParamsSortInitiatedDate ListTransactionsParamsSort = "initiated_date"
+)
+
+// Valid indicates whether the value is a known member of the ListTransactionsParamsSort enum.
+func (e ListTransactionsParamsSort) Valid() bool {
+	switch e {
+	case ListTransactionsParamsSortCreatedAt:
+		return true
+	case ListTransactionsParamsSortInitiatedDate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListTransactionsParamsSortDir.
+const (
+	ListTransactionsParamsSortDirAsc  ListTransactionsParamsSortDir = "asc"
+	ListTransactionsParamsSortDirDesc ListTransactionsParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListTransactionsParamsSortDir enum.
+func (e ListTransactionsParamsSortDir) Valid() bool {
+	switch e {
+	case ListTransactionsParamsSortDirAsc:
+		return true
+	case ListTransactionsParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIError defines model for APIError.
 type APIError struct {
 	Code    APIErrorCode `json:"code"`
@@ -658,9 +694,29 @@ type Account struct {
 	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
+// AccountBalance defines model for AccountBalance.
+type AccountBalance struct {
+	AccountId int64  `json:"account_id"`
+	Currency  string `json:"currency"`
+
+	// CurrentBalance JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	CurrentBalance string `json:"current_balance"`
+
+	// PostedBalance JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	PostedBalance string `json:"posted_balance"`
+}
+
+// AccountBalanceListResponse defines model for AccountBalanceListResponse.
+type AccountBalanceListResponse struct {
+	Balances []AccountBalance `json:"balances"`
+}
+
 // AccountListResponse defines model for AccountListResponse.
 type AccountListResponse struct {
 	Accounts []Account `json:"accounts"`
+
+	// TotalCount Count of matching accounts before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
 }
 
 // AccountType defines model for AccountType.
@@ -732,6 +788,9 @@ type CategoryEconomicIntent string
 // CategoryListResponse defines model for CategoryListResponse.
 type CategoryListResponse struct {
 	Categories []Category `json:"categories"`
+
+	// TotalCount Count of matching categories before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
 }
 
 // CreateAccountRequest defines model for CreateAccountRequest.
@@ -916,6 +975,9 @@ type CreditLimitHistory struct {
 // CreditLimitHistoryListResponse defines model for CreditLimitHistoryListResponse.
 type CreditLimitHistoryListResponse struct {
 	CreditLimitHistory []CreditLimitHistory `json:"credit_limit_history"`
+
+	// TotalCount Count of matching credit limit history rows before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
 }
 
 // DatabaseBackupStatusResponse defines model for DatabaseBackupStatusResponse.
@@ -979,6 +1041,9 @@ type ExchangeRate struct {
 // ExchangeRateListResponse defines model for ExchangeRateListResponse.
 type ExchangeRateListResponse struct {
 	ExchangeRates []ExchangeRate `json:"exchange_rates"`
+
+	// TotalCount Count of matching exchange rates before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
 }
 
 // ExchangeRateLoadingStatusResponse defines model for ExchangeRateLoadingStatusResponse.
@@ -1037,16 +1102,22 @@ type JournalRecord struct {
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
-	Source               Source               `json:"source"`
-	TagIds               []int64              `json:"tag_ids"`
-	TombstonedAt         *time.Time           `json:"tombstoned_at,omitempty"`
-	TransactionId        int64                `json:"transaction_id"`
-	UpdatedAt            time.Time            `json:"updated_at"`
+
+	// RunningBalance JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	RunningBalance *string    `json:"running_balance,omitempty"`
+	Source         Source     `json:"source"`
+	TagIds         []int64    `json:"tag_ids"`
+	TombstonedAt   *time.Time `json:"tombstoned_at,omitempty"`
+	TransactionId  int64      `json:"transaction_id"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // JournalRecordSearchResponse defines model for JournalRecordSearchResponse.
 type JournalRecordSearchResponse struct {
 	Records []JournalRecord `json:"records"`
+
+	// TotalCount Count of matching journal records before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
 }
 
 // Member defines model for Member.
@@ -1061,6 +1132,9 @@ type Member struct {
 // MemberListResponse defines model for MemberListResponse.
 type MemberListResponse struct {
 	Members []Member `json:"members"`
+
+	// TotalCount Count of matching members before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
 }
 
 // OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
@@ -1114,6 +1188,9 @@ type Tag struct {
 // TagListResponse defines model for TagListResponse.
 type TagListResponse struct {
 	Tags []Tag `json:"tags"`
+
+	// TotalCount Count of matching tags before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
 }
 
 // Transaction defines model for Transaction.
@@ -1139,6 +1216,8 @@ type TransactionComponent struct {
 
 // TransactionListResponse defines model for TransactionListResponse.
 type TransactionListResponse struct {
+	// TotalCount Count of matching transactions before limit and offset are applied.
+	TotalCount   int64         `json:"total_count"`
 	Transactions []Transaction `json:"transactions"`
 }
 
@@ -1157,6 +1236,8 @@ type TransactionTemplate struct {
 
 // TransactionTemplateListResponse defines model for TransactionTemplateListResponse.
 type TransactionTemplateListResponse struct {
+	// TotalCount Count of matching transaction templates before limit and offset are applied.
+	TotalCount           int64                 `json:"total_count"`
 	TransactionTemplates []TransactionTemplate `json:"transaction_templates"`
 }
 
@@ -1269,6 +1350,12 @@ type ListAccountsParamsSort string
 // ListAccountsParamsSortDir defines parameters for ListAccounts.
 type ListAccountsParamsSortDir string
 
+// ListAccountBalancesParams defines parameters for ListAccountBalances.
+type ListAccountBalancesParams struct {
+	IncludeHidden *bool    `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+	AccountIds    *[]int64 `form:"account_ids,omitempty" json:"account_ids,omitempty"`
+}
+
 // GetAccountParams defines parameters for GetAccount.
 type GetAccountParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
@@ -1315,8 +1402,11 @@ type SearchAccountJournalRecordsParams struct {
 	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
 	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
-	Limit             *int                `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// IncludeRunningBalance When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.
+	IncludeRunningBalance *bool `form:"include_running_balance,omitempty" json:"include_running_balance,omitempty"`
+	Limit                 *int  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset                *int  `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListCategoriesParams defines parameters for ListCategories.
@@ -1456,9 +1546,17 @@ type ListTransactionTemplatesParamsSortDir string
 
 // ListTransactionsParams defines parameters for ListTransactions.
 type ListTransactionsParams struct {
-	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+	Sort    *ListTransactionsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir *ListTransactionsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit   *int                           `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset  *int                           `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// ListTransactionsParamsSort defines parameters for ListTransactions.
+type ListTransactionsParamsSort string
+
+// ListTransactionsParamsSortDir defines parameters for ListTransactions.
+type ListTransactionsParamsSortDir string
 
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
@@ -1609,6 +1707,9 @@ type ClientInterface interface {
 	CreateAccountWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateAccount(ctx context.Context, body CreateAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAccountBalances request
+	ListAccountBalances(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteAccount request
 	DeleteAccount(ctx context.Context, accountId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1849,6 +1950,18 @@ func (c *Client) CreateAccountWithBody(ctx context.Context, contentType string, 
 
 func (c *Client) CreateAccount(ctx context.Context, body CreateAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateAccountRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAccountBalances(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAccountBalancesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2973,6 +3086,72 @@ func NewCreateAccountRequestWithBody(server string, contentType string, body io.
 	return req, nil
 }
 
+// NewListAccountBalancesRequest generates requests for ListAccountBalances
+func NewListAccountBalancesRequest(server string, params *ListAccountBalancesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/accounts/balances")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeHidden != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AccountIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "account_ids", *params.AccountIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDeleteAccountRequest generates requests for DeleteAccount
 func NewDeleteAccountRequest(server string, accountId int64) (*http.Request, error) {
 	var err error
@@ -3489,6 +3668,18 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 		if params.MemoContains != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "memo_contains", *params.MemoContains, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeRunningBalance != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_running_balance", *params.IncludeRunningBalance, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -5787,6 +5978,30 @@ func NewListTransactionsRequest(server string, params *ListTransactionsParams) (
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.SortDir != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort_dir", *params.SortDir, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -6191,6 +6406,9 @@ type ClientWithResponsesInterface interface {
 
 	CreateAccountWithResponse(ctx context.Context, body CreateAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAccountResponse, error)
 
+	// ListAccountBalancesWithResponse request
+	ListAccountBalancesWithResponse(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*ListAccountBalancesResponse, error)
+
 	// DeleteAccountWithResponse request
 	DeleteAccountWithResponse(ctx context.Context, accountId int64, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error)
 
@@ -6461,6 +6679,37 @@ func (r CreateAccountResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateAccountResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListAccountBalancesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AccountBalanceListResponse
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAccountBalancesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAccountBalancesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAccountBalancesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -8266,6 +8515,15 @@ func (c *ClientWithResponses) CreateAccountWithResponse(ctx context.Context, bod
 	return ParseCreateAccountResponse(rsp)
 }
 
+// ListAccountBalancesWithResponse request returning *ListAccountBalancesResponse
+func (c *ClientWithResponses) ListAccountBalancesWithResponse(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*ListAccountBalancesResponse, error) {
+	rsp, err := c.ListAccountBalances(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAccountBalancesResponse(rsp)
+}
+
 // DeleteAccountWithResponse request returning *DeleteAccountResponse
 func (c *ClientWithResponses) DeleteAccountWithResponse(ctx context.Context, accountId int64, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error) {
 	rsp, err := c.DeleteAccount(ctx, accountId, reqEditors...)
@@ -9013,6 +9271,39 @@ func ParseCreateAccountResponse(rsp *http.Response) (*CreateAccountResponse, err
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAccountBalancesResponse parses an HTTP response from a ListAccountBalancesWithResponse call
+func ParseListAccountBalancesResponse(rsp *http.Response) (*ListAccountBalancesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAccountBalancesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AccountBalanceListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	}
 

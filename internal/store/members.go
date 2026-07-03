@@ -81,40 +81,49 @@ WHERE member_id = ?`
 }
 
 // List returns members in deterministic name order.
-func (s *MemberStore) List(ctx context.Context, opts members.ListOptions) ([]members.Member, error) {
-	query := `SELECT member_id, name, created_at, updated_at, tombstoned_at
-FROM ` + s.db.accountingName("member") + `
+func (s *MemberStore) List(ctx context.Context, opts members.ListOptions) (services.PaginatedList[members.Member], error) {
+	filterQuery := `FROM ` + s.db.accountingName("member") + `
 WHERE 1 = 1`
 	args := []any{}
 	if !opts.IncludeTombstoned {
-		query += " AND tombstoned_at IS NULL"
+		filterQuery += " AND tombstoned_at IS NULL"
 	}
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "members", opts.List.IncludeTotalCount)
+	if err != nil {
+		return services.PaginatedList[members.Member]{}, err
+	}
+
+	query := `SELECT member_id, name, created_at, updated_at, tombstoned_at
+` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, memberSortColumns, services.SortKeyName, "member_id")
 
 	rows, err := s.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list members: %w", err)
+		return services.PaginatedList[members.Member]{}, fmt.Errorf("list members: %w", err)
 	}
 
-	members := []members.Member{}
+	memberItems := []members.Member{}
 	for rows.Next() {
 		member, err := scanMember(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan member: %w", err)
+			return services.PaginatedList[members.Member]{}, fmt.Errorf("scan member: %w", err)
 		}
-		members = append(members, member)
+		memberItems = append(memberItems, member)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate members: %w; close members rows: %w", err, closeErr)
+			return services.PaginatedList[members.Member]{}, fmt.Errorf("iterate members: %w; close members rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate members: %w", err)
+		return services.PaginatedList[members.Member]{}, fmt.Errorf("iterate members: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close members rows: %w", err)
+		return services.PaginatedList[members.Member]{}, fmt.Errorf("close members rows: %w", err)
 	}
 
-	return members, nil
+	return services.PaginatedList[members.Member]{
+		Items:      memberItems,
+		TotalCount: totalCount,
+	}, nil
 }
 
 // UpdateName updates a member's name.

@@ -60,7 +60,7 @@ type USDRateBracket struct {
 type Repository interface {
 	Create(context.Context, CreateInput) (ExchangeRate, error)
 	Get(context.Context, int64, bool) (ExchangeRate, error)
-	List(context.Context, ListOptions) ([]ExchangeRate, error)
+	List(context.Context, ListOptions) (services.PaginatedList[ExchangeRate], error)
 	UpdateRate(context.Context, int64, values.Decimal) (ExchangeRate, error)
 	Tombstone(context.Context, int64) error
 	UpsertActiveUSDRates(context.Context, []UpsertRate) error
@@ -168,15 +168,15 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ex
 }
 
 // List returns exchange rates using exact filters.
-func (s *Service) List(ctx context.Context, opts ListOptions) ([]ExchangeRate, error) {
+func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[ExchangeRate], error) {
 	if opts.FromCurrency != nil {
 		if err := validateCurrencyCode("from_currency", *opts.FromCurrency); err != nil {
-			return nil, err
+			return services.PaginatedList[ExchangeRate]{}, err
 		}
 	}
 	if opts.ToCurrency != nil {
 		if err := validateCurrencyCode("to_currency", *opts.ToCurrency); err != nil {
-			return nil, err
+			return services.PaginatedList[ExchangeRate]{}, err
 		}
 	}
 	return s.repo.List(ctx, opts)

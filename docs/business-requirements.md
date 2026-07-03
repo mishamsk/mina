@@ -42,10 +42,10 @@ Technical users who appreciate text-based accounting systems (like ledger-cli, h
 Delivered REST API foundation with accounts, transactions, categories, tags, household members, basic search/filtering, and bulk operations.
 
 ### Phase 2: Minimal Web UI, Templates, and Recurring Transactions
-Minimal local web UI, development infrastructure for web UI iteration, hierarchical date-free transaction templates, and recurring transaction support.
+Minimal local web UI transaction entry/search flows per `docs/webui-design.md`, development infrastructure for web UI iteration, hierarchical date-free transaction templates, and recurring transaction support.
 
 ### Phase 3: Basic Reporting
-Requirements TBD. Candidate areas include account balances, monthly spend/income summaries, saved searches, tag/category/member summaries, and personal vs. shared expense views.
+Requirements TBD. Candidate areas include saved searches, tag/category/member summaries, personal vs. shared expense views, richer summaries, and trend reporting.
 
 ### Phase 4: Budgeting
 Monthly category-based budgeting.
@@ -200,13 +200,13 @@ Search and filter records by:
 # Future Phases
 
 ## Phase 2: Minimal Web UI, Templates, and Recurring Transactions
-- Local web UI development infrastructure and minimal transaction entry/search flows.
+- Local web UI development infrastructure and minimal transaction entry/search flows per `docs/webui-design.md`.
 - Transaction templates are hierarchical, date-free, category-bearing manual-entry defaults.
 - Transaction templates are separate from recurring transactions and do not include schedules, cadence, due dates, or generated transaction source state.
 - Recurring transaction scheduling requirements TBD.
 
 ## Phase 3: Basic Reporting
-*Requirements TBD. Candidate areas include account balances, monthly spend/income summaries, saved searches, tag/category/member summaries, and personal vs. shared expense views.*
+*Requirements TBD. Candidate areas include saved searches, tag/category/member summaries, personal vs. shared expense views, richer summaries, and trend reporting.*
 
 ## Phase 4: Budgeting
 *Requirements TBD*

@@ -74,6 +74,7 @@ func TestTransactionListPaginationBoundary(t *testing.T) {
 	third := createTransactionForDate(t, client, refs, "2024-01-03", "Third")
 	first := createTransactionForDate(t, client, refs, "2024-01-01", "First")
 	second := createTransactionForDate(t, client, refs, "2024-01-02", "Second")
+	secondPeer := createTransactionForDate(t, client, refs, "2024-01-02", "Second peer")
 
 	defaultList, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 	if err != nil {
@@ -82,7 +83,15 @@ func TestTransactionListPaginationBoundary(t *testing.T) {
 	if defaultList.StatusCode() != http.StatusOK {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
-	assertTransactionIDs(t, defaultList.JSON200.Transactions, []int64{first.JSON201.TransactionId, second.JSON201.TransactionId, third.JSON201.TransactionId})
+	assertTransactionIDs(t, defaultList.JSON200.Transactions, []int64{
+		third.JSON201.TransactionId,
+		secondPeer.JSON201.TransactionId,
+		second.JSON201.TransactionId,
+		first.JSON201.TransactionId,
+	})
+	if defaultList.JSON200.TotalCount != 4 {
+		t.Fatalf("default transaction total_count = %d, want 4", defaultList.JSON200.TotalCount)
+	}
 
 	limitOne := 1
 	limitPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{Limit: &limitOne})
@@ -92,7 +101,10 @@ func TestTransactionListPaginationBoundary(t *testing.T) {
 	if limitPage.StatusCode() != http.StatusOK {
 		t.Fatalf("limit page status = %d, want %d; body %s", limitPage.StatusCode(), http.StatusOK, limitPage.Body)
 	}
-	assertTransactionIDs(t, limitPage.JSON200.Transactions, []int64{first.JSON201.TransactionId})
+	assertTransactionIDs(t, limitPage.JSON200.Transactions, []int64{third.JSON201.TransactionId})
+	if limitPage.JSON200.TotalCount != 4 {
+		t.Fatalf("limit page transaction total_count = %d, want 4", limitPage.JSON200.TotalCount)
+	}
 
 	offsetOne := 1
 	offsetPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{Offset: &offsetOne})
@@ -102,7 +114,14 @@ func TestTransactionListPaginationBoundary(t *testing.T) {
 	if offsetPage.StatusCode() != http.StatusOK {
 		t.Fatalf("offset page status = %d, want %d; body %s", offsetPage.StatusCode(), http.StatusOK, offsetPage.Body)
 	}
-	assertTransactionIDs(t, offsetPage.JSON200.Transactions, []int64{second.JSON201.TransactionId, third.JSON201.TransactionId})
+	assertTransactionIDs(t, offsetPage.JSON200.Transactions, []int64{
+		secondPeer.JSON201.TransactionId,
+		second.JSON201.TransactionId,
+		first.JSON201.TransactionId,
+	})
+	if offsetPage.JSON200.TotalCount != 4 {
+		t.Fatalf("offset page transaction total_count = %d, want 4", offsetPage.JSON200.TotalCount)
+	}
 
 	window, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
 		Limit:  &limitOne,
@@ -114,14 +133,107 @@ func TestTransactionListPaginationBoundary(t *testing.T) {
 	if window.StatusCode() != http.StatusOK {
 		t.Fatalf("window status = %d, want %d; body %s", window.StatusCode(), http.StatusOK, window.Body)
 	}
-	assertTransactionIDs(t, window.JSON200.Transactions, []int64{second.JSON201.TransactionId})
+	assertTransactionIDs(t, window.JSON200.Transactions, []int64{secondPeer.JSON201.TransactionId})
+	if window.JSON200.TotalCount != 4 {
+		t.Fatalf("window transaction total_count = %d, want 4", window.JSON200.TotalCount)
+	}
 	if len(window.JSON200.Transactions[0].Records) != 2 {
 		t.Fatalf("window nested record count = %d, want 2; body %+v", len(window.JSON200.Transactions[0].Records), window.JSON200.Transactions[0])
 	}
 
+	sortInitiated := httpclient.ListTransactionsParamsSortInitiatedDate
+	asc := httpclient.ListTransactionsParamsSortDirAsc
+	initiatedAsc, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort:    &sortInitiated,
+		SortDir: &asc,
+	})
+	if err != nil {
+		t.Fatalf("initiated asc request: %v", err)
+	}
+	if initiatedAsc.StatusCode() != http.StatusOK {
+		t.Fatalf("initiated asc status = %d, want %d; body %s", initiatedAsc.StatusCode(), http.StatusOK, initiatedAsc.Body)
+	}
+	assertTransactionIDs(t, initiatedAsc.JSON200.Transactions, []int64{
+		first.JSON201.TransactionId,
+		second.JSON201.TransactionId,
+		secondPeer.JSON201.TransactionId,
+		third.JSON201.TransactionId,
+	})
+
+	desc := httpclient.ListTransactionsParamsSortDirDesc
+	initiatedDesc, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort:    &sortInitiated,
+		SortDir: &desc,
+	})
+	if err != nil {
+		t.Fatalf("initiated desc request: %v", err)
+	}
+	if initiatedDesc.StatusCode() != http.StatusOK {
+		t.Fatalf("initiated desc status = %d, want %d; body %s", initiatedDesc.StatusCode(), http.StatusOK, initiatedDesc.Body)
+	}
+	assertTransactionIDs(t, initiatedDesc.JSON200.Transactions, []int64{
+		third.JSON201.TransactionId,
+		secondPeer.JSON201.TransactionId,
+		second.JSON201.TransactionId,
+		first.JSON201.TransactionId,
+	})
+
+	sortCreatedAt := httpclient.ListTransactionsParamsSortCreatedAt
+	createdAsc, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort:    &sortCreatedAt,
+		SortDir: &asc,
+	})
+	if err != nil {
+		t.Fatalf("created_at asc request: %v", err)
+	}
+	if createdAsc.StatusCode() != http.StatusOK {
+		t.Fatalf("created_at asc status = %d, want %d; body %s", createdAsc.StatusCode(), http.StatusOK, createdAsc.Body)
+	}
+	assertTransactionIDs(t, createdAsc.JSON200.Transactions, []int64{
+		third.JSON201.TransactionId,
+		first.JSON201.TransactionId,
+		second.JSON201.TransactionId,
+		secondPeer.JSON201.TransactionId,
+	})
+
+	createdDesc, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort:    &sortCreatedAt,
+		SortDir: &desc,
+	})
+	if err != nil {
+		t.Fatalf("created_at desc request: %v", err)
+	}
+	if createdDesc.StatusCode() != http.StatusOK {
+		t.Fatalf("created_at desc status = %d, want %d; body %s", createdDesc.StatusCode(), http.StatusOK, createdDesc.Body)
+	}
+	assertTransactionIDs(t, createdDesc.JSON200.Transactions, []int64{
+		secondPeer.JSON201.TransactionId,
+		second.JSON201.TransactionId,
+		first.JSON201.TransactionId,
+		third.JSON201.TransactionId,
+	})
+
+	createdDefaultDir, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort: &sortCreatedAt,
+	})
+	if err != nil {
+		t.Fatalf("created_at default sort_dir request: %v", err)
+	}
+	if createdDefaultDir.StatusCode() != http.StatusOK {
+		t.Fatalf("created_at default sort_dir status = %d, want %d; body %s", createdDefaultDir.StatusCode(), http.StatusOK, createdDefaultDir.Body)
+	}
+	assertTransactionIDs(t, createdDefaultDir.JSON200.Transactions, []int64{
+		secondPeer.JSON201.TransactionId,
+		second.JSON201.TransactionId,
+		first.JSON201.TransactionId,
+		third.JSON201.TransactionId,
+	})
+
 	assertInvalidTransactionListQuery(t, client, "limit=0")
 	assertInvalidTransactionListQuery(t, client, "limit=501")
 	assertInvalidTransactionListQuery(t, client, "offset=-1")
+	assertInvalidTransactionListQuery(t, client, "sort=fqn")
+	assertInvalidTransactionListQuery(t, client, "sort_dir=sideways")
 }
 
 func TestTransactionRecordFieldsBoundary(t *testing.T) {

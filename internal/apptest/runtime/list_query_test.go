@@ -61,6 +61,9 @@ func TestSharedListQueryHiddenDefaultAndPagination(t *testing.T) {
 		t.Fatalf("default list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
 	}
 	assertCategoryIDs(t, defaultList.JSON200.Categories, []int64{alpha.CategoryId, beta.CategoryId, gamma.CategoryId})
+	if defaultList.JSON200.TotalCount != 3 {
+		t.Fatalf("default list total_count = %d, want 3", defaultList.JSON200.TotalCount)
+	}
 
 	includeHidden := true
 	withHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{IncludeHidden: &includeHidden})
@@ -71,6 +74,9 @@ func TestSharedListQueryHiddenDefaultAndPagination(t *testing.T) {
 		t.Fatalf("with hidden status = %d, want %d; body %s", withHidden.StatusCode(), http.StatusOK, withHidden.Body)
 	}
 	assertCategoryIDs(t, withHidden.JSON200.Categories, []int64{alpha.CategoryId, beta.CategoryId, gamma.CategoryId, hidden.CategoryId})
+	if withHidden.JSON200.TotalCount != 4 {
+		t.Fatalf("with hidden total_count = %d, want 4", withHidden.JSON200.TotalCount)
+	}
 
 	sortFQN := httpclient.ListCategoriesParamsSortFqn
 	limitTwo := 2
@@ -87,6 +93,9 @@ func TestSharedListQueryHiddenDefaultAndPagination(t *testing.T) {
 		t.Fatalf("page status = %d, want %d; body %s", page.StatusCode(), http.StatusOK, page.Body)
 	}
 	assertCategoryIDs(t, page.JSON200.Categories, []int64{beta.CategoryId, gamma.CategoryId})
+	if page.JSON200.TotalCount != 3 {
+		t.Fatalf("page total_count = %d, want 3", page.JSON200.TotalCount)
+	}
 
 	desc := httpclient.ListCategoriesParamsSortDirDesc
 	descPage, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
@@ -101,6 +110,9 @@ func TestSharedListQueryHiddenDefaultAndPagination(t *testing.T) {
 		t.Fatalf("desc page status = %d, want %d; body %s", descPage.StatusCode(), http.StatusOK, descPage.Body)
 	}
 	assertCategoryIDs(t, descPage.JSON200.Categories, []int64{gamma.CategoryId, beta.CategoryId})
+	if descPage.JSON200.TotalCount != 3 {
+		t.Fatalf("desc page total_count = %d, want 3", descPage.JSON200.TotalCount)
+	}
 }
 
 func TestSharedListQueryCompositeSortDirection(t *testing.T) {

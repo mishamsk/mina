@@ -55,7 +55,7 @@ func (u ActiveUsage) HasActiveDependents() bool {
 type Repository interface {
 	Create(context.Context, CreateInput) (Member, error)
 	Get(context.Context, int64, bool) (Member, error)
-	List(context.Context, ListOptions) ([]Member, error)
+	List(context.Context, ListOptions) (services.PaginatedList[Member], error)
 	UpdateName(context.Context, int64, string) (Member, error)
 	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
@@ -158,7 +158,7 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Me
 }
 
 // List returns household members using default visibility rules unless explicitly overridden.
-func (s *Service) List(ctx context.Context, opts ListOptions) ([]Member, error) {
+func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Member], error) {
 	return s.repo.List(ctx, opts)
 }
 
@@ -241,8 +241,8 @@ func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]memberRefer
 		return nil, err
 	}
 
-	entries := make(map[int64]memberReferenceState, len(members))
-	for _, member := range members {
+	entries := make(map[int64]memberReferenceState, len(members.Items))
+	for _, member := range members.Items {
 		entries[member.ID] = memberReferenceStateFromMember(member)
 	}
 

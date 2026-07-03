@@ -1,6 +1,9 @@
 package store
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/mishamsk/mina/internal/services"
 )
 
@@ -10,10 +13,7 @@ func appendServiceListOrderAndPage(query string, args []any, opts services.ListO
 		sortColumns = allowedSorts[defaultSort]
 	}
 
-	direction := "ASC"
-	if opts.SortDirection == services.SortDirectionDesc {
-		direction = "DESC"
-	}
+	direction := serviceListDirection(opts)
 
 	query += " ORDER BY "
 	for index, column := range sortColumns {
@@ -26,6 +26,13 @@ func appendServiceListOrderAndPage(query string, args []any, opts services.ListO
 	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
 
 	return query, args
+}
+
+func serviceListDirection(opts services.ListOptions) string {
+	if opts.SortDirection == services.SortDirectionDesc {
+		return "DESC"
+	}
+	return "ASC"
 }
 
 func appendLimitOffset(query string, args []any, limit *int, offset int) (string, []any) {
@@ -42,4 +49,17 @@ func appendLimitOffset(query string, args []any, limit *int, offset int) (string
 	}
 
 	return query, args
+}
+
+func countMatchingRows(ctx context.Context, queryer rowQuerier, query string, args []any, label string, includeTotalCount bool) (int64, error) {
+	if !includeTotalCount {
+		return 0, nil
+	}
+
+	var totalCount int64
+	if err := queryer.QueryRowContext(ctx, query, args...).Scan(&totalCount); err != nil {
+		return 0, fmt.Errorf("count %s: %w", label, err)
+	}
+
+	return totalCount, nil
 }
