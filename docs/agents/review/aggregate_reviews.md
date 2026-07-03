@@ -8,6 +8,10 @@ Raw reviews are for this review scope:
 
 {{REVIEW_SCOPE}}
 
+Exact review range:
+
+{{REVIEW_RANGE}}
+
 Code changes were made for: {{GOAL}}
 
 ## Instructions
@@ -22,6 +26,9 @@ diff, and likely worth fixing. Deduplicate overlapping comments, merge
 equivalent findings, and reject anything speculative, pre-existing, unrelated
 to the task, unsupported by the diff, or merely stylistic unless it creates a
 concrete correctness, maintainability, compatibility, or verification problem.
+Reject comments that ask to revert, align, or modify state already present at
+the review range base; those findings are out of range even if the state
+conflicts with task constraints.
 Not every possible bug or edge case is worth fixing. Prefer issues that affect
 normal use, documented contracts, realistic data created by this app, or
 external boundaries where failure is expected. Do not obsess over defensive

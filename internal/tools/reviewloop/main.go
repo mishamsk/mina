@@ -25,6 +25,8 @@ const (
 	modulePath              = "github.com/mishamsk/mina"
 	maxIterations           = 3
 	reviewLoopActiveEnvName = "MINA_REVIEW_LOOP_ACTIVE"
+	reviewLoopBaseEnvName   = "MINA_REVIEWLOOP_BASE"
+	defaultReviewBaseRef    = "main"
 	codexHeartbeatInterval  = time.Minute
 	codexTurnTimeout        = 30 * time.Minute
 	codexNoEventTimeout     = 30 * time.Minute
@@ -72,6 +74,16 @@ type reviewTarget struct {
 	branchName string
 	commitSHA  string
 	headSHA    string
+	baseRef    string
+	baseSHA    string
+	baseSource string
+}
+
+type reviewBase struct {
+	ref      string
+	sha      string
+	distance int
+	source   string
 }
 
 type reviewTemplates struct {
@@ -175,6 +187,7 @@ func run(args []string) (int, error) {
 		aggregatePrompt, err := interpolate(cfg.templates.aggregate, cfg.placeholderValues(map[string]string{
 			"RAW_REVIEWS":  rawReviews,
 			"REVIEW_SCOPE": reviewScope,
+			"REVIEW_RANGE": cfg.reviewTarget.diffRange(iteration),
 		}))
 		if err != nil {
 			return 2, fmt.Errorf("build aggregate prompt: %w", err)
@@ -215,8 +228,12 @@ func run(args []string) (int, error) {
 }
 
 func loadConfig(args []string) (config, error) {
+	args, baseOverride, err := parseReviewLoopArgs(args)
+	if err != nil {
+		return config{}, err
+	}
 	if len(args) != 1 && len(args) != 2 {
-		return config{}, errors.New("usage: reviewloop <goal> [branch-or-commit]")
+		return config{}, errors.New("usage: reviewloop [--base <ref>] <goal> [branch-or-commit]")
 	}
 
 	goal := strings.TrimSpace(args[0])
@@ -227,6 +244,9 @@ func loadConfig(args []string) (config, error) {
 	root, err := repoRoot()
 	if err != nil {
 		return config{}, err
+	}
+	if baseOverride == "" {
+		baseOverride = strings.TrimSpace(os.Getenv(reviewLoopBaseEnvName))
 	}
 
 	target := reviewTarget{}
@@ -260,6 +280,15 @@ func loadConfig(args []string) (config, error) {
 		return config{}, err
 	}
 	target.headSHA = headSHA
+	if target.commitSHA == "" {
+		base, err := resolveBranchReviewBase(root, target.branchName, baseOverride)
+		if err != nil {
+			return config{}, err
+		}
+		target.baseRef = base.ref
+		target.baseSHA = base.sha
+		target.baseSource = base.source
+	}
 	previousReviewFile, err := createReviewProgressFile(root, target)
 	if err != nil {
 		return config{}, err
@@ -289,15 +318,148 @@ func loadConfig(args []string) (config, error) {
 	}, nil
 }
 
+func parseReviewLoopArgs(args []string) ([]string, string, error) {
+	var positional []string
+	var baseRef string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--base":
+			if i+1 >= len(args) {
+				return nil, "", errors.New("--base requires a ref")
+			}
+			i++
+			baseRef = strings.TrimSpace(args[i])
+			if baseRef == "" {
+				return nil, "", errors.New("--base ref must not be empty")
+			}
+		case strings.HasPrefix(arg, "--base="):
+			baseRef = strings.TrimSpace(strings.TrimPrefix(arg, "--base="))
+			if baseRef == "" {
+				return nil, "", errors.New("--base ref must not be empty")
+			}
+		case strings.HasPrefix(arg, "--"):
+			return nil, "", fmt.Errorf("unknown flag %s", arg)
+		default:
+			positional = append(positional, arg)
+		}
+	}
+	return positional, baseRef, nil
+}
+
+func resolveBranchReviewBase(root string, branchName string, baseOverride string) (reviewBase, error) {
+	if baseOverride != "" {
+		base, err := mergeBaseWithHead(root, baseOverride)
+		if err != nil {
+			return reviewBase{}, fmt.Errorf("resolve review base %q: %w", baseOverride, err)
+		}
+		return reviewBase{ref: baseOverride, sha: base, source: "override"}, nil
+	}
+	if branchName == defaultReviewBaseRef {
+		base, err := mergeBaseWithHead(root, defaultReviewBaseRef)
+		if err != nil {
+			return reviewBase{}, fmt.Errorf("resolve review base %q: %w", defaultReviewBaseRef, err)
+		}
+		return reviewBase{ref: defaultReviewBaseRef, sha: base, source: "default"}, nil
+	}
+
+	base, err := autoDetectBranchReviewBase(root, branchName)
+	if err == nil {
+		return base, nil
+	}
+
+	fallbackBase, fallbackErr := mergeBaseWithHead(root, defaultReviewBaseRef)
+	if fallbackErr != nil {
+		return reviewBase{}, fmt.Errorf("%w; fallback to %s failed: %w", err, defaultReviewBaseRef, fallbackErr)
+	}
+	return reviewBase{ref: defaultReviewBaseRef, sha: fallbackBase, source: "fallback"}, nil
+}
+
+func autoDetectBranchReviewBase(root string, branchName string) (reviewBase, error) {
+	output, err := gitOutput(root, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+	if err != nil {
+		return reviewBase{}, fmt.Errorf("list local branches: %w", err)
+	}
+
+	headSHA, err := gitOutput(root, "rev-parse", "HEAD")
+	if err != nil {
+		return reviewBase{}, fmt.Errorf("resolve HEAD: %w", err)
+	}
+
+	var best reviewBase
+	for _, ref := range nonEmptyLines(output) {
+		if ref == branchName {
+			continue
+		}
+		baseSHA, err := mergeBaseWithHead(root, ref)
+		if err != nil || baseSHA == "" || baseSHA == headSHA {
+			continue
+		}
+		distance, err := revListCount(root, baseSHA+"..HEAD")
+		if err != nil {
+			continue
+		}
+		candidate := reviewBase{
+			ref:      ref,
+			sha:      baseSHA,
+			distance: distance,
+			source:   "auto",
+		}
+		if betterReviewBase(candidate, best) {
+			best = candidate
+		}
+	}
+
+	if best.sha == "" {
+		return reviewBase{}, errors.New("auto-detect review base: no usable local branch base")
+	}
+	return best, nil
+}
+
+func mergeBaseWithHead(root string, ref string) (string, error) {
+	if _, err := gitOutput(root, "rev-parse", "--verify", ref+"^{commit}"); err != nil {
+		return "", err
+	}
+	return gitOutput(root, "merge-base", "HEAD", ref)
+}
+
+func revListCount(root string, rangeSpec string) (int, error) {
+	output, err := gitOutput(root, "rev-list", "--count", rangeSpec)
+	if err != nil {
+		return 0, err
+	}
+	var count int
+	if _, err := fmt.Sscanf(output, "%d", &count); err != nil {
+		return 0, fmt.Errorf("parse rev-list count %q: %w", output, err)
+	}
+	return count, nil
+}
+
+func betterReviewBase(candidate reviewBase, current reviewBase) bool {
+	if current.sha == "" {
+		return true
+	}
+	if candidate.distance != current.distance {
+		return candidate.distance < current.distance
+	}
+	if candidate.ref == defaultReviewBaseRef && current.ref != defaultReviewBaseRef {
+		return true
+	}
+	if candidate.ref != defaultReviewBaseRef && current.ref == defaultReviewBaseRef {
+		return false
+	}
+	return candidate.ref < current.ref
+}
+
 func (target reviewTarget) scope(iteration int) string {
 	if target.commitSHA == "" {
 		return strings.Join([]string{
 			"Review the current branch only.",
 			"Use this exact range:",
-			"1. Compute `base=$(git merge-base HEAD main)`.",
-			"2. Inspect `git diff --stat \"$base\" HEAD` for the changed files.",
-			"3. Inspect focused diffs with `git diff \"$base\" HEAD -- <path>`.",
-			"Do not review `HEAD~1`, unrelated history, or changes already present on `main`.",
+			fmt.Sprintf("1. Use base commit `%s` (%s, %s).", target.baseSHA, target.baseRef, target.baseSource),
+			fmt.Sprintf("2. Inspect `git diff --stat %s HEAD` for the changed files.", target.baseSHA),
+			fmt.Sprintf("3. Inspect focused diffs with `git diff %s HEAD -- <path>`.", target.baseSHA),
+			fmt.Sprintf("Do not review `HEAD~1`, unrelated history, or changes already present at `%s`.", target.baseSHA),
 		}, "\n")
 	}
 	if iteration == 1 {
@@ -320,7 +482,7 @@ func (target reviewTarget) scope(iteration int) string {
 
 func (target reviewTarget) diffRange(iteration int) string {
 	if target.commitSHA == "" {
-		return "`git diff $(git merge-base HEAD main) HEAD`"
+		return fmt.Sprintf("`git diff %s HEAD`", target.baseSHA)
 	}
 	if iteration == 1 {
 		return fmt.Sprintf("`git diff %s~1 %s`", target.commitSHA, target.commitSHA)
@@ -331,11 +493,7 @@ func (target reviewTarget) diffRange(iteration int) string {
 func (target reviewTarget) changedFiles(root string, iteration int) ([]string, error) {
 	var args []string
 	if target.commitSHA == "" {
-		base, err := gitOutput(root, "merge-base", "HEAD", "main")
-		if err != nil {
-			return nil, fmt.Errorf("resolve review diff base: %w", err)
-		}
-		args = []string{"diff", "--name-only", base, "HEAD"}
+		args = []string{"diff", "--name-only", target.baseSHA, "HEAD"}
 	} else if iteration == 1 {
 		args = []string{"diff", "--name-only", target.commitSHA + "~1", target.commitSHA}
 	} else {
@@ -730,6 +888,7 @@ func (cfg config) placeholderValues(overrides map[string]string) map[string]stri
 		"REVIEWER_NAME":        "",
 		"REVIEW_FOCUS":         "",
 		"REVIEW_SCOPE":         "",
+		"REVIEW_RANGE":         "",
 		"RAW_REVIEWS":          "",
 		"REVIEWS":              "",
 	}

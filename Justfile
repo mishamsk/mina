@@ -324,13 +324,18 @@ r-cur:
 
 # Run the automated review loop.
 [group('agents')]
-review-loop goal branch_or_commit="":
+review-loop goal branch_or_commit="" base_ref="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     branch_or_commit={{ quote(branch_or_commit) }}
-    if [ -n "$branch_or_commit" ]; then
+    base_ref={{ quote(base_ref) }}
+    if [ -n "$branch_or_commit" ] && [ -n "$base_ref" ]; then
+        go run ./internal/tools/reviewloop --base "$base_ref" {{ quote(goal) }} "$branch_or_commit"
+    elif [ -n "$branch_or_commit" ]; then
         go run ./internal/tools/reviewloop {{ quote(goal) }} "$branch_or_commit"
+    elif [ -n "$base_ref" ]; then
+        go run ./internal/tools/reviewloop --base "$base_ref" {{ quote(goal) }}
     else
         go run ./internal/tools/reviewloop {{ quote(goal) }}
     fi
