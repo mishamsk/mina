@@ -6,7 +6,7 @@
 - Implemented API capability groups:
   - Health checks and stable JSON error envelopes.
   - App administration for seeding demo data.
-  - Account, category, tag, and household member CRUD/list flows.
+  - Account, category, tag, and household member CRUD/list flows, including account featured metadata.
   - Account type and category economic-intent metadata for accounting semantics.
   - Exchange-rate and account credit-limit-history flows.
   - Transaction creation, read, paginated list, full replacement, and tombstone deletion with nested journal records.

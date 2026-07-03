@@ -36,6 +36,7 @@ type Account struct {
 	FQN            string
 	AccountType    AccountType
 	IsHidden       bool
+	IsFeatured     bool
 	Currency       *string
 	ExternalID     *string
 	ExternalSystem *string
@@ -52,16 +53,24 @@ type CreateInput struct {
 	FQN            string
 	AccountType    AccountType
 	IsHidden       bool
+	IsFeatured     bool
 	Currency       *string
 	ExternalID     *string
 	ExternalSystem *string
 }
 
+// OptionalStringUpdate carries a nullable string field for partial updates.
+type OptionalStringUpdate struct {
+	Specified bool
+	Value     *string
+}
+
 // UpdateInput contains mutable account fields.
 type UpdateInput struct {
 	IsHidden       *bool
-	ExternalID     *string
-	ExternalSystem *string
+	IsFeatured     *bool
+	ExternalID     OptionalStringUpdate
+	ExternalSystem OptionalStringUpdate
 }
 
 // ListOptions controls account list visibility.
@@ -69,6 +78,7 @@ type ListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
 	AccountType       *AccountType
+	IsFeatured        *bool
 	List              services.ListOptions
 }
 
@@ -234,16 +244,36 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 	if id <= 0 {
 		return Account{}, services.InvalidRequest("account_id must be positive")
 	}
-	if input.IsHidden == nil {
-		return Account{}, services.InvalidRequest("is_hidden is required")
+	if !input.hasChanges() {
+		return Account{}, services.InvalidRequest("at least one account field is required")
 	}
-	if err := validateExternalIdentifiers(input.ExternalID, input.ExternalSystem); err != nil {
-		return Account{}, err
+	if input.ExternalID.Specified || input.ExternalSystem.Specified {
+		current, err := s.repo.Get(ctx, id, false)
+		if errors.Is(err, services.ErrNotFound) {
+			return Account{}, services.NotFound("account not found")
+		}
+		if err != nil {
+			return Account{}, err
+		}
+		externalID := current.ExternalID
+		if input.ExternalID.Specified {
+			externalID = input.ExternalID.Value
+		}
+		externalSystem := current.ExternalSystem
+		if input.ExternalSystem.Specified {
+			externalSystem = input.ExternalSystem.Value
+		}
+		if err := validateExternalIdentifiers(externalID, externalSystem); err != nil {
+			return Account{}, err
+		}
 	}
 
 	account, err := s.repo.UpdateMutable(ctx, id, input)
 	if errors.Is(err, services.ErrNotFound) {
 		return Account{}, services.NotFound("account not found")
+	}
+	if errors.Is(err, services.ErrConflict) {
+		return Account{}, services.Conflict("account external identifiers changed; retry with both external_id and external_system")
 	}
 	if err != nil {
 		return Account{}, err
@@ -252,6 +282,13 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 	s.cacheActiveReference(account)
 
 	return account, nil
+}
+
+func (input UpdateInput) hasChanges() bool {
+	return input.IsHidden != nil ||
+		input.IsFeatured != nil ||
+		input.ExternalID.Specified ||
+		input.ExternalSystem.Specified
 }
 
 // ActiveUsage reports active resources that reference an account.

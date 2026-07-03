@@ -77,6 +77,7 @@ A unified chart of accounts for all financial entities:
 - **Currency**: Accounts may specify a single currency or support multiple currencies (common for counterparties like merchants)
 - **External identifiers**: Links to external systems (Plaid, IBAN, etc.)
 - **Hidden state**: Hidden accounts are excluded from input dropdowns and default queries, but remain selectable when explicitly searching
+- **Featured state**: Featured accounts can be promoted in UI/account-picker workflows without changing accounting semantics
 
 ### Credit Limits
 

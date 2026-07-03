@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -648,6 +649,7 @@ type Account struct {
 	ExternalId     *string     `json:"external_id,omitempty"`
 	ExternalSystem *string     `json:"external_system,omitempty"`
 	Fqn            string      `json:"fqn"`
+	IsFeatured     bool        `json:"is_featured"`
 	IsHidden       bool        `json:"is_hidden"`
 	Level          int         `json:"level"`
 	Name           string      `json:"name"`
@@ -739,6 +741,7 @@ type CreateAccountRequest struct {
 	ExternalId     *string     `json:"external_id,omitempty"`
 	ExternalSystem *string     `json:"external_system,omitempty"`
 	Fqn            string      `json:"fqn"`
+	IsFeatured     *bool       `json:"is_featured,omitempty"`
 	IsHidden       *bool       `json:"is_hidden,omitempty"`
 }
 
@@ -1200,9 +1203,10 @@ type TransactionTemplateWriteRequest struct {
 
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
-	ExternalId     *string `json:"external_id,omitempty"`
-	ExternalSystem *string `json:"external_system,omitempty"`
-	IsHidden       bool    `json:"is_hidden"`
+	ExternalId     nullable.Nullable[string] `json:"external_id,omitempty"`
+	ExternalSystem nullable.Nullable[string] `json:"external_system,omitempty"`
+	IsFeatured     *bool                     `json:"is_featured,omitempty"`
+	IsHidden       *bool                     `json:"is_hidden,omitempty"`
 }
 
 // UpdateCategoryRequest defines model for UpdateCategoryRequest.
@@ -1252,6 +1256,7 @@ type ListAccountsParams struct {
 	IncludeHidden     *bool                      `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 	IncludeTombstoned *bool                      `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 	AccountType       *AccountType               `form:"account_type,omitempty" json:"account_type,omitempty"`
+	IsFeatured        *bool                      `form:"is_featured,omitempty" json:"is_featured,omitempty"`
 	Sort              *ListAccountsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListAccountsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
 	Limit             *int                       `form:"limit,omitempty" json:"limit,omitempty"`
@@ -2845,6 +2850,18 @@ func NewListAccountsRequest(server string, params *ListAccountsParams) (*http.Re
 		if params.AccountType != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "account_type", *params.AccountType, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IsFeatured != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "is_featured", *params.IsFeatured, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

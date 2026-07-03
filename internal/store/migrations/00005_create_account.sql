@@ -7,6 +7,8 @@ CREATE TABLE account (
 	account_type account_type NOT NULL,
 	-- Excludes active rows from default lists while keeping them selectable by explicit query.
 	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+	-- Marks active rows for prominent UI/account-picker placement without changing accounting semantics.
+	is_featured BOOLEAN NOT NULL DEFAULT FALSE,
 	-- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
 	currency TEXT,
 	-- Identifier assigned by an external system when this account is linked outside Mina.
@@ -30,6 +32,7 @@ CREATE TABLE account (
 COMMENT ON COLUMN account.fqn IS 'Colon-separated hierarchical account path, e.g. checking:Chase:Primary.';
 COMMENT ON COLUMN account.account_type IS 'Explicit semantic account type used for balances and transaction classification.';
 COMMENT ON COLUMN account.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
+COMMENT ON COLUMN account.is_featured IS 'Marks active rows for prominent UI/account-picker placement without changing accounting semantics.';
 COMMENT ON COLUMN account.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
 COMMENT ON COLUMN account.external_id IS 'Identifier assigned by an external system when this account is linked outside Mina.';
 COMMENT ON COLUMN account.external_system IS 'External system namespace for external_id, e.g. plaid.';

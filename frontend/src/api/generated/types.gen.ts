@@ -19,6 +19,7 @@ export type Account = {
     fqn: string;
     account_type: AccountType;
     is_hidden: boolean;
+    is_featured: boolean;
     currency?: string | null;
     external_id?: string | null;
     external_system?: string | null;
@@ -103,6 +104,7 @@ export type CreateAccountRequest = {
     fqn: string;
     account_type: AccountType;
     is_hidden?: boolean;
+    is_featured?: boolean;
     currency?: string | null;
     external_id?: string | null;
     external_system?: string | null;
@@ -537,7 +539,8 @@ export type UpdateCategoryRequest = {
 };
 
 export type UpdateAccountRequest = {
-    is_hidden: boolean;
+    is_hidden?: boolean;
+    is_featured?: boolean;
     external_id?: string | null;
     external_system?: string | null;
 };
@@ -1308,6 +1311,7 @@ export type ListAccountsData = {
         include_hidden?: boolean;
         include_tombstoned?: boolean;
         account_type?: AccountType;
+        is_featured?: boolean;
         sort?: 'fqn' | 'created_at' | 'updated_at';
         sort_dir?: 'asc' | 'desc';
         limit?: number;

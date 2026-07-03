@@ -10,6 +10,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/tags"
+	"github.com/oapi-codegen/nullable"
 )
 
 func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAccountsRequestObject) (openapi.ListAccountsResponseObject, error) {
@@ -18,6 +19,7 @@ func (s *strictServer) ListAccounts(ctx context.Context, request openapi.ListAcc
 		IncludeHidden:     boolParam(params.IncludeHidden),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
 		AccountType:       accountTypeParam(params.AccountType),
+		IsFeatured:        params.IsFeatured,
 		List: listOptionsFromParams(
 			params.Sort,
 			params.SortDir,
@@ -46,6 +48,7 @@ func (s *strictServer) CreateAccount(ctx context.Context, request openapi.Create
 		FQN:            request.Body.Fqn,
 		AccountType:    accounts.AccountType(request.Body.AccountType),
 		IsHidden:       request.Body.IsHidden != nil && *request.Body.IsHidden,
+		IsFeatured:     request.Body.IsFeatured != nil && *request.Body.IsFeatured,
 		Currency:       request.Body.Currency,
 		ExternalID:     request.Body.ExternalId,
 		ExternalSystem: request.Body.ExternalSystem,
@@ -75,11 +78,11 @@ func (s *strictServer) GetAccount(ctx context.Context, request openapi.GetAccoun
 }
 
 func (s *strictServer) UpdateAccount(ctx context.Context, request openapi.UpdateAccountRequestObject) (openapi.UpdateAccountResponseObject, error) {
-	isHidden := request.Body.IsHidden
 	account, err := s.deps.Accounts.UpdateMutable(ctx, request.AccountId, accounts.UpdateInput{
-		IsHidden:       &isHidden,
-		ExternalID:     request.Body.ExternalId,
-		ExternalSystem: request.Body.ExternalSystem,
+		IsHidden:       request.Body.IsHidden,
+		IsFeatured:     request.Body.IsFeatured,
+		ExternalID:     optionalNullableString(request.Body.ExternalId),
+		ExternalSystem: optionalNullableString(request.Body.ExternalSystem),
 	})
 	if err != nil {
 		return nil, err
@@ -271,6 +274,7 @@ func accountAPIResponse(account accounts.Account) openapi.Account {
 		Fqn:            account.FQN,
 		AccountType:    openapi.AccountType(account.AccountType),
 		IsHidden:       account.IsHidden,
+		IsFeatured:     account.IsFeatured,
 		Currency:       account.Currency,
 		ExternalId:     account.ExternalID,
 		ExternalSystem: account.ExternalSystem,
@@ -281,6 +285,17 @@ func accountAPIResponse(account accounts.Account) openapi.Account {
 		UpdatedAt:      account.UpdatedAt.UTC(),
 		TombstonedAt:   nullableTimestampTime(account.TombstonedAt),
 	}
+}
+
+func optionalNullableString(value nullable.Nullable[string]) accounts.OptionalStringUpdate {
+	if !value.IsSpecified() {
+		return accounts.OptionalStringUpdate{}
+	}
+	if value.IsNull() {
+		return accounts.OptionalStringUpdate{Specified: true}
+	}
+	stringValue := value.MustGet()
+	return accounts.OptionalStringUpdate{Specified: true, Value: &stringValue}
 }
 
 func accountAPIResponses(accounts []accounts.Account) []openapi.Account {

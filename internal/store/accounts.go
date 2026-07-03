@@ -38,12 +38,13 @@ func (s *AccountStore) Create(ctx context.Context, input accounts.CreateInput) (
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("account")+` (fqn, account_type, is_hidden, currency, external_id, external_system)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING account_id, fqn, account_type, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("account")+` (fqn, account_type, is_hidden, is_featured, currency, external_id, external_system)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 			enumValue(input.AccountType),
 			input.IsHidden,
+			input.IsFeatured,
 			input.Currency,
 			input.ExternalID,
 			input.ExternalSystem,
@@ -67,7 +68,7 @@ RETURNING account_id, fqn, account_type, is_hidden, currency, external_id, exter
 
 // Get returns an account by ID.
 func (s *AccountStore) Get(ctx context.Context, id int64, includeTombstoned bool) (accounts.Account, error) {
-	query := `SELECT account_id, fqn, account_type, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("account") + `
 WHERE account_id = ?`
 	args := []any{id}
@@ -88,7 +89,7 @@ WHERE account_id = ?`
 
 // List returns accounts in deterministic hierarchy order.
 func (s *AccountStore) List(ctx context.Context, opts accounts.ListOptions) ([]accounts.Account, error) {
-	query := `SELECT account_id, fqn, account_type, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("account") + `
 WHERE 1 = 1`
 	args := []any{}
@@ -101,6 +102,10 @@ WHERE 1 = 1`
 	if opts.AccountType != nil {
 		query += " AND account_type = CAST(? AS " + s.db.accountingName("account_type") + ")"
 		args = append(args, enumValue(*opts.AccountType))
+	}
+	if opts.IsFeatured != nil {
+		query += " AND is_featured = ?"
+		args = append(args, *opts.IsFeatured)
 	}
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, accountSortColumns, services.SortKeyFQN, "account_id")
 
@@ -130,24 +135,54 @@ WHERE 1 = 1`
 	return accounts, nil
 }
 
-// UpdateMutable updates account hidden state and external identifiers.
+// UpdateMutable updates account mutable metadata and external identifiers.
 func (s *AccountStore) UpdateMutable(ctx context.Context, id int64, input accounts.UpdateInput) (accounts.Account, error) {
-	row := s.db.query().QueryRowContext(
-		ctx,
-		`UPDATE `+s.db.accountingName("account")+`
-SET is_hidden = ?,
-    external_id = ?,
-    external_system = ?,
-    updated_at = CURRENT_TIMESTAMP
-WHERE account_id = ? AND tombstoned_at IS NULL
-RETURNING account_id, fqn, account_type, is_hidden, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
-		*input.IsHidden,
-		input.ExternalID,
-		input.ExternalSystem,
-		id,
-	)
+	setClauses := []string{}
+	args := []any{}
+	partialExternalIdentifierUpdate := input.ExternalID.Specified != input.ExternalSystem.Specified
+	if input.IsHidden != nil {
+		setClauses = append(setClauses, "is_hidden = ?")
+		args = append(args, *input.IsHidden)
+	}
+	if input.IsFeatured != nil {
+		setClauses = append(setClauses, "is_featured = ?")
+		args = append(args, *input.IsFeatured)
+	}
+	if input.ExternalID.Specified {
+		setClauses = append(setClauses, "external_id = ?")
+		args = append(args, input.ExternalID.Value)
+	}
+	if input.ExternalSystem.Specified {
+		setClauses = append(setClauses, "external_system = ?")
+		args = append(args, input.ExternalSystem.Value)
+	}
+	setClauses = append(setClauses, "updated_at = CURRENT_TIMESTAMP")
+	args = append(args, id)
+
+	query := `UPDATE ` + s.db.accountingName("account") + `
+SET ` + strings.Join(setClauses, ",\n    ") + `
+WHERE account_id = ? AND tombstoned_at IS NULL`
+	if input.ExternalID.Specified && !input.ExternalSystem.Specified {
+		query += " AND external_system IS NOT NULL"
+	}
+	if input.ExternalSystem.Specified && !input.ExternalID.Specified {
+		query += " AND external_id IS NOT NULL"
+	}
+	query += `
+RETURNING account_id, fqn, account_type, is_hidden, is_featured, currency, external_id, external_system, parent_fqn, name, level, created_at, updated_at, tombstoned_at`
+
+	row := s.db.query().QueryRowContext(ctx, query, args...)
 	account, err := scanAccount(row)
 	if errors.Is(err, sql.ErrNoRows) {
+		if partialExternalIdentifierUpdate {
+			exists, existsErr := activeAccountIDExists(ctx, s.db.query(), s.db, id)
+			if existsErr != nil {
+				return accounts.Account{}, existsErr
+			}
+			if exists {
+				return accounts.Account{}, services.ErrConflict
+			}
+		}
 		return accounts.Account{}, services.ErrNotFound
 	}
 	if err != nil {
@@ -201,6 +236,7 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 		&account.FQN,
 		&accountType,
 		&account.IsHidden,
+		&account.IsFeatured,
 		&currency,
 		&externalID,
 		&externalSystem,
@@ -245,6 +281,23 @@ func accountFQNExists(ctx context.Context, tx *sql.Tx, db *AppDB, fqn string) (b
 	}
 	if err != nil {
 		return false, fmt.Errorf("check account fqn: %w", err)
+	}
+
+	return true, nil
+}
+
+func activeAccountIDExists(ctx context.Context, queryer sqlQueryer, db *AppDB, id int64) (bool, error) {
+	var foundID int64
+	err := queryer.QueryRowContext(
+		ctx,
+		"SELECT account_id FROM "+db.accountingName("account")+" WHERE account_id = ? AND tombstoned_at IS NULL LIMIT 1",
+		id,
+	).Scan(&foundID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check account id: %w", err)
 	}
 
 	return true, nil

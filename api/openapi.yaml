@@ -590,6 +590,11 @@ paths:
           required: false
           schema:
             $ref: "#/components/schemas/AccountType"
+        - name: is_featured
+          in: query
+          required: false
+          schema:
+            type: boolean
         - name: sort
           in: query
           required: false
@@ -1716,6 +1721,7 @@ components:
         - fqn
         - account_type
         - is_hidden
+        - is_featured
         - parent_fqn
         - name
         - level
@@ -1730,6 +1736,8 @@ components:
         account_type:
           $ref: "#/components/schemas/AccountType"
         is_hidden:
+          type: boolean
+        is_featured:
           type: boolean
         currency:
           type: string
@@ -1967,6 +1975,9 @@ components:
         account_type:
           $ref: "#/components/schemas/AccountType"
         is_hidden:
+          type: boolean
+          default: false
+        is_featured:
           type: boolean
           default: false
         currency:
@@ -3190,17 +3201,25 @@ components:
     UpdateAccountRequest:
       type: object
       additionalProperties: false
-      required:
-        - is_hidden
       properties:
         is_hidden:
+          type: boolean
+        is_featured:
           type: boolean
         external_id:
           type: string
           nullable: true
+          x-go-type: nullable.Nullable[string]
+          x-go-type-skip-optional-pointer: true
+          x-go-type-import:
+            path: github.com/oapi-codegen/nullable
         external_system:
           type: string
           nullable: true
+          x-go-type: nullable.Nullable[string]
+          x-go-type-skip-optional-pointer: true
+          x-go-type-import:
+            path: github.com/oapi-codegen/nullable
     UpdateExchangeRateRequest:
       type: object
       additionalProperties: false

@@ -14,6 +14,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/govalues/decimal v0.1.36
 	github.com/oapi-codegen/nethttp-middleware v1.1.2
+	github.com/oapi-codegen/nullable v1.1.0
 	github.com/oapi-codegen/runtime v1.4.1
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/robfig/cron/v3 v3.0.1
