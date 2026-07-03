@@ -5,10 +5,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/mishamsk/mina/internal/services/exchangerates"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
 const usdCurrency = "USD"
+const priorInterpolationBracketLookback = 7 * 24 * time.Hour
 
 var errProviderRequired = errors.New("exchange-rate loading provider is not configured")
 
@@ -31,15 +33,7 @@ var (
 
 // NeededCurrency is one non-USD currency requiring rates.
 type NeededCurrency struct {
-	Currency     string
-	EarliestDate values.CivilDate
-}
-
-// UpsertRate is one active USD rate to create or update.
-type UpsertRate struct {
-	ToCurrency    string
-	EffectiveDate values.CivilDate
-	Rate          values.Decimal
+	Currency string
 }
 
 // ProviderRate is one provider-returned daily USD conversion rate.
@@ -60,7 +54,11 @@ type Repository interface {
 	NeededCurrencies(context.Context) ([]NeededCurrency, error)
 	LatestActiveUSDRateDates(context.Context, []string) (map[string]values.CivilDate, error)
 	EarliestMissingActiveUSDRateDates(context.Context, []string) (map[string]values.CivilDate, error)
-	UpsertActiveUSDRates(context.Context, []UpsertRate) error
+}
+
+// RateWriter persists loaded active USD rates.
+type RateWriter interface {
+	UpsertActiveUSDRates(context.Context, []exchangerates.UpsertRate) error
 }
 
 // Clock returns the current process time.
@@ -70,14 +68,15 @@ type Clock interface {
 
 // Service owns exchange-rate loading planning and execution.
 type Service struct {
-	repo     Repository
-	provider RateProvider
-	clock    Clock
+	repo       Repository
+	rateWriter RateWriter
+	provider   RateProvider
+	clock      Clock
 }
 
 // NewService creates an exchange-rate loading service.
-func NewService(repo Repository, provider RateProvider, clock Clock) *Service {
-	return &Service{repo: repo, provider: provider, clock: clock}
+func NewService(repo Repository, rateWriter RateWriter, provider RateProvider, clock Clock) *Service {
+	return &Service{repo: repo, rateWriter: rateWriter, provider: provider, clock: clock}
 }
 
 // Load plans and loads needed exchange rates.
@@ -100,7 +99,7 @@ func (s *Service) Load(ctx context.Context) error {
 		return err
 	}
 
-	upserts := []UpsertRate{}
+	upserts := []exchangerates.UpsertRate{}
 	var firstErr error
 	for _, need := range needed {
 		window, ok, err := s.window(ctx, need, latest[need.Currency], missing[need.Currency])
@@ -127,7 +126,7 @@ func (s *Service) Load(ctx context.Context) error {
 			continue
 		}
 		for _, rate := range rates {
-			upserts = append(upserts, UpsertRate{
+			upserts = append(upserts, exchangerates.UpsertRate{
 				ToCurrency:    rate.Currency,
 				EffectiveDate: rate.EffectiveDate,
 				Rate:          rate.Rate,
@@ -138,7 +137,7 @@ func (s *Service) Load(ctx context.Context) error {
 		return firstErr
 	}
 
-	if err := s.repo.UpsertActiveUSDRates(ctx, upserts); err != nil {
+	if err := s.rateWriter.UpsertActiveUSDRates(ctx, upserts); err != nil {
 		return err
 	}
 
@@ -161,14 +160,6 @@ func (s *Service) window(
 	latest values.CivilDate,
 	missing values.CivilDate,
 ) (loadWindow, bool, error) {
-	start := need.EarliestDate
-	if !latest.Time().IsZero() {
-		start = latest
-	}
-	if !missing.Time().IsZero() && missing.Time().Before(start.Time()) {
-		start = missing
-	}
-
 	settledThrough, ok, err := s.provider.SettledThroughDate(ctx, need.Currency)
 	if err != nil {
 		return loadWindow{}, false, err
@@ -176,6 +167,15 @@ func (s *Service) window(
 	if !ok {
 		settledThrough = values.CivilDateFromTime(s.clock.Now())
 	}
+
+	start := settledThrough
+	if !latest.Time().IsZero() {
+		start = latest
+	}
+	if !missing.Time().IsZero() && (latest.Time().IsZero() || missing.Time().Before(latest.Time())) {
+		start = values.CivilDateFromTime(missing.Time().Add(-priorInterpolationBracketLookback))
+	}
+
 	end := settledThrough
 	if start.Time().After(end.Time()) {
 		return loadWindow{}, false, nil

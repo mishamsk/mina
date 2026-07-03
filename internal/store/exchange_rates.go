@@ -28,18 +28,17 @@ func NewExchangeRateStore(db *AppDB) *ExchangeRateStore {
 	return &ExchangeRateStore{db: db}
 }
 
-// NeededCurrencies returns active non-USD journal-record currencies and their earliest needed dates.
+// NeededCurrencies returns tracked currencies: all non-USD currencies seen in active journal records.
 func (s *ExchangeRateStore) NeededCurrencies(ctx context.Context) ([]exchangerateloading.NeededCurrency, error) {
 	rows, err := s.db.query().QueryContext(
 		ctx,
-		`SELECT jr.currency, MIN(COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date)) AS earliest_date
+		`SELECT DISTINCT jr.currency
 FROM `+s.db.accountingName("journal_record")+` AS jr
 JOIN `+s.db.accountingName("transaction")+` AS t
   ON t.transaction_id = jr.transaction_id
 WHERE jr.tombstoned_at IS NULL
   AND t.tombstoned_at IS NULL
   AND jr.currency <> 'USD'
-GROUP BY jr.currency
 ORDER BY jr.currency`,
 	)
 	if err != nil {
@@ -49,13 +48,11 @@ ORDER BY jr.currency`,
 	needed := []exchangerateloading.NeededCurrency{}
 	for rows.Next() {
 		var currency string
-		var earliest time.Time
-		if err := rows.Scan(&currency, &earliest); err != nil {
+		if err := rows.Scan(&currency); err != nil {
 			return nil, fmt.Errorf("scan needed exchange-rate currency: %w", err)
 		}
 		needed = append(needed, exchangerateloading.NeededCurrency{
-			Currency:     currency,
-			EarliestDate: values.CivilDateFromTime(earliest),
+			Currency: currency,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -114,7 +111,7 @@ GROUP BY to_currency`
 	return result, nil
 }
 
-// EarliestMissingActiveUSDRateDates returns each currency's earliest needed journal-record date without an active USD rate.
+// EarliestMissingActiveUSDRateDates returns demand-driven backfill dates for unresolved journal records without exact active USD rates.
 func (s *ExchangeRateStore) EarliestMissingActiveUSDRateDates(
 	ctx context.Context,
 	currencies []string,
@@ -132,6 +129,7 @@ func (s *ExchangeRateStore) EarliestMissingActiveUSDRateDates(
 	WHERE jr.tombstoned_at IS NULL
 	  AND t.tombstoned_at IS NULL
 	  AND jr.currency <> 'USD'
+	  AND jr.amount_usd IS NULL
 	  AND jr.currency IN (` + placeholders(len(currencies)) + `)
 )
 SELECT needed_record.currency, MIN(needed_record.needed_date)
@@ -174,7 +172,7 @@ GROUP BY needed_record.currency`
 }
 
 // UpsertActiveUSDRates creates or updates active USD exchange rates.
-func (s *ExchangeRateStore) UpsertActiveUSDRates(ctx context.Context, rates []exchangerateloading.UpsertRate) error {
+func (s *ExchangeRateStore) UpsertActiveUSDRates(ctx context.Context, rates []exchangerates.UpsertRate) error {
 	if len(rates) == 0 {
 		return nil
 	}
@@ -204,6 +202,54 @@ VALUES ('USD', source.to_currency, source.rate, source.effective_date)`,
 	}
 
 	return nil
+}
+
+// BracketingActiveUSDRates returns the nearest active USD rates around date.
+func (s *ExchangeRateStore) BracketingActiveUSDRates(
+	ctx context.Context,
+	currency string,
+	date values.CivilDate,
+) (exchangerates.USDRateBracket, error) {
+	before, err := s.bracketingActiveUSDRate(ctx, currency, date, "<=", "DESC")
+	if err != nil {
+		return exchangerates.USDRateBracket{}, err
+	}
+	after, err := s.bracketingActiveUSDRate(ctx, currency, date, ">=", "ASC")
+	if err != nil {
+		return exchangerates.USDRateBracket{}, err
+	}
+
+	return exchangerates.USDRateBracket{AtOrBefore: before, AtOrAfter: after}, nil
+}
+
+func (s *ExchangeRateStore) bracketingActiveUSDRate(
+	ctx context.Context,
+	currency string,
+	date values.CivilDate,
+	operator string,
+	direction string,
+) (*exchangerates.ExchangeRate, error) {
+	rate, err := scanExchangeRate(s.db.query().QueryRowContext(
+		ctx,
+		`SELECT exchange_rate_id, from_currency, to_currency, rate, effective_date, created_at, tombstoned_at
+FROM `+s.db.accountingName("exchange_rate")+`
+WHERE tombstoned_at IS NULL
+  AND from_currency = 'USD'
+  AND to_currency = ?
+  AND CAST(effective_date AS DATE) `+operator+` ?
+ORDER BY CAST(effective_date AS DATE) `+direction+`, effective_date `+direction+`, exchange_rate_id `+direction+`
+LIMIT 1`,
+		currency,
+		civilDateArg(date),
+	))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query bracketing active USD exchange rate: %w", err)
+	}
+
+	return &rate, nil
 }
 
 // Create persists a new exchange rate.

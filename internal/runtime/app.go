@@ -218,13 +218,16 @@ func newAccountingServices(
 	if err != nil {
 		return appServices{}, err
 	}
+	exchangeRates := exchangerates.NewService(exchangeRateStore)
 	exchangeRateLoading := exchangerateloading.NewService(
 		exchangeRateStore,
+		exchangeRates,
 		exchangeRateProvider(cfg, opts),
 		opts.clock(),
 	)
 	startupExchangeRateLoading := exchangerateloading.NewService(
 		exchangeRateStore,
+		exchangeRates,
 		startupProvider,
 		opts.clock(),
 	)
@@ -255,7 +258,6 @@ func newAccountingServices(
 	categoryStore := store.NewCategoryStore(appDB)
 	tagStore := store.NewTagStore(appDB)
 	memberStore := store.NewMemberStore(appDB)
-	exchangeRates := exchangerates.NewService(exchangeRateStore)
 	accountService := accounts.NewService(accountStore, referenceSerializer)
 	categoryService := categories.NewService(categoryStore, referenceSerializer)
 	tagService := tags.NewService(tagStore, referenceSerializer)
@@ -423,8 +425,8 @@ func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServ
 	op := background.Operation{
 		ID:         operationruns.ExchangeRateLoadingOperationID,
 		Key:        string(operationruns.ExchangeRateLoadingOperationID),
-		Run:        exchangeRateOperationRun(services.ExchangeRateLoading.Load),
-		StartupRun: startupExchangeRateLoad(cfg, opts, services.StartupExchangeRateLoading),
+		Run:        exchangeRateOperationRun(services.ExchangeRateLoading.Load, services.Transactions.BackfillMissingAmountUSD),
+		StartupRun: startupExchangeRateLoad(cfg, opts, services.StartupExchangeRateLoading, services.Transactions.BackfillMissingAmountUSD),
 		Timeout:    2 * time.Minute,
 		MaxRetries: 2,
 	}
@@ -455,7 +457,12 @@ func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServ
 	return runner, nil
 }
 
-func startupExchangeRateLoad(cfg appconfig.Config, opts Options, loader *exchangerateloading.Service) background.OperationFunc {
+func startupExchangeRateLoad(
+	cfg appconfig.Config,
+	opts Options,
+	loader *exchangerateloading.Service,
+	backfill func(context.Context) error,
+) background.OperationFunc {
 	return func(ctx context.Context) error {
 		if opts.Dependencies.StartupExchangeRateProviderFactory == nil &&
 			exchangeRateStartupProvider(cfg) == "frankfurter_file" {
@@ -464,14 +471,28 @@ func startupExchangeRateLoad(cfg appconfig.Config, opts Options, loader *exchang
 			}
 		}
 
-		return classifyExchangeRateOperationError(loader.Load(ctx))
+		return runExchangeRateLoadWithBackfill(ctx, loader.Load, backfill)
 	}
 }
 
-func exchangeRateOperationRun(run background.OperationFunc) background.OperationFunc {
+func exchangeRateOperationRun(run background.OperationFunc, backfill func(context.Context) error) background.OperationFunc {
 	return func(ctx context.Context) error {
-		return classifyExchangeRateOperationError(run(ctx))
+		return runExchangeRateLoadWithBackfill(ctx, run, backfill)
 	}
+}
+
+func runExchangeRateLoadWithBackfill(ctx context.Context, run background.OperationFunc, backfill func(context.Context) error) error {
+	loadErr := run(ctx)
+	if errors.Is(loadErr, context.Canceled) || errors.Is(loadErr, context.DeadlineExceeded) {
+		return classifyExchangeRateOperationError(loadErr)
+	}
+	if backfill != nil {
+		if err := backfill(ctx); err != nil {
+			return classifyExchangeRateOperationError(err)
+		}
+	}
+
+	return classifyExchangeRateOperationError(loadErr)
 }
 
 func classifyExchangeRateOperationError(err error) error {

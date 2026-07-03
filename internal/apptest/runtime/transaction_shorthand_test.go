@@ -154,11 +154,94 @@ func TestShorthandTransactionCreateOptionalFieldsAmountUSDAndReadShapes(t *testi
 		Currency:              "EUR",
 		Amount:                "3.21",
 	})
-	for _, record := range eur.Records {
-		if record.AmountUsd != nil {
-			t.Fatalf("EUR amount_usd = %v, want nil", record.AmountUsd)
-		}
-	}
+	assertRecordAmountUSD(t, eur, refs.euroCashAccountID, "-2.91818182")
+	assertRecordAmountUSD(t, eur, refs.euroMerchantAccountID, "2.91818182")
+}
+
+func TestShorthandTransactionInfersNonUSDAmountUSDFromExchangeRates(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createShorthandRefs(client)
+
+	createExchangeRate(t, client, "USD", "EUR", "1.10000000", "2024-04-01T00:00:00Z")
+	createExchangeRate(t, client, "USD", "EUR", "1.20000000", "2024-04-11T00:00:00Z")
+
+	exact := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-01"),
+		FundingAccountId:      refs.euroCashAccountID,
+		CounterpartyAccountId: refs.euroMerchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "EUR",
+		Amount:                "11.00",
+	})
+	assertRecordAmountUSD(t, exact, refs.euroCashAccountID, "-10.00000000")
+	assertRecordAmountUSD(t, exact, refs.euroMerchantAccountID, "10.00000000")
+
+	interpolated := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-06"),
+		FundingAccountId:      refs.euroCashAccountID,
+		CounterpartyAccountId: refs.euroMerchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "EUR",
+		Amount:                "11.50",
+	})
+	assertRecordAmountUSD(t, interpolated, refs.euroCashAccountID, "-10.00000000")
+	assertRecordAmountUSD(t, interpolated, refs.euroMerchantAccountID, "10.00000000")
+
+	beforeEarliest := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-03-31"),
+		FundingAccountId:      refs.euroCashAccountID,
+		CounterpartyAccountId: refs.euroMerchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "EUR",
+		Amount:                "5.00",
+	})
+	assertRecordAmountUSDNil(t, beforeEarliest, refs.euroCashAccountID)
+	assertRecordAmountUSDNil(t, beforeEarliest, refs.euroMerchantAccountID)
+
+	afterLatest := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-12"),
+		FundingAccountId:      refs.euroCashAccountID,
+		CounterpartyAccountId: refs.euroMerchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "EUR",
+		Amount:                "5.00",
+	})
+	assertRecordAmountUSDNil(t, afterLatest, refs.euroCashAccountID)
+	assertRecordAmountUSDNil(t, afterLatest, refs.euroMerchantAccountID)
+
+	cryptoCash := client.Scenario().AccountWithCurrency("crypto:Shorthand:BTC", "C::BTC")
+	cryptoMerchant := client.Scenario().Account("merchant:Shorthand:Crypto")
+	crypto := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-06"),
+		FundingAccountId:      cryptoCash.AccountId,
+		CounterpartyAccountId: cryptoMerchant.AccountId,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "C::BTC",
+		Amount:                "1.00",
+	})
+	assertRecordAmountUSDNil(t, crypto, cryptoCash.AccountId)
+	assertRecordAmountUSDNil(t, crypto, cryptoMerchant.AccountId)
+}
+
+func TestShorthandTransactionUsesPostedDateForAmountUSDInference(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createShorthandRefs(client)
+	postedDate := apptest.Timestamp("2024-04-02T15:00:00Z")
+
+	createExchangeRate(t, client, "USD", "EUR", "1.00000000", "2024-04-01T00:00:00Z")
+	createExchangeRate(t, client, "USD", "EUR", "2.00000000", "2024-04-02T00:00:00Z")
+
+	created := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-01"),
+		FundingAccountId:      refs.euroCashAccountID,
+		CounterpartyAccountId: refs.euroMerchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "EUR",
+		Amount:                "10.00",
+		PostedDate:            &postedDate,
+	})
+	assertRecordAmountUSD(t, created, refs.euroCashAccountID, "-5.00000000")
+	assertRecordAmountUSD(t, created, refs.euroMerchantAccountID, "5.00000000")
 }
 
 func TestShorthandTransactionValidationErrors(t *testing.T) {
@@ -409,6 +492,32 @@ func createTransferTransaction(t *testing.T, client *apptest.Client, request htt
 	return *response.JSON201
 }
 
+func createExchangeRate(
+	t *testing.T,
+	client *apptest.Client,
+	fromCurrency string,
+	toCurrency string,
+	rate string,
+	effectiveDate string,
+) httpclient.ExchangeRate {
+	t.Helper()
+
+	response, err := client.REST().CreateExchangeRateWithResponse(context.Background(), httpclient.CreateExchangeRateRequest{
+		FromCurrency:  fromCurrency,
+		ToCurrency:    toCurrency,
+		Rate:          rate,
+		EffectiveDate: apptest.Timestamp(effectiveDate),
+	})
+	if err != nil {
+		t.Fatalf("create exchange rate request: %v", err)
+	}
+	if response.StatusCode() != http.StatusCreated {
+		t.Fatalf("create exchange rate status = %d, want %d; body %s", response.StatusCode(), http.StatusCreated, response.Body)
+	}
+
+	return *response.JSON201
+}
+
 func assertRecordAmount(t *testing.T, transaction httpclient.Transaction, accountID int64, want string) {
 	t.Helper()
 
@@ -424,6 +533,15 @@ func assertRecordAmountUSD(t *testing.T, transaction httpclient.Transaction, acc
 	record := transactionRecordByAccount(t, transaction, accountID)
 	if record.AmountUsd == nil || *record.AmountUsd != want {
 		t.Fatalf("record amount_usd for account %d = %v, want %q; records %+v", accountID, record.AmountUsd, want, transaction.Records)
+	}
+}
+
+func assertRecordAmountUSDNil(t *testing.T, transaction httpclient.Transaction, accountID int64) {
+	t.Helper()
+
+	record := transactionRecordByAccount(t, transaction, accountID)
+	if record.AmountUsd != nil {
+		t.Fatalf("record amount_usd for account %d = %v, want nil; records %+v", accountID, record.AmountUsd, transaction.Records)
 	}
 }
 

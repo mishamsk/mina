@@ -143,9 +143,6 @@ func (s *Service) shorthandCreateInput(
 	expectedIntent categories.CategoryEconomicIntent,
 	specs []shorthandRecordSpec,
 ) (CreateInput, error) {
-	if s.amountUSDDeriver == nil {
-		return CreateInput{}, errors.New("transactions: amount USD deriver is not configured")
-	}
 	if err := s.requireShorthandCategoryIntent(ctx, categoryID, expectedIntent); err != nil {
 		return CreateInput{}, err
 	}
@@ -161,16 +158,11 @@ func (s *Service) shorthandCreateInput(
 
 	records := make([]JournalRecordInput, 0, len(specs))
 	for _, spec := range specs {
-		amountUSD, err := s.amountUSDDeriver.SignedAmountUSD(ctx, fields.Currency, spec.amount, fields.InitiatedDate)
-		if err != nil {
-			return CreateInput{}, err
-		}
 		records = append(records, JournalRecordInput{
 			AccountID:            spec.accountID,
 			MemberID:             fields.MemberID,
 			Currency:             fields.Currency,
 			Amount:               spec.amount,
-			AmountUSD:            amountUSD,
 			CategoryID:           categoryID,
 			TagIDs:               append([]int64{}, fields.TagIDs...),
 			Memo:                 fields.Memo,

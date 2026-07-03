@@ -327,6 +327,115 @@ func TestTransactionAllowsNullAndUnbalancedAmountUSD(t *testing.T) {
 	}
 }
 
+func TestTransactionCreateInfersMissingAmountUSD(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+
+	usdRequest := balancedTransactionRequest(refs)
+	usdRequest.Records[0].AmountUsd = nil
+	usdRequest.Records[1].AmountUsd = nil
+	usd, err := client.REST().CreateTransactionWithResponse(context.Background(), usdRequest)
+	if err != nil {
+		t.Fatalf("USD create request: %v", err)
+	}
+	if usd.StatusCode() != http.StatusCreated {
+		t.Fatalf("USD create status = %d, want %d; body %s", usd.StatusCode(), http.StatusCreated, usd.Body)
+	}
+	assertRecordAmountUSD(t, *usd.JSON201, refs.CheckingAccountId, "-12.34000000")
+	assertRecordAmountUSD(t, *usd.JSON201, refs.MerchantAccountId, "12.34000000")
+
+	createExchangeRate(t, client, "USD", "EUR", "1.10000000", "2024-03-10T00:00:00Z")
+	eurCash := client.Scenario().AccountWithCurrency("cash:Transaction:EUR", "EUR")
+	eurMerchant := client.Scenario().Account("merchant:Transaction:EuroCoffee")
+	eurRequest := httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-03-10"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            eurCash.AccountId,
+				Currency:             "EUR",
+				Amount:               "-11.00",
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+			{
+				AccountId:            eurMerchant.AccountId,
+				Currency:             "EUR",
+				Amount:               "11.00",
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+		},
+	}
+	eur, err := client.REST().CreateTransactionWithResponse(context.Background(), eurRequest)
+	if err != nil {
+		t.Fatalf("EUR create request: %v", err)
+	}
+	if eur.StatusCode() != http.StatusCreated {
+		t.Fatalf("EUR create status = %d, want %d; body %s", eur.StatusCode(), http.StatusCreated, eur.Body)
+	}
+	assertRecordAmountUSD(t, *eur.JSON201, eurCash.AccountId, "-10.00000000")
+	assertRecordAmountUSD(t, *eur.JSON201, eurMerchant.AccountId, "10.00000000")
+
+	explicitRequest := eurRequest
+	explicitRequest.Records[0].AmountUsd = apptest.StringPtr("-99.00")
+	explicit, err := client.REST().CreateTransactionWithResponse(context.Background(), explicitRequest)
+	if err != nil {
+		t.Fatalf("explicit amount_usd create request: %v", err)
+	}
+	if explicit.StatusCode() != http.StatusCreated {
+		t.Fatalf("explicit amount_usd create status = %d, want %d; body %s", explicit.StatusCode(), http.StatusCreated, explicit.Body)
+	}
+	assertRecordAmountUSD(t, *explicit.JSON201, eurCash.AccountId, "-99.00000000")
+	assertRecordAmountUSD(t, *explicit.JSON201, eurMerchant.AccountId, "10.00000000")
+}
+
+func TestTransactionLeavesUnrepresentableInferredAmountUSDNull(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	currency := "C::TINY-RATE"
+	createExchangeRate(t, client, "USD", currency, "0.00000001", "2024-03-10T00:00:00Z")
+	cash := client.Scenario().AccountWithCurrency("cash:Transaction:TinyRate", currency)
+	counterparty := client.Scenario().Account("merchant:Transaction:TinyRate")
+
+	request := httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-03-10"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            cash.AccountId,
+				Currency:             currency,
+				Amount:               "-100.00",
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+			{
+				AccountId:            counterparty.AccountId,
+				Currency:             currency,
+				Amount:               "100.00",
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+		},
+	}
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
+	if err != nil {
+		t.Fatalf("create transaction request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertRecordAmountUSDNil(t, *created.JSON201, cash.AccountId)
+	assertRecordAmountUSDNil(t, *created.JSON201, counterparty.AccountId)
+}
+
 func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)

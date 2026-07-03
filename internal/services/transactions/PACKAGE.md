@@ -7,8 +7,11 @@
 ## Implicit Contracts
 
 - Create/replace and bulk category/account/tag use cases validate references through dictionary service APIs before writes.
+- Create/replace infers missing `amount_usd` with posted-date-else-initiated lookup dates and preserves explicit values.
 - Transaction semantic classification uses account/category reference data owned by dictionary service APIs.
 - Shorthand create use cases build ordinary same-currency two-record transactions before delegating to full create validation and persistence.
+- The transactions service owns `amount_usd` backfill for active journal records still storing `NULL`.
+- Runtime may trigger backfill after non-canceled exchange-rate load attempts; backfill never overwrites non-`NULL` values.
 
 ## Boundaries
 

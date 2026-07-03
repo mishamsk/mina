@@ -119,6 +119,79 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 	return transaction, nil
 }
 
+// ListMissingAmountUSDRecords returns active records with unresolved amount_usd.
+func (s *TransactionStore) ListMissingAmountUSDRecords(ctx context.Context) ([]transactions.AmountUSDBackfillRecord, error) {
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`SELECT jr.record_id, jr.currency, jr.amount, COALESCE(CAST(jr.posted_date AS DATE), t.initiated_date) AS lookup_date
+FROM `+s.db.accountingName("journal_record")+` AS jr
+JOIN `+s.db.accountingName("transaction")+` AS t
+  ON t.transaction_id = jr.transaction_id
+WHERE jr.tombstoned_at IS NULL
+  AND t.tombstoned_at IS NULL
+  AND jr.amount_usd IS NULL
+ORDER BY jr.currency, lookup_date, jr.record_id`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query missing amount_usd records: %w", err)
+	}
+
+	records := []transactions.AmountUSDBackfillRecord{}
+	for rows.Next() {
+		var record transactions.AmountUSDBackfillRecord
+		var amount duckdb.Decimal
+		var lookupDate time.Time
+		if err := rows.Scan(&record.RecordID, &record.Currency, &amount, &lookupDate); err != nil {
+			return nil, fmt.Errorf("scan missing amount_usd record: %w", err)
+		}
+		parsedAmount, err := decimalFromDuckDB(amount)
+		if err != nil {
+			return nil, fmt.Errorf("scan missing amount_usd amount: %w", err)
+		}
+		record.Amount = parsedAmount
+		record.LookupDate = values.CivilDateFromTime(lookupDate)
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate missing amount_usd records: %w; close rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate missing amount_usd records: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close missing amount_usd rows: %w", err)
+	}
+
+	return records, nil
+}
+
+// BatchSetAmountUSD sets resolved amount_usd values on active unresolved records.
+func (s *TransactionStore) BatchSetAmountUSD(ctx context.Context, updates []transactions.AmountUSDBackfillUpdate) error {
+	if len(updates) == 0 {
+		return nil
+	}
+
+	return s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		for _, update := range updates {
+			if _, err := tx.ExecContext(
+				ctx,
+				`UPDATE `+s.db.accountingName("journal_record")+`
+SET amount_usd = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE record_id = ?
+  AND tombstoned_at IS NULL
+  AND amount_usd IS NULL`,
+				update.AmountUSD.LibraryDecimal(),
+				update.RecordID,
+			); err != nil {
+				return fmt.Errorf("backfill amount_usd record %d: %w", update.RecordID, err)
+			}
+		}
+
+		return nil
+	})
+}
+
 // Get returns a transaction with nested journal records.
 func (s *TransactionStore) Get(ctx context.Context, id int64) (transactions.Transaction, error) {
 	transaction, err := scanTransaction(s.db.query().QueryRowContext(

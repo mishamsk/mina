@@ -73,12 +73,57 @@ func TestTransactionReplaceBoundary(t *testing.T) {
 	if read.StatusCode() != http.StatusOK {
 		t.Fatalf("read after usd-unbalanced replace status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
 	}
-	if read.JSON200.Records[0].AmountUsd != nil {
-		t.Fatalf("first amount_usd after replace = %v, want nil", read.JSON200.Records[0].AmountUsd)
+	if read.JSON200.Records[0].AmountUsd == nil || *read.JSON200.Records[0].AmountUsd != "-20.00000000" {
+		t.Fatalf("first amount_usd after replace = %v, want -20.00000000", read.JSON200.Records[0].AmountUsd)
 	}
 	if read.JSON200.Records[1].AmountUsd == nil || *read.JSON200.Records[1].AmountUsd != "19.00000000" {
 		t.Fatalf("second amount_usd after replace = %v, want 19.00000000", read.JSON200.Records[1].AmountUsd)
 	}
+}
+
+func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), balancedTransactionRequest(refs))
+	requireNoTransportError(t, "create transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+
+	createExchangeRate(t, client, "USD", "EUR", "1.10000000", "2024-03-12T00:00:00Z")
+	eurCash := client.Scenario().AccountWithCurrency("cash:Replace:EUR", "EUR")
+	eurMerchant := client.Scenario().Account("merchant:Replace:EuroCoffee")
+	replacement := httpclient.UpdateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-03-12"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId:            eurCash.AccountId,
+				Currency:             "EUR",
+				Amount:               "-11.00",
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+			{
+				AccountId:            eurMerchant.AccountId,
+				Currency:             "EUR",
+				Amount:               "11.00",
+				CategoryId:           refs.CategoryId,
+				PostingStatus:        httpclient.Posted,
+				ReconciliationStatus: httpclient.Reconciled,
+				Source:               httpclient.Manual,
+			},
+		},
+	}
+
+	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacement)
+	requireNoTransportError(t, "replace transaction", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("replace status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	assertRecordAmountUSD(t, *replaced.JSON200, eurCash.AccountId, "-10.00000000")
+	assertRecordAmountUSD(t, *replaced.JSON200, eurMerchant.AccountId, "10.00000000")
 }
 
 func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {

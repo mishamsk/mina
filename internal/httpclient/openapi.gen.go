@@ -796,7 +796,7 @@ type CreateJournalRecordRequest struct {
 	Amount string `json:"amount"`
 
 	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsd      *string `json:"amount_usd"`
+	AmountUsd      *string `json:"amount_usd,omitempty"`
 	CategoryId     int64   `json:"category_id"`
 	Currency       string  `json:"currency"`
 	ExternalId     *string `json:"external_id,omitempty"`

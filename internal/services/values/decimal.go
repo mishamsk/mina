@@ -71,6 +71,16 @@ func DecimalFromLibrary(value decimal.Decimal) (Decimal, error) {
 	return enforceDecimalConstraints(value)
 }
 
+// DecimalFromInt64 creates a DECIMAL(18,8) application value from an integer.
+func DecimalFromInt64(value int64) (Decimal, error) {
+	parsed, err := decimal.New(value, 0)
+	if err != nil {
+		return Decimal{}, fmt.Errorf("create decimal from integer: %w", err)
+	}
+
+	return enforceDecimalConstraints(parsed)
+}
+
 // LibraryDecimal returns the underlying decimal library value.
 func (d Decimal) LibraryDecimal() decimal.Decimal {
 	return d.value
@@ -99,6 +109,38 @@ func (d Decimal) Add(other Decimal) (Decimal, error) {
 	}
 
 	return enforceDecimalConstraints(sum)
+}
+
+// Sub returns d-other while preserving DECIMAL(18,8) constraints.
+func (d Decimal) Sub(other Decimal) (Decimal, error) {
+	difference, err := d.value.SubExact(other.value, decimalScale)
+	if err != nil {
+		return Decimal{}, fmt.Errorf("subtract decimal: %w", err)
+	}
+
+	return enforceDecimalConstraints(difference)
+}
+
+// Mul returns d*other while preserving DECIMAL(18,8) constraints.
+func (d Decimal) Mul(other Decimal) (Decimal, error) {
+	product, err := d.value.MulExact(other.value, decimalScale)
+	if err != nil {
+		return Decimal{}, fmt.Errorf("multiply decimal: %w", err)
+	}
+	product = product.Round(decimalScale)
+
+	return enforceDecimalConstraints(product)
+}
+
+// Div returns d/other while preserving DECIMAL(18,8) constraints.
+func (d Decimal) Div(other Decimal) (Decimal, error) {
+	quotient, err := d.value.Quo(other.value)
+	if err != nil {
+		return Decimal{}, fmt.Errorf("divide decimal: %w", err)
+	}
+	quotient = quotient.Round(decimalScale)
+
+	return enforceDecimalConstraints(quotient)
 }
 
 // Neg returns -d while preserving DECIMAL(18,8) constraints.

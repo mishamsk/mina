@@ -6,7 +6,10 @@
 
 ## Implicit Contracts
 
-- Signed amount-USD derivation copies signed USD record amounts and leaves non-USD unset until rate-selection semantics are implemented.
+- The exchange-rate service is the only service-level writer for `exchange_rate` rows.
+- Signed amount-USD derivation copies signed USD amounts.
+- Non-USD derivation uses active `USD -> currency` rates: exact lookup date first, linearly interpolated interior gaps second, else `NULL`.
+- `NULL` amount-USD is the only unresolved signal; inferred persisted values are not recomputed by this service.
 
 ## Boundaries
 

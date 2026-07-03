@@ -137,7 +137,7 @@ export type CreateJournalRecordRequest = {
     /**
      * JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
      */
-    amount_usd: string | null;
+    amount_usd?: string | null;
     category_id: number;
     tag_ids?: Array<number>;
     memo?: string | null;

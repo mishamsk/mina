@@ -2027,7 +2027,6 @@ components:
         - account_id
         - currency
         - amount
-        - amount_usd
         - category_id
         - posting_status
         - reconciliation_status

@@ -108,6 +108,20 @@ type JournalRecordInput struct {
 	ExternalSystem       *string
 }
 
+// AmountUSDBackfillRecord is one unresolved record needing amount-USD inference.
+type AmountUSDBackfillRecord struct {
+	RecordID   int64
+	Currency   string
+	Amount     values.Decimal
+	LookupDate values.CivilDate
+}
+
+// AmountUSDBackfillUpdate is one resolved amount-USD backfill update.
+type AmountUSDBackfillUpdate struct {
+	RecordID  int64
+	AmountUSD values.Decimal
+}
+
 // ListOptions controls transaction list pagination.
 type ListOptions struct {
 	Limit  *int
@@ -190,6 +204,8 @@ type Repository interface {
 	BulkUpdateTags(context.Context, []int64, []int64, []int64) (int, error)
 	BulkReassignAccount(context.Context, []int64, int64) (int, error)
 	BulkUpdateStatuses(context.Context, []int64, *PostingStatus, *ReconciliationStatus) (int, error)
+	ListMissingAmountUSDRecords(context.Context) ([]AmountUSDBackfillRecord, error)
+	BatchSetAmountUSD(context.Context, []AmountUSDBackfillUpdate) error
 }
 
 // AccountReferenceValidator resolves active account references for transaction validation.
@@ -267,6 +283,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
+	if err := s.inferMissingAmountUSD(ctx, &input); err != nil {
+		return Transaction{}, err
+	}
 
 	var transaction Transaction
 	if err := s.refs.SerializeReferenceOperation(func() error {
@@ -302,6 +321,9 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
+	if err := s.inferMissingAmountUSD(ctx, &input); err != nil {
+		return Transaction{}, err
+	}
 
 	var transaction Transaction
 	if err := s.refs.SerializeReferenceOperation(func() error {
@@ -329,6 +351,64 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 	}
 
 	return transaction, nil
+}
+
+func (s *Service) inferMissingAmountUSD(ctx context.Context, input *CreateInput) error {
+	if s.amountUSDDeriver == nil {
+		return errors.New("transactions: amount USD deriver is not configured")
+	}
+	for index := range input.Records {
+		if input.Records[index].AmountUSD != nil {
+			continue
+		}
+		lookupDate := input.InitiatedDate
+		if input.Records[index].PostedDate != nil {
+			lookupDate = values.CivilDateFromTime(*input.Records[index].PostedDate)
+		}
+		amountUSD, err := s.amountUSDDeriver.SignedAmountUSD(
+			ctx,
+			input.Records[index].Currency,
+			input.Records[index].Amount,
+			lookupDate,
+		)
+		if err != nil {
+			return err
+		}
+		input.Records[index].AmountUSD = amountUSD
+	}
+
+	return nil
+}
+
+// BackfillMissingAmountUSD fills unresolved journal records when amount USD can be derived.
+func (s *Service) BackfillMissingAmountUSD(ctx context.Context) error {
+	if s.amountUSDDeriver == nil {
+		return errors.New("transactions: amount USD deriver is not configured")
+	}
+
+	records, err := s.repo.ListMissingAmountUSDRecords(ctx)
+	if err != nil {
+		return err
+	}
+	updates := make([]AmountUSDBackfillUpdate, 0, len(records))
+	for _, record := range records {
+		amountUSD, err := s.amountUSDDeriver.SignedAmountUSD(ctx, record.Currency, record.Amount, record.LookupDate)
+		if err != nil {
+			return err
+		}
+		if amountUSD == nil {
+			continue
+		}
+		updates = append(updates, AmountUSDBackfillUpdate{
+			RecordID:  record.RecordID,
+			AmountUSD: *amountUSD,
+		})
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+
+	return s.repo.BatchSetAmountUSD(ctx, updates)
 }
 
 // Get returns a transaction with nested journal records by ID.

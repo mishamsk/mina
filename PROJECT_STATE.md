@@ -10,6 +10,7 @@
   - Account type and category economic-intent metadata for accounting semantics.
   - Exchange-rate and account credit-limit-history flows.
   - Transaction creation, read, paginated list, full replacement, and tombstone deletion with nested journal records.
+  - Non-USD `amount_usd` inference on transaction writes using stored `USD -> currency` rates when resolvable.
   - Shorthand transaction creation endpoints for spend, income, refund, and transfer.
   - Transaction-template creation, read, paginated list, full replacement, and tombstone deletion with nested partial record defaults.
   - Transaction semantic shape validation with derived transaction class, component summaries, and display amounts in REST responses.
@@ -35,7 +36,7 @@
   - Atomic double-entry transaction persistence and replacement.
   - Ephemeral runtime operation-run status is stored in the in-memory process database outside portable accounting state.
   - Store-owned database backup sources use DuckDB database copy into provider-owned target files and reject in-memory accounting sources.
-  - Exchange-rate loading infers non-USD journal-record needs and upserts active `USD -> currency` rates.
+  - Exchange-rate loading infers non-USD journal-record needs, upserts active `USD -> currency` rates, and backfills resolvable null `amount_usd` values.
   - Transaction templates are stored as normalized active/tombstoned template and record-default rows with write-time reference checks.
   - Tombstone-aware reads and list defaults for applicable resources.
   - Store-owned allowlists for dynamic filtering and sorting.
