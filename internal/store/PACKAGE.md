@@ -31,6 +31,7 @@
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
 - Transaction repositories store normalized journal records and own active selected-record checks for bulk operations.
 - Transaction-template repositories store normalized partial record defaults.
+- Dictionary usage queries report active dependency facts only; services decide whether those facts block deletes.
 - Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; repositories also pre-check active uniqueness to return stable conflict messages.
 - Account, category, tag, and transaction-template hierarchy fields are read from DuckDB generated virtual columns.
 

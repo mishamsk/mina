@@ -897,6 +897,10 @@ export type DeleteCategoryErrors = {
      * The requested resource was not found.
      */
     404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
 };
 
 export type DeleteCategoryError = DeleteCategoryErrors[keyof DeleteCategoryErrors];
@@ -1053,6 +1057,10 @@ export type DeleteTagErrors = {
      * The requested resource was not found.
      */
     404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
 };
 
 export type DeleteTagError = DeleteTagErrors[keyof DeleteTagErrors];
@@ -1208,6 +1216,10 @@ export type DeleteMemberErrors = {
      * The requested resource was not found.
      */
     404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
 };
 
 export type DeleteMemberError = DeleteMemberErrors[keyof DeleteMemberErrors];
@@ -1369,6 +1381,10 @@ export type DeleteAccountErrors = {
      * The requested resource was not found.
      */
     404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
 };
 
 export type DeleteAccountError = DeleteAccountErrors[keyof DeleteAccountErrors];

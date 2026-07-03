@@ -49,6 +49,7 @@ type appServices struct {
 	Backup                     *backups.Service
 	ExchangeRateLoading        *exchangerateloading.Service
 	StartupExchangeRateLoading *exchangerateloading.Service
+	ReferenceSerializer        *referenceSerializer
 }
 
 // New opens the configured database, applies migrations, and wires the composed HTTP handler.
@@ -184,7 +185,8 @@ func NewWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 }
 
 func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
-	services, err := newAccountingServices(appDB, cfg, opts, operationRepo)
+	referenceSerializer := &referenceSerializer{}
+	services, err := newAccountingServices(appDB, cfg, opts, operationRepo, referenceSerializer)
 	if err != nil {
 		return appServices{}, err
 	}
@@ -204,7 +206,13 @@ func composeHTTPHandler(restHandler http.Handler, webUIHandler http.Handler) htt
 	})
 }
 
-func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, operationRepo operationruns.Repository) (appServices, error) {
+func newAccountingServices(
+	appDB *store.AppDB,
+	cfg appconfig.Config,
+	opts Options,
+	operationRepo operationruns.Repository,
+	referenceSerializer *referenceSerializer,
+) (appServices, error) {
 	exchangeRateStore := store.NewExchangeRateStore(appDB)
 	startupProvider, err := startupExchangeRateProvider(cfg, opts)
 	if err != nil {
@@ -248,10 +256,10 @@ func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Option
 	tagStore := store.NewTagStore(appDB)
 	memberStore := store.NewMemberStore(appDB)
 	exchangeRates := exchangerates.NewService(exchangeRateStore)
-	accountService := accounts.NewService(accountStore)
-	categoryService := categories.NewService(categoryStore)
-	tagService := tags.NewService(tagStore)
-	memberService := members.NewService(memberStore)
+	accountService := accounts.NewService(accountStore, referenceSerializer)
+	categoryService := categories.NewService(categoryStore, referenceSerializer)
+	tagService := tags.NewService(tagStore, referenceSerializer)
+	memberService := members.NewService(memberStore, referenceSerializer)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			Health:        health.NewService(store.NewHealthStore(appDB)),
@@ -260,7 +268,7 @@ func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Option
 			Tags:          tagService,
 			Members:       memberService,
 			Accounts:      accountService,
-			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService),
+			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, referenceSerializer),
 			ExchangeRates: exchangeRates,
 			Transactions: transactions.NewService(
 				store.NewTransactionStore(appDB),
@@ -269,6 +277,7 @@ func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Option
 				tagService,
 				memberService,
 				exchangeRates,
+				referenceSerializer,
 			),
 			Templates: transactiontemplates.NewService(
 				store.NewTransactionTemplateStore(appDB),
@@ -276,11 +285,13 @@ func newAccountingServices(appDB *store.AppDB, cfg appconfig.Config, opts Option
 				categoryService,
 				tagService,
 				memberService,
+				referenceSerializer,
 			),
 		},
 		Backup:                     backupService,
 		ExchangeRateLoading:        exchangeRateLoading,
 		StartupExchangeRateLoading: startupExchangeRateLoading,
+		ReferenceSerializer:        referenceSerializer,
 	}, nil
 }
 
@@ -343,12 +354,12 @@ func newDemoService(appDB *store.AppDB, cfg appconfig.Config, opts Options, main
 	return demo.NewService(demo.Dependencies{
 		Atomic: func(ctx context.Context, fn func(demo.Services) error) error {
 			if err := appDB.WithTx(ctx, nil, func(txAppDB *store.AppDB) error {
-				services, err := newAccountingServices(txAppDB, cfg, opts, nil)
+				txServices, err := newAccountingServices(txAppDB, cfg, opts, nil, mainServices.ReferenceSerializer)
 				if err != nil {
 					return err
 				}
 
-				return fn(demoDependencies(services))
+				return fn(demoDependencies(txServices))
 			}); err != nil {
 				return err
 			}

@@ -6455,6 +6455,7 @@ type DeleteAccountResponse struct {
 	HTTPResponse *http.Response
 	JSON400      *InvalidRequest
 	JSON404      *NotFound
+	JSON409      *Conflict
 }
 
 // Status returns HTTPResponse.Status
@@ -6965,6 +6966,7 @@ type DeleteCategoryResponse struct {
 	HTTPResponse *http.Response
 	JSON400      *InvalidRequest
 	JSON404      *NotFound
+	JSON409      *Conflict
 }
 
 // Status returns HTTPResponse.Status
@@ -7375,6 +7377,7 @@ type DeleteMemberResponse struct {
 	HTTPResponse *http.Response
 	JSON400      *InvalidRequest
 	JSON404      *NotFound
+	JSON409      *Conflict
 }
 
 // Status returns HTTPResponse.Status
@@ -7689,6 +7692,7 @@ type DeleteTagResponse struct {
 	HTTPResponse *http.Response
 	JSON400      *InvalidRequest
 	JSON404      *NotFound
+	JSON409      *Conflict
 }
 
 // Status returns HTTPResponse.Status
@@ -9026,6 +9030,13 @@ func ParseDeleteAccountResponse(rsp *http.Response) (*DeleteAccountResponse, err
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	}
 
 	return response, nil
@@ -9652,6 +9663,13 @@ func ParseDeleteCategoryResponse(rsp *http.Response) (*DeleteCategoryResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	}
 
 	return response, nil
@@ -10130,6 +10148,13 @@ func ParseDeleteMemberResponse(rsp *http.Response) (*DeleteMemberResponse, error
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
 	}
 
 	return response, nil
@@ -10487,6 +10512,13 @@ func ParseDeleteTagResponse(rsp *http.Response) (*DeleteTagResponse, error) {
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 

@@ -8,6 +8,8 @@
 ## Implicit Contracts
 
 - Service packages own domain types, validation, use cases, and repository interfaces.
+- Dictionary services own blocked-delete decisions for active dependent references and do not expose cascade tombstone APIs.
+- Runtime-wired reference-integrity guards serialize dictionary deletes with dependent writes that rely on service reference validation.
 - Service packages must not import HTTP, OpenAPI, web UI, TUI, scheduler, SQL, generated DB, Cobra, process I/O, store, or runtime packages.
 - Public service structs and repository contracts carry app-owned value types for civil dates, audit timestamps, and decimals.
 - Callers must provide service-declared types; transport string parsing belongs to the owning adapter.

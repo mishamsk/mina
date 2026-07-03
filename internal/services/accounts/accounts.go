@@ -85,24 +85,43 @@ type Reference struct {
 	IsHidden    bool
 }
 
+// ActiveUsage reports active resources that reference an account.
+type ActiveUsage struct {
+	JournalRecords             bool
+	TransactionTemplateRecords bool
+	CreditLimitHistory         bool
+}
+
+// HasActiveDependents reports whether any active resource references the account.
+func (u ActiveUsage) HasActiveDependents() bool {
+	return u.JournalRecords || u.TransactionTemplateRecords || u.CreditLimitHistory
+}
+
 // Repository persists account state.
 type Repository interface {
 	Create(context.Context, CreateInput) (Account, error)
 	Get(context.Context, int64, bool) (Account, error)
 	List(context.Context, ListOptions) ([]Account, error)
 	UpdateMutable(context.Context, int64, UpdateInput) (Account, error)
+	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
+}
+
+// ReferenceSerializer serializes dictionary deletes with writes that create dependent references.
+type ReferenceSerializer interface {
+	SerializeReferenceOperation(func() error) error
 }
 
 // Service owns account use cases and validation.
 type Service struct {
 	repo  Repository
+	refs  ReferenceSerializer
 	cache accountReferenceCache
 }
 
 // NewService creates an account service backed by repo.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository, refs ReferenceSerializer) *Service {
+	return &Service{repo: repo, refs: refs}
 }
 
 // Create validates and creates an account.
@@ -235,19 +254,45 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 	return account, nil
 }
 
+// ActiveUsage reports active resources that reference an account.
+func (s *Service) ActiveUsage(ctx context.Context, id int64) (ActiveUsage, error) {
+	if id <= 0 {
+		return ActiveUsage{}, services.InvalidRequest("account_id must be positive")
+	}
+
+	return s.repo.ActiveUsage(ctx, id)
+}
+
 // Delete tombstones an account.
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	if id <= 0 {
 		return services.InvalidRequest("account_id must be positive")
 	}
 
-	if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
-		return services.NotFound("account not found")
-	} else if err != nil {
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if _, err := s.repo.Get(ctx, id, false); errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("account not found")
+		} else if err != nil {
+			return err
+		}
+		usage, err := s.repo.ActiveUsage(ctx, id)
+		if err != nil {
+			return err
+		}
+		if usage.HasActiveDependents() {
+			return services.Conflict("account is referenced by active resources")
+		}
+		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("account not found")
+		} else if err != nil {
+			return err
+		}
+
+		s.cacheInactiveReference(id)
+		return nil
+	}); err != nil {
 		return err
 	}
-
-	s.cacheInactiveReference(id)
 
 	return nil
 }

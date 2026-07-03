@@ -95,6 +95,11 @@ type MemberReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64) (map[int64]members.Reference, error)
 }
 
+// ReferenceSerializer serializes dependent writes with dictionary deletes.
+type ReferenceSerializer interface {
+	SerializeReferenceOperation(func() error) error
+}
+
 // Service owns transaction-template use cases and validation.
 type Service struct {
 	repo       Repository
@@ -102,6 +107,7 @@ type Service struct {
 	categories CategoryReferenceValidator
 	tags       TagReferenceValidator
 	members    MemberReferenceValidator
+	refs       ReferenceSerializer
 }
 
 // NewService creates a transaction-template service backed by repositories.
@@ -111,6 +117,7 @@ func NewService(
 	categories CategoryReferenceValidator,
 	tags TagReferenceValidator,
 	members MemberReferenceValidator,
+	refs ReferenceSerializer,
 ) *Service {
 	return &Service{
 		repo:       repo,
@@ -118,23 +125,31 @@ func NewService(
 		categories: categories,
 		tags:       tags,
 		members:    members,
+		refs:       refs,
 	}
 }
 
 // Create validates and creates a transaction template.
 func (s *Service) Create(ctx context.Context, input WriteInput) (Template, error) {
-	if err := s.validateTemplateInput(ctx, input.FQN, input.Records); err != nil {
-		return Template{}, err
-	}
+	var template Template
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateTemplateInput(ctx, input.FQN, input.Records); err != nil {
+			return err
+		}
 
-	template, err := s.repo.Create(ctx, input)
-	if errors.Is(err, services.ErrConflict) {
-		return Template{}, services.Conflict("active transaction template fqn already exists")
-	}
-	if errors.Is(err, services.ErrInvalidReference) || errors.Is(err, services.ErrNotFound) {
-		return Template{}, invalidReferenceError()
-	}
-	if err != nil {
+		created, err := s.repo.Create(ctx, input)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("active transaction template fqn already exists")
+		}
+		if errors.Is(err, services.ErrInvalidReference) || errors.Is(err, services.ErrNotFound) {
+			return invalidReferenceError()
+		}
+		if err != nil {
+			return err
+		}
+		template = created
+		return nil
+	}); err != nil {
 		return Template{}, err
 	}
 
@@ -180,21 +195,28 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Temp
 	} else if err != nil {
 		return Template{}, err
 	}
-	if err := s.validateTemplateReferences(ctx, input.Records); err != nil {
-		return Template{}, err
-	}
+	var template Template
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateTemplateReferences(ctx, input.Records); err != nil {
+			return err
+		}
 
-	template, err := s.repo.Replace(ctx, id, input)
-	if errors.Is(err, services.ErrConflict) {
-		return Template{}, services.Conflict("active transaction template fqn already exists")
-	}
-	if errors.Is(err, services.ErrInvalidReference) {
-		return Template{}, invalidReferenceError()
-	}
-	if errors.Is(err, services.ErrNotFound) {
-		return Template{}, services.NotFound("transaction template not found")
-	}
-	if err != nil {
+		replaced, err := s.repo.Replace(ctx, id, input)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("active transaction template fqn already exists")
+		}
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidReferenceError()
+		}
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("transaction template not found")
+		}
+		if err != nil {
+			return err
+		}
+		template = replaced
+		return nil
+	}); err != nil {
 		return Template{}, err
 	}
 

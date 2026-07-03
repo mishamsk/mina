@@ -48,24 +48,42 @@ type Reference struct {
 	IsHidden bool
 }
 
+// ActiveUsage reports active resources that reference a tag.
+type ActiveUsage struct {
+	JournalRecords             bool
+	TransactionTemplateRecords bool
+}
+
+// HasActiveDependents reports whether any active resource references the tag.
+func (u ActiveUsage) HasActiveDependents() bool {
+	return u.JournalRecords || u.TransactionTemplateRecords
+}
+
 // Repository persists tag state.
 type Repository interface {
 	Create(context.Context, CreateInput) (Tag, error)
 	Get(context.Context, int64, bool) (Tag, error)
 	List(context.Context, ListOptions) ([]Tag, error)
 	UpdateHidden(context.Context, int64, bool) (Tag, error)
+	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
+}
+
+// ReferenceSerializer serializes dictionary deletes with writes that create dependent references.
+type ReferenceSerializer interface {
+	SerializeReferenceOperation(func() error) error
 }
 
 // Service owns tag use cases and validation.
 type Service struct {
 	repo  Repository
+	refs  ReferenceSerializer
 	cache tagReferenceCache
 }
 
 // NewService creates a tag service backed by repo.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository, refs ReferenceSerializer) *Service {
+	return &Service{repo: repo, refs: refs}
 }
 
 // Create validates and creates a tag.
@@ -182,19 +200,45 @@ func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (T
 	return tag, nil
 }
 
+// ActiveUsage reports active resources that reference a tag.
+func (s *Service) ActiveUsage(ctx context.Context, id int64) (ActiveUsage, error) {
+	if id <= 0 {
+		return ActiveUsage{}, services.InvalidRequest("tag_id must be positive")
+	}
+
+	return s.repo.ActiveUsage(ctx, id)
+}
+
 // Delete tombstones a tag.
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	if id <= 0 {
 		return services.InvalidRequest("tag_id must be positive")
 	}
 
-	if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
-		return services.NotFound("tag not found")
-	} else if err != nil {
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if _, err := s.repo.Get(ctx, id, false); errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("tag not found")
+		} else if err != nil {
+			return err
+		}
+		usage, err := s.repo.ActiveUsage(ctx, id)
+		if err != nil {
+			return err
+		}
+		if usage.HasActiveDependents() {
+			return services.Conflict("tag is referenced by active resources")
+		}
+		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("tag not found")
+		} else if err != nil {
+			return err
+		}
+
+		s.cacheInactiveReference(id)
+		return nil
+	}); err != nil {
 		return err
 	}
-
-	s.cacheInactiveReference(id)
 
 	return nil
 }

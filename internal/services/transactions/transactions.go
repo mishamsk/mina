@@ -219,6 +219,11 @@ type AmountUSDDeriver interface {
 	SignedAmountUSD(context.Context, string, values.Decimal, values.CivilDate) (*values.Decimal, error)
 }
 
+// ReferenceSerializer serializes dependent writes with dictionary deletes.
+type ReferenceSerializer interface {
+	SerializeReferenceOperation(func() error) error
+}
+
 // Service owns transaction, journal record, and bulk record use cases.
 type Service struct {
 	repo             Repository
@@ -227,6 +232,7 @@ type Service struct {
 	tags             TagReferenceValidator
 	members          MemberReferenceValidator
 	amountUSDDeriver AmountUSDDeriver
+	refs             ReferenceSerializer
 }
 
 // NewService creates a transaction service backed by repositories.
@@ -237,6 +243,7 @@ func NewService(
 	tags TagReferenceValidator,
 	members MemberReferenceValidator,
 	amountUSDDeriver AmountUSDDeriver,
+	refs ReferenceSerializer,
 ) *Service {
 	return &Service{
 		repo:             repo,
@@ -245,6 +252,7 @@ func NewService(
 		tags:             tags,
 		members:          members,
 		amountUSDDeriver: amountUSDDeriver,
+		refs:             refs,
 	}
 }
 
@@ -259,18 +267,30 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, e
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
-	if err := s.validateInputClassification(ctx, input); err != nil {
-		return Transaction{}, err
-	}
-	transaction, err := s.repo.Create(ctx, input)
-	if errors.Is(err, services.ErrNotFound) || errors.Is(err, services.ErrInvalidReference) {
-		return Transaction{}, services.InvalidRequest("transaction references missing or inactive resource")
-	}
-	if err != nil {
+
+	var transaction Transaction
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateInputClassification(ctx, input); err != nil {
+			return err
+		}
+		created, err := s.repo.Create(ctx, input)
+		if errors.Is(err, services.ErrNotFound) || errors.Is(err, services.ErrInvalidReference) {
+			return services.InvalidRequest("transaction references missing or inactive resource")
+		}
+		if err != nil {
+			return err
+		}
+		classified, err := classifyTransaction(created)
+		if err != nil {
+			return err
+		}
+		transaction = classified
+		return nil
+	}); err != nil {
 		return Transaction{}, err
 	}
 
-	return classifyTransaction(transaction)
+	return transaction, nil
 }
 
 // Replace validates and replaces a transaction and its journal records.
@@ -282,21 +302,33 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
-	if err := s.validateInputClassification(ctx, input); err != nil {
-		return Transaction{}, err
-	}
-	transaction, err := s.repo.Replace(ctx, id, input)
-	if errors.Is(err, services.ErrInvalidReference) {
-		return Transaction{}, services.InvalidRequest("transaction references missing or inactive resource")
-	}
-	if errors.Is(err, services.ErrNotFound) {
-		return Transaction{}, services.NotFound("transaction not found")
-	}
-	if err != nil {
+
+	var transaction Transaction
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateInputClassification(ctx, input); err != nil {
+			return err
+		}
+		replaced, err := s.repo.Replace(ctx, id, input)
+		if errors.Is(err, services.ErrInvalidReference) {
+			return services.InvalidRequest("transaction references missing or inactive resource")
+		}
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("transaction not found")
+		}
+		if err != nil {
+			return err
+		}
+		classified, err := classifyTransaction(replaced)
+		if err != nil {
+			return err
+		}
+		transaction = classified
+		return nil
+	}); err != nil {
 		return Transaction{}, err
 	}
 
-	return classifyTransaction(transaction)
+	return transaction, nil
 }
 
 // Get returns a transaction with nested journal records by ID.
@@ -365,15 +397,21 @@ func (s *Service) BulkCategorize(ctx context.Context, recordIDs []int64, categor
 	if categoryID <= 0 {
 		return BulkRecordOperationResponse{}, services.InvalidRequest("category_id must be positive")
 	}
-	if err := s.validateBulkCategorizeClassification(ctx, recordIDs, categoryID); err != nil {
-		return BulkRecordOperationResponse{}, err
-	}
-
-	count, err := s.repo.BulkCategorize(ctx, recordIDs, categoryID)
-	if errors.Is(err, services.ErrInvalidReference) {
-		return BulkRecordOperationResponse{}, services.InvalidRequest("records or category missing or inactive resource")
-	}
-	if err != nil {
+	var count int
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateBulkCategorizeClassification(ctx, recordIDs, categoryID); err != nil {
+			return err
+		}
+		updated, err := s.repo.BulkCategorize(ctx, recordIDs, categoryID)
+		if errors.Is(err, services.ErrInvalidReference) {
+			return services.InvalidRequest("records or category missing or inactive resource")
+		}
+		if err != nil {
+			return err
+		}
+		count = updated
+		return nil
+	}); err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
 
@@ -397,19 +435,25 @@ func (s *Service) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagI
 	if err := validateNoIDOverlap("add_tag_ids", addTagIDs, "remove_tag_ids", removeTagIDs); err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
-	tagIDs := append(append([]int64{}, addTagIDs...), removeTagIDs...)
-	if _, err := s.tags.ValidateActiveReferences(ctx, tagIDs, tags.ReferenceOptions{AllowHidden: true}); err != nil {
-		if errors.Is(err, services.ErrInvalidReference) {
-			return BulkRecordOperationResponse{}, services.InvalidRequest("records or tags missing or inactive resource")
+	var count int
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		tagIDs := append(append([]int64{}, addTagIDs...), removeTagIDs...)
+		if _, err := s.tags.ValidateActiveReferences(ctx, tagIDs, tags.ReferenceOptions{AllowHidden: true}); err != nil {
+			if errors.Is(err, services.ErrInvalidReference) {
+				return services.InvalidRequest("records or tags missing or inactive resource")
+			}
+			return err
 		}
-		return BulkRecordOperationResponse{}, err
-	}
-
-	count, err := s.repo.BulkUpdateTags(ctx, recordIDs, addTagIDs, removeTagIDs)
-	if errors.Is(err, services.ErrInvalidReference) {
-		return BulkRecordOperationResponse{}, services.InvalidRequest("records or tags missing or inactive resource")
-	}
-	if err != nil {
+		updated, err := s.repo.BulkUpdateTags(ctx, recordIDs, addTagIDs, removeTagIDs)
+		if errors.Is(err, services.ErrInvalidReference) {
+			return services.InvalidRequest("records or tags missing or inactive resource")
+		}
+		if err != nil {
+			return err
+		}
+		count = updated
+		return nil
+	}); err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
 
@@ -424,15 +468,21 @@ func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, ac
 	if accountID <= 0 {
 		return BulkRecordOperationResponse{}, services.InvalidRequest("account_id must be positive")
 	}
-	if err := s.validateBulkReassignAccountClassification(ctx, recordIDs, accountID); err != nil {
-		return BulkRecordOperationResponse{}, err
-	}
-
-	count, err := s.repo.BulkReassignAccount(ctx, recordIDs, accountID)
-	if errors.Is(err, services.ErrInvalidReference) {
-		return BulkRecordOperationResponse{}, services.InvalidRequest("records or account missing or inactive resource")
-	}
-	if err != nil {
+	var count int
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateBulkReassignAccountClassification(ctx, recordIDs, accountID); err != nil {
+			return err
+		}
+		updated, err := s.repo.BulkReassignAccount(ctx, recordIDs, accountID)
+		if errors.Is(err, services.ErrInvalidReference) {
+			return services.InvalidRequest("records or account missing or inactive resource")
+		}
+		if err != nil {
+			return err
+		}
+		count = updated
+		return nil
+	}); err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
 

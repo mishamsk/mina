@@ -40,24 +40,42 @@ type Reference struct {
 	ID int64
 }
 
+// ActiveUsage reports active resources that reference a household member.
+type ActiveUsage struct {
+	JournalRecords             bool
+	TransactionTemplateRecords bool
+}
+
+// HasActiveDependents reports whether any active resource references the household member.
+func (u ActiveUsage) HasActiveDependents() bool {
+	return u.JournalRecords || u.TransactionTemplateRecords
+}
+
 // Repository persists household member state.
 type Repository interface {
 	Create(context.Context, CreateInput) (Member, error)
 	Get(context.Context, int64, bool) (Member, error)
 	List(context.Context, ListOptions) ([]Member, error)
 	UpdateName(context.Context, int64, string) (Member, error)
+	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
+}
+
+// ReferenceSerializer serializes dictionary deletes with writes that create dependent references.
+type ReferenceSerializer interface {
+	SerializeReferenceOperation(func() error) error
 }
 
 // Service owns household member use cases and validation.
 type Service struct {
 	repo  Repository
+	refs  ReferenceSerializer
 	cache memberReferenceCache
 }
 
 // NewService creates a member service backed by repo.
-func NewService(repo Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo Repository, refs ReferenceSerializer) *Service {
+	return &Service{repo: repo, refs: refs}
 }
 
 // Create validates and creates a household member.
@@ -173,19 +191,45 @@ func (s *Service) UpdateName(ctx context.Context, id int64, input UpdateInput) (
 	return member, nil
 }
 
+// ActiveUsage reports active resources that reference a household member.
+func (s *Service) ActiveUsage(ctx context.Context, id int64) (ActiveUsage, error) {
+	if id <= 0 {
+		return ActiveUsage{}, services.InvalidRequest("member_id must be positive")
+	}
+
+	return s.repo.ActiveUsage(ctx, id)
+}
+
 // Delete tombstones a household member.
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	if id <= 0 {
 		return services.InvalidRequest("member_id must be positive")
 	}
 
-	if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
-		return services.NotFound("member not found")
-	} else if err != nil {
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if _, err := s.repo.Get(ctx, id, false); errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("member not found")
+		} else if err != nil {
+			return err
+		}
+		usage, err := s.repo.ActiveUsage(ctx, id)
+		if err != nil {
+			return err
+		}
+		if usage.HasActiveDependents() {
+			return services.Conflict("member is referenced by active resources")
+		}
+		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("member not found")
+		} else if err != nil {
+			return err
+		}
+
+		s.cacheInactiveReference(id)
+		return nil
+	}); err != nil {
 		return err
 	}
-
-	s.cacheInactiveReference(id)
 
 	return nil
 }

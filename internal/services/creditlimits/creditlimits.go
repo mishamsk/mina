@@ -45,17 +45,24 @@ type AccountReferenceValidator interface {
 	ValidateActiveReference(context.Context, int64, accounts.ReferenceOptions) (accounts.Reference, error)
 }
 
+// ReferenceSerializer serializes account deletes with writes that create dependent references.
+type ReferenceSerializer interface {
+	SerializeReferenceOperation(func() error) error
+}
+
 // Service owns credit limit history use cases and validation.
 type Service struct {
 	repo     Repository
 	accounts AccountReferenceValidator
+	refs     ReferenceSerializer
 }
 
 // NewService creates a credit limit history service backed by repo.
-func NewService(repo Repository, accounts AccountReferenceValidator) *Service {
+func NewService(repo Repository, accounts AccountReferenceValidator, refs ReferenceSerializer) *Service {
 	return &Service{
 		repo:     repo,
 		accounts: accounts,
+		refs:     refs,
 	}
 }
 
@@ -67,21 +74,28 @@ func (s *Service) Create(ctx context.Context, accountID int64, input CreateInput
 	if input.CreditLimit.Sign() < 0 {
 		return CreditLimitHistory{}, services.InvalidRequest("credit_limit must be a non-negative decimal")
 	}
-	if _, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
-		if errors.Is(err, services.ErrInvalidReference) {
-			return CreditLimitHistory{}, services.NotFound("account not found")
-		}
-		return CreditLimitHistory{}, err
-	}
 
-	history, err := s.repo.Create(ctx, accountID, input)
-	if errors.Is(err, services.ErrNotFound) {
-		return CreditLimitHistory{}, services.NotFound("account not found")
-	}
-	if errors.Is(err, services.ErrConflict) {
-		return CreditLimitHistory{}, services.Conflict("active credit limit history already exists for account and effective date")
-	}
-	if err != nil {
+	var history CreditLimitHistory
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if _, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+			if errors.Is(err, services.ErrInvalidReference) {
+				return services.NotFound("account not found")
+			}
+			return err
+		}
+		created, err := s.repo.Create(ctx, accountID, input)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("account not found")
+		}
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("active credit limit history already exists for account and effective date")
+		}
+		if err != nil {
+			return err
+		}
+		history = created
+		return nil
+	}); err != nil {
 		return CreditLimitHistory{}, err
 	}
 
