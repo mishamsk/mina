@@ -55,7 +55,7 @@ Per-task checklist — every task below runs the full per-task workflow; tick a 
 
 Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = backend/API-only, (FE) = frontend-only; respect the stated dependencies, otherwise run in order.
 
-- [ ] Task 1: `qdra` — web UI transaction and navigation papercuts (FE) — branch `qdra-ui-papercuts`
+- [x] Task 1: `qdra` — web UI transaction and navigation papercuts (FE) — branch `qdra-ui-papercuts`
 - [ ] Task 2: `ah5b` — tag chip overflow display (FE) — branch `ah5b-tag-chip-overflow`
 - [ ] Task 3: `4nmw` — transaction detail panel interaction polish (FE) — branch `4nmw-detail-panel-polish`
 - [ ] Task 4: `z8v9` — jump-to-date control on Transactions (FE) — branch `z8v9-date-jump`
