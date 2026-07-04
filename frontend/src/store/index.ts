@@ -23,14 +23,20 @@ export {
   useStatusPageView,
 } from "./status-page";
 export type {
+  CategoryPickerCategoriesSnapshot,
   LedgerLookupsSnapshot,
   TransactionPageSnapshot,
   TransactionsPageParams,
 } from "./transactions";
 export {
+  categoryPickerIntentKey,
   clearTransactionPageLoading,
   getTransactionsSnapshot,
   invalidateTransactionPages,
+  normalizedCategoryPickerIntents,
+  setCategoryPickerCategories,
+  setCategoryPickerCategoriesError,
+  setCategoryPickerCategoriesLoading,
   setLedgerLookups,
   setLedgerLookupsError,
   setLedgerLookupsLoading,
@@ -38,6 +44,7 @@ export {
   setTransactionPageError,
   setTransactionPageLoading,
   transactionPageKey,
+  useCategoryPickerCategoriesView,
   useLedgerLookupsView,
   useTransactionPageView,
   useTransactionsStore,

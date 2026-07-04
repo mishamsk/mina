@@ -42,6 +42,7 @@ import {
   type EntityOption,
   EntityPicker,
 } from "./entity-picker";
+import { useCategoryPickerCategoriesResource } from "./use-transactions-resource";
 
 interface EntryPanelProps {
   readonly lookups: LedgerLookupsSnapshot | undefined;
@@ -334,6 +335,22 @@ const hasErrors = (errors: FieldErrors): boolean =>
 const FieldError = ({ message }: { readonly message: string | undefined }) =>
   message ? <p className="text-destructive text-xs">{message}</p> : null;
 
+const RetryableFieldError = ({
+  message,
+  onRetry,
+}: {
+  readonly message: string | undefined;
+  readonly onRetry: () => void;
+}) =>
+  message ? (
+    <div className="flex items-center gap-2">
+      <p className="text-destructive text-xs">{message}</p>
+      <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
+  ) : null;
+
 const accountCurrency = (
   lookups: LedgerLookupsSnapshot | undefined,
   accountId: number | undefined,
@@ -403,9 +420,6 @@ const lookupCurrencies = (
 const visibleAccount = (account: Account): boolean =>
   !account.is_hidden && !account.tombstoned_at;
 
-const visibleCategory = (category: Category): boolean =>
-  !category.is_hidden && !category.tombstoned_at;
-
 const visibleMember = (member: Member): boolean => !member.tombstoned_at;
 
 const visibleTag = (tag: Tag): boolean => !tag.is_hidden && !tag.tombstoned_at;
@@ -422,6 +436,7 @@ export const EntryPanel = ({
   const [draftReady, setDraftReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
+  const [categoryRetryToken, setCategoryRetryToken] = useState(0);
   const [entryPanelMaxHeight, setEntryPanelMaxHeight] = useState<
     number | undefined
   >();
@@ -431,6 +446,11 @@ export const EntryPanel = ({
   const activeTab = draft.activeTab;
   const activeTabDraft = draft.tabs[activeTab];
   const activeConfig = tabConfigs[activeTab];
+  const categoryPicker = useCategoryPickerCategoriesResource(
+    activeConfig.categoryIntents,
+    open && draftReady,
+    categoryRetryToken,
+  );
 
   useEffect(() => {
     if (!open) {
@@ -512,27 +532,16 @@ export const EntryPanel = ({
 
   const options = useMemo(() => {
     const accounts = (lookups?.accounts ?? []).filter(visibleAccount);
-    const categories = (lookups?.categories ?? []).filter(visibleCategory);
+    const categories = categoryPicker.snapshot?.categories ?? [];
     const members = (lookups?.members ?? []).filter(visibleMember);
     const tags = (lookups?.tags ?? []).filter(visibleTag);
-    const categoryOptions = (entryType: TransactionEntryType) =>
-      categories
-        .filter((category) =>
-          tabConfigs[entryType].categoryIntents.includes(
-            category.economic_intent,
-          ),
-        )
-        .map((category) => entityOption(category, category.category_id));
     return {
       balanceAccounts: accounts
         .filter((account) => account.account_type === "balance")
         .map((account) => entityOption(account, account.account_id)),
-      categoriesByTab: {
-        income: categoryOptions("income"),
-        refund: categoryOptions("refund"),
-        spend: categoryOptions("spend"),
-        transfer: categoryOptions("transfer"),
-      },
+      categories: categories.map((category) =>
+        entityOption(category, category.category_id),
+      ),
       flowAccounts: accounts
         .filter((account) => account.account_type === "flow")
         .map((account) => entityOption(account, account.account_id)),
@@ -540,9 +549,16 @@ export const EntryPanel = ({
       members: members.map(memberOption),
       tags: tags.map((tag) => entityOption(tag, tag.tag_id)),
     };
-  }, [lookups]);
+  }, [categoryPicker.snapshot, lookups]);
+  const categoryPickerReady = Boolean(categoryPicker.snapshot);
   const lookupRevision = lookups?.loadedAt ?? "loading";
+  const categoryLookupRevision =
+    categoryPicker.snapshot?.loadedAt ?? "categories-loading";
   const ready = Boolean(lookups && draftReady);
+  const canSubmit = Boolean(
+    lookups && draftReady && categoryPickerReady && !saving,
+  );
+  const loadingMessage = "Loading lookups...";
 
   const updateActiveTabDraft = useCallback(
     (patch: Partial<TransactionEntryTabDraft>) => {
@@ -577,6 +593,10 @@ export const EntryPanel = ({
     setGeneralError(undefined);
   };
 
+  const retryCategoryPicker = () => {
+    setCategoryRetryToken((currentToken) => currentToken + 1);
+  };
+
   const validateField = useCallback(
     (field: FieldName) => {
       setFieldErrors((currentErrors) => {
@@ -593,6 +613,10 @@ export const EntryPanel = ({
   );
 
   const submit = useCallback(async () => {
+    if (!canSubmit) {
+      return;
+    }
+
     const nextFieldErrors = validateDraft(activeTabDraft, activeTab);
     setFieldErrors(nextFieldErrors);
     setGeneralError(undefined);
@@ -673,7 +697,7 @@ export const EntryPanel = ({
     const apiFieldErrors = fieldErrorsFromAPI(message);
     setFieldErrors(apiFieldErrors);
     setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);
-  }, [activeTab, activeTabDraft, draft, onSaved]);
+  }, [activeTab, activeTabDraft, canSubmit, draft, onSaved]);
 
   const primaryAccountValue = accountValue(
     activeTabDraft,
@@ -754,7 +778,7 @@ export const EntryPanel = ({
 
       {!ready ? (
         <div className="flex flex-1 items-start p-4">
-          <p className="text-muted-foreground text-sm">Loading lookups...</p>
+          <p className="text-muted-foreground text-sm">{loadingMessage}</p>
         </div>
       ) : null}
 
@@ -879,16 +903,22 @@ export const EntryPanel = ({
           />
 
           <EntityPicker
-            key={`${lookupRevision}:${activeTab}:category:${activeTabDraft.categoryId ?? ""}`}
+            key={`${categoryLookupRevision}:${activeTab}:category:${activeTabDraft.categoryId ?? ""}`}
+            disabled={!categoryPickerReady}
             id={`${activeTab}-category`}
             label="Category"
-            options={options.categoriesByTab[activeTab]}
+            options={options.categories}
+            placeholder={categoryPickerReady ? "Search" : "Loading categories"}
             value={activeTabDraft.categoryId}
             onChange={(categoryId) => {
               updateActiveTabDraft({ categoryId });
             }}
           />
           <FieldError message={fieldErrors.categoryId} />
+          <RetryableFieldError
+            message={categoryPicker.errorMessage}
+            onRetry={retryCategoryPicker}
+          />
 
           <EntityMultiPicker
             id={`${activeTab}-tags`}
@@ -955,7 +985,7 @@ export const EntryPanel = ({
               {sessionCount}
             </span>
           </div>
-          <Button type="submit" disabled={saving || !lookups || !draftReady}>
+          <Button type="submit" disabled={!canSubmit}>
             <Check aria-hidden="true" />
             {saving ? "Saving" : "Save and add another"}
           </Button>

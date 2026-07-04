@@ -7,7 +7,9 @@ interface AccountFixture {
 
 interface CategoryFixture {
   readonly category_id: number;
+  readonly economic_intent: string;
   readonly fqn: string;
+  readonly name: string;
 }
 
 interface TagFixture {
@@ -82,6 +84,21 @@ const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
   return (await response.json()) as TagFixture;
 };
 
+const createCategory = async (
+  page: Page,
+  fqn: string,
+  economicIntent: string,
+): Promise<CategoryFixture> => {
+  const response = await page.request.post("/api/categories", {
+    data: {
+      economic_intent: economicIntent,
+      fqn,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as CategoryFixture;
+};
+
 const createMember = async (
   page: Page,
   name: string,
@@ -112,6 +129,19 @@ const hideTag = async (page: Page, tag: TagFixture): Promise<void> => {
   const response = await page.request.patch(`/api/tags/${tag.tag_id}`, {
     data: { is_hidden: true },
   });
+  expect(response.ok()).toBe(true);
+};
+
+const hideCategory = async (
+  page: Page,
+  category: CategoryFixture,
+): Promise<void> => {
+  const response = await page.request.patch(
+    `/api/categories/${category.category_id}`,
+    {
+      data: { is_hidden: true },
+    },
+  );
   expect(response.ok()).toBe(true);
 };
 
@@ -1521,15 +1551,118 @@ test("transactions resolve hidden referenced tags but exclude them from pickers"
   await expect(page.getByText("No matches")).toBeVisible();
 });
 
+test("entry category picker requests spend intents and excludes hidden categories", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const hiddenCategoryFqn = `E2E:Hidden:${unique}:QuietSpendCategory${unique}`;
+  const visibleCategoryFqn = `E2E:Visible:${unique}:PickerSpendCategory${unique}`;
+  const visibleCategory = await createCategory(
+    page,
+    visibleCategoryFqn,
+    "expense",
+  );
+  const hiddenCategory = await createCategory(
+    page,
+    hiddenCategoryFqn,
+    "expense",
+  );
+
+  const [accounts] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const memo = `E2E hidden category ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "9.13",
+      category_id: hiddenCategory.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-05-31",
+      memo,
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+  await hideCategory(page, hiddenCategory);
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const hiddenCategoryRow = page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first();
+  await expect(hiddenCategoryRow).toBeVisible();
+  await expect(
+    hiddenCategoryRow.getByText(hiddenCategory.name, { exact: true }),
+  ).toBeVisible();
+
+  const categoryRequestPromise = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/categories" &&
+      url.searchParams.getAll("economic_intent").length > 0
+    );
+  });
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+
+  const categoryRequest = await categoryRequestPromise;
+  const categoryRequestUrl = new URL(categoryRequest.url());
+  expect(categoryRequestUrl.searchParams.getAll("economic_intent")).toEqual([
+    "expense",
+    "fee",
+  ]);
+  expect(categoryRequestUrl.searchParams.has("include_hidden")).toBe(false);
+  expect(categoryRequestUrl.searchParams.has("include_tombstoned")).toBe(false);
+
+  const categoryPicker = page.getByRole("combobox", { name: "Category" });
+  await categoryPicker.fill(visibleCategory.name);
+  await expect(
+    page.getByRole("option", { name: new RegExp(visibleCategory.name) }),
+  ).toBeVisible();
+
+  await categoryPicker.fill("Salary");
+  await expect(page.getByText("No matches")).toBeVisible();
+
+  await categoryPicker.fill(hiddenCategory.name);
+  await expect(page.getByText("No matches")).toBeVisible();
+});
+
 const chooseOptionByKeyboard = async (
   page: Page,
   label: string,
-  query: string,
+  searchText: string,
+  optionValue: string,
+  arrowDownPresses = 0,
 ) => {
   const picker = page.getByRole("combobox", { name: label });
-  await picker.fill(query);
-  await picker.press("ArrowDown");
+  await picker.fill(searchText);
+  const option = page
+    .getByRole("option")
+    .filter({ hasText: optionValue })
+    .first();
+  await expect(option).toBeVisible();
+  const optionId = (await option.getAttribute("id")) ?? "";
+  if (arrowDownPresses === 0) {
+    await picker.press("ArrowDown");
+    await picker.press("ArrowUp");
+  } else {
+    for (let index = 0; index < arrowDownPresses; index += 1) {
+      await picker.press("ArrowDown");
+    }
+  }
+  await expect(picker).toHaveAttribute("aria-activedescendant", optionId);
   await picker.press("Enter");
+  await expect(picker).toHaveValue(optionValue);
 };
 
 test("keyboard spend entry creates a transaction and keeps sticky fields", async ({
@@ -1598,9 +1731,20 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
 
   await page.getByLabel("Date").fill("2026-05-31");
   await page.getByLabel("Amount").fill(amount);
-  await chooseOptionByKeyboard(page, "Funding account", "cash:Wallet");
-  await chooseOptionByKeyboard(page, "Merchant", "merchant:Books");
-  await chooseOptionByKeyboard(page, "Category", "Entertainment:Books");
+  await chooseOptionByKeyboard(
+    page,
+    "Funding account",
+    "credit_card",
+    "credit_card:Chase:Sapphire",
+    1,
+  );
+  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books");
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    "Books",
+    "Entertainment:Books",
+  );
   await page.getByLabel("Memo").fill("E2E arcade spend");
 
   await page.getByRole("combobox", { name: "Category" }).focus();
@@ -1610,7 +1754,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await expect(page.getByLabel("Date")).toHaveValue("2026-05-31");
   await expect(
     page.getByRole("combobox", { name: "Funding account" }),
-  ).toHaveValue("cash:Wallet");
+  ).toHaveValue("credit_card:Chase:Sapphire");
   await expect(page.getByLabel("Amount")).toHaveValue("");
 
   await page.getByRole("button", { name: "Close entry panel" }).click();
@@ -1641,9 +1785,19 @@ test("entry panel creates each shorthand transaction type", async ({
 
   await page.getByLabel("Date").fill("2026-05-30");
   await page.getByLabel("Amount").fill(`31.${cents}`);
-  await chooseOptionByKeyboard(page, "Funding account", "cash:Wallet");
-  await chooseOptionByKeyboard(page, "Merchant", "merchant:Books");
-  await chooseOptionByKeyboard(page, "Category", "Entertainment:Books");
+  await chooseOptionByKeyboard(
+    page,
+    "Funding account",
+    "Wallet",
+    "cash:Wallet",
+  );
+  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books");
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    "Books",
+    "Entertainment:Books",
+  );
   await page.getByLabel("Memo").fill("E2E tab spend");
   await page.getByRole("button", { name: "Save and add another" }).click();
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
@@ -1655,10 +1809,16 @@ test("entry panel creates each shorthand transaction type", async ({
   await chooseOptionByKeyboard(
     page,
     "Destination account",
+    "Chase:Joint",
     "checking:Chase:Joint",
   );
-  await chooseOptionByKeyboard(page, "Source", "income:AcmePayroll");
-  await chooseOptionByKeyboard(page, "Category", "Income:Salary");
+  await chooseOptionByKeyboard(
+    page,
+    "Source",
+    "AcmePayroll",
+    "income:AcmePayroll",
+  );
+  await chooseOptionByKeyboard(page, "Category", "Salary", "Income:Salary");
   await page.getByLabel("Memo").fill("E2E tab income");
   await page.getByRole("button", { name: "Save and add another" }).click();
   await expect(page.getByText("Entries this session: 2")).toBeVisible();
@@ -1670,10 +1830,11 @@ test("entry panel creates each shorthand transaction type", async ({
   await chooseOptionByKeyboard(
     page,
     "Destination account",
+    "Chase:Joint",
     "checking:Chase:Joint",
   );
-  await chooseOptionByKeyboard(page, "Merchant", "merchant:Target");
-  await chooseOptionByKeyboard(page, "Category", "Refunds:Retail");
+  await chooseOptionByKeyboard(page, "Merchant", "Target", "merchant:Target");
+  await chooseOptionByKeyboard(page, "Category", "Retail", "Refunds:Retail");
   await page.getByLabel("Memo").fill("E2E tab refund");
   await page.getByRole("button", { name: "Save and add another" }).click();
   await expect(page.getByText("Entries this session: 3")).toBeVisible();
@@ -1684,9 +1845,20 @@ test("entry panel creates each shorthand transaction type", async ({
   ).toBeVisible();
   await page.getByLabel("Date").fill("2026-05-30");
   await page.getByLabel("Amount").fill(`22.${cents}`);
-  await chooseOptionByKeyboard(page, "From account", "checking:Chase:Joint");
-  await chooseOptionByKeyboard(page, "To account", "savings:Ally:Emergency");
-  await chooseOptionByKeyboard(page, "Category", "Transfer");
+  await chooseOptionByKeyboard(
+    page,
+    "From account",
+    "Chase:Joint",
+    "checking:Chase:Joint",
+  );
+  await chooseOptionByKeyboard(
+    page,
+    "To account",
+    "Ally:Emergency",
+    "savings:Ally:Emergency",
+  );
+  // Truncated text forces a real search instead of selecting an exact searchLabel match.
+  await chooseOptionByKeyboard(page, "Category", "ransfer", "Transfer");
   await page.getByLabel("Memo").fill("E2E tab transfer");
   await page.getByRole("button", { name: "Save and add another" }).click();
   await expect(page.getByText("Entries this session: 4")).toBeVisible();

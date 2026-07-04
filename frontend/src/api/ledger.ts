@@ -1,4 +1,5 @@
 import type {
+  CategoryEconomicIntent,
   CreateIncomeTransactionRequest,
   CreateRefundTransactionRequest,
   CreateSpendTransactionRequest,
@@ -97,6 +98,19 @@ export const fetchLedgerLookups = async () => {
 
   return { accounts, categories, members, tags };
 };
+
+export const fetchCategoryPickerCategories = (
+  economicIntents: readonly CategoryEconomicIntent[],
+) =>
+  listCategories({
+    query: {
+      economic_intent: [...new Set(economicIntents)].sort(),
+      limit: lookupLimit,
+      offset: 0,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
 
 export const createSpend = (body: CreateSpendTransactionRequest) =>
   createSpendTransaction({ body });

@@ -1,6 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import {
+  type CategoryEconomicIntent,
+  fetchCategoryPickerCategories,
   fetchLedgerLookups,
   fetchTransactionPage,
   isNetworkFailure,
@@ -8,9 +10,14 @@ import {
   type TransactionPageParams,
 } from "@/api";
 import {
+  categoryPickerIntentKey,
   clearTransactionPageLoading,
   getTransactionsSnapshot,
   invalidateTransactionPages,
+  normalizedCategoryPickerIntents,
+  setCategoryPickerCategories,
+  setCategoryPickerCategoriesError,
+  setCategoryPickerCategoriesLoading,
   setLedgerLookups,
   setLedgerLookupsError,
   setLedgerLookupsLoading,
@@ -18,6 +25,7 @@ import {
   setTransactionPageError,
   setTransactionPageLoading,
   transactionPageKey,
+  useCategoryPickerCategoriesView,
   useLedgerLookupsView,
   useTransactionPageView,
 } from "@/store";
@@ -136,6 +144,49 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
   }, []);
 
   return { lookups, page };
+};
+
+export const useCategoryPickerCategoriesResource = (
+  intents: readonly CategoryEconomicIntent[],
+  enabled: boolean,
+  retryToken = 0,
+) => {
+  const intentKey = categoryPickerIntentKey(intents);
+  const normalizedIntents = useMemo(
+    () => normalizedCategoryPickerIntents(intents),
+    [intents],
+  );
+  const categories = useCategoryPickerCategoriesView(normalizedIntents);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    const snapshot = getTransactionsSnapshot();
+    if (
+      snapshot.categoryPickerCategories[intentKey] ||
+      snapshot.categoryPickerCategoryLoading[intentKey]
+    ) {
+      return;
+    }
+
+    setCategoryPickerCategoriesLoading(normalizedIntents);
+
+    void fetchCategoryPickerCategories(normalizedIntents).then((result) => {
+      if (result.data) {
+        setCategoryPickerCategories(normalizedIntents, result.data.categories);
+        return;
+      }
+
+      setCategoryPickerCategoriesError(
+        normalizedIntents,
+        apiErrorMessage(result.error),
+      );
+    });
+  }, [enabled, intentKey, normalizedIntents, retryToken]);
+
+  return categories;
 };
 
 export const refreshTransactionPage = async (

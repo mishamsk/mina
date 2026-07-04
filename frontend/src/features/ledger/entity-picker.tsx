@@ -12,6 +12,7 @@ export interface EntityOption {
 }
 
 interface EntityPickerProps {
+  readonly disabled?: boolean;
   readonly id: string;
   readonly label: string;
   readonly onChange: (id: number | undefined) => void;
@@ -24,6 +25,7 @@ const matchesQuery = (option: EntityOption, query: string): boolean =>
   option.searchLabel.toLowerCase().includes(query.trim().toLowerCase());
 
 export const EntityPicker = ({
+  disabled = false,
   id,
   label,
   onChange,
@@ -45,7 +47,9 @@ export const EntityPicker = ({
       : Math.min(activeIndex, filteredOptions.length - 1);
   const activeOption = filteredOptions[clampedActiveIndex];
   const activeOptionId =
-    open && activeOption ? `${id}-option-${activeOption.id}` : undefined;
+    open && !disabled && activeOption
+      ? `${id}-option-${activeOption.id}`
+      : undefined;
 
   const selectOption = (option: EntityOption) => {
     onChange(option.id);
@@ -62,10 +66,11 @@ export const EntityPicker = ({
         id={id}
         role="combobox"
         aria-controls={`${id}-options`}
-        aria-expanded={open}
+        aria-expanded={open && !disabled}
         aria-autocomplete="list"
         aria-activedescendant={activeOptionId}
         className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+        disabled={disabled}
         placeholder={placeholder}
         value={query}
         onBlur={() => {
@@ -88,6 +93,9 @@ export const EntityPicker = ({
           }
         }}
         onFocus={() => {
+          if (disabled) {
+            return;
+          }
           setQuery(selected?.searchLabel ?? query);
           setOpen(true);
           setActiveIndex(
@@ -98,6 +106,10 @@ export const EntityPicker = ({
           );
         }}
         onKeyDown={(event) => {
+          if (disabled) {
+            return;
+          }
+
           if (event.metaKey || event.ctrlKey) {
             return;
           }
@@ -134,7 +146,7 @@ export const EntityPicker = ({
           }
         }}
       />
-      {open ? (
+      {open && !disabled ? (
         <div
           id={`${id}-options`}
           role="listbox"
