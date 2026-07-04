@@ -57,7 +57,7 @@ Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = 
 
 - [x] Task 1: `qdra` — web UI transaction and navigation papercuts (FE) — branch `qdra-ui-papercuts`
 - [x] Task 2: `ah5b` — tag chip overflow display (FE) — branch `ah5b-tag-chip-overflow`
-- [ ] Task 3: `4nmw` — transaction detail panel interaction polish (FE) — branch `4nmw-detail-panel-polish`
+- [x] Task 3: `4nmw` — transaction detail panel interaction polish (FE) — branch `4nmw-detail-panel-polish`
 - [ ] Task 4: `z8v9` — jump-to-date control on Transactions (FE) — branch `z8v9-date-jump`
 - [ ] Task 5: `f9yj` — entry pickers fetch intent-filtered categories (FE) — branch `f9yj-intent-pickers`; issue already owned, comment instead of claim
 - [ ] Task 6: `y7yk` — balances API: USD equivalents + bulk credit limits (API) — branch `y7yk-balances-aggregates-api`
