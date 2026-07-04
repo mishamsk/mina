@@ -1,10 +1,19 @@
 import { ChevronDown, ChevronRight, Open, Plus } from "pixelarticons/react";
-import { Fragment, useMemo, useState } from "react";
+import {
+  type FocusEvent,
+  Fragment,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { DisplayAmount, JournalRecord, Tag, Transaction } from "@/api";
-import { Tooltip } from "@/components/tooltip";
+import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
 import { currencyDisplayMarker } from "@/utils/currency";
@@ -25,7 +34,7 @@ import {
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
-import { TagChip } from "./tag-chip";
+import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
 
 interface TransactionBrowserProps {
   readonly errorMessage: string | undefined;
@@ -84,28 +93,196 @@ const LoadingRows = () => (
   </div>
 );
 
+const clippedTagChipSlopPx = 0.5;
+const emptyClippedTagIds: ReadonlySet<number> = new Set();
+
+const sameTagIdSet = (
+  left: ReadonlySet<number>,
+  right: ReadonlySet<number>,
+): boolean =>
+  left.size === right.size && Array.from(left).every((id) => right.has(id));
+
+const useClippedTagIds = (
+  element: HTMLDivElement | null,
+  isOverflowing: boolean,
+  tagIdsKey: string,
+): ReadonlySet<number> => {
+  const [clippedTagIds, setClippedTagIds] = useState<ReadonlySet<number>>(
+    () => new Set(),
+  );
+
+  useLayoutEffect(() => {
+    if (!element || !isOverflowing) {
+      return;
+    }
+
+    let frame = 0;
+    const measure = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const clipRect = element.getBoundingClientRect();
+        const overflowTrigger = element.parentElement
+          ?.querySelector<HTMLElement>(
+            "[data-testid='transaction-tags-overflow']",
+          )
+          ?.closest<HTMLElement>("[tabindex]");
+        const overflowRect = overflowTrigger?.getBoundingClientRect();
+        const nextClippedTagIds = new Set<number>();
+
+        for (const child of element.children) {
+          if (!(child instanceof HTMLElement)) {
+            continue;
+          }
+          const tagId = Number(child.dataset.tagId);
+          if (!Number.isFinite(tagId)) {
+            continue;
+          }
+
+          const rect = child.getBoundingClientRect();
+          const overlapsOverflowChip =
+            overflowRect !== undefined &&
+            rect.left < overflowRect.right + clippedTagChipSlopPx &&
+            rect.right > overflowRect.left - clippedTagChipSlopPx &&
+            rect.top < overflowRect.bottom + clippedTagChipSlopPx &&
+            rect.bottom > overflowRect.top - clippedTagChipSlopPx;
+          if (
+            rect.left < clipRect.left - clippedTagChipSlopPx ||
+            rect.right > clipRect.right + clippedTagChipSlopPx ||
+            rect.top < clipRect.top - clippedTagChipSlopPx ||
+            rect.bottom > clipRect.bottom + clippedTagChipSlopPx ||
+            overlapsOverflowChip
+          ) {
+            nextClippedTagIds.add(tagId);
+          }
+        }
+
+        setClippedTagIds((current) =>
+          sameTagIdSet(current, nextClippedTagIds)
+            ? current
+            : nextClippedTagIds,
+        );
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(element);
+    for (const child of element.children) {
+      if (child instanceof HTMLElement) {
+        resizeObserver.observe(child);
+      }
+    }
+    window.addEventListener("resize", measure);
+    measure();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+      resizeObserver.disconnect();
+    };
+  }, [element, isOverflowing, tagIdsKey]);
+
+  return element && isOverflowing ? clippedTagIds : emptyClippedTagIds;
+};
+
 const TagChipsLine = ({ tags }: { readonly tags: readonly Tag[] }) => {
-  const maxVisibleTags = 2;
-  const visibleTags = tags.slice(0, maxVisibleTags);
-  const overflowing = tags.length > visibleTags.length;
+  const { isOverflowing, ref } = useElementOverflow<HTMLDivElement>();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusedTagIdRef = useRef<number | null>(null);
+  const [tagListElement, setTagListElement] = useState<HTMLDivElement | null>(
+    null,
+  );
   const fullLabel = tags.map((tag) => tag.fqn).join(", ");
+  const tagIdsKey = tags.map((tag) => tag.tag_id).join(":");
+  const clippedTagIds = useClippedTagIds(
+    tagListElement,
+    isOverflowing,
+    tagIdsKey,
+  );
+  const setTagListRef = useCallback(
+    (nextElement: HTMLDivElement | null) => {
+      ref(nextElement);
+      setTagListElement(nextElement);
+    },
+    [ref],
+  );
+  const handleTagListFocusCapture = useCallback(
+    (event: FocusEvent<HTMLDivElement>) => {
+      const focusedTagElement = Array.from(tagListElement?.children ?? []).find(
+        (child): child is HTMLElement =>
+          child instanceof HTMLElement && child.contains(event.target),
+      );
+      const focusedTagId = Number(focusedTagElement?.dataset.tagId);
+      focusedTagIdRef.current = Number.isFinite(focusedTagId)
+        ? focusedTagId
+        : null;
+    },
+    [tagListElement],
+  );
+
+  useLayoutEffect(() => {
+    if (!tagListElement || clippedTagIds.size === 0) {
+      return;
+    }
+
+    const focusedTagId = focusedTagIdRef.current;
+    if (focusedTagId === null || !clippedTagIds.has(focusedTagId)) {
+      return;
+    }
+
+    const overflowContent = rootRef.current?.querySelector<HTMLElement>(
+      "[data-testid='transaction-tags-overflow']",
+    );
+    const overflowTrigger = overflowContent?.closest<HTMLElement>("[tabindex]");
+    const firstVisibleTagTrigger = Array.from(tagListElement.children)
+      .filter(
+        (child): child is HTMLElement =>
+          child instanceof HTMLElement &&
+          !clippedTagIds.has(Number(child.dataset.tagId)),
+      )
+      .map((child) => child.querySelector<HTMLElement>("[tabindex]"))
+      .find((trigger): trigger is HTMLElement => Boolean(trigger));
+
+    focusWithoutTooltip(overflowTrigger ?? firstVisibleTagTrigger, {
+      preventScroll: true,
+    });
+  }, [clippedTagIds, tagListElement]);
 
   return (
-    <div className="relative max-w-full min-w-0 overflow-visible">
+    <div
+      ref={rootRef}
+      className={cn(
+        tagChipMicroHeightClass,
+        "relative max-w-full min-w-0 overflow-visible",
+      )}
+    >
       <div
+        ref={setTagListRef}
+        data-testid="transaction-tag-chips-list"
+        onFocusCapture={handleTagListFocusCapture}
         className={cn(
-          "flex min-h-4 w-full max-w-full min-w-0 flex-nowrap gap-1 overflow-hidden pr-0.5 pb-0.5",
-          overflowing && "pr-6",
+          // Two micro chip rows: chip height, one row gap, and room for chip shadow.
+          tagChipMicroHeightClass,
+          "flex max-h-[calc(var(--tag-chip-micro-height)+var(--tag-chip-micro-height)+var(--tag-chip-row-gap)+var(--tag-chip-shadow-room))] min-h-[var(--tag-chip-micro-height)] w-full max-w-full min-w-0 flex-wrap gap-x-1 gap-y-[var(--tag-chip-row-gap)] overflow-hidden pr-[var(--tag-chip-shadow-room)] pb-[var(--tag-chip-shadow-room)] [--tag-chip-row-gap:0.25rem] [--tag-chip-shadow-room:2px]",
         )}
       >
-        {visibleTags.map((tag) => (
-          <TagChip key={tag.tag_id} label={tag.name} micro tooltip={tag.fqn} />
-        ))}
+        {tags.map((tag) => {
+          const isClipped = clippedTagIds.has(tag.tag_id);
+          return (
+            <span
+              key={tag.tag_id}
+              aria-hidden={isClipped ? true : undefined}
+              className={cn("inline-flex shrink-0", isClipped && "invisible")}
+              data-tag-id={tag.tag_id}
+            >
+              <TagChip label={tag.name} micro tooltip={tag.fqn} />
+            </span>
+          );
+        })}
       </div>
-      {overflowing ? (
+      {isOverflowing ? (
         <Tooltip
           label={fullLabel}
-          className="bg-card text-foreground absolute top-0 right-0 inline-flex h-4 w-4 items-center justify-center border border-[var(--border-ink)] font-mono text-[11px] leading-none shadow-[var(--shadow-chip)]"
+          className="bg-card text-foreground absolute right-0 bottom-0 inline-flex h-[var(--tag-chip-micro-height)] w-4 items-center justify-center border border-[var(--border-ink)] font-mono text-[11px] leading-none shadow-[var(--shadow-chip)]"
         >
           <span data-testid="transaction-tags-overflow">…</span>
         </Tooltip>
@@ -553,7 +730,7 @@ export const TransactionBrowser = ({
                         <FqnPath value={category.fqn} variant="leaf-chip" />
                       ) : null}
                     </td>
-                    <td className="transactions-tags-column px-3 py-2">
+                    <td className="transactions-tags-column px-3 py-1">
                       <div className="min-w-0 overflow-visible pb-0.5">
                         {tags === "mixed" ? (
                           <MixedSentinel />

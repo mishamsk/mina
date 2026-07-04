@@ -151,6 +151,50 @@ const chipShadowFitsClippingAncestors = async (
     return true;
   });
 
+const tagChipLineState = async (row: Locator) =>
+  row
+    .locator("td")
+    .nth(5)
+    .evaluate((cell) => {
+      const list = cell.querySelector<HTMLElement>(
+        "[data-testid='transaction-tag-chips-list']",
+      );
+      if (!list) {
+        return {
+          hiddenLabels: [],
+          visibleLabels: [],
+          visibleRowCount: 0,
+        };
+      }
+
+      const clipRect = list.getBoundingClientRect();
+      const chips = Array.from(list.children).filter(
+        (child): child is HTMLElement => child instanceof HTMLElement,
+      );
+      const chipStates = chips.map((chip) => {
+        const rect = chip.getBoundingClientRect();
+        const visible =
+          rect.left >= clipRect.left - 0.5 &&
+          rect.right <= clipRect.right + 0.5 &&
+          rect.top >= clipRect.top - 0.5 &&
+          rect.bottom <= clipRect.bottom + 0.5;
+        return {
+          label: chip.textContent?.trim() ?? "",
+          top: Math.round(rect.top),
+          visible,
+        };
+      });
+      const visibleStates = chipStates.filter((chip) => chip.visible);
+
+      return {
+        hiddenLabels: chipStates
+          .filter((chip) => !chip.visible)
+          .map((chip) => chip.label),
+        visibleLabels: visibleStates.map((chip) => chip.label),
+        visibleRowCount: new Set(visibleStates.map((chip) => chip.top)).size,
+      };
+    });
+
 test("transactions page renders demo transaction lines and expands records", async ({
   page,
 }) => {
@@ -735,17 +779,30 @@ test("transactions line composition uses compact dates and single-line leaf tags
   await page.setViewportSize({ width: 1600, height: 720 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
-  const lisbonTagFqn = `E2E:Wrap:${unique}:Aardvark`;
-  const tagFqns = [
-    lisbonTagFqn,
-    `E2E:Wrap:${unique}:Planning`,
-    `E2E:Wrap:${unique}:Receipts`,
-    `E2E:Wrap:${unique}:Shared`,
-    `E2E:Wrap:${unique}:LongLeafNameForEllipsis`,
+  const fitTagFqns = [
+    `E2E:WrapFit:${unique}:FitAlpha${unique}`,
+    `E2E:WrapFit:${unique}:FitBravo${unique}`,
+    `E2E:WrapFit:${unique}:FitCedar${unique}`,
+    `E2E:WrapFit:${unique}:FitDelta${unique}`,
+  ];
+  const overflowTooltipTagFqn = `E2E:WrapOverflow:${unique}:Aardvark${unique}`;
+  const overflowTagFqns = [
+    overflowTooltipTagFqn,
+    ...Array.from(
+      { length: 11 },
+      (_, index) =>
+        `E2E:WrapOverflow:${unique}:Overflow${String(index + 1).padStart(2, "0")}${unique}`,
+    ),
   ];
   const memberName = `QA${unique}`;
-  const createdTags = await Promise.all(
-    tagFqns.map((fqn) => createTag(page, fqn)),
+  const createdFitTags = await Promise.all(
+    fitTagFqns.map((fqn) => createTag(page, fqn)),
+  );
+  const createdOverflowTags = await Promise.all(
+    overflowTagFqns.map((fqn) => createTag(page, fqn)),
+  );
+  const overflowTagFqnsByName = new Map(
+    createdOverflowTags.map((tag) => [tag.name, tag.fqn]),
   );
   const member = await createMember(page, memberName);
   const [accounts, categories] = await Promise.all([
@@ -755,7 +812,8 @@ test("transactions line composition uses compact dates and single-line leaf tags
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:Books");
   const category = findByFqn(categories, "Entertainment:Books");
-  const memo = `E2E many tags ${unique}`;
+  const fitMemo = `E2E fitting tags ${unique}`;
+  const overflowMemo = `E2E overflowing tags ${unique}`;
   const noMemoLeaf = `NoMemo${unique}`;
   const noMemoMerchantAccount = await createAccount(
     page,
@@ -763,7 +821,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
     "flow",
   );
 
-  const spendResponse = await page.request.post("/api/transactions/spend", {
+  const fitSpendResponse = await page.request.post("/api/transactions/spend", {
     data: {
       amount: "7.31",
       category_id: category.category_id,
@@ -771,12 +829,29 @@ test("transactions line composition uses compact dates and single-line leaf tags
       currency: "USD",
       funding_account_id: fundingAccount.account_id,
       initiated_date: "2026-05-31",
-      member_id: member.member_id,
-      memo,
-      tag_ids: createdTags.map((tag) => tag.tag_id),
+      memo: fitMemo,
+      tag_ids: createdFitTags.map((tag) => tag.tag_id),
     },
   });
-  expect(spendResponse.ok()).toBe(true);
+  expect(fitSpendResponse.ok()).toBe(true);
+
+  const overflowSpendResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "7.32",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-05-31",
+        member_id: member.member_id,
+        memo: overflowMemo,
+        tag_ids: createdOverflowTags.map((tag) => tag.tag_id),
+      },
+    },
+  );
+  expect(overflowSpendResponse.ok()).toBe(true);
 
   const noMemoSpendResponse = await page.request.post(
     "/api/transactions/spend",
@@ -788,6 +863,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
         currency: "USD",
         funding_account_id: fundingAccount.account_id,
         initiated_date: "2026-05-31",
+        tag_ids: createdOverflowTags.map((tag) => tag.tag_id),
       },
     },
   );
@@ -796,31 +872,68 @@ test("transactions line composition uses compact dates and single-line leaf tags
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
-  const manyTagRow = page.getByRole("row").filter({ hasText: memo }).first();
-  await expect(manyTagRow).toBeVisible();
+  const fitTagRow = page.getByRole("row").filter({ hasText: fitMemo }).first();
+  await expect(fitTagRow).toBeVisible();
+  const fitTagState = await tagChipLineState(fitTagRow);
+  expect(fitTagState.visibleLabels.length).toBeGreaterThan(2);
+  expect(fitTagState.visibleLabels).toEqual(
+    expect.arrayContaining(createdFitTags.map((tag) => tag.name)),
+  );
+  expect(fitTagState.hiddenLabels).toEqual([]);
+  expect(fitTagState.visibleRowCount).toBeLessThanOrEqual(2);
+  await expect(
+    fitTagRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
+  ).toHaveCount(0);
 
-  const dateCell = manyTagRow.locator("td").nth(1);
+  const overflowTagRow = page
+    .getByRole("row")
+    .filter({ hasText: overflowMemo })
+    .first();
+  await expect(overflowTagRow).toBeVisible();
+
+  const dateCell = overflowTagRow.locator("td").nth(1);
   await expect(dateCell.locator("div").nth(0)).toHaveText("May 31");
   await expect(dateCell.locator("div").nth(1)).toHaveText("2026");
 
-  const statusCell = manyTagRow.locator("td").nth(2);
+  const statusCell = overflowTagRow.locator("td").nth(2);
   await expect(statusCell).toHaveText("");
 
-  const lisbonTag = manyTagRow
+  const overflowTagState = await tagChipLineState(overflowTagRow);
+  expect(overflowTagState.visibleLabels.length).toBeGreaterThan(0);
+  expect(overflowTagState.hiddenLabels.length).toBeGreaterThan(0);
+  expect(overflowTagState.visibleRowCount).toBeLessThanOrEqual(2);
+
+  const visibleOverflowTag = overflowTagRow
     .locator("td")
     .nth(5)
-    .getByText("Aardvark", { exact: true });
-  await expect(lisbonTag).toBeVisible();
-  await lisbonTag.hover();
-  await expect(
-    page.getByRole("tooltip").filter({ hasText: lisbonTagFqn }),
-  ).toBeVisible();
-  await expect(
-    manyTagRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
-  ).toBeVisible();
-  expect(await chipShadowFitsClippingAncestors(lisbonTag)).toBe(true);
+    .getByText(createdOverflowTags[0]?.name ?? "", { exact: true });
+  await expect(visibleOverflowTag).toBeVisible();
+  const overflowChip = overflowTagRow
+    .locator("td")
+    .nth(5)
+    .getByTestId("transaction-tags-overflow");
+  await expect(overflowChip).toBeVisible();
+  const renderedOverflowTagLabels = await overflowTagRow
+    .locator("td")
+    .nth(5)
+    .getByTestId("transaction-tag-chips-list")
+    .evaluate((list) =>
+      Array.from(list.children)
+        .map((child) => child.textContent?.trim() ?? "")
+        .filter(Boolean),
+    );
+  const overflowTooltipLabel = renderedOverflowTagLabels
+    .map((label) => overflowTagFqnsByName.get(label) ?? label)
+    .join(", ");
+  await overflowChip.hover();
+  const overflowTooltip = page
+    .getByRole("tooltip")
+    .filter({ hasText: overflowTooltipLabel });
+  await expect(overflowTooltip).toBeVisible();
+  await expect(overflowTooltip).toHaveText(overflowTooltipLabel);
+  expect(await chipShadowFitsClippingAncestors(visibleOverflowTag)).toBe(true);
 
-  const memberChip = manyTagRow
+  const memberChip = overflowTagRow
     .locator("td")
     .nth(6)
     .getByText(memberName.slice(0, 2), { exact: true });
@@ -836,6 +949,8 @@ test("transactions line composition uses compact dates and single-line leaf tags
     noMemoLeaf,
   );
   await expect(noMemoRow.getByTestId("transaction-line-memo")).toHaveCount(0);
+  const noMemoTagState = await tagChipLineState(noMemoRow);
+  expect(noMemoTagState.visibleRowCount).toBe(2);
   const noMemoTitleCenterOffset = await noMemoRow
     .locator("td")
     .nth(3)
@@ -859,18 +974,30 @@ test("transactions line composition uses compact dates and single-line leaf tags
 
   const rowHeights = await page
     .locator("tbody > tr[aria-expanded]")
-    .evaluateAll((rows, rowMemo) => {
-      const manyTag = rows.find((row) => row.textContent?.includes(rowMemo));
-      const ordinary = rows.find((row) =>
-        row.textContent?.includes("BlueCash → Target"),
-      );
-      return {
-        manyTag: manyTag?.getBoundingClientRect().height,
-        ordinary: ordinary?.getBoundingClientRect().height,
-      };
-    }, memo);
+    .evaluateAll(
+      (rows, rowText) => {
+        const manyTag = rows.find((row) =>
+          row.textContent?.includes(rowText.withMemo),
+        );
+        const noMemoManyTag = rows.find((row) =>
+          row.textContent?.includes(rowText.withoutMemo),
+        );
+        const ordinary = rows.find((row) =>
+          row.textContent?.includes("BlueCash → Target"),
+        );
+        return {
+          manyTag: manyTag?.getBoundingClientRect().height,
+          noMemoManyTag: noMemoManyTag?.getBoundingClientRect().height,
+          ordinary: ordinary?.getBoundingClientRect().height,
+        };
+      },
+      { withMemo: overflowMemo, withoutMemo: noMemoLeaf },
+    );
   expect(
     Math.abs((rowHeights.manyTag ?? 0) - (rowHeights.ordinary ?? 0)),
+  ).toBeLessThan(1);
+  expect(
+    Math.abs((rowHeights.noMemoManyTag ?? 0) - (rowHeights.ordinary ?? 0)),
   ).toBeLessThan(1);
 });
 
@@ -881,11 +1008,12 @@ test("transaction detail panel shows full records and supports deep links", asyn
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const tagFqns = [
-    `E2E:Detail:${unique}:Aardvark`,
-    `E2E:Detail:${unique}:Planning`,
-    `E2E:Detail:${unique}:Receipts`,
-    `E2E:Detail:${unique}:Shared`,
-    `E2E:Detail:${unique}:LongLeafNameForDetailPanel`,
+    `E2E:Detail:${unique}:Aardvark${unique}`,
+    ...Array.from(
+      { length: 11 },
+      (_, index) =>
+        `E2E:Detail:${unique}:DetailOverflow${String(index + 1).padStart(2, "0")}${unique}`,
+    ),
   ];
   const createdTags = await Promise.all(
     tagFqns.map((fqn) => createTag(page, fqn)),
