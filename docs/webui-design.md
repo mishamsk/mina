@@ -118,7 +118,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Lifted record values (category, tags, member, status) follow the uniformity display rule: identical across all active records → show the value; differing → show a "Mixed" sentinel indicator.
 - Member uniformity ignores unattributed records (counterparty/flow records rarely carry attribution): exactly one distinct member among attributed records → show it; none attributed → blank (whole-household); multiple distinct → Mixed.
 - The memo second line shows the memo when it is uniform across active records (ignoring empty memos); differing memos omit the second line — never a "Mixed" sentinel as prose. When a mixed-class title already falls back to the memo, the second line is omitted.
-- Tag chips in lines render at the micro size on a single line, showing tag leaf names only; overflow truncates with an ellipsis. Tags never increase row height; the transaction detail view shows the complete set.
+- Tag chips in lines render at the micro size, showing tag leaf names only, filling up to two chip rows within the standard row height; tags that still do not fit collapse into an overflow indicator chip. Tags never increase row height; the transaction detail view shows the complete set.
 
 ### Dates and statuses
 
