@@ -13,6 +13,7 @@ import {
   buildLookupMaps,
   displayAmountKey,
   formatInitiatedDate,
+  lineMemo,
   type LookupMaps,
   transactionClassLabel,
 } from "./format";
@@ -246,6 +247,7 @@ export const TransactionDetailPanel = ({
     string | undefined
   >();
   const [deleting, setDeleting] = useState(false);
+  const summaryMemo = transaction ? lineMemo(transaction) : undefined;
 
   const closeDeleteConfirmation = useCallback(() => {
     if (deleting) {
@@ -410,6 +412,14 @@ export const TransactionDetailPanel = ({
                 <p className="text-muted-foreground text-sm">
                   Initiated {formatInitiatedDate(transaction.initiated_date)}
                 </p>
+                {summaryMemo ? (
+                  <p
+                    className="text-muted-foreground font-body text-sm break-words whitespace-pre-wrap"
+                    data-testid="transaction-detail-summary-memo"
+                  >
+                    {summaryMemo}
+                  </p>
+                ) : null}
               </div>
               <DetailAmountList transaction={transaction} />
             </header>

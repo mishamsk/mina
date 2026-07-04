@@ -16,6 +16,11 @@ interface TagFixture {
   readonly tag_id: number;
 }
 
+interface MemberFixture {
+  readonly member_id: number;
+  readonly name: string;
+}
+
 interface TransactionFixture {
   readonly display_title: string;
   readonly transaction_id: number;
@@ -47,6 +52,15 @@ const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
   const response = await page.request.post("/api/tags", { data: { fqn } });
   expect(response.ok()).toBe(true);
   return (await response.json()) as TagFixture;
+};
+
+const createMember = async (
+  page: Page,
+  name: string,
+): Promise<MemberFixture> => {
+  const response = await page.request.post("/api/members", { data: { name } });
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as MemberFixture;
 };
 
 const createAccount = async (
@@ -91,6 +105,51 @@ const amountChipsFitCell = async (row: Locator): Promise<boolean> =>
         )
       );
     });
+
+const chipShadowFitsClippingAncestors = async (
+  chipContent: Locator,
+): Promise<boolean> =>
+  chipContent.evaluate((element) => {
+    const chipShadowOffsetPx = 2;
+    const chip =
+      element.parentElement instanceof HTMLElement
+        ? element.parentElement
+        : element instanceof HTMLElement
+          ? element
+          : null;
+    const row = chip?.closest("tr");
+    if (!chip || !row) {
+      return false;
+    }
+
+    const chipRect = chip.getBoundingClientRect();
+    const shadowBounds = {
+      bottom: chipRect.bottom + chipShadowOffsetPx,
+      right: chipRect.right + chipShadowOffsetPx,
+    };
+
+    let ancestor: HTMLElement | null = chip.parentElement;
+    while (ancestor) {
+      const style = getComputedStyle(ancestor);
+      const clipsX = style.overflowX !== "visible";
+      const clipsY = style.overflowY !== "visible";
+      if (clipsX || clipsY) {
+        const rect = ancestor.getBoundingClientRect();
+        if (
+          (clipsX && shadowBounds.right > rect.right + 0.5) ||
+          (clipsY && shadowBounds.bottom > rect.bottom + 0.5)
+        ) {
+          return false;
+        }
+      }
+      if (ancestor === row) {
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+
+    return true;
+  });
 
 test("transactions page renders demo transaction lines and expands records", async ({
   page,
@@ -156,9 +215,9 @@ test("transactions page uses server pagination controls", async ({ page }) => {
   await page.goto("/transactions?page=1&pageSize=10");
 
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
-  await expect(page.locator("tbody > tr[aria-expanded]").first()).toContainText(
-    "→",
-  );
+  await expect(
+    page.locator("tbody > tr[aria-expanded]").filter({ hasText: "→" }).first(),
+  ).toBeVisible();
   const firstPageFirstTitle = (
     await page
       .locator("tbody > tr[aria-expanded]")
@@ -354,7 +413,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     });
 
   await page.setViewportSize({ width: 1000, height: 720 });
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=50");
 
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
 
@@ -684,9 +743,11 @@ test("transactions line composition uses compact dates and single-line leaf tags
     `E2E:Wrap:${unique}:Shared`,
     `E2E:Wrap:${unique}:LongLeafNameForEllipsis`,
   ];
+  const memberName = `QA${unique}`;
   const createdTags = await Promise.all(
     tagFqns.map((fqn) => createTag(page, fqn)),
   );
+  const member = await createMember(page, memberName);
   const [accounts, categories] = await Promise.all([
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
@@ -695,6 +756,12 @@ test("transactions line composition uses compact dates and single-line leaf tags
   const merchantAccount = findByFqn(accounts, "merchant:Books");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E many tags ${unique}`;
+  const noMemoLeaf = `NoMemo${unique}`;
+  const noMemoMerchantAccount = await createAccount(
+    page,
+    `merchant:E2E:${noMemoLeaf}`,
+    "flow",
+  );
 
   const spendResponse = await page.request.post("/api/transactions/spend", {
     data: {
@@ -704,11 +771,27 @@ test("transactions line composition uses compact dates and single-line leaf tags
       currency: "USD",
       funding_account_id: fundingAccount.account_id,
       initiated_date: "2026-05-31",
+      member_id: member.member_id,
       memo,
       tag_ids: createdTags.map((tag) => tag.tag_id),
     },
   });
   expect(spendResponse.ok()).toBe(true);
+
+  const noMemoSpendResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "6.42",
+        category_id: category.category_id,
+        counterparty_account_id: noMemoMerchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-05-31",
+      },
+    },
+  );
+  expect(noMemoSpendResponse.ok()).toBe(true);
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
@@ -735,6 +818,44 @@ test("transactions line composition uses compact dates and single-line leaf tags
   await expect(
     manyTagRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
   ).toBeVisible();
+  expect(await chipShadowFitsClippingAncestors(lisbonTag)).toBe(true);
+
+  const memberChip = manyTagRow
+    .locator("td")
+    .nth(6)
+    .getByText(memberName.slice(0, 2), { exact: true });
+  await expect(memberChip).toBeVisible();
+  expect(await chipShadowFitsClippingAncestors(memberChip)).toBe(true);
+
+  const noMemoRow = page
+    .getByRole("row")
+    .filter({ hasText: noMemoLeaf })
+    .first();
+  await expect(noMemoRow).toBeVisible();
+  await expect(noMemoRow.getByTestId("transaction-line-title")).toContainText(
+    noMemoLeaf,
+  );
+  await expect(noMemoRow.getByTestId("transaction-line-memo")).toHaveCount(0);
+  const noMemoTitleCenterOffset = await noMemoRow
+    .locator("td")
+    .nth(3)
+    .evaluate((descriptionCell) => {
+      const title = descriptionCell.querySelector<HTMLElement>(
+        "[data-testid='transaction-line-title']",
+      );
+      if (!title) {
+        return Number.POSITIVE_INFINITY;
+      }
+
+      const cellRect = descriptionCell.getBoundingClientRect();
+      const titleRect = title.getBoundingClientRect();
+      return Math.abs(
+        titleRect.top +
+          titleRect.height / 2 -
+          (cellRect.top + cellRect.height / 2),
+      );
+    });
+  expect(noMemoTitleCenterOffset).toBeLessThanOrEqual(1);
 
   const rowHeights = await page
     .locator("tbody > tr[aria-expanded]")
@@ -824,8 +945,16 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(
     panel.getByTestId("amount-chip").filter({ hasText: "-42.19 $" }).first(),
   ).toBeVisible();
-  await expect(panel.getByText(memo).first()).toBeVisible();
+  await expect(panel.getByTestId("transaction-detail-summary-memo")).toHaveText(
+    memo,
+  );
   await expect(panel.getByText("Journal records")).toBeVisible();
+  const journalRecords = panel.locator(
+    "section[aria-labelledby='transaction-detail-records']",
+  );
+  await expect(
+    journalRecords.getByRole("cell", { name: memo }).first(),
+  ).toBeVisible();
   await expect(panel.getByText("cash:Wallet").first()).toBeVisible();
   await expect(panel.getByText("merchant:Books").first()).toBeVisible();
   await expect(panel.getByText("Entertainment:Books").first()).toBeVisible();
@@ -858,7 +987,9 @@ test("transaction detail panel shows full records and supports deep links", asyn
     name: transaction.display_title,
   });
   await expect(deepLinkPanel).toBeVisible();
-  await expect(deepLinkPanel.getByText(memo).first()).toBeVisible();
+  await expect(
+    deepLinkPanel.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(memo);
 
   await page.keyboard.press("Escape");
   await expect(deepLinkPanel).toBeHidden();

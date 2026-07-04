@@ -91,11 +91,11 @@ const TagChipsLine = ({ tags }: { readonly tags: readonly Tag[] }) => {
   const fullLabel = tags.map((tag) => tag.fqn).join(", ");
 
   return (
-    <div className="relative max-w-full min-w-0 overflow-hidden">
+    <div className="relative max-w-full min-w-0 overflow-visible">
       <div
         className={cn(
-          "flex w-full max-w-full min-w-0 flex-nowrap gap-1 overflow-hidden",
-          overflowing && "pr-5",
+          "flex min-h-4 w-full max-w-full min-w-0 flex-nowrap gap-1 overflow-hidden pr-0.5 pb-0.5",
+          overflowing && "pr-6",
         )}
       >
         {visibleTags.map((tag) => (
@@ -479,9 +479,17 @@ export const TransactionBrowser = ({
                       )}
                     </td>
                     <td className="px-3 py-2">
-                      <div className="flex min-w-0 items-start gap-2">
+                      <div
+                        className={cn(
+                          "flex min-w-0 gap-2",
+                          memo ? "items-start" : "items-center",
+                        )}
+                      >
                         <span
-                          className="mt-0.5 grid size-6 shrink-0 place-items-center"
+                          className={cn(
+                            "grid size-6 shrink-0 place-items-center",
+                            memo && "mt-0.5",
+                          )}
                           aria-hidden="true"
                         >
                           {expanded ? (
@@ -496,16 +504,27 @@ export const TransactionBrowser = ({
                             />
                           )}
                         </span>
-                        <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                        <div
+                          className={cn(
+                            "grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-2",
+                            memo ? "items-start" : "items-center",
+                          )}
+                        >
                           <div className="min-w-0">
                             <Tooltip label={title} className="block min-w-0">
-                              <div className="truncate font-medium">
+                              <div
+                                className="truncate font-medium"
+                                data-testid="transaction-line-title"
+                              >
                                 {title}
                               </div>
                             </Tooltip>
                             {memo ? (
                               <Tooltip label={memo} className="block min-w-0">
-                                <div className="text-muted-foreground truncate text-xs">
+                                <div
+                                  className="text-muted-foreground truncate text-xs"
+                                  data-testid="transaction-line-memo"
+                                >
                                   {memo}
                                 </div>
                               </Tooltip>
@@ -535,7 +554,7 @@ export const TransactionBrowser = ({
                       ) : null}
                     </td>
                     <td className="transactions-tags-column px-3 py-2">
-                      <div className="min-w-0">
+                      <div className="min-w-0 overflow-visible pb-0.5">
                         {tags === "mixed" ? (
                           <MixedSentinel />
                         ) : (
@@ -544,11 +563,13 @@ export const TransactionBrowser = ({
                       </div>
                     </td>
                     <td className="transactions-member-column px-3 py-2">
-                      {member === "mixed" ? (
-                        <MixedSentinel />
-                      ) : member ? (
-                        <MemberChip name={member.name} />
-                      ) : null}
+                      <div className="overflow-visible pb-0.5">
+                        {member === "mixed" ? (
+                          <MixedSentinel />
+                        ) : member ? (
+                          <MemberChip name={member.name} />
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-right align-middle">
                       <div className="flex min-w-0 flex-row flex-wrap items-center justify-end gap-1">

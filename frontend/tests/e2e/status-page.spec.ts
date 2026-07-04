@@ -103,6 +103,36 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Transactions" }),
   ).toBeVisible();
+
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await expect(
+    page.getByRole("link", { name: "Transactions" }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: "Settings" })).toBeDisabled();
+  const statusIcon = page
+    .getByRole("link", { name: "Status" })
+    .locator("svg")
+    .first();
+  const settingsIcon = page
+    .getByRole("button", { name: "Settings" })
+    .locator("svg")
+    .first();
+  await expect(statusIcon).toBeVisible();
+  await expect(settingsIcon).toBeVisible();
+
+  const [statusIconBox, settingsIconBox] = await Promise.all([
+    statusIcon.boundingBox(),
+    settingsIcon.boundingBox(),
+  ]);
+  expect(statusIconBox).not.toBeNull();
+  expect(settingsIconBox).not.toBeNull();
+  expect(
+    Math.abs(
+      (statusIconBox?.x ?? 0) +
+        (statusIconBox?.width ?? 0) / 2 -
+        ((settingsIconBox?.x ?? 0) + (settingsIconBox?.width ?? 0) / 2),
+    ),
+  ).toBeLessThanOrEqual(1);
 });
 
 test("status page UI preference survives reload", async ({ page }) => {

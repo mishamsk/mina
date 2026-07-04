@@ -9,7 +9,7 @@ import {
   ListBox,
   Menu,
   Plus,
-  SettingsCog,
+  SettingsCog2,
   User,
   Wallet,
 } from "pixelarticons/react";
@@ -46,25 +46,18 @@ const referenceNavItems: readonly NavItem[] = [
 
 const utilityNavItems: readonly NavItem[] = [
   { icon: Chart, label: "Status", to: "/status" },
-  { disabled: true, icon: SettingsCog, label: "Settings", to: "/settings" },
+  { disabled: true, icon: SettingsCog2, label: "Settings", to: "/settings" },
 ];
 
 interface AppShellProps {
   readonly children: ReactNode;
 }
 
-const navLinkClass = ({
-  collapsed,
-  isActive,
-}: {
-  collapsed: boolean;
-  isActive: boolean;
-}) =>
+const navLinkClass = ({ collapsed }: { collapsed: boolean }) =>
   cn(
     "font-heading flex h-9 items-center gap-3 border-2 border-transparent px-2 text-sm font-semibold text-[var(--frame-muted)] uppercase",
     "hover:border-[var(--border-ink)] hover:bg-[var(--sidebar-accent)] hover:text-[var(--frame-foreground)]",
-    isActive &&
-      "border-[var(--border-ink)] bg-primary text-primary-foreground shadow-[var(--shadow-chip)] hover:bg-primary hover:text-primary-foreground",
+    "aria-[current=page]:border-[var(--border-ink)] aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground aria-[current=page]:shadow-[var(--shadow-chip)] aria-[current=page]:hover:bg-primary aria-[current=page]:hover:text-primary-foreground",
     collapsed && "justify-center px-0",
   );
 
@@ -79,7 +72,7 @@ const DisabledNavItem = ({
       disabled
       aria-label={label}
       className={cn(
-        "font-heading flex h-9 items-center gap-3 border-2 border-transparent px-2 text-sm font-semibold text-[var(--frame-muted)] uppercase opacity-60",
+        "font-heading flex h-9 w-full items-center gap-3 border-2 border-transparent px-2 text-sm font-semibold text-[var(--frame-muted)] uppercase opacity-60",
         collapsed && "justify-center px-0",
       )}
     >
@@ -89,8 +82,8 @@ const DisabledNavItem = ({
   );
 
   return collapsed ? (
-    <Tooltip label={label} className="w-full">
-      {item}
+    <Tooltip label={label} asChild>
+      <span className="flex w-full">{item}</span>
     </Tooltip>
   ) : (
     item
@@ -119,9 +112,9 @@ const SidebarNav = ({
 
       const navLink = (
         <NavLink
+          className={navLinkClass({ collapsed })}
           key={item.label}
           to={item.to}
-          className={({ isActive }) => navLinkClass({ collapsed, isActive })}
         >
           <item.icon className="size-4 shrink-0" aria-hidden="true" />
           <span className={cn(collapsed && "sr-only")}>{item.label}</span>
