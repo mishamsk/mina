@@ -163,7 +163,7 @@ func (s *AccountStore) ListBalances(ctx context.Context, opts accounts.BalanceLi
 	rows, err := s.db.query().QueryContext(
 		ctx,
 		`WITH active_records AS (
-	SELECT jr.account_id, jr.currency, jr.amount, jr.posting_status
+	SELECT jr.account_id, jr.currency, jr.amount, jr.amount_usd, jr.posting_status
 	FROM `+s.db.accountingName("journal_record")+` jr
 	JOIN `+s.db.accountingName("transaction")+` tx ON tx.transaction_id = jr.transaction_id
 	WHERE jr.tombstoned_at IS NULL
@@ -174,9 +174,17 @@ SELECT a.account_id,
        COALESCE(ar.currency, a.currency) AS currency,
        COALESCE(CAST(SUM(ar.amount) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS current_balance,
        COALESCE(CAST(SUM(CASE
+           WHEN ar.account_id IS NOT NULL AND ar.amount_usd IS NOT NULL THEN ar.amount_usd
+           ELSE CAST(0 AS DECIMAL(18,8))
+       END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS current_balance_usd,
+       COALESCE(CAST(SUM(CASE
            WHEN ar.posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`) THEN ar.amount
            ELSE CAST(0 AS DECIMAL(18,8))
-       END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS posted_balance
+       END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS posted_balance,
+       COALESCE(CAST(SUM(CASE
+           WHEN ar.account_id IS NOT NULL AND ar.amount_usd IS NULL THEN 1
+           ELSE 0
+       END) AS BIGINT), 0) AS unconverted_count
 FROM `+s.db.accountingName("account")+` a
 LEFT JOIN active_records ar ON ar.account_id = a.account_id
 `+filter+`
@@ -346,12 +354,15 @@ func scanAccount(scanner accountScanner) (accounts.Account, error) {
 func scanAccountBalance(scanner accountScanner) (accounts.AccountBalance, error) {
 	var balance accounts.AccountBalance
 	var current duckdb.Decimal
+	var currentUSD duckdb.Decimal
 	var posted duckdb.Decimal
 	if err := scanner.Scan(
 		&balance.AccountID,
 		&balance.Currency,
 		&current,
+		&currentUSD,
 		&posted,
+		&balance.UnconvertedCount,
 	); err != nil {
 		return accounts.AccountBalance{}, err
 	}
@@ -360,11 +371,16 @@ func scanAccountBalance(scanner accountScanner) (accounts.AccountBalance, error)
 	if err != nil {
 		return accounts.AccountBalance{}, fmt.Errorf("scan current balance decimal: %w", err)
 	}
+	currentBalanceUSD, err := decimalFromDuckDB(currentUSD)
+	if err != nil {
+		return accounts.AccountBalance{}, fmt.Errorf("scan current balance usd decimal: %w", err)
+	}
 	postedBalance, err := decimalFromDuckDB(posted)
 	if err != nil {
 		return accounts.AccountBalance{}, fmt.Errorf("scan posted balance decimal: %w", err)
 	}
 	balance.CurrentBalance = currentBalance
+	balance.CurrentBalanceUSD = currentBalanceUSD
 	balance.PostedBalance = postedBalance
 
 	return balance, nil

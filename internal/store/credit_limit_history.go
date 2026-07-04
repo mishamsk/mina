@@ -131,6 +131,62 @@ WHERE account_id = ?`
 	}, nil
 }
 
+// CurrentByAccounts returns the latest active credit limit on or before asOf for each account.
+func (s *CreditLimitHistoryStore) CurrentByAccounts(ctx context.Context, accountIDs []int64, asOf values.CivilDate) (map[int64]values.Decimal, error) {
+	if len(accountIDs) == 0 {
+		return map[int64]values.Decimal{}, nil
+	}
+
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`WITH ranked_limits AS (
+	SELECT account_id,
+	       credit_limit,
+	       ROW_NUMBER() OVER (
+	           PARTITION BY account_id
+	           ORDER BY effective_date DESC, credit_limit_history_id DESC
+	       ) AS row_number
+	FROM `+s.db.accountingName("credit_limit_history")+`
+	WHERE tombstoned_at IS NULL
+	  AND effective_date <= ?
+	  AND account_id IN (`+placeholders(len(accountIDs))+`)
+)
+SELECT account_id, credit_limit
+FROM ranked_limits
+WHERE row_number = 1
+ORDER BY account_id ASC`,
+		append([]any{civilDateArg(asOf)}, int64Args(accountIDs)...)...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list current credit limits: %w", err)
+	}
+
+	limits := make(map[int64]values.Decimal, len(accountIDs))
+	for rows.Next() {
+		var accountID int64
+		var creditLimit duckdb.Decimal
+		if err := rows.Scan(&accountID, &creditLimit); err != nil {
+			return nil, fmt.Errorf("scan current credit limit: %w", err)
+		}
+		parsedLimit, err := decimalFromDuckDB(creditLimit)
+		if err != nil {
+			return nil, fmt.Errorf("scan current credit limit decimal: %w", err)
+		}
+		limits[accountID] = parsedLimit
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate current credit limits: %w; close current credit limit rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate current credit limits: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close current credit limit rows: %w", err)
+	}
+
+	return limits, nil
+}
+
 // Tombstone marks a credit limit history entry deleted without removing its historical row.
 func (s *CreditLimitHistoryStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.query().ExecContext(

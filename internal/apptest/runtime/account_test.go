@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
@@ -431,7 +432,7 @@ func TestAccountBalancesBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	scenario := client.Scenario()
 
-	checking := scenario.AccountWithCurrency("checking:Balances:Primary", "USD")
+	checking := scenario.AccountWithCurrency("checking:Balances:Primary", "EUR")
 	savings := scenario.AccountWithCurrency("savings:Balances:Reserve", "USD")
 	travel := scenario.AccountWithCurrency("cash:Travel", "USD")
 	merchant := scenario.AccountWithType("merchant:Balances", httpclient.Flow)
@@ -451,14 +452,15 @@ func TestAccountBalancesBoundary(t *testing.T) {
 		t.Fatalf("hidden balance account status = %d, want %d; body %s", hidden.StatusCode(), http.StatusCreated, hidden.Body)
 	}
 
-	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-100.00", "100.00", httpclient.Posted)
-	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-25.00", "25.00", httpclient.Pending)
-	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-5.00", "5.00", httpclient.Cancelled)
-	createBalanceTransaction(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "USD", "2.00", "-2.00", httpclient.Posted)
-	createBalanceTransaction(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "EUR", "3.00", "-3.00", httpclient.Posted)
+	createBalanceTransactionWithAmountUSD(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-100.00", "100.00", "-110.00", "110.00", httpclient.Posted)
+	createBalanceTransactionWithAmountUSD(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-25.00", "25.00", "-27.50", "27.50", httpclient.Pending)
+	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-10.00", "10.00", httpclient.Posted)
+	createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-5.00", "5.00", httpclient.Cancelled)
+	createBalanceTransactionWithAmountUSD(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "USD", "2.00", "-2.00", "2.50", "-2.50", httpclient.Posted)
+	createBalanceTransactionWithAmountUSD(t, client, travel.AccountId, merchant.AccountId, incomeCategory.CategoryId, "EUR", "3.00", "-3.00", "3.30", "-3.30", httpclient.Posted)
 	createBalanceTransaction(t, client, savings.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-7.00", "7.00", httpclient.Cancelled)
-	createBalanceTransaction(t, client, hidden.JSON201.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-9.00", "9.00", httpclient.Posted)
-	deletedTransaction := createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-11.00", "11.00", httpclient.Posted)
+	createBalanceTransactionWithAmountUSD(t, client, hidden.JSON201.AccountId, merchant.AccountId, expenseCategory.CategoryId, "USD", "-9.00", "9.00", "-9.00", "9.00", httpclient.Posted)
+	deletedTransaction := createBalanceTransaction(t, client, checking.AccountId, merchant.AccountId, expenseCategory.CategoryId, "EUR", "-11.00", "11.00", httpclient.Posted)
 	deleted, err := client.REST().DeleteTransactionWithResponse(context.Background(), deletedTransaction.JSON201.TransactionId)
 	if err != nil {
 		t.Fatalf("delete balance transaction request: %v", err)
@@ -475,10 +477,10 @@ func TestAccountBalancesBoundary(t *testing.T) {
 		t.Fatalf("list account balances status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
 	}
 	assertAccountBalances(t, balances.JSON200.Balances, []wantAccountBalance{
-		{accountID: checking.AccountId, currency: "USD", current: "-125.00000000", posted: "-100.00000000"},
-		{accountID: savings.AccountId, currency: "USD", current: "0.00000000", posted: "0.00000000"},
-		{accountID: travel.AccountId, currency: "EUR", current: "3.00000000", posted: "3.00000000"},
-		{accountID: travel.AccountId, currency: "USD", current: "2.00000000", posted: "2.00000000"},
+		{accountID: checking.AccountId, currency: "EUR", current: "-135.00000000", currentUSD: "-137.50000000", posted: "-110.00000000", unconvertedCount: 1},
+		{accountID: savings.AccountId, currency: "USD", current: "0.00000000", currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
+		{accountID: travel.AccountId, currency: "EUR", current: "3.00000000", currentUSD: "3.30000000", posted: "3.00000000", unconvertedCount: 0},
+		{accountID: travel.AccountId, currency: "USD", current: "2.00000000", currentUSD: "2.50000000", posted: "2.00000000", unconvertedCount: 0},
 	})
 
 	includeHidden, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{IncludeHidden: &hiddenValue})
@@ -489,11 +491,11 @@ func TestAccountBalancesBoundary(t *testing.T) {
 		t.Fatalf("include hidden account balances status = %d, want %d; body %s", includeHidden.StatusCode(), http.StatusOK, includeHidden.Body)
 	}
 	assertAccountBalances(t, includeHidden.JSON200.Balances, []wantAccountBalance{
-		{accountID: checking.AccountId, currency: "USD", current: "-125.00000000", posted: "-100.00000000"},
-		{accountID: savings.AccountId, currency: "USD", current: "0.00000000", posted: "0.00000000"},
-		{accountID: travel.AccountId, currency: "EUR", current: "3.00000000", posted: "3.00000000"},
-		{accountID: travel.AccountId, currency: "USD", current: "2.00000000", posted: "2.00000000"},
-		{accountID: hidden.JSON201.AccountId, currency: "USD", current: "-9.00000000", posted: "-9.00000000"},
+		{accountID: checking.AccountId, currency: "EUR", current: "-135.00000000", currentUSD: "-137.50000000", posted: "-110.00000000", unconvertedCount: 1},
+		{accountID: savings.AccountId, currency: "USD", current: "0.00000000", currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
+		{accountID: travel.AccountId, currency: "EUR", current: "3.00000000", currentUSD: "3.30000000", posted: "3.00000000", unconvertedCount: 0},
+		{accountID: travel.AccountId, currency: "USD", current: "2.00000000", currentUSD: "2.50000000", posted: "2.00000000", unconvertedCount: 0},
+		{accountID: hidden.JSON201.AccountId, currency: "USD", current: "-9.00000000", currentUSD: "-9.00000000", posted: "-9.00000000", unconvertedCount: 0},
 	})
 
 	accountIDs := []int64{travel.AccountId, merchant.AccountId}
@@ -505,8 +507,8 @@ func TestAccountBalancesBoundary(t *testing.T) {
 		t.Fatalf("filtered account balances status = %d, want %d; body %s", filtered.StatusCode(), http.StatusOK, filtered.Body)
 	}
 	assertAccountBalances(t, filtered.JSON200.Balances, []wantAccountBalance{
-		{accountID: travel.AccountId, currency: "EUR", current: "3.00000000", posted: "3.00000000"},
-		{accountID: travel.AccountId, currency: "USD", current: "2.00000000", posted: "2.00000000"},
+		{accountID: travel.AccountId, currency: "EUR", current: "3.00000000", currentUSD: "3.30000000", posted: "3.00000000", unconvertedCount: 0},
+		{accountID: travel.AccountId, currency: "USD", current: "2.00000000", currentUSD: "2.50000000", posted: "2.00000000", unconvertedCount: 0},
 	})
 
 	emptyAccountIDs := []int64{merchant.AccountId}
@@ -526,6 +528,61 @@ func TestAccountBalancesBoundary(t *testing.T) {
 	if invalid.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid account balances status = %d, want %d; body %s", invalid.StatusCode(), http.StatusBadRequest, invalid.Body)
 	}
+}
+
+func TestAccountBalancesIncludeCurrentCreditLimits(t *testing.T) {
+	clock := apptest.NewFakeClock(apptest.Timestamp("2026-07-04T12:00:00Z"))
+	client := newSharedClient(t, apptest.WithClock(clock))
+	scenario := client.Scenario()
+
+	card := scenario.AccountWithCurrency("cards:Balances:Rewards", "USD")
+	backupCard := scenario.AccountWithCurrency("cards:Balances:Backup", "USD")
+	noHistory := scenario.AccountWithCurrency("checking:Balances:NoLimit", "USD")
+
+	createCreditLimitHistory(t, client, card.AccountId, "5000.00", "2026-01-01")
+	createCreditLimitHistory(t, client, card.AccountId, "7000.00", "2026-07-03")
+	createCreditLimitHistory(t, client, card.AccountId, "9000.00", "2026-07-05")
+	tombstoned := createCreditLimitHistory(t, client, card.AccountId, "8000.00", "2026-07-04")
+	deleteCreditLimitHistory(t, client, tombstoned.JSON201.CreditLimitHistoryId)
+	createCreditLimitHistory(t, client, backupCard.AccountId, "3000.00", "2026-06-01")
+
+	accountIDs := []int64{card.AccountId, backupCard.AccountId, noHistory.AccountId}
+	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})
+	if err != nil {
+		t.Fatalf("list account balances with credit limits request: %v", err)
+	}
+	if balances.StatusCode() != http.StatusOK {
+		t.Fatalf("list account balances with credit limits status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
+	}
+	assertAccountBalances(t, balances.JSON200.Balances, []wantAccountBalance{
+		{accountID: card.AccountId, currency: "USD", current: "0.00000000", creditLimit: ptrTo("7000.00000000"), currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
+		{accountID: backupCard.AccountId, currency: "USD", current: "0.00000000", creditLimit: ptrTo("3000.00000000"), currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
+		{accountID: noHistory.AccountId, currency: "USD", current: "0.00000000", currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
+	})
+}
+
+func TestAccountBalancesUseLocalCivilDateForCurrentCreditLimits(t *testing.T) {
+	localZone := time.FixedZone("local-test", -7*60*60)
+	clock := apptest.NewFakeClock(time.Date(2026, 7, 4, 23, 30, 0, 0, localZone))
+	client := newSharedClient(t, apptest.WithClock(clock))
+	scenario := client.Scenario()
+
+	card := scenario.AccountWithCurrency("cards:Balances:LocalToday", "USD")
+
+	createCreditLimitHistory(t, client, card.AccountId, "4000.00", "2026-07-04")
+	createCreditLimitHistory(t, client, card.AccountId, "5000.00", "2026-07-05")
+
+	accountIDs := []int64{card.AccountId}
+	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})
+	if err != nil {
+		t.Fatalf("list account balances with local-date credit limit request: %v", err)
+	}
+	if balances.StatusCode() != http.StatusOK {
+		t.Fatalf("list account balances with local-date credit limit status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
+	}
+	assertAccountBalances(t, balances.JSON200.Balances, []wantAccountBalance{
+		{accountID: card.AccountId, currency: "USD", current: "0.00000000", creditLimit: ptrTo("4000.00000000"), currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
+	})
 }
 
 func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
@@ -816,6 +873,66 @@ func createBalanceTransaction(
 ) *httpclient.CreateTransactionResponse {
 	t.Helper()
 
+	return createBalanceTransactionWithOptionalAmountUSD(
+		t,
+		client,
+		balanceAccountID,
+		counterAccountID,
+		categoryID,
+		currency,
+		balanceAmount,
+		counterAmount,
+		nil,
+		nil,
+		postingStatus,
+	)
+}
+
+func createBalanceTransactionWithAmountUSD(
+	t *testing.T,
+	client *apptest.Client,
+	balanceAccountID int64,
+	counterAccountID int64,
+	categoryID int64,
+	currency string,
+	balanceAmount string,
+	counterAmount string,
+	balanceAmountUSD string,
+	counterAmountUSD string,
+	postingStatus httpclient.PostingStatus,
+) *httpclient.CreateTransactionResponse {
+	t.Helper()
+
+	return createBalanceTransactionWithOptionalAmountUSD(
+		t,
+		client,
+		balanceAccountID,
+		counterAccountID,
+		categoryID,
+		currency,
+		balanceAmount,
+		counterAmount,
+		&balanceAmountUSD,
+		&counterAmountUSD,
+		postingStatus,
+	)
+}
+
+func createBalanceTransactionWithOptionalAmountUSD(
+	t *testing.T,
+	client *apptest.Client,
+	balanceAccountID int64,
+	counterAccountID int64,
+	categoryID int64,
+	currency string,
+	balanceAmount string,
+	counterAmount string,
+	balanceAmountUSD *string,
+	counterAmountUSD *string,
+	postingStatus httpclient.PostingStatus,
+) *httpclient.CreateTransactionResponse {
+	t.Helper()
+
 	created, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-03-10"),
 		Records: []httpclient.CreateJournalRecordRequest{
@@ -823,6 +940,7 @@ func createBalanceTransaction(
 				AccountId:            balanceAccountID,
 				Currency:             currency,
 				Amount:               balanceAmount,
+				AmountUsd:            balanceAmountUSD,
 				CategoryId:           categoryID,
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -832,6 +950,7 @@ func createBalanceTransaction(
 				AccountId:            counterAccountID,
 				Currency:             currency,
 				Amount:               counterAmount,
+				AmountUsd:            counterAmountUSD,
 				CategoryId:           categoryID,
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -849,11 +968,49 @@ func createBalanceTransaction(
 	return created
 }
 
+func createCreditLimitHistory(
+	t *testing.T,
+	client *apptest.Client,
+	accountID int64,
+	creditLimit string,
+	effectiveDate string,
+) *httpclient.CreateCreditLimitHistoryResponse {
+	t.Helper()
+
+	created, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), accountID, httpclient.CreateCreditLimitHistoryRequest{
+		CreditLimit:   creditLimit,
+		EffectiveDate: apptest.Date(effectiveDate),
+	})
+	if err != nil {
+		t.Fatalf("create credit limit history request: %v", err)
+	}
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create credit limit history status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+
+	return created
+}
+
+func deleteCreditLimitHistory(t *testing.T, client *apptest.Client, id int64) {
+	t.Helper()
+
+	deleted, err := client.REST().DeleteCreditLimitHistoryWithResponse(context.Background(), id)
+	if err != nil {
+		t.Fatalf("delete credit limit history request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete credit limit history status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+}
+
 type wantAccountBalance struct {
-	accountID int64
-	currency  string
-	current   string
-	posted    string
+	accountID        int64
+	currency         string
+	current          string
+	creditLimit      *string
+	currentUSD       string
+	posted           string
+	unconvertedCount int64
 }
 
 func assertAccountBalances(t *testing.T, balances []httpclient.AccountBalance, want []wantAccountBalance) {
@@ -866,8 +1023,19 @@ func assertAccountBalances(t *testing.T, balances []httpclient.AccountBalance, w
 		if balance.AccountId != want[index].accountID ||
 			balance.Currency != want[index].currency ||
 			balance.CurrentBalance != want[index].current ||
-			balance.PostedBalance != want[index].posted {
+			!equalOptionalString(balance.CreditLimit, want[index].creditLimit) ||
+			balance.CurrentBalanceUsd != want[index].currentUSD ||
+			balance.PostedBalance != want[index].posted ||
+			balance.UnconvertedCount != want[index].unconvertedCount {
 			t.Fatalf("account balance at %d = %+v, want %+v; balances = %+v", index, balance, want[index], balances)
 		}
 	}
+}
+
+func equalOptionalString(left *string, right *string) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+
+	return *left == *right
 }

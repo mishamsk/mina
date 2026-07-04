@@ -10,6 +10,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/tags"
+	"github.com/mishamsk/mina/internal/services/values"
 	"github.com/oapi-codegen/nullable"
 )
 
@@ -47,8 +48,13 @@ func (s *strictServer) ListAccountBalances(ctx context.Context, request openapi.
 		return nil, err
 	}
 
+	currentLimits, err := s.deps.CreditLimits.CurrentByAccounts(ctx, accountIDsFromBalances(balances), values.LocalCivilDateFromTime(s.deps.clock().Now()))
+	if err != nil {
+		return nil, err
+	}
+
 	return openapi.ListAccountBalances200JSONResponse{
-		Balances: accountBalanceAPIResponses(balances),
+		Balances: accountBalanceAPIResponses(balances, currentLimits),
 	}, nil
 }
 
@@ -334,22 +340,40 @@ func accountAPIResponses(accounts []accounts.Account) []openapi.Account {
 	return responses
 }
 
-func accountBalanceAPIResponse(balance accounts.AccountBalance) openapi.AccountBalance {
+func accountBalanceAPIResponse(balance accounts.AccountBalance, currentLimits map[int64]values.Decimal) openapi.AccountBalance {
+	var creditLimit *string
+	if limit, ok := currentLimits[balance.AccountID]; ok {
+		value := limit.String()
+		creditLimit = &value
+	}
+
 	return openapi.AccountBalance{
-		AccountId:      balance.AccountID,
-		Currency:       balance.Currency,
-		CurrentBalance: balance.CurrentBalance.String(),
-		PostedBalance:  balance.PostedBalance.String(),
+		AccountId:         balance.AccountID,
+		Currency:          balance.Currency,
+		CreditLimit:       creditLimit,
+		CurrentBalance:    balance.CurrentBalance.String(),
+		CurrentBalanceUsd: balance.CurrentBalanceUSD.String(),
+		PostedBalance:     balance.PostedBalance.String(),
+		UnconvertedCount:  balance.UnconvertedCount,
 	}
 }
 
-func accountBalanceAPIResponses(balances []accounts.AccountBalance) []openapi.AccountBalance {
+func accountBalanceAPIResponses(balances []accounts.AccountBalance, currentLimits map[int64]values.Decimal) []openapi.AccountBalance {
 	responses := make([]openapi.AccountBalance, 0, len(balances))
 	for _, balance := range balances {
-		responses = append(responses, accountBalanceAPIResponse(balance))
+		responses = append(responses, accountBalanceAPIResponse(balance, currentLimits))
 	}
 
 	return responses
+}
+
+func accountIDsFromBalances(balances []accounts.AccountBalance) []int64 {
+	ids := make([]int64, 0, len(balances))
+	for _, balance := range balances {
+		ids = append(ids, balance.AccountID)
+	}
+
+	return ids
 }
 
 func categoryAPIResponse(category categories.Category) openapi.Category {

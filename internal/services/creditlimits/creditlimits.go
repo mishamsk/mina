@@ -37,6 +37,7 @@ type Repository interface {
 	Create(context.Context, int64, CreateInput) (CreditLimitHistory, error)
 	Get(context.Context, int64, bool) (CreditLimitHistory, error)
 	ListByAccount(context.Context, int64, ListOptions) (services.PaginatedList[CreditLimitHistory], error)
+	CurrentByAccounts(context.Context, []int64, values.CivilDate) (map[int64]values.Decimal, error)
 	Tombstone(context.Context, int64) error
 }
 
@@ -142,6 +143,26 @@ func (s *Service) ListByAccount(ctx context.Context, accountID int64, opts ListO
 	return history, nil
 }
 
+// CurrentByAccounts returns current active credit limits keyed by account ID.
+//
+// Tombstoned rows are excluded. For each account, the row with the latest
+// effective date on or before asOf wins; ties are resolved by the highest
+// credit-limit history ID. Accounts with no applicable limit are absent from the
+// returned map; absence does not mean a zero credit limit.
+func (s *Service) CurrentByAccounts(ctx context.Context, accountIDs []int64, asOf values.CivilDate) (map[int64]values.Decimal, error) {
+	uniqueIDs := deduplicateIDs(accountIDs)
+	for _, id := range uniqueIDs {
+		if id <= 0 {
+			return nil, services.InvalidRequest("account_ids values must be positive")
+		}
+	}
+	if len(uniqueIDs) == 0 {
+		return map[int64]values.Decimal{}, nil
+	}
+
+	return s.repo.CurrentByAccounts(ctx, uniqueIDs, asOf)
+}
+
 // Delete tombstones a credit limit history entry.
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	if id <= 0 {
@@ -155,4 +176,22 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	}
 
 	return nil
+}
+
+func deduplicateIDs(ids []int64) []int64 {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	seen := make(map[int64]struct{}, len(ids))
+	result := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+
+	return result
 }

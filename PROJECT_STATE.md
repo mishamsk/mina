@@ -11,7 +11,7 @@
   - Exchange-rate and account credit-limit-history flows.
   - Transaction creation, read, paginated and date-anchored list, full replacement, and tombstone deletion with nested journal records.
   - Non-USD `amount_usd` inference on transaction writes using stored `USD -> currency` rates when resolvable.
-  - Server-computed transaction month spend/income totals with USD-equivalent aggregation and unconverted counts.
+  - Server-computed transaction month spend/income totals and account balances with USD-equivalent aggregation, unconverted counts, and current credit limits.
   - Shorthand transaction creation endpoints for spend, income, refund, and transfer.
   - Transaction-template creation, read, paginated list, full replacement, and tombstone deletion with nested partial record defaults.
   - Transaction semantic shape validation with derived transaction class, summary titles, component summaries, and display amounts in REST responses.

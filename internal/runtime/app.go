@@ -303,6 +303,7 @@ func newAccountingServices(
 				memberService,
 				referenceSerializer,
 			),
+			Clock: opts.clock(),
 		},
 		Backup:                     backupService,
 		ExchangeRateLoading:        exchangeRateLoading,

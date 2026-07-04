@@ -37,6 +37,26 @@ type Dependencies struct {
 	Transactions  *transactions.Service
 	Templates     *transactiontemplates.Service
 	Demo          *demo.Service
+	Clock         Clock
+}
+
+// Clock returns the current process time for HTTP adapter decisions.
+type Clock interface {
+	Now() time.Time
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time {
+	return time.Now()
+}
+
+func (deps Dependencies) clock() Clock {
+	if deps.Clock != nil {
+		return deps.Clock
+	}
+
+	return systemClock{}
 }
 
 // Options controls process-local HTTP adapter behavior.

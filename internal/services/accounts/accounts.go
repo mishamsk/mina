@@ -50,10 +50,12 @@ type Account struct {
 
 // AccountBalance is one server-computed account balance row for a currency.
 type AccountBalance struct {
-	AccountID      int64
-	Currency       string
-	CurrentBalance values.Decimal
-	PostedBalance  values.Decimal
+	AccountID         int64
+	Currency          string
+	CurrentBalance    values.Decimal
+	CurrentBalanceUSD values.Decimal
+	PostedBalance     values.Decimal
+	UnconvertedCount  int64
 }
 
 // CreateInput contains fields for creating an account.

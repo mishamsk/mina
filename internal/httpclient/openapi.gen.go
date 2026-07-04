@@ -696,14 +696,23 @@ type Account struct {
 
 // AccountBalance defines model for AccountBalance.
 type AccountBalance struct {
-	AccountId int64  `json:"account_id"`
-	Currency  string `json:"currency"`
+	AccountId int64 `json:"account_id"`
+
+	// CreditLimit JSON string, not a JSON number. Current credit limit for the account, when known, from the latest active credit-limit-history row with effective_date on or before the API runtime clock's local civil date. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	CreditLimit *string `json:"credit_limit,omitempty"`
+	Currency    string  `json:"currency"`
 
 	// CurrentBalance JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	CurrentBalance string `json:"current_balance"`
 
+	// CurrentBalanceUsd JSON string, not a JSON number. Approximate USD-equivalent DECIMAL(18,8) aggregate using stored journal-record amount_usd values only; no query-time exchange-rate conversion is performed. Partial when unconverted_count is greater than zero. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	CurrentBalanceUsd string `json:"current_balance_usd"`
+
 	// PostedBalance JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	PostedBalance string `json:"posted_balance"`
+
+	// UnconvertedCount Count of active non-cancelled records contributing to this balance row that do not have amount_usd.
+	UnconvertedCount int64 `json:"unconverted_count"`
 }
 
 // AccountBalanceListResponse defines model for AccountBalanceListResponse.

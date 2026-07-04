@@ -47,9 +47,21 @@ export type AccountBalance = {
      */
     current_balance: string;
     /**
+     * JSON string, not a JSON number. Current credit limit for the account, when known, from the latest active credit-limit-history row with effective_date on or before the API runtime clock's local civil date. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    credit_limit?: string;
+    /**
+     * JSON string, not a JSON number. Approximate USD-equivalent DECIMAL(18,8) aggregate using stored journal-record amount_usd values only; no query-time exchange-rate conversion is performed. Partial when unconverted_count is greater than zero. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    current_balance_usd: string;
+    /**
      * JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     posted_balance: string;
+    /**
+     * Count of active non-cancelled records contributing to this balance row that do not have amount_usd.
+     */
+    unconverted_count: number;
 };
 
 export type AccountBalanceListResponse = {

@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Account references are validated through the account service API before credit-limit history writes and account-scoped lists.
+- Current credit-limit lookups exclude tombstones, choose the latest effective date on or before the as-of date with highest-history-ID tie-breaking, and omit accounts with no applicable limit.
 
 ## Boundaries
 

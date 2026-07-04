@@ -33,6 +33,13 @@ func CivilDateFromTime(value time.Time) CivilDate {
 	return CivilDate{value: time.Date(year, month, day, 0, 0, 0, 0, time.UTC)}
 }
 
+// LocalCivilDateFromTime creates a civil date from value's local calendar date component.
+func LocalCivilDateFromTime(value time.Time) CivilDate {
+	year, month, day := value.Date()
+
+	return CivilDate{value: time.Date(year, month, day, 0, 0, 0, 0, time.UTC)}
+}
+
 // Time returns the UTC midnight representation of d.
 func (d CivilDate) Time() time.Time {
 	return d.value
