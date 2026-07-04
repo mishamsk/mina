@@ -62,6 +62,7 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 - Every page uses one header pattern: title (with optional breadcrumb for detail pages) on the left, primary actions on the right, filter/toolbar row beneath when applicable.
 - Pages carry no standing description text. Each page header includes a small help icon button that reveals a short explanatory paragraph on demand (popover or collapsible); the explanation is hidden by default.
 - Overlays: side peek panels for previews, the docked entry panel for transaction entry, centered dialogs only for confirmations.
+- Side peek/detail panels are non-modal: no backdrop, no focus trap, no modal semantics; the underlying list stays interactive so row navigation can drive the panel. `Esc` closes the panel and returns focus to the originating row. Centered dialogs are modal and trap focus.
 - Table density (comfortable/compact) is a persisted UI preference.
 
 ## Command Palette
@@ -274,7 +275,7 @@ Mina-specific building blocks every screen composes (names indicative; placement
 
 - WCAG AA contrast in every theme; visible focus rings; full keyboard operability of tables, pickers, and forms.
 - Icon-only controls carry accessible labels and tooltips.
-- Semantic markup for tables and forms; overlays trap focus and restore it on close.
+- Semantic markup for tables and forms; modal overlays (dialogs) trap focus and restore it on close; non-modal side peek/detail panels follow the Overlays rule instead of trapping focus.
 
 ## How to Use This Document
 
