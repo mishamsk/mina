@@ -1004,7 +1004,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
 test("transaction detail panel shows full records and supports deep links", async ({
   page,
 }, testInfo) => {
-  await page.setViewportSize({ width: 1440, height: 760 });
+  await page.setViewportSize({ width: 1920, height: 760 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const tagFqns = [
@@ -1026,6 +1026,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   const merchantAccount = findByFqn(accounts, "merchant:Books");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E detail ${unique} full memo with receipt notes, household context, and enough words to be truncated on the transaction line but readable in the panel`;
+  const alternateMemo = `E2E detail ${unique} alternate`;
 
   const spendResponse = await page.request.post("/api/transactions/spend", {
     data: {
@@ -1041,12 +1042,34 @@ test("transaction detail panel shows full records and supports deep links", asyn
   });
   expect(spendResponse.ok()).toBe(true);
   const transaction = (await spendResponse.json()) as TransactionFixture;
+  const alternateSpendResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "7.18",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-07-01",
+        memo: alternateMemo,
+      },
+    },
+  );
+  expect(alternateSpendResponse.ok()).toBe(true);
+  const alternateTransaction =
+    (await alternateSpendResponse.json()) as TransactionFixture;
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
   const detailRow = page.getByRole("row").filter({ hasText: memo }).first();
+  const alternateDetailRow = page
+    .getByRole("row")
+    .filter({ hasText: alternateMemo })
+    .first();
   await expect(detailRow).toBeVisible();
+  await expect(alternateDetailRow).toBeVisible();
   await expect(
     detailRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
   ).toBeVisible();
@@ -1069,6 +1092,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   );
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
+  await expect(panel).not.toHaveAttribute("aria-modal", "true");
   await expect(panel.getByText("SPEND").first()).toBeVisible();
   await expect(
     panel.getByTestId("amount-chip").filter({ hasText: "-42.19 $" }).first(),
@@ -1086,14 +1110,37 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(panel.getByText("cash:Wallet").first()).toBeVisible();
   await expect(panel.getByText("merchant:Books").first()).toBeVisible();
   await expect(panel.getByText("Entertainment:Books").first()).toBeVisible();
+  await expect
+    .poll(() =>
+      panel
+        .getByTestId("transaction-detail-records-table")
+        .evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+    )
+    .toBe(true);
   for (const tag of createdTags) {
     await expect(
       panel.getByText(tag.name, { exact: true }).first(),
     ).toBeVisible();
   }
 
+  await alternateDetailRow
+    .getByRole("button", {
+      name: "Open transaction detail",
+    })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${alternateTransaction.transaction_id}(?:&|$)`),
+  );
+  const alternatePanel = page.getByRole("dialog", {
+    name: alternateTransaction.display_title,
+  });
+  await expect(alternatePanel).toBeVisible();
+  await expect(
+    alternatePanel.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(alternateMemo);
+
   await page.keyboard.press("Escape");
-  await expect(panel).toBeHidden();
+  await expect(alternatePanel).toBeHidden();
   await expect(entryPanel).toBeVisible();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
   await page.keyboard.press("Escape");
@@ -1122,6 +1169,62 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await page.keyboard.press("Escape");
   await expect(deepLinkPanel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=10$/);
+});
+
+test("focused transaction row opens detail with Enter and restores focus on Escape", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E keyboard detail ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "18.34",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-03",
+      memo,
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const detailRow = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(detailRow).toBeVisible();
+  await expect(detailRow).toHaveAttribute("aria-expanded", "false");
+
+  await detailRow.focus();
+  await expect(detailRow).toBeFocused();
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
+  );
+  const panel = page.getByRole("dialog", { name: transaction.display_title });
+  await expect(panel).toBeVisible();
+  await expect(detailRow).toHaveAttribute("aria-expanded", "false");
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await expect(detailRow).toBeFocused();
+
+  await page.keyboard.press("Space");
+  await expect(detailRow).toHaveAttribute("aria-expanded", "true");
 });
 
 test("transaction detail delete confirms, tombstones, and refreshes the row", async ({
@@ -1367,11 +1470,11 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await expect(page.getByLabel("Amount")).toHaveValue("");
 
   await page.getByRole("button", { name: "Close entry panel" }).click();
-  await expect(
-    page.getByRole("status").filter({
-      hasText: "Transaction saved.",
-    }),
-  ).toBeVisible();
+  const savedNotice = page.getByRole("status").filter({
+    hasText: "Transaction saved.",
+  });
+  await expect(savedNotice).toBeVisible();
+  await expect(savedNotice).toBeHidden({ timeout: 6000 });
 });
 
 test("entry panel creates each shorthand transaction type", async ({

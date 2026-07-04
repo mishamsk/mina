@@ -402,13 +402,22 @@ const RecordStatus = ({ record }: { readonly record: JournalRecord }) => (
   <span>{record.posting_status === "posted" ? "" : record.posting_status}</span>
 );
 
-const isInteractiveTarget = (target: EventTarget | null): boolean =>
-  target instanceof HTMLElement &&
-  Boolean(
-    target.closest(
-      "a, button, input, select, textarea, summary, [role='button'], [contenteditable='true']",
-    ),
-  );
+const interactiveTargetSelector =
+  "a, button, input, select, textarea, summary, [role='button'], " +
+  "[contenteditable='true'], " +
+  "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
+
+const isInteractiveTarget = (
+  target: EventTarget | null,
+  currentTarget: HTMLElement,
+): boolean => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const interactiveTarget = target.closest(interactiveTargetSelector);
+  return interactiveTarget !== null && interactiveTarget !== currentTarget;
+};
 
 const RecordsTable = ({
   maps,
@@ -621,18 +630,30 @@ export const TransactionBrowser = ({
                     aria-expanded={expanded}
                     tabIndex={0}
                     onClick={(event) => {
-                      if (isInteractiveTarget(event.target)) {
+                      if (
+                        isInteractiveTarget(event.target, event.currentTarget)
+                      ) {
                         return;
                       }
                       toggleExpanded();
                     }}
                     onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") {
+                      if (
+                        isInteractiveTarget(event.target, event.currentTarget)
+                      ) {
                         return;
                       }
-                      if (isInteractiveTarget(event.target)) {
+
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        onOpenTransaction(transaction);
                         return;
                       }
+
+                      if (event.key !== " ") {
+                        return;
+                      }
+
                       event.preventDefault();
                       toggleExpanded();
                     }}

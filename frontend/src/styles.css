@@ -203,6 +203,10 @@
     container: transactions-table / inline-size;
   }
 
+  .transaction-detail-records-table {
+    container: transaction-detail-records / inline-size;
+  }
+
   .transactions-table .transactions-class-column {
     width: 5%;
   }
@@ -364,6 +368,79 @@
 
     .transactions-table .transactions-amount-column {
       width: 50%;
+    }
+  }
+
+  .transaction-detail-records-table .detail-records-account-column {
+    width: 22%;
+  }
+
+  .transaction-detail-records-table .detail-records-amount-column {
+    width: 14%;
+  }
+
+  .transaction-detail-records-table .detail-records-category-column {
+    width: 16%;
+  }
+
+  .transaction-detail-records-table .detail-records-tags-column {
+    width: 16%;
+  }
+
+  .transaction-detail-records-table .detail-records-member-column {
+    width: 11%;
+  }
+
+  .transaction-detail-records-table .detail-records-status-column {
+    width: 11%;
+  }
+
+  .transaction-detail-records-table .detail-records-memo-column {
+    width: 10%;
+  }
+
+  @container transaction-detail-records (max-width: 680px) {
+    .transaction-detail-records-table table,
+    .transaction-detail-records-table colgroup,
+    .transaction-detail-records-table tbody,
+    .transaction-detail-records-table tr,
+    .transaction-detail-records-table td {
+      display: block;
+      width: 100%;
+    }
+
+    .transaction-detail-records-table thead {
+      display: none;
+    }
+
+    .transaction-detail-records-table tr {
+      border-top: 2px solid var(--border-ink);
+      padding: 0.25rem 0;
+    }
+
+    .transaction-detail-records-table tr:first-child {
+      border-top: 0;
+    }
+
+    .transaction-detail-records-table td {
+      display: grid;
+      grid-template-columns: minmax(5.5rem, 32%) minmax(0, 1fr);
+      gap: 0.75rem;
+      align-items: start;
+      text-align: left;
+    }
+
+    .transaction-detail-records-table td::before {
+      content: attr(data-label);
+      color: var(--muted-foreground);
+      font-family: var(--font-display-family);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .transaction-detail-records-table .detail-records-amount-column {
+      text-align: left;
     }
   }
 

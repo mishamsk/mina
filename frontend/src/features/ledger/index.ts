@@ -6,6 +6,7 @@ export { FqnPath } from "./fqn-path";
 export { TagChip } from "./tag-chip";
 export { TransactionBrowser } from "./transaction-browser";
 export { TransactionDetailPanel } from "./transaction-detail-panel";
+export { useTransactionDetail } from "./use-transaction-detail";
 export {
   refreshTransactionPage,
   refreshTransactionPageAfterSave,

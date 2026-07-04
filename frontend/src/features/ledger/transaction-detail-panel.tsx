@@ -2,6 +2,7 @@ import { Close, Trash } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
+import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -152,17 +153,31 @@ const DetailRecordsTable = ({
   readonly maps: LookupMaps;
   readonly records: readonly JournalRecord[];
 }) => (
-  <div className="overflow-x-auto border-2 border-[var(--border-ink)]">
-    <table className="w-full min-w-[980px] table-fixed border-collapse text-sm">
+  <div
+    className="transaction-detail-records-table max-w-full overflow-hidden border-2 border-[var(--border-ink)]"
+    data-testid="transaction-detail-records-table"
+  >
+    <table className="w-full table-fixed border-collapse text-sm">
+      <colgroup>
+        <col className="detail-records-account-column" />
+        <col className="detail-records-amount-column" />
+        <col className="detail-records-category-column" />
+        <col className="detail-records-tags-column" />
+        <col className="detail-records-member-column" />
+        <col className="detail-records-status-column" />
+        <col className="detail-records-memo-column" />
+      </colgroup>
       <thead>
         <tr className="font-heading bg-[var(--table-header)] text-left text-xs font-semibold uppercase">
-          <th className="w-[20%] px-2 py-2">Account</th>
-          <th className="w-[12%] px-2 py-2 text-right">Amount</th>
-          <th className="w-[16%] px-2 py-2">Category</th>
-          <th className="w-[16%] px-2 py-2">Tags</th>
-          <th className="w-[10%] px-2 py-2">Member</th>
-          <th className="w-[13%] px-2 py-2">Statuses</th>
-          <th className="w-[13%] px-2 py-2">Memo</th>
+          <th className="detail-records-account-column px-2 py-2">Account</th>
+          <th className="detail-records-amount-column px-2 py-2 text-right">
+            Amount
+          </th>
+          <th className="detail-records-category-column px-2 py-2">Category</th>
+          <th className="detail-records-tags-column px-2 py-2">Tags</th>
+          <th className="detail-records-member-column px-2 py-2">Member</th>
+          <th className="detail-records-status-column px-2 py-2">Statuses</th>
+          <th className="detail-records-memo-column px-2 py-2">Memo</th>
         </tr>
       </thead>
       <tbody>
@@ -184,32 +199,67 @@ const DetailRecordsTable = ({
                   "text-muted-foreground line-through",
               )}
             >
-              <td className="px-2 py-2">
+              <td
+                className="detail-records-account-column min-w-0 px-2 py-2"
+                data-label="Account"
+              >
                 {account ? <FqnPath value={account.fqn} /> : "Unknown account"}
               </td>
-              <td className="px-2 py-2 text-right">
+              <td
+                className="detail-records-amount-column min-w-0 px-2 py-2 text-right"
+                data-label="Amount"
+              >
                 <AmountText
                   amount={recordDisplayAmount(record)}
                   tone="neutral"
                 />
               </td>
-              <td className="px-2 py-2">
+              <td
+                className="detail-records-category-column min-w-0 px-2 py-2"
+                data-label="Category"
+              >
                 {category ? <FqnPath value={category.fqn} /> : "Uncategorized"}
               </td>
-              <td className="px-2 py-2">
-                <RecordTagSet maps={maps} record={record} />
+              <td
+                className="detail-records-tags-column min-w-0 px-2 py-2"
+                data-label="Tags"
+              >
+                <div className="max-w-full overflow-hidden">
+                  <RecordTagSet maps={maps} record={record} />
+                </div>
               </td>
-              <td className="px-2 py-2">{member?.name ?? ""}</td>
-              <td className="px-2 py-2">
-                <div className="flex flex-col gap-1">
+              <td
+                className="detail-records-member-column min-w-0 px-2 py-2"
+                data-label="Member"
+              >
+                {member ? (
+                  <Tooltip label={member.name} className="block">
+                    <span className="block truncate">{member.name}</span>
+                  </Tooltip>
+                ) : null}
+              </td>
+              <td
+                className="detail-records-status-column min-w-0 px-2 py-2"
+                data-label="Statuses"
+              >
+                <div className="flex min-w-0 flex-col gap-1">
                   <span className="inline-flex items-center gap-1">
                     <StatusIcon status={record.posting_status} />
-                    {statusLabel(record.posting_status)}
+                    <span className="truncate">
+                      {statusLabel(record.posting_status)}
+                    </span>
                   </span>
                 </div>
               </td>
-              <td className="text-muted-foreground px-2 py-2 break-words whitespace-normal">
-                {record.memo}
+              <td
+                className="detail-records-memo-column text-muted-foreground min-w-0 px-2 py-2"
+                data-label="Memo"
+              >
+                {record.memo ? (
+                  <Tooltip label={record.memo} className="block">
+                    <span className="block truncate">{record.memo}</span>
+                  </Tooltip>
+                ) : null}
               </td>
             </tr>
           );
@@ -236,9 +286,7 @@ export const TransactionDetailPanel = ({
   onRestoreFocus,
   transaction,
 }: TransactionDetailPanelProps) => {
-  const panelRef = useRef<HTMLElement | null>(null);
   const deleteDialogRef = useRef<HTMLElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const cancelDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
@@ -261,10 +309,6 @@ export const TransactionDetailPanel = ({
   }, [deleting]);
 
   useEffect(() => {
-    window.requestAnimationFrame(() => {
-      closeButtonRef.current?.focus({ preventScroll: true });
-    });
-
     return () => {
       onRestoreFocus();
     };
@@ -287,9 +331,11 @@ export const TransactionDetailPanel = ({
         return;
       }
 
-      const trapRoot = confirmDeleteOpen
-        ? deleteDialogRef.current
-        : panelRef.current;
+      if (!confirmDeleteOpen) {
+        return;
+      }
+
+      const trapRoot = deleteDialogRef.current;
       if (!trapRoot) {
         return;
       }
@@ -362,9 +408,7 @@ export const TransactionDetailPanel = ({
 
   return (
     <aside
-      ref={panelRef}
       role="dialog"
-      aria-modal="true"
       aria-labelledby="transaction-detail-title"
       className="bg-card fixed top-4 right-4 bottom-4 z-50 flex w-[min(760px,calc(100vw-2rem))] max-w-full flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
       data-testid="transaction-detail-panel"
@@ -383,7 +427,6 @@ export const TransactionDetailPanel = ({
           </h2>
         </div>
         <Button
-          ref={closeButtonRef}
           type="button"
           variant="outline"
           size="icon-sm"
