@@ -6,8 +6,19 @@ export { FqnPath } from "./fqn-path";
 export { TagChip } from "./tag-chip";
 export { TransactionBrowser } from "./transaction-browser";
 export { TransactionDetailPanel } from "./transaction-detail-panel";
+export {
+  defaultTransactionPage,
+  defaultTransactionPageSize,
+  normalizeTransactionPageSize,
+  readTransactionPageFromSearchParams,
+  transactionOffsetFromPage,
+  transactionPageFromOffset,
+  transactionPageSizes,
+} from "./transaction-page-position";
+export { useTransactionDateJump } from "./use-transaction-date-jump";
 export { useTransactionDetail } from "./use-transaction-detail";
 export {
+  jumpToTransactionDatePage,
   refreshTransactionPage,
   refreshTransactionPageAfterSave,
   useTransactionsResource,

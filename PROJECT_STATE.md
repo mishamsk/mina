@@ -29,7 +29,7 @@
 - Implemented web UI behavior:
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.
-  - Transactions page uses server-derived transaction titles and has a URL-addressable detail side panel with full journal records and delete confirmation.
+  - Transactions page uses server-derived transaction titles, has a date-jump control backed by anchored pagination, and has a URL-addressable detail side panel with full journal records and delete confirmation.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:
   - Runtime owns accounting location defaults, opens an in-memory DuckDB process database, and selects either an attached accounting database file or the in-memory accounting database with configurable schema fallback.

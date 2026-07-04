@@ -23,7 +23,14 @@ interface MemberFixture {
 
 interface TransactionFixture {
   readonly display_title: string;
+  readonly initiated_date?: string;
   readonly transaction_id: number;
+}
+
+interface TransactionListFixture {
+  readonly offset: number;
+  readonly total_count: number;
+  readonly transactions: readonly TransactionFixture[];
 }
 
 const listFixtures = async <T>(
@@ -46,6 +53,27 @@ const findByFqn = <T extends { readonly fqn: string }>(
   const fixture = fixtures.find((item) => item.fqn === fqn);
   expect(fixture, `${fqn} fixture`).toBeDefined();
   return fixture as T;
+};
+
+const expectTransactionsPageUrl = async (
+  page: Page,
+  expectedPage: number,
+  expectedPageSize: number,
+): Promise<void> => {
+  await expect
+    .poll(() => {
+      const searchParams = new URL(page.url()).searchParams;
+      return {
+        anchorDate: searchParams.get("anchor_date"),
+        page: searchParams.get("page"),
+        pageSize: searchParams.get("pageSize"),
+      };
+    })
+    .toEqual({
+      anchorDate: null,
+      page: String(expectedPage),
+      pageSize: String(expectedPageSize),
+    });
 };
 
 const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
@@ -330,6 +358,122 @@ test("transactions page uses server pagination controls", async ({ page }) => {
 
   await expect(page).toHaveURL(/page=1/);
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
+});
+
+test("transactions page jumps to a date-anchored page", async ({ page }) => {
+  const initialResponse = await page.request.get(
+    "/api/transactions?limit=25&offset=0&sort=initiated_date&sort_dir=desc",
+  );
+  expect(initialResponse.ok()).toBe(true);
+  const initialPage = (await initialResponse.json()) as TransactionListFixture;
+  expect(initialPage.transactions.length).toBeGreaterThan(20);
+
+  const jumpDate = initialPage.transactions[10]!.initiated_date!;
+  const olderThanEverything = "2020-01-01";
+
+  await page.goto("/transactions?page=1&pageSize=10");
+  await expect(
+    page.getByText(initialPage.transactions[0]!.display_title),
+  ).toBeVisible();
+  const retainedFirstPageRow = await page
+    .locator("tbody > tr[aria-expanded]")
+    .first()
+    .innerText();
+  expect(retainedFirstPageRow).toContain(
+    initialPage.transactions[0]!.display_title,
+  );
+
+  let releaseDateJumpResponse: (() => void) | undefined;
+  const dateJumpRequestStarted = new Promise<void>((resolve) => {
+    void page.route("**/api/transactions**", async (route) => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get("anchor_date") === jumpDate) {
+        resolve();
+        await new Promise<void>((release) => {
+          releaseDateJumpResponse = release;
+        });
+      }
+      await route.continue();
+    });
+  });
+  const dateJumpResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === jumpDate
+    );
+  });
+  const transactionRequestUrls: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/transactions") {
+      transactionRequestUrls.push(request.url());
+    }
+  });
+
+  await page.getByLabel("Go to day").fill(jumpDate);
+  await dateJumpRequestStarted;
+
+  try {
+    await expect(page.getByTestId("transactions-page-busy")).toBeVisible();
+    const retainedDuringJump = await page
+      .locator("tbody > tr[aria-expanded]")
+      .first()
+      .innerText();
+    expect(retainedDuringJump).toContain(
+      initialPage.transactions[0]!.display_title,
+    );
+  } finally {
+    releaseDateJumpResponse?.();
+  }
+
+  const dateJumpBody = (await (
+    await dateJumpResponse
+  ).json()) as TransactionListFixture;
+  const landedPage = Math.floor(dateJumpBody.offset / 10) + 1;
+  expect(dateJumpBody.total_count).toBeGreaterThan(landedPage * 10);
+  const landedTransaction = dateJumpBody.transactions[0]!;
+  await expectTransactionsPageUrl(page, landedPage, 10);
+  await expect(
+    page.getByText(new RegExp(`Page ${landedPage} of \\d+`)),
+  ).toBeVisible();
+  await expect(
+    page.getByText(landedTransaction.display_title).first(),
+  ).toBeVisible();
+  expect(
+    transactionRequestUrls.filter((requestUrl) => {
+      const url = new URL(requestUrl);
+      return (
+        url.searchParams.get("anchor_date") === null &&
+        url.searchParams.get("limit") === "10" &&
+        url.searchParams.get("offset") === String(dateJumpBody.offset)
+      );
+    }),
+  ).toHaveLength(0);
+  await expect(page.getByLabel("Go to day")).toHaveValue("");
+
+  await page.getByRole("button", { name: "Next" }).click();
+  await expectTransactionsPageUrl(page, landedPage + 1, 10);
+  await expect(
+    page.getByText(new RegExp(`Page ${landedPage + 1} of \\d+`)),
+  ).toBeVisible();
+
+  const oldDateJumpResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === olderThanEverything
+    );
+  });
+  await page.getByLabel("Go to day").fill(olderThanEverything);
+  const oldDateJumpBody = (await (
+    await oldDateJumpResponse
+  ).json()) as TransactionListFixture;
+  const oldAnchorPage = Math.floor(oldDateJumpBody.offset / 10) + 1;
+  await expectTransactionsPageUrl(page, oldAnchorPage, 10);
+  await expect(
+    page.getByText(new RegExp(`Page ${oldAnchorPage} of \\d+`)),
+  ).toBeVisible();
 });
 
 test("transactions page collapses low-priority columns instead of scrolling horizontally", async ({

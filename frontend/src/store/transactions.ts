@@ -7,6 +7,7 @@ import type { Account, Category, Member, Tag, Transaction } from "@/api";
 import { createSelectors } from "./selectors";
 
 export interface TransactionsPageParams {
+  readonly anchorDate?: string;
   readonly limit: number;
   readonly offset: number;
 }
@@ -56,6 +57,13 @@ export const useTransactionsStore = createSelectors(transactionsStore);
 export const transactionPageKey = (params: TransactionsPageParams): string =>
   `${params.limit}:${params.offset}`;
 
+export const transactionPageRequestKey = (
+  params: TransactionsPageParams,
+): string =>
+  params.anchorDate
+    ? `${transactionPageKey(params)}:${params.anchorDate}`
+    : transactionPageKey(params);
+
 export const useTransactionPageView = (params: TransactionsPageParams) => {
   const key = transactionPageKey(params);
   return useTransactionsStore(
@@ -64,11 +72,12 @@ export const useTransactionPageView = (params: TransactionsPageParams) => {
       const fallbackSnapshot = state.lastLoadedPageKey
         ? state.pages[state.lastLoadedPageKey]
         : undefined;
+      const requestKey = transactionPageRequestKey(params);
 
       return {
         displayedSnapshot: snapshot ?? fallbackSnapshot,
         errorMessage: state.errorMessage,
-        loading: state.loadingPageKey === key,
+        loading: state.loadingPageKey === requestKey,
         snapshot,
       };
     }),
@@ -93,10 +102,24 @@ export const setTransactionPageLoading = (
   useTransactionsStore.setState(
     {
       errorMessage: undefined,
-      loadingPageKey: transactionPageKey(params),
+      loadingPageKey: transactionPageRequestKey(params),
     },
     false,
     "TransactionsStore/setTransactionPageLoading",
+  );
+};
+
+export const clearTransactionPageLoading = (
+  params: TransactionsPageParams,
+): void => {
+  const key = transactionPageRequestKey(params);
+  useTransactionsStore.setState(
+    (state) => ({
+      loadingPageKey:
+        state.loadingPageKey === key ? undefined : state.loadingPageKey,
+    }),
+    false,
+    "TransactionsStore/clearTransactionPageLoading",
   );
 };
 
@@ -104,14 +127,16 @@ export const setTransactionPage = (
   params: TransactionsPageParams,
   totalCount: number | undefined,
   transactions: readonly Transaction[],
+  loadingParams: TransactionsPageParams = params,
 ): void => {
   const key = transactionPageKey(params);
+  const loadingKey = transactionPageRequestKey(loadingParams);
   useTransactionsStore.setState(
     (state) => ({
       errorMessage: undefined,
       lastLoadedPageKey: key,
       loadingPageKey:
-        state.loadingPageKey === key ? undefined : state.loadingPageKey,
+        state.loadingPageKey === loadingKey ? undefined : state.loadingPageKey,
       pages: {
         ...state.pages,
         [key]: {
@@ -131,7 +156,7 @@ export const setTransactionPageError = (
   params: TransactionsPageParams,
   errorMessage: string,
 ): void => {
-  const key = transactionPageKey(params);
+  const key = transactionPageRequestKey(params);
   useTransactionsStore.setState(
     (state) => ({
       errorMessage,

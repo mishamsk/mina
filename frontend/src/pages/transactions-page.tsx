@@ -8,61 +8,56 @@ import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
 import {
+  defaultTransactionPage,
   EntryPanel,
+  readTransactionPageFromSearchParams,
   refreshTransactionPageAfterSave,
   TransactionBrowser,
   TransactionDetailPanel,
+  transactionOffsetFromPage,
+  useTransactionDateJump,
   useTransactionDetail,
   useTransactionsResource,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
-
-const defaultPage = 1;
-const defaultPageSize = 10;
-const pageSizes = new Set([10, 25, 50]);
 
 interface SaveNotice {
   readonly id: number;
   readonly message: string;
 }
 
-const parsePositiveInteger = (
-  value: string | null,
-  fallback: number,
-): number => {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    return fallback;
-  }
-  return parsed;
-};
-
 export const TransactionsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [entryPanelOpen, setEntryPanelOpen] = useState(false);
   const [entryPanelRevision, setEntryPanelRevision] = useState(0);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | undefined>();
-  const page = parsePositiveInteger(searchParams.get("page"), defaultPage);
-  const requestedPageSize = parsePositiveInteger(
-    searchParams.get("pageSize"),
-    defaultPageSize,
-  );
-  const pageSize = pageSizes.has(requestedPageSize)
-    ? requestedPageSize
-    : defaultPageSize;
+  const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
   const params = useMemo(
     () => ({
       limit: pageSize,
-      offset: (page - 1) * pageSize,
+      offset: transactionOffsetFromPage(page, pageSize),
     }),
     [page, pageSize],
   );
+  const {
+    cancelDateJump,
+    dateJumpLoading,
+    dateJumpValue,
+    jumpToDate,
+    setDateJumpValue,
+  } = useTransactionDateJump({
+    page,
+    pageSize,
+    params,
+    setSearchParams,
+  });
   const { lookups, page: pageResource } = useTransactionsResource(params);
   const displayedSnapshot = pageResource.displayedSnapshot;
   const transactions = displayedSnapshot?.transactions;
   const totalCount = displayedSnapshot?.totalCount;
   const loading =
     pageResource.loading ||
+    dateJumpLoading ||
     lookups.loading ||
     (Boolean(transactions) && !lookups.snapshot);
   const errorMessage = pageResource.errorMessage ?? lookups.errorMessage;
@@ -120,12 +115,18 @@ export const TransactionsPage = () => {
     };
   }, [detail.selectedTransactionId, openEntryPanel]);
 
-  const setPage = (nextPage: number) => {
-    setSearchParams({
-      page: String(nextPage),
-      pageSize: String(pageSize),
-    });
-  };
+  const setPage = useCallback(
+    (nextPage: number) => {
+      cancelDateJump();
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("page", String(nextPage));
+        next.set("pageSize", String(pageSize));
+        return next;
+      });
+    },
+    [cancelDateJump, pageSize, setSearchParams],
+  );
 
   return (
     <section
@@ -146,6 +147,38 @@ export const TransactionsPage = () => {
             <Plus aria-hidden="true" />
             New transaction
           </Button>
+        }
+        toolbar={
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="transactions-date-jump"
+                className="font-heading text-xs font-semibold text-[var(--frame-muted)] uppercase"
+              >
+                Go to day
+              </label>
+              <input
+                id="transactions-date-jump"
+                type="date"
+                className="bg-card text-foreground h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)] aria-disabled:opacity-70"
+                value={dateJumpValue}
+                readOnly={dateJumpLoading}
+                aria-disabled={dateJumpLoading}
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setDateJumpValue(nextValue);
+                  void jumpToDate(nextValue);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") {
+                    return;
+                  }
+                  event.preventDefault();
+                  void jumpToDate(event.currentTarget.value);
+                }}
+              />
+            </div>
+          </div>
         }
       />
       <div
@@ -172,13 +205,16 @@ export const TransactionsPage = () => {
             }}
             onOpenTransaction={detail.openTransactionDetail}
             onPageSizeChange={(nextPageSize) => {
-              setSearchParams({
-                page: String(defaultPage),
-                pageSize: String(nextPageSize),
+              cancelDateJump();
+              setSearchParams((current) => {
+                const next = new URLSearchParams(current);
+                next.set("page", String(defaultTransactionPage));
+                next.set("pageSize", String(nextPageSize));
+                return next;
               });
             }}
             onPreviousPage={() => {
-              setPage(Math.max(defaultPage, page - 1));
+              setPage(Math.max(defaultTransactionPage, page - 1));
             }}
             page={page}
             pageSize={pageSize}

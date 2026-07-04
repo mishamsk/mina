@@ -28,6 +28,7 @@ export type {
   TransactionsPageParams,
 } from "./transactions";
 export {
+  clearTransactionPageLoading,
   getTransactionsSnapshot,
   invalidateTransactionPages,
   setLedgerLookups,

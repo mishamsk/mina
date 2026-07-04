@@ -8,6 +8,7 @@ import {
   type TransactionPageParams,
 } from "@/api";
 import {
+  clearTransactionPageLoading,
   getTransactionsSnapshot,
   invalidateTransactionPages,
   setLedgerLookups,
@@ -39,6 +40,20 @@ const apiErrorMessage = (error: unknown): string => {
   return "The API request failed.";
 };
 
+interface LoadedTransactionPage {
+  readonly offset: number;
+  readonly totalCount: number | undefined;
+  readonly transactions: readonly Transaction[];
+}
+
+const effectivePageParams = (
+  params: TransactionPageParams,
+  offset: number,
+): TransactionPageParams => ({
+  limit: params.limit,
+  offset,
+});
+
 export const useTransactionsResource = (params: TransactionPageParams) => {
   const page = useTransactionPageView(params);
   const lookups = useLedgerLookupsView();
@@ -60,9 +75,10 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
 
       if (result.data) {
         setTransactionPage(
-          params,
+          effectivePageParams(params, result.data.offset),
           result.data.total_count,
           result.data.transactions,
+          params,
         );
         return;
       }
@@ -131,9 +147,10 @@ export const refreshTransactionPage = async (
   const result = await fetchTransactionPage(params);
   if (result.data) {
     setTransactionPage(
-      params,
+      effectivePageParams(params, result.data.offset),
       result.data.total_count,
       result.data.transactions,
+      params,
     );
     return result.data.transactions;
   }
@@ -150,4 +167,36 @@ export const refreshTransactionPageAfterSave = async (
   return transactions.some(
     (transaction) => transaction.transaction_id === transactionId,
   );
+};
+
+export const jumpToTransactionDatePage = async (
+  params: TransactionPageParams & { readonly anchorDate: string },
+  isActive: () => boolean = () => true,
+): Promise<LoadedTransactionPage | undefined> => {
+  setTransactionPageLoading(params);
+
+  const result = await fetchTransactionPage(params);
+  if (!isActive()) {
+    clearTransactionPageLoading(params);
+    return undefined;
+  }
+
+  if (result.data) {
+    const loadedPage = {
+      offset: result.data.offset,
+      totalCount: result.data.total_count,
+      transactions: result.data.transactions,
+    };
+    // Anchor responses must return a page-aligned offset so this effective key satisfies the URL page without a second fetch.
+    setTransactionPage(
+      effectivePageParams(params, result.data.offset),
+      result.data.total_count,
+      result.data.transactions,
+      params,
+    );
+    return loadedPage;
+  }
+
+  setTransactionPageError(params, apiErrorMessage(result.error));
+  return undefined;
 };

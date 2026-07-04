@@ -19,6 +19,7 @@ import {
 } from "./generated";
 
 export interface TransactionPageParams {
+  readonly anchorDate?: string;
   readonly limit: number;
   readonly offset: number;
 }
@@ -30,6 +31,7 @@ export const fetchTransactionPage = (params: TransactionPageParams) =>
     query: {
       limit: params.limit,
       offset: params.offset,
+      anchor_date: params.anchorDate,
       // When sorting becomes user-facing, add sort and sort_dir to the URL state and snapshot key.
       sort: "initiated_date",
       sort_dir: "desc",
