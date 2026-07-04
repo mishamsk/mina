@@ -26,15 +26,28 @@ func (s *strictServer) ListTransactions(ctx context.Context, request openapi.Lis
 		services.SortKeyInitiatedDate,
 	)
 
-	transactionList, err := s.deps.Transactions.List(ctx, listOptions)
+	transactionList, err := s.deps.Transactions.List(ctx, transactions.ListOptions{
+		ListOptions: listOptions,
+		AnchorDate:  nullableCivilDateFromOpenAPI(request.Params.AnchorDate),
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	return openapi.ListTransactions200JSONResponse{
 		Transactions: transactionAPIResponses(transactionList.Items),
+		Offset:       transactionList.Offset,
 		TotalCount:   transactionList.TotalCount,
 	}, nil
+}
+
+func (s *strictServer) GetTransactionMonthTotals(ctx context.Context, request openapi.GetTransactionMonthTotalsRequestObject) (openapi.GetTransactionMonthTotalsResponseObject, error) {
+	totals, err := s.deps.Transactions.MonthTotals(ctx, request.Params.Month)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.GetTransactionMonthTotals200JSONResponse(transactionMonthTotalsAPIResponse(totals)), nil
 }
 
 func (s *strictServer) CreateTransaction(ctx context.Context, request openapi.CreateTransactionRequestObject) (openapi.CreateTransactionResponseObject, error) {
@@ -449,6 +462,7 @@ func transactionAPIResponse(transaction transactions.Transaction) openapi.Transa
 		TransactionId:    transaction.ID,
 		InitiatedDate:    openAPIDate(transaction.InitiatedDate),
 		TransactionClass: openapi.TransactionClass(transaction.Class),
+		DisplayTitle:     transaction.DisplayTitle,
 		PrimaryAmounts:   displayAmountAPIResponses(transaction.PrimaryAmounts),
 		Components:       classificationComponentAPIResponses(transaction.Components),
 		CreatedAt:        transaction.CreatedAt.UTC(),
@@ -464,6 +478,21 @@ func transactionAPIResponses(transactions []transactions.Transaction) []openapi.
 	}
 
 	return responses
+}
+
+func transactionMonthTotalsAPIResponse(totals transactions.MonthActivityTotals) openapi.TransactionMonthTotalsResponse {
+	return openapi.TransactionMonthTotalsResponse{
+		Month:  totals.Month,
+		Spend:  transactionMonthTotalAPIResponse(totals.Spend),
+		Income: transactionMonthTotalAPIResponse(totals.Income),
+	}
+}
+
+func transactionMonthTotalAPIResponse(total transactions.MonthActivityTotal) openapi.TransactionMonthTotal {
+	return openapi.TransactionMonthTotal{
+		AmountUsd:        total.AmountUSD.String(),
+		UnconvertedCount: total.UnconvertedCount,
+	}
 }
 
 func journalRecordAPIResponse(record transactions.JournalRecord) openapi.JournalRecord {

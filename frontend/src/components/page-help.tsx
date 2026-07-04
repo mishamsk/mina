@@ -1,6 +1,7 @@
 import { InfoBox } from "pixelarticons/react";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 
 interface PageHelpProps {
@@ -43,20 +44,21 @@ export const PageHelp = ({ children, label }: PageHelpProps) => {
 
   return (
     <div ref={containerRef} className="relative inline-flex">
-      <Button
-        type="button"
-        variant="outline"
-        size="icon-xs"
-        aria-controls={contentId}
-        aria-expanded={open}
-        aria-label={label}
-        title={label}
-        onClick={() => {
-          setOpen((current) => !current);
-        }}
-      >
-        <InfoBox aria-hidden="true" />
-      </Button>
+      <Tooltip label={label} asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-xs"
+          aria-controls={contentId}
+          aria-expanded={open}
+          aria-label={label}
+          onClick={() => {
+            setOpen((current) => !current);
+          }}
+        >
+          <InfoBox aria-hidden="true" />
+        </Button>
+      </Tooltip>
       {open ? (
         <p
           id={contentId}

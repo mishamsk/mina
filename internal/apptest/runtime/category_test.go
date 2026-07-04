@@ -195,6 +195,89 @@ func TestCategoryRejectsDuplicateActiveFQN(t *testing.T) {
 	}
 }
 
+func TestCategoryListFiltersByEconomicIntent(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	hidden := true
+
+	expense := scenario.CategoryWithIntent("FilterIntent:Expense", httpclient.CategoryEconomicIntentExpense)
+	fee, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "FilterIntent:FeeHidden",
+		EconomicIntent: httpclient.CategoryEconomicIntentFee,
+		IsHidden:       &hidden,
+	})
+	if err != nil {
+		t.Fatalf("hidden fee create request: %v", err)
+	}
+	if fee.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden fee create status = %d, want %d; body %s", fee.StatusCode(), http.StatusCreated, fee.Body)
+	}
+	income := scenario.CategoryWithIntent("FilterIntent:Income", httpclient.CategoryEconomicIntentIncome)
+	refund := scenario.CategoryWithIntent("FilterIntent:Refund", httpclient.CategoryEconomicIntentRefund)
+
+	incomeIntent := []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentIncome}
+	singleIntent, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		EconomicIntent: &incomeIntent,
+	})
+	if err != nil {
+		t.Fatalf("single intent list request: %v", err)
+	}
+	if singleIntent.StatusCode() != http.StatusOK {
+		t.Fatalf("single intent list status = %d, want %d; body %s", singleIntent.StatusCode(), http.StatusOK, singleIntent.Body)
+	}
+	assertCategoryIDs(t, singleIntent.JSON200.Categories, []int64{income.CategoryId})
+
+	expenseOrRefund := []httpclient.CategoryEconomicIntent{
+		httpclient.CategoryEconomicIntentExpense,
+		httpclient.CategoryEconomicIntentRefund,
+	}
+	multipleIntents, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		EconomicIntent: &expenseOrRefund,
+	})
+	if err != nil {
+		t.Fatalf("multiple intents list request: %v", err)
+	}
+	if multipleIntents.StatusCode() != http.StatusOK {
+		t.Fatalf("multiple intents list status = %d, want %d; body %s", multipleIntents.StatusCode(), http.StatusOK, multipleIntents.Body)
+	}
+	assertCategoryIDs(t, multipleIntents.JSON200.Categories, []int64{expense.CategoryId, refund.CategoryId})
+
+	feeIntent := []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentFee}
+	feeWithoutHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		EconomicIntent: &feeIntent,
+	})
+	if err != nil {
+		t.Fatalf("fee without hidden list request: %v", err)
+	}
+	if feeWithoutHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("fee without hidden list status = %d, want %d; body %s", feeWithoutHidden.StatusCode(), http.StatusOK, feeWithoutHidden.Body)
+	}
+	assertCategoryIDs(t, feeWithoutHidden.JSON200.Categories, nil)
+
+	feeWithHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		EconomicIntent: &feeIntent,
+		IncludeHidden:  &hidden,
+	})
+	if err != nil {
+		t.Fatalf("fee with hidden list request: %v", err)
+	}
+	if feeWithHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("fee with hidden list status = %d, want %d; body %s", feeWithHidden.StatusCode(), http.StatusOK, feeWithHidden.Body)
+	}
+	assertCategoryIDs(t, feeWithHidden.JSON200.Categories, []int64{fee.JSON201.CategoryId})
+
+	invalidIntent, err := client.REST().ListCategoriesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("economic_intent=unknown"))
+	if err != nil {
+		t.Fatalf("invalid intent list request: %v", err)
+	}
+	if invalidIntent.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("invalid intent list status = %d, want %d; body %s", invalidIntent.StatusCode(), http.StatusBadRequest, invalidIntent.Body)
+	}
+	if invalidIntent.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("invalid intent code = %q, want %q", invalidIntent.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
+	}
+}
+
 func TestCategoryValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 

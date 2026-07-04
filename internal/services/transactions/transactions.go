@@ -50,6 +50,7 @@ type Transaction struct {
 	ID             int64
 	InitiatedDate  values.CivilDate
 	Class          TransactionClass
+	DisplayTitle   string
 	PrimaryAmounts []DisplayAmount
 	Components     []ClassificationComponent
 	CreatedAt      time.Time
@@ -62,6 +63,7 @@ type JournalRecord struct {
 	ID                   int64
 	TransactionID        int64
 	AccountID            int64
+	AccountName          string
 	AccountType          accounts.AccountType
 	MemberID             *int64
 	Currency             string
@@ -148,6 +150,39 @@ type RecordSearchOptions struct {
 	IncludeTotalCount     bool
 }
 
+// ListOptions controls transaction list sort, pagination, and date anchoring.
+type ListOptions struct {
+	services.ListOptions
+	AnchorDate *values.CivilDate
+}
+
+// ListResult carries a transaction page plus transaction-list-specific metadata.
+type ListResult struct {
+	Items      []Transaction
+	Offset     int
+	TotalCount int64
+}
+
+// MonthTotalsRange identifies the civil-date range covered by a requested month.
+type MonthTotalsRange struct {
+	Month string
+	Start values.CivilDate
+	End   values.CivilDate
+}
+
+// MonthActivityTotals contains server-computed spend and income totals for a civil month.
+type MonthActivityTotals struct {
+	Month  string
+	Spend  MonthActivityTotal
+	Income MonthActivityTotal
+}
+
+// MonthActivityTotal is one USD-equivalent aggregate plus unresolved conversion count.
+type MonthActivityTotal struct {
+	AmountUSD        values.Decimal
+	UnconvertedCount int64
+}
+
 // BulkRecordOperationResponse reports the selected and updated record counts.
 type BulkRecordOperationResponse struct {
 	RecordIDs    []int64
@@ -193,7 +228,8 @@ type Repository interface {
 	Create(context.Context, CreateInput) (Transaction, error)
 	Replace(context.Context, int64, CreateInput) (Transaction, error)
 	Get(context.Context, int64) (Transaction, error)
-	List(context.Context, services.ListOptions) (services.PaginatedList[Transaction], error)
+	List(context.Context, ListOptions) (ListResult, error)
+	MonthTotals(context.Context, MonthTotalsRange) (MonthActivityTotals, error)
 	Tombstone(context.Context, int64) error
 	SearchRecords(context.Context, RecordSearchOptions) (services.PaginatedList[JournalRecord], error)
 	TransactionsByRecordIDs(context.Context, []int64) ([]Transaction, error)
@@ -439,20 +475,63 @@ func (s *Service) Get(ctx context.Context, id int64) (Transaction, error) {
 }
 
 // List returns transactions with nested journal records.
-func (s *Service) List(ctx context.Context, opts services.ListOptions) (services.PaginatedList[Transaction], error) {
+func (s *Service) List(ctx context.Context, opts ListOptions) (ListResult, error) {
+	if err := validateTransactionListOptions(opts); err != nil {
+		return ListResult{}, err
+	}
 	transactions, err := s.repo.List(ctx, opts)
 	if err != nil {
-		return services.PaginatedList[Transaction]{}, err
+		return ListResult{}, err
 	}
 	for index := range transactions.Items {
 		classified, err := classifyTransaction(transactions.Items[index])
 		if err != nil {
-			return services.PaginatedList[Transaction]{}, err
+			return ListResult{}, err
 		}
 		transactions.Items[index] = classified
 	}
 
 	return transactions, nil
+}
+
+// MonthTotals returns server-computed spend and income totals for a YYYY-MM civil month.
+func (s *Service) MonthTotals(ctx context.Context, month string) (MonthActivityTotals, error) {
+	monthRange, err := monthTotalsRange(month)
+	if err != nil {
+		return MonthActivityTotals{}, err
+	}
+
+	return s.repo.MonthTotals(ctx, monthRange)
+}
+
+func monthTotalsRange(month string) (MonthTotalsRange, error) {
+	if len(month) != len("2006-01") {
+		return MonthTotalsRange{}, services.InvalidRequest("month must use YYYY-MM format")
+	}
+	parsed, err := time.Parse("2006-01", month)
+	if err != nil || parsed.Format("2006-01") != month {
+		return MonthTotalsRange{}, services.InvalidRequest("month must use YYYY-MM format")
+	}
+
+	return MonthTotalsRange{
+		Month: month,
+		Start: values.CivilDateFromTime(parsed),
+		End:   values.CivilDateFromTime(parsed.AddDate(0, 1, 0)),
+	}, nil
+}
+
+func validateTransactionListOptions(opts ListOptions) error {
+	if opts.AnchorDate == nil {
+		return nil
+	}
+	if opts.SortKey != "" && opts.SortKey != services.SortKeyInitiatedDate {
+		return services.InvalidRequest("anchor_date is only valid with initiated_date descending sort")
+	}
+	if opts.SortDirection != services.SortDirectionDesc {
+		return services.InvalidRequest("anchor_date is only valid with initiated_date descending sort")
+	}
+
+	return nil
 }
 
 // Delete tombstones a transaction and its journal records.

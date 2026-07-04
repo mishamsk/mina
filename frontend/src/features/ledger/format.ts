@@ -99,9 +99,6 @@ export const formatDecimalAmount = (
 export const displayAmountKey = (displayAmount: DisplayAmount): string =>
   `${displayAmount.currency}:${displayAmount.amount}`;
 
-export const accountLeaf = (account: Account | undefined): string =>
-  account?.name ?? "Unknown account";
-
 const activeRecords = (transaction: Transaction): readonly JournalRecord[] => {
   const records = transaction.records.filter(
     (record) => record.posting_status !== "cancelled",
@@ -111,15 +108,6 @@ const activeRecords = (transaction: Transaction): readonly JournalRecord[] => {
 
 const recordAmountIsPositive = (record: JournalRecord): boolean =>
   !record.amount.startsWith("-");
-
-const flowRecord = (
-  transaction: Transaction,
-  maps: LookupMaps,
-): JournalRecord | undefined =>
-  transaction.records.find(
-    (record) =>
-      maps.accountsById.get(record.account_id)?.account_type === "flow",
-  );
 
 const balanceRecords = (
   transaction: Transaction,
@@ -139,85 +127,6 @@ const signedBalanceRecord = (
     (record) => recordAmountIsPositive(record) === positive,
   );
 
-const signedFlowRecord = (
-  transaction: Transaction,
-  maps: LookupMaps,
-  positive: boolean,
-): JournalRecord | undefined =>
-  transaction.records.find(
-    (record) =>
-      maps.accountsById.get(record.account_id)?.account_type === "flow" &&
-      recordAmountIsPositive(record) === positive,
-  );
-
-export const counterpartyTitle = (
-  transaction: Transaction,
-  maps: LookupMaps,
-): string => {
-  switch (transaction.transaction_class) {
-    case "spend": {
-      const from = signedBalanceRecord(transaction, maps, false);
-      const to = signedFlowRecord(transaction, maps, true);
-      return `${accountLeaf(maps.accountsById.get(from?.account_id ?? -1))} → ${accountLeaf(
-        maps.accountsById.get(to?.account_id ?? -1),
-      )}`;
-    }
-    case "income":
-    case "refund": {
-      const from = signedFlowRecord(transaction, maps, false);
-      const to = signedBalanceRecord(transaction, maps, true);
-      return `${accountLeaf(maps.accountsById.get(from?.account_id ?? -1))} → ${accountLeaf(
-        maps.accountsById.get(to?.account_id ?? -1),
-      )}`;
-    }
-    case "transfer": {
-      const records = balanceRecords(transaction, maps);
-      const from = records.find((record) => !recordAmountIsPositive(record));
-      const to = records.find((record) => recordAmountIsPositive(record));
-      return `${accountLeaf(maps.accountsById.get(from?.account_id ?? -1))} → ${accountLeaf(
-        maps.accountsById.get(to?.account_id ?? -1),
-      )}`;
-    }
-    case "currency_exchange": {
-      const exchangeAmounts =
-        transaction.components.find(
-          (component) => component.intent === "exchange",
-        )?.amounts ?? [];
-      const sold = exchangeAmounts.find((amount) =>
-        amount.amount.startsWith("-"),
-      );
-      const bought = exchangeAmounts.find(
-        (amount) => !amount.amount.startsWith("-"),
-      );
-      if (sold && bought) {
-        return `${sold.currency} → ${bought.currency}`;
-      }
-
-      const from = signedBalanceRecord(transaction, maps, false);
-      const to = signedBalanceRecord(transaction, maps, true);
-      return from && to
-        ? `${from.currency} → ${to.currency}`
-        : "Currency exchange";
-    }
-    case "adjustment":
-    case "fx_gain_loss":
-      return accountLeaf(
-        maps.accountsById.get(
-          balanceRecords(transaction, maps)[0]?.account_id ?? -1,
-        ),
-      );
-    case "mixed":
-      return (
-        transaction.records.find((record) => record.memo)?.memo ??
-        accountLeaf(
-          maps.accountsById.get(
-            flowRecord(transaction, maps)?.account_id ?? -1,
-          ),
-        )
-      );
-  }
-};
-
 const uniformValue = <T>(
   values: readonly T[],
   equals: (left: T, right: T) => boolean = Object.is,
@@ -228,6 +137,11 @@ const uniformValue = <T>(
   }
   return values.every((value) => equals(value, first)) ? first : "mixed";
 };
+
+const compareNumbers = (left: number, right: number): number => left - right;
+
+const compareTagsByName = (left: Tag, right: Tag): number =>
+  left.name.localeCompare(right.name) || left.fqn.localeCompare(right.fqn);
 
 export const lineMemo = (transaction: Transaction): string | undefined => {
   const memos = activeRecords(transaction)
@@ -264,7 +178,9 @@ export const lineTags = (
   maps: LookupMaps,
 ): readonly Tag[] | "mixed" => {
   const tagIds = uniformValue(
-    activeRecords(transaction).map((record) => [...record.tag_ids].sort()),
+    activeRecords(transaction).map((record) =>
+      [...record.tag_ids].sort(compareNumbers),
+    ),
     (left, right) =>
       left.length === right.length &&
       left.every((value, index) => value === right[index]),
@@ -276,6 +192,7 @@ export const lineTags = (
     ? tagIds
         .map((tagId) => maps.tagsById.get(tagId))
         .filter((tag): tag is Tag => Boolean(tag))
+        .sort(compareTagsByName)
     : [];
 };
 

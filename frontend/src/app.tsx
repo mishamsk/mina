@@ -2,6 +2,7 @@ import { AlertCircle } from "lucide-react";
 import { BrowserRouter } from "react-router";
 
 import { ErrorBoundary } from "./components/error-boundary";
+import { AppTooltipProvider } from "./components/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { AppRoutes } from "./pages/router";
 import { useBootstrapView } from "./store/bootstrap";
@@ -39,9 +40,11 @@ export const App = () => {
 
   return (
     <ErrorBoundary>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <AppTooltipProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AppTooltipProvider>
     </ErrorBoundary>
   );
 };

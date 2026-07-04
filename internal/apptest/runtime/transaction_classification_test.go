@@ -13,19 +13,21 @@ func TestTransactionClassificationClassesBoundary(t *testing.T) {
 	cases := []struct {
 		name      string
 		wantClass httpclient.TransactionClass
+		wantTitle string
 		request   func(*classificationFixture) httpclient.CreateTransactionRequest
 	}{
-		{name: "spend", wantClass: httpclient.TransactionClassSpend, request: spendClassificationRequest},
-		{name: "income", wantClass: httpclient.TransactionClassIncome, request: incomeClassificationRequest},
-		{name: "refund", wantClass: httpclient.TransactionClassRefund, request: refundClassificationRequest},
-		{name: "transfer", wantClass: httpclient.TransactionClassTransfer, request: transferClassificationRequest},
-		{name: "currency exchange", wantClass: httpclient.TransactionClassCurrencyExchange, request: exchangeClassificationRequest},
-		{name: "fee", wantClass: httpclient.TransactionClassSpend, request: feeClassificationRequest},
-		{name: "transfer with fee", wantClass: httpclient.TransactionClassTransfer, request: transferWithFeeClassificationRequest},
-		{name: "exchange with fee and fx", wantClass: httpclient.TransactionClassCurrencyExchange, request: exchangeWithFeeAndFXClassificationRequest},
-		{name: "adjustment", wantClass: httpclient.TransactionClassAdjustment, request: adjustmentClassificationRequest},
-		{name: "fx gain loss", wantClass: httpclient.TransactionClassFxGainLoss, request: fxGainLossClassificationRequest},
-		{name: "mixed", wantClass: httpclient.TransactionClassMixed, request: mixedClassificationRequest},
+		{name: "spend", wantClass: httpclient.TransactionClassSpend, wantTitle: "Checking → Local", request: spendClassificationRequest},
+		{name: "cross-currency spend", wantClass: httpclient.TransactionClassSpend, wantTitle: "Checking → Local", request: crossCurrencySpendClassificationRequest},
+		{name: "income", wantClass: httpclient.TransactionClassIncome, wantTitle: "Employer → Checking", request: incomeClassificationRequest},
+		{name: "refund", wantClass: httpclient.TransactionClassRefund, wantTitle: "Local → Checking", request: refundClassificationRequest},
+		{name: "transfer", wantClass: httpclient.TransactionClassTransfer, wantTitle: "Checking → Savings", request: transferClassificationRequest},
+		{name: "currency exchange", wantClass: httpclient.TransactionClassCurrencyExchange, wantTitle: "USD → EUR", request: exchangeClassificationRequest},
+		{name: "fee", wantClass: httpclient.TransactionClassSpend, wantTitle: "Checking → Fees", request: feeClassificationRequest},
+		{name: "transfer with fee", wantClass: httpclient.TransactionClassTransfer, wantTitle: "Checking → Savings", request: transferWithFeeClassificationRequest},
+		{name: "exchange with fee and fx", wantClass: httpclient.TransactionClassCurrencyExchange, wantTitle: "USD → EUR", request: exchangeWithFeeAndFXClassificationRequest},
+		{name: "adjustment", wantClass: httpclient.TransactionClassAdjustment, wantTitle: "Checking", request: adjustmentClassificationRequest},
+		{name: "fx gain loss", wantClass: httpclient.TransactionClassFxGainLoss, wantTitle: "Checking", request: fxGainLossClassificationRequest},
+		{name: "mixed", wantClass: httpclient.TransactionClassMixed, wantTitle: "Employer", request: mixedClassificationRequest},
 	}
 
 	for _, tc := range cases {
@@ -39,6 +41,7 @@ func TestTransactionClassificationClassesBoundary(t *testing.T) {
 				t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 			}
 			assertTransactionClass(t, "created", *created.JSON201, tc.wantClass)
+			assertTransactionDisplayTitle(t, "created", *created.JSON201, tc.wantTitle)
 
 			read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
 			requireNoTransportError(t, "read transaction", err)
@@ -46,6 +49,7 @@ func TestTransactionClassificationClassesBoundary(t *testing.T) {
 				t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
 			}
 			assertTransactionClass(t, "read", *read.JSON200, tc.wantClass)
+			assertTransactionDisplayTitle(t, "read", *read.JSON200, tc.wantTitle)
 
 			list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
 			requireNoTransportError(t, "list transactions", err)
@@ -56,8 +60,59 @@ func TestTransactionClassificationClassesBoundary(t *testing.T) {
 				t.Fatalf("list count = %d, want 1; body %+v", len(list.JSON200.Transactions), list.JSON200)
 			}
 			assertTransactionClass(t, "listed", list.JSON200.Transactions[0], tc.wantClass)
+			assertTransactionDisplayTitle(t, "listed", list.JSON200.Transactions[0], tc.wantTitle)
 		})
 	}
+}
+
+func TestTransactionDisplayTitleMemoFallbackBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newClassificationFixture(t, client)
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), mixedMemoClassificationRequest(fixture))
+	requireNoTransportError(t, "create mixed memo transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertTransactionClass(t, "created", *created.JSON201, httpclient.TransactionClassMixed)
+	assertTransactionDisplayTitle(t, "created", *created.JSON201, "Mixed payroll correction")
+
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "read mixed memo transaction", err)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	assertTransactionDisplayTitle(t, "read", *read.JSON200, "Mixed payroll correction")
+
+	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
+	requireNoTransportError(t, "list mixed memo transactions", err)
+	if list.StatusCode() != http.StatusOK {
+		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
+	}
+	if len(list.JSON200.Transactions) != 1 {
+		t.Fatalf("list count = %d, want 1; body %+v", len(list.JSON200.Transactions), list.JSON200)
+	}
+	assertTransactionDisplayTitle(t, "listed", list.JSON200.Transactions[0], "Mixed payroll correction")
+}
+
+func TestTransactionDisplayTitleUsesAccountIdentityForUniquenessBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	fixture := newClassificationFixture(t, client)
+	jointA := scenario.AccountWithCurrency("banks:Chase:Joint", "USD")
+	jointB := scenario.AccountWithCurrency("banks:Ally:Joint", "USD")
+
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), classificationRequest(
+		record(jointA.AccountId, fixture.expenseCategory.CategoryId, "USD", "-7.00"),
+		record(jointB.AccountId, fixture.expenseCategory.CategoryId, "USD", "-5.00"),
+		record(fixture.merchant.AccountId, fixture.expenseCategory.CategoryId, "USD", "12.00"),
+	))
+	requireNoTransportError(t, "create duplicate leaf transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertTransactionClass(t, "created", *created.JSON201, httpclient.TransactionClassSpend)
+	assertTransactionDisplayTitle(t, "created", *created.JSON201, "Local")
 }
 
 func TestTransactionClassificationDisplayAmountsBoundary(t *testing.T) {
@@ -175,6 +230,7 @@ func TestTransactionReplaceReclassifiesBoundary(t *testing.T) {
 		t.Fatalf("replace transaction_id = %d, want %d", replaced.JSON200.TransactionId, created.JSON201.TransactionId)
 	}
 	assertTransactionClass(t, "replaced", *replaced.JSON200, httpclient.TransactionClassIncome)
+	assertTransactionDisplayTitle(t, "replaced", *replaced.JSON200, "Employer → Checking")
 	assertIncomeDisplayAmounts(t, "replaced", *replaced.JSON200)
 }
 
@@ -316,6 +372,17 @@ func spendClassificationRequest(f *classificationFixture) httpclient.CreateTrans
 	return classificationRequest(record(f.checking.AccountId, f.expenseCategory.CategoryId, "USD", "-12.34"), record(f.merchant.AccountId, f.expenseCategory.CategoryId, "USD", "12.34"))
 }
 
+func crossCurrencySpendClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
+	return classificationRequest(
+		record(f.checking.AccountId, f.exchangeCategory.CategoryId, "USD", "-110.00"),
+		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "USD", "110.00"),
+		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "EUR", "-100.00"),
+		record(f.cashEUR.AccountId, f.exchangeCategory.CategoryId, "EUR", "100.00"),
+		record(f.cashEUR.AccountId, f.expenseCategory.CategoryId, "EUR", "-100.00"),
+		record(f.merchant.AccountId, f.expenseCategory.CategoryId, "EUR", "100.00"),
+	)
+}
+
 func incomeClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
 	return classificationRequest(record(f.checking.AccountId, f.incomeCategory.CategoryId, "USD", "100.00"), record(f.employer.AccountId, f.incomeCategory.CategoryId, "USD", "-100.00"))
 }
@@ -333,11 +400,12 @@ func feeClassificationRequest(f *classificationFixture) httpclient.CreateTransac
 }
 
 func transferWithFeeClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
+	memo := "Transfer with bank fee"
 	return classificationRequest(
-		record(f.checking.AccountId, f.transferCategory.CategoryId, "USD", "-25.00"),
-		record(f.savings.AccountId, f.transferCategory.CategoryId, "USD", "25.00"),
-		record(f.checking.AccountId, f.feeCategory.CategoryId, "USD", "-1.00"),
-		record(f.feeProvider.AccountId, f.feeCategory.CategoryId, "USD", "1.00"),
+		recordWithMemo(f.checking.AccountId, f.transferCategory.CategoryId, "USD", "-25.00", memo),
+		recordWithMemo(f.savings.AccountId, f.transferCategory.CategoryId, "USD", "25.00", memo),
+		recordWithMemo(f.checking.AccountId, f.feeCategory.CategoryId, "USD", "-1.00", memo),
+		recordWithMemo(f.feeProvider.AccountId, f.feeCategory.CategoryId, "USD", "1.00", memo),
 	)
 }
 
@@ -380,6 +448,16 @@ func mixedClassificationRequest(f *classificationFixture) httpclient.CreateTrans
 	)
 }
 
+func mixedMemoClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
+	memo := "Mixed payroll correction"
+	return classificationRequest(
+		recordWithMemo(f.checking.AccountId, f.expenseCategory.CategoryId, "USD", "-12.00", memo),
+		recordWithMemo(f.merchant.AccountId, f.expenseCategory.CategoryId, "USD", "12.00", memo),
+		recordWithMemo(f.checking.AccountId, f.incomeCategory.CategoryId, "USD", "100.00", memo),
+		recordWithMemo(f.employer.AccountId, f.incomeCategory.CategoryId, "USD", "-100.00", memo),
+	)
+}
+
 func invalidExpenseShapeRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
 	return classificationRequest(record(f.checking.AccountId, f.expenseCategory.CategoryId, "USD", "-10.00"), record(f.savings.AccountId, f.expenseCategory.CategoryId, "USD", "10.00"))
 }
@@ -413,6 +491,12 @@ func record(accountID int64, categoryID int64, currency string, amount string) h
 	}
 }
 
+func recordWithMemo(accountID int64, categoryID int64, currency string, amount string, memo string) httpclient.CreateJournalRecordRequest {
+	record := record(accountID, categoryID, currency, amount)
+	record.Memo = &memo
+	return record
+}
+
 func assertTransactionClass(t *testing.T, label string, transaction httpclient.Transaction, want httpclient.TransactionClass) {
 	t.Helper()
 	if transaction.TransactionClass != want {
@@ -423,6 +507,13 @@ func assertTransactionClass(t *testing.T, label string, transaction httpclient.T
 	}
 	if transaction.PrimaryAmounts == nil {
 		t.Fatalf("%s primary_amounts = nil, want array", label)
+	}
+}
+
+func assertTransactionDisplayTitle(t *testing.T, label string, transaction httpclient.Transaction, want string) {
+	t.Helper()
+	if transaction.DisplayTitle != want {
+		t.Fatalf("%s display_title = %q, want %q; transaction %+v", label, transaction.DisplayTitle, want, transaction)
 	}
 }
 

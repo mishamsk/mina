@@ -1,5 +1,6 @@
 import type { DisplayAmount, TransactionClass } from "@/api";
 import { cn } from "@/lib/utils";
+import { currencyDisplayMarker } from "@/utils/currency";
 
 import { formatDecimalAmount } from "./format";
 
@@ -31,27 +32,38 @@ export const AmountText = ({
   positiveSign = true,
   tone = "class-aware",
   transactionClass,
-}: AmountTextProps) => (
-  <span
-    className={cn(
-      "font-mono whitespace-nowrap tabular-nums",
-      chip &&
-        "bg-card inline-flex h-7 items-center border border-[var(--border-ink)] px-2 font-medium shadow-[var(--shadow-chip)]",
-      chip &&
-        (transactionClass === "income"
-          ? "text-foreground bg-[var(--color-class-income-bright)]"
-          : transactionClass === "refund"
+}: AmountTextProps) => {
+  const formattedAmount = formatDecimalAmount(amount.amount, amount.currency, {
+    positiveSign,
+  });
+  const marker = currencyDisplayMarker(amount.currency);
+
+  return (
+    <span
+      data-testid={chip ? "amount-chip" : "amount-text"}
+      className={cn(
+        "font-mono [overflow-wrap:anywhere] tabular-nums",
+        chip
+          ? "bg-card inline-flex min-h-7 max-w-full flex-wrap items-center justify-end border border-[var(--border-ink)] px-2 text-right font-medium shadow-[var(--shadow-chip)]"
+          : "inline max-w-full text-right whitespace-normal",
+        chip &&
+          (transactionClass === "income"
             ? "text-foreground bg-[var(--color-class-income-bright)]"
-            : ""),
-      tone === "neutral"
-        ? "text-foreground"
-        : amountClassName(transactionClass),
-      className,
-    )}
-  >
-    {formatDecimalAmount(amount.amount, amount.currency, { positiveSign })}
-    <span className="text-muted-foreground whitespace-pre">
-      {` ${amount.currency}`}
+            : transactionClass === "refund"
+              ? "text-foreground bg-[var(--color-class-income-bright)]"
+              : ""),
+        tone === "neutral"
+          ? "text-foreground"
+          : amountClassName(transactionClass),
+        className,
+      )}
+    >
+      <span className="min-w-0 [overflow-wrap:anywhere]">
+        {formattedAmount}
+      </span>
+      <span className="text-muted-foreground whitespace-pre">
+        {` ${marker}`}
+      </span>
     </span>
-  </span>
-);
+  );
+};

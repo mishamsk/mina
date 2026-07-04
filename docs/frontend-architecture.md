@@ -121,6 +121,7 @@ Rules:
 ## Boundary Linting
 
 - `just frontend-lint` runs general TypeScript and ESLint checks and ignores generated output.
+- Package-boundary imports from the Package Boundaries section are enforced by `no-restricted-imports` rules in `frontend/eslint.config.js`.
 - `just frontend-lint` runs Stylelint for CSS.
 - `just frontend-fmt` uses Prettier with Tailwind class sorting.
 - Frontend lint rules live in `frontend/eslint.config.js` and `frontend/stylelint.config.js`; Justfile recipes own when they run.

@@ -2,6 +2,7 @@ package transactions
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
@@ -49,6 +50,7 @@ func classifyTransaction(transaction Transaction) (Transaction, error) {
 // mutable backing arrays with the returned transaction.
 func withClassification(transaction Transaction, classified transactionClassification) Transaction {
 	transaction.Class = classified.class
+	transaction.DisplayTitle = transactionDisplayTitle(transaction, classified.class)
 	transaction.PrimaryAmounts = cloneDisplayAmounts(classified.primaryAmounts)
 	transaction.Components = cloneClassificationComponents(classified.components)
 
@@ -339,6 +341,254 @@ func primaryAmounts(class TransactionClass, components []ClassificationComponent
 	default:
 		return []DisplayAmount{}, nil
 	}
+}
+
+func transactionDisplayTitle(transaction Transaction, class TransactionClass) string {
+	switch class {
+	case TransactionClassSpend:
+		if title := spendDisplayTitle(transaction.Records); title != "" {
+			return title
+		}
+	case TransactionClassIncome:
+		if title := directionalAccountTitle(
+			transaction.Records,
+			func(record JournalRecord) bool {
+				return record.EconomicIntent == categories.CategoryEconomicIntentIncome &&
+					record.AccountType == accounts.AccountTypeFlow &&
+					record.Amount.Sign() < 0
+			},
+			func(record JournalRecord) bool {
+				return record.EconomicIntent == categories.CategoryEconomicIntentIncome &&
+					record.AccountType == accounts.AccountTypeBalance &&
+					record.Amount.Sign() > 0
+			},
+		); title != "" {
+			return title
+		}
+	case TransactionClassRefund:
+		if title := directionalAccountTitle(
+			transaction.Records,
+			func(record JournalRecord) bool {
+				return record.EconomicIntent == categories.CategoryEconomicIntentRefund &&
+					record.AccountType == accounts.AccountTypeFlow &&
+					record.Amount.Sign() < 0
+			},
+			func(record JournalRecord) bool {
+				return record.EconomicIntent == categories.CategoryEconomicIntentRefund &&
+					record.AccountType == accounts.AccountTypeBalance &&
+					record.Amount.Sign() > 0
+			},
+		); title != "" {
+			return title
+		}
+	case TransactionClassTransfer:
+		if title := directionalAccountTitle(
+			transaction.Records,
+			func(record JournalRecord) bool {
+				return record.EconomicIntent == categories.CategoryEconomicIntentTransfer &&
+					record.AccountType == accounts.AccountTypeBalance &&
+					record.Amount.Sign() < 0
+			},
+			func(record JournalRecord) bool {
+				return record.EconomicIntent == categories.CategoryEconomicIntentTransfer &&
+					record.AccountType == accounts.AccountTypeBalance &&
+					record.Amount.Sign() > 0
+			},
+		); title != "" {
+			return title
+		}
+	case TransactionClassCurrencyExchange:
+		if title := directionalCurrencyTitle(transaction.Records); title != "" {
+			return title
+		}
+	case TransactionClassAdjustment:
+		if title := affectedAccountTitle(transaction.Records, categories.CategoryEconomicIntentAdjustment); title != "" {
+			return title
+		}
+	case TransactionClassFXGainLoss:
+		if title := affectedAccountTitle(transaction.Records, categories.CategoryEconomicIntentFXGainLoss); title != "" {
+			return title
+		}
+	}
+
+	if title := uniformMemoTitle(transaction.Records); title != "" {
+		return title
+	}
+	if title := dominantCounterpartyTitle(transaction.Records); title != "" {
+		return title
+	}
+
+	return "Transaction"
+}
+
+func spendDisplayTitle(records []JournalRecord) string {
+	to := func(record JournalRecord) bool {
+		return (record.EconomicIntent == categories.CategoryEconomicIntentExpense ||
+			record.EconomicIntent == categories.CategoryEconomicIntentFee) &&
+			(record.AccountType == accounts.AccountTypeFlow || record.AccountType == accounts.AccountTypeSystem) &&
+			record.Amount.Sign() > 0
+	}
+
+	if title := directionalAccountTitle(
+		records,
+		func(record JournalRecord) bool {
+			return record.EconomicIntent == categories.CategoryEconomicIntentExchange &&
+				record.AccountType == accounts.AccountTypeBalance &&
+				record.Amount.Sign() < 0
+		},
+		to,
+	); title != "" {
+		return title
+	}
+
+	return directionalAccountTitle(
+		records,
+		func(record JournalRecord) bool {
+			if record.AccountType != accounts.AccountTypeBalance || record.Amount.Sign() >= 0 {
+				return false
+			}
+			return record.EconomicIntent == categories.CategoryEconomicIntentExpense ||
+				record.EconomicIntent == categories.CategoryEconomicIntentFee
+		},
+		to,
+	)
+}
+
+func directionalAccountTitle(records []JournalRecord, from func(JournalRecord) bool, to func(JournalRecord) bool) string {
+	fromName, ok := uniqueAccountName(records, from)
+	if !ok {
+		return ""
+	}
+	toName, ok := uniqueAccountName(records, to)
+	if !ok {
+		return ""
+	}
+
+	return fromName + " → " + toName
+}
+
+func uniqueAccountName(records []JournalRecord, include func(JournalRecord) bool) (string, bool) {
+	name := ""
+	var accountID int64
+	for _, record := range records {
+		if !include(record) || record.AccountName == "" {
+			continue
+		}
+		if name == "" {
+			name = record.AccountName
+			accountID = record.AccountID
+			continue
+		}
+		if record.AccountID != accountID {
+			return "", false
+		}
+	}
+
+	return name, name != ""
+}
+
+func directionalCurrencyTitle(records []JournalRecord) string {
+	sold, soldOK := uniqueCurrency(records, func(record JournalRecord) bool {
+		return record.EconomicIntent == categories.CategoryEconomicIntentExchange &&
+			record.AccountType == accounts.AccountTypeBalance &&
+			record.Amount.Sign() < 0
+	})
+	if !soldOK {
+		return ""
+	}
+	bought, boughtOK := uniqueCurrency(records, func(record JournalRecord) bool {
+		return record.EconomicIntent == categories.CategoryEconomicIntentExchange &&
+			record.AccountType == accounts.AccountTypeBalance &&
+			record.Amount.Sign() > 0
+	})
+	if !boughtOK {
+		return ""
+	}
+
+	return sold + " → " + bought
+}
+
+func uniqueCurrency(records []JournalRecord, include func(JournalRecord) bool) (string, bool) {
+	currency := ""
+	for _, record := range records {
+		if !include(record) {
+			continue
+		}
+		if currency == "" {
+			currency = record.Currency
+			continue
+		}
+		if record.Currency != currency {
+			return "", false
+		}
+	}
+
+	return currency, currency != ""
+}
+
+func affectedAccountTitle(records []JournalRecord, intent categories.CategoryEconomicIntent) string {
+	name, ok := uniqueAccountName(records, func(record JournalRecord) bool {
+		return record.EconomicIntent == intent && record.AccountType != accounts.AccountTypeSystem
+	})
+	if !ok {
+		return ""
+	}
+
+	return name
+}
+
+func uniformMemoTitle(records []JournalRecord) string {
+	title := ""
+	for _, record := range records {
+		if record.Memo == nil || *record.Memo == "" {
+			continue
+		}
+		if title == "" {
+			title = *record.Memo
+			continue
+		}
+		if *record.Memo != title {
+			return ""
+		}
+	}
+
+	return title
+}
+
+func dominantCounterpartyTitle(records []JournalRecord) string {
+	if title := dominantRecordTitle(records, func(record JournalRecord) bool {
+		return record.AccountType == accounts.AccountTypeFlow
+	}); title != "" {
+		return title
+	}
+	if title := dominantRecordTitle(records, func(record JournalRecord) bool {
+		return record.AccountType != accounts.AccountTypeSystem
+	}); title != "" {
+		return title
+	}
+
+	return dominantRecordTitle(records, func(JournalRecord) bool {
+		return true
+	})
+}
+
+func dominantRecordTitle(records []JournalRecord, include func(JournalRecord) bool) string {
+	title := ""
+	var maxAmount DisplayAmount
+	found := false
+	for _, record := range records {
+		if !include(record) || strings.TrimSpace(record.AccountName) == "" {
+			continue
+		}
+		amount := record.Amount.Abs()
+		if !found || amount.Cmp(maxAmount.Amount) > 0 {
+			title = record.AccountName
+			maxAmount = DisplayAmount{Amount: amount}
+			found = true
+		}
+	}
+
+	return title
 }
 
 // sumComponents adds already-derived component amounts for the requested

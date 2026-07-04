@@ -113,6 +113,7 @@ func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListC
 	categoryList, err := s.deps.Categories.List(ctx, categories.ListOptions{
 		IncludeHidden:     boolParam(params.IncludeHidden),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		EconomicIntents:   categoryEconomicIntentsFromAPI(params.EconomicIntent),
 		List: listOptionsFromParams(
 			params.Sort,
 			params.SortDir,
@@ -373,6 +374,19 @@ func categoryAPIResponses(categories []categories.Category) []openapi.Category {
 	}
 
 	return responses
+}
+
+func categoryEconomicIntentsFromAPI(values *[]openapi.CategoryEconomicIntent) []categories.CategoryEconomicIntent {
+	if values == nil {
+		return nil
+	}
+
+	intents := make([]categories.CategoryEconomicIntent, 0, len(*values))
+	for _, value := range *values {
+		intents = append(intents, categories.CategoryEconomicIntent(value))
+	}
+
+	return intents
 }
 
 func memberAPIResponse(member members.Member) openapi.Member {

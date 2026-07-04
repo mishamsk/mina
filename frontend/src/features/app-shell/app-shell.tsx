@@ -16,6 +16,7 @@ import {
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import { NavLink } from "react-router";
 
+import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -71,21 +72,30 @@ const DisabledNavItem = ({
   collapsed,
   icon: Icon,
   label,
-}: Pick<NavItem, "icon" | "label"> & { readonly collapsed: boolean }) => (
-  <button
-    type="button"
-    disabled
-    aria-label={label}
-    className={cn(
-      "font-heading flex h-9 items-center gap-3 border-2 border-transparent px-2 text-sm font-semibold text-[var(--frame-muted)] uppercase opacity-60",
-      collapsed && "justify-center px-0",
-    )}
-    title={collapsed ? label : undefined}
-  >
-    <Icon className="size-4 shrink-0" aria-hidden="true" />
-    <span className={cn(collapsed && "sr-only")}>{label}</span>
-  </button>
-);
+}: Pick<NavItem, "icon" | "label"> & { readonly collapsed: boolean }) => {
+  const item = (
+    <button
+      type="button"
+      disabled
+      aria-label={label}
+      className={cn(
+        "font-heading flex h-9 items-center gap-3 border-2 border-transparent px-2 text-sm font-semibold text-[var(--frame-muted)] uppercase opacity-60",
+        collapsed && "justify-center px-0",
+      )}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden="true" />
+      <span className={cn(collapsed && "sr-only")}>{label}</span>
+    </button>
+  );
+
+  return collapsed ? (
+    <Tooltip label={label} className="w-full">
+      {item}
+    </Tooltip>
+  ) : (
+    item
+  );
+};
 
 const SidebarNav = ({
   collapsed,
@@ -95,28 +105,65 @@ const SidebarNav = ({
   readonly items: readonly NavItem[];
 }) => (
   <nav className="flex flex-col gap-1">
-    {items.map((item) =>
-      item.disabled ? (
-        <DisabledNavItem
-          key={item.label}
-          collapsed={collapsed}
-          icon={item.icon}
-          label={item.label}
-        />
-      ) : (
+    {items.map((item) => {
+      if (item.disabled) {
+        return (
+          <DisabledNavItem
+            key={item.label}
+            collapsed={collapsed}
+            icon={item.icon}
+            label={item.label}
+          />
+        );
+      }
+
+      const navLink = (
         <NavLink
           key={item.label}
           to={item.to}
           className={({ isActive }) => navLinkClass({ collapsed, isActive })}
-          title={collapsed ? item.label : undefined}
         >
           <item.icon className="size-4 shrink-0" aria-hidden="true" />
           <span className={cn(collapsed && "sr-only")}>{item.label}</span>
         </NavLink>
-      ),
-    )}
+      );
+
+      return collapsed ? (
+        <Tooltip key={item.label} label={item.label} asChild>
+          {navLink}
+        </Tooltip>
+      ) : (
+        navLink
+      );
+    })}
   </nav>
 );
+
+const NewTransactionButton = ({
+  collapsed,
+}: {
+  readonly collapsed: boolean;
+}) => {
+  const button = (
+    <Button
+      type="button"
+      disabled
+      className={cn("w-full", collapsed && "px-0")}
+      aria-label="New transaction"
+    >
+      <Plus aria-hidden="true" />
+      <span className={cn(collapsed && "sr-only")}>New transaction</span>
+    </Button>
+  );
+
+  return collapsed ? (
+    <Tooltip label="New transaction" className="w-full">
+      {button}
+    </Tooltip>
+  ) : (
+    button
+  );
+};
 
 export const AppShell = ({ children }: AppShellProps) => {
   const {
@@ -153,18 +200,7 @@ export const AppShell = ({ children }: AppShellProps) => {
         </div>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-3">
-          <Button
-            type="button"
-            disabled
-            className={cn("w-full", sidebarCollapsed && "px-0")}
-            aria-label="New transaction"
-            title={sidebarCollapsed ? "New transaction" : undefined}
-          >
-            <Plus aria-hidden="true" />
-            <span className={cn(sidebarCollapsed && "sr-only")}>
-              New transaction
-            </span>
-          </Button>
+          <NewTransactionButton collapsed={sidebarCollapsed} />
 
           <SidebarNav collapsed={sidebarCollapsed} items={primaryNavItems} />
 
@@ -191,34 +227,39 @@ export const AppShell = ({ children }: AppShellProps) => {
         </div>
 
         <div className="border-t-2 border-[var(--border-ink)] p-3">
-          <Button
-            type="button"
-            variant="outline"
-            size={sidebarCollapsed ? "icon" : "default"}
-            className="w-full"
-            aria-expanded={!sidebarCollapsed}
-            aria-label={
-              sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
-            }
-            onClick={() => {
-              setSidebarCollapsed(!sidebarCollapsed);
-            }}
+          <Tooltip
+            label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            asChild
           >
-            {sidebarCollapsed ? (
-              <Menu aria-hidden="true" />
-            ) : (
-              <Close aria-hidden="true" />
-            )}
-            <span className={cn(sidebarCollapsed && "sr-only")}>
-              {sidebarCollapsed ? "Expand" : "Collapse"}
-            </span>
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size={sidebarCollapsed ? "icon" : "default"}
+              className="w-full"
+              aria-expanded={!sidebarCollapsed}
+              aria-label={
+                sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+              }
+              onClick={() => {
+                setSidebarCollapsed(!sidebarCollapsed);
+              }}
+            >
+              {sidebarCollapsed ? (
+                <Menu aria-hidden="true" />
+              ) : (
+                <Close aria-hidden="true" />
+              )}
+              <span className={cn(sidebarCollapsed && "sr-only")}>
+                {sidebarCollapsed ? "Expand" : "Collapse"}
+              </span>
+            </Button>
+          </Tooltip>
         </div>
       </aside>
 
       <main
         className={cn(
-          "min-h-svh bg-[var(--ground)] bg-[linear-gradient(90deg,rgb(237_234_247_/_4%)_1px,transparent_1px),linear-gradient(180deg,rgb(237_234_247_/_4%)_1px,transparent_1px)] bg-[size:16px_16px] px-5 pt-7 pb-0 transition-[margin] duration-150 ease-[steps(2)] sm:px-8",
+          "min-h-svh bg-[var(--ground)] bg-[linear-gradient(90deg,rgb(237_234_247_/_4%)_1px,transparent_1px),linear-gradient(180deg,rgb(237_234_247_/_4%)_1px,transparent_1px)] bg-[size:16px_16px] px-5 pt-7 pb-3 transition-[margin] duration-150 ease-[steps(2)] sm:px-8",
           sidebarCollapsed ? "ml-[76px]" : "ml-64",
         )}
       >

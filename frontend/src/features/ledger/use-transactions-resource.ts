@@ -4,6 +4,7 @@ import {
   fetchLedgerLookups,
   fetchTransactionPage,
   isNetworkFailure,
+  type Transaction,
   type TransactionPageParams,
 } from "@/api";
 import {
@@ -121,10 +122,9 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
   return { lookups, page };
 };
 
-export const refreshTransactionPageAfterSave = async (
+export const refreshTransactionPage = async (
   params: TransactionPageParams,
-  transactionId: number,
-): Promise<boolean> => {
+): Promise<readonly Transaction[]> => {
   invalidateTransactionPages();
   setTransactionPageLoading(params);
 
@@ -135,11 +135,19 @@ export const refreshTransactionPageAfterSave = async (
       result.data.total_count,
       result.data.transactions,
     );
-    return result.data.transactions.some(
-      (transaction) => transaction.transaction_id === transactionId,
-    );
+    return result.data.transactions;
   }
 
   setTransactionPageError(params, apiErrorMessage(result.error));
-  return false;
+  return [];
+};
+
+export const refreshTransactionPageAfterSave = async (
+  params: TransactionPageParams,
+  transactionId: number,
+): Promise<boolean> => {
+  const transactions = await refreshTransactionPage(params);
+  return transactions.some(
+    (transaction) => transaction.transaction_id === transactionId,
+  );
 };

@@ -9,6 +9,8 @@ import {
   createRefundTransaction,
   createSpendTransaction,
   createTransferTransaction,
+  deleteTransaction,
+  getTransaction,
   listAccounts,
   listCategories,
   listMembers,
@@ -34,12 +36,26 @@ export const fetchTransactionPage = (params: TransactionPageParams) =>
     },
   });
 
+export const fetchTransactionById = (transactionId: number) =>
+  getTransaction({
+    path: {
+      transaction_id: transactionId,
+    },
+  });
+
+export const deleteTransactionById = (transactionId: number) =>
+  deleteTransaction({
+    path: {
+      transaction_id: transactionId,
+    },
+  });
+
 export const fetchLedgerLookups = async () => {
   const [accounts, categories, tags, members] = await Promise.all([
     listAccounts({
       query: {
-        include_hidden: false,
-        include_tombstoned: false,
+        include_hidden: true,
+        include_tombstoned: true,
         limit: lookupLimit,
         offset: 0,
         sort: "fqn",
@@ -48,8 +64,8 @@ export const fetchLedgerLookups = async () => {
     }),
     listCategories({
       query: {
-        include_hidden: false,
-        include_tombstoned: false,
+        include_hidden: true,
+        include_tombstoned: true,
         limit: lookupLimit,
         offset: 0,
         sort: "fqn",
@@ -58,8 +74,8 @@ export const fetchLedgerLookups = async () => {
     }),
     listTags({
       query: {
-        include_hidden: false,
-        include_tombstoned: false,
+        include_hidden: true,
+        include_tombstoned: true,
         limit: lookupLimit,
         offset: 0,
         sort: "fqn",
@@ -68,7 +84,7 @@ export const fetchLedgerLookups = async () => {
     }),
     listMembers({
       query: {
-        include_tombstoned: false,
+        include_tombstoned: true,
         limit: lookupLimit,
         offset: 0,
         sort: "name",

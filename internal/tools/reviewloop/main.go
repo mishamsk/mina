@@ -755,6 +755,8 @@ func selectReviewersForPath(selected *reviewerSelectionState, path string) {
 		return
 	case isDocumentationPath(path):
 		selected.repo["docs"] = true
+	case isFrontendToolingPath(path):
+		selected.repo["dev-tooling"] = true
 	case isFrontendPath(path):
 		selected.frontend = true
 	case isAppCodePath(path):
@@ -787,6 +789,25 @@ func isCodexPath(path string) bool {
 
 func isFrontendPath(path string) bool {
 	return path == "frontend" || strings.HasPrefix(path, "frontend/")
+}
+
+func isFrontendToolingPath(path string) bool {
+	switch path {
+	case "frontend/.prettierignore",
+		"frontend/components.json",
+		"frontend/eslint.config.js",
+		"frontend/openapi-ts.config.ts",
+		"frontend/package.json",
+		"frontend/playwright.config.ts",
+		"frontend/pnpm-lock.yaml",
+		"frontend/pnpm-workspace.yaml",
+		"frontend/prettier.config.js",
+		"frontend/stylelint.config.js",
+		"frontend/tsconfig.json",
+		"frontend/vite.config.ts":
+		return true
+	}
+	return false
 }
 
 func isDocumentationPath(path string) bool {
@@ -870,6 +891,11 @@ func reviewerScopedReviewScope(reviewScope string, reviewer reviewerPrompt) stri
 		scopeLines = append(scopeLines,
 			"- Review documentation changes in any path, including documentation under `frontend/`.",
 			"- Use the range above with focused documentation paths, such as `-- '*.md'` and `-- docs/`.",
+		)
+	case reviewer.name == "dev-tooling":
+		scopeLines = append(scopeLines,
+			"- Review changed paths under `frontend/` only when they are build, lint, test, format, or dependency configuration files.",
+			"- Do not review frontend application code under `frontend/src/` or `frontend/tests/`.",
 		)
 	default:
 		scopeLines = append(scopeLines,

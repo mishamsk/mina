@@ -1,24 +1,100 @@
-import type { ReactNode } from "react";
+import { type FocusEvent, type ReactNode, useRef, useState } from "react";
 
+import {
+  Tooltip as TooltipRoot,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 interface TooltipProps {
+  readonly asChild?: boolean;
   readonly children: ReactNode;
   readonly className?: string;
   readonly label: string;
 }
 
-export const Tooltip = ({ children, className, label }: TooltipProps) => (
-  <span
-    className={cn("group/tooltip relative inline-flex max-w-full", className)}
-    title={label}
-  >
+const suppressFocusTooltipAttribute = "data-mina-suppress-focus-tooltip";
+
+export const focusWithoutTooltip = (
+  element: HTMLElement | null | undefined,
+  options?: FocusOptions,
+) => {
+  if (!element) {
+    return;
+  }
+
+  element.setAttribute(suppressFocusTooltipAttribute, "true");
+  element.focus(options);
+  window.requestAnimationFrame(() => {
+    element.removeAttribute(suppressFocusTooltipAttribute);
+  });
+};
+
+export const AppTooltipProvider = ({
+  children,
+}: {
+  readonly children: ReactNode;
+}) => (
+  <TooltipProvider delayDuration={150} disableHoverableContent>
     {children}
-    <span
-      aria-hidden="true"
-      className="bg-card text-foreground pointer-events-none absolute bottom-full left-0 z-50 mb-1 hidden max-w-72 border-2 border-[var(--border-ink)] px-2 py-1 font-mono text-xs whitespace-normal shadow-[var(--shadow-pixel)] group-focus-within/tooltip:block group-hover/tooltip:block"
-    >
-      {label}
-    </span>
-  </span>
+  </TooltipProvider>
 );
+
+export const Tooltip = ({
+  asChild = false,
+  children,
+  className,
+  label,
+}: TooltipProps) => {
+  const [open, setOpen] = useState(false);
+  const suppressNextOpenRef = useRef(false);
+
+  const handleFocusCapture = (event: FocusEvent<HTMLElement>) => {
+    if (
+      event.currentTarget.hasAttribute(suppressFocusTooltipAttribute) ||
+      (event.target instanceof HTMLElement &&
+        event.target.closest(`[${suppressFocusTooltipAttribute}]`))
+    ) {
+      suppressNextOpenRef.current = true;
+    }
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen && suppressNextOpenRef.current) {
+      suppressNextOpenRef.current = false;
+      setOpen(false);
+      return;
+    }
+
+    if (!nextOpen) {
+      suppressNextOpenRef.current = false;
+    }
+    setOpen(nextOpen);
+  };
+
+  return (
+    <TooltipRoot open={open} onOpenChange={handleOpenChange}>
+      {asChild ? (
+        <TooltipTrigger
+          asChild
+          className={className}
+          onFocusCapture={handleFocusCapture}
+        >
+          {children}
+        </TooltipTrigger>
+      ) : (
+        <TooltipTrigger asChild onFocusCapture={handleFocusCapture}>
+          <span
+            className={cn("inline-flex max-w-full min-w-0", className)}
+            tabIndex={0}
+          >
+            {children}
+          </span>
+        </TooltipTrigger>
+      )}
+      <TooltipContent>{label}</TooltipContent>
+    </TooltipRoot>
+  );
+};

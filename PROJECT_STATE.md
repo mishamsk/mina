@@ -6,14 +6,15 @@
 - Implemented API capability groups:
   - Health checks and stable JSON error envelopes.
   - App administration for seeding demo data.
-  - Account, category, tag, and household member CRUD/list flows, including account featured metadata.
+  - Account, category, tag, and household member CRUD/list flows, including account featured metadata and category economic-intent filtering.
   - Account type and category economic-intent metadata for accounting semantics.
   - Exchange-rate and account credit-limit-history flows.
-  - Transaction creation, read, paginated list, full replacement, and tombstone deletion with nested journal records.
+  - Transaction creation, read, paginated and date-anchored list, full replacement, and tombstone deletion with nested journal records.
   - Non-USD `amount_usd` inference on transaction writes using stored `USD -> currency` rates when resolvable.
+  - Server-computed transaction month spend/income totals with USD-equivalent aggregation and unconverted counts.
   - Shorthand transaction creation endpoints for spend, income, refund, and transfer.
   - Transaction-template creation, read, paginated list, full replacement, and tombstone deletion with nested partial record defaults.
-  - Transaction semantic shape validation with derived transaction class, component summaries, and display amounts in REST responses.
+  - Transaction semantic shape validation with derived transaction class, summary titles, component summaries, and display amounts in REST responses.
   - Paginated journal-record search and account-record search.
   - Bulk journal-record category, tag, account, and status updates.
   - Background operation status, run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
@@ -28,6 +29,7 @@
 - Implemented web UI behavior:
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.
+  - Transactions page uses server-derived transaction titles and has a URL-addressable detail side panel with full journal records and delete confirmation.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:
   - Runtime owns accounting location defaults, opens an in-memory DuckDB process database, and selects either an attached accounting database file or the in-memory accounting database with configurable schema fallback.

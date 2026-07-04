@@ -165,6 +165,87 @@ ORDER BY jr.currency, lookup_date, jr.record_id`,
 	return records, nil
 }
 
+// MonthTotals returns spend and income aggregates for active records in one civil month.
+func (s *TransactionStore) MonthTotals(ctx context.Context, monthRange transactions.MonthTotalsRange) (transactions.MonthActivityTotals, error) {
+	row := s.db.query().QueryRowContext(
+		ctx,
+		`WITH classified_records AS (
+	SELECT
+		CASE
+			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`)
+			  AND a.account_type = CAST(? AS `+s.db.accountingName("account_type")+`) THEN 'spend'
+			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`)
+			  AND a.account_type IN (
+				  CAST(? AS `+s.db.accountingName("account_type")+`),
+				  CAST(? AS `+s.db.accountingName("account_type")+`)
+			  ) THEN 'spend'
+			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`)
+			  AND a.account_type = CAST(? AS `+s.db.accountingName("account_type")+`) THEN 'income'
+			ELSE NULL
+		END AS total_kind,
+		CASE
+			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`) THEN -jr.amount_usd
+			ELSE jr.amount_usd
+		END AS signed_amount_usd,
+		jr.amount_usd
+	FROM `+s.db.accountingName("journal_record")+` jr
+	JOIN `+s.db.accountingName("transaction")+` tx ON tx.transaction_id = jr.transaction_id
+	JOIN `+s.db.accountingName("category")+` c ON c.category_id = jr.category_id
+	JOIN `+s.db.accountingName("account")+` a ON a.account_id = jr.account_id
+	WHERE jr.tombstoned_at IS NULL
+	  AND tx.tombstoned_at IS NULL
+	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
+	  AND tx.initiated_date >= ?
+	  AND tx.initiated_date < ?
+)
+SELECT
+	COALESCE(CAST(SUM(CASE
+		WHEN total_kind = 'spend' AND amount_usd IS NOT NULL THEN signed_amount_usd
+		ELSE CAST(0 AS DECIMAL(18,8))
+	END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS spend_amount_usd,
+	COALESCE(CAST(SUM(CASE WHEN total_kind = 'spend' AND amount_usd IS NULL THEN 1 ELSE 0 END) AS BIGINT), 0) AS spend_unconverted_count,
+	COALESCE(CAST(SUM(CASE
+		WHEN total_kind = 'income' AND amount_usd IS NOT NULL THEN signed_amount_usd
+		ELSE CAST(0 AS DECIMAL(18,8))
+	END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS income_amount_usd,
+	COALESCE(CAST(SUM(CASE WHEN total_kind = 'income' AND amount_usd IS NULL THEN 1 ELSE 0 END) AS BIGINT), 0) AS income_unconverted_count
+FROM classified_records
+WHERE total_kind IS NOT NULL`,
+		enumValue(categories.CategoryEconomicIntentExpense),
+		enumValue(accounts.AccountTypeFlow),
+		enumValue(categories.CategoryEconomicIntentFee),
+		enumValue(accounts.AccountTypeFlow),
+		enumValue(accounts.AccountTypeSystem),
+		enumValue(categories.CategoryEconomicIntentIncome),
+		enumValue(accounts.AccountTypeFlow),
+		enumValue(categories.CategoryEconomicIntentIncome),
+		enumValue(transactions.PostingStatusCancelled),
+		civilDateArg(monthRange.Start),
+		civilDateArg(monthRange.End),
+	)
+
+	var spendAmount duckdb.Decimal
+	var incomeAmount duckdb.Decimal
+	var totals transactions.MonthActivityTotals
+	totals.Month = monthRange.Month
+	if err := row.Scan(&spendAmount, &totals.Spend.UnconvertedCount, &incomeAmount, &totals.Income.UnconvertedCount); err != nil {
+		return transactions.MonthActivityTotals{}, fmt.Errorf("query month totals: %w", err)
+	}
+
+	parsedSpend, err := decimalFromDuckDB(spendAmount)
+	if err != nil {
+		return transactions.MonthActivityTotals{}, fmt.Errorf("scan month spend total: %w", err)
+	}
+	parsedIncome, err := decimalFromDuckDB(incomeAmount)
+	if err != nil {
+		return transactions.MonthActivityTotals{}, fmt.Errorf("scan month income total: %w", err)
+	}
+	totals.Spend.AmountUSD = parsedSpend
+	totals.Income.AmountUSD = parsedIncome
+
+	return totals, nil
+}
+
 // BatchSetAmountUSD sets resolved amount_usd values on active unresolved records.
 func (s *TransactionStore) BatchSetAmountUSD(ctx context.Context, updates []transactions.AmountUSDBackfillUpdate) error {
 	if len(updates) == 0 {
@@ -218,7 +299,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 }
 
 // List returns transactions with nested journal records in deterministic date order.
-func (s *TransactionStore) List(ctx context.Context, opts services.ListOptions) (services.PaginatedList[transactions.Transaction], error) {
+func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptions) (transactions.ListResult, error) {
 	filterQuery := `FROM ` + s.db.accountingName("transaction") + `
 WHERE tombstoned_at IS NULL`
 	query := `SELECT transaction_id, initiated_date, created_at, tombstoned_at
@@ -226,13 +307,20 @@ WHERE tombstoned_at IS NULL`
 	args := []any{}
 	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "transactions", opts.IncludeTotalCount)
 	if err != nil {
-		return services.PaginatedList[transactions.Transaction]{}, err
+		return transactions.ListResult{}, err
+	}
+	effectiveOffset := opts.Offset
+	if opts.AnchorDate != nil {
+		effectiveOffset, err = s.transactionAnchorOffset(ctx, *opts.AnchorDate, opts.Limit)
+		if err != nil {
+			return transactions.ListResult{}, err
+		}
 	}
 	sortColumns, ok := transactionSortColumns[opts.SortKey]
 	if !ok {
 		sortColumns = transactionSortColumns[services.SortKeyInitiatedDate]
 	}
-	direction := serviceListDirection(opts)
+	direction := serviceListDirection(opts.ListOptions)
 	query += " ORDER BY "
 	for index, column := range sortColumns {
 		if index > 0 {
@@ -241,7 +329,7 @@ WHERE tombstoned_at IS NULL`
 		query += column + " " + direction
 	}
 	query += ", transaction_id " + direction
-	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
+	query, args = appendLimitOffset(query, args, opts.Limit, effectiveOffset)
 
 	rows, err := s.db.query().QueryContext(
 		ctx,
@@ -249,7 +337,7 @@ WHERE tombstoned_at IS NULL`
 		args...,
 	)
 	if err != nil {
-		return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("list transactions: %w", err)
+		return transactions.ListResult{}, fmt.Errorf("list transactions: %w", err)
 	}
 
 	transactionItems := []transactions.Transaction{}
@@ -257,33 +345,70 @@ WHERE tombstoned_at IS NULL`
 	for rows.Next() {
 		transaction, err := scanTransaction(rows)
 		if err != nil {
-			return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("scan transaction: %w", err)
+			return transactions.ListResult{}, fmt.Errorf("scan transaction: %w", err)
 		}
 		transactionItems = append(transactionItems, transaction)
 		transactionIDs = append(transactionIDs, transaction.ID)
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("iterate transactions: %w; close transactions rows: %w", err, closeErr)
+			return transactions.ListResult{}, fmt.Errorf("iterate transactions: %w; close transactions rows: %w", err, closeErr)
 		}
-		return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("iterate transactions: %w", err)
+		return transactions.ListResult{}, fmt.Errorf("iterate transactions: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return services.PaginatedList[transactions.Transaction]{}, fmt.Errorf("close transactions rows: %w", err)
+		return transactions.ListResult{}, fmt.Errorf("close transactions rows: %w", err)
 	}
 
 	records, err := s.recordsByTransactionIDs(ctx, transactionIDs)
 	if err != nil {
-		return services.PaginatedList[transactions.Transaction]{}, err
+		return transactions.ListResult{}, err
 	}
 	for index := range transactionItems {
 		transactionItems[index].Records = records[transactionItems[index].ID]
 	}
 
-	return services.PaginatedList[transactions.Transaction]{
+	return transactions.ListResult{
 		Items:      transactionItems,
+		Offset:     effectiveOffset,
 		TotalCount: totalCount,
 	}, nil
+}
+
+func (s *TransactionStore) transactionAnchorOffset(ctx context.Context, anchor values.CivilDate, limit *int) (int, error) {
+	var totalCount int64
+	if err := s.db.query().QueryRowContext(
+		ctx,
+		`SELECT COUNT(*)
+FROM `+s.db.accountingName("transaction")+`
+WHERE tombstoned_at IS NULL`,
+	).Scan(&totalCount); err != nil {
+		return 0, fmt.Errorf("count transactions for anchor offset: %w", err)
+	}
+	if totalCount == 0 {
+		return 0, nil
+	}
+
+	var anchorIndex int64
+	err := s.db.query().QueryRowContext(
+		ctx,
+		`SELECT COUNT(*)
+FROM `+s.db.accountingName("transaction")+`
+WHERE tombstoned_at IS NULL AND initiated_date > ?`,
+		civilDateArg(anchor),
+	).Scan(&anchorIndex)
+	if err != nil {
+		return 0, fmt.Errorf("compute transaction anchor offset: %w", err)
+	}
+	if anchorIndex >= totalCount {
+		anchorIndex = totalCount - 1
+	}
+
+	if limit != nil && *limit > 0 {
+		anchorIndex = (anchorIndex / int64(*limit)) * int64(*limit)
+	}
+
+	return int(anchorIndex), nil
 }
 
 // Tombstone marks a transaction and its active journal records deleted.
@@ -431,7 +556,7 @@ JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
 
 	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	` + runningBalanceSelect + `, jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, c.economic_intent
+	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, c.economic_intent
 ` + fromQuery + "\n" + runningBalanceJoin + "\n" + whereQuery
 	query += " ORDER BY tx.initiated_date ASC, jr.transaction_id ASC, jr.record_id ASC"
 	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
@@ -694,6 +819,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	var updatedAt time.Time
 	var tombstonedAt sql.NullTime
 	var accountType sql.NullString
+	var accountName sql.NullString
 	var economicIntent sql.NullString
 	if err := scanner.Scan(
 		&record.ID,
@@ -718,6 +844,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 		&updatedAt,
 		&tombstonedAt,
 		&accountType,
+		&accountName,
 		&economicIntent,
 	); err != nil {
 		return transactions.JournalRecord{}, err
@@ -770,6 +897,9 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	if accountType.Valid {
 		record.AccountType = accounts.AccountType(strings.ToLower(accountType.String))
 	}
+	if accountName.Valid {
+		record.AccountName = accountName.String
+	}
 	if economicIntent.Valid {
 		record.EconomicIntent = categories.CategoryEconomicIntent(strings.ToLower(economicIntent.String))
 	}
@@ -791,7 +921,7 @@ func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 		`SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	CAST(NULL AS DECIMAL(18,8)) AS running_balance,
 	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, c.economic_intent
+	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, c.economic_intent
 FROM `+db.accountingName("journal_record")+` jr
 JOIN `+db.accountingName("account")+` a ON a.account_id = jr.account_id
 JOIN `+db.accountingName("category")+` c ON c.category_id = jr.category_id

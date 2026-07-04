@@ -22,6 +22,7 @@ func TestShorthandTransactionCreateSignsAndDefaults(t *testing.T) {
 		Amount:                "12.34",
 	})
 	assertTransactionClass(t, "spend", spend, httpclient.TransactionClassSpend)
+	assertTransactionDisplayTitle(t, "spend", spend, "Primary → Coffee")
 	assertRecordAmount(t, spend, refs.checkingAccountID, "-12.34000000")
 	assertRecordAmount(t, spend, refs.merchantAccountID, "12.34000000")
 	assertDefaultShorthandRecords(t, spend)
@@ -35,6 +36,7 @@ func TestShorthandTransactionCreateSignsAndDefaults(t *testing.T) {
 		Amount:               "100.00",
 	})
 	assertTransactionClass(t, "income", income, httpclient.TransactionClassIncome)
+	assertTransactionDisplayTitle(t, "income", income, "Employer → Primary")
 	assertRecordAmount(t, income, refs.checkingAccountID, "100.00000000")
 	assertRecordAmount(t, income, refs.employerAccountID, "-100.00000000")
 
@@ -47,6 +49,7 @@ func TestShorthandTransactionCreateSignsAndDefaults(t *testing.T) {
 		Amount:                "5.67",
 	})
 	assertTransactionClass(t, "refund", refund, httpclient.TransactionClassRefund)
+	assertTransactionDisplayTitle(t, "refund", refund, "Coffee → Primary")
 	assertRecordAmount(t, refund, refs.checkingAccountID, "5.67000000")
 	assertRecordAmount(t, refund, refs.merchantAccountID, "-5.67000000")
 
@@ -59,6 +62,7 @@ func TestShorthandTransactionCreateSignsAndDefaults(t *testing.T) {
 		Amount:               "25.00",
 	})
 	assertTransactionClass(t, "transfer", transfer, httpclient.TransactionClassTransfer)
+	assertTransactionDisplayTitle(t, "transfer", transfer, "Primary → Reserve")
 	assertRecordAmount(t, transfer, refs.checkingAccountID, "-25.00000000")
 	assertRecordAmount(t, transfer, refs.savingsAccountID, "25.00000000")
 }

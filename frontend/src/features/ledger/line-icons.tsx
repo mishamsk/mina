@@ -55,7 +55,7 @@ export const ClassIcon = ({ className, transactionClass }: ClassIconProps) => {
       label={label}
       className={cn("inline-grid size-6 place-items-center", className)}
     >
-      <span aria-label={label} role="img" title={label}>
+      <span aria-label={label} role="img">
         <Icon
           aria-hidden="true"
           className={cn("size-5", classTone[transactionClass])}
@@ -83,7 +83,7 @@ export const StatusIcon = ({ className, status }: StatusIconProps) => {
       label={label}
       className={cn("inline-grid size-6 place-items-center", className)}
     >
-      <span aria-label={label} role="img" title={label}>
+      <span aria-label={label} role="img">
         <Icon
           aria-hidden="true"
           className={cn(

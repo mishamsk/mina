@@ -1,17 +1,17 @@
-import { ChevronDown, ChevronRight, Plus } from "pixelarticons/react";
+import { ChevronDown, ChevronRight, Open, Plus } from "pixelarticons/react";
 import { Fragment, useMemo, useState } from "react";
 
-import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
+import type { DisplayAmount, JournalRecord, Tag, Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
+import { currencyDisplayMarker } from "@/utils/currency";
 
 import { AmountText } from "./amount-text";
 import {
   buildLookupMaps,
-  counterpartyTitle,
   displayAmountKey,
   formatDecimalAmount,
   formatInitiatedDateParts,
@@ -25,6 +25,7 @@ import {
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
+import { TagChip } from "./tag-chip";
 
 interface TransactionBrowserProps {
   readonly errorMessage: string | undefined;
@@ -33,6 +34,7 @@ interface TransactionBrowserProps {
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onNewTransaction: () => void;
   readonly onNextPage: () => void;
+  readonly onOpenTransaction: (transaction: Transaction) => void;
   readonly onPageSizeChange: (pageSize: number) => void;
   readonly onPreviousPage: () => void;
   readonly page: number;
@@ -82,35 +84,43 @@ const LoadingRows = () => (
   </div>
 );
 
-const TagChip = ({
-  label,
-  micro = false,
-  title,
-}: {
-  readonly label: string;
-  readonly micro?: boolean;
-  readonly title?: string;
-}) => (
-  <Tooltip
-    label={title ?? label}
-    className={cn(
-      "bg-muted text-foreground inline-flex min-w-0 items-center border border-[var(--border-ink)] font-mono shadow-[var(--shadow-chip)]",
-      micro
-        ? "h-4 max-w-20 px-1 text-[11px] leading-none"
-        : "h-5 max-w-28 px-1.5 text-xs",
-    )}
-  >
-    <span className="truncate">{label}</span>
-  </Tooltip>
-);
+const TagChipsLine = ({ tags }: { readonly tags: readonly Tag[] }) => {
+  const maxVisibleTags = 2;
+  const visibleTags = tags.slice(0, maxVisibleTags);
+  const overflowing = tags.length > visibleTags.length;
+  const fullLabel = tags.map((tag) => tag.fqn).join(", ");
+
+  return (
+    <div className="relative max-w-full min-w-0 overflow-hidden">
+      <div
+        className={cn(
+          "flex w-full max-w-full min-w-0 flex-nowrap gap-1 overflow-hidden",
+          overflowing && "pr-5",
+        )}
+      >
+        {visibleTags.map((tag) => (
+          <TagChip key={tag.tag_id} label={tag.name} micro tooltip={tag.fqn} />
+        ))}
+      </div>
+      {overflowing ? (
+        <Tooltip
+          label={fullLabel}
+          className="bg-card text-foreground absolute top-0 right-0 inline-flex h-4 w-4 items-center justify-center border border-[var(--border-ink)] font-mono text-[11px] leading-none shadow-[var(--shadow-chip)]"
+        >
+          <span data-testid="transaction-tags-overflow">…</span>
+        </Tooltip>
+      ) : null}
+    </div>
+  );
+};
 
 const MemberChip = ({ name }: { readonly name: string }) => (
-  <span
+  <Tooltip
+    label={name}
     className="font-heading text-foreground inline-grid size-6 place-items-center border border-[var(--border-ink)] bg-[var(--color-class-adjustment-bright)] text-[11px] font-semibold uppercase shadow-[var(--shadow-chip)]"
-    title={name}
   >
-    {name.slice(0, 2)}
-  </span>
+    <span>{name.slice(0, 2)}</span>
+  </Tooltip>
 );
 
 const MixedSentinel = ({ label = "Mixed" }: { readonly label?: string }) => (
@@ -119,37 +129,97 @@ const MixedSentinel = ({ label = "Mixed" }: { readonly label?: string }) => (
   </span>
 );
 
-const compactAmountsText = (amounts: readonly DisplayAmount[]): string => {
+const AmountSeparator = () => <span className="whitespace-pre">{" / "}</span>;
+
+const CompactAmounts = ({
+  amounts,
+}: {
+  readonly amounts: readonly DisplayAmount[];
+}) => {
   const [first] = amounts;
   if (!first) {
-    return "";
+    return null;
   }
   const oneCurrency = amounts.every(
     (amount) => amount.currency === first.currency,
   );
   if (oneCurrency) {
-    return `${amounts
-      .map((amount) => formatDecimalAmount(amount.amount, amount.currency))
-      .join(" / ")} ${first.currency}`;
+    return (
+      <>
+        {amounts.map((amount, index) => (
+          <Fragment key={`${amount.currency}:${amount.amount}:${index}`}>
+            {index > 0 ? <AmountSeparator /> : null}
+            <span className="min-w-0 [overflow-wrap:anywhere]">
+              {formatDecimalAmount(amount.amount, amount.currency)}
+            </span>
+          </Fragment>
+        ))}
+        <span className="text-muted-foreground whitespace-pre">
+          {` ${currencyDisplayMarker(first.currency)}`}
+        </span>
+      </>
+    );
+  }
+
+  return amounts.map((amount, index) => (
+    <Fragment key={`${amount.currency}:${amount.amount}:${index}`}>
+      {index > 0 ? <AmountSeparator /> : null}
+      <span className="min-w-0 [overflow-wrap:anywhere]">
+        {formatDecimalAmount(amount.amount, amount.currency)}
+      </span>
+      <span className="text-muted-foreground whitespace-pre">
+        {` ${currencyDisplayMarker(amount.currency)}`}
+      </span>
+    </Fragment>
+  ));
+};
+
+const compactAmountsLength = (amounts: readonly DisplayAmount[]): number => {
+  const [first] = amounts;
+  if (!first) {
+    return 0;
+  }
+  const oneCurrency = amounts.every(
+    (amount) => amount.currency === first.currency,
+  );
+  if (oneCurrency) {
+    return (
+      amounts
+        .map((amount) => formatDecimalAmount(amount.amount, amount.currency))
+        .join(" / ").length +
+      1 +
+      currencyDisplayMarker(first.currency).length
+    );
   }
   return amounts
     .map(
       (amount) =>
-        `${formatDecimalAmount(amount.amount, amount.currency)} ${amount.currency}`,
+        `${formatDecimalAmount(amount.amount, amount.currency)} ${currencyDisplayMarker(amount.currency)}`,
     )
-    .join(" / ");
+    .join(" / ").length;
 };
 
 const MixedAmounts = ({
   amounts,
 }: {
   readonly amounts: readonly DisplayAmount[];
-}) =>
-  amounts.length > 0 ? (
-    <span className="bg-card inline-flex h-7 max-w-full items-center border border-[var(--border-ink)] px-2 font-mono font-medium whitespace-nowrap tabular-nums shadow-[var(--shadow-chip)]">
-      {compactAmountsText(amounts)}
+}) => {
+  const wraps = compactAmountsLength(amounts) > 24;
+
+  return amounts.length > 0 ? (
+    <span
+      className={cn(
+        "bg-card inline-flex max-w-full items-center justify-end border border-[var(--border-ink)] px-2 text-right font-mono font-medium tabular-nums shadow-[var(--shadow-chip)]",
+        wraps
+          ? "min-h-7 flex-wrap [overflow-wrap:anywhere]"
+          : "h-7 whitespace-nowrap",
+      )}
+      data-testid="amount-chip"
+    >
+      <CompactAmounts amounts={amounts} />
     </span>
   ) : null;
+};
 
 const RecordStatus = ({ record }: { readonly record: JournalRecord }) => (
   <span>{record.posting_status === "posted" ? "" : record.posting_status}</span>
@@ -241,6 +311,7 @@ export const TransactionBrowser = ({
   lookups,
   onNewTransaction,
   onNextPage,
+  onOpenTransaction,
   onPageSizeChange,
   onPreviousPage,
   page,
@@ -335,7 +406,7 @@ export const TransactionBrowser = ({
               const expanded = expandedTransactionIds.has(
                 transaction.transaction_id,
               );
-              const title = counterpartyTitle(transaction, maps);
+              const title = transaction.display_title;
               const initiatedDate = formatInitiatedDateParts(
                 transaction.initiated_date,
               );
@@ -425,17 +496,34 @@ export const TransactionBrowser = ({
                             />
                           )}
                         </span>
-                        <div className="min-w-0">
-                          <div className="truncate font-medium" title={title}>
-                            {title}
-                          </div>
-                          {memo ? (
-                            <Tooltip label={memo} className="block min-w-0">
-                              <div className="text-muted-foreground truncate text-xs">
-                                {memo}
+                        <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
+                          <div className="min-w-0">
+                            <Tooltip label={title} className="block min-w-0">
+                              <div className="truncate font-medium">
+                                {title}
                               </div>
                             </Tooltip>
-                          ) : null}
+                            {memo ? (
+                              <Tooltip label={memo} className="block min-w-0">
+                                <div className="text-muted-foreground truncate text-xs">
+                                  {memo}
+                                </div>
+                              </Tooltip>
+                            ) : null}
+                          </div>
+                          <Tooltip label="Open transaction detail" asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label="Open transaction detail"
+                              onClick={() => {
+                                onOpenTransaction(transaction);
+                              }}
+                            >
+                              <Open aria-hidden="true" />
+                            </Button>
+                          </Tooltip>
                         </div>
                       </div>
                     </td>
@@ -447,18 +535,11 @@ export const TransactionBrowser = ({
                       ) : null}
                     </td>
                     <td className="transactions-tags-column px-3 py-2">
-                      <div className="flex min-w-0 flex-nowrap gap-1 overflow-hidden">
+                      <div className="min-w-0">
                         {tags === "mixed" ? (
                           <MixedSentinel />
                         ) : (
-                          tags.map((tag) => (
-                            <TagChip
-                              key={tag.tag_id}
-                              label={tag.name}
-                              micro
-                              title={tag.fqn}
-                            />
-                          ))
+                          <TagChipsLine tags={tags} />
                         )}
                       </div>
                     </td>
@@ -469,7 +550,7 @@ export const TransactionBrowser = ({
                         <MemberChip name={member.name} />
                       ) : null}
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-3 py-2 text-right align-middle">
                       <div className="flex min-w-0 flex-row flex-wrap items-center justify-end gap-1">
                         {transaction.transaction_class === "mixed" ? (
                           <MixedAmounts amounts={amounts} />
@@ -513,7 +594,10 @@ export const TransactionBrowser = ({
         </table>
       </div>
 
-      <div className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between">
+      <div
+        className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between"
+        data-testid="transactions-pagination-footer"
+      >
         <div className="flex items-center gap-2 text-sm">
           <label htmlFor="transactions-page-size" className="font-medium">
             Rows

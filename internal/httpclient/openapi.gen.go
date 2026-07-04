@@ -1195,14 +1195,17 @@ type TagListResponse struct {
 
 // Transaction defines model for Transaction.
 type Transaction struct {
-	Components       []TransactionComponent `json:"components"`
-	CreatedAt        time.Time              `json:"created_at"`
-	InitiatedDate    openapi_types.Date     `json:"initiated_date"`
-	PrimaryAmounts   []DisplayAmount        `json:"primary_amounts"`
-	Records          []JournalRecord        `json:"records"`
-	TombstonedAt     *time.Time             `json:"tombstoned_at,omitempty"`
-	TransactionClass TransactionClass       `json:"transaction_class"`
-	TransactionId    int64                  `json:"transaction_id"`
+	Components []TransactionComponent `json:"components"`
+	CreatedAt  time.Time              `json:"created_at"`
+
+	// DisplayTitle Server-derived transaction summary title for transaction lines.
+	DisplayTitle     string             `json:"display_title"`
+	InitiatedDate    openapi_types.Date `json:"initiated_date"`
+	PrimaryAmounts   []DisplayAmount    `json:"primary_amounts"`
+	Records          []JournalRecord    `json:"records"`
+	TombstonedAt     *time.Time         `json:"tombstoned_at,omitempty"`
+	TransactionClass TransactionClass   `json:"transaction_class"`
+	TransactionId    int64              `json:"transaction_id"`
 }
 
 // TransactionClass defines model for TransactionClass.
@@ -1216,9 +1219,28 @@ type TransactionComponent struct {
 
 // TransactionListResponse defines model for TransactionListResponse.
 type TransactionListResponse struct {
+	// Offset Effective offset used for this transaction page after any anchor_date seek.
+	Offset int `json:"offset"`
+
 	// TotalCount Count of matching transactions before limit and offset are applied.
 	TotalCount   int64         `json:"total_count"`
 	Transactions []Transaction `json:"transactions"`
+}
+
+// TransactionMonthTotal defines model for TransactionMonthTotal.
+type TransactionMonthTotal struct {
+	// AmountUsd JSON string, not a JSON number. USD-equivalent DECIMAL(18,8) aggregate for records with amount_usd available; responses use fixed-scale formatting with exactly 8 fractional digits.
+	AmountUsd string `json:"amount_usd"`
+
+	// UnconvertedCount Count of records contributing to this total that do not have amount_usd.
+	UnconvertedCount int64 `json:"unconverted_count"`
+}
+
+// TransactionMonthTotalsResponse defines model for TransactionMonthTotalsResponse.
+type TransactionMonthTotalsResponse struct {
+	Income TransactionMonthTotal `json:"income"`
+	Month  string                `json:"month"`
+	Spend  TransactionMonthTotal `json:"spend"`
 }
 
 // TransactionTemplate defines model for TransactionTemplate.
@@ -1413,6 +1435,7 @@ type SearchAccountJournalRecordsParams struct {
 type ListCategoriesParams struct {
 	IncludeHidden     *bool                        `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 	IncludeTombstoned *bool                        `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	EconomicIntent    *[]CategoryEconomicIntent    `form:"economic_intent,omitempty" json:"economic_intent,omitempty"`
 	Sort              *ListCategoriesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListCategoriesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
 	Limit             *int                         `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1550,6 +1573,9 @@ type ListTransactionsParams struct {
 	SortDir *ListTransactionsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
 	Limit   *int                           `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset  *int                           `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// AnchorDate Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.
+	AnchorDate *openapi_types.Date `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
 }
 
 // ListTransactionsParamsSort defines parameters for ListTransactions.
@@ -1557,6 +1583,11 @@ type ListTransactionsParamsSort string
 
 // ListTransactionsParamsSortDir defines parameters for ListTransactions.
 type ListTransactionsParamsSortDir string
+
+// GetTransactionMonthTotalsParams defines parameters for GetTransactionMonthTotals.
+type GetTransactionMonthTotalsParams struct {
+	Month string `form:"month" json:"month"`
+}
 
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
@@ -1896,6 +1927,9 @@ type ClientInterface interface {
 	CreateIncomeTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateIncomeTransaction(ctx context.Context, body CreateIncomeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTransactionMonthTotals request
+	GetTransactionMonthTotals(ctx context.Context, params *GetTransactionMonthTotalsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateRefundTransactionWithBody request with any body
 	CreateRefundTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2778,6 +2812,18 @@ func (c *Client) CreateIncomeTransactionWithBody(ctx context.Context, contentTyp
 
 func (c *Client) CreateIncomeTransaction(ctx context.Context, body CreateIncomeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateIncomeTransactionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetTransactionMonthTotals(ctx context.Context, params *GetTransactionMonthTotalsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTransactionMonthTotalsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4000,6 +4046,18 @@ func NewListCategoriesRequest(server string, params *ListCategoriesParams) (*htt
 		if params.IncludeTombstoned != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_tombstoned", *params.IncludeTombstoned, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.EconomicIntent != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "economic_intent", *params.EconomicIntent, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -6026,6 +6084,18 @@ func NewListTransactionsRequest(server string, params *ListTransactionsParams) (
 
 		}
 
+		if params.AnchorDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "anchor_date", *params.AnchorDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -6116,6 +6186,56 @@ func NewCreateIncomeTransactionRequestWithBody(server string, contentType string
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetTransactionMonthTotalsRequest generates requests for GetTransactionMonthTotals
+func NewGetTransactionMonthTotalsRequest(server string, params *GetTransactionMonthTotalsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/month-totals")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "month", params.Month, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -6594,6 +6714,9 @@ type ClientWithResponsesInterface interface {
 	CreateIncomeTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateIncomeTransactionResponse, error)
 
 	CreateIncomeTransactionWithResponse(ctx context.Context, body CreateIncomeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateIncomeTransactionResponse, error)
+
+	// GetTransactionMonthTotalsWithResponse request
+	GetTransactionMonthTotalsWithResponse(ctx context.Context, params *GetTransactionMonthTotalsParams, reqEditors ...RequestEditorFn) (*GetTransactionMonthTotalsResponse, error)
 
 	// CreateRefundTransactionWithBodyWithResponse request with any body
 	CreateRefundTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRefundTransactionResponse, error)
@@ -8301,6 +8424,37 @@ func (r CreateIncomeTransactionResponse) ContentType() string {
 	return ""
 }
 
+type GetTransactionMonthTotalsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TransactionMonthTotalsResponse
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTransactionMonthTotalsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTransactionMonthTotalsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTransactionMonthTotalsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CreateRefundTransactionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9116,6 +9270,15 @@ func (c *ClientWithResponses) CreateIncomeTransactionWithResponse(ctx context.Co
 		return nil, err
 	}
 	return ParseCreateIncomeTransactionResponse(rsp)
+}
+
+// GetTransactionMonthTotalsWithResponse request returning *GetTransactionMonthTotalsResponse
+func (c *ClientWithResponses) GetTransactionMonthTotalsWithResponse(ctx context.Context, params *GetTransactionMonthTotalsParams, reqEditors ...RequestEditorFn) (*GetTransactionMonthTotalsResponse, error) {
+	rsp, err := c.GetTransactionMonthTotals(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTransactionMonthTotalsResponse(rsp)
 }
 
 // CreateRefundTransactionWithBodyWithResponse request with arbitrary body returning *CreateRefundTransactionResponse
@@ -11192,6 +11355,39 @@ func ParseCreateIncomeTransactionResponse(rsp *http.Response) (*CreateIncomeTran
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetTransactionMonthTotalsResponse parses an HTTP response from a GetTransactionMonthTotalsWithResponse call
+func ParseGetTransactionMonthTotalsResponse(rsp *http.Response) (*GetTransactionMonthTotalsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTransactionMonthTotalsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TransactionMonthTotalsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest InvalidRequest

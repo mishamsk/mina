@@ -339,6 +339,23 @@ export type DisplayAmount = {
 
 export type TransactionClass = 'spend' | 'income' | 'refund' | 'transfer' | 'currency_exchange' | 'adjustment' | 'fx_gain_loss' | 'mixed';
 
+export type TransactionMonthTotal = {
+    /**
+     * JSON string, not a JSON number. USD-equivalent DECIMAL(18,8) aggregate for records with amount_usd available; responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount_usd: string;
+    /**
+     * Count of records contributing to this total that do not have amount_usd.
+     */
+    unconverted_count: number;
+};
+
+export type TransactionMonthTotalsResponse = {
+    month: string;
+    spend: TransactionMonthTotal;
+    income: TransactionMonthTotal;
+};
+
 export type TransactionComponent = {
     intent: CategoryEconomicIntent;
     amounts: Array<DisplayAmount>;
@@ -576,6 +593,10 @@ export type Transaction = {
     transaction_id: number;
     initiated_date: string;
     transaction_class: TransactionClass;
+    /**
+     * Server-derived transaction summary title for transaction lines.
+     */
+    display_title: string;
     primary_amounts: Array<DisplayAmount>;
     components: Array<TransactionComponent>;
     created_at: string;
@@ -585,6 +606,10 @@ export type Transaction = {
 
 export type TransactionListResponse = {
     transactions: Array<Transaction>;
+    /**
+     * Effective offset used for this transaction page after any anchor_date seek.
+     */
+    offset: number;
     /**
      * Count of matching transactions before limit and offset are applied.
      */
@@ -884,6 +909,7 @@ export type ListCategoriesData = {
     query?: {
         include_hidden?: boolean;
         include_tombstoned?: boolean;
+        economic_intent?: Array<CategoryEconomicIntent>;
         sort?: 'fqn' | 'created_at' | 'updated_at';
         sort_dir?: 'asc' | 'desc';
         limit?: number;
@@ -2009,6 +2035,10 @@ export type ListTransactionsData = {
         sort_dir?: 'asc' | 'desc';
         limit?: number;
         offset?: number;
+        /**
+         * Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.
+         */
+        anchor_date?: string;
     };
     url: '/api/transactions';
 };
@@ -2055,6 +2085,33 @@ export type CreateTransactionResponses = {
 };
 
 export type CreateTransactionResponse = CreateTransactionResponses[keyof CreateTransactionResponses];
+
+export type GetTransactionMonthTotalsData = {
+    body?: never;
+    path?: never;
+    query: {
+        month: string;
+    };
+    url: '/api/transactions/month-totals';
+};
+
+export type GetTransactionMonthTotalsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type GetTransactionMonthTotalsError = GetTransactionMonthTotalsErrors[keyof GetTransactionMonthTotalsErrors];
+
+export type GetTransactionMonthTotalsResponses = {
+    /**
+     * Month spend and income totals.
+     */
+    200: TransactionMonthTotalsResponse;
+};
+
+export type GetTransactionMonthTotalsResponse = GetTransactionMonthTotalsResponses[keyof GetTransactionMonthTotalsResponses];
 
 export type CreateSpendTransactionData = {
     body: CreateSpendTransactionRequest;

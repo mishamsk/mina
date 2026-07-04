@@ -66,6 +66,7 @@ type CreateInput struct {
 type ListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	EconomicIntents   []CategoryEconomicIntent
 	List              services.ListOptions
 }
 
@@ -208,6 +209,12 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ca
 
 // List returns categories using default visibility rules unless explicitly overridden.
 func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Category], error) {
+	for _, intent := range opts.EconomicIntents {
+		if !ValidCategoryEconomicIntent(intent) {
+			return services.PaginatedList[Category]{}, services.InvalidRequest("economic_intent must be one of expense, fee, income, refund, transfer, exchange, adjustment, or fx_gain_loss")
+		}
+	}
+
 	return s.repo.List(ctx, opts)
 }
 

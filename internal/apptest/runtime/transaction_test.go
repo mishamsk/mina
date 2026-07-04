@@ -92,6 +92,7 @@ func TestTransactionListPaginationBoundary(t *testing.T) {
 	if defaultList.JSON200.TotalCount != 4 {
 		t.Fatalf("default transaction total_count = %d, want 4", defaultList.JSON200.TotalCount)
 	}
+	assertTransactionListOffset(t, "default list", *defaultList.JSON200, 0)
 
 	limitOne := 1
 	limitPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{Limit: &limitOne})
@@ -119,6 +120,7 @@ func TestTransactionListPaginationBoundary(t *testing.T) {
 		second.JSON201.TransactionId,
 		first.JSON201.TransactionId,
 	})
+	assertTransactionListOffset(t, "offset page", *offsetPage.JSON200, 1)
 	if offsetPage.JSON200.TotalCount != 4 {
 		t.Fatalf("offset page transaction total_count = %d, want 4", offsetPage.JSON200.TotalCount)
 	}
@@ -134,6 +136,7 @@ func TestTransactionListPaginationBoundary(t *testing.T) {
 		t.Fatalf("window status = %d, want %d; body %s", window.StatusCode(), http.StatusOK, window.Body)
 	}
 	assertTransactionIDs(t, window.JSON200.Transactions, []int64{secondPeer.JSON201.TransactionId})
+	assertTransactionListOffset(t, "window", *window.JSON200, 1)
 	if window.JSON200.TotalCount != 4 {
 		t.Fatalf("window transaction total_count = %d, want 4", window.JSON200.TotalCount)
 	}
@@ -236,6 +239,151 @@ func TestTransactionListPaginationBoundary(t *testing.T) {
 	assertInvalidTransactionListQuery(t, client, "sort_dir=sideways")
 }
 
+func TestTransactionListAnchorDateBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+	first := createTransactionForDate(t, client, refs, "2024-01-01", "First")
+	second := createTransactionForDate(t, client, refs, "2024-01-02", "Second")
+	third := createTransactionForDate(t, client, refs, "2024-01-03", "Third")
+	fourth := createTransactionForDate(t, client, refs, "2024-01-04", "Fourth")
+	fifth := createTransactionForDate(t, client, refs, "2024-01-05", "Fifth")
+
+	limitTwo := 2
+	midHistory := apptest.Date("2024-01-03")
+	midPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Limit:      &limitTwo,
+		AnchorDate: &midHistory,
+	})
+	if err != nil {
+		t.Fatalf("mid-history anchor request: %v", err)
+	}
+	if midPage.StatusCode() != http.StatusOK {
+		t.Fatalf("mid-history anchor status = %d, want %d; body %s", midPage.StatusCode(), http.StatusOK, midPage.Body)
+	}
+	assertTransactionIDs(t, midPage.JSON200.Transactions, []int64{third.JSON201.TransactionId, second.JSON201.TransactionId})
+	assertTransactionListOffset(t, "mid-history anchor", *midPage.JSON200, 2)
+	if midPage.JSON200.TotalCount != 5 {
+		t.Fatalf("mid-history total_count = %d, want 5", midPage.JSON200.TotalCount)
+	}
+
+	offsetZero := 0
+	anchorOverridesOffset, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Limit:      &limitTwo,
+		Offset:     &offsetZero,
+		AnchorDate: &midHistory,
+	})
+	if err != nil {
+		t.Fatalf("anchor overrides offset request: %v", err)
+	}
+	if anchorOverridesOffset.StatusCode() != http.StatusOK {
+		t.Fatalf("anchor overrides offset status = %d, want %d; body %s", anchorOverridesOffset.StatusCode(), http.StatusOK, anchorOverridesOffset.Body)
+	}
+	assertTransactionIDs(t, anchorOverridesOffset.JSON200.Transactions, []int64{third.JSON201.TransactionId, second.JSON201.TransactionId})
+	assertTransactionListOffset(t, "anchor overrides offset", *anchorOverridesOffset.JSON200, 2)
+
+	newerThanAll := apptest.Date("2024-02-01")
+	newerPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Limit:      &limitTwo,
+		AnchorDate: &newerThanAll,
+	})
+	if err != nil {
+		t.Fatalf("newer anchor request: %v", err)
+	}
+	if newerPage.StatusCode() != http.StatusOK {
+		t.Fatalf("newer anchor status = %d, want %d; body %s", newerPage.StatusCode(), http.StatusOK, newerPage.Body)
+	}
+	assertTransactionIDs(t, newerPage.JSON200.Transactions, []int64{fifth.JSON201.TransactionId, fourth.JSON201.TransactionId})
+	assertTransactionListOffset(t, "newer anchor", *newerPage.JSON200, 0)
+
+	olderThanAll := apptest.Date("2023-12-01")
+	olderPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Limit:      &limitTwo,
+		AnchorDate: &olderThanAll,
+	})
+	if err != nil {
+		t.Fatalf("older anchor request: %v", err)
+	}
+	if olderPage.StatusCode() != http.StatusOK {
+		t.Fatalf("older anchor status = %d, want %d; body %s", olderPage.StatusCode(), http.StatusOK, olderPage.Body)
+	}
+	assertTransactionIDs(t, olderPage.JSON200.Transactions, []int64{first.JSON201.TransactionId})
+	assertTransactionListOffset(t, "older anchor", *olderPage.JSON200, 4)
+
+	limitThree := 3
+	anchorSecond := apptest.Date("2024-01-02")
+	alignedPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Limit:      &limitThree,
+		AnchorDate: &anchorSecond,
+	})
+	if err != nil {
+		t.Fatalf("aligned anchor request: %v", err)
+	}
+	if alignedPage.StatusCode() != http.StatusOK {
+		t.Fatalf("aligned anchor status = %d, want %d; body %s", alignedPage.StatusCode(), http.StatusOK, alignedPage.Body)
+	}
+	assertTransactionIDs(t, alignedPage.JSON200.Transactions, []int64{second.JSON201.TransactionId, first.JSON201.TransactionId})
+	assertTransactionListOffset(t, "aligned anchor", *alignedPage.JSON200, 3)
+
+	sameDayFirst := createTransactionForDate(t, client, refs, "2024-01-03", "Same day first")
+	sameDaySecond := createTransactionForDate(t, client, refs, "2024-01-03", "Same day second")
+
+	tiePage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Limit:      &limitTwo,
+		AnchorDate: &midHistory,
+	})
+	if err != nil {
+		t.Fatalf("same-day tie anchor request: %v", err)
+	}
+	if tiePage.StatusCode() != http.StatusOK {
+		t.Fatalf("same-day tie anchor status = %d, want %d; body %s", tiePage.StatusCode(), http.StatusOK, tiePage.Body)
+	}
+	assertTransactionIDs(t, tiePage.JSON200.Transactions, []int64{sameDaySecond.JSON201.TransactionId, sameDayFirst.JSON201.TransactionId})
+	assertTransactionListOffset(t, "same-day tie anchor", *tiePage.JSON200, 2)
+	if tiePage.JSON200.TotalCount != 7 {
+		t.Fatalf("same-day tie total_count = %d, want 7", tiePage.JSON200.TotalCount)
+	}
+	if third.JSON201.TransactionId >= sameDayFirst.JSON201.TransactionId || sameDayFirst.JSON201.TransactionId >= sameDaySecond.JSON201.TransactionId {
+		t.Fatalf("same-day tie fixture ids = %d, %d, %d, want increasing creation ids", third.JSON201.TransactionId, sameDayFirst.JSON201.TransactionId, sameDaySecond.JSON201.TransactionId)
+	}
+
+	sortInitiated := httpclient.ListTransactionsParamsSortInitiatedDate
+	desc := httpclient.ListTransactionsParamsSortDirDesc
+	explicitSortPage, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort:       &sortInitiated,
+		SortDir:    &desc,
+		Limit:      &limitTwo,
+		AnchorDate: &midHistory,
+	})
+	if err != nil {
+		t.Fatalf("explicit anchor sort request: %v", err)
+	}
+	if explicitSortPage.StatusCode() != http.StatusOK {
+		t.Fatalf("explicit anchor sort status = %d, want %d; body %s", explicitSortPage.StatusCode(), http.StatusOK, explicitSortPage.Body)
+	}
+	assertTransactionIDs(t, explicitSortPage.JSON200.Transactions, []int64{sameDaySecond.JSON201.TransactionId, sameDayFirst.JSON201.TransactionId})
+	assertTransactionListOffset(t, "explicit anchor sort", *explicitSortPage.JSON200, 2)
+
+	asc := httpclient.ListTransactionsParamsSortDirAsc
+	invalidDirection, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		SortDir:    &asc,
+		AnchorDate: &midHistory,
+	})
+	if err != nil {
+		t.Fatalf("invalid anchor direction request: %v", err)
+	}
+	assertInvalidTransactionAnchorResponse(t, "invalid anchor direction", invalidDirection)
+
+	sortCreatedAt := httpclient.ListTransactionsParamsSortCreatedAt
+	invalidSort, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		Sort:       &sortCreatedAt,
+		AnchorDate: &midHistory,
+	})
+	if err != nil {
+		t.Fatalf("invalid anchor sort request: %v", err)
+	}
+	assertInvalidTransactionAnchorResponse(t, "invalid anchor sort", invalidSort)
+}
+
 func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
@@ -306,6 +454,23 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	assertInt64s(t, readRecord.TagIds, []int64{refs.TagId})
 	if readRecord.CreatedAt != record.CreatedAt || readRecord.UpdatedAt != record.UpdatedAt {
 		t.Fatalf("read timestamps = %q/%q, want %q/%q", readRecord.CreatedAt, readRecord.UpdatedAt, record.CreatedAt, record.UpdatedAt)
+	}
+}
+
+func assertTransactionListOffset(t *testing.T, label string, list httpclient.TransactionListResponse, want int) {
+	t.Helper()
+	if list.Offset != want {
+		t.Fatalf("%s offset = %d, want %d; body %+v", label, list.Offset, want, list)
+	}
+}
+
+func assertInvalidTransactionAnchorResponse(t *testing.T, label string, response *httpclient.ListTransactionsResponse) {
+	t.Helper()
+	if response.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("%s status = %d, want %d; body %s", label, response.StatusCode(), http.StatusBadRequest, response.Body)
+	}
+	if response.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("%s code = %q, want %q", label, response.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
 }
 

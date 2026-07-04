@@ -91,7 +91,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 ### Amounts and currency
 
-- Format: locale-grouped number with explicit sign for signed contexts, e.g. `−1,234.56`, followed by a de-emphasized ISO currency code, e.g. `−1,234.56 USD`. Contexts locked to one known currency (an account register header, a single-currency form) may drop the code.
+- Format: locale-grouped number with explicit sign for signed contexts, e.g. `−1,234.56`, followed by a de-emphasized currency marker: the conventional currency symbol when the currency has one (e.g. `−1,234.56 $`, `−1,234.56 €`), otherwise the ISO code. Crypto currencies always use their code. Contexts locked to one known currency (an account register header, a single-currency form) may drop the marker.
 - Fiat renders with 2 decimals; crypto (`C::` prefix) renders up to 8 decimals with trailing zeros trimmed.
 - Never sum mixed currencies natively. Aggregations across currencies display the USD equivalent, visibly marked as approximate: `≈ 1,234.56 USD`. Records with no `amount_usd` are surfaced as "unconverted" in any aggregate that needs them.
 - Display amounts per transaction class follow the display table in `docs/accounting-semantics.md`: spend negative, income/refund positive, transfer/exchange neutral with movement amounts shown separately, mixed shows component amounts and no synthetic total.
@@ -146,7 +146,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - When horizontal space runs out, columns collapse by priority instead of showing a horizontal scrollbar: status marker first, then member, then tags, then category.
 - Pagination shows "Page X of Y" from server-provided total counts.
 - Moving between pages keeps the current rows visible until the next page arrives — no skeleton flash or flicker for uncached pages (skeletons are for first load only).
-- The browser fills the available viewport height: the table body flexes and the pagination footer sits flush with the bottom of the viewport, aligned with the bottom of the sidebar.
+- The browser fills the available viewport height: the table body flexes and the pagination footer sits at a small, consistent inset from the viewport bottom, matching the sidebar's bottom-control inset so the two bottom edges align.
 - Shareable state: filters, search text, sort, and list position live in the URL (per `docs/frontend-architecture.md`). Detail pages are URL-addressable. Sidebar navigation returns to a page's last-used state.
 - Filter bar pattern: a free-text search input plus an "Add filter" menu producing removable typed filter chips. Filter dimensions: account, category, tag, member, amount range, date range (initiated/pending/posted), posting status, reconciliation status, transaction class.
 

@@ -400,6 +400,16 @@ const lookupCurrencies = (
   return [...currencies].sort((left, right) => left.localeCompare(right));
 };
 
+const visibleAccount = (account: Account): boolean =>
+  !account.is_hidden && !account.tombstoned_at;
+
+const visibleCategory = (category: Category): boolean =>
+  !category.is_hidden && !category.tombstoned_at;
+
+const visibleMember = (member: Member): boolean => !member.tombstoned_at;
+
+const visibleTag = (tag: Tag): boolean => !tag.is_hidden && !tag.tombstoned_at;
+
 export const EntryPanel = ({
   lookups,
   onClose,
@@ -464,6 +474,9 @@ export const EntryPanel = ({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
       if (event.key === "Escape") {
         onClose();
       }
@@ -498,8 +511,10 @@ export const EntryPanel = ({
   }, [open]);
 
   const options = useMemo(() => {
-    const accounts = lookups?.accounts ?? [];
-    const categories = lookups?.categories ?? [];
+    const accounts = (lookups?.accounts ?? []).filter(visibleAccount);
+    const categories = (lookups?.categories ?? []).filter(visibleCategory);
+    const members = (lookups?.members ?? []).filter(visibleMember);
+    const tags = (lookups?.tags ?? []).filter(visibleTag);
     const categoryOptions = (entryType: TransactionEntryType) =>
       categories
         .filter((category) =>
@@ -522,8 +537,8 @@ export const EntryPanel = ({
         .filter((account) => account.account_type === "flow")
         .map((account) => entityOption(account, account.account_id)),
       currencies: lookupCurrencies(lookups),
-      members: lookups?.members.map(memberOption) ?? [],
-      tags: lookups?.tags.map((tag) => entityOption(tag, tag.tag_id)) ?? [],
+      members: members.map(memberOption),
+      tags: tags.map((tag) => entityOption(tag, tag.tag_id)),
     };
   }, [lookups]);
   const lookupRevision = lookups?.loadedAt ?? "loading";

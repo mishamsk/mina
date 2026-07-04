@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 interface AccountFixture {
   readonly account_id: number;
@@ -14,6 +14,11 @@ interface TagFixture {
   readonly fqn: string;
   readonly name: string;
   readonly tag_id: number;
+}
+
+interface TransactionFixture {
+  readonly display_title: string;
+  readonly transaction_id: number;
 }
 
 const listFixtures = async <T>(
@@ -44,6 +49,49 @@ const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
   return (await response.json()) as TagFixture;
 };
 
+const createAccount = async (
+  page: Page,
+  fqn: string,
+  accountType: "balance" | "flow",
+  currency?: string,
+): Promise<AccountFixture> => {
+  const response = await page.request.post("/api/accounts", {
+    data: {
+      account_type: accountType,
+      currency,
+      fqn,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as AccountFixture;
+};
+
+const hideTag = async (page: Page, tag: TagFixture): Promise<void> => {
+  const response = await page.request.patch(`/api/tags/${tag.tag_id}`, {
+    data: { is_hidden: true },
+  });
+  expect(response.ok()).toBe(true);
+};
+
+const amountChipsFitCell = async (row: Locator): Promise<boolean> =>
+  row
+    .locator("td")
+    .nth(7)
+    .evaluate((cell) => {
+      const cellRect = cell.getBoundingClientRect();
+      const chips = Array.from(
+        cell.querySelectorAll<HTMLElement>("[data-testid='amount-chip']"),
+      ).map((chip) => chip.getBoundingClientRect());
+      return (
+        chips.length > 0 &&
+        chips.every(
+          (chipRect) =>
+            chipRect.left >= cellRect.left - 0.5 &&
+            chipRect.right <= cellRect.right + 0.5,
+        )
+      );
+    });
+
 test("transactions page renders demo transaction lines and expands records", async ({
   page,
 }) => {
@@ -59,11 +107,11 @@ test("transactions page renders demo transaction lines and expands records", asy
   const transferRow = page
     .getByRole("row")
     .filter({ has: page.getByRole("img", { name: "TRANSFER" }) })
-    .filter({ hasText: "120.00 USD" })
+    .filter({ hasText: "120.00 $" })
     .first();
   await expect(transferRow).toBeVisible();
   await expect(transferRow).toContainText("→");
-  await expect(transferRow).not.toContainText("+120.00 USD");
+  await expect(transferRow).not.toContainText("+120.00 $");
 
   const firstRowBackgroundBefore = await transactionRows
     .nth(0)
@@ -316,8 +364,8 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   expect(intermediateTableState.amountCellRightWithinContainer).toBe(true);
   expect(intermediateTableState.amountContentRightWithinContainer).toBe(true);
   expect(intermediateTableState.amountHasTruncatedContent).toBe(false);
-  expect(intermediateTableState.amountText).toBe("-43.98 USD");
-  expect(intermediateTableState.amountTexts).toContain("+3,250.00 USD");
+  expect(intermediateTableState.amountText).toBe("-43.98 $");
+  expect(intermediateTableState.amountTexts).toContain("+3,250.00 $");
   expect(intermediateTableState.memberFullyVisible).toBe(true);
   expect(intermediateTableState.visibleContentOverlapsAmount).toBe(false);
   expect(intermediateTableState.statusHeaderCollapsed).toBe(
@@ -341,8 +389,8 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     expect(tableState.amountCellRightWithinContainer).toBe(true);
     expect(tableState.amountContentRightWithinContainer).toBe(true);
     expect(tableState.amountHasTruncatedContent).toBe(false);
-    expect(tableState.amountText).toBe("-43.98 USD");
-    expect(tableState.amountTexts).toContain("+3,250.00 USD");
+    expect(tableState.amountText).toBe("-43.98 $");
+    expect(tableState.amountTexts).toContain("+3,250.00 $");
     expect(tableState.visibleContentOverlapsAmount).toBe(false);
     if (tableState.categoryCollapsed) {
       expect(tableState.tagsCollapsed).toBe(true);
@@ -356,6 +404,179 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   }
 
   expect(intermediateTableState.memberCollapsed).toBe(true);
+});
+
+test("transactions contain long amount chips and align the pagination footer", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const incomeDestinationAccount = findByFqn(accounts, "checking:Chase:Joint");
+  const incomeSourceAccount = findByFqn(accounts, "income:AcmePayroll");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const incomeCategory = findByFqn(categories, "Income:Salary");
+  const memo = `E2E long amount ${unique}`;
+  const mixedMemo = `E2E mixed long amount ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "9999999999.99",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-05-31",
+      memo,
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+
+  const mixedResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-05-31",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-9999999999.99",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "9999999999.99",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: incomeDestinationAccount.account_id,
+          amount: "8888888888.88",
+          category_id: incomeCategory.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: incomeSourceAccount.account_id,
+          amount: "-8888888888.88",
+          category_id: incomeCategory.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+      ],
+    },
+  });
+  expect(mixedResponse.ok()).toBe(true);
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const footerBox = await page
+    .getByTestId("transactions-pagination-footer")
+    .boundingBox();
+  const collapseBox = await page
+    .getByRole("button", { name: "Collapse sidebar" })
+    .boundingBox();
+  expect(footerBox).not.toBeNull();
+  expect(collapseBox).not.toBeNull();
+  expect(
+    Math.abs(
+      (footerBox?.y ?? 0) +
+        (footerBox?.height ?? 0) -
+        ((collapseBox?.y ?? 0) + (collapseBox?.height ?? 0)),
+    ),
+  ).toBeLessThanOrEqual(1);
+
+  for (const width of [1600, 1000, 700]) {
+    await page.setViewportSize({ width, height: 720 });
+    const longAmountRow = page.getByRole("row").filter({ hasText: memo });
+    await expect(longAmountRow).toBeVisible();
+    await expect(longAmountRow.locator("td").nth(7)).toContainText(
+      "-9,999,999,999.99 $",
+    );
+    const mixedLongAmountRow = page
+      .getByRole("row")
+      .filter({ hasText: mixedMemo });
+    await expect(mixedLongAmountRow).toBeVisible();
+    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText(
+      "-9,999,999,999.99",
+    );
+    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText(
+      "+8,888,888,888.88",
+    );
+    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText("$");
+
+    await expect(amountChipsFitCell(longAmountRow)).resolves.toBe(true);
+    await expect(amountChipsFitCell(mixedLongAmountRow)).resolves.toBe(true);
+  }
+});
+
+test("transactions display currency symbols with code fallback", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [categories] = await Promise.all([
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const category = findByFqn(categories, "Entertainment:Books");
+  const fundingAccount = await createAccount(
+    page,
+    `e2e:fallback:${unique}:cash`,
+    "balance",
+    "XDR",
+  );
+  const merchantAccount = await createAccount(
+    page,
+    `e2e:fallback:${unique}:merchant`,
+    "flow",
+  );
+  const memo = `E2E fallback currency ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "3.21",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "XDR",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-05-31",
+      memo,
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+  await expect(
+    page
+      .getByRole("row")
+      .filter({ hasText: "BlueCash → Target" })
+      .first()
+      .locator("td")
+      .nth(7),
+  ).toContainText("-43.98 $");
+  await expect(
+    page.getByRole("row").filter({ hasText: memo }).locator("td").nth(7),
+  ).toContainText("-3.21 XDR");
 });
 
 test("transactions page help and leaf category chips", async ({ page }) => {
@@ -377,9 +598,7 @@ test("transactions page help and leaf category chips", async ({ page }) => {
     .first();
   await expect(simpleSpendRow).toBeVisible();
   await expect(simpleSpendRow.locator("td").nth(6)).not.toContainText("Mixed");
-  await expect(simpleSpendRow.locator("td").nth(7)).toContainText(
-    /-43\.98 USD/,
-  );
+  await expect(simpleSpendRow.locator("td").nth(7)).toContainText(/-43\.98 \$/);
 
   const mixedRow = page
     .getByRole("row")
@@ -390,7 +609,7 @@ test("transactions page help and leaf category chips", async ({ page }) => {
     mixedRow.locator("td").nth(4).getByText("Mixed", { exact: true }),
   ).toBeVisible();
   await expect(mixedRow.locator("td").nth(7)).toContainText(
-    "-5.00 / +100.00 USD",
+    "-5.00 / +100.00 $",
   );
   const rowHeights = await page
     .locator("tbody > tr[aria-expanded]")
@@ -398,10 +617,8 @@ test("transactions page help and leaf category chips", async ({ page }) => {
       const mixed = rows.find((row) =>
         row.textContent?.includes("Mixed payroll correction"),
       );
-      const ordinarySingleLine = rows.find(
-        (row) =>
-          !row.textContent?.includes("Mixed payroll correction") &&
-          !row.querySelector("td:nth-child(4) .text-xs"),
+      const ordinarySingleLine = rows.find((row) =>
+        row.textContent?.includes("BlueCash → Target"),
       );
       return {
         mixed: mixed?.getBoundingClientRect().height,
@@ -415,29 +632,51 @@ test("transactions page help and leaf category chips", async ({ page }) => {
     .filter({ has: page.getByRole("img", { name: "EXCHANGE" }) })
     .filter({ hasText: "USD → EUR" })
     .first();
-  await expect(exchangeRow).toContainText("-224.00 USD");
-  await expect(exchangeRow).not.toContainText("200.00 EUR");
+  await expect(exchangeRow).toContainText("-224.00 $");
+  await expect(exchangeRow).not.toContainText("200.00 €");
 
-  await expect(
-    page.getByRole("img", { name: "SPEND" }).first(),
-  ).toHaveAttribute("title", "SPEND");
+  const spendIcon = page.getByRole("img", { name: "SPEND" }).first();
+  await expect(spendIcon).toBeVisible();
+  await spendIcon.hover();
+  const spendTooltip = page.getByRole("tooltip").filter({ hasText: "SPEND" });
+  await expect(spendTooltip).toBeVisible();
+  await page.mouse.move(0, 0);
+  await expect(spendTooltip).toBeHidden();
 
   const booksCategory = page
     .locator("tbody tr")
     .filter({ hasText: "Books" })
     .first()
     .locator("td")
-    .nth(4)
-    .getByTitle("Entertainment:Books");
-  await expect(booksCategory.locator("span").first()).toHaveText("Books");
+    .nth(4);
+  await expect(booksCategory.getByText("Books", { exact: true })).toBeVisible();
+  await booksCategory.getByText("Books", { exact: true }).hover();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Entertainment:Books" }),
+  ).toBeVisible();
+  await page.mouse.move(0, 0);
+  await expect(page.getByRole("tooltip")).toBeHidden();
+
+  const openDetailButton = page
+    .getByRole("button", { name: "Open transaction detail" })
+    .first();
+  await openDetailButton.focus();
+  await expect(openDetailButton).toBeFocused();
+  const openDetailTooltip = page
+    .getByRole("tooltip")
+    .filter({ hasText: "Open transaction detail" });
+  await expect(openDetailTooltip).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(openDetailTooltip).toBeHidden();
 });
 
 test("transactions line composition uses compact dates and single-line leaf tags", async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 720 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
-  const lisbonTagFqn = `E2E:Wrap:${unique}:Lisbon2026`;
+  const lisbonTagFqn = `E2E:Wrap:${unique}:Aardvark`;
   const tagFqns = [
     lisbonTagFqn,
     `E2E:Wrap:${unique}:Planning`,
@@ -484,8 +723,18 @@ test("transactions line composition uses compact dates and single-line leaf tags
   const statusCell = manyTagRow.locator("td").nth(2);
   await expect(statusCell).toHaveText("");
 
-  const lisbonTag = manyTagRow.locator("td").nth(5).getByTitle(lisbonTagFqn);
-  await expect(lisbonTag.locator("span").first()).toHaveText("Lisbon2026");
+  const lisbonTag = manyTagRow
+    .locator("td")
+    .nth(5)
+    .getByText("Aardvark", { exact: true });
+  await expect(lisbonTag).toBeVisible();
+  await lisbonTag.hover();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: lisbonTagFqn }),
+  ).toBeVisible();
+  await expect(
+    manyTagRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
+  ).toBeVisible();
 
   const rowHeights = await page
     .locator("tbody > tr[aria-expanded]")
@@ -502,6 +751,268 @@ test("transactions line composition uses compact dates and single-line leaf tags
   expect(
     Math.abs((rowHeights.manyTag ?? 0) - (rowHeights.ordinary ?? 0)),
   ).toBeLessThan(1);
+});
+
+test("transaction detail panel shows full records and supports deep links", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const tagFqns = [
+    `E2E:Detail:${unique}:Aardvark`,
+    `E2E:Detail:${unique}:Planning`,
+    `E2E:Detail:${unique}:Receipts`,
+    `E2E:Detail:${unique}:Shared`,
+    `E2E:Detail:${unique}:LongLeafNameForDetailPanel`,
+  ];
+  const createdTags = await Promise.all(
+    tagFqns.map((fqn) => createTag(page, fqn)),
+  );
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E detail ${unique} full memo with receipt notes, household context, and enough words to be truncated on the transaction line but readable in the panel`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "42.19",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-06-30",
+      memo,
+      tag_ids: createdTags.map((tag) => tag.tag_id),
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const detailRow = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(detailRow).toBeVisible();
+  await expect(
+    detailRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
+  ).toBeVisible();
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  await expect(entryPanel).toBeVisible();
+
+  await detailRow
+    .getByRole("button", {
+      name: "Open transaction detail",
+    })
+    .click();
+
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
+  );
+  const panel = page.getByRole("dialog", { name: transaction.display_title });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("SPEND").first()).toBeVisible();
+  await expect(
+    panel.getByTestId("amount-chip").filter({ hasText: "-42.19 $" }).first(),
+  ).toBeVisible();
+  await expect(panel.getByText(memo).first()).toBeVisible();
+  await expect(panel.getByText("Journal records")).toBeVisible();
+  await expect(panel.getByText("cash:Wallet").first()).toBeVisible();
+  await expect(panel.getByText("merchant:Books").first()).toBeVisible();
+  await expect(panel.getByText("Entertainment:Books").first()).toBeVisible();
+  for (const tag of createdTags) {
+    await expect(
+      panel.getByText(tag.name, { exact: true }).first(),
+    ).toBeVisible();
+  }
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(entryPanel).toBeVisible();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await page.keyboard.press("Escape");
+  await expect(entryPanel).toBeHidden();
+
+  await detailRow
+    .getByRole("button", {
+      name: "Open transaction detail",
+    })
+    .click();
+  await expect(panel).toBeVisible();
+  await page.keyboard.press("KeyN");
+  await expect(entryPanel).toBeHidden();
+
+  await page.goto(
+    `/transactions?page=2&pageSize=10&transaction=${transaction.transaction_id}`,
+  );
+  const deepLinkPanel = page.getByRole("dialog", {
+    name: transaction.display_title,
+  });
+  await expect(deepLinkPanel).toBeVisible();
+  await expect(deepLinkPanel.getByText(memo).first()).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(deepLinkPanel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=10$/);
+});
+
+test("transaction detail delete confirms, tombstones, and refreshes the row", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E delete detail ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.45",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-02",
+      memo,
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+  const consoleErrors: string[] = [];
+  const failedTransactionRequests: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") {
+      consoleErrors.push(message.text());
+    }
+  });
+  page.on("requestfailed", (request) => {
+    if (
+      request.method() === "GET" &&
+      request.url().includes(`/api/transactions/${transaction.transaction_id}`)
+    ) {
+      failedTransactionRequests.push(
+        `${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`,
+      );
+    }
+  });
+  page.on("response", (response) => {
+    if (
+      response.request().method() === "GET" &&
+      response
+        .url()
+        .includes(`/api/transactions/${transaction.transaction_id}`) &&
+      response.status() >= 400
+    ) {
+      failedTransactionRequests.push(
+        `GET ${response.url()} returned ${response.status()}`,
+      );
+    }
+  });
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const detailRow = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(detailRow).toBeVisible();
+  await detailRow
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+
+  const panel = page.getByRole("dialog", { name: transaction.display_title });
+  await expect(panel).toBeVisible();
+
+  await panel.getByRole("button", { name: "Delete" }).click();
+  const confirmDialog = page.getByRole("alertdialog", {
+    name: "Delete transaction",
+  });
+  await expect(confirmDialog).toBeVisible();
+  await expect(
+    confirmDialog.getByText(transaction.display_title),
+  ).toBeVisible();
+  await confirmDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirmDialog).toBeHidden();
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Delete" })).toBeFocused();
+
+  await panel.getByRole("button", { name: "Delete" }).click();
+  await page
+    .getByRole("alertdialog", { name: "Delete transaction" })
+    .getByRole("button", { name: "Delete transaction" })
+    .click();
+
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction deleted." }),
+  ).toBeVisible();
+  await expect(panel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await expect(page.getByRole("row").filter({ hasText: memo })).toBeHidden();
+  expect(consoleErrors).toEqual([]);
+  expect(failedTransactionRequests).toEqual([]);
+});
+
+test("transactions resolve hidden referenced tags but exclude them from pickers", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const hiddenTagFqn = `E2E:Hidden:${unique}:QuietTag`;
+  const hiddenTag = await createTag(page, hiddenTagFqn);
+
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E hidden tag ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "8.42",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-05-31",
+      memo,
+      tag_ids: [hiddenTag.tag_id],
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+  await hideTag(page, hiddenTag);
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const hiddenTagRow = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(hiddenTagRow).toBeVisible();
+  await expect(
+    hiddenTagRow.locator("td").nth(5).getByText("QuietTag", { exact: true }),
+  ).toBeVisible();
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const tagsPicker = page.getByRole("combobox", { name: "Tags" });
+  await tagsPicker.fill(hiddenTagFqn);
+  await expect(page.getByText("No matches")).toBeVisible();
 });
 
 const chooseOptionByKeyboard = async (

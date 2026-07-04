@@ -128,6 +128,7 @@ Theme treatments for the shared component inventory in `docs/webui-design.md`:
 - `BalanceStrip`: mono amounts in `--frame-foreground` on the frame; no accent fills so the strip stays glanceable.
 - Toasts: landmark treatment, one-line, auto-dismiss; success uses mint ink text, not a mint fill.
 - Empty states: small pixel-art sprite (inline SVG, ≤ 4 colors from the accent palette), mono bold uppercase headline, sans explanation, primary action button.
+- Tooltips: exactly one flat treatment everywhere — ink fill (`--border-ink`), `--frame-foreground` text, 12px mono, square, no outline, no shadow — visually distinct from data chips and cards. Tooltip popups render above all surfaces and are never clipped by table cells or scroll containers. Chip-styled or pixel-shadowed tooltip popups are not allowed; native browser `title` tooltips must not appear alongside the styled tooltip (accessible names stay).
 
 ## Accessibility & Verification
 

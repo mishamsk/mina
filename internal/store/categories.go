@@ -94,6 +94,12 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		filterQuery += " AND tombstoned_at IS NULL"
 	}
+	if len(opts.EconomicIntents) > 0 {
+		filterQuery += " AND economic_intent IN (" + placeholders(len(opts.EconomicIntents)) + ")"
+		for _, intent := range opts.EconomicIntents {
+			args = append(args, enumValue(intent))
+		}
+	}
 	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "categories", opts.List.IncludeTotalCount)
 	if err != nil {
 		return services.PaginatedList[categories.Category]{}, err
