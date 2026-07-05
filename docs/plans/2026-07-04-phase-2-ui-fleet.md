@@ -66,7 +66,7 @@ Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = 
 - [x] Task 9: `npb5` — transactions list filter/search API (API) — branch `npb5-transactions-filter-api`
 - [x] Task 10: `0b17` — Transactions search and filter bar (FE; requires Task 9) — branch `0b17-filter-bar`
 - [x] Task 11: `bm0h` — account-record search API for registers (API) — branch `bm0h-register-api`
-- [ ] Task 12: `7ts6` — Accounts chart-of-accounts page (FE) — branch `7ts6-accounts-page`
+- [x] Task 12: `7ts6` — Accounts chart-of-accounts page (FE) — branch `7ts6-accounts-page`
 - [ ] Task 13: `6a1w` — account page with register (FE; requires Task 11) — branch `6a1w-account-register`
 - [ ] Task 14: `t3ph` — account group pages (FE; requires Tasks 11 and 13) — branch `t3ph-group-pages`
 - [ ] Task 15: `s5nw` — Categories reference page, establishes the reference pattern (FE) — branch `s5nw-categories-page`
