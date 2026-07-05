@@ -2262,6 +2262,10 @@ export type SearchJournalRecordsData = {
     path?: never;
     query?: {
         account_id?: number;
+        /**
+         * Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.
+         */
+        account_fqn_prefix?: string;
         category_id?: number;
         tag_id?: number;
         member_id?: number;

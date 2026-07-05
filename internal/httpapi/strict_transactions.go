@@ -316,6 +316,7 @@ func (s *strictServer) BulkUpdateJournalRecordStatuses(ctx context.Context, requ
 func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (transactions.RecordSearchOptions, error) {
 	opts := transactions.RecordSearchOptions{
 		AccountID:         params.AccountId,
+		AccountFQNPrefix:  params.AccountFqnPrefix,
 		CategoryID:        params.CategoryId,
 		MemberID:          params.MemberId,
 		TagID:             params.TagId,

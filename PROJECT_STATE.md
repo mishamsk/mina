@@ -15,7 +15,7 @@
   - Shorthand transaction creation endpoints for spend, income, refund, and transfer.
   - Transaction-template creation, read, paginated list, full replacement, and tombstone deletion with nested partial record defaults.
   - Transaction semantic shape validation with derived transaction class, summary titles, component summaries, and display amounts in REST responses.
-  - Paginated journal-record search and account-record search.
+  - Paginated journal-record search with account-FQN prefix register filtering, plus account-record search by account ID.
   - Bulk journal-record category, tag, account, and status updates.
   - Background operation status, run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
   - OpenAPI discovery through `GET /openapi.json`.

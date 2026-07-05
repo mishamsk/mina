@@ -673,6 +673,10 @@ JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
 		whereQuery += " AND jr.account_id = ?"
 		args = append(args, *opts.AccountID)
 	}
+	if opts.AccountFQNPrefix != nil {
+		whereQuery += " AND (a.fqn = ? OR a.fqn LIKE ? ESCAPE '\\')"
+		args = append(args, *opts.AccountFQNPrefix, escapeLikePattern(*opts.AccountFQNPrefix)+":%")
+	}
 	if opts.CategoryID != nil {
 		whereQuery += " AND jr.category_id = ?"
 		args = append(args, *opts.CategoryID)

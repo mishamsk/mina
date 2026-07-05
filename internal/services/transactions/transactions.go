@@ -128,6 +128,7 @@ type AmountUSDBackfillUpdate struct {
 // RecordSearchOptions controls journal record search filters.
 type RecordSearchOptions struct {
 	AccountID             *int64
+	AccountFQNPrefix      *string
 	CategoryID            *int64
 	MemberID              *int64
 	TagID                 *int64
@@ -1046,6 +1047,17 @@ func validateRecordSearchOptions(opts RecordSearchOptions) error {
 	if opts.AccountID != nil && *opts.AccountID <= 0 {
 		return services.InvalidRequest("account_id must be positive")
 	}
+	if opts.AccountFQNPrefix != nil {
+		if err := validateAccountFQNPrefix(*opts.AccountFQNPrefix); err != nil {
+			return err
+		}
+		if opts.AccountID != nil {
+			return services.InvalidRequest("account_fqn_prefix cannot be combined with account_id")
+		}
+		if opts.IncludeRunningBalance {
+			return services.InvalidRequest("account_fqn_prefix cannot be combined with include_running_balance")
+		}
+	}
 	if opts.CategoryID != nil && *opts.CategoryID <= 0 {
 		return services.InvalidRequest("category_id must be positive")
 	}
@@ -1071,6 +1083,22 @@ func validateRecordSearchOptions(opts RecordSearchOptions) error {
 	if opts.IncludeRunningBalance && opts.AccountID == nil {
 		return services.InvalidRequest("include_running_balance requires account_id")
 	}
+	return nil
+}
+
+func validateAccountFQNPrefix(prefix string) error {
+	if strings.TrimSpace(prefix) != prefix || prefix == "" {
+		return services.InvalidRequest("account_fqn_prefix must be non-empty without leading or trailing whitespace")
+	}
+	if strings.HasPrefix(prefix, ":") || strings.HasSuffix(prefix, ":") || strings.Contains(prefix, "::") {
+		return services.InvalidRequest("account_fqn_prefix must be colon-separated with non-empty segments")
+	}
+	for segment := range strings.SplitSeq(prefix, ":") {
+		if strings.TrimSpace(segment) != segment || segment == "" {
+			return services.InvalidRequest("account_fqn_prefix segments must be non-empty without leading or trailing whitespace")
+		}
+	}
+
 	return nil
 }
 

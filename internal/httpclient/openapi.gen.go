@@ -1512,7 +1512,10 @@ type GetMemberParams struct {
 
 // SearchJournalRecordsParams defines parameters for SearchJournalRecords.
 type SearchJournalRecordsParams struct {
-	AccountId            *int64                `form:"account_id,omitempty" json:"account_id,omitempty"`
+	AccountId *int64 `form:"account_id,omitempty" json:"account_id,omitempty"`
+
+	// AccountFqnPrefix Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.
+	AccountFqnPrefix     *string               `form:"account_fqn_prefix,omitempty" json:"account_fqn_prefix,omitempty"`
 	CategoryId           *int64                `form:"category_id,omitempty" json:"category_id,omitempty"`
 	TagId                *int64                `form:"tag_id,omitempty" json:"tag_id,omitempty"`
 	MemberId             *int64                `form:"member_id,omitempty" json:"member_id,omitempty"`
@@ -5104,6 +5107,18 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 		if params.AccountId != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "account_id", *params.AccountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AccountFqnPrefix != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "account_fqn_prefix", *params.AccountFqnPrefix, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
