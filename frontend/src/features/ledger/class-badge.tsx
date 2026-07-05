@@ -1,7 +1,7 @@
 import type { TransactionClass } from "@/api";
 import { cn } from "@/lib/utils";
 
-import { transactionClassLabel } from "./format";
+import { compactTransactionClassLabel } from "./format";
 
 interface ClassBadgeProps {
   readonly className?: string;
@@ -35,6 +35,6 @@ export const ClassBadge = ({
       className,
     )}
   >
-    {transactionClassLabel(transactionClass)}
+    {compactTransactionClassLabel(transactionClass)}
   </span>
 );

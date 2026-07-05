@@ -27,6 +27,7 @@ import {
   setTransactionPageError,
   setTransactionPageLoading,
   transactionPageKey,
+  transactionPageRequestKey,
   useCategoryPickerCategoriesView,
   useLedgerLookupsView,
   useTransactionPageView,
@@ -60,6 +61,7 @@ const effectivePageParams = (
   params: TransactionPageParams,
   offset: number,
 ): TransactionPageParams => ({
+  filters: params.filters,
   limit: params.limit,
   offset,
 });
@@ -71,7 +73,8 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
   useEffect(() => {
     const snapshot = getTransactionsSnapshot();
     const key = transactionPageKey(params);
-    if (snapshot.pages[key] || snapshot.loadingPageKey === key) {
+    const requestKey = transactionPageRequestKey(params);
+    if (snapshot.pages[key] || snapshot.loadingPageKey === requestKey) {
       return;
     }
 

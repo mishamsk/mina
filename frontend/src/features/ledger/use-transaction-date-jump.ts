@@ -2,8 +2,10 @@ import { useCallback, useRef, useState } from "react";
 import type { SetURLSearchParams } from "react-router";
 
 import type { TransactionPageParams } from "@/api";
+import { transactionFilterSignature } from "@/models/transaction-filters";
 
 import {
+  readTransactionFiltersFromSearchParams,
   readTransactionPageFromSearchParams,
   transactionPageFromOffset,
 } from "./transaction-page-position";
@@ -43,11 +45,15 @@ export const useTransactionDateJump = ({
       activeDateJumpIdRef.current = jumpId;
       const startingPage = page;
       const startingPageSize = pageSize;
+      const startingFilterSignature = transactionFilterSignature(
+        params.filters,
+      );
       setDateJumpLoading(true);
       try {
         const result = await jumpToTransactionDatePage(
           {
             anchorDate,
+            filters: params.filters,
             limit: pageSize,
             offset: params.offset,
           },
@@ -61,10 +67,14 @@ export const useTransactionDateJump = ({
         let dateJumpApplied = false;
         setSearchParams((current) => {
           const currentPage = readTransactionPageFromSearchParams(current);
+          const currentFilterSignature = transactionFilterSignature(
+            readTransactionFiltersFromSearchParams(current),
+          );
           if (
             activeDateJumpIdRef.current !== jumpId ||
             currentPage.page !== startingPage ||
-            currentPage.pageSize !== startingPageSize
+            currentPage.pageSize !== startingPageSize ||
+            currentFilterSignature !== startingFilterSignature
           ) {
             return current;
           }
@@ -84,7 +94,14 @@ export const useTransactionDateJump = ({
         }
       }
     },
-    [dateJumpLoading, page, pageSize, params.offset, setSearchParams],
+    [
+      dateJumpLoading,
+      page,
+      pageSize,
+      params.filters,
+      params.offset,
+      setSearchParams,
+    ],
   );
 
   return {

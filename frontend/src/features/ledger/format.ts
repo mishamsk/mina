@@ -19,6 +19,17 @@ export interface LookupMaps {
   readonly tagsById: ReadonlyMap<number, Tag>;
 }
 
+const classLabels: Record<TransactionClass, string> = {
+  adjustment: "Adjustment",
+  currency_exchange: "Currency exchange",
+  fx_gain_loss: "FX gain/loss",
+  income: "Income",
+  mixed: "Mixed",
+  refund: "Refund",
+  spend: "Spend",
+  transfer: "Transfer",
+};
+
 const compactClassLabels: Record<TransactionClass, string> = {
   adjustment: "ADJUST",
   currency_exchange: "EXCHANGE",
@@ -32,7 +43,20 @@ const compactClassLabels: Record<TransactionClass, string> = {
 
 export const transactionClassLabel = (
   transactionClass: TransactionClass,
+): string => classLabels[transactionClass];
+
+export const compactTransactionClassLabel = (
+  transactionClass: TransactionClass,
 ): string => compactClassLabels[transactionClass];
+
+const postingStatusLabels: Record<PostingStatus, string> = {
+  cancelled: "Cancelled",
+  pending: "Pending",
+  posted: "Posted",
+};
+
+export const postingStatusLabel = (status: PostingStatus | "mixed"): string =>
+  status === "mixed" ? "Mixed posting status" : postingStatusLabels[status];
 
 export const buildLookupMaps = (
   lookups: LedgerLookupsSnapshot | undefined,

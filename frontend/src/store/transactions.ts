@@ -12,11 +12,17 @@ import type {
   Transaction,
   TransactionMonthTotalsResponse,
 } from "@/api";
+import {
+  normalizeTransactionFilters,
+  type TransactionFilters,
+  transactionFilterSignature,
+} from "@/models/transaction-filters";
 
 import { createSelectors } from "./selectors";
 
 export interface TransactionsPageParams {
   readonly anchorDate?: string;
+  readonly filters?: Partial<TransactionFilters>;
   readonly limit: number;
   readonly offset: number;
 }
@@ -75,6 +81,7 @@ interface TransactionsState {
   readonly featuredBalances: FeaturedBalancesSnapshot | undefined;
   readonly featuredBalancesErrorMessage: string | undefined;
   readonly featuredBalancesLoading: boolean;
+  readonly lastTransactionsPageSearch: string;
   readonly lastLoadedPageKey: string | undefined;
   readonly loadingPageKey: string | undefined;
   readonly lookupErrorMessage: string | undefined;
@@ -94,6 +101,7 @@ const initialTransactionsState: TransactionsState = {
   featuredBalances: undefined,
   featuredBalancesErrorMessage: undefined,
   featuredBalancesLoading: false,
+  lastTransactionsPageSearch: "",
   lastLoadedPageKey: undefined,
   loadingPageKey: undefined,
   lookupErrorMessage: undefined,
@@ -112,8 +120,10 @@ const transactionsStore = create<TransactionsState>()(
 export const useTransactionsStore = createSelectors(transactionsStore);
 
 // When sorting becomes user-facing, add sort and sort_dir to the URL state and snapshot key.
-export const transactionPageKey = (params: TransactionsPageParams): string =>
-  `${params.limit}:${params.offset}`;
+export const transactionPageKey = (params: TransactionsPageParams): string => {
+  const filterSignature = transactionFilterSignature(params.filters);
+  return `${params.limit}:${params.offset}:${filterSignature}`;
+};
 
 export const transactionPageRequestKey = (
   params: TransactionsPageParams,
@@ -190,8 +200,21 @@ export const useCategoryPickerCategoriesView = (
   );
 };
 
+export const useLastTransactionsPageSearch = (): string =>
+  useTransactionsStore((state) => state.lastTransactionsPageSearch);
+
 export const getTransactionsSnapshot = (): TransactionsState =>
   useTransactionsStore.getState();
+
+export const setLastTransactionsPageSearch = (search: string): void => {
+  useTransactionsStore.setState(
+    {
+      lastTransactionsPageSearch: search,
+    },
+    false,
+    "TransactionsStore/setLastTransactionsPageSearch",
+  );
+};
 
 export const setTransactionPageLoading = (
   params: TransactionsPageParams,
@@ -226,7 +249,10 @@ export const setTransactionPage = (
   transactions: readonly Transaction[],
   loadingParams: TransactionsPageParams = params,
 ): void => {
-  const key = transactionPageKey(params);
+  const key = transactionPageKey({
+    ...params,
+    filters: normalizeTransactionFilters(params.filters),
+  });
   const loadingKey = transactionPageRequestKey(loadingParams);
   useTransactionsStore.setState(
     (state) => ({

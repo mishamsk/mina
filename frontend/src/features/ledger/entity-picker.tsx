@@ -1,4 +1,4 @@
-import { Close } from "pixelarticons/react";
+import { Close, EyeOff } from "pixelarticons/react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -6,16 +6,19 @@ import { cn } from "@/lib/utils";
 
 export interface EntityOption {
   readonly detail?: string;
+  readonly hidden?: boolean;
   readonly id: number;
   readonly label: string;
   readonly searchLabel: string;
 }
 
 interface EntityPickerProps {
+  readonly clearOnSelect?: boolean;
   readonly disabled?: boolean;
   readonly id: string;
   readonly label: string;
   readonly onChange: (id: number | undefined) => void;
+  readonly onOpenChange?: (open: boolean) => void;
   readonly options: readonly EntityOption[];
   readonly placeholder?: string;
   readonly value: number | undefined;
@@ -25,10 +28,12 @@ const matchesQuery = (option: EntityOption, query: string): boolean =>
   option.searchLabel.toLowerCase().includes(query.trim().toLowerCase());
 
 export const EntityPicker = ({
+  clearOnSelect = false,
   disabled = false,
   id,
   label,
   onChange,
+  onOpenChange,
   options,
   placeholder = "Search",
   value,
@@ -51,10 +56,16 @@ export const EntityPicker = ({
       ? `${id}-option-${activeOption.id}`
       : undefined;
 
+  const updateOpen = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
+
   const selectOption = (option: EntityOption) => {
     onChange(option.id);
-    setQuery(option.searchLabel);
-    setOpen(false);
+    setQuery(clearOnSelect ? "" : option.searchLabel);
+    setActiveIndex(0);
+    updateOpen(false);
   };
 
   return (
@@ -75,7 +86,7 @@ export const EntityPicker = ({
         value={query}
         onBlur={() => {
           window.setTimeout(() => {
-            setOpen(false);
+            updateOpen(false);
           }, 100);
         }}
         onChange={(event) => {
@@ -83,12 +94,14 @@ export const EntityPicker = ({
           const exactOption = options.find(
             (option) => option.searchLabel === nextQuery,
           );
-          setQuery(nextQuery);
-          setOpen(true);
-          setActiveIndex(0);
           if (exactOption) {
-            onChange(exactOption.id);
-          } else if (!selected || selected.searchLabel !== nextQuery) {
+            selectOption(exactOption);
+            return;
+          }
+          setQuery(nextQuery);
+          updateOpen(true);
+          setActiveIndex(0);
+          if (!selected || selected.searchLabel !== nextQuery) {
             onChange(undefined);
           }
         }}
@@ -97,7 +110,7 @@ export const EntityPicker = ({
             return;
           }
           setQuery(selected?.searchLabel ?? query);
-          setOpen(true);
+          updateOpen(true);
           setActiveIndex(
             Math.max(
               0,
@@ -116,13 +129,13 @@ export const EntityPicker = ({
 
           if (event.key === "Escape") {
             event.preventDefault();
-            setOpen(false);
+            updateOpen(false);
             return;
           }
 
           if (event.key === "ArrowDown") {
             event.preventDefault();
-            setOpen(true);
+            updateOpen(true);
             setActiveIndex((current) =>
               filteredOptions.length === 0
                 ? 0
@@ -133,7 +146,7 @@ export const EntityPicker = ({
 
           if (event.key === "ArrowUp") {
             event.preventDefault();
-            setOpen(true);
+            updateOpen(true);
             setActiveIndex((current) =>
               filteredOptions.length === 0 ? 0 : Math.max(current - 1, 0),
             );
@@ -172,7 +185,12 @@ export const EntityPicker = ({
                   selectOption(option);
                 }}
               >
-                <span className="font-medium">{option.label}</span>
+                <span className="flex items-center gap-1 font-medium">
+                  {option.hidden ? (
+                    <EyeOff aria-label="Hidden" className="size-3" />
+                  ) : null}
+                  {option.label}
+                </span>
                 {option.detail ? (
                   <span className="text-muted-foreground font-mono text-xs">
                     {option.detail}
@@ -195,6 +213,7 @@ interface EntityMultiPickerProps {
   readonly id: string;
   readonly label: string;
   readonly onChange: (ids: readonly number[]) => void;
+  readonly onOpenChange?: (open: boolean) => void;
   readonly options: readonly EntityOption[];
   readonly placeholder?: string;
   readonly value: readonly number[];
@@ -204,6 +223,7 @@ export const EntityMultiPicker = ({
   id,
   label,
   onChange,
+  onOpenChange,
   options,
   placeholder = "Search",
   value,
@@ -216,9 +236,10 @@ export const EntityMultiPicker = ({
   return (
     <div className="flex flex-col gap-2">
       <EntityPicker
-        key={value.join(",")}
+        clearOnSelect
         id={id}
         label={label}
+        onOpenChange={onOpenChange}
         options={availableOptions}
         placeholder={placeholder}
         value={undefined}
@@ -235,6 +256,9 @@ export const EntityMultiPicker = ({
               key={option.id}
               className="bg-muted inline-flex h-7 items-center gap-1 border border-[var(--border-ink)] px-2 font-mono text-xs shadow-[var(--shadow-chip)]"
             >
+              {option.hidden ? (
+                <EyeOff aria-label="Hidden" className="size-3" />
+              ) : null}
               {option.label}
               <Button
                 type="button"

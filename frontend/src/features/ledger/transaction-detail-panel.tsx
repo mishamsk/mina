@@ -16,6 +16,7 @@ import {
   formatInitiatedDate,
   lineMemo,
   type LookupMaps,
+  postingStatusLabel,
   transactionClassLabel,
 } from "./format";
 import { FqnPath } from "./fqn-path";
@@ -66,9 +67,6 @@ const detailDisplayAmounts = (
     ? transaction.primary_amounts
     : transaction.components.flatMap((component) => component.amounts);
 };
-
-const statusLabel = (value: string): string =>
-  `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 
 const uniqueRecordSources = (transaction: Transaction): string =>
   Array.from(new Set(transaction.records.map((record) => record.source))).join(
@@ -246,7 +244,7 @@ const DetailRecordsTable = ({
                   <span className="inline-flex items-center gap-1">
                     <StatusIcon status={record.posting_status} />
                     <span className="truncate">
-                      {statusLabel(record.posting_status)}
+                      {postingStatusLabel(record.posting_status)}
                     </span>
                   </span>
                 </div>
@@ -324,6 +322,9 @@ export const TransactionDetailPanel = ({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (event.defaultPrevented) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         if (confirmDeleteOpen) {

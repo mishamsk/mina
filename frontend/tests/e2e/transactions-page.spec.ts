@@ -61,6 +61,7 @@ const expectTransactionsPageUrl = async (
   page: Page,
   expectedPage: number,
   expectedPageSize: number,
+  expectedFilters: { readonly q?: string } = {},
 ): Promise<void> => {
   await expect
     .poll(() => {
@@ -69,13 +70,94 @@ const expectTransactionsPageUrl = async (
         anchorDate: searchParams.get("anchor_date"),
         page: searchParams.get("page"),
         pageSize: searchParams.get("pageSize"),
+        q: searchParams.get("q"),
       };
     })
     .toEqual({
       anchorDate: null,
       page: String(expectedPage),
       pageSize: String(expectedPageSize),
+      q: expectedFilters.q ?? null,
     });
+};
+
+const expectTransactionFilterUrl = async (
+  page: Page,
+  expected: {
+    readonly amountMax?: string;
+    readonly amountMin?: string;
+    readonly initiatedFrom?: string;
+    readonly initiatedTo?: string;
+    readonly page?: string;
+    readonly pageSize?: string;
+    readonly q?: string;
+    readonly statuses?: readonly string[];
+    readonly tags?: readonly number[];
+  },
+): Promise<void> => {
+  await expect
+    .poll(() => {
+      const searchParams = new URL(page.url()).searchParams;
+      return {
+        amountMax: searchParams.get("amountMax"),
+        amountMin: searchParams.get("amountMin"),
+        initiatedFrom: searchParams.get("initiatedFrom"),
+        initiatedTo: searchParams.get("initiatedTo"),
+        page: searchParams.get("page"),
+        pageSize: searchParams.get("pageSize"),
+        q: searchParams.get("q"),
+        statuses: searchParams.getAll("status").sort(),
+        tags: searchParams
+          .getAll("tag")
+          .map((value) => Number(value))
+          .sort((left, right) => left - right),
+      };
+    })
+    .toEqual({
+      amountMax: expected.amountMax ?? null,
+      amountMin: expected.amountMin ?? null,
+      initiatedFrom: expected.initiatedFrom ?? null,
+      initiatedTo: expected.initiatedTo ?? null,
+      page: expected.page ?? "1",
+      pageSize: expected.pageSize ?? "10",
+      q: expected.q ?? null,
+      statuses: [...(expected.statuses ?? [])].sort(),
+      tags: [...(expected.tags ?? [])].sort((left, right) => left - right),
+    });
+};
+
+const transactionRequestHasFilters = (
+  requestUrl: URL,
+  expected: {
+    readonly amountMax?: string;
+    readonly amountMin?: string;
+    readonly anchorDate?: string;
+    readonly initiatedFrom?: string;
+    readonly initiatedTo?: string;
+    readonly limit?: string;
+    readonly statuses?: readonly string[];
+    readonly tags?: readonly number[];
+  },
+): boolean => {
+  const params = requestUrl.searchParams;
+  const tags = params
+    .getAll("tag_id")
+    .map((value) => Number(value))
+    .sort((left, right) => left - right);
+  return (
+    params.get("amount_max") === (expected.amountMax ?? null) &&
+    params.get("amount_min") === (expected.amountMin ?? null) &&
+    params.get("anchor_date") === (expected.anchorDate ?? null) &&
+    params.get("initiated_date_from") === (expected.initiatedFrom ?? null) &&
+    params.get("initiated_date_to") === (expected.initiatedTo ?? null) &&
+    (expected.limit === undefined || params.get("limit") === expected.limit) &&
+    JSON.stringify(params.getAll("posting_status").sort()) ===
+      JSON.stringify([...(expected.statuses ?? [])].sort()) &&
+    JSON.stringify(tags) ===
+      JSON.stringify(
+        [...(expected.tags ?? [])].sort((left, right) => left - right),
+      )
+  );
 };
 
 const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
@@ -286,7 +368,9 @@ test("transactions page renders demo transaction lines and expands records", asy
 
   await transferRow.click();
   await expect(transferRow).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByText("Memo")).toBeVisible();
+  await expect(
+    page.getByRole("columnheader", { exact: true, name: "Memo" }),
+  ).toBeVisible();
   await page.mouse.move(0, 0);
 
   const firstRowBackgroundAfter = await transactionRows
@@ -390,6 +474,303 @@ test("transactions page uses server pagination controls", async ({ page }) => {
 
   await expect(page).toHaveURL(/page=1/);
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
+});
+
+test("transactions page search filters server-side and deep-links", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const memo = `E2E search memo ${unique}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-05-31",
+      memo,
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+
+  await page.goto("/transactions?page=2&pageSize=10");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const searchRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("search") === unique
+    );
+  });
+  await page.getByRole("searchbox", { name: "Search" }).fill(unique);
+  const requestUrl = new URL((await searchRequest).url());
+  expect(requestUrl.searchParams.get("limit")).toBe("10");
+  expect(requestUrl.searchParams.get("offset")).toBe("0");
+  expect(requestUrl.searchParams.get("search")).toBe(unique);
+
+  await expectTransactionsPageUrl(page, 1, 10, { q: unique });
+  await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+
+  const deepLinkRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("search") === unique &&
+      url.searchParams.get("limit") === "50"
+    );
+  });
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await deepLinkRequest;
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue(
+    unique,
+  );
+  await expectTransactionsPageUrl(page, 1, 50, { q: unique });
+  await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+});
+
+test("transactions page add-filter menu drives server filters and chips", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const visibleTagOne = await createTag(page, `E2E:Filter:${unique}:Groceries`);
+  const visibleTagTwo = await createTag(page, `E2E:Filter:${unique}:Errands`);
+  const hiddenTag = await createTag(page, `E2E:Filter:${unique}:HiddenMatch`);
+  await hideTag(page, hiddenTag);
+
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const targetMemo = `E2E filtered target ${unique}`;
+
+  const targetSpend = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-05-31",
+      memo: targetMemo,
+      posting_status: "pending",
+      tag_ids: [visibleTagOne.tag_id],
+    },
+  });
+  expect(targetSpend.ok()).toBe(true);
+  const alternateSpend = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "15.00",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-05-30",
+      memo: `E2E filtered alternate ${unique}`,
+      tag_ids: [visibleTagTwo.tag_id],
+    },
+  });
+  expect(alternateSpend.ok()).toBe(true);
+
+  await page.goto("/transactions?page=2&pageSize=10");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await page.getByRole("button", { exact: true, name: "Tag" }).click();
+  const tagsPicker = page.getByRole("combobox", { name: "Tags" });
+  await tagsPicker.fill("HiddenMatch");
+  await expect(page.locator("#transactions-filter-tag-options")).toContainText(
+    "No matches",
+  );
+  await page.getByText("Include hidden", { exact: true }).click();
+  await expect(page.locator("#transactions-filter-tag-options")).toContainText(
+    "HiddenMatch",
+  );
+  await tagsPicker.fill(visibleTagOne.fqn);
+  await expect(
+    page.getByRole("button", { name: "Remove Groceries" }),
+  ).toBeVisible();
+  await tagsPicker.fill(visibleTagTwo.fqn);
+  await expect(
+    page.getByRole("button", { name: "Remove Errands" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Posting status" }).click();
+  await page.getByText("Pending", { exact: true }).click();
+
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { exact: true, name: "Amount" }).click();
+  await page.getByRole("textbox", { name: "Min" }).fill("10");
+  await page.getByRole("textbox", { name: "Max" }).fill("20");
+
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Initiated date" }).click();
+  await page
+    .getByRole("textbox", { exact: true, name: "From" })
+    .fill("2026-05-01");
+  const finalFilterRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        amountMax: "20",
+        amountMin: "10",
+        initiatedFrom: "2026-05-01",
+        initiatedTo: "2026-05-31",
+        limit: "10",
+        statuses: ["pending"],
+        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+      })
+    );
+  });
+  await page
+    .getByRole("textbox", { exact: true, name: "To" })
+    .fill("2026-05-31");
+  await finalFilterRequest;
+
+  await expectTransactionFilterUrl(page, {
+    amountMax: "20",
+    amountMin: "10",
+    initiatedFrom: "2026-05-01",
+    initiatedTo: "2026-05-31",
+    statuses: ["pending"],
+    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+  });
+  await expect(
+    page.getByRole("row").filter({ hasText: targetMemo }),
+  ).toBeVisible();
+
+  const deepLinkRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        amountMax: "20",
+        amountMin: "10",
+        initiatedFrom: "2026-05-01",
+        initiatedTo: "2026-05-31",
+        limit: "10",
+        statuses: ["pending"],
+        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+      })
+    );
+  });
+  await page.goto(
+    `/transactions?page=1&pageSize=10&tag=${visibleTagOne.tag_id}` +
+      `&tag=${visibleTagTwo.tag_id}&status=pending&amountMin=10` +
+      `&amountMax=20&initiatedFrom=2026-05-01&initiatedTo=2026-05-31`,
+  );
+  await deepLinkRequest;
+  await expect(page.getByText("Tag Groceries")).toBeVisible();
+  await expect(page.getByText("Status Pending")).toBeVisible();
+  await expect(page.getByText("Amount 10-20")).toBeVisible();
+  await expect(page.getByText("Initiated 2026-05-01-2026-05-31")).toBeVisible();
+
+  const pageSizeRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        amountMax: "20",
+        amountMin: "10",
+        initiatedFrom: "2026-05-01",
+        initiatedTo: "2026-05-31",
+        limit: "25",
+        statuses: ["pending"],
+        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+      })
+    );
+  });
+  await page.getByLabel("Rows").selectOption("25");
+  await pageSizeRequest;
+
+  const dateJumpRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        amountMax: "20",
+        amountMin: "10",
+        anchorDate: "2026-05-31",
+        initiatedFrom: "2026-05-01",
+        initiatedTo: "2026-05-31",
+        limit: "25",
+        statuses: ["pending"],
+        tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+      })
+    );
+  });
+  await page.getByLabel("Go to day").fill("2026-05-31");
+  await dateJumpRequest;
+
+  await page.getByRole("button", { name: "Remove Status Pending" }).click();
+  await expectTransactionFilterUrl(page, {
+    amountMax: "20",
+    amountMin: "10",
+    initiatedFrom: "2026-05-01",
+    initiatedTo: "2026-05-31",
+    pageSize: "25",
+    tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
+  });
+
+  await page.getByRole("button", { name: "Clear all" }).click();
+  await expectTransactionFilterUrl(page, { pageSize: "25" });
+  await expect(page.getByText("Tag Groceries")).toBeHidden();
+  await expect(page.getByText("Amount 10-20")).toBeHidden();
+});
+
+test("transactions sidebar restores the last-used transactions URL state", async ({
+  page,
+}) => {
+  await page.goto("/transactions?page=2&pageSize=25&q=Target&status=posted");
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Transactions" }),
+  ).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue(
+    "Target",
+  );
+  await expectTransactionFilterUrl(page, {
+    page: "2",
+    pageSize: "25",
+    q: "Target",
+    statuses: ["posted"],
+  });
+
+  await page.getByRole("link", { name: "Status" }).click();
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Status" }),
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: "Transactions" }).click();
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Transactions" }),
+  ).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue(
+    "Target",
+  );
+  await expectTransactionFilterUrl(page, {
+    page: "2",
+    pageSize: "25",
+    q: "Target",
+    statuses: ["posted"],
+  });
 });
 
 test("transactions page jumps to a date-anchored page", async ({ page }) => {
@@ -1343,6 +1724,65 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await page.keyboard.press("Escape");
   await expect(deepLinkPanel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=10$/);
+});
+
+test("Escape closes filter popover before transaction detail panel", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 760 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E escape layered ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "31.42",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-06-29",
+      memo,
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  await page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first()
+    .getByRole("button", {
+      name: "Open transaction detail",
+    })
+    .click();
+  const panel = page.getByRole("dialog", { name: transaction.display_title });
+  await expect(panel).toBeVisible();
+
+  await page.getByRole("button", { name: "Add filter" }).click();
+  const popover = page.locator('[data-slot="popover-content"]');
+  await expect(popover).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(popover).toBeHidden();
+  await expect(panel).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
+  );
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
 });
 
 test("focused transaction row opens detail with Enter and restores focus on Escape", async ({

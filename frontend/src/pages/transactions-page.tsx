@@ -1,6 +1,6 @@
 import { Plus } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 
 import type { Transaction } from "@/api";
 import { PageHelp } from "@/components/page-help";
@@ -10,34 +10,93 @@ import { PageHeader } from "@/features/app-shell";
 import {
   defaultTransactionPage,
   EntryPanel,
+  readTransactionFiltersFromSearchParams,
   readTransactionPageFromSearchParams,
   refreshTransactionPageAfterSave,
   TransactionBrowser,
   TransactionDetailPanel,
+  TransactionFilterControls,
   transactionOffsetFromPage,
   useTransactionDateJump,
   useTransactionDetail,
   useTransactionsResource,
+  writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
+import type { TransactionFilters } from "@/models/transaction-filters";
+import { setLastTransactionsPageSearch } from "@/store";
 
 interface SaveNotice {
   readonly id: number;
   readonly message: string;
 }
 
+interface TransactionSearchInputProps {
+  readonly onSearchChange: (value: string) => void;
+  readonly value: string;
+}
+
+const TransactionSearchInput = ({
+  onSearchChange,
+  value,
+}: TransactionSearchInputProps) => {
+  const [draftState, setDraftState] = useState({
+    draft: value,
+    value,
+  });
+  const draft = draftState.value === value ? draftState.draft : value;
+
+  useEffect(() => {
+    const normalizedSearch = draft.trim();
+    if (normalizedSearch === value) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      onSearchChange(normalizedSearch);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [draft, onSearchChange, value]);
+
+  return (
+    <input
+      id="transactions-search"
+      type="search"
+      className="bg-card text-foreground placeholder:text-muted-foreground h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+      placeholder="Memo or counterparty"
+      value={draft}
+      onChange={(event) => {
+        setDraftState({
+          draft: event.target.value,
+          value,
+        });
+      }}
+    />
+  );
+};
+
 export const TransactionsPage = () => {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [entryPanelOpen, setEntryPanelOpen] = useState(false);
   const [entryPanelRevision, setEntryPanelRevision] = useState(0);
+  const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | undefined>();
   const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
+  const filters = useMemo(
+    () => readTransactionFiltersFromSearchParams(searchParams),
+    [searchParams],
+  );
   const params = useMemo(
     () => ({
+      filters,
       limit: pageSize,
       offset: transactionOffsetFromPage(page, pageSize),
     }),
-    [page, pageSize],
+    [filters, page, pageSize],
   );
   const {
     cancelDateJump,
@@ -61,6 +120,10 @@ export const TransactionsPage = () => {
     lookups.loading ||
     (Boolean(transactions) && !lookups.snapshot);
   const errorMessage = pageResource.errorMessage ?? lookups.errorMessage;
+
+  useEffect(() => {
+    setLastTransactionsPageSearch(location.search);
+  }, [location.search]);
 
   const openEntryPanel = useCallback(() => {
     setEntryPanelRevision((revision) => revision + 1);
@@ -88,12 +151,36 @@ export const TransactionsPage = () => {
     transactions,
   });
 
+  const setSearchFilter = useCallback(
+    (normalizedSearch: string) => {
+      cancelDateJump();
+      setSearchParams((current) =>
+        writeTransactionFiltersToSearchParams(current, {
+          ...readTransactionFiltersFromSearchParams(current),
+          search: normalizedSearch,
+        }),
+      );
+    },
+    [cancelDateJump, setSearchParams],
+  );
+
+  const setTransactionFilters = useCallback(
+    (nextFilters: TransactionFilters) => {
+      cancelDateJump();
+      setSearchParams((current) =>
+        writeTransactionFiltersToSearchParams(current, nextFilters),
+      );
+    },
+    [cancelDateJump, setSearchParams],
+  );
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
       const targetElement = target instanceof HTMLElement ? target : undefined;
       if (
         detail.selectedTransactionId ||
+        filterPopoverOpen ||
         event.key.toLowerCase() !== "n" ||
         event.metaKey ||
         event.ctrlKey ||
@@ -113,7 +200,7 @@ export const TransactionsPage = () => {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [detail.selectedTransactionId, openEntryPanel]);
+  }, [detail.selectedTransactionId, filterPopoverOpen, openEntryPanel]);
 
   const setPage = useCallback(
     (nextPage: number) => {
@@ -152,6 +239,18 @@ export const TransactionsPage = () => {
         }
         toolbar={
           <div className="flex flex-wrap items-end gap-3">
+            <div className="flex min-w-[16rem] flex-col gap-1">
+              <label
+                htmlFor="transactions-search"
+                className="font-heading text-xs font-semibold text-[var(--frame-muted)] uppercase"
+              >
+                Search
+              </label>
+              <TransactionSearchInput
+                onSearchChange={setSearchFilter}
+                value={filters.search ?? ""}
+              />
+            </div>
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="transactions-date-jump"
@@ -180,6 +279,12 @@ export const TransactionsPage = () => {
                 }}
               />
             </div>
+            <TransactionFilterControls
+              filters={filters}
+              lookups={lookups.snapshot}
+              onChange={setTransactionFilters}
+              onOpenChange={setFilterPopoverOpen}
+            />
           </div>
         }
       />

@@ -16,7 +16,7 @@ import type { PostingStatus, TransactionClass } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { cn } from "@/lib/utils";
 
-import { transactionClassLabel } from "./format";
+import { postingStatusLabel, transactionClassLabel } from "./format";
 
 type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -87,7 +87,7 @@ export const StatusIcon = ({
   }
 
   const Icon = status === "pending" ? Clock : Cancel;
-  const label = `${status.slice(0, 1).toUpperCase()}${status.slice(1)}`;
+  const label = postingStatusLabel(status);
 
   return (
     <Tooltip

@@ -1,3 +1,8 @@
+import {
+  normalizeTransactionFilters,
+  type TransactionFilters,
+} from "@/models/transaction-filters";
+
 import type {
   CategoryEconomicIntent,
   CreateIncomeTransactionRequest,
@@ -24,11 +29,72 @@ import {
 
 export interface TransactionPageParams {
   readonly anchorDate?: string;
+  readonly filters?: Partial<TransactionFilters>;
   readonly limit: number;
   readonly offset: number;
 }
 
 const lookupLimit = 500;
+
+const dateTimeBound = (date: string, boundary: "end" | "start"): string => {
+  const [year = "0", month = "1", day = "1"] = date.split("-");
+  const localDate =
+    boundary === "start"
+      ? new Date(Number(year), Number(month) - 1, Number(day), 0, 0, 0, 0)
+      : new Date(Number(year), Number(month) - 1, Number(day), 23, 59, 59, 999);
+  return localDate.toISOString();
+};
+
+const transactionFilterQuery = (
+  filters: Partial<TransactionFilters> | undefined,
+) => {
+  const normalized = normalizeTransactionFilters(filters);
+  return {
+    ...(normalized.accountIds.length > 0
+      ? { account_id: [...normalized.accountIds] }
+      : {}),
+    ...(normalized.amountMax ? { amount_max: normalized.amountMax } : {}),
+    ...(normalized.amountMin ? { amount_min: normalized.amountMin } : {}),
+    ...(normalized.amountUsdMax
+      ? { amount_usd_max: normalized.amountUsdMax }
+      : {}),
+    ...(normalized.amountUsdMin
+      ? { amount_usd_min: normalized.amountUsdMin }
+      : {}),
+    ...(normalized.categoryIds.length > 0
+      ? { category_id: [...normalized.categoryIds] }
+      : {}),
+    ...(normalized.classes.length > 0
+      ? { transaction_class: [...normalized.classes] }
+      : {}),
+    ...(normalized.initiatedFrom
+      ? { initiated_date_from: normalized.initiatedFrom }
+      : {}),
+    ...(normalized.initiatedTo
+      ? { initiated_date_to: normalized.initiatedTo }
+      : {}),
+    ...(normalized.memberIds.length > 0
+      ? { member_id: [...normalized.memberIds] }
+      : {}),
+    ...(normalized.pendingFrom
+      ? { pending_date_from: dateTimeBound(normalized.pendingFrom, "start") }
+      : {}),
+    ...(normalized.pendingTo
+      ? { pending_date_to: dateTimeBound(normalized.pendingTo, "end") }
+      : {}),
+    ...(normalized.postedFrom
+      ? { posted_date_from: dateTimeBound(normalized.postedFrom, "start") }
+      : {}),
+    ...(normalized.postedTo
+      ? { posted_date_to: dateTimeBound(normalized.postedTo, "end") }
+      : {}),
+    ...(normalized.search ? { search: normalized.search } : {}),
+    ...(normalized.statuses.length > 0
+      ? { posting_status: [...normalized.statuses] }
+      : {}),
+    ...(normalized.tagIds.length > 0 ? { tag_id: [...normalized.tagIds] } : {}),
+  };
+};
 
 export const fetchTransactionPage = (params: TransactionPageParams) =>
   listTransactions({
@@ -36,6 +102,7 @@ export const fetchTransactionPage = (params: TransactionPageParams) =>
       limit: params.limit,
       offset: params.offset,
       anchor_date: params.anchorDate,
+      ...transactionFilterQuery(params.filters),
       // When sorting becomes user-facing, add sort and sort_dir to the URL state and snapshot key.
       sort: "initiated_date",
       sort_dir: "desc",

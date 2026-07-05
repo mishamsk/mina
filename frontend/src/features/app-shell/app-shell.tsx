@@ -14,14 +14,18 @@ import {
   Wallet,
 } from "pixelarticons/react";
 import type { ComponentType, ReactNode, SVGProps } from "react";
-import { NavLink } from "react-router";
+import { NavLink, type To } from "react-router";
 
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { BalanceStrip } from "@/features/featured-balances";
 import { cn } from "@/lib/utils";
-import { setSidebarCollapsed, usePreferencesView } from "@/store";
+import {
+  setSidebarCollapsed,
+  useLastTransactionsPageSearch,
+  usePreferencesView,
+} from "@/store";
 
 type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -29,14 +33,8 @@ interface NavItem {
   readonly disabled?: boolean;
   readonly icon: PixelIcon;
   readonly label: string;
-  readonly to: string;
+  readonly to: To;
 }
-
-const primaryNavItems: readonly NavItem[] = [
-  { icon: Home, label: "Overview", to: "/overview" },
-  { icon: ListBox, label: "Transactions", to: "/transactions" },
-  { disabled: true, icon: Wallet, label: "Accounts", to: "/accounts" },
-];
 
 const referenceNavItems: readonly NavItem[] = [
   { disabled: true, icon: Folder, label: "Categories", to: "/categories" },
@@ -163,6 +161,19 @@ export const AppShell = ({ children }: AppShellProps) => {
   const {
     preferences: { sidebarCollapsed },
   } = usePreferencesView();
+  const lastTransactionsPageSearch = useLastTransactionsPageSearch();
+  const primaryNavItems: readonly NavItem[] = [
+    { icon: Home, label: "Overview", to: "/overview" },
+    {
+      icon: ListBox,
+      label: "Transactions",
+      to: {
+        pathname: "/transactions",
+        search: lastTransactionsPageSearch,
+      },
+    },
+    { disabled: true, icon: Wallet, label: "Accounts", to: "/accounts" },
+  ];
 
   return (
     <div className="bg-background text-foreground min-h-svh">

@@ -17,6 +17,7 @@ import {
   lineMemo,
   linePostingStatus,
   MixedAmounts,
+  postingStatusLabel,
   StatusIcon,
   sumDecimalStrings,
   transactionClassLabel,
@@ -324,15 +325,10 @@ const StatusMixedMarker = () => (
   </Tooltip>
 );
 
-const postingStatusLabel = (status: string): string =>
-  status === "mixed"
-    ? "Mixed posting status"
-    : `${status.slice(0, 1).toUpperCase()}${status.slice(1)}`;
-
 const recentActivityTooltipLabel = (
   transaction: Transaction,
   memo: string | undefined,
-  postingStatus: string,
+  postingStatus: ReturnType<typeof linePostingStatus>,
 ): string =>
   [
     `Class ${transactionClassLabel(transaction.transaction_class)}`,

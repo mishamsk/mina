@@ -8,6 +8,7 @@ export {
   lineDisplayAmounts,
   lineMemo,
   linePostingStatus,
+  postingStatusLabel,
   sumDecimalStrings,
   transactionClassLabel,
 } from "./format";
@@ -16,14 +17,17 @@ export { ClassIcon, StatusIcon } from "./line-icons";
 export { TagChip } from "./tag-chip";
 export { TransactionBrowser } from "./transaction-browser";
 export { TransactionDetailPanel } from "./transaction-detail-panel";
+export { TransactionFilterControls } from "./transaction-filter-controls";
 export {
   defaultTransactionPage,
   defaultTransactionPageSize,
   normalizeTransactionPageSize,
+  readTransactionFiltersFromSearchParams,
   readTransactionPageFromSearchParams,
   transactionOffsetFromPage,
   transactionPageFromOffset,
   transactionPageSizes,
+  writeTransactionFiltersToSearchParams,
 } from "./transaction-page-position";
 export { useTransactionDateJump } from "./use-transaction-date-jump";
 export { useTransactionDetail } from "./use-transaction-detail";
