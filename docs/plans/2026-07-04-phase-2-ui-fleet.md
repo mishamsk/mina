@@ -1,6 +1,6 @@
 # Plan: Phase 2 UI fleet — sequential sub-branch delivery (kata label `ui-stage-3`)
 
-Drive the remaining phase-2 web UI scope to mostly-complete by delivering one kata issue at a time as a Codex-implemented sub-branch of `ui-stage-3`, with the Claude session running this plan acting as operator: plan author, reviewer, integrator. This plan is self-contained; it deliberately inlines a modified (strictly sequential) version of the codex-goal-fleet workflow and does not depend on that skill.
+Drive the remaining phase-2 web UI scope to mostly-complete by delivering one kata issue at a time as a Codex-implemented sub-branch of the main working branch, with the Claude session running this plan acting as operator: plan author, reviewer, integrator. This plan is self-contained; it deliberately inlines a modified (strictly sequential) version of the codex-goal-fleet workflow and does not depend on that skill.
 
 ## Plan Context
 
@@ -8,7 +8,7 @@ Drive the remaining phase-2 web UI scope to mostly-complete by delivering one ka
 
 - Operator: the Claude session executing this plan. Authors sub-branch plans, launches and waits on Codex, reviews, merges, closes kata issues. Never edits implementation code — all code changes flow through Codex sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
 - Codex: the only implementor, headless, one session at a time.
-- Integration branch: `ui-stage-3` (this worktree). Never touch `main`.
+- Integration branch ("main working branch"): whatever branch the operator session is currently on when executing this plan. Never touch `main`.
 - Today's issue set carries kata label `ui-stage-3`: query with `kata list --label ui-stage-3 --agent`.
 
 ### Rules of engagement
@@ -23,7 +23,7 @@ Drive the remaining phase-2 web UI scope to mostly-complete by delivering one ka
 
 ### Per-task workflow (referenced by every task below)
 
-1. Setup: from `ui-stage-3`, `gt <branch> ui-stage-3 -x true` (worktree lands in `.worktrees/<branch>`). Claim: `kata claim <ref> --comment "Fleet sub-branch <branch>." --agent`.
+1. Setup: from the main working branch, `gt <branch> <main-working-branch> -x true` (worktree lands in `.worktrees/<branch>`). Claim: `kata claim <ref> --comment "Fleet sub-branch <branch>." --agent`.
 2. Author the Codex implementation plan in the sub-worktree at `docs/plans/2026-MM-DD-<topic>.md` from `docs/plan_template.md`: concrete checkboxes sized 1–4 commits, the kata ref, repo verification commands per commit (`just test`, `just pre-commit`; `just test-integration` for API/HTTP behavior; `just test-frontend-e2e` for frontend runtime behavior). Initial plans keep the standard Final Verification including one `just review-loop`. Feature-delivering plans include a PROJECT_STATE.md update item and package-doc updates where contracts change. Before authoring, read the owning ground-truth docs for the touched area (`docs/architecture.md`; for frontend also `docs/frontend-architecture.md`, `docs/webui-design.md`, `docs/webui-theme-arcade-cabinet.md`; for API semantics `docs/business-requirements.md`, `api/openapi.yaml`). Commit the plan in the sub-worktree.
 3. Dispatch: from the sub-worktree, headless in the background (do not use `just codex-goal` — it fails without a terminal), run exactly:
 
@@ -34,11 +34,11 @@ Drive the remaining phase-2 web UI scope to mostly-complete by delivering one ka
    Do not touch the worktree while the session runs. Completion signal: plan moved to `docs/plans/completed/` and process exit. Review-loop can take ~10 minutes; use long poll timeouts and do not kill it while heartbeat/progress lines continue.
 4. Operator review (each iteration):
    - Sanity: all checkboxes ticked, plan archived, sub-worktree clean, suites reported green.
-   - Docs governance: `git diff ui-stage-3...<branch> -- docs/` — implementors and review fixers must not change scope, phasing, or UX/architecture rules in ground-truth docs. Revert unauthorized edits (operator-owned commit) and note it.
+   - Docs governance: `git diff <main-working-branch>...<branch> -- docs/` — implementors and review fixers must not change scope, phasing, or UX/architecture rules in ground-truth docs. Revert unauthorized edits (operator-owned commit) and note it.
    - Architectural audit: read-only subagents over the sub-branch diff against the owning docs; demand file:line evidence and severity.
    - Live verification for anything with a runtime surface: run `just dev --demo`, drive the UI (Playwright or equivalent), screenshot, judge against `docs/webui-design.md` and the theme doc — observed behavior beats checkboxes. This includes the operator's critical high-level architectural and visual UI/UX judgment.
 5. Fix loop (max 2 per task): author an implementation-only fix plan from the template — file:line defects with live evidence, a "protect — do not regress" list, explicit scope exclusions, "Do not run review-loop." in Plan Context, no review-loop in Final Verification. Commit it in the sub-worktree, re-dispatch Codex, re-review.
-6. Merge: from the `ui-stage-3` worktree, `git merge --squash <branch>`, commit as `Squash merge branch '<branch>'`. Trivial conflicts (plans, docs) resolve as operator; implementation conflicts: abort, merge `ui-stage-3` into the sub-worktree, hand resolution to Codex via a fix plan (no review-loop), re-review, retry.
+6. Merge: from the main working branch's worktree, `git merge --squash <branch>`, commit as `Squash merge branch '<branch>'`. Trivial conflicts (plans, docs) resolve as operator; implementation conflicts: abort, merge the main working branch into the sub-worktree, hand resolution to Codex via a fix plan (no review-loop), re-review, retry.
 7. Cleanup: `git worktree remove .worktrees/<branch>`, `git branch -D <branch>`.
 8. Close: `kata close <ref> --done --message "..." --commit <sha> --test "<suites>" --agent` if the session did not already.
 9. Rule changes discovered in review go into ground-truth docs first (operator edits, committed separately); long-horizon gaps become new kata issues, not fix-plan items.
@@ -50,7 +50,7 @@ Per-task checklist — every task below runs the full per-task workflow; tick a 
 1. Setup, claim, Codex plan authored and committed
 2. Codex session completed (plan archived, worktree clean, suites green)
 3. Operator review passed (fix plans used ≤2)
-4. Squash-merged into `ui-stage-3`; worktree and branch removed
+4. Squash-merged into the main working branch; worktree and branch removed
 5. Kata issue closed with evidence
 
 Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = backend/API-only, (FE) = frontend-only; respect the stated dependencies, otherwise run in order.
@@ -77,7 +77,7 @@ Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = 
 
 ## Final Verification
 
-- [ ] On `ui-stage-3` with all merged branches: `just test` passes
+- [ ] On the main working branch with all merged branches: `just test` passes
 - [ ] `just test-integration` passes
 - [ ] `just pre-commit` passes
 - [ ] `just test-frontend-e2e` passes
