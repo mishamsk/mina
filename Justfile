@@ -342,8 +342,66 @@ review-loop goal branch_or_commit="" base_ref="":
 
 # Run Codex against an implementation plan.
 [group('agents')]
-codex-goal plan_file:
-    command codex --dangerously-bypass-approvals-and-sandbox {{ quote("/goal implement " + plan_file + ". Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item.") }}
+codex-goal plan_file="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    plan_file={{ quote(plan_file) }}
+    if [ -z "$plan_file" ]; then
+        command -v fzf >/dev/null || { echo "missing required tool: fzf" >&2; exit 1; }
+        if ! plan_file="$(
+            find docs/plans -maxdepth 1 -type f -name '*.md' | sort | fzf \
+                --prompt='Plan> ' \
+                --preview='sed -n "1,120p" {}'
+        )"; then
+            echo "no plan selected" >&2
+            exit 1
+        fi
+        [ -n "$plan_file" ] || { echo "no plan selected" >&2; exit 1; }
+    fi
+
+    command codex --dangerously-bypass-approvals-and-sandbox "/goal implement ${plan_file}. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
+
+# Start a kata plan-only worktree through Codex.
+[group('agents')]
+codex-kata-plan:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    command -v codex >/dev/null || { echo "missing required tool: codex" >&2; exit 1; }
+    command -v fzf >/dev/null || { echo "missing required tool: fzf" >&2; exit 1; }
+    command -v jq >/dev/null || { echo "missing required tool: jq" >&2; exit 1; }
+    command -v kata >/dev/null || { echo "missing required tool: kata" >&2; exit 1; }
+
+    if ! selected="$(
+        jq -r -s '
+            (.[1].issues
+                | map(select(.parent != null) | .parent.short_id)
+                | unique) as $parents
+            | .[0].issues
+            | map(select((.short_id as $id | $parents | index($id) | not)))
+            | sort_by(.updated_at)
+            | reverse[]
+            | [
+                .short_id,
+                ("P" + (.priority | tostring)),
+                .updated_at,
+                .title
+            ]
+            | @tsv
+        ' <(kata ready --json --limit 0) <(kata list --status all --limit 1000 --json) | fzf \
+            --prompt='Kata> ' \
+            --delimiter=$'\t' \
+            --with-nth=1,2,4 \
+            --preview='kata show {1} --agent'
+    )"; then
+        echo "no kata issue selected" >&2
+        exit 1
+    fi
+    [ -n "$selected" ] || { echo "no kata issue selected" >&2; exit 1; }
+
+    issue="${selected%%$'\t'*}"
+    command codex exec --dangerously-bypass-approvals-and-sandbox "\$kata-plan-worktree #${issue}"
 
 # Rebase the current branch through Codex.
 [group('agents')]
