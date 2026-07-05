@@ -64,7 +64,7 @@ Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = 
 - [x] Task 7: `d7jh` — featured-accounts balance strip (FE) — branch `d7jh-balance-strip`
 - [x] Task 8: `vp80` — Overview dashboard page (FE; requires Task 6) — branch `vp80-overview-page`
 - [x] Task 9: `npb5` — transactions list filter/search API (API) — branch `npb5-transactions-filter-api`
-- [ ] Task 10: `0b17` — Transactions search and filter bar (FE; requires Task 9) — branch `0b17-filter-bar`
+- [x] Task 10: `0b17` — Transactions search and filter bar (FE; requires Task 9) — branch `0b17-filter-bar`
 - [ ] Task 11: `bm0h` — account-record search API for registers (API) — branch `bm0h-register-api`
 - [ ] Task 12: `7ts6` — Accounts chart-of-accounts page (FE) — branch `7ts6-accounts-page`
 - [ ] Task 13: `6a1w` — account page with register (FE; requires Task 11) — branch `6a1w-account-register`
