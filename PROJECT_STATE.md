@@ -30,6 +30,7 @@
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.
   - The app shell shows a featured-account balance strip on every route when featured accounts exist, backed by account metadata and server balances.
+  - Overview is the landing page, with active balance accounts grouped by FQN root, approximate USD subtotals, credit remaining, current-month spend/income pulse, and recent activity links.
   - Transactions page uses server-derived transaction titles, has a date-jump control backed by anchored pagination, and has a URL-addressable detail side panel with full journal records and delete confirmation.
   - Transaction entry category pickers fetch API-filtered category lists by tab economic intent.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.

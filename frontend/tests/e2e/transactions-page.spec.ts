@@ -262,7 +262,9 @@ test("transactions page renders demo transaction lines and expands records", asy
     page.getByRole("heading", { exact: true, name: "Transactions" }),
   ).toBeVisible();
   await expect(page.getByText("Description")).toBeVisible();
-  await expect(page.getByText("Amount")).toBeVisible();
+  await expect(
+    page.getByRole("columnheader", { name: "Amount" }),
+  ).toBeVisible();
 
   const transactionRows = page.locator("tbody > tr[aria-expanded]");
   const transferRow = page
@@ -1649,15 +1651,14 @@ const chooseOptionByKeyboard = async (
   await picker.fill(searchText);
   const option = page
     .getByRole("option")
-    .filter({ hasText: optionValue })
-    .first();
+    .filter({ has: page.getByText(optionValue, { exact: true }) });
   await expect(option).toBeVisible();
-  const optionId = (await option.getAttribute("id")) ?? "";
+  const optionId = await option.evaluate((element) => element.id);
   if (arrowDownPresses === 0) {
     await picker.press("ArrowDown");
     await picker.press("ArrowUp");
   } else {
-    for (let index = 0; index < arrowDownPresses; index += 1) {
+    for (let press = 0; press < arrowDownPresses; press += 1) {
       await picker.press("ArrowDown");
     }
   }

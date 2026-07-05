@@ -80,6 +80,32 @@ const roundedFixed = (absoluteAmount: string, scale: number): string => {
     : `${formatWhole(fixedWhole)}.${fixedFraction}`;
 };
 
+const decimalScale = 8;
+const decimalFactor = 10n ** BigInt(decimalScale);
+
+const decimalUnits = (value: string): bigint => {
+  const negative = value.startsWith("-");
+  const absolute = negative ? value.slice(1) : value;
+  const [whole = "0", fraction = ""] = absolute.split(".");
+  const normalizedFraction = fraction.padEnd(decimalScale, "0").slice(0, 8);
+  const units =
+    BigInt(whole || "0") * decimalFactor + BigInt(normalizedFraction);
+  return negative ? -units : units;
+};
+
+const decimalString = (units: bigint): string => {
+  const negative = units < 0n;
+  const absolute = negative ? -units : units;
+  const whole = absolute / decimalFactor;
+  const fraction = (absolute % decimalFactor)
+    .toString()
+    .padStart(decimalScale, "0");
+  return `${negative ? "-" : ""}${whole}.${fraction}`;
+};
+
+export const sumDecimalStrings = (values: readonly string[]): string =>
+  decimalString(values.reduce((sum, value) => sum + decimalUnits(value), 0n));
+
 export const formatDecimalAmount = (
   amount: string,
   currency: string,

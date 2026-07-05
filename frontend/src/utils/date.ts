@@ -6,6 +6,13 @@ export const localTodayISODate = (): string => {
   return `${year}-${month}-${day}`;
 };
 
+export const localYearMonth = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+};
+
 export const localCivilDate = (value: string): Date => {
   const [year = "0", month = "1", day = "1"] = value.split("-");
   return new Date(Number(year), Number(month) - 1, Number(day));

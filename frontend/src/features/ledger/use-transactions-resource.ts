@@ -10,6 +10,7 @@ import {
   type TransactionPageParams,
 } from "@/api";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
+import { refreshOverview } from "@/features/overview";
 import {
   categoryPickerIntentKey,
   clearTransactionPageLoading,
@@ -218,6 +219,7 @@ export const refreshTransactionPageAfterSave = async (
   const [transactions] = await Promise.all([
     refreshTransactionPage(params),
     refreshFeaturedBalances(),
+    refreshOverview(),
   ]);
   return transactions.some(
     (transaction) => transaction.transaction_id === transactionId,

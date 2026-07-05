@@ -162,15 +162,14 @@ test("legacy ui redirects keep slash-prefixed paths same-origin", async ({
 test("shell renders and navigates between routed pages", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page).toHaveURL(/\/transactions$/);
+  await expect(page).toHaveURL(/\/overview$/);
   await expect(page.getByLabel("Primary")).toBeVisible();
   await expect(
     page.getByLabel("Primary").getByRole("button", { name: "New transaction" }),
   ).toBeDisabled();
+  await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Transactions" })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Transactions" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   const balanceStrip = page.getByTestId("featured-balance-strip");
   await expect(balanceStrip).toBeVisible();
   await expect(balanceStrip.getByText("Joint")).toBeVisible();

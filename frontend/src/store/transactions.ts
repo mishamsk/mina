@@ -10,6 +10,7 @@ import type {
   Member,
   Tag,
   Transaction,
+  TransactionMonthTotalsResponse,
 } from "@/api";
 
 import { createSelectors } from "./selectors";
@@ -45,6 +46,20 @@ export interface FeaturedBalancesSnapshot {
   readonly rows: readonly FeaturedBalanceRow[];
 }
 
+export interface OverviewBalanceRow {
+  readonly account: Account;
+  readonly balance: AccountBalance;
+}
+
+export interface OverviewSnapshot {
+  readonly accounts: readonly Account[];
+  readonly balanceRows: readonly OverviewBalanceRow[];
+  readonly loadedAt: string;
+  readonly month: string;
+  readonly monthTotals: TransactionMonthTotalsResponse;
+  readonly recentTransactions: readonly Transaction[];
+}
+
 export interface CategoryPickerCategoriesSnapshot {
   readonly categories: readonly Category[];
   readonly loadedAt: string;
@@ -65,6 +80,9 @@ interface TransactionsState {
   readonly lookupErrorMessage: string | undefined;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly lookupsLoading: boolean;
+  readonly overview: OverviewSnapshot | undefined;
+  readonly overviewErrorMessage: string | undefined;
+  readonly overviewLoading: boolean;
   readonly pages: Readonly<Record<string, TransactionPageSnapshot>>;
 }
 
@@ -81,6 +99,9 @@ const initialTransactionsState: TransactionsState = {
   lookupErrorMessage: undefined,
   lookups: undefined,
   lookupsLoading: false,
+  overview: undefined,
+  overviewErrorMessage: undefined,
+  overviewLoading: false,
   pages: {},
 };
 
@@ -144,6 +165,15 @@ export const useFeaturedBalancesView = () =>
       errorMessage: state.featuredBalancesErrorMessage,
       loading: state.featuredBalancesLoading,
       snapshot: state.featuredBalances,
+    })),
+  );
+
+export const useOverviewView = () =>
+  useTransactionsStore(
+    useShallow((state) => ({
+      errorMessage: state.overviewErrorMessage,
+      loading: state.overviewLoading,
+      snapshot: state.overview,
     })),
   );
 
@@ -310,6 +340,45 @@ export const setFeaturedBalancesError = (errorMessage: string): void => {
     },
     false,
     "TransactionsStore/setFeaturedBalancesError",
+  );
+};
+
+export const setOverviewLoading = (): void => {
+  useTransactionsStore.setState(
+    {
+      overviewErrorMessage: undefined,
+      overviewLoading: true,
+    },
+    false,
+    "TransactionsStore/setOverviewLoading",
+  );
+};
+
+export const setOverview = (
+  overview: Omit<OverviewSnapshot, "loadedAt">,
+): void => {
+  useTransactionsStore.setState(
+    {
+      overview: {
+        ...overview,
+        loadedAt: new Date().toISOString(),
+      },
+      overviewErrorMessage: undefined,
+      overviewLoading: false,
+    },
+    false,
+    "TransactionsStore/setOverview",
+  );
+};
+
+export const setOverviewError = (errorMessage: string): void => {
+  useTransactionsStore.setState(
+    {
+      overviewErrorMessage: errorMessage,
+      overviewLoading: false,
+    },
+    false,
+    "TransactionsStore/setOverviewError",
   );
 };
 

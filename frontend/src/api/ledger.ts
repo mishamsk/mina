@@ -11,7 +11,9 @@ import {
   createSpendTransaction,
   createTransferTransaction,
   deleteTransaction,
+  getAccount,
   getTransaction,
+  getTransactionMonthTotals,
   listAccountBalances,
   listAccounts,
   listCategories,
@@ -124,6 +126,40 @@ export const fetchFeaturedAccountBalances = async () => {
 
   return { accounts, balances };
 };
+
+export const fetchOverviewAccountBalances = () => listAccountBalances();
+
+export const fetchOverviewAccounts = () =>
+  listAccounts({
+    query: {
+      account_type: "balance",
+      limit: lookupLimit,
+      offset: 0,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+export const fetchAccountsByIds = (accountIds: readonly number[]) =>
+  Promise.all(
+    [...new Set(accountIds)].map((accountId) =>
+      getAccount({
+        path: {
+          account_id: accountId,
+        },
+        query: {
+          include_tombstoned: true,
+        },
+      }),
+    ),
+  );
+
+export const fetchTransactionMonthTotalsByMonth = (month: string) =>
+  getTransactionMonthTotals({
+    query: {
+      month,
+    },
+  });
 
 export const fetchCategoryPickerCategories = (
   economicIntents: readonly CategoryEconomicIntent[],

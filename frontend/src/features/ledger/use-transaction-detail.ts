@@ -9,6 +9,7 @@ import {
 } from "@/api";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
+import { refreshOverview } from "@/features/overview";
 
 import { refreshTransactionPage } from "./use-transactions-resource";
 
@@ -39,6 +40,8 @@ const apiErrorMessage = (error: unknown): string => {
   }
   return "The API request failed.";
 };
+
+const restoreFallbackSelector = "[data-transaction-detail-restore-target]";
 
 interface FetchedTransactionDetail {
   readonly errorMessage: string | undefined;
@@ -117,7 +120,12 @@ export const useTransactionDetail = ({
   }, [setSearchParams]);
 
   const restoreDetailFocus = useCallback(() => {
-    focusWithoutTooltip(detailRestoreFocusRef.current, { preventScroll: true });
+    const fallback = document.querySelector<HTMLElement>(
+      restoreFallbackSelector,
+    );
+    focusWithoutTooltip(detailRestoreFocusRef.current ?? fallback, {
+      preventScroll: true,
+    });
   }, []);
 
   const deleteSelectedTransaction = useCallback(
@@ -135,6 +143,7 @@ export const useTransactionDetail = ({
       await Promise.all([
         refreshTransactionPage(params),
         refreshFeaturedBalances(),
+        refreshOverview(),
       ]);
     },
     [closeTransactionDetail, onNotice, params],

@@ -132,6 +132,8 @@ export const TransactionsPage = () => {
     <section
       className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
       aria-labelledby="transactions-title"
+      data-transaction-detail-restore-target
+      tabIndex={-1}
     >
       <PageHeader
         title="Transactions"

@@ -33,7 +33,7 @@ interface NavItem {
 }
 
 const primaryNavItems: readonly NavItem[] = [
-  { disabled: true, icon: Home, label: "Overview", to: "/overview" },
+  { icon: Home, label: "Overview", to: "/overview" },
   { icon: ListBox, label: "Transactions", to: "/transactions" },
   { disabled: true, icon: Wallet, label: "Accounts", to: "/accounts" },
 ];

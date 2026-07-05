@@ -286,6 +286,7 @@ export const TransactionDetailPanel = ({
   onRestoreFocus,
   transaction,
 }: TransactionDetailPanelProps) => {
+  const panelRef = useRef<HTMLElement | null>(null);
   const deleteDialogRef = useRef<HTMLElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const cancelDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -307,6 +308,12 @@ export const TransactionDetailPanel = ({
       deleteButtonRef.current?.focus({ preventScroll: true });
     });
   }, [deleting]);
+
+  useEffect(() => {
+    window.requestAnimationFrame(() => {
+      panelRef.current?.focus({ preventScroll: true });
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -408,6 +415,7 @@ export const TransactionDetailPanel = ({
 
   return (
     <aside
+      ref={panelRef}
       role="dialog"
       aria-labelledby="transaction-detail-title"
       className="bg-card fixed top-4 right-4 bottom-4 z-50 flex w-[min(760px,calc(100vw-2rem))] max-w-full flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"

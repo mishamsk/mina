@@ -22,6 +22,7 @@ type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 interface ClassIconProps {
   readonly className?: string;
+  readonly focusable?: boolean;
   readonly transactionClass: TransactionClass;
 }
 
@@ -47,11 +48,16 @@ const classTone: Record<TransactionClass, string> = {
   transfer: "text-[var(--color-class-transfer-ink)]",
 };
 
-export const ClassIcon = ({ className, transactionClass }: ClassIconProps) => {
+export const ClassIcon = ({
+  className,
+  focusable = true,
+  transactionClass,
+}: ClassIconProps) => {
   const Icon = classIcons[transactionClass];
   const label = transactionClassLabel(transactionClass);
   return (
     <Tooltip
+      focusable={focusable}
       label={label}
       className={cn("inline-grid size-6 place-items-center", className)}
     >
@@ -67,10 +73,15 @@ export const ClassIcon = ({ className, transactionClass }: ClassIconProps) => {
 
 interface StatusIconProps {
   readonly className?: string;
+  readonly focusable?: boolean;
   readonly status: PostingStatus;
 }
 
-export const StatusIcon = ({ className, status }: StatusIconProps) => {
+export const StatusIcon = ({
+  className,
+  focusable = true,
+  status,
+}: StatusIconProps) => {
   if (status === "posted") {
     return null;
   }
@@ -80,6 +91,7 @@ export const StatusIcon = ({ className, status }: StatusIconProps) => {
 
   return (
     <Tooltip
+      focusable={focusable}
       label={label}
       className={cn("inline-grid size-6 place-items-center", className)}
     >

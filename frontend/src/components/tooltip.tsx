@@ -12,6 +12,7 @@ interface TooltipProps {
   readonly asChild?: boolean;
   readonly children: ReactNode;
   readonly className?: string;
+  readonly focusable?: boolean;
   readonly label: string;
 }
 
@@ -46,6 +47,7 @@ export const Tooltip = ({
   asChild = false,
   children,
   className,
+  focusable = true,
   label,
 }: TooltipProps) => {
   const [open, setOpen] = useState(false);
@@ -88,7 +90,7 @@ export const Tooltip = ({
         <TooltipTrigger asChild onFocusCapture={handleFocusCapture}>
           <span
             className={cn("inline-flex max-w-full min-w-0", className)}
-            tabIndex={0}
+            tabIndex={focusable ? 0 : undefined}
           >
             {children}
           </span>
