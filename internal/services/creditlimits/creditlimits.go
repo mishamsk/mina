@@ -44,6 +44,7 @@ type Repository interface {
 // AccountReferenceValidator resolves active account references for credit-limit validation.
 type AccountReferenceValidator interface {
 	ValidateActiveReference(context.Context, int64, accounts.ReferenceOptions) (accounts.Reference, error)
+	ValidateActiveReferences(context.Context, []int64, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
 }
 
 // ReferenceSerializer serializes account deletes with writes that create dependent references.
@@ -158,6 +159,12 @@ func (s *Service) CurrentByAccounts(ctx context.Context, accountIDs []int64, asO
 	}
 	if len(uniqueIDs) == 0 {
 		return map[int64]values.Decimal{}, nil
+	}
+	if _, err := s.accounts.ValidateActiveReferences(ctx, uniqueIDs, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return nil, services.InvalidRequest("account_ids reference missing or inactive account")
+		}
+		return nil, err
 	}
 
 	return s.repo.CurrentByAccounts(ctx, uniqueIDs, asOf)

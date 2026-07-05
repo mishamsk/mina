@@ -254,9 +254,8 @@ func (s *strictServer) SearchAccountJournalRecords(ctx context.Context, request 
 	if err != nil {
 		return nil, err
 	}
-	opts.AccountID = &request.AccountId
 
-	records, err := s.deps.Transactions.SearchRecords(ctx, opts)
+	records, err := s.deps.Transactions.SearchAccountRecords(ctx, request.AccountId, opts)
 	if err != nil {
 		return nil, err
 	}

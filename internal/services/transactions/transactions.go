@@ -502,6 +502,9 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (ListResult, error
 	if err != nil {
 		return ListResult{}, err
 	}
+	if err := s.validateTransactionListFilterReferences(ctx, validatedOpts); err != nil {
+		return ListResult{}, err
+	}
 	transactions, err := s.repo.List(ctx, validatedOpts)
 	if err != nil {
 		return ListResult{}, err
@@ -595,6 +598,35 @@ func validateTransactionListOptions(opts ListOptions) (ListOptions, error) {
 	return opts, nil
 }
 
+func (s *Service) validateTransactionListFilterReferences(ctx context.Context, opts ListOptions) error {
+	if _, err := s.accounts.ValidateActiveReferences(ctx, opts.AccountIDs, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidTransactionFilterReferenceError()
+		}
+		return err
+	}
+	if _, err := s.categories.ValidateActiveReferences(ctx, opts.CategoryIDs, categories.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidTransactionFilterReferenceError()
+		}
+		return err
+	}
+	if _, err := s.tags.ValidateActiveReferences(ctx, opts.TagIDs, tags.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidTransactionFilterReferenceError()
+		}
+		return err
+	}
+	if _, err := s.members.ValidateActiveReferences(ctx, opts.MemberIDs); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidTransactionFilterReferenceError()
+		}
+		return err
+	}
+
+	return nil
+}
+
 func parseTransactionListDecimal(name string, value *string) (*values.Decimal, error) {
 	if value == nil {
 		return nil, nil
@@ -641,6 +673,32 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 // SearchRecords returns journal records matching validated filters.
 func (s *Service) SearchRecords(ctx context.Context, opts RecordSearchOptions) (services.PaginatedList[JournalRecord], error) {
 	if err := validateRecordSearchOptions(opts); err != nil {
+		return services.PaginatedList[JournalRecord]{}, err
+	}
+	if err := s.validateRecordSearchFilterReferences(ctx, opts, true); err != nil {
+		return services.PaginatedList[JournalRecord]{}, err
+	}
+
+	return s.repo.SearchRecords(ctx, opts)
+}
+
+// SearchAccountRecords returns journal records for one active account target.
+func (s *Service) SearchAccountRecords(ctx context.Context, accountID int64, opts RecordSearchOptions) (services.PaginatedList[JournalRecord], error) {
+	if accountID <= 0 {
+		return services.PaginatedList[JournalRecord]{}, services.InvalidRequest("account_id must be positive")
+	}
+	opts.AccountID = &accountID
+	if err := validateRecordSearchOptions(opts); err != nil {
+		return services.PaginatedList[JournalRecord]{}, err
+	}
+	if _, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return services.PaginatedList[JournalRecord]{}, services.NotFound("account not found")
+		}
+		return services.PaginatedList[JournalRecord]{}, err
+	}
+
+	if err := s.validateRecordSearchFilterReferences(ctx, opts, false); err != nil {
 		return services.PaginatedList[JournalRecord]{}, err
 	}
 
@@ -938,6 +996,14 @@ func invalidTransactionReferenceError() error {
 	return services.InvalidRequest("transaction references missing or inactive resource")
 }
 
+func invalidTransactionFilterReferenceError() error {
+	return services.InvalidRequest("transaction filters reference missing or inactive resource")
+}
+
+func invalidRecordSearchFilterReferenceError() error {
+	return services.InvalidRequest("record search filters reference missing or inactive resource")
+}
+
 func idSet(ids []int64) map[int64]struct{} {
 	set := make(map[int64]struct{}, len(ids))
 	for _, id := range ids {
@@ -1084,6 +1150,45 @@ func validateRecordSearchOptions(opts RecordSearchOptions) error {
 		return services.InvalidRequest("include_running_balance requires account_id")
 	}
 	return nil
+}
+
+func (s *Service) validateRecordSearchFilterReferences(ctx context.Context, opts RecordSearchOptions, validateAccount bool) error {
+	if validateAccount {
+		if _, err := s.accounts.ValidateActiveReferences(ctx, optionalID(opts.AccountID), accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+			if errors.Is(err, services.ErrInvalidReference) {
+				return invalidRecordSearchFilterReferenceError()
+			}
+			return err
+		}
+	}
+	if _, err := s.categories.ValidateActiveReferences(ctx, optionalID(opts.CategoryID), categories.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidRecordSearchFilterReferenceError()
+		}
+		return err
+	}
+	if _, err := s.tags.ValidateActiveReferences(ctx, optionalID(opts.TagID), tags.ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidRecordSearchFilterReferenceError()
+		}
+		return err
+	}
+	if _, err := s.members.ValidateActiveReferences(ctx, optionalID(opts.MemberID)); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return invalidRecordSearchFilterReferenceError()
+		}
+		return err
+	}
+
+	return nil
+}
+
+func optionalID(id *int64) []int64 {
+	if id == nil {
+		return nil
+	}
+
+	return []int64{*id}
 }
 
 func validateAccountFQNPrefix(prefix string) error {

@@ -340,6 +340,104 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	}
 }
 
+func TestRecordSearchDictionaryFilterReferencesBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+
+	for _, rawQuery := range []string{
+		"account_id=999999",
+		"category_id=999999",
+		"tag_id=999999",
+		"member_id=999999",
+	} {
+		t.Run("global missing "+rawQuery, func(t *testing.T) {
+			assertInvalidRecordSearchQuery(t, client, rawQuery)
+		})
+	}
+
+	tombstonedAccount := scenario.AccountWithCurrency("checking:RecordSearch:TombstonedFilter", "USD")
+	deleteAccount(t, client, tombstonedAccount.AccountId)
+	tombstonedCategory := scenario.Category("RecordSearch:TombstonedFilter")
+	deleteCategory(t, client, tombstonedCategory.CategoryId)
+	tombstonedTag := scenario.Tag("RecordSearch:TombstonedFilter")
+	deleteTag(t, client, tombstonedTag.TagId)
+	tombstonedMember := scenario.Member("Record Search Tombstoned Filter")
+	deleteMember(t, client, tombstonedMember.MemberId)
+
+	for _, rawQuery := range []string{
+		"account_id=" + apptest.FormatID(tombstonedAccount.AccountId),
+		"category_id=" + apptest.FormatID(tombstonedCategory.CategoryId),
+		"tag_id=" + apptest.FormatID(tombstonedTag.TagId),
+		"member_id=" + apptest.FormatID(tombstonedMember.MemberId),
+	} {
+		t.Run("global tombstoned "+rawQuery, func(t *testing.T) {
+			assertInvalidRecordSearchQuery(t, client, rawQuery)
+		})
+	}
+
+	assertAccountRecordSearchNotFound(t, client, 999999)
+	assertAccountRecordSearchNotFound(t, client, tombstonedAccount.AccountId)
+	assertInvalidAccountRecordSearchQuery(t, client, 999999, "category_id=0")
+
+	hidden := true
+	hiddenAccount, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "checking:RecordSearch:HiddenFilter",
+		AccountType: httpclient.Balance,
+		IsHidden:    &hidden,
+		Currency:    ptrTo("USD"),
+	})
+	if err != nil {
+		t.Fatalf("hidden record search filter account request: %v", err)
+	}
+	if hiddenAccount.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden record search filter account status = %d, want %d; body %s", hiddenAccount.StatusCode(), http.StatusCreated, hiddenAccount.Body)
+	}
+	hiddenCategory := scenario.CategoryWithHidden("RecordSearch:HiddenFilter", hidden)
+	hiddenTag, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn:      "RecordSearch:HiddenFilter",
+		IsHidden: &hidden,
+	})
+	if err != nil {
+		t.Fatalf("hidden record search filter tag request: %v", err)
+	}
+	if hiddenTag.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden record search filter tag status = %d, want %d; body %s", hiddenTag.StatusCode(), http.StatusCreated, hiddenTag.Body)
+	}
+
+	for _, rawQuery := range []string{
+		"account_id=" + apptest.FormatID(hiddenAccount.JSON201.AccountId),
+		"category_id=" + apptest.FormatID(hiddenCategory.CategoryId),
+		"tag_id=" + apptest.FormatID(hiddenTag.JSON201.TagId),
+	} {
+		t.Run("global hidden active "+rawQuery, func(t *testing.T) {
+			assertEmptyRecordSearchQuery(t, client, rawQuery)
+		})
+	}
+	assertEmptyAccountRecordSearch(t, client, hiddenAccount.JSON201.AccountId)
+	for _, rawQuery := range []string{
+		"category_id=" + apptest.FormatID(hiddenCategory.CategoryId),
+		"tag_id=" + apptest.FormatID(hiddenTag.JSON201.TagId),
+	} {
+		t.Run("account scoped hidden active "+rawQuery, func(t *testing.T) {
+			assertEmptyAccountRecordSearchQuery(t, client, hiddenAccount.JSON201.AccountId, rawQuery)
+		})
+	}
+
+	activeAccount := scenario.AccountWithCurrency("checking:RecordSearch:ActiveFilter", "USD")
+	for _, rawQuery := range []string{
+		"category_id=999999",
+		"tag_id=999999",
+		"member_id=999999",
+		"category_id=" + apptest.FormatID(tombstonedCategory.CategoryId),
+		"tag_id=" + apptest.FormatID(tombstonedTag.TagId),
+		"member_id=" + apptest.FormatID(tombstonedMember.MemberId),
+	} {
+		t.Run("account scoped invalid "+rawQuery, func(t *testing.T) {
+			assertInvalidAccountRecordSearchQuery(t, client, activeAccount.AccountId, rawQuery)
+		})
+	}
+}
+
 func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	scenario := client.Scenario()
@@ -800,6 +898,20 @@ func assertRecordRunningBalances(t *testing.T, records []httpclient.JournalRecor
 	}
 }
 
+func assertEmptyRecordSearchQuery(t *testing.T, client *apptest.Client, rawQuery string) {
+	t.Helper()
+
+	response, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery(rawQuery))
+	requireNoTransportError(t, "search records", err)
+	if response.StatusCode() != http.StatusOK {
+		t.Fatalf("search records query %q status = %d, want %d; body %s", rawQuery, response.StatusCode(), http.StatusOK, response.Body)
+	}
+	assertRecordIDs(t, response.JSON200.Records, nil)
+	if response.JSON200.TotalCount != 0 {
+		t.Fatalf("search records query %q total_count = %d, want 0; body %+v", rawQuery, response.JSON200.TotalCount, response.JSON200)
+	}
+}
+
 func assertInvalidRecordSearchQuery(t *testing.T, client *apptest.Client, rawQuery string) {
 	t.Helper()
 
@@ -813,6 +925,34 @@ func assertInvalidRecordSearchQuery(t *testing.T, client *apptest.Client, rawQue
 	}
 }
 
+func assertEmptyAccountRecordSearch(t *testing.T, client *apptest.Client, accountID int64) {
+	t.Helper()
+
+	response, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), accountID, nil)
+	requireNoTransportError(t, "search account records", err)
+	if response.StatusCode() != http.StatusOK {
+		t.Fatalf("search account records status = %d, want %d; body %s", response.StatusCode(), http.StatusOK, response.Body)
+	}
+	assertRecordIDs(t, response.JSON200.Records, nil)
+	if response.JSON200.TotalCount != 0 {
+		t.Fatalf("search account records total_count = %d, want 0; body %+v", response.JSON200.TotalCount, response.JSON200)
+	}
+}
+
+func assertEmptyAccountRecordSearchQuery(t *testing.T, client *apptest.Client, accountID int64, rawQuery string) {
+	t.Helper()
+
+	response, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), accountID, nil, apptest.ReplaceRawQuery(rawQuery))
+	requireNoTransportError(t, "search account records", err)
+	if response.StatusCode() != http.StatusOK {
+		t.Fatalf("search account records query %q status = %d, want %d; body %s", rawQuery, response.StatusCode(), http.StatusOK, response.Body)
+	}
+	assertRecordIDs(t, response.JSON200.Records, nil)
+	if response.JSON200.TotalCount != 0 {
+		t.Fatalf("search account records query %q total_count = %d, want 0; body %+v", rawQuery, response.JSON200.TotalCount, response.JSON200)
+	}
+}
+
 func assertInvalidAccountRecordSearchQuery(t *testing.T, client *apptest.Client, accountID int64, rawQuery string) {
 	t.Helper()
 
@@ -823,6 +963,19 @@ func assertInvalidAccountRecordSearchQuery(t *testing.T, client *apptest.Client,
 	}
 	if response.JSON400 == nil || response.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
 		t.Fatalf("invalid search account records query %q code = %+v, want %q", rawQuery, response.JSON400, httpclient.APIErrorCodeInvalidRequest)
+	}
+}
+
+func assertAccountRecordSearchNotFound(t *testing.T, client *apptest.Client, accountID int64) {
+	t.Helper()
+
+	response, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), accountID, nil)
+	requireNoTransportError(t, "search missing account records", err)
+	if response.StatusCode() != http.StatusNotFound {
+		t.Fatalf("missing account records status = %d, want %d; body %s", response.StatusCode(), http.StatusNotFound, response.Body)
+	}
+	if response.JSON404 == nil || response.JSON404.Error.Code != httpclient.APIErrorCodeNotFound {
+		t.Fatalf("missing account records error = %+v, want %q; body %s", response.JSON404, httpclient.APIErrorCodeNotFound, response.Body)
 	}
 }
 

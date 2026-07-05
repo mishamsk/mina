@@ -498,6 +498,21 @@ func TestAccountBalancesBoundary(t *testing.T) {
 		{accountID: hidden.JSON201.AccountId, currency: "USD", current: "-9.00000000", currentUSD: "-9.00000000", posted: "-9.00000000", unconvertedCount: 0},
 	})
 
+	hiddenAccountIDs := []int64{hidden.JSON201.AccountId}
+	filteredHidden, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{
+		AccountIds:    &hiddenAccountIDs,
+		IncludeHidden: &hiddenValue,
+	})
+	if err != nil {
+		t.Fatalf("filtered hidden account balances request: %v", err)
+	}
+	if filteredHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("filtered hidden account balances status = %d, want %d; body %s", filteredHidden.StatusCode(), http.StatusOK, filteredHidden.Body)
+	}
+	assertAccountBalances(t, filteredHidden.JSON200.Balances, []wantAccountBalance{
+		{accountID: hidden.JSON201.AccountId, currency: "USD", current: "-9.00000000", currentUSD: "-9.00000000", posted: "-9.00000000", unconvertedCount: 0},
+	})
+
 	accountIDs := []int64{travel.AccountId, merchant.AccountId}
 	filtered, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})
 	if err != nil {
@@ -527,6 +542,45 @@ func TestAccountBalancesBoundary(t *testing.T) {
 	}
 	if invalid.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid account balances status = %d, want %d; body %s", invalid.StatusCode(), http.StatusBadRequest, invalid.Body)
+	}
+	if invalid.JSON400 == nil || invalid.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest || invalid.JSON400.Error.Message != "query parameter \"account_ids\" is invalid: number must be at least 1" {
+		t.Fatalf("invalid account balances error = %+v, want existing invalid_request query validation message; body %s", invalid.JSON400, invalid.Body)
+	}
+
+	missingAccountIDs := []int64{999999}
+	missing, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &missingAccountIDs})
+	if err != nil {
+		t.Fatalf("missing account balances request: %v", err)
+	}
+	if missing.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("missing account balances status = %d, want %d; body %s", missing.StatusCode(), http.StatusBadRequest, missing.Body)
+	}
+	if missing.JSON400 == nil || missing.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("missing account balances error = %+v, want invalid_request; body %s", missing.JSON400, missing.Body)
+	}
+
+	tombstoned, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "checking:Balances:Tombstoned",
+		AccountType: httpclient.Balance,
+		Currency:    ptrTo("USD"),
+	})
+	if err != nil {
+		t.Fatalf("tombstoned balance account create request: %v", err)
+	}
+	if tombstoned.StatusCode() != http.StatusCreated {
+		t.Fatalf("tombstoned balance account create status = %d, want %d; body %s", tombstoned.StatusCode(), http.StatusCreated, tombstoned.Body)
+	}
+	deleteAccount(t, client, tombstoned.JSON201.AccountId)
+	tombstonedAccountIDs := []int64{tombstoned.JSON201.AccountId}
+	tombstonedBalance, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &tombstonedAccountIDs})
+	if err != nil {
+		t.Fatalf("tombstoned account balances request: %v", err)
+	}
+	if tombstonedBalance.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("tombstoned account balances status = %d, want %d; body %s", tombstonedBalance.StatusCode(), http.StatusBadRequest, tombstonedBalance.Body)
+	}
+	if tombstonedBalance.JSON400 == nil || tombstonedBalance.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("tombstoned account balances error = %+v, want invalid_request; body %s", tombstonedBalance.JSON400, tombstonedBalance.Body)
 	}
 }
 

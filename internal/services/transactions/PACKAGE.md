@@ -7,6 +7,8 @@
 ## Implicit Contracts
 
 - Create/replace and bulk category/account/tag use cases validate references through dictionary service APIs before writes.
+- Transaction-list and record-search dictionary ID filters validate active references through dictionary service APIs before reads.
+- Account-scoped record search treats the path account ID as a target account and returns not found for missing or inactive accounts.
 - Create/replace infers missing `amount_usd` with posted-date-else-initiated lookup dates and preserves explicit values.
 - Transaction semantic classification uses account/category reference data owned by dictionary service APIs.
 - Shorthand create use cases build ordinary same-currency two-record transactions before delegating to full create validation and persistence.

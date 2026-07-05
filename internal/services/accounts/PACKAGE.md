@@ -10,6 +10,7 @@
 - Hidden active accounts are valid references only when callers explicitly allow hidden references.
 - Featured account state is presentation metadata and does not affect accounting semantics or reference validation.
 - Balance reads return active balance accounts only; current includes posted and pending records, posted-only excludes pending, and cancelled records are excluded.
+- Explicit account filters on balance reads must reference active accounts.
 
 ## Boundaries
 

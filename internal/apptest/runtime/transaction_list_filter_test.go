@@ -407,6 +407,77 @@ func TestTransactionListFilterValidationBoundary(t *testing.T) {
 	}
 }
 
+func TestTransactionListDictionaryFilterReferencesBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+
+	for _, rawQuery := range []string{
+		"account_id=999999",
+		"category_id=999999",
+		"tag_id=999999",
+		"member_id=999999",
+	} {
+		t.Run("missing "+rawQuery, func(t *testing.T) {
+			assertInvalidTransactionListQuery(t, client, rawQuery)
+		})
+	}
+
+	tombstonedAccount := scenario.AccountWithCurrency("checking:TransactionList:TombstonedFilter", "USD")
+	deleteAccount(t, client, tombstonedAccount.AccountId)
+	tombstonedCategory := scenario.Category("TransactionList:TombstonedFilter")
+	deleteCategory(t, client, tombstonedCategory.CategoryId)
+	tombstonedTag := scenario.Tag("TransactionList:TombstonedFilter")
+	deleteTag(t, client, tombstonedTag.TagId)
+	tombstonedMember := scenario.Member("Transaction List Tombstoned Filter")
+	deleteMember(t, client, tombstonedMember.MemberId)
+
+	for _, rawQuery := range []string{
+		"account_id=" + apptest.FormatID(tombstonedAccount.AccountId),
+		"category_id=" + apptest.FormatID(tombstonedCategory.CategoryId),
+		"tag_id=" + apptest.FormatID(tombstonedTag.TagId),
+		"member_id=" + apptest.FormatID(tombstonedMember.MemberId),
+	} {
+		t.Run("tombstoned "+rawQuery, func(t *testing.T) {
+			assertInvalidTransactionListQuery(t, client, rawQuery)
+		})
+	}
+
+	hidden := true
+	hiddenAccount, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "checking:TransactionList:HiddenFilter",
+		AccountType: httpclient.Balance,
+		IsHidden:    &hidden,
+		Currency:    ptrTo("USD"),
+	})
+	if err != nil {
+		t.Fatalf("hidden transaction list filter account request: %v", err)
+	}
+	if hiddenAccount.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden transaction list filter account status = %d, want %d; body %s", hiddenAccount.StatusCode(), http.StatusCreated, hiddenAccount.Body)
+	}
+	hiddenCategory := scenario.CategoryWithHidden("TransactionList:HiddenFilter", hidden)
+	hiddenTag, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn:      "TransactionList:HiddenFilter",
+		IsHidden: &hidden,
+	})
+	if err != nil {
+		t.Fatalf("hidden transaction list filter tag request: %v", err)
+	}
+	if hiddenTag.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden transaction list filter tag status = %d, want %d; body %s", hiddenTag.StatusCode(), http.StatusCreated, hiddenTag.Body)
+	}
+
+	for _, rawQuery := range []string{
+		"account_id=" + apptest.FormatID(hiddenAccount.JSON201.AccountId),
+		"category_id=" + apptest.FormatID(hiddenCategory.CategoryId),
+		"tag_id=" + apptest.FormatID(hiddenTag.JSON201.TagId),
+	} {
+		t.Run("hidden active "+rawQuery, func(t *testing.T) {
+			assertEmptyTransactionListQuery(t, client, rawQuery)
+		})
+	}
+}
+
 type transactionListFilterInput struct {
 	Date          string
 	BalanceID     int64
@@ -473,4 +544,12 @@ func assertTransactionListResponse(t *testing.T, label string, response *httpcli
 	if response.JSON200.TotalCount != total {
 		t.Fatalf("%s total_count = %d, want %d; body %+v", label, response.JSON200.TotalCount, total, response.JSON200)
 	}
+}
+
+func assertEmptyTransactionListQuery(t *testing.T, client *apptest.Client, rawQuery string) {
+	t.Helper()
+
+	response, err := client.REST().ListTransactionsWithResponse(context.Background(), nil, apptest.ReplaceRawQuery(rawQuery))
+	requireNoTransportError(t, "list transactions", err)
+	assertTransactionListResponse(t, "transaction list query "+rawQuery, response, nil, 0)
 }

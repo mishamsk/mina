@@ -2367,6 +2367,10 @@ export type SearchAccountJournalRecordsErrors = {
      * The request is invalid.
      */
     400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
 };
 
 export type SearchAccountJournalRecordsError = SearchAccountJournalRecordsErrors[keyof SearchAccountJournalRecordsErrors];

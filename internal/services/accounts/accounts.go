@@ -260,6 +260,12 @@ func (s *Service) ListBalances(ctx context.Context, opts BalanceListOptions) ([]
 			return nil, services.InvalidRequest("account_ids values must be positive")
 		}
 	}
+	if _, err := s.ValidateActiveReferences(ctx, accountIDs, ReferenceOptions{AllowHidden: true}); err != nil {
+		if errors.Is(err, services.ErrInvalidReference) {
+			return nil, services.InvalidRequest("account_ids reference missing or inactive account")
+		}
+		return nil, err
+	}
 
 	return s.repo.ListBalances(ctx, BalanceListOptions{
 		IncludeHidden: opts.IncludeHidden,
