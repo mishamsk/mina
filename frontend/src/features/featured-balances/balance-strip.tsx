@@ -1,5 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import { Banknote } from "pixelarticons/react";
+import { Link } from "react-router";
 
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -55,13 +56,14 @@ const ExpandedBalanceRows = ({
         data-testid="featured-balance-row"
         className="grid min-h-8 grid-cols-[minmax(0,1fr)_minmax(0,50%)] items-center gap-2 px-2 py-1"
       >
-        <Tooltip label={row.account.fqn} className="min-w-0">
-          <span
+        <Tooltip label={row.account.fqn} asChild className="min-w-0">
+          <Link
+            to={`/accounts/${row.account.account_id}`}
             data-testid="featured-balance-name"
-            className="block truncate font-mono text-xs font-medium text-[var(--frame-foreground)]"
+            className="block truncate font-mono text-xs font-medium text-[var(--frame-foreground)] hover:underline"
           >
             {row.account.name}
-          </span>
+          </Link>
         </Tooltip>
         <BalanceAmount row={row} />
       </div>

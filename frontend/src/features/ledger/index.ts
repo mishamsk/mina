@@ -8,6 +8,7 @@ export {
   lineDisplayAmounts,
   lineMemo,
   linePostingStatus,
+  type LookupMaps,
   postingStatusLabel,
   sumDecimalStrings,
   transactionClassLabel,
@@ -16,7 +17,12 @@ export { FqnPath } from "./fqn-path";
 export { ClassIcon, StatusIcon } from "./line-icons";
 export { TagChip } from "./tag-chip";
 export { TransactionBrowser } from "./transaction-browser";
-export { TransactionDetailPanel } from "./transaction-detail-panel";
+export {
+  TransactionDetailContent,
+  TransactionDetailErrorContent,
+  TransactionDetailLoadingContent,
+  TransactionDetailPanel,
+} from "./transaction-detail-panel";
 export { TransactionFilterControls } from "./transaction-filter-controls";
 export {
   defaultTransactionPage,

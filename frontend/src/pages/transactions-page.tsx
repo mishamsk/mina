@@ -347,6 +347,7 @@ export const TransactionsPage = () => {
             const savedOnCurrentPage = await refreshTransactionPageAfterSave(
               params,
               transaction.transaction_id,
+              transaction,
             );
             showSaveNotice(
               savedOnCurrentPage

@@ -29,6 +29,9 @@ export const PageHelp = ({ children, label }: PageHelpProps) => {
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
         setOpen(false);
       }
     };
@@ -63,6 +66,7 @@ export const PageHelp = ({ children, label }: PageHelpProps) => {
         <p
           id={contentId}
           role="note"
+          data-page-help-content
           className="bg-card font-body text-foreground absolute top-full left-0 z-30 mt-2 w-72 border-2 border-[var(--border-ink)] p-3 text-sm shadow-[var(--shadow-pixel)]"
         >
           {children}

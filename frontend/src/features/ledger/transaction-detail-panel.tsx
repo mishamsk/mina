@@ -267,13 +267,94 @@ const DetailRecordsTable = ({
   </div>
 );
 
-const LoadingPanelContent = () => (
+export const TransactionDetailLoadingContent = () => (
   <div className="space-y-4 p-4">
     <Skeleton className="h-8 w-48" />
     <Skeleton className="h-14 w-full" />
     <Skeleton className="h-44 w-full" />
   </div>
 );
+
+export const TransactionDetailErrorContent = ({
+  errorMessage,
+}: {
+  readonly errorMessage: string;
+}) => (
+  <div className="p-4" role="alert">
+    <p className="text-destructive font-semibold">
+      Transaction could not be loaded.
+    </p>
+    <p className="text-muted-foreground mt-2 text-sm">{errorMessage}</p>
+  </div>
+);
+
+export const TransactionDetailContent = ({
+  maps,
+  transaction,
+}: {
+  readonly maps: LookupMaps;
+  readonly transaction: Transaction;
+}) => {
+  const summaryMemo = lineMemo(transaction);
+
+  return (
+    <div className="space-y-5 p-4">
+      <header className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="min-w-0 space-y-3">
+          <ClassBadge transactionClass={transaction.transaction_class} />
+          <p className="text-muted-foreground text-sm">
+            Initiated {formatInitiatedDate(transaction.initiated_date)}
+          </p>
+          {summaryMemo ? (
+            <p
+              className="text-muted-foreground font-body text-sm break-words whitespace-pre-wrap"
+              data-testid="transaction-detail-summary-memo"
+            >
+              {summaryMemo}
+            </p>
+          ) : null}
+        </div>
+        <DetailAmountList transaction={transaction} />
+      </header>
+
+      <section aria-labelledby="transaction-detail-records">
+        <h3
+          id="transaction-detail-records"
+          className="font-heading mb-2 text-sm font-semibold uppercase"
+        >
+          Journal records
+        </h3>
+        <DetailRecordsTable maps={maps} records={transaction.records} />
+      </section>
+
+      <section
+        aria-labelledby="transaction-detail-metadata"
+        className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-3"
+      >
+        <h3
+          id="transaction-detail-metadata"
+          className="font-heading mb-2 text-sm font-semibold uppercase"
+        >
+          Metadata
+        </h3>
+        <dl className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr]">
+          <dt className="font-heading text-muted-foreground uppercase">
+            Class
+          </dt>
+          <dd>{transactionClassLabel(transaction.transaction_class)}</dd>
+          <dt className="font-heading text-muted-foreground uppercase">
+            Source
+          </dt>
+          <dd>{uniqueRecordSources(transaction)}</dd>
+          <dt className="font-heading text-muted-foreground uppercase">
+            Created
+          </dt>
+          <dd>{formatTimestamp(transaction.created_at)}</dd>
+        </dl>
+      </section>
+    </div>
+  );
+};
 
 export const TransactionDetailPanel = ({
   errorMessage,
@@ -294,7 +375,6 @@ export const TransactionDetailPanel = ({
     string | undefined
   >();
   const [deleting, setDeleting] = useState(false);
-  const summaryMemo = transaction ? lineMemo(transaction) : undefined;
 
   const closeDeleteConfirmation = useCallback(() => {
     if (deleting) {
@@ -448,70 +528,11 @@ export const TransactionDetailPanel = ({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (
-          <LoadingPanelContent />
+          <TransactionDetailLoadingContent />
         ) : errorMessage ? (
-          <div className="p-4" role="alert">
-            <p className="text-destructive font-semibold">
-              Transaction could not be loaded.
-            </p>
-            <p className="text-muted-foreground mt-2 text-sm">{errorMessage}</p>
-          </div>
+          <TransactionDetailErrorContent errorMessage={errorMessage} />
         ) : transaction ? (
-          <div className="space-y-5 p-4">
-            <header className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
-              <div className="min-w-0 space-y-3">
-                <ClassBadge transactionClass={transaction.transaction_class} />
-                <p className="text-muted-foreground text-sm">
-                  Initiated {formatInitiatedDate(transaction.initiated_date)}
-                </p>
-                {summaryMemo ? (
-                  <p
-                    className="text-muted-foreground font-body text-sm break-words whitespace-pre-wrap"
-                    data-testid="transaction-detail-summary-memo"
-                  >
-                    {summaryMemo}
-                  </p>
-                ) : null}
-              </div>
-              <DetailAmountList transaction={transaction} />
-            </header>
-
-            <section aria-labelledby="transaction-detail-records">
-              <h3
-                id="transaction-detail-records"
-                className="font-heading mb-2 text-sm font-semibold uppercase"
-              >
-                Journal records
-              </h3>
-              <DetailRecordsTable maps={maps} records={transaction.records} />
-            </section>
-
-            <section
-              aria-labelledby="transaction-detail-metadata"
-              className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-3"
-            >
-              <h3
-                id="transaction-detail-metadata"
-                className="font-heading mb-2 text-sm font-semibold uppercase"
-              >
-                Metadata
-              </h3>
-              <dl className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr]">
-                <dt className="font-heading text-muted-foreground uppercase">
-                  Class
-                </dt>
-                <dd>{transactionClassLabel(transaction.transaction_class)}</dd>
-                <dt className="font-heading text-muted-foreground uppercase">
-                  Source
-                </dt>
-                <dd>{uniqueRecordSources(transaction)}</dd>
-                <dt className="font-heading text-muted-foreground uppercase">
-                  Created
-                </dt>
-                <dd>{formatTimestamp(transaction.created_at)}</dd>
-              </dl>
-            </section>
-          </div>
+          <TransactionDetailContent maps={maps} transaction={transaction} />
         ) : null}
       </div>
       {transaction && !loading && !errorMessage ? (

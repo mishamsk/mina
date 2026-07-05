@@ -3,7 +3,15 @@ import process from "node:process";
 import { defineConfig, devices } from "@playwright/test";
 
 const port = Number(process.env.MINA_FRONTEND_E2E_PORT ?? 18080);
-const baseURL = `http://127.0.0.1:${port}`;
+const chromiumURL = `http://127.0.0.1:${port}`;
+const webkitURL = `http://127.0.0.1:${port + 1}`;
+
+const webServer = (serverPort: number, url: string) => ({
+  command: `MINA_FX_AUTO_LOAD_ENABLED=false ../bin/mina serve --host 127.0.0.1 --port ${serverPort} --quiet --demo`,
+  reuseExistingServer: !process.env.CI,
+  timeout: 30_000,
+  url: `${url}/api/health`,
+});
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -13,21 +21,15 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], baseURL: chromiumURL },
     },
     {
       name: "webkit",
-      use: { ...devices["Desktop Safari"] },
+      use: { ...devices["Desktop Safari"], baseURL: webkitURL },
     },
   ],
-  webServer: {
-    command: `MINA_FX_AUTO_LOAD_ENABLED=false ../bin/mina serve --host 127.0.0.1 --port ${port} --quiet --demo`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
-    url: `${baseURL}/api/health`,
-  },
+  webServer: [webServer(port, chromiumURL), webServer(port + 1, webkitURL)],
   use: {
-    baseURL,
     trace: "on-first-retry",
   },
 });

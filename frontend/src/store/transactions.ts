@@ -302,6 +302,16 @@ export const setLedgerLookupsLoading = (): void => {
   );
 };
 
+export const clearLedgerLookupsLoading = (): void => {
+  useTransactionsStore.setState(
+    {
+      lookupsLoading: false,
+    },
+    false,
+    "TransactionsStore/clearLedgerLookupsLoading",
+  );
+};
+
 export const setLedgerLookups = (
   lookups: Omit<LedgerLookupsSnapshot, "loadedAt">,
 ): void => {

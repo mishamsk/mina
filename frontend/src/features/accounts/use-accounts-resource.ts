@@ -1,12 +1,15 @@
 import { useEffect, useRef } from "react";
 
-import { fetchAccountsPage, isNetworkFailure } from "@/api";
+import { type Account, fetchAccountsPage, isNetworkFailure } from "@/api";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
 import { refreshLedgerLookups } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
 import {
   clearAccountsPageLoading,
   getAccountsSnapshot,
+  invalidateAccountHeaders,
+  mergeAccountsPageAccount,
+  removeAccountsPageAccount,
   setAccountsPage,
   setAccountsPageError,
   setAccountsPageLoading,
@@ -32,6 +35,8 @@ const apiErrorMessage = (error: unknown): string => {
 };
 
 let accountsPageLoadGeneration = 0;
+const accountsPageRefreshRetryDelayMs = 200;
+const accountsPageRefreshAttempts = 8;
 
 const nextAccountsPageLoadGeneration = (): number => {
   accountsPageLoadGeneration += 1;
@@ -42,14 +47,41 @@ const nextAccountsPageLoadGeneration = (): number => {
 const isCurrentAccountsPageLoad = (generation: number): boolean =>
   generation === accountsPageLoadGeneration;
 
+const accountsPageLoaded = (
+  result: Awaited<ReturnType<typeof fetchAccountsPage>>,
+): boolean => Boolean(result.accounts.data && result.balances.data);
+
+const waitForAccountsPageRetry = (): Promise<void> =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, accountsPageRefreshRetryDelayMs);
+  });
+
+const fetchAccountsPageWithRetries = async (
+  shouldContinue: () => boolean,
+): Promise<Awaited<ReturnType<typeof fetchAccountsPage>>> => {
+  let result = await fetchAccountsPage();
+  for (
+    let attempt = 1;
+    attempt < accountsPageRefreshAttempts && !accountsPageLoaded(result);
+    attempt += 1
+  ) {
+    if (!shouldContinue()) {
+      return result;
+    }
+    await waitForAccountsPageRetry();
+    result = await fetchAccountsPage();
+  }
+  return result;
+};
+
 const loadAccountsPage = async (
   generation: number,
   shouldCommit: () => boolean = () => true,
 ): Promise<void> => {
-  const result = await fetchAccountsPage();
   const isCurrentLoad = () => isCurrentAccountsPageLoad(generation);
   const commitCurrent = () => shouldCommit() && isCurrentLoad();
 
+  const result = await fetchAccountsPageWithRetries(commitCurrent);
   if (!commitCurrent()) {
     if (isCurrentLoad()) {
       clearAccountsPageLoading();
@@ -77,9 +109,19 @@ export const refreshAccountsPage = async (): Promise<void> => {
   await loadAccountsPage(nextAccountsPageLoadGeneration());
 };
 
-export const refreshAccountsAfterMutation = async (): Promise<void> => {
+export const refreshAccountsAfterMutation = async (options?: {
+  readonly account?: Account;
+  readonly removedAccountId?: number;
+}): Promise<void> => {
+  invalidateAccountHeaders();
+  await refreshAccountsPage();
+  if (options?.account) {
+    mergeAccountsPageAccount(options.account);
+  }
+  if (options?.removedAccountId !== undefined) {
+    removeAccountsPageAccount(options.removedAccountId);
+  }
   await Promise.all([
-    refreshAccountsPage(),
     refreshFeaturedBalances(),
     refreshOverview(),
     refreshLedgerLookups(),

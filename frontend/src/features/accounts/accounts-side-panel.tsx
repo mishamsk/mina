@@ -554,7 +554,7 @@ const AccountsSidePanelContent = ({
     }
 
     if (result.data) {
-      await refreshAccountsAfterMutation();
+      await refreshAccountsAfterMutation({ account: result.data });
       if (!panelSessionActiveRef.current) {
         return;
       }
@@ -659,7 +659,9 @@ const AccountsSidePanelContent = ({
     if (result.data !== undefined || !result.error) {
       onNotice("Account deleted.");
       onClose();
-      await refreshAccountsAfterMutation();
+      await refreshAccountsAfterMutation({
+        removedAccountId: account.account_id,
+      });
       return;
     }
     setDeletingAccount(false);

@@ -15,6 +15,9 @@ import {
   categoryPickerIntentKey,
   clearTransactionPageLoading,
   getTransactionsSnapshot,
+  invalidateAccountHeader,
+  invalidateAccountRegisterPages,
+  invalidateAccountTransactionCache,
   invalidateTransactionPages,
   normalizedCategoryPickerIntents,
   setCategoryPickerCategories,
@@ -224,10 +227,34 @@ export const refreshLedgerLookups = async (): Promise<void> => {
   await loadLedgerLookups();
 };
 
+export const invalidateAccountRegistersForTransaction = (
+  transaction: Transaction,
+  previousTransaction?: Transaction,
+): void => {
+  const accountIds = new Set(
+    [previousTransaction, transaction]
+      .filter((value): value is Transaction => Boolean(value))
+      .flatMap((value) => value.records.map((record) => record.account_id)),
+  );
+
+  invalidateAccountTransactionCache(transaction.transaction_id);
+
+  for (const accountId of accountIds) {
+    invalidateAccountHeader(accountId);
+    invalidateAccountRegisterPages(accountId);
+  }
+};
+
 export const refreshTransactionPageAfterSave = async (
   params: TransactionPageParams,
   transactionId: number,
+  transaction?: Transaction,
+  previousTransaction?: Transaction,
 ): Promise<boolean> => {
+  if (transaction) {
+    invalidateAccountRegistersForTransaction(transaction, previousTransaction);
+  }
+
   const [transactions] = await Promise.all([
     refreshTransactionPage(params),
     refreshFeaturedBalances(),

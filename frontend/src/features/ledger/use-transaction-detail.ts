@@ -11,7 +11,10 @@ import { focusWithoutTooltip } from "@/components/tooltip";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
 import { refreshOverview } from "@/features/overview";
 
-import { refreshTransactionPage } from "./use-transactions-resource";
+import {
+  invalidateAccountRegistersForTransaction,
+  refreshTransactionPage,
+} from "./use-transactions-resource";
 
 const parseOptionalPositiveInteger = (
   value: string | null,
@@ -138,6 +141,7 @@ export const useTransactionDetail = ({
       }
 
       setSuppressedDetailFetchId(nextTransaction.transaction_id);
+      invalidateAccountRegistersForTransaction(nextTransaction);
       closeTransactionDetail();
       onNotice("Transaction deleted.");
       await Promise.all([

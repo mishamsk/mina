@@ -179,7 +179,9 @@ export const AccountsPageContent = ({
     <AccountsTree
       accounts={accountsPage.snapshot?.accounts}
       balances={accountsPage.snapshot?.balances}
-      errorMessage={accountsPage.errorMessage}
+      errorMessage={
+        accountsPage.snapshot ? undefined : accountsPage.errorMessage
+      }
       includeHidden={includeHidden}
       loading={accountsPage.loading}
       onCreateAccount={onCreateAccount}

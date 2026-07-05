@@ -14,7 +14,8 @@ export const localYearMonth = (): string => {
 };
 
 export const localCivilDate = (value: string): Date => {
-  const [year = "0", month = "1", day = "1"] = value.split("-");
+  const [datePart = value] = value.split("T");
+  const [year = "0", month = "1", day = "1"] = datePart.split("-");
   return new Date(Number(year), Number(month) - 1, Number(day));
 };
 

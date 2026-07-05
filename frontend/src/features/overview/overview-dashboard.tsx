@@ -194,7 +194,12 @@ const BalanceRow = ({ row }: { readonly row: OverviewBalanceRow }) => {
     >
       <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <FqnPath value={row.account.fqn} />
+          <Link
+            to={`/accounts/${row.account.account_id}`}
+            className="focus-visible:outline-ring inline-flex min-w-0 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <FqnPath value={row.account.fqn} />
+          </Link>
           {row.account.is_featured ? (
             <Badge variant="secondary" className="text-[10px]">
               Featured

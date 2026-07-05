@@ -1,5 +1,6 @@
 import { EyeOff, Plus, Reload } from "pixelarticons/react";
 import { useMemo } from "react";
+import { Link } from "react-router";
 
 import type {
   Account,
@@ -43,6 +44,23 @@ const accountTypeMatches = (
 const accountSearchMatches = (account: Account, search: string): boolean =>
   search.trim() === "" ||
   account.fqn.toLowerCase().includes(search.trim().toLowerCase());
+
+const interactiveTargetSelector =
+  "a, button, input, select, textarea, summary, [role='button'], " +
+  "[contenteditable='true'], " +
+  "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
+
+const isInteractiveTarget = (
+  target: EventTarget | null,
+  currentTarget: HTMLElement,
+): boolean => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const interactiveTarget = target.closest(interactiveTargetSelector);
+  return interactiveTarget !== null && interactiveTarget !== currentTarget;
+};
 
 export const accountTreeRows = (
   accounts: readonly Account[],
@@ -327,6 +345,11 @@ export const AccountsTree = ({
                     if (!row.account) {
                       return;
                     }
+                    if (
+                      isInteractiveTarget(event.target, event.currentTarget)
+                    ) {
+                      return;
+                    }
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       onEditAccount?.(row.account, event.currentTarget);
@@ -338,15 +361,27 @@ export const AccountsTree = ({
                       className="min-w-0 overflow-hidden"
                       style={{ paddingLeft: `${row.depth * 1.25}rem` }}
                     >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <FqnPath value={row.fqn} />
-                        {row.account?.is_hidden ? (
-                          <EyeOff
-                            aria-hidden="true"
-                            className="size-4 shrink-0 lg:hidden"
-                          />
-                        ) : null}
-                      </span>
+                      {row.account ? (
+                        <Link
+                          to={`/accounts/${row.account.account_id}`}
+                          className="focus-visible:outline-ring inline-flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                        >
+                          <FqnPath value={row.fqn} />
+                          {row.account.is_hidden ? (
+                            <EyeOff
+                              aria-hidden="true"
+                              className="size-4 shrink-0 lg:hidden"
+                            />
+                          ) : null}
+                        </Link>
+                      ) : (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <FqnPath value={row.fqn} />
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="hidden px-3 py-2 align-middle sm:table-cell">

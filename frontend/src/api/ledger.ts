@@ -33,12 +33,19 @@ import {
   listMembers,
   listTags,
   listTransactions,
+  searchAccountJournalRecords,
   updateAccount as updateGeneratedAccount,
 } from "./generated";
 
 export interface TransactionPageParams {
   readonly anchorDate?: string;
   readonly filters?: Partial<TransactionFilters>;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+export interface AccountRecordsPageParams {
+  readonly includeRunningBalance: boolean;
   readonly limit: number;
   readonly offset: number;
 }
@@ -124,6 +131,51 @@ export const fetchTransactionById = (transactionId: number) =>
       transaction_id: transactionId,
     },
   });
+
+export const fetchAccountRecordsPage = (
+  accountId: number,
+  params: AccountRecordsPageParams,
+) =>
+  searchAccountJournalRecords({
+    path: {
+      account_id: accountId,
+    },
+    query: {
+      include_running_balance: params.includeRunningBalance,
+      limit: params.limit,
+      offset: params.offset,
+    },
+  });
+
+export const fetchAccountHeader = async (accountId: number) => {
+  const account = await getAccount({
+    path: {
+      account_id: accountId,
+    },
+    query: {
+      include_tombstoned: true,
+    },
+  });
+  const [balances, creditLimitHistory] = await Promise.all([
+    listAccountBalances({
+      query: {
+        account_ids: [accountId],
+        include_hidden: true,
+      },
+    }),
+    account.data?.tombstoned_at
+      ? Promise.resolve({
+          data: {
+            credit_limit_history: [],
+            total_count: 0,
+          },
+          error: undefined,
+        })
+      : fetchCreditLimitHistory(accountId),
+  ]);
+
+  return { account, balances, creditLimitHistory };
+};
 
 export const deleteTransactionById = (transactionId: number) =>
   deleteTransaction({

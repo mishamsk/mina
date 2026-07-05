@@ -203,6 +203,10 @@
     container: transactions-table / inline-size;
   }
 
+  .account-register-table-scroll {
+    container: account-register-table / inline-size;
+  }
+
   .transaction-detail-records-table {
     container: transaction-detail-records / inline-size;
   }
@@ -371,6 +375,147 @@
     }
   }
 
+  .account-register-table .account-register-date-column {
+    width: 12%;
+  }
+
+  .account-register-table .account-register-counterparty-column {
+    width: 23%;
+  }
+
+  .account-register-table .account-register-category-column {
+    width: 16%;
+  }
+
+  .account-register-table .account-register-memo-column {
+    width: 19%;
+  }
+
+  .account-register-table .account-register-status-column {
+    width: 10%;
+  }
+
+  .account-register-table .account-register-amount-column {
+    width: 10%;
+  }
+
+  .account-register-table .account-register-running-column {
+    width: 10%;
+  }
+
+  @container account-register-table (max-width: 1040px) {
+    .account-register-table .account-register-status-column {
+      visibility: collapse;
+      width: 0;
+    }
+
+    .account-register-table :is(th, td).account-register-status-column {
+      font-size: 0 !important;
+      padding-right: 0 !important;
+      padding-left: 0 !important;
+    }
+
+    .account-register-table :is(th, td).account-register-status-column > * {
+      display: none !important;
+    }
+
+    .account-register-table .account-register-counterparty-column {
+      width: 24%;
+    }
+
+    .account-register-table .account-register-memo-column {
+      width: 22%;
+    }
+
+    .account-register-table .account-register-amount-column,
+    .account-register-table .account-register-running-column {
+      width: 13%;
+    }
+  }
+
+  @container account-register-table (max-width: 820px) {
+    .account-register-table .account-register-category-column {
+      visibility: collapse;
+      width: 0;
+    }
+
+    .account-register-table :is(th, td).account-register-category-column {
+      font-size: 0 !important;
+      padding-right: 0 !important;
+      padding-left: 0 !important;
+    }
+
+    .account-register-table :is(th, td).account-register-category-column > * {
+      display: none !important;
+    }
+
+    .account-register-table .account-register-date-column {
+      width: 14%;
+    }
+
+    .account-register-table .account-register-counterparty-column {
+      width: 28%;
+    }
+
+    .account-register-table .account-register-memo-column {
+      width: 28%;
+    }
+
+    .account-register-table .account-register-amount-column,
+    .account-register-table .account-register-running-column {
+      width: 15%;
+    }
+  }
+
+  @container account-register-table (max-width: 620px) {
+    .account-register-table .account-register-date-column {
+      width: 16%;
+    }
+
+    .account-register-table .account-register-counterparty-column {
+      width: 28%;
+    }
+
+    .account-register-table .account-register-memo-column {
+      width: 24%;
+    }
+
+    .account-register-table .account-register-amount-column,
+    .account-register-table .account-register-running-column {
+      width: 16%;
+    }
+  }
+
+  @container account-register-table (max-width: 460px) {
+    .account-register-table .account-register-memo-column {
+      visibility: collapse;
+      width: 0;
+    }
+
+    .account-register-table :is(th, td).account-register-memo-column {
+      font-size: 0 !important;
+      padding-right: 0 !important;
+      padding-left: 0 !important;
+    }
+
+    .account-register-table :is(th, td).account-register-memo-column > * {
+      display: none !important;
+    }
+
+    .account-register-table .account-register-date-column {
+      width: 18%;
+    }
+
+    .account-register-table .account-register-counterparty-column {
+      width: 34%;
+    }
+
+    .account-register-table .account-register-amount-column,
+    .account-register-table .account-register-running-column {
+      width: 24%;
+    }
+  }
+
   .transaction-detail-records-table .detail-records-account-column {
     width: 22%;
   }
@@ -397,6 +542,18 @@
 
   .transaction-detail-records-table .detail-records-memo-column {
     width: 10%;
+  }
+
+  .transaction-detail-records-table
+    .detail-records-amount-column
+    [data-testid="amount-text"],
+  .transaction-detail-records-table
+    .detail-records-amount-column
+    [data-testid="amount-text"]
+    > span {
+    overflow-wrap: normal;
+    word-break: normal;
+    white-space: nowrap;
   }
 
   @container transaction-detail-records (max-width: 680px) {
