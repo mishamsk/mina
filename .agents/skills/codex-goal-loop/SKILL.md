@@ -18,9 +18,12 @@ committed plan files.
 ## Launch
 
 1. Ensure the worktree is clean and the plan file is committed.
-2. Launch headless, tracked in the background:
-   `just codex-goal <plan_file>` — if it fails with "stdin is not a terminal", fall
-   back to `codex exec` with the exact prompt string from the `codex-goal` recipe.
+2. Launch headless, tracked in the background — do not use `just codex-goal`, it
+   fails without a terminal. Run exactly:
+
+   ```sh
+   codex exec --dangerously-bypass-approvals-and-sandbox "/goal implement <plan_file>. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
+   ```
 3. Do not touch the worktree while the session runs. Completion signal: the plan file
    moves to `docs/plans/completed/` and the process exits. If the session dies on an
    external usage limit, schedule a timed background wait until the stated reset time
@@ -44,8 +47,11 @@ committed plan files.
 
 - Write a new implementation-only plan from `docs/plan_template.md`: file-referenced
   defects with live evidence, a "protect — do not regress" list of verified behaviors,
-  explicit scope exclusions, and an escape hatch on the review-loop step for external
-  usage-limit failures.
+  and explicit scope exclusions.
+- The initial plan runs the one allowed `just review-loop` (in its Final Verification).
+  Every fix plan MUST forbid it: state "Do not run review-loop." in the plan's Plan
+  Context and omit review-loop from its Final Verification. Fold any unresolved
+  review-loop comments into fix plans yourself — never let Codex re-run review-loop.
 - Rule changes discovered during review go into the ground-truth docs first (your
   edits, committed separately); the plan then references them as already-committed.
 - Long-horizon gaps go to the issue ledger (Kata), not into plans or design docs.
