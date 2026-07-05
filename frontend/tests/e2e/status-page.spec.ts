@@ -1,5 +1,15 @@
 import { expect, type Page, test } from "@playwright/test";
 
+interface AccountFixture {
+  readonly account_id: number;
+  readonly fqn: string;
+}
+
+interface CategoryFixture {
+  readonly category_id: number;
+  readonly fqn: string;
+}
+
 const waitForStatusDetailsPreference = async (page: Page) => {
   await page.waitForFunction(
     () =>
@@ -29,6 +39,76 @@ const waitForStatusDetailsPreference = async (page: Page) => {
         };
       }),
   );
+};
+
+const createAccount = async (
+  page: Page,
+  fqn: string,
+  accountType: "balance" | "flow",
+  currency?: string,
+  isFeatured = false,
+): Promise<AccountFixture> => {
+  const response = await page.request.post("/api/accounts", {
+    data: {
+      account_type: accountType,
+      currency,
+      fqn,
+      is_featured: isFeatured,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as AccountFixture;
+};
+
+const updateAccountFeatured = async (
+  page: Page,
+  account: AccountFixture,
+  isFeatured: boolean,
+): Promise<void> => {
+  const response = await page.request.patch(
+    `/api/accounts/${account.account_id}`,
+    {
+      data: {
+        is_featured: isFeatured,
+      },
+    },
+  );
+  expect(response.ok()).toBe(true);
+};
+
+const createCategory = async (
+  page: Page,
+  fqn: string,
+): Promise<CategoryFixture> => {
+  const response = await page.request.post("/api/categories", {
+    data: {
+      economic_intent: "expense",
+      fqn,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as CategoryFixture;
+};
+
+const chooseOptionByKeyboard = async (
+  page: Page,
+  label: string,
+  searchText: string,
+  optionValue: string,
+) => {
+  const picker = page.getByRole("combobox", { name: label });
+  await picker.fill(searchText);
+  const option = page
+    .getByRole("option")
+    .filter({ hasText: optionValue })
+    .first();
+  await expect(option).toBeVisible();
+  const optionId = (await option.getAttribute("id")) ?? "";
+  await picker.press("ArrowDown");
+  await picker.press("ArrowUp");
+  await expect(picker).toHaveAttribute("aria-activedescendant", optionId);
+  await picker.press("Enter");
+  await expect(picker).toHaveValue(optionValue);
 };
 
 test("status page reports backend health", async ({ page }) => {
@@ -91,11 +171,18 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Transactions" }),
   ).toBeVisible();
+  const balanceStrip = page.getByTestId("featured-balance-strip");
+  await expect(balanceStrip).toBeVisible();
+  await expect(balanceStrip.getByText("Joint")).toBeVisible();
+  await expect(balanceStrip.getByText("Emergency")).toBeVisible();
+  await expect(balanceStrip.getByText("Sapphire")).toBeVisible();
+  await expect(balanceStrip).not.toContainText("BlueCash");
 
   await page.getByRole("link", { name: "Status" }).click();
 
   await expect(page).toHaveURL(/\/status$/);
   await expect(page.getByRole("heading", { name: "Status" })).toBeVisible();
+  await expect(balanceStrip.getByText("Joint")).toBeVisible();
 
   await page.getByRole("link", { name: "Transactions" }).click();
 
@@ -109,6 +196,17 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
     page.getByRole("link", { name: "Transactions" }),
   ).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("button", { name: "Settings" })).toBeDisabled();
+  await expect(balanceStrip.getByTestId("featured-balance-row")).toHaveCount(0);
+  const featuredIcon = balanceStrip.locator("svg").first();
+  await expect(featuredIcon).toBeVisible();
+  await featuredIcon.hover();
+  const featuredTooltip = page
+    .getByRole("tooltip")
+    .filter({ hasText: "Joint" });
+  await expect(featuredTooltip).toContainText("Sapphire");
+  await expect(featuredTooltip).toContainText("$");
+  await page.mouse.move(0, 0);
+
   const statusIcon = page
     .getByRole("link", { name: "Status" })
     .locator("svg")
@@ -133,6 +231,66 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
         ((settingsIconBox?.x ?? 0) + (settingsIconBox?.width ?? 0) / 2),
     ),
   ).toBeLessThanOrEqual(1);
+});
+
+test("featured balance strip follows account metadata and transaction saves", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const featuredLeaf = `Featured${unique}`;
+  const featuredFqn = `e2e:featured:${featuredLeaf}`;
+  const fundingAccount = await createAccount(
+    page,
+    featuredFqn,
+    "balance",
+    "USD",
+  );
+  const merchantAccount = await createAccount(
+    page,
+    `e2e:merchant:${unique}`,
+    "flow",
+    "USD",
+  );
+  const category = await createCategory(page, `E2E:Featured:${unique}`);
+
+  await page.goto("/transactions?page=1&pageSize=10");
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Transactions" }),
+  ).toBeVisible();
+  const balanceStrip = page.getByTestId("featured-balance-strip");
+  await expect(balanceStrip).not.toContainText(featuredLeaf);
+
+  await updateAccountFeatured(page, fundingAccount, true);
+  await page.reload();
+
+  const featuredRow = balanceStrip
+    .getByTestId("featured-balance-row")
+    .filter({ hasText: featuredLeaf });
+  await expect(featuredRow).toContainText("0.00 $");
+  const beforeSaveText = await featuredRow.innerText();
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(page.getByRole("heading", { name: "New spend" })).toBeVisible();
+  await page.getByLabel("Date").fill("2026-04-01");
+  await chooseOptionByKeyboard(
+    page,
+    "Funding account",
+    featuredLeaf,
+    featuredFqn,
+  );
+  await chooseOptionByKeyboard(page, "Merchant", unique, merchantAccount.fqn);
+  await chooseOptionByKeyboard(page, "Category", unique, category.fqn);
+  await page.getByLabel("Amount").fill("12.34");
+  await expect(page.getByLabel("Amount")).toHaveValue("12.34");
+  await page.getByLabel("Memo").fill(`E2E featured strip ${unique}`);
+  await page.getByRole("button", { name: "Save and add another" }).click();
+
+  await expect(page.getByText("Entries this session: 1")).toBeVisible();
+  await expect.poll(() => featuredRow.innerText()).not.toBe(beforeSaveText);
+  await expect(featuredRow).toContainText("-12.34 $");
 });
 
 test("status page UI preference survives reload", async ({ page }) => {

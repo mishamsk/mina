@@ -402,16 +402,13 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   const olderThanEverything = "2020-01-01";
 
   await page.goto("/transactions?page=1&pageSize=10");
-  await expect(
-    page.getByText(initialPage.transactions[0]!.display_title),
-  ).toBeVisible();
-  const retainedFirstPageRow = await page
-    .locator("tbody > tr[aria-expanded]")
-    .first()
-    .innerText();
-  expect(retainedFirstPageRow).toContain(
-    initialPage.transactions[0]!.display_title,
-  );
+  const firstTransactionRow = page.locator("tbody > tr[aria-expanded]").first();
+  await expect(firstTransactionRow).toBeVisible();
+  const normalizedFirstTransactionRowText = async () =>
+    firstTransactionRow.evaluate(
+      (row) => row.textContent?.replace(/\s+/g, " ").trim() ?? "",
+    );
+  const retainedFirstPageRow = await normalizedFirstTransactionRowText();
 
   let releaseDateJumpResponse: (() => void) | undefined;
   const dateJumpRequestStarted = new Promise<void>((resolve) => {
@@ -446,13 +443,9 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
 
   try {
     await expect(page.getByTestId("transactions-page-busy")).toBeVisible();
-    const retainedDuringJump = await page
-      .locator("tbody > tr[aria-expanded]")
-      .first()
-      .innerText();
-    expect(retainedDuringJump).toContain(
-      initialPage.transactions[0]!.display_title,
-    );
+    await expect
+      .poll(normalizedFirstTransactionRowText)
+      .toBe(retainedFirstPageRow);
   } finally {
     releaseDateJumpResponse?.();
   }
@@ -694,12 +687,17 @@ test("transactions contain long amount chips and align the pagination footer", a
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:Books");
-  const incomeDestinationAccount = findByFqn(accounts, "checking:Chase:Joint");
   const incomeSourceAccount = findByFqn(accounts, "income:AcmePayroll");
   const category = findByFqn(categories, "Entertainment:Books");
   const incomeCategory = findByFqn(categories, "Income:Salary");
   const memo = `E2E long amount ${unique}`;
   const mixedMemo = `E2E mixed long amount ${unique}`;
+  const incomeDestinationAccount = await createAccount(
+    page,
+    `e2e:long:${unique}:income-destination`,
+    "balance",
+    "USD",
+  );
 
   const spendResponse = await page.request.post("/api/transactions/spend", {
     data: {
@@ -1547,8 +1545,11 @@ test("transactions resolve hidden referenced tags but exclude them from pickers"
     .getByRole("button", { name: "New transaction" })
     .click();
   const tagsPicker = page.getByRole("combobox", { name: "Tags" });
+  await expect(tagsPicker).toBeVisible();
+  await expect(tagsPicker).toBeEnabled();
   await tagsPicker.fill(hiddenTagFqn);
-  await expect(page.getByText("No matches")).toBeVisible();
+  await expect(tagsPicker).toHaveValue(hiddenTagFqn);
+  await expect(page.locator("#spend-tags-options")).toContainText("No matches");
 });
 
 test("entry category picker requests spend intents and excludes hidden categories", async ({

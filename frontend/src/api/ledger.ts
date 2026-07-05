@@ -12,6 +12,7 @@ import {
   createTransferTransaction,
   deleteTransaction,
   getTransaction,
+  listAccountBalances,
   listAccounts,
   listCategories,
   listMembers,
@@ -97,6 +98,31 @@ export const fetchLedgerLookups = async () => {
   ]);
 
   return { accounts, categories, members, tags };
+};
+
+export const fetchFeaturedAccountBalances = async () => {
+  const accounts = await listAccounts({
+    query: {
+      account_type: "balance",
+      is_featured: true,
+      limit: lookupLimit,
+      offset: 0,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+  if (!accounts.data || accounts.data.accounts.length === 0) {
+    return { accounts, balances: undefined };
+  }
+
+  const balances = await listAccountBalances({
+    query: {
+      account_ids: accounts.data.accounts.map((account) => account.account_id),
+    },
+  });
+
+  return { accounts, balances };
 };
 
 export const fetchCategoryPickerCategories = (

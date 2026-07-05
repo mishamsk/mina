@@ -23,6 +23,7 @@ func TestSeedDemoThroughREST(t *testing.T) {
 		t.Fatalf("seeded transactions = %d, want at least 100", seeded.JSON200.Transactions)
 	}
 	assertSeededRESTCounts(t, client, *seeded.JSON200)
+	assertSeededFeaturedBalanceAccounts(t, client)
 }
 
 func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
@@ -218,6 +219,41 @@ func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpcli
 		t.Fatalf("listed transactions = %d, want %d", len(transactions.JSON200.Transactions), seeded.Transactions)
 	}
 	assertDemoSemanticCoverage(t, categories.JSON200.Categories, transactions.JSON200.Transactions)
+}
+
+func assertSeededFeaturedBalanceAccounts(t *testing.T, client *apptest.Client) {
+	t.Helper()
+
+	accountType := httpclient.Balance
+	isFeatured := true
+	sortBy := httpclient.ListAccountsParamsSortFqn
+	sortDir := httpclient.ListAccountsParamsSortDirAsc
+	accounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{
+		AccountType: &accountType,
+		IsFeatured:  &isFeatured,
+		Sort:        &sortBy,
+		SortDir:     &sortDir,
+	})
+	if err != nil {
+		t.Fatalf("list featured balance accounts request: %v", err)
+	}
+	if accounts.StatusCode() != http.StatusOK {
+		t.Fatalf("list featured balance accounts status = %d, want %d; body %s", accounts.StatusCode(), http.StatusOK, accounts.Body)
+	}
+
+	want := []string{
+		"checking:Chase:Joint",
+		"credit_card:Chase:Sapphire",
+		"savings:Ally:Emergency",
+	}
+	if len(accounts.JSON200.Accounts) != len(want) {
+		t.Fatalf("featured balance account count = %d, want %d; accounts = %+v", len(accounts.JSON200.Accounts), len(want), accounts.JSON200.Accounts)
+	}
+	for i, account := range accounts.JSON200.Accounts {
+		if account.Fqn != want[i] {
+			t.Fatalf("featured balance account fqn at %d = %q, want %q; accounts = %+v", i, account.Fqn, want[i], accounts.JSON200.Accounts)
+		}
+	}
 }
 
 func assertDemoSemanticCoverage(t *testing.T, categories []httpclient.Category, transactions []httpclient.Transaction) {

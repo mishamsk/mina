@@ -4,6 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import type {
   Account,
+  AccountBalance,
   Category,
   CategoryEconomicIntent,
   Member,
@@ -34,6 +35,16 @@ export interface LedgerLookupsSnapshot {
   readonly tags: readonly Tag[];
 }
 
+export interface FeaturedBalanceRow {
+  readonly account: Account;
+  readonly balance: AccountBalance;
+}
+
+export interface FeaturedBalancesSnapshot {
+  readonly loadedAt: string;
+  readonly rows: readonly FeaturedBalanceRow[];
+}
+
 export interface CategoryPickerCategoriesSnapshot {
   readonly categories: readonly Category[];
   readonly loadedAt: string;
@@ -46,6 +57,9 @@ interface TransactionsState {
   readonly categoryPickerCategoryErrors: Readonly<Record<string, string>>;
   readonly categoryPickerCategoryLoading: Readonly<Record<string, boolean>>;
   readonly errorMessage: string | undefined;
+  readonly featuredBalances: FeaturedBalancesSnapshot | undefined;
+  readonly featuredBalancesErrorMessage: string | undefined;
+  readonly featuredBalancesLoading: boolean;
   readonly lastLoadedPageKey: string | undefined;
   readonly loadingPageKey: string | undefined;
   readonly lookupErrorMessage: string | undefined;
@@ -59,6 +73,9 @@ const initialTransactionsState: TransactionsState = {
   categoryPickerCategoryErrors: {},
   categoryPickerCategoryLoading: {},
   errorMessage: undefined,
+  featuredBalances: undefined,
+  featuredBalancesErrorMessage: undefined,
+  featuredBalancesLoading: false,
   lastLoadedPageKey: undefined,
   loadingPageKey: undefined,
   lookupErrorMessage: undefined,
@@ -118,6 +135,15 @@ export const useLedgerLookupsView = () =>
       errorMessage: state.lookupErrorMessage,
       loading: state.lookupsLoading,
       snapshot: state.lookups,
+    })),
+  );
+
+export const useFeaturedBalancesView = () =>
+  useTransactionsStore(
+    useShallow((state) => ({
+      errorMessage: state.featuredBalancesErrorMessage,
+      loading: state.featuredBalancesLoading,
+      snapshot: state.featuredBalances,
     })),
   );
 
@@ -245,6 +271,45 @@ export const setLedgerLookupsError = (errorMessage: string): void => {
     },
     false,
     "TransactionsStore/setLedgerLookupsError",
+  );
+};
+
+export const setFeaturedBalancesLoading = (): void => {
+  useTransactionsStore.setState(
+    {
+      featuredBalancesErrorMessage: undefined,
+      featuredBalancesLoading: true,
+    },
+    false,
+    "TransactionsStore/setFeaturedBalancesLoading",
+  );
+};
+
+export const setFeaturedBalances = (
+  rows: readonly FeaturedBalanceRow[],
+): void => {
+  useTransactionsStore.setState(
+    {
+      featuredBalances: {
+        loadedAt: new Date().toISOString(),
+        rows,
+      },
+      featuredBalancesErrorMessage: undefined,
+      featuredBalancesLoading: false,
+    },
+    false,
+    "TransactionsStore/setFeaturedBalances",
+  );
+};
+
+export const setFeaturedBalancesError = (errorMessage: string): void => {
+  useTransactionsStore.setState(
+    {
+      featuredBalancesErrorMessage: errorMessage,
+      featuredBalancesLoading: false,
+    },
+    false,
+    "TransactionsStore/setFeaturedBalancesError",
   );
 };
 

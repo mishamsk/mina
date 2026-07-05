@@ -24,6 +24,8 @@ export {
 } from "./status-page";
 export type {
   CategoryPickerCategoriesSnapshot,
+  FeaturedBalanceRow,
+  FeaturedBalancesSnapshot,
   LedgerLookupsSnapshot,
   TransactionPageSnapshot,
   TransactionsPageParams,
@@ -37,6 +39,9 @@ export {
   setCategoryPickerCategories,
   setCategoryPickerCategoriesError,
   setCategoryPickerCategoriesLoading,
+  setFeaturedBalances,
+  setFeaturedBalancesError,
+  setFeaturedBalancesLoading,
   setLedgerLookups,
   setLedgerLookupsError,
   setLedgerLookupsLoading,
@@ -45,6 +50,7 @@ export {
   setTransactionPageLoading,
   transactionPageKey,
   useCategoryPickerCategoriesView,
+  useFeaturedBalancesView,
   useLedgerLookupsView,
   useTransactionPageView,
   useTransactionsStore,

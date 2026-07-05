@@ -8,6 +8,7 @@ import {
   isNetworkFailure,
 } from "@/api";
 import { focusWithoutTooltip } from "@/components/tooltip";
+import { refreshFeaturedBalances } from "@/features/featured-balances";
 
 import { refreshTransactionPage } from "./use-transactions-resource";
 
@@ -131,7 +132,10 @@ export const useTransactionDetail = ({
       setSuppressedDetailFetchId(nextTransaction.transaction_id);
       closeTransactionDetail();
       onNotice("Transaction deleted.");
-      await refreshTransactionPage(params);
+      await Promise.all([
+        refreshTransactionPage(params),
+        refreshFeaturedBalances(),
+      ]);
     },
     [closeTransactionDetail, onNotice, params],
   );

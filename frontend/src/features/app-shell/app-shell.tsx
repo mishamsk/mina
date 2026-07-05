@@ -19,6 +19,7 @@ import { NavLink } from "react-router";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { BalanceStrip } from "@/features/featured-balances";
 import { cn } from "@/lib/utils";
 import { setSidebarCollapsed, usePreferencesView } from "@/store";
 
@@ -212,6 +213,8 @@ export const AppShell = ({ children }: AppShellProps) => {
               items={referenceNavItems}
             />
           </section>
+
+          <BalanceStrip collapsed={sidebarCollapsed} />
 
           <div className="mt-auto flex flex-col gap-3">
             <Separator />
