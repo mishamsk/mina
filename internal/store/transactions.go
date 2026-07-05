@@ -300,18 +300,16 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 
 // List returns transactions with nested journal records in deterministic date order.
 func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptions) (transactions.ListResult, error) {
-	filterQuery := `FROM ` + s.db.accountingName("transaction") + `
-WHERE tombstoned_at IS NULL`
-	query := `SELECT transaction_id, initiated_date, created_at, tombstoned_at
-` + filterQuery
-	args := []any{}
-	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "transactions", opts.IncludeTotalCount)
+	predicate := s.transactionListPredicate(opts)
+	query := `SELECT tx.transaction_id, tx.initiated_date, tx.created_at, tx.tombstoned_at
+` + predicate.query
+	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+predicate.query, predicate.args, "transactions", opts.IncludeTotalCount)
 	if err != nil {
 		return transactions.ListResult{}, err
 	}
 	effectiveOffset := opts.Offset
 	if opts.AnchorDate != nil {
-		effectiveOffset, err = s.transactionAnchorOffset(ctx, *opts.AnchorDate, opts.Limit)
+		effectiveOffset, err = s.transactionAnchorOffset(ctx, *opts.AnchorDate, opts.Limit, predicate)
 		if err != nil {
 			return transactions.ListResult{}, err
 		}
@@ -329,7 +327,7 @@ WHERE tombstoned_at IS NULL`
 		query += column + " " + direction
 	}
 	query += ", transaction_id " + direction
-	query, args = appendLimitOffset(query, args, opts.Limit, effectiveOffset)
+	query, args := appendLimitOffset(query, slices.Clone(predicate.args), opts.Limit, effectiveOffset)
 
 	rows, err := s.db.query().QueryContext(
 		ctx,
@@ -375,13 +373,205 @@ WHERE tombstoned_at IS NULL`
 	}, nil
 }
 
-func (s *TransactionStore) transactionAnchorOffset(ctx context.Context, anchor values.CivilDate, limit *int) (int, error) {
+type transactionListPredicate struct {
+	query string
+	args  []any
+}
+
+func (s *TransactionStore) transactionListPredicate(opts transactions.ListOptions) transactionListPredicate {
+	query := `FROM ` + s.db.accountingName("transaction") + ` tx
+WHERE tx.tombstoned_at IS NULL`
+	args := []any{}
+	if opts.InitiatedDateFrom != nil {
+		query += " AND tx.initiated_date >= ?"
+		args = append(args, civilDateArg(*opts.InitiatedDateFrom))
+	}
+	if opts.InitiatedDateTo != nil {
+		query += " AND tx.initiated_date <= ?"
+		args = append(args, civilDateArg(*opts.InitiatedDateTo))
+	}
+	if len(opts.AccountIDs) > 0 {
+		query += " AND " + s.transactionListRecordExists("jr.account_id IN ("+placeholders(len(opts.AccountIDs))+")")
+		args = append(args, int64Args(opts.AccountIDs)...)
+	}
+	if len(opts.CategoryIDs) > 0 {
+		query += " AND " + s.transactionListRecordExists("jr.category_id IN ("+placeholders(len(opts.CategoryIDs))+")")
+		args = append(args, int64Args(opts.CategoryIDs)...)
+	}
+	if len(opts.MemberIDs) > 0 {
+		query += " AND " + s.transactionListRecordExists("jr.member_id IN ("+placeholders(len(opts.MemberIDs))+")")
+		args = append(args, int64Args(opts.MemberIDs)...)
+	}
+	if len(opts.TagIDs) > 0 {
+		tagConditions := make([]string, 0, len(opts.TagIDs))
+		for range opts.TagIDs {
+			tagConditions = append(tagConditions, "list_contains(jr.tag_ids, ?)")
+		}
+		query += " AND " + s.transactionListRecordExists("("+strings.Join(tagConditions, " OR ")+")")
+		args = append(args, int64Args(opts.TagIDs)...)
+	}
+	if len(opts.PostingStatuses) > 0 {
+		statusConditions := make([]string, 0, len(opts.PostingStatuses))
+		for _, status := range opts.PostingStatuses {
+			statusConditions = append(statusConditions, "jr.posting_status = CAST(? AS "+s.db.accountingName("posting_status")+")")
+			args = append(args, enumValue(status))
+		}
+		query += " AND " + s.transactionListRecordExists("("+strings.Join(statusConditions, " OR ")+")")
+	}
+	if len(opts.TransactionClasses) > 0 {
+		query += " AND " + s.transactionListClassExpression() + " IN (" + placeholders(len(opts.TransactionClasses)) + ")"
+		for _, class := range opts.TransactionClasses {
+			args = append(args, string(class))
+		}
+	}
+	if opts.AmountMin != nil || opts.AmountMax != nil {
+		conditions := []string{}
+		if opts.AmountMin != nil {
+			conditions = append(conditions, "jr.amount >= ?")
+			args = append(args, opts.AmountMin.LibraryDecimal())
+		}
+		if opts.AmountMax != nil {
+			conditions = append(conditions, "jr.amount <= ?")
+			args = append(args, opts.AmountMax.LibraryDecimal())
+		}
+		query += " AND " + s.transactionListRecordExists(strings.Join(conditions, " AND "))
+	}
+	if opts.AmountUSDMin != nil || opts.AmountUSDMax != nil {
+		conditions := []string{}
+		if opts.AmountUSDMin != nil {
+			conditions = append(conditions, "jr.amount_usd >= ?")
+			args = append(args, opts.AmountUSDMin.LibraryDecimal())
+		}
+		if opts.AmountUSDMax != nil {
+			conditions = append(conditions, "jr.amount_usd <= ?")
+			args = append(args, opts.AmountUSDMax.LibraryDecimal())
+		}
+		query += " AND " + s.transactionListRecordExists(strings.Join(conditions, " AND "))
+	}
+	if opts.PendingDateFrom != nil || opts.PendingDateTo != nil {
+		conditions := []string{}
+		if opts.PendingDateFrom != nil {
+			conditions = append(conditions, "jr.pending_date >= ?")
+			args = append(args, timestampArg(*opts.PendingDateFrom))
+		}
+		if opts.PendingDateTo != nil {
+			conditions = append(conditions, "jr.pending_date <= ?")
+			args = append(args, timestampArg(*opts.PendingDateTo))
+		}
+		query += " AND " + s.transactionListRecordExists(strings.Join(conditions, " AND "))
+	}
+	if opts.PostedDateFrom != nil || opts.PostedDateTo != nil {
+		conditions := []string{}
+		if opts.PostedDateFrom != nil {
+			conditions = append(conditions, "jr.posted_date >= ?")
+			args = append(args, timestampArg(*opts.PostedDateFrom))
+		}
+		if opts.PostedDateTo != nil {
+			conditions = append(conditions, "jr.posted_date <= ?")
+			args = append(args, timestampArg(*opts.PostedDateTo))
+		}
+		query += " AND " + s.transactionListRecordExists(strings.Join(conditions, " AND "))
+	}
+	if opts.Search != nil {
+		searchPattern := "%" + escapeLikePattern(strings.ToLower(*opts.Search)) + "%"
+		query += ` AND EXISTS (
+	SELECT 1
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
+	JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
+	WHERE jr.transaction_id = tx.transaction_id
+	  AND jr.tombstoned_at IS NULL
+	  AND (
+		  lower(COALESCE(jr.memo, '')) LIKE ? ESCAPE '\'
+		  OR (
+			  lower(a.name) LIKE ? ESCAPE '\'
+			  AND (
+				  (c.economic_intent IN (CAST(? AS ` + s.db.accountingName("category_economic_intent") + `), CAST(? AS ` + s.db.accountingName("category_economic_intent") + `))
+					  AND a.account_type IN (CAST(? AS ` + s.db.accountingName("account_type") + `), CAST(? AS ` + s.db.accountingName("account_type") + `))
+					  AND jr.amount > 0)
+				  OR (c.economic_intent IN (CAST(? AS ` + s.db.accountingName("category_economic_intent") + `), CAST(? AS ` + s.db.accountingName("category_economic_intent") + `))
+					  AND a.account_type = CAST(? AS ` + s.db.accountingName("account_type") + `)
+					  AND jr.amount < 0)
+				  OR (c.economic_intent = CAST(? AS ` + s.db.accountingName("category_economic_intent") + `)
+					  AND a.account_type = CAST(? AS ` + s.db.accountingName("account_type") + `))
+				  OR (c.economic_intent = CAST(? AS ` + s.db.accountingName("category_economic_intent") + `)
+					  AND a.account_type = CAST(? AS ` + s.db.accountingName("account_type") + `))
+				  OR (c.economic_intent IN (CAST(? AS ` + s.db.accountingName("category_economic_intent") + `), CAST(? AS ` + s.db.accountingName("category_economic_intent") + `))
+					  AND a.account_type <> CAST(? AS ` + s.db.accountingName("account_type") + `))
+			  )
+		  )
+	  )
+)`
+		args = append(args,
+			searchPattern,
+			searchPattern,
+			enumValue(categories.CategoryEconomicIntentExpense),
+			enumValue(categories.CategoryEconomicIntentFee),
+			enumValue(accounts.AccountTypeFlow),
+			enumValue(accounts.AccountTypeSystem),
+			enumValue(categories.CategoryEconomicIntentIncome),
+			enumValue(categories.CategoryEconomicIntentRefund),
+			enumValue(accounts.AccountTypeFlow),
+			enumValue(categories.CategoryEconomicIntentTransfer),
+			enumValue(accounts.AccountTypeBalance),
+			enumValue(categories.CategoryEconomicIntentExchange),
+			enumValue(accounts.AccountTypeFlow),
+			enumValue(categories.CategoryEconomicIntentAdjustment),
+			enumValue(categories.CategoryEconomicIntentFXGainLoss),
+			enumValue(accounts.AccountTypeSystem),
+		)
+	}
+
+	return transactionListPredicate{query: query, args: args}
+}
+
+func (s *TransactionStore) transactionListRecordExists(condition string) string {
+	return `EXISTS (
+	SELECT 1
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	WHERE jr.transaction_id = tx.transaction_id
+	  AND jr.tombstoned_at IS NULL
+	  AND ` + condition + `
+)`
+}
+
+func (s *TransactionStore) transactionListClassExpression() string {
+	intentType := s.db.accountingName("category_economic_intent")
+
+	return `(SELECT CASE
+	WHEN has_income AND NOT has_expense AND NOT has_fee AND NOT has_refund AND NOT has_adjustment AND NOT has_fx THEN 'income'
+	WHEN has_refund AND NOT has_expense AND NOT has_fee AND NOT has_income AND NOT has_adjustment AND NOT has_fx THEN 'refund'
+	WHEN has_transfer AND NOT has_expense AND NOT has_income AND NOT has_refund AND NOT has_adjustment AND NOT has_exchange AND NOT has_fx THEN 'transfer'
+	WHEN has_exchange AND NOT has_expense AND NOT has_income AND NOT has_refund AND NOT has_transfer AND NOT has_adjustment THEN 'currency_exchange'
+	WHEN has_expense AND NOT has_income AND NOT has_refund AND NOT has_adjustment AND NOT has_fx THEN 'spend'
+	WHEN has_fee AND NOT has_expense AND NOT has_income AND NOT has_refund AND NOT has_transfer AND NOT has_exchange AND NOT has_adjustment AND NOT has_fx THEN 'spend'
+	WHEN has_adjustment AND NOT has_expense AND NOT has_fee AND NOT has_income AND NOT has_refund AND NOT has_transfer AND NOT has_exchange THEN 'adjustment'
+	WHEN has_fx AND NOT has_expense AND NOT has_fee AND NOT has_income AND NOT has_refund AND NOT has_transfer AND NOT has_exchange AND NOT has_adjustment THEN 'fx_gain_loss'
+	ELSE 'mixed'
+END
+FROM (
+	SELECT
+		COALESCE(bool_or(c.economic_intent = CAST('EXPENSE' AS ` + intentType + `)), false) AS has_expense,
+		COALESCE(bool_or(c.economic_intent = CAST('FEE' AS ` + intentType + `)), false) AS has_fee,
+		COALESCE(bool_or(c.economic_intent = CAST('INCOME' AS ` + intentType + `)), false) AS has_income,
+		COALESCE(bool_or(c.economic_intent = CAST('REFUND' AS ` + intentType + `)), false) AS has_refund,
+		COALESCE(bool_or(c.economic_intent = CAST('TRANSFER' AS ` + intentType + `)), false) AS has_transfer,
+		COALESCE(bool_or(c.economic_intent = CAST('EXCHANGE' AS ` + intentType + `)), false) AS has_exchange,
+		COALESCE(bool_or(c.economic_intent = CAST('ADJUSTMENT' AS ` + intentType + `)), false) AS has_adjustment,
+		COALESCE(bool_or(c.economic_intent = CAST('FX_GAIN_LOSS' AS ` + intentType + `)), false) AS has_fx
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
+	WHERE jr.transaction_id = tx.transaction_id
+	  AND jr.tombstoned_at IS NULL
+) component_presence)`
+}
+
+func (s *TransactionStore) transactionAnchorOffset(ctx context.Context, anchor values.CivilDate, limit *int, predicate transactionListPredicate) (int, error) {
 	var totalCount int64
 	if err := s.db.query().QueryRowContext(
 		ctx,
-		`SELECT COUNT(*)
-FROM `+s.db.accountingName("transaction")+`
-WHERE tombstoned_at IS NULL`,
+		`SELECT COUNT(*) `+predicate.query,
+		predicate.args...,
 	).Scan(&totalCount); err != nil {
 		return 0, fmt.Errorf("count transactions for anchor offset: %w", err)
 	}
@@ -390,12 +580,11 @@ WHERE tombstoned_at IS NULL`,
 	}
 
 	var anchorIndex int64
+	anchorArgs := append(slices.Clone(predicate.args), civilDateArg(anchor))
 	err := s.db.query().QueryRowContext(
 		ctx,
-		`SELECT COUNT(*)
-FROM `+s.db.accountingName("transaction")+`
-WHERE tombstoned_at IS NULL AND initiated_date > ?`,
-		civilDateArg(anchor),
+		`SELECT COUNT(*) `+predicate.query+` AND tx.initiated_date > ?`,
+		anchorArgs...,
 	).Scan(&anchorIndex)
 	if err != nil {
 		return 0, fmt.Errorf("compute transaction anchor offset: %w", err)

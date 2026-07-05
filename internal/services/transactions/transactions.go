@@ -153,7 +153,28 @@ type RecordSearchOptions struct {
 // ListOptions controls transaction list sort, pagination, and date anchoring.
 type ListOptions struct {
 	services.ListOptions
-	AnchorDate *values.CivilDate
+	AnchorDate         *values.CivilDate
+	AccountIDs         []int64
+	CategoryIDs        []int64
+	TagIDs             []int64
+	MemberIDs          []int64
+	PostingStatuses    []PostingStatus
+	TransactionClasses []TransactionClass
+	AmountMinText      *string
+	AmountMaxText      *string
+	AmountUSDMinText   *string
+	AmountUSDMaxText   *string
+	AmountMin          *values.Decimal
+	AmountMax          *values.Decimal
+	AmountUSDMin       *values.Decimal
+	AmountUSDMax       *values.Decimal
+	InitiatedDateFrom  *values.CivilDate
+	InitiatedDateTo    *values.CivilDate
+	PendingDateFrom    *time.Time
+	PendingDateTo      *time.Time
+	PostedDateFrom     *time.Time
+	PostedDateTo       *time.Time
+	Search             *string
 }
 
 // ListResult carries a transaction page plus transaction-list-specific metadata.
@@ -476,10 +497,11 @@ func (s *Service) Get(ctx context.Context, id int64) (Transaction, error) {
 
 // List returns transactions with nested journal records.
 func (s *Service) List(ctx context.Context, opts ListOptions) (ListResult, error) {
-	if err := validateTransactionListOptions(opts); err != nil {
+	validatedOpts, err := validateTransactionListOptions(opts)
+	if err != nil {
 		return ListResult{}, err
 	}
-	transactions, err := s.repo.List(ctx, opts)
+	transactions, err := s.repo.List(ctx, validatedOpts)
 	if err != nil {
 		return ListResult{}, err
 	}
@@ -520,18 +542,84 @@ func monthTotalsRange(month string) (MonthTotalsRange, error) {
 	}, nil
 }
 
-func validateTransactionListOptions(opts ListOptions) error {
-	if opts.AnchorDate == nil {
-		return nil
+func validateTransactionListOptions(opts ListOptions) (ListOptions, error) {
+	if opts.AnchorDate != nil {
+		if opts.SortKey != "" && opts.SortKey != services.SortKeyInitiatedDate {
+			return ListOptions{}, services.InvalidRequest("anchor_date is only valid with initiated_date descending sort")
+		}
+		if opts.SortDirection != services.SortDirectionDesc {
+			return ListOptions{}, services.InvalidRequest("anchor_date is only valid with initiated_date descending sort")
+		}
 	}
-	if opts.SortKey != "" && opts.SortKey != services.SortKeyInitiatedDate {
-		return services.InvalidRequest("anchor_date is only valid with initiated_date descending sort")
+	if err := validatePositiveIDs("account_id", opts.AccountIDs); err != nil {
+		return ListOptions{}, err
 	}
-	if opts.SortDirection != services.SortDirectionDesc {
-		return services.InvalidRequest("anchor_date is only valid with initiated_date descending sort")
+	if err := validatePositiveIDs("category_id", opts.CategoryIDs); err != nil {
+		return ListOptions{}, err
+	}
+	if err := validatePositiveIDs("tag_id", opts.TagIDs); err != nil {
+		return ListOptions{}, err
+	}
+	if err := validatePositiveIDs("member_id", opts.MemberIDs); err != nil {
+		return ListOptions{}, err
+	}
+	for _, status := range opts.PostingStatuses {
+		if err := validatePostingStatus(0, status); err != nil {
+			return ListOptions{}, services.InvalidRequest("posting_status values must be pending, posted, or cancelled")
+		}
+	}
+	for _, class := range opts.TransactionClasses {
+		if !validTransactionClass(class) {
+			return ListOptions{}, services.InvalidRequest("transaction_class values must be spend, income, refund, transfer, currency_exchange, adjustment, fx_gain_loss, or mixed")
+		}
+	}
+	if opts.Search != nil && *opts.Search == "" {
+		return ListOptions{}, services.InvalidRequest("search must be non-empty")
 	}
 
-	return nil
+	var err error
+	if opts.AmountMin, err = parseTransactionListDecimal("amount_min", opts.AmountMinText); err != nil {
+		return ListOptions{}, err
+	}
+	if opts.AmountMax, err = parseTransactionListDecimal("amount_max", opts.AmountMaxText); err != nil {
+		return ListOptions{}, err
+	}
+	if opts.AmountUSDMin, err = parseTransactionListDecimal("amount_usd_min", opts.AmountUSDMinText); err != nil {
+		return ListOptions{}, err
+	}
+	if opts.AmountUSDMax, err = parseTransactionListDecimal("amount_usd_max", opts.AmountUSDMaxText); err != nil {
+		return ListOptions{}, err
+	}
+
+	return opts, nil
+}
+
+func parseTransactionListDecimal(name string, value *string) (*values.Decimal, error) {
+	if value == nil {
+		return nil, nil
+	}
+	parsed, err := values.ParseDecimal(*value)
+	if err != nil {
+		return nil, services.InvalidRequest(name + " must be a decimal with at most 10 integer digits and 8 fractional digits")
+	}
+
+	return &parsed, nil
+}
+
+func validTransactionClass(class TransactionClass) bool {
+	switch class {
+	case TransactionClassSpend,
+		TransactionClassIncome,
+		TransactionClassRefund,
+		TransactionClassTransfer,
+		TransactionClassCurrencyExchange,
+		TransactionClassAdjustment,
+		TransactionClassFXGainLoss,
+		TransactionClassMixed:
+		return true
+	default:
+		return false
+	}
 }
 
 // Delete tombstones a transaction and its journal records.
@@ -1008,6 +1096,16 @@ func validatePositiveUniqueIDs(name string, ids []int64) error {
 			return services.InvalidRequest(name + " values must be unique")
 		}
 		seen[id] = struct{}{}
+	}
+
+	return nil
+}
+
+func validatePositiveIDs(name string, ids []int64) error {
+	for _, id := range ids {
+		if id <= 0 {
+			return services.InvalidRequest(name + " values must be positive")
+		}
 	}
 
 	return nil

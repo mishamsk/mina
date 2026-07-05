@@ -1210,6 +1210,144 @@ paths:
             type: string
             pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             format: date
+        - name: account_id
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+        - name: category_id
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+        - name: tag_id
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+        - name: member_id
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+        - name: posting_status
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/PostingStatus"
+        - name: transaction_class
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/TransactionClass"
+        - name: amount_min
+          in: query
+          required: false
+          description: JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
+          schema:
+            type: string
+            pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+            maxLength: 20
+        - name: amount_max
+          in: query
+          required: false
+          description: JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.
+          schema:
+            type: string
+            pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+            maxLength: 20
+        - name: amount_usd_min
+          in: query
+          required: false
+          description: JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.
+          schema:
+            type: string
+            pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+            maxLength: 20
+        - name: amount_usd_max
+          in: query
+          required: false
+          description: JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.
+          schema:
+            type: string
+            pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+            maxLength: 20
+        - name: initiated_date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+            format: date
+        - name: initiated_date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+            format: date
+        - name: pending_date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: pending_date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: posted_date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: posted_date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: search
+          in: query
+          required: false
+          description: Case-insensitive contains search over active journal-record memos and counterparty account names.
+          schema:
+            type: string
       responses:
         "200":
           description: Transactions in requested order.

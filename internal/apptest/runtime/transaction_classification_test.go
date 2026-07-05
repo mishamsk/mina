@@ -65,6 +65,136 @@ func TestTransactionClassificationClassesBoundary(t *testing.T) {
 	}
 }
 
+func TestTransactionListClassFilterParityBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newClassificationFixture(t, client)
+	cases := []struct {
+		date    string
+		class   httpclient.TransactionClass
+		request func(*classificationFixture) httpclient.CreateTransactionRequest
+	}{
+		{date: "2024-06-01", class: httpclient.TransactionClassSpend, request: spendClassificationRequest},
+		{date: "2024-06-02", class: httpclient.TransactionClassSpend, request: crossCurrencySpendClassificationRequest},
+		{date: "2024-06-03", class: httpclient.TransactionClassSpend, request: feeClassificationRequest},
+		{date: "2024-06-04", class: httpclient.TransactionClassIncome, request: incomeClassificationRequest},
+		{date: "2024-06-05", class: httpclient.TransactionClassRefund, request: refundClassificationRequest},
+		{date: "2024-06-06", class: httpclient.TransactionClassTransfer, request: transferClassificationRequest},
+		{date: "2024-06-07", class: httpclient.TransactionClassTransfer, request: transferWithFeeClassificationRequest},
+		{date: "2024-06-08", class: httpclient.TransactionClassCurrencyExchange, request: exchangeClassificationRequest},
+		{date: "2024-06-09", class: httpclient.TransactionClassCurrencyExchange, request: exchangeWithFeeAndFXClassificationRequest},
+		{date: "2024-06-10", class: httpclient.TransactionClassAdjustment, request: adjustmentClassificationRequest},
+		{date: "2024-06-11", class: httpclient.TransactionClassFxGainLoss, request: fxGainLossClassificationRequest},
+		{date: "2024-06-12", class: httpclient.TransactionClassMixed, request: mixedClassificationRequest},
+	}
+	idsByClass := map[httpclient.TransactionClass][]int64{}
+	for _, tc := range cases {
+		request := tc.request(fixture)
+		request.InitiatedDate = apptest.Date(tc.date)
+		created, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
+		requireNoTransportError(t, "create classified transaction", err)
+		if created.StatusCode() != http.StatusCreated {
+			t.Fatalf("create %s status = %d, want %d; body %s", tc.class, created.StatusCode(), http.StatusCreated, created.Body)
+		}
+		if created.JSON201.TransactionClass != tc.class {
+			t.Fatalf("created transaction_class = %q, want %q; body %+v", created.JSON201.TransactionClass, tc.class, created.JSON201)
+		}
+		idsByClass[tc.class] = append([]int64{created.JSON201.TransactionId}, idsByClass[tc.class]...)
+	}
+
+	for _, tc := range cases {
+		t.Run(string(tc.class), func(t *testing.T) {
+			response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+				TransactionClass: ptrTo([]httpclient.TransactionClass{tc.class}),
+			})
+			requireNoTransportError(t, "list transactions by class", err)
+			assertTransactionListResponse(t, "class filter", response, idsByClass[tc.class], int64(len(idsByClass[tc.class])))
+			for _, transaction := range response.JSON200.Transactions {
+				if transaction.TransactionClass != tc.class {
+					t.Fatalf("listed transaction_class = %q, want %q; transaction %+v", transaction.TransactionClass, tc.class, transaction)
+				}
+			}
+		})
+	}
+}
+
+func TestTransactionListClassFilterCompositionBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newClassificationFixture(t, client)
+	spend := createDatedClassificationTransaction(t, client, "2024-06-01", spendClassificationRequest(fixture))
+	income := createDatedClassificationTransaction(t, client, "2024-06-02", incomeClassificationRequest(fixture))
+	refund := createDatedClassificationTransaction(t, client, "2024-06-03", refundClassificationRequest(fixture))
+	createDatedClassificationTransaction(t, client, "2024-06-04", transferClassificationRequest(fixture))
+
+	classAndAccount, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		AccountId:        ptrTo([]int64{fixture.employer.AccountId}),
+		TransactionClass: ptrTo([]httpclient.TransactionClass{httpclient.TransactionClassIncome}),
+	})
+	requireNoTransportError(t, "list class and account filter", err)
+	assertTransactionListResponse(t, "class and account filter", classAndAccount, []int64{income.JSON201.TransactionId}, 1)
+
+	limitTwo := 2
+	offsetOne := 1
+	paged, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		TransactionClass: ptrTo([]httpclient.TransactionClass{
+			httpclient.TransactionClassSpend,
+			httpclient.TransactionClassIncome,
+			httpclient.TransactionClassRefund,
+		}),
+		Limit:  &limitTwo,
+		Offset: &offsetOne,
+	})
+	requireNoTransportError(t, "list paged class filter", err)
+	assertTransactionListResponse(t, "paged class filter", paged, []int64{income.JSON201.TransactionId, spend.JSON201.TransactionId}, 3)
+	assertTransactionListOffset(t, "paged class filter", *paged.JSON200, 1)
+
+	anchor := apptest.Date("2024-06-02")
+	anchored, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		TransactionClass: ptrTo([]httpclient.TransactionClass{
+			httpclient.TransactionClassSpend,
+			httpclient.TransactionClassIncome,
+			httpclient.TransactionClassRefund,
+		}),
+		Limit:      &limitTwo,
+		AnchorDate: &anchor,
+	})
+	requireNoTransportError(t, "list anchored class filter", err)
+	assertTransactionListResponse(t, "anchored class filter", anchored, []int64{refund.JSON201.TransactionId, income.JSON201.TransactionId}, 3)
+	assertTransactionListOffset(t, "anchored class filter", *anchored.JSON200, 0)
+
+	assertInvalidTransactionListQuery(t, client, "transaction_class=not_a_class")
+}
+
+func TestTransactionListClassFilterUsesReplacementClassBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newClassificationFixture(t, client)
+	created := createDatedClassificationTransaction(t, client, "2024-06-01", spendClassificationRequest(fixture))
+	replacement := incomeClassificationRequest(fixture)
+	replacement.InitiatedDate = apptest.Date("2024-06-02")
+
+	replaced, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		created.JSON201.TransactionId,
+		httpclient.UpdateTransactionRequest(replacement),
+	)
+	requireNoTransportError(t, "replace transaction for class filter", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("replace transaction for class filter status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	assertTransactionClass(t, "replaced", *replaced.JSON200, httpclient.TransactionClassIncome)
+
+	oldClass, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		TransactionClass: ptrTo([]httpclient.TransactionClass{httpclient.TransactionClassSpend}),
+	})
+	requireNoTransportError(t, "list old class after replacement", err)
+	assertTransactionListResponse(t, "old class after replacement", oldClass, nil, 0)
+
+	activeClass, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		TransactionClass: ptrTo([]httpclient.TransactionClass{httpclient.TransactionClassIncome}),
+	})
+	requireNoTransportError(t, "list active class after replacement", err)
+	assertTransactionListResponse(t, "active class after replacement", activeClass, []int64{replaced.JSON200.TransactionId}, 1)
+}
+
 func TestTransactionDisplayTitleMemoFallbackBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	fixture := newClassificationFixture(t, client)
@@ -476,6 +606,19 @@ func classificationRequest(records ...httpclient.CreateJournalRecordRequest) htt
 		InitiatedDate: apptest.Date("2024-06-01"),
 		Records:       records,
 	}
+}
+
+func createDatedClassificationTransaction(t *testing.T, client *apptest.Client, date string, request httpclient.CreateTransactionRequest) *httpclient.CreateTransactionResponse {
+	t.Helper()
+
+	request.InitiatedDate = apptest.Date(date)
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
+	requireNoTransportError(t, "create dated classification transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create dated classification transaction status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+
+	return created
 }
 
 func record(accountID int64, categoryID int64, currency string, amount string) httpclient.CreateJournalRecordRequest {

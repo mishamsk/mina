@@ -1584,7 +1584,34 @@ type ListTransactionsParams struct {
 	Offset  *int                           `form:"offset,omitempty" json:"offset,omitempty"`
 
 	// AnchorDate Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.
-	AnchorDate *openapi_types.Date `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+	AnchorDate       *openapi_types.Date `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+	AccountId        *[]int64            `form:"account_id,omitempty" json:"account_id,omitempty"`
+	CategoryId       *[]int64            `form:"category_id,omitempty" json:"category_id,omitempty"`
+	TagId            *[]int64            `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+	MemberId         *[]int64            `form:"member_id,omitempty" json:"member_id,omitempty"`
+	PostingStatus    *[]PostingStatus    `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	TransactionClass *[]TransactionClass `form:"transaction_class,omitempty" json:"transaction_class,omitempty"`
+
+	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
+	AmountMin *string `form:"amount_min,omitempty" json:"amount_min,omitempty"`
+
+	// AmountMax JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.
+	AmountMax *string `form:"amount_max,omitempty" json:"amount_max,omitempty"`
+
+	// AmountUsdMin JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.
+	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
+
+	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.
+	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
+	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+
+	// Search Case-insensitive contains search over active journal-record memos and counterparty account names.
+	Search *string `form:"search,omitempty" json:"search,omitempty"`
 }
 
 // ListTransactionsParamsSort defines parameters for ListTransactions.
@@ -6096,6 +6123,210 @@ func NewListTransactionsRequest(server string, params *ListTransactionsParams) (
 		if params.AnchorDate != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "anchor_date", *params.AnchorDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AccountId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "account_id", *params.AccountId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CategoryId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "category_id", *params.CategoryId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TagId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tag_id", *params.TagId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MemberId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "member_id", *params.MemberId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PostingStatus != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posting_status", *params.PostingStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TransactionClass != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "transaction_class", *params.TransactionClass, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AmountMin != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "amount_min", *params.AmountMin, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AmountMax != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "amount_max", *params.AmountMax, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AmountUsdMin != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "amount_usd_min", *params.AmountUsdMin, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.AmountUsdMax != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "amount_usd_max", *params.AmountUsdMax, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.InitiatedDateFrom != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_from", *params.InitiatedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.InitiatedDateTo != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "initiated_date_to", *params.InitiatedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PendingDateFrom != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_from", *params.PendingDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PendingDateTo != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "pending_date_to", *params.PendingDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PostedDateFrom != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_from", *params.PostedDateFrom, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PostedDateTo != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posted_date_to", *params.PostedDateTo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date-time"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Search != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "search", *params.Search, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

@@ -2051,6 +2051,38 @@ export type ListTransactionsData = {
          * Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.
          */
         anchor_date?: string;
+        account_id?: Array<number>;
+        category_id?: Array<number>;
+        tag_id?: Array<number>;
+        member_id?: Array<number>;
+        posting_status?: Array<PostingStatus>;
+        transaction_class?: Array<TransactionClass>;
+        /**
+         * JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
+         */
+        amount_min?: string;
+        /**
+         * JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.
+         */
+        amount_max?: string;
+        /**
+         * JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.
+         */
+        amount_usd_min?: string;
+        /**
+         * JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.
+         */
+        amount_usd_max?: string;
+        initiated_date_from?: string;
+        initiated_date_to?: string;
+        pending_date_from?: string;
+        pending_date_to?: string;
+        posted_date_from?: string;
+        posted_date_to?: string;
+        /**
+         * Case-insensitive contains search over active journal-record memos and counterparty account names.
+         */
+        search?: string;
     };
     url: '/api/transactions';
 };

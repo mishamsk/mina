@@ -27,8 +27,25 @@ func (s *strictServer) ListTransactions(ctx context.Context, request openapi.Lis
 	)
 
 	transactionList, err := s.deps.Transactions.List(ctx, transactions.ListOptions{
-		ListOptions: listOptions,
-		AnchorDate:  nullableCivilDateFromOpenAPI(request.Params.AnchorDate),
+		ListOptions:        listOptions,
+		AnchorDate:         nullableCivilDateFromOpenAPI(request.Params.AnchorDate),
+		AccountIDs:         cloneOptionalInt64Slice(request.Params.AccountId),
+		CategoryIDs:        cloneOptionalInt64Slice(request.Params.CategoryId),
+		TagIDs:             cloneOptionalInt64Slice(request.Params.TagId),
+		MemberIDs:          cloneOptionalInt64Slice(request.Params.MemberId),
+		PostingStatuses:    transactionAPIPostingStatusSlice(request.Params.PostingStatus),
+		TransactionClasses: transactionAPIClassSlice(request.Params.TransactionClass),
+		AmountMinText:      request.Params.AmountMin,
+		AmountMaxText:      request.Params.AmountMax,
+		AmountUSDMinText:   request.Params.AmountUsdMin,
+		AmountUSDMaxText:   request.Params.AmountUsdMax,
+		InitiatedDateFrom:  nullableCivilDateFromOpenAPI(request.Params.InitiatedDateFrom),
+		InitiatedDateTo:    nullableCivilDateFromOpenAPI(request.Params.InitiatedDateTo),
+		PendingDateFrom:    nullableTimestampFromOpenAPI(request.Params.PendingDateFrom),
+		PendingDateTo:      nullableTimestampFromOpenAPI(request.Params.PendingDateTo),
+		PostedDateFrom:     nullableTimestampFromOpenAPI(request.Params.PostedDateFrom),
+		PostedDateTo:       nullableTimestampFromOpenAPI(request.Params.PostedDateTo),
+		Search:             request.Params.Search,
 	})
 	if err != nil {
 		return nil, err
@@ -585,6 +602,30 @@ func cloneInt64Slice(values []int64) []int64 {
 	}
 
 	return slices.Clone(values)
+}
+
+func transactionAPIPostingStatusSlice(statuses *[]openapi.PostingStatus) []transactions.PostingStatus {
+	if statuses == nil {
+		return nil
+	}
+	values := make([]transactions.PostingStatus, 0, len(*statuses))
+	for _, status := range *statuses {
+		values = append(values, transactions.PostingStatus(status))
+	}
+
+	return values
+}
+
+func transactionAPIClassSlice(classes *[]openapi.TransactionClass) []transactions.TransactionClass {
+	if classes == nil {
+		return nil
+	}
+	values := make([]transactions.TransactionClass, 0, len(*classes))
+	for _, class := range *classes {
+		values = append(values, transactions.TransactionClass(class))
+	}
+
+	return values
 }
 
 func transactionAPIPostingStatusPtr(status *openapi.PostingStatus) *transactions.PostingStatus {
