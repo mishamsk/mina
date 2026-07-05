@@ -172,7 +172,7 @@ export const AppShell = ({ children }: AppShellProps) => {
         search: lastTransactionsPageSearch,
       },
     },
-    { disabled: true, icon: Wallet, label: "Accounts", to: "/accounts" },
+    { icon: Wallet, label: "Accounts", to: "/accounts" },
   ];
 
   return (

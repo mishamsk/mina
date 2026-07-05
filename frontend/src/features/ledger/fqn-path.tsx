@@ -38,12 +38,17 @@ export const FqnPath = ({
   return (
     <Tooltip
       label={value}
-      className={cn("inline-flex max-w-full font-mono text-sm", className)}
+      className={cn(
+        "inline-flex max-w-full min-w-0 overflow-hidden font-mono text-sm",
+        className,
+      )}
     >
       {ancestors ? (
-        <span className="text-muted-foreground truncate">{ancestors}</span>
+        <span className="text-muted-foreground max-w-full min-w-0 truncate">
+          {ancestors}
+        </span>
       ) : null}
-      <span className="text-foreground shrink-0 truncate font-medium">
+      <span className="text-foreground max-w-full min-w-0 truncate font-medium">
         {leaf}
       </span>
     </Tooltip>

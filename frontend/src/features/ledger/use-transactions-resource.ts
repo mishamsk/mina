@@ -66,6 +66,41 @@ const effectivePageParams = (
   offset,
 });
 
+const loadLedgerLookups = async (
+  shouldCommit: () => boolean = () => true,
+): Promise<void> => {
+  setLedgerLookupsLoading();
+
+  const result = await fetchLedgerLookups();
+  if (!shouldCommit()) {
+    return;
+  }
+
+  if (
+    result.accounts.data &&
+    result.categories.data &&
+    result.tags.data &&
+    result.members.data
+  ) {
+    setLedgerLookups({
+      accounts: result.accounts.data.accounts,
+      categories: result.categories.data.categories,
+      members: result.members.data.members,
+      tags: result.tags.data.tags,
+    });
+    return;
+  }
+
+  setLedgerLookupsError(
+    apiErrorMessage(
+      result.accounts.error ??
+        result.categories.error ??
+        result.tags.error ??
+        result.members.error,
+    ),
+  );
+};
+
 export const useTransactionsResource = (params: TransactionPageParams) => {
   const page = useTransactionPageView(params);
   const lookups = useLedgerLookupsView();
@@ -111,37 +146,7 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
     }
 
     let active = true;
-    setLedgerLookupsLoading();
-
-    void fetchLedgerLookups().then((result) => {
-      if (!active) {
-        return;
-      }
-
-      if (
-        result.accounts.data &&
-        result.categories.data &&
-        result.tags.data &&
-        result.members.data
-      ) {
-        setLedgerLookups({
-          accounts: result.accounts.data.accounts,
-          categories: result.categories.data.categories,
-          members: result.members.data.members,
-          tags: result.tags.data.tags,
-        });
-        return;
-      }
-
-      setLedgerLookupsError(
-        apiErrorMessage(
-          result.accounts.error ??
-            result.categories.error ??
-            result.tags.error ??
-            result.members.error,
-        ),
-      );
-    });
+    void loadLedgerLookups(() => active);
 
     return () => {
       active = false;
@@ -213,6 +218,10 @@ export const refreshTransactionPage = async (
 
   setTransactionPageError(params, apiErrorMessage(result.error));
   return [];
+};
+
+export const refreshLedgerLookups = async (): Promise<void> => {
+  await loadLedgerLookups();
 };
 
 export const refreshTransactionPageAfterSave = async (

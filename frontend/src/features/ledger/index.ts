@@ -33,6 +33,7 @@ export { useTransactionDateJump } from "./use-transaction-date-jump";
 export { useTransactionDetail } from "./use-transaction-detail";
 export {
   jumpToTransactionDatePage,
+  refreshLedgerLookups,
   refreshTransactionPage,
   refreshTransactionPageAfterSave,
   useTransactionsResource,

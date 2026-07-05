@@ -5,16 +5,23 @@ import {
 
 import type {
   CategoryEconomicIntent,
+  CreateAccountRequest,
+  CreateCreditLimitHistoryRequest,
   CreateIncomeTransactionRequest,
   CreateRefundTransactionRequest,
   CreateSpendTransactionRequest,
   CreateTransferTransactionRequest,
+  UpdateAccountRequest,
 } from "./generated";
 import {
+  createAccount as createGeneratedAccount,
+  createCreditLimitHistory as createGeneratedCreditLimitHistory,
   createIncomeTransaction,
   createRefundTransaction,
   createSpendTransaction,
   createTransferTransaction,
+  deleteAccount as deleteGeneratedAccount,
+  deleteCreditLimitHistory as deleteGeneratedCreditLimitHistory,
   deleteTransaction,
   getAccount,
   getTransaction,
@@ -22,9 +29,11 @@ import {
   listAccountBalances,
   listAccounts,
   listCategories,
+  listCreditLimitHistory as listGeneratedCreditLimitHistory,
   listMembers,
   listTags,
   listTransactions,
+  updateAccount as updateGeneratedAccount,
 } from "./generated";
 
 export interface TransactionPageParams {
@@ -194,6 +203,27 @@ export const fetchFeaturedAccountBalances = async () => {
   return { accounts, balances };
 };
 
+export const fetchAccountsPage = async () => {
+  const [accounts, balances] = await Promise.all([
+    listAccounts({
+      query: {
+        include_hidden: true,
+        limit: lookupLimit,
+        offset: 0,
+        sort: "fqn",
+        sort_dir: "asc",
+      },
+    }),
+    listAccountBalances({
+      query: {
+        include_hidden: true,
+      },
+    }),
+  ]);
+
+  return { accounts, balances };
+};
+
 export const fetchOverviewAccountBalances = () => listAccountBalances();
 
 export const fetchOverviewAccounts = () =>
@@ -238,6 +268,60 @@ export const fetchCategoryPickerCategories = (
       offset: 0,
       sort: "fqn",
       sort_dir: "asc",
+    },
+  });
+
+export const createLedgerAccount = (body: CreateAccountRequest) =>
+  createGeneratedAccount({ body });
+
+export const updateLedgerAccount = (
+  accountId: number,
+  body: UpdateAccountRequest,
+) =>
+  updateGeneratedAccount({
+    body,
+    path: {
+      account_id: accountId,
+    },
+  });
+
+export const deleteLedgerAccountById = (accountId: number) =>
+  deleteGeneratedAccount({
+    path: {
+      account_id: accountId,
+    },
+  });
+
+export const fetchCreditLimitHistory = (accountId: number) =>
+  listGeneratedCreditLimitHistory({
+    path: {
+      account_id: accountId,
+    },
+    query: {
+      limit: lookupLimit,
+      offset: 0,
+      sort: "effective_date",
+      sort_dir: "desc",
+    },
+  });
+
+export const createLedgerCreditLimitHistory = (
+  accountId: number,
+  body: CreateCreditLimitHistoryRequest,
+) =>
+  createGeneratedCreditLimitHistory({
+    body,
+    path: {
+      account_id: accountId,
+    },
+  });
+
+export const deleteLedgerCreditLimitHistoryById = (
+  creditLimitHistoryId: number,
+) =>
+  deleteGeneratedCreditLimitHistory({
+    path: {
+      credit_limit_history_id: creditLimitHistoryId,
     },
   });
 

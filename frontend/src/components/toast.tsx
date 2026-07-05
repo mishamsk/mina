@@ -7,6 +7,7 @@ export const toastDurationMs = 4000;
 
 interface ToastProps {
   readonly className?: string;
+  readonly containerClassName?: string;
   readonly durationMs?: number;
   readonly message: string | undefined;
   readonly onDismiss: () => void;
@@ -14,6 +15,7 @@ interface ToastProps {
 
 export const Toast = ({
   className,
+  containerClassName,
   durationMs = toastDurationMs,
   message,
   onDismiss,
@@ -43,7 +45,10 @@ export const Toast = ({
   };
 
   return (
-    <div className="fixed right-4 bottom-4 z-40 max-w-sm" role="status">
+    <div
+      className={cn("fixed right-4 bottom-4 z-40 max-w-sm", containerClassName)}
+      role="status"
+    >
       <Tooltip label={message} asChild>
         <button
           type="button"
