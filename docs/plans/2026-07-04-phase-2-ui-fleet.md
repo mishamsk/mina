@@ -62,7 +62,7 @@ Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = 
 - [x] Task 5: `f9yj` — entry pickers fetch intent-filtered categories (FE) — branch `f9yj-intent-pickers`; issue already owned, comment instead of claim
 - [x] Task 6: `y7yk` — balances API: USD equivalents + bulk credit limits (API) — branch `y7yk-balances-aggregates-api`
 - [x] Task 7: `d7jh` — featured-accounts balance strip (FE) — branch `d7jh-balance-strip`
-- [ ] Task 8: `vp80` — Overview dashboard page (FE; requires Task 6) — branch `vp80-overview-page`
+- [x] Task 8: `vp80` — Overview dashboard page (FE; requires Task 6) — branch `vp80-overview-page`
 - [ ] Task 9: `npb5` — transactions list filter/search API (API) — branch `npb5-transactions-filter-api`
 - [ ] Task 10: `0b17` — Transactions search and filter bar (FE; requires Task 9) — branch `0b17-filter-bar`
 - [ ] Task 11: `bm0h` — account-record search API for registers (API) — branch `bm0h-register-api`
