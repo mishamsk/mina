@@ -310,7 +310,7 @@ pre-commit:
 # Review branch changes since the merge-base with main.
 [group('review')]
 r-branch:
-    revdiff --untracked "$(git merge-base main HEAD).."
+    revdiff --untracked "$(git merge-base main HEAD)"
 
 # Review the last commit.
 [group('review')]
