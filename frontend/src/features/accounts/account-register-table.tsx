@@ -33,6 +33,8 @@ interface AccountRegisterTableProps {
   readonly pageSizeOptions: readonly number[];
   readonly records: readonly JournalRecord[] | undefined;
   readonly selectedRecordId: number | undefined;
+  readonly showAccount?: boolean;
+  readonly showRunningBalance?: boolean;
   readonly totalCount: number | undefined;
   readonly transactionErrorsById: Readonly<Record<number, string>>;
   readonly transactionsById: Readonly<Record<number, Transaction>>;
@@ -64,31 +66,64 @@ const displayAmount = (
 ): DisplayAmount | undefined =>
   amount === null || amount === undefined ? undefined : { amount, currency };
 
-const AccountRegisterSkeleton = () => (
-  <div
-    className="bg-card min-h-0 flex-1 overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
-    aria-hidden="true"
-  >
-    <div className="grid grid-cols-[7rem_minmax(10rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_8rem] gap-3 bg-[var(--table-header)] px-3 py-2">
-      {Array.from({ length: 7 }).map((_, index) => (
-        <Skeleton key={index} className="h-5" />
-      ))}
-    </div>
-    {Array.from({ length: 8 }).map((_, index) => (
+const skeletonTemplate = (
+  showAccount: boolean,
+  showRunningBalance: boolean,
+): string => {
+  if (showAccount && showRunningBalance) {
+    return "grid-cols-[7rem_minmax(9rem,1fr)_minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_8rem]";
+  }
+  if (showAccount) {
+    return "grid-cols-[7rem_minmax(10rem,1fr)_minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem]";
+  }
+  if (showRunningBalance) {
+    return "grid-cols-[7rem_minmax(10rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_8rem]";
+  }
+  return "grid-cols-[7rem_minmax(10rem,1.5fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem]";
+};
+
+const AccountRegisterSkeleton = ({
+  showAccount,
+  showRunningBalance,
+}: {
+  readonly showAccount: boolean;
+  readonly showRunningBalance: boolean;
+}) => {
+  const template = skeletonTemplate(showAccount, showRunningBalance);
+  const columnCount = 6 + (showAccount ? 1 : 0) + (showRunningBalance ? 1 : 0);
+
+  return (
+    <div
+      className="bg-card min-h-0 flex-1 overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+      aria-hidden="true"
+    >
       <div
-        key={index}
         className={cn(
-          "grid grid-cols-[7rem_minmax(10rem,1.4fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_6rem_8rem_8rem] gap-3 px-3 py-3",
-          index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
+          "grid gap-3 bg-[var(--table-header)] px-3 py-2",
+          template,
         )}
       >
-        {Array.from({ length: 7 }).map((__, cellIndex) => (
-          <Skeleton key={cellIndex} className="h-5" />
+        {Array.from({ length: columnCount }).map((_, index) => (
+          <Skeleton key={index} className="h-5" />
         ))}
       </div>
-    ))}
-  </div>
-);
+      {Array.from({ length: 8 }).map((_, index) => (
+        <div
+          key={index}
+          className={cn(
+            "grid gap-3 px-3 py-3",
+            template,
+            index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
+          )}
+        >
+          {Array.from({ length: columnCount }).map((__, cellIndex) => (
+            <Skeleton key={cellIndex} className="h-5" />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 export const AccountRegisterTable = ({
   errorMessage,
@@ -108,12 +143,19 @@ export const AccountRegisterTable = ({
   pageSizeOptions,
   records,
   selectedRecordId,
+  showAccount = false,
+  showRunningBalance = true,
   totalCount,
   transactionErrorsById,
   transactionsById,
 }: AccountRegisterTableProps) => {
   if (loading && !records) {
-    return <AccountRegisterSkeleton />;
+    return (
+      <AccountRegisterSkeleton
+        showAccount={showAccount}
+        showRunningBalance={showRunningBalance}
+      />
+    );
   }
 
   if (errorMessage) {
@@ -201,19 +243,35 @@ export const AccountRegisterTable = ({
             </div>
           </div>
         ) : null}
-        <table className="account-register-table w-full table-fixed border-collapse text-sm">
+        <table
+          className={cn(
+            "account-register-table w-full table-fixed border-collapse text-sm",
+            showAccount && "account-register-table--with-account",
+            !showRunningBalance && "account-register-table--without-running",
+          )}
+        >
           <colgroup>
             <col className="account-register-date-column" />
+            {showAccount ? (
+              <col className="account-register-account-column" />
+            ) : null}
             <col className="account-register-counterparty-column" />
             <col className="account-register-category-column" />
             <col className="account-register-memo-column" />
             <col className="account-register-status-column" />
             <col className="account-register-amount-column" />
-            <col className="account-register-running-column" />
+            {showRunningBalance ? (
+              <col className="account-register-running-column" />
+            ) : null}
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-foreground border-b-2 border-[var(--border-ink)] text-left text-xs font-semibold uppercase">
               <th className="account-register-date-column px-3 py-2">Date</th>
+              {showAccount ? (
+                <th className="account-register-account-column px-3 py-2">
+                  Account
+                </th>
+              ) : null}
               <th className="account-register-counterparty-column px-3 py-2">
                 Counterparty
               </th>
@@ -227,9 +285,11 @@ export const AccountRegisterTable = ({
               <th className="account-register-amount-column px-3 py-2 text-right">
                 Amount
               </th>
-              <th className="account-register-running-column px-3 py-2 text-right">
-                Running
-              </th>
+              {showRunningBalance ? (
+                <th className="account-register-running-column px-3 py-2 text-right">
+                  Running
+                </th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -238,6 +298,7 @@ export const AccountRegisterTable = ({
               const transaction = transactionsById[record.transaction_id];
               const transactionError =
                 transactionErrorsById[record.transaction_id];
+              const account = maps.accountsById.get(record.account_id);
               const category = maps.categoriesById.get(record.category_id);
               const amount = displayAmount(record.amount, record.currency);
               const runningBalance = displayAmount(
@@ -320,6 +381,21 @@ export const AccountRegisterTable = ({
                       {date.year}
                     </div>
                   </td>
+                  {showAccount ? (
+                    <td className="account-register-account-column px-3 py-2">
+                      {lookupsLoaded && account ? (
+                        <FqnPath value={account.fqn} />
+                      ) : (
+                        <span className="text-muted-foreground font-mono text-xs">
+                          {lookupsLoaded
+                            ? "Missing account"
+                            : lookupErrorMessage
+                              ? "Lookup unavailable"
+                              : "Loading"}
+                        </span>
+                      )}
+                    </td>
+                  ) : null}
                   <td className="account-register-counterparty-column px-3 py-2">
                     {transaction ? (
                       <Tooltip
@@ -388,18 +464,22 @@ export const AccountRegisterTable = ({
                       />
                     ) : null}
                   </td>
-                  <td className="account-register-running-column px-3 py-2 text-right">
-                    {runningBalance ? (
-                      <AmountText
-                        amount={runningBalance}
-                        className="justify-end"
-                        positiveSign={false}
-                        tone="neutral"
-                      />
-                    ) : (
-                      <span className="text-muted-foreground font-mono">-</span>
-                    )}
-                  </td>
+                  {showRunningBalance ? (
+                    <td className="account-register-running-column px-3 py-2 text-right">
+                      {runningBalance ? (
+                        <AmountText
+                          amount={runningBalance}
+                          className="justify-end"
+                          positiveSign={false}
+                          tone="neutral"
+                        />
+                      ) : (
+                        <span className="text-muted-foreground font-mono">
+                          -
+                        </span>
+                      )}
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}

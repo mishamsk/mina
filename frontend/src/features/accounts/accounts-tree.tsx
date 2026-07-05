@@ -34,6 +34,7 @@ interface AccountTreeRow {
   readonly account?: Account;
   readonly depth: number;
   readonly fqn: string;
+  readonly hasChildren: boolean;
 }
 
 const accountTypeMatches = (
@@ -97,11 +98,24 @@ export const accountTreeRows = (
     }
   }
 
+  const visibleParentFqns = new Set<string>();
+  for (const nodeFqn of visibleNodeFqns) {
+    const segments = nodeFqn.split(":");
+    for (
+      let segmentIndex = 1;
+      segmentIndex < segments.length;
+      segmentIndex += 1
+    ) {
+      visibleParentFqns.add(segments.slice(0, segmentIndex).join(":"));
+    }
+  }
+
   return [...visibleNodeFqns].sort(compareFqnPath).map((fqn) => {
     return {
       account: visibleAccountByFqn.get(fqn),
       depth: Math.max(0, fqn.split(":").length - 1),
       fqn,
+      hasChildren: visibleParentFqns.has(fqn),
     };
   });
 };
@@ -335,6 +349,8 @@ export const AccountsTree = ({
                     row.account ? "text-foreground" : "text-muted-foreground",
                     row.account &&
                       "cursor-pointer hover:bg-[var(--color-interactive-bright)]",
+                    !row.account &&
+                      "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
                   )}
                   onClick={(event) => {
                     if (row.account) {
@@ -362,25 +378,41 @@ export const AccountsTree = ({
                       style={{ paddingLeft: `${row.depth * 1.25}rem` }}
                     >
                       {row.account ? (
-                        <Link
-                          to={`/accounts/${row.account.account_id}`}
-                          className="focus-visible:outline-ring inline-flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                          }}
-                        >
-                          <FqnPath value={row.fqn} />
-                          {row.account.is_hidden ? (
-                            <EyeOff
-                              aria-hidden="true"
-                              className="size-4 shrink-0 lg:hidden"
-                            />
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <Link
+                            to={`/accounts/${row.account.account_id}`}
+                            className="focus-visible:outline-ring inline-flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
+                          >
+                            <FqnPath value={row.fqn} focusable={false} />
+                            {row.account.is_hidden ? (
+                              <EyeOff
+                                aria-hidden="true"
+                                className="size-4 shrink-0 lg:hidden"
+                              />
+                            ) : null}
+                          </Link>
+                          {row.hasChildren ? (
+                            <Link
+                              to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
+                              className="focus-visible:outline-ring border border-[var(--border-ink)] bg-[var(--band)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase shadow-[var(--shadow-chip)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                              }}
+                            >
+                              Group
+                            </Link>
                           ) : null}
-                        </Link>
+                        </div>
                       ) : (
-                        <span className="flex min-w-0 items-center gap-2">
-                          <FqnPath value={row.fqn} />
-                        </span>
+                        <Link
+                          to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
+                          className="focus-visible:outline-ring flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                        >
+                          <FqnPath value={row.fqn} focusable={false} />
+                        </Link>
                       )}
                     </div>
                   </td>

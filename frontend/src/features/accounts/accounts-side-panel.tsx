@@ -657,11 +657,11 @@ const AccountsSidePanelContent = ({
       return;
     }
     if (result.data !== undefined || !result.error) {
-      onNotice("Account deleted.");
-      onClose();
       await refreshAccountsAfterMutation({
         removedAccountId: account.account_id,
       });
+      onNotice("Account deleted.");
+      onClose();
       return;
     }
     setDeletingAccount(false);

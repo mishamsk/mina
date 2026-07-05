@@ -17,7 +17,7 @@ export default defineConfig({
   testDir: "tests/e2e",
   timeout: 30_000,
   forbidOnly: Boolean(process.env.CI),
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   projects: [
     {
       name: "chromium",

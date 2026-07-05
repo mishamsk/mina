@@ -619,6 +619,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await page.getByRole("button", { exact: true, name: "Amount" }).click();
   await page.getByRole("textbox", { name: "Min" }).fill("10");
   await page.getByRole("textbox", { name: "Max" }).fill("20");
+  await expect(page.getByText("Amount 10-20")).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: "Initiated date" }).click();

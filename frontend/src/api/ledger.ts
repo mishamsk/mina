@@ -34,6 +34,7 @@ import {
   listTags,
   listTransactions,
   searchAccountJournalRecords,
+  searchJournalRecords,
   updateAccount as updateGeneratedAccount,
 } from "./generated";
 
@@ -46,6 +47,12 @@ export interface TransactionPageParams {
 
 export interface AccountRecordsPageParams {
   readonly includeRunningBalance: boolean;
+  readonly limit: number;
+  readonly offset: number;
+}
+
+export interface GroupRecordsPageParams {
+  readonly accountFqnPrefix: string;
   readonly limit: number;
   readonly offset: number;
 }
@@ -142,6 +149,15 @@ export const fetchAccountRecordsPage = (
     },
     query: {
       include_running_balance: params.includeRunningBalance,
+      limit: params.limit,
+      offset: params.offset,
+    },
+  });
+
+export const fetchGroupRecordsPage = (params: GroupRecordsPageParams) =>
+  searchJournalRecords({
+    query: {
+      account_fqn_prefix: params.accountFqnPrefix,
       limit: params.limit,
       offset: params.offset,
     },

@@ -1,3 +1,4 @@
+export { AccountGroupPageContent } from "./account-group-page-content";
 export { AccountHeader } from "./account-header";
 export { AccountPeekPanel } from "./account-peek-panel";
 export { AccountRegisterTable } from "./account-register-table";
@@ -12,7 +13,9 @@ export { AccountsTree, accountTreeRows } from "./accounts-tree";
 export {
   refreshAccountRegisterPage,
   refreshAccountTransaction,
+  refreshGroupRegisterPage,
   useAccountRegisterResource,
+  useGroupRegisterResource,
 } from "./use-account-register-resource";
 export {
   refreshAccountsAfterMutation,

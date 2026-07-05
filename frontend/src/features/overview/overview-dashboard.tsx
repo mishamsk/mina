@@ -263,7 +263,12 @@ const BalanceGroups = ({
           <CardHeader className="grid-cols-[1fr_auto]">
             <div className="min-w-0">
               <CardTitle className="font-heading text-base font-bold uppercase">
-                {group.root}
+                <Link
+                  to={`/accounts/group?prefix=${encodeURIComponent(group.root)}`}
+                  className="focus-visible:outline-ring hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  {group.root}
+                </Link>
               </CardTitle>
               <p className="text-muted-foreground text-xs">
                 {group.rows.length} account{group.rows.length === 1 ? "" : "s"}

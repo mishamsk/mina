@@ -271,18 +271,35 @@ const RangeEditor = ({
 
   const update = (side: "from" | "to", rawValue: string): void => {
     const value = rawValue.trim();
+    const nextFromDraft = side === "from" ? rawValue : fromDraft;
+    const nextToDraft = side === "to" ? rawValue : toDraft;
     setDraftState({
-      fromDraft: side === "from" ? rawValue : fromDraft,
+      fromDraft: nextFromDraft,
       fromValue,
-      toDraft: side === "to" ? rawValue : toDraft,
+      toDraft: nextToDraft,
       toValue,
     });
     if (value && pattern && !pattern.test(value)) {
       return;
     }
+
+    const normalizeDraft = (
+      draft: string,
+      previousValue: string | undefined,
+    ): string | undefined => {
+      const nextValue = draft.trim();
+      if (!nextValue) {
+        return undefined;
+      }
+      if (pattern && !pattern.test(nextValue)) {
+        return previousValue;
+      }
+      return nextValue;
+    };
+
     onChange(
-      side === "from" ? value || undefined : fromValue,
-      side === "to" ? value || undefined : toValue,
+      normalizeDraft(nextFromDraft, fromValue),
+      normalizeDraft(nextToDraft, toValue),
     );
   };
 

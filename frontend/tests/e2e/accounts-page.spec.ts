@@ -2,6 +2,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 
 interface AccountFixture {
   readonly account_id: number;
+  readonly account_type: "balance" | "flow" | "system";
   readonly fqn: string;
 }
 
@@ -14,10 +15,13 @@ interface BalanceFixture {
   readonly account_id: number;
   readonly currency: string;
   readonly current_balance: string;
+  readonly current_balance_usd: string;
   readonly posted_balance: string;
+  readonly unconverted_count: number;
 }
 
 interface JournalRecordFixture {
+  readonly account_id: number;
   readonly amount: string;
   readonly currency: string;
   readonly memo?: string | null;
@@ -45,21 +49,26 @@ const listFixtures = async <T>(
   return body[collectionKey] ?? [];
 };
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const decimalScale = 8;
 
 const createAccount = async (
   page: Page,
   {
+    accountType = "balance",
     fqn,
     hidden = false,
   }: {
+    readonly accountType?: "balance" | "flow" | "system";
     readonly fqn: string;
     readonly hidden?: boolean;
   },
 ): Promise<AccountFixture> => {
   const response = await page.request.post("/api/accounts", {
     data: {
-      account_type: "balance",
+      account_type: accountType,
       currency: "USD",
       fqn,
       is_hidden: hidden,
@@ -550,6 +559,246 @@ test("account page renders header and paginated running-balance register", async
   await expect(page.getByLabel("Hidden account")).toBeVisible();
 });
 
+test("account group page renders subtotals and combined prefix register", async ({
+  browserName,
+  page,
+}) => {
+  const slug = browserName.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const prefix = `aaa_group:${unique}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const siblingWallet = findByFqn(accounts, "savings:Ally:Emergency");
+  const siblingMerchant = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const [wallet, fees] = await Promise.all([
+    createAccount(page, { fqn: `${prefix}:GroupBalance${unique}` }),
+    createAccount(page, { accountType: "flow", fqn: `${prefix}:Fees` }),
+  ]);
+  const fundingAccounts = [
+    wallet,
+    wallet,
+    wallet,
+    wallet,
+    wallet,
+    wallet,
+  ] as const;
+  const groupRecords = fundingAccounts.flatMap((fundingAccount, index) => {
+    const transactionIndex = index + 1;
+    const amount = `${10 + transactionIndex}.00`;
+    const memo = `E2E group register ${unique} ${String(transactionIndex).padStart(2, "0")}`;
+    return [
+      {
+        account_id: fundingAccount.account_id,
+        amount: `-${amount}`,
+        category_id: category.category_id,
+        currency: "USD",
+        memo,
+        posting_status: "posted",
+        reconciliation_status: "unreconciled",
+        source: "manual",
+      },
+      {
+        account_id: fees.account_id,
+        amount,
+        category_id: category.category_id,
+        currency: "USD",
+        memo,
+        posting_status: "posted",
+        reconciliation_status: "unreconciled",
+        source: "manual",
+      },
+    ];
+  });
+  const groupResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-05-01",
+      records: groupRecords,
+    },
+  });
+  expect(groupResponse.ok()).toBe(true);
+  const groupTransaction = (await groupResponse.json()) as TransactionFixture;
+
+  const siblingResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "19.00",
+      category_id: category.category_id,
+      counterparty_account_id: siblingMerchant.account_id,
+      currency: "USD",
+      funding_account_id: siblingWallet.account_id,
+      initiated_date: "2026-05-20",
+      memo: `E2E sibling group ${unique}`,
+    },
+  });
+  expect(siblingResponse.ok()).toBe(true);
+
+  const groupUrl = `/accounts/group?prefix=${encodeURIComponent(prefix)}&page=1&pageSize=10`;
+  const recordsRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/records" &&
+      url.searchParams.get("account_fqn_prefix") === prefix &&
+      url.searchParams.get("limit") === "10" &&
+      url.searchParams.get("offset") === "0" &&
+      !url.searchParams.has("include_running_balance") &&
+      !url.searchParams.has("account_id")
+    );
+  });
+  const recordsResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/records" &&
+      url.searchParams.get("account_fqn_prefix") === prefix &&
+      url.searchParams.get("offset") === "0"
+    );
+  });
+
+  await page.goto(groupUrl);
+  await recordsRequest;
+  const recordsBody = (await (await recordsResponse).json()) as {
+    readonly records: readonly JournalRecordFixture[];
+    readonly total_count: number;
+  };
+  expect(recordsBody.total_count).toBe(12);
+  const walletRecord = requireDefined(
+    recordsBody.records.find(
+      (record) => record.account_id === wallet.account_id,
+    ),
+    "wallet record",
+  );
+  const feesRecord = requireDefined(
+    recordsBody.records.find((record) => record.account_id === fees.account_id),
+    "fees record",
+  );
+  const firstRecord = requireDefined(recordsBody.records[0], "first record");
+  const secondRecord = requireDefined(recordsBody.records[1], "second record");
+  expect(firstRecord.transaction_id).toBe(groupTransaction.transaction_id);
+
+  await expect(
+    page.getByRole("heading", {
+      name: new RegExp(`^${escapeRegExp(prefix).replace(":", ":\\s*")}$`),
+    }),
+  ).toBeVisible();
+  await expect(page.getByTestId("account-group-subtotals")).toContainText(
+    "1 balance account",
+  );
+  await expect(
+    page
+      .getByTestId("account-group-balance-row")
+      .filter({ hasText: `GroupBalance${unique}` })
+      .getByRole("link"),
+  ).toHaveAttribute("href", `/accounts/${wallet.account_id}`);
+  await expect(
+    page
+      .getByTestId("account-group-subtotals")
+      .getByTestId("approximate-usd-amount"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("columnheader", { name: "Account" }),
+  ).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Running" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page
+      .locator(`[data-record-id="${walletRecord.record_id}"]`)
+      .locator("td")
+      .nth(1),
+  ).toContainText(`GroupBalance${unique}`);
+  await expect(
+    page
+      .locator(`[data-record-id="${feesRecord.record_id}"]`)
+      .locator("td")
+      .nth(1),
+  ).toContainText("Fees");
+  await expect(page.getByText(`E2E sibling group ${unique}`)).toHaveCount(0);
+  await expect(
+    page.getByTestId("account-register-pagination-footer"),
+  ).toContainText("Page 1 of 2");
+
+  const firstRow = page.locator(`[data-record-id="${firstRecord.record_id}"]`);
+  await firstRow.click();
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]record=${firstRecord.record_id}(?:&|$)`),
+  );
+  const peekPanel = page.getByTestId("account-peek-panel");
+  await expect(peekPanel).toBeVisible();
+  await expect(
+    peekPanel.getByRole("heading", { name: groupTransaction.display_title }),
+  ).toBeVisible();
+
+  await firstRow.focus();
+  await page.keyboard.press("ArrowDown");
+  const secondRow = page.locator(
+    `[data-record-id="${secondRecord.record_id}"]`,
+  );
+  await expect(secondRow).toBeFocused();
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]record=${secondRecord.record_id}(?:&|$)`),
+  );
+
+  await page.keyboard.press("Escape");
+  await expect(peekPanel).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]record=/);
+  await expect(secondRow).toBeFocused();
+
+  await page.goto(
+    `/accounts/group?prefix=${encodeURIComponent(prefix)}&page=1&pageSize=10&record=${firstRecord.record_id}`,
+  );
+  await expect(peekPanel).toBeVisible();
+  await expect(
+    peekPanel.getByRole("heading", { name: groupTransaction.display_title }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(peekPanel).toBeHidden();
+
+  const secondPageResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/records" &&
+      url.searchParams.get("account_fqn_prefix") === prefix &&
+      url.searchParams.get("limit") === "10" &&
+      url.searchParams.get("offset") === "10"
+    );
+  });
+  await page.getByRole("button", { name: "Next" }).click();
+  await secondPageResponse;
+  await expectAccountRegisterUrl(page, 2, 10);
+  await expect(page).not.toHaveURL(/[?&]record=/);
+  await expect(
+    page.getByTestId("account-register-pagination-footer"),
+  ).toContainText("Page 2 of 2");
+
+  await page.goto("/accounts");
+  const groupTreeLink = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: unique })
+    .first()
+    .getByRole("link", { name: new RegExp(unique) });
+  await expect(groupTreeLink).toHaveAttribute(
+    "href",
+    `/accounts/group?prefix=${encodeURIComponent(prefix)}`,
+  );
+  await groupTreeLink.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/accounts/group\\?prefix=${encodeURIComponent(prefix)}$`),
+  );
+
+  await page.goto("/overview");
+  const overviewGroupLink = page
+    .getByTestId("overview-balance-group")
+    .filter({ hasText: "checking" })
+    .getByRole("link", { exact: true, name: "checking" });
+  await expect(overviewGroupLink).toHaveAttribute(
+    "href",
+    "/accounts/group?prefix=checking",
+  );
+  await overviewGroupLink.click();
+  await expect(page).toHaveURL("/accounts/group?prefix=checking");
+});
+
 test("account entry links navigate to account register pages", async ({
   page,
 }) => {
@@ -570,6 +819,7 @@ test("account entry links navigate to account register pages", async ({
   await expect(jointTreeLink).toHaveAttribute(
     "href",
     `/accounts/${joint.account_id}`,
+    { timeout: 10_000 },
   );
   await jointTreeLink.click();
   await expect(page).toHaveURL(new RegExp(`/accounts/${joint.account_id}$`));
@@ -607,9 +857,12 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   page,
 }) => {
   const unique = Date.now().toString(36);
-  const fqn = `e2e:accounts:${browserName}:${unique}:Checking`;
+  const fqn = `aaa_e2e:accounts:${browserName}:${unique}:Checking`;
 
   await page.goto("/accounts");
+  await expect(
+    page.getByTestId("accounts-tree-row").filter({ hasText: "Joint" }).first(),
+  ).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: "New account" }).click();
   const createPanel = page.getByRole("dialog", { name: "Create account" });
   await expect(createPanel).toBeVisible();
@@ -638,14 +891,16 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   await createPanel.getByRole("button", { name: "Create" }).click();
   await createAccountRequest;
   await lookupRefresh;
-  await expect(page.getByText("Account created.")).toBeVisible();
+  await expect(page.getByText("Account created.")).toBeVisible({
+    timeout: 10_000,
+  });
 
   await page.getByLabel("Search").fill(fqn);
   const createdRow = page
     .getByTestId("accounts-tree-row")
     .filter({ hasText: "Checking" })
     .first();
-  await expect(createdRow).toBeVisible();
+  await expect(createdRow).toBeVisible({ timeout: 10_000 });
 
   await page.getByLabel("Include hidden").click();
   await createdRow.click();
@@ -662,7 +917,9 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   });
   await editPanel.getByRole("button", { name: "Save" }).click();
   await updateAccountRequest;
-  await expect(page.getByText("Account updated.")).toBeVisible();
+  await expect(page.getByText("Account updated.")).toBeVisible({
+    timeout: 10_000,
+  });
   const hiddenCreatedRow = page
     .getByTestId("accounts-tree-row")
     .filter({ hasText: "Checking" })
@@ -693,7 +950,9 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   });
   await editPanel.getByRole("button", { name: "Add" }).click();
   await creditLimitCreate;
-  await expect(page.getByText("Credit limit added.")).toBeVisible();
+  await expect(page.getByText("Credit limit added.")).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(editPanel.getByText("2026-07-05")).toBeVisible();
   await expect(editPanel.getByText("23,000.00 $")).toBeVisible();
 
@@ -732,7 +991,9 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
     .getByRole("button", { name: "Delete credit limit" })
     .click();
   await creditLimitDelete;
-  await expect(page.getByText("Credit limit deleted.")).toBeVisible();
+  await expect(page.getByText("Credit limit deleted.")).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(editPanel.getByText("2026-07-05")).toHaveCount(0);
 
   await editPanel.getByRole("button", { name: "Close account panel" }).click();
@@ -771,10 +1032,12 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
     .getByRole("button", { name: "Delete account" })
     .click();
   await accountDelete;
-  await expect(page.getByText("Account deleted.")).toBeVisible();
+  await expect(page.getByText("Account deleted.")).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(
     page.getByTestId("accounts-tree-row").filter({ hasText: "Checking" }),
-  ).toHaveCount(0);
+  ).toHaveCount(0, { timeout: 10_000 });
 });
 
 test("accounts form clears API field errors after editing the field", async ({

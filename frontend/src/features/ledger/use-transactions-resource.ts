@@ -18,6 +18,7 @@ import {
   invalidateAccountHeader,
   invalidateAccountRegisterPages,
   invalidateAccountTransactionCache,
+  invalidateGroupRegisterPages,
   invalidateTransactionPages,
   normalizedCategoryPickerIntents,
   setCategoryPickerCategories,
@@ -238,6 +239,7 @@ export const invalidateAccountRegistersForTransaction = (
   );
 
   invalidateAccountTransactionCache(transaction.transaction_id);
+  invalidateGroupRegisterPages();
 
   for (const accountId of accountIds) {
     invalidateAccountHeader(accountId);

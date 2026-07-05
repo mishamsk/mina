@@ -379,6 +379,10 @@
     width: 12%;
   }
 
+  .account-register-table .account-register-account-column {
+    width: 18%;
+  }
+
   .account-register-table .account-register-counterparty-column {
     width: 23%;
   }
@@ -403,6 +407,51 @@
     width: 10%;
   }
 
+  .account-register-table--with-account .account-register-date-column {
+    width: 10%;
+  }
+
+  .account-register-table--with-account .account-register-counterparty-column {
+    width: 20%;
+  }
+
+  .account-register-table--with-account .account-register-category-column {
+    width: 14%;
+  }
+
+  .account-register-table--with-account .account-register-memo-column {
+    width: 18%;
+  }
+
+  .account-register-table--without-running.account-register-table--with-account
+    .account-register-account-column {
+    width: 19%;
+  }
+
+  .account-register-table--without-running.account-register-table--with-account
+    .account-register-counterparty-column {
+    width: 22%;
+  }
+
+  .account-register-table--without-running.account-register-table--with-account
+    .account-register-memo-column {
+    width: 21%;
+  }
+
+  .account-register-table--without-running:not(
+      .account-register-table--with-account
+    )
+    .account-register-counterparty-column {
+    width: 28%;
+  }
+
+  .account-register-table--without-running:not(
+      .account-register-table--with-account
+    )
+    .account-register-memo-column {
+    width: 24%;
+  }
+
   @container account-register-table (max-width: 1040px) {
     .account-register-table .account-register-status-column {
       visibility: collapse;
@@ -421,6 +470,10 @@
 
     .account-register-table .account-register-counterparty-column {
       width: 24%;
+    }
+
+    .account-register-table .account-register-account-column {
+      width: 20%;
     }
 
     .account-register-table .account-register-memo-column {
@@ -453,6 +506,10 @@
       width: 14%;
     }
 
+    .account-register-table .account-register-account-column {
+      width: 24%;
+    }
+
     .account-register-table .account-register-counterparty-column {
       width: 28%;
     }
@@ -472,6 +529,10 @@
       width: 16%;
     }
 
+    .account-register-table .account-register-account-column {
+      width: 28%;
+    }
+
     .account-register-table .account-register-counterparty-column {
       width: 28%;
     }
@@ -487,6 +548,10 @@
   }
 
   @container account-register-table (max-width: 460px) {
+    .account-register-table .account-register-account-column {
+      width: 24%;
+    }
+
     .account-register-table .account-register-memo-column {
       visibility: collapse;
       width: 0;

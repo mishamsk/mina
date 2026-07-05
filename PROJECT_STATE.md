@@ -33,6 +33,7 @@
   - Overview is the landing page, with active balance accounts grouped by FQN root, approximate USD subtotals, credit remaining, current-month spend/income pulse, and recent activity links.
   - Transactions page uses server-derived transaction titles, URL-backed server-side search/filter chips, date-jump anchored pagination, and a URL-addressable detail side panel with full journal records and delete confirmation.
   - Accounts page shows the chart of accounts as a searchable/filterable FQN tree with hidden-account controls, account create/edit, credit-limit history management, tombstone delete, and URL-addressable account registers with running balances, transaction peeks, and balance-surface links.
+  - Account group pages show descendant balance-account subtotals and combined prefix registers across balance and flow accounts, with transaction peeks and links from account trees and overview balance groups.
   - Transaction entry category pickers fetch API-filtered category lists by tab economic intent.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:
