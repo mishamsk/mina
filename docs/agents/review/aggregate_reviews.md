@@ -26,6 +26,14 @@ diff, and likely worth fixing. Deduplicate overlapping comments, merge
 equivalent findings, and reject anything speculative, pre-existing, unrelated
 to the task, unsupported by the diff, or merely stylistic unless it creates a
 concrete correctness, maintainability, compatibility, or verification problem.
+Keep simplification findings when they identify a diff-added redundant layer:
+a pass-through wrapper, one-use helper, duplicated API name, single-implementation
+abstraction, dead exported surface, or generic mechanism with no real second use.
+These are valid `nit` findings when the reviewer points to specific code and the
+fix is local. Reject them when they are pre-existing, mandated by repo docs,
+needed for an ownership or package boundary, remove meaningful shared behavior,
+require broad refactoring, or are only an aesthetic preference about naming or
+layout.
 Reject comments that ask to revert, align, or modify state already present at
 the review range base; those findings are out of range even if the state
 conflicts with task constraints.
