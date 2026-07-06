@@ -38,7 +38,9 @@ func TestIntegrationScripts(t *testing.T) {
 		Dir:                 "testdata/script",
 		RequireExplicitExec: true,
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
+			"duckdbclone":    testscriptDuckDBClone,
 			"duckdbsnapshot": testscriptDuckDBSnapshot,
+			"duckdbexec":     testscriptDuckDBExec,
 			"duckdbtables":   testscriptDuckDBTables,
 			"duckdbtouch":    testscriptDuckDBTouch,
 			"freeport":       testscriptFreePort,
@@ -49,6 +51,71 @@ func TestIntegrationScripts(t *testing.T) {
 			"waitfile":       testscriptWaitFile,
 		},
 	})
+}
+
+func testscriptDuckDBClone(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("duckdbclone does not support negation")
+	}
+	if len(args) != 2 {
+		ts.Fatalf("usage: duckdbclone src-db dst-db")
+	}
+	if _, err := os.Stat(args[1]); err == nil {
+		ts.Fatalf("clone destination %s already exists", args[1])
+	} else if !errors.Is(err, os.ErrNotExist) {
+		ts.Fatalf("stat clone destination %s: %v", args[1], err)
+	}
+
+	db, err := sql.Open("duckdb", "")
+	ts.Check(err)
+	defer func() {
+		ts.Check(db.Close())
+	}()
+
+	ctx := context.Background()
+	for _, stmt := range []string{
+		"ATTACH " + duckDBStringLiteral(args[0]) + " AS src (READ_ONLY)",
+		"ATTACH " + duckDBStringLiteral(args[1]) + " AS dst",
+		"COPY FROM DATABASE src TO dst",
+		"DETACH dst",
+		"DETACH src",
+	} {
+		_, err := db.ExecContext(ctx, stmt)
+		ts.Check(err)
+	}
+}
+
+func duckDBStringLiteral(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func testscriptDuckDBExec(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("duckdbexec does not support negation")
+	}
+	if len(args) != 2 {
+		ts.Fatalf("usage: duckdbexec path sql-file")
+	}
+
+	sqlPath := args[1]
+	if _, err := os.Stat(ts.MkAbs(sqlPath)); err == nil {
+		sqlPath = ts.MkAbs(sqlPath)
+	} else if errors.Is(err, os.ErrNotExist) {
+		sqlPath = filepath.Join("testdata", "validate", args[1])
+	} else {
+		ts.Fatalf("stat sql file %s: %v", args[1], err)
+	}
+
+	query, err := os.ReadFile(sqlPath)
+	ts.Check(err)
+	db, err := sql.Open("duckdb", args[0])
+	ts.Check(err)
+	defer func() {
+		ts.Check(db.Close())
+	}()
+
+	_, err = db.ExecContext(context.Background(), string(query))
+	ts.Check(err)
 }
 
 func testscriptDuckDBTouch(ts *testscript.TestScript, neg bool, args []string) {

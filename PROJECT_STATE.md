@@ -26,6 +26,8 @@
   - Database backups copy the selected file-backed DuckDB accounting database to configured local backup files; empty backup config creates no automatic runs.
   - `mina serve --demo` seeds deterministic April-May 2026 demo data for new in-memory state or new file-backed schemas.
   - File-backed startup demo seeding refuses when the selected accounting schema already exists.
+  - File-backed startup runs configurable database validation (`none`, `shallow`, or `full`; default `shallow`) after migrations.
+  - CLI-only `mina db validate` runs offline integrity checks with schema, referential, SQL invariant, and transaction-classification layers.
 - Implemented web UI behavior:
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.

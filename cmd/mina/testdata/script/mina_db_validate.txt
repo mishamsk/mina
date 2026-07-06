@@ -1,0 +1,196 @@
+# Database validation is a process-boundary diagnostic for file-backed databases.
+env MINA_FX_AUTO_LOAD_ENABLED=false
+freeport
+exec mina serve --demo --db $WORK/demo.db --schema demo --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpget http://127.0.0.1:$PORT/api/health
+stdout '"status":"ok"'
+kill -INT server
+wait server
+
+duckdbsnapshot $WORK/demo.db $WORK/demo.snapshot
+
+# Clean migrated demo state validates.
+exec mina db validate --db $WORK/demo.db --schema demo
+stdout 'ok: database is valid'
+duckdbsnapshot $WORK/demo.db $WORK/demo.snapshot
+
+# Validation never creates files or schemas.
+! exec mina db validate --db $WORK/missing.db --schema demo
+stderr 'missing.db'
+! exists $WORK/missing.db
+
+! exec mina db validate --db $WORK/demo.db --schema missing_schema
+stderr 'accounting schema "missing_schema" does not exist in database .*demo.db'
+duckdbtables $WORK/demo.db missing_schema
+stdout '^0$'
+
+# Schema version cases.
+duckdbclone $WORK/demo.db $WORK/version_behind_latest.db
+duckdbexec $WORK/version_behind_latest.db version_behind_latest.sql
+! exec mina db validate --db $WORK/version_behind_latest.db --schema demo
+stderr 'error: schema: schema_version .* has pending migrations; run mina migrate first'
+duckdbexec $WORK/version_behind_latest.db version_assert_behind_latest.sql
+
+duckdbclone $WORK/demo.db $WORK/version_newer_than_binary.db
+duckdbexec $WORK/version_newer_than_binary.db version_newer_than_binary.sql
+! exec mina db validate --db $WORK/version_newer_than_binary.db --schema demo
+stderr 'error: schema: database is newer than this binary'
+
+duckdbclone $WORK/demo.db $WORK/version_unsupported_shape.db
+duckdbexec $WORK/version_unsupported_shape.db version_unsupported_shape.sql
+! exec mina db validate --db $WORK/version_unsupported_shape.db --schema demo
+stderr 'error: schema: schema_version table has unsupported shape; run mina migrate first'
+
+# Schema layer cases.
+duckdbclone $WORK/demo.db $WORK/schema_drop_unique_index.db
+duckdbexec $WORK/schema_drop_unique_index.db schema_drop_unique_index.sql
+exec mina db validate --db $WORK/schema_drop_unique_index.db --schema demo
+stdout 'warning: schema: missing unique index category_active_fqn_unique'
+
+duckdbclone $WORK/demo.db $WORK/schema_drop_unique_constraint.db
+duckdbexec $WORK/schema_drop_unique_constraint.db schema_drop_unique_constraint.sql
+exec mina db validate --db $WORK/schema_drop_unique_constraint.db --schema demo
+stdout -count=1 'warning: schema: missing unique constraint \(name, tombstoned_at\) on table member'
+
+duckdbclone $WORK/demo.db $WORK/schema_drop_column.db
+duckdbexec $WORK/schema_drop_column.db schema_drop_column.sql
+! exec mina db validate --db $WORK/schema_drop_column.db --schema demo
+stderr 'error: schema: missing column journal_record.memo'
+
+duckdbclone $WORK/demo.db $WORK/schema_retype_enum.db
+duckdbexec $WORK/schema_retype_enum.db schema_retype_enum.sql
+! exec mina db validate --db $WORK/schema_retype_enum.db --schema demo
+stderr 'error: schema: column journal_record.posting_status type mismatch'
+
+duckdbclone $WORK/demo.db $WORK/schema_unknown_table.db
+duckdbexec $WORK/schema_unknown_table.db schema_unknown_table.sql
+exec mina db validate --db $WORK/schema_unknown_table.db --schema demo
+stdout 'info: schema: unexpected table manual_audit_note'
+
+duckdbclone $WORK/demo.db $WORK/schema_info_ref_dangling_account.db
+duckdbexec $WORK/schema_info_ref_dangling_account.db schema_info_ref_dangling_account.sql
+! exec mina db validate --db $WORK/schema_info_ref_dangling_account.db --schema demo
+stderr 'info: schema: unexpected table manual_audit_note'
+stderr 'error: referential: active journal_record.account_id references missing account'
+
+# Referential layer cases.
+duckdbclone $WORK/demo.db $WORK/ref_dangling_account.db
+duckdbexec $WORK/ref_dangling_account.db ref_dangling_account.sql
+! exec mina db validate --db $WORK/ref_dangling_account.db --schema demo
+stderr 'error: referential: active journal_record.account_id references missing account'
+exec mina db validate --shallow --db $WORK/ref_dangling_account.db --schema demo
+stdout 'ok: database is valid'
+
+duckdbclone $WORK/demo.db $WORK/ref_tombstoned_transaction.db
+duckdbexec $WORK/ref_tombstoned_transaction.db ref_tombstoned_transaction.sql
+! exec mina db validate --db $WORK/ref_tombstoned_transaction.db --schema demo
+stderr 'error: referential: active journal_record.transaction_id references tombstoned transaction'
+
+duckdbclone $WORK/demo.db $WORK/ref_tombstoned_category.db
+duckdbexec $WORK/ref_tombstoned_category.db ref_tombstoned_category.sql
+! exec mina db validate --db $WORK/ref_tombstoned_category.db --schema demo
+stderr 'error: referential: active journal_record.category_id references tombstoned category'
+
+duckdbclone $WORK/demo.db $WORK/ref_dangling_tag.db
+duckdbexec $WORK/ref_dangling_tag.db ref_dangling_tag.sql
+exec mina db validate --db $WORK/ref_dangling_tag.db --schema demo
+stdout 'warning: referential: active journal_record.tag_ids references missing tag'
+
+duckdbclone $WORK/demo.db $WORK/ref_dangling_credit_limit_account.db
+duckdbexec $WORK/ref_dangling_credit_limit_account.db ref_dangling_credit_limit_account.sql
+exec mina db validate --db $WORK/ref_dangling_credit_limit_account.db --schema demo
+stdout 'warning: referential: active credit_limit_history.account_id references missing account'
+
+duckdbclone $WORK/demo.db $WORK/ref_budget_active_and_tombstoned_category_fqn.db
+duckdbexec $WORK/ref_budget_active_and_tombstoned_category_fqn.db ref_budget_active_and_tombstoned_category_fqn.sql
+exec mina db validate --db $WORK/ref_budget_active_and_tombstoned_category_fqn.db --schema demo
+stdout 'ok: database is valid'
+
+# SQL invariant and value-domain cases.
+duckdbclone $WORK/demo.db $WORK/inv_unbalanced.db
+duckdbexec $WORK/inv_unbalanced.db inv_unbalanced.sql
+! exec mina db validate --db $WORK/inv_unbalanced.db --schema demo
+stderr 'error: invariant: transaction .* is unbalanced for USD'
+
+duckdbclone $WORK/demo.db $WORK/inv_single_record.db
+duckdbexec $WORK/inv_single_record.db inv_single_record.sql
+! exec mina db validate --db $WORK/inv_single_record.db --schema demo
+stderr 'error: invariant: active transaction .* has fewer than two active records'
+
+duckdbclone $WORK/demo.db $WORK/inv_nonpositive_exchange_rate.db
+duckdbexec $WORK/inv_nonpositive_exchange_rate.db inv_nonpositive_exchange_rate.sql
+! exec mina db validate --db $WORK/inv_nonpositive_exchange_rate.db --schema demo
+stderr 'error: invariant: exchange_rate.rate must be positive'
+
+duckdbclone $WORK/demo.db $WORK/inv_zero_amount.db
+duckdbexec $WORK/inv_zero_amount.db inv_zero_amount.sql
+exec mina db validate --db $WORK/inv_zero_amount.db --schema demo
+stdout 'warning: invariant: journal_record.amount_usd is zero'
+stdout 'warning: invariant: transaction_template_record.amount is zero'
+
+duckdbclone $WORK/demo.db $WORK/inv_invalid_currency.db
+duckdbexec $WORK/inv_invalid_currency.db inv_invalid_currency.sql
+exec mina db validate --db $WORK/inv_invalid_currency.db --schema demo
+stdout 'warning: invariant: invalid currency code ZZZ'
+
+duckdbclone $WORK/demo.db $WORK/inv_malformed_fqn.db
+duckdbexec $WORK/inv_malformed_fqn.db inv_malformed_fqn.sql
+exec mina db validate --db $WORK/inv_malformed_fqn.db --schema demo
+stdout 'warning: invariant: malformed account.fqn "bad::fqn"'
+stdout 'warning: invariant: malformed tag.fqn "bad::tag"'
+
+duckdbclone $WORK/demo.db $WORK/inv_unpaired_external_id.db
+duckdbexec $WORK/inv_unpaired_external_id.db inv_unpaired_external_id.sql
+exec mina db validate --db $WORK/inv_unpaired_external_id.db --schema demo
+stdout 'info: invariant: account external_id and external_system must be paired'
+
+duckdbclone $WORK/demo.db $WORK/inv_memo_whitespace.db
+duckdbexec $WORK/inv_memo_whitespace.db inv_memo_whitespace.sql
+exec mina db validate --db $WORK/inv_memo_whitespace.db --schema demo
+stdout 'info: invariant: journal_record.memo has leading or trailing whitespace'
+stdout 'info: invariant: transaction_template_record.memo has leading or trailing whitespace'
+
+duckdbclone $WORK/demo.db $WORK/inv_duplicate_active_category.db
+duckdbexec $WORK/inv_duplicate_active_category.db inv_duplicate_active_category.sql
+exec mina db validate --db $WORK/inv_duplicate_active_category.db --schema demo
+stdout 'warning: schema: missing unique index category_active_fqn_unique'
+stdout 'warning: invariant: duplicate active category.fqn'
+
+duckdbclone $WORK/demo.db $WORK/inv_mismatched_active_category_index.db
+duckdbexec $WORK/inv_mismatched_active_category_index.db inv_mismatched_active_category_index.sql
+exec mina db validate --db $WORK/inv_mismatched_active_category_index.db --schema demo
+stdout 'warning: schema: index category_active_fqn_unique definition mismatch'
+stdout 'warning: invariant: duplicate active category.fqn'
+
+# Classification layer case.
+duckdbclone $WORK/demo.db $WORK/class_expense_shape.db
+duckdbexec $WORK/class_expense_shape.db class_expense_shape.sql
+! exec mina db validate --db $WORK/class_expense_shape.db --schema demo
+stderr 'error: classification: transaction .* violates EXPENSE semantic shape'
+
+# Startup validation runs shallow by default and can be disabled.
+duckdbclone $WORK/demo.db $WORK/startup_broken_schema.db
+duckdbexec $WORK/startup_broken_schema.db startup_broken_schema.sql
+! exec mina migrate --db $WORK/startup_broken_schema.db --schema demo --yes
+stderr 'database validation failed'
+stderr 'error: schema: missing column journal_record.memo'
+! exec mina serve --db $WORK/startup_broken_schema.db --schema demo --yes --host 192.0.2.1 --port 0 --quiet
+stderr 'database validation failed'
+stderr 'error: schema: missing column journal_record.memo'
+
+! exec mina serve --config-file startup-validation-none.toml --db $WORK/startup_broken_schema.db --schema demo --yes --host 192.0.2.1 --port 0 --quiet
+stderr 'listen error:'
+
+env MINA_STARTUP_VALIDATION=full
+! exec mina serve --db $WORK/ref_dangling_account.db --schema demo --yes --host 192.0.2.1 --port 0 --quiet
+stderr 'database validation failed'
+stderr 'error: referential: active journal_record.account_id references missing account'
+
+env MINA_STARTUP_VALIDATION=none
+! exec mina serve --db $WORK/startup_broken_schema.db --schema demo --yes --host 192.0.2.1 --port 0 --quiet
+stderr 'listen error:'
+
+duckdbsnapshot $WORK/demo.db $WORK/demo.snapshot
+
+-- startup-validation-none.toml --
+startup_validation = "none"

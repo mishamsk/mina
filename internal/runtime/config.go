@@ -9,6 +9,7 @@ import (
 	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/background"
 	"github.com/mishamsk/mina/internal/services/backups"
+	"github.com/mishamsk/mina/internal/services/dbvalidation"
 	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 	"github.com/mishamsk/mina/internal/store"
 )
@@ -57,6 +58,9 @@ type OperationConfig struct {
 
 // Validate checks runtime-owned settings before composition starts.
 func Validate(cfg appconfig.Config, operationsEnabled bool) error {
+	if _, _, err := startupValidationLevel(cfg); err != nil {
+		return err
+	}
 	if operationsEnabled && cfg.ExchangeRates.AutomaticLoadingEnabled {
 		if err := validateExchangeRateLoadSchedule(cfg.ExchangeRates.LoadScheduleUTC); err != nil {
 			return err
@@ -146,5 +150,18 @@ func validateExchangeRateStartupProvider(provider string) error {
 		return nil
 	default:
 		return fmt.Errorf("exchange-rate startup provider %q is not supported", provider)
+	}
+}
+
+func startupValidationLevel(cfg appconfig.Config) (dbvalidation.Level, bool, error) {
+	switch cfg.StartupValidation {
+	case "", "shallow":
+		return dbvalidation.LevelShallow, true, nil
+	case "full":
+		return dbvalidation.LevelFull, true, nil
+	case "none":
+		return "", false, nil
+	default:
+		return "", false, fmt.Errorf("startup_validation must be one of none, shallow, or full")
 	}
 }

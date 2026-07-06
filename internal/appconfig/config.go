@@ -21,6 +21,7 @@ const (
 const (
 	defaultServeHost                   = "127.0.0.1"
 	defaultServePort                   = 8080
+	defaultStartupValidation           = "shallow"
 	defaultExchangeRateLoadScheduleUTC = "0 17 * * *"
 	defaultFrankfurterBaseURL          = "https://api.frankfurter.dev/v2"
 	defaultExchangeRateStartupProvider = "frankfurter_file"
@@ -31,12 +32,13 @@ const ConfigFileHelp = "$XDG_CONFIG_PATH/mina/config.toml"
 
 // Config contains source-loaded process settings.
 type Config struct {
-	DatabasePath     string
-	AccountingSchema string
-	CacheDir         string
-	Serve            ServeConfig
-	ExchangeRates    ExchangeRateConfig
-	Backups          BackupConfig
+	DatabasePath      string
+	AccountingSchema  string
+	CacheDir          string
+	StartupValidation string
+	Serve             ServeConfig
+	ExchangeRates     ExchangeRateConfig
+	Backups           BackupConfig
 }
 
 // ServeConfig contains source-loaded REST listener settings.
@@ -99,12 +101,13 @@ type LoadOptions struct {
 
 // Overrides contains explicit config values from higher-precedence callers.
 type Overrides struct {
-	DatabasePath     Override[string]
-	AccountingSchema Override[string]
-	CacheDir         Override[string]
-	Serve            ServeOverrides
-	ExchangeRates    ExchangeRateOverrides
-	Backups          BackupOverrides
+	DatabasePath      Override[string]
+	AccountingSchema  Override[string]
+	CacheDir          Override[string]
+	StartupValidation Override[string]
+	Serve             ServeOverrides
+	ExchangeRates     ExchangeRateOverrides
+	Backups           BackupOverrides
 }
 
 // ServeOverrides contains explicit REST listener config values.
@@ -153,6 +156,8 @@ const (
 	SourceDatabasePath SourceKey = "db"
 	// SourceAccountingSchema identifies the accounting schema config source.
 	SourceAccountingSchema SourceKey = "schema"
+	// SourceStartupValidation identifies the startup validation config source.
+	SourceStartupValidation SourceKey = "startup_validation"
 	// SourceServeHost identifies the REST listener host config source.
 	SourceServeHost SourceKey = "serve.host"
 	// SourceServePort identifies the REST listener port config source.
@@ -176,11 +181,12 @@ const (
 )
 
 type fileConfig struct {
-	DatabasePath     *string                `toml:"db" env:"MINA_DB"`
-	AccountingSchema *string                `toml:"schema" env:"MINA_SCHEMA"`
-	Serve            serveFileConfig        `toml:"serve"`
-	ExchangeRates    exchangeRateFileConfig `toml:"exchange_rates"`
-	Backups          backupFileConfig       `toml:"backups"`
+	DatabasePath      *string                `toml:"db" env:"MINA_DB"`
+	AccountingSchema  *string                `toml:"schema" env:"MINA_SCHEMA"`
+	StartupValidation *string                `toml:"startup_validation" env:"MINA_STARTUP_VALIDATION"`
+	Serve             serveFileConfig        `toml:"serve"`
+	ExchangeRates     exchangeRateFileConfig `toml:"exchange_rates"`
+	Backups           backupFileConfig       `toml:"backups"`
 }
 
 type serveFileConfig struct {
@@ -221,8 +227,9 @@ func DefaultServeConfig() ServeConfig {
 // DefaultConfig returns Mina's process config defaults.
 func DefaultConfig() Config {
 	return Config{
-		Serve:         DefaultServeConfig(),
-		ExchangeRates: DefaultExchangeRateConfig(),
+		StartupValidation: defaultStartupValidation,
+		Serve:             DefaultServeConfig(),
+		ExchangeRates:     DefaultExchangeRateConfig(),
 	}
 }
 
@@ -256,6 +263,7 @@ func Sources() map[SourceKey]Source {
 	return map[SourceKey]Source{
 		SourceDatabasePath:                        sourceFor(SourceDatabasePath),
 		SourceAccountingSchema:                    sourceFor(SourceAccountingSchema),
+		SourceStartupValidation:                   sourceFor(SourceStartupValidation),
 		SourceServeHost:                           sourceFor(SourceServeHost),
 		SourceServePort:                           sourceFor(SourceServePort),
 		SourceServeAccessLogPath:                  sourceFor(SourceServeAccessLogPath),
@@ -407,6 +415,9 @@ func applySharedFile(cfg *Config, fileCfg fileConfig) {
 	if fileCfg.AccountingSchema != nil {
 		cfg.AccountingSchema = *fileCfg.AccountingSchema
 	}
+	if fileCfg.StartupValidation != nil {
+		cfg.StartupValidation = *fileCfg.StartupValidation
+	}
 }
 
 func applyServeFile(cfg *Config, fileCfg fileConfig) {
@@ -430,6 +441,9 @@ func applyOverrides(cfg *Config, overrides Overrides) {
 	}
 	if overrides.CacheDir.IsSet {
 		cfg.CacheDir = overrides.CacheDir.Val
+	}
+	if overrides.StartupValidation.IsSet {
+		cfg.StartupValidation = overrides.StartupValidation.Val
 	}
 }
 

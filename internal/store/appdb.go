@@ -22,14 +22,25 @@ type AppDB struct {
 
 // OpenAppDB opens the process DuckDB handle and prepares the accounting location.
 func OpenAppDB(ctx context.Context, request AppDBOpenRequest) (*AppDB, error) {
+	return openAppDBWithAttach(ctx, request, attachDatabase)
+}
+
+// OpenAppDBReadOnly opens the process DuckDB handle and attaches file-backed accounting state read-only.
+func OpenAppDBReadOnly(ctx context.Context, request AppDBOpenRequest) (*AppDB, error) {
+	return openAppDBWithAttach(ctx, request, attachDatabaseReadOnly)
+}
+
+func openAppDBWithAttach(
+	ctx context.Context,
+	request AppDBOpenRequest,
+	attach func(context.Context, *AppDB, string) error,
+) (*AppDB, error) {
 	db, err := OpenInMemory(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	appDB, err := openAppDB(ctx, db, request, func(*AppDB) error {
-		return db.Close()
-	})
+	appDB, err := openAppDB(ctx, db, request, attach, func(*AppDB) error { return db.Close() })
 	if err != nil {
 		if closeErr := db.Close(); closeErr != nil {
 			return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
@@ -44,7 +55,7 @@ func OpenAppDB(ctx context.Context, request AppDBOpenRequest) (*AppDB, error) {
 // OpenAppDBWithProcessDB opens accounting state on an existing DuckDB process handle.
 // Closing the returned AppDB does not close the process handle.
 func OpenAppDBWithProcessDB(ctx context.Context, db *sql.DB, request AppDBOpenRequest) (*AppDB, error) {
-	return openAppDB(ctx, db, request, func(appDB *AppDB) error {
+	return openAppDB(ctx, db, request, attachDatabase, func(appDB *AppDB) error {
 		if request.Path == "" {
 			return nil
 		}
@@ -57,6 +68,7 @@ func openAppDB(
 	ctx context.Context,
 	db *sql.DB,
 	request AppDBOpenRequest,
+	attach func(context.Context, *AppDB, string) error,
 	close func(*AppDB) error,
 ) (*AppDB, error) {
 	location, err := NewAccountingLocation(ctx, db, request.AccountingLocation)
@@ -72,7 +84,7 @@ func openAppDB(
 	}
 
 	if request.Path != "" {
-		if err := attachDatabase(ctx, appDB, request.Path); err != nil {
+		if err := attach(ctx, appDB, request.Path); err != nil {
 			return nil, err
 		}
 	}

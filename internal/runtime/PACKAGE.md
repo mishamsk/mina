@@ -12,6 +12,8 @@
 - Startup demo seeding runs after app composition and before HTTP listen.
 - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Runtime decides database lifecycle policy, then delegates DuckDB mechanics to store `AppDB` open helpers.
+- Startup runs configured database validation after migration for file-backed accounting state only; error findings abort startup.
+- `ValidateDatabase` opens the selected file-backed accounting state read-only and never writes to the target.
 - Runtime derives accounting database and schema defaults from `appconfig.Config`.
 - Runtime consumes source-loaded app settings from `internal/appconfig`.
 - Runtime consumes the cache directory resolved by `internal/appconfig`.

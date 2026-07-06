@@ -1,0 +1,1 @@
+UPDATE demo.journal_record SET tombstoned_at = CURRENT_TIMESTAMP WHERE transaction_id = (SELECT MIN(transaction_id) FROM demo.transaction WHERE tombstoned_at IS NULL) AND record_id <> (SELECT MIN(record_id) FROM demo.journal_record WHERE transaction_id = (SELECT MIN(transaction_id) FROM demo.transaction WHERE tombstoned_at IS NULL));

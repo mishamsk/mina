@@ -7,6 +7,9 @@
 ## Implicit Contracts
 
 - Migrations are upgrade-only Goose SQL files recorded in `schema_version` in the selected accounting location.
+- Adding or editing an embedded migration requires re-pinning `PinnedMigrationContentHash`.
+- New FK-shaped columns must be registered in the validation reference registry or explicitly waived.
+- Database validation builds its pristine reference catalog in a scratch in-memory accounting schema.
 - `AppDB` owns the DuckDB process handle, selected accounting location, active transaction, and close policy.
 - Shared process-local runtime state lives in ephemeral `memory._mina_internal` tables, outside the portable accounting schema.
 - Operation runs use numeric IDs from a `_mina_internal` sequence and a store-owned DuckDB status enum.

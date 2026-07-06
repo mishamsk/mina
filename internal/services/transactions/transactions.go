@@ -896,7 +896,7 @@ func (s *Service) validateBulkCategorizeClassification(ctx context.Context, reco
 				found[record.ID] = struct{}{}
 			}
 		}
-		if err := validateTransactionClassification(affected[transactionIndex]); err != nil {
+		if err := ValidateTransactionClassification(affected[transactionIndex]); err != nil {
 			return err
 		}
 	}
@@ -934,7 +934,7 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 				found[record.ID] = struct{}{}
 			}
 		}
-		if err := validateTransactionClassification(affected[transactionIndex]); err != nil {
+		if err := ValidateTransactionClassification(affected[transactionIndex]); err != nil {
 			return err
 		}
 	}

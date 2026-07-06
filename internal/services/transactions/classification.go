@@ -15,12 +15,25 @@ type transactionClassification struct {
 	components     []ClassificationComponent
 }
 
-// validateTransactionClassification runs classification only for validation.
-// Bulk update pre-validation uses this after simulating the requested record
-// edits on the currently affected transactions.
-func validateTransactionClassification(transaction Transaction) error {
+// ValidateTransactionClassification validates the persisted semantic shape of
+// a transaction without deriving display fields.
+func ValidateTransactionClassification(transaction Transaction) error {
 	_, err := classifyTransaction(transaction)
 	return err
+}
+
+// SemanticShapeError carries the economic intent whose semantic record shape is invalid.
+type SemanticShapeError struct {
+	Intent categories.CategoryEconomicIntent
+	err    *services.Error
+}
+
+func (e SemanticShapeError) Error() string {
+	return e.err.Error()
+}
+
+func (e SemanticShapeError) Unwrap() error {
+	return e.err
 }
 
 // classifyTransaction derives the user-facing classification from a fully
@@ -236,7 +249,10 @@ func validateIntentShape(intent categories.CategoryEconomicIntent, records []Sem
 // semanticShapeError returns a service validation error tied to the violating
 // category intent so API callers can fix the record/category/account shape.
 func semanticShapeError(intent categories.CategoryEconomicIntent) error {
-	return services.InvalidRequest("transaction records violate " + string(intent) + " semantic shape")
+	return SemanticShapeError{
+		Intent: intent,
+		err:    services.InvalidRequest("transaction records violate " + string(intent) + " semantic shape"),
+	}
 }
 
 // classifyComponentSet derives the one user-facing transaction class from the

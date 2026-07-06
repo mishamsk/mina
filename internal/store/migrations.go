@@ -234,7 +234,7 @@ func schemaVersionTableShape(ctx context.Context, appDB *AppDB) (schemaVersionSh
 	catalog, schema := appDB.accountingCatalogAndSchema()
 	rows, err := appDB.db.QueryContext(
 		ctx,
-		`SELECT column_name
+		`SELECT column_name, data_type
 FROM duckdb_columns()
 WHERE database_name = ?
   AND schema_name = ?
@@ -246,13 +246,14 @@ WHERE database_name = ?
 		return schemaVersionTableUnknown, fmt.Errorf("read schema_version columns: %w", err)
 	}
 
-	columns := map[string]bool{}
+	columns := map[string]string{}
 	for rows.Next() {
 		var column string
-		if err := rows.Scan(&column); err != nil {
+		var dataType string
+		if err := rows.Scan(&column, &dataType); err != nil {
 			return schemaVersionTableUnknown, fmt.Errorf("scan schema_version column: %w", err)
 		}
-		columns[column] = true
+		columns[column] = dataType
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
@@ -262,12 +263,27 @@ WHERE database_name = ?
 		return schemaVersionTableUnknown, fmt.Errorf("close schema_version columns: %w", err)
 	}
 
-	if columns["id"] && columns["version_id"] && columns["is_applied"] && columns["tstamp"] {
+	if schemaVersionColumnsMatch(columns, map[string]string{
+		"id":         "INTEGER",
+		"version_id": "BIGINT",
+		"is_applied": "BOOLEAN",
+		"tstamp":     "TIMESTAMP",
+	}) {
 		return schemaVersionTableGoose, nil
 	}
-	if columns["version"] && columns["name"] && columns["applied_at"] {
+	if _, ok := columns["version"]; ok && columns["name"] != "" && columns["applied_at"] != "" {
 		return schemaVersionTableLegacy, nil
 	}
 
 	return schemaVersionTableUnknown, nil
+}
+
+func schemaVersionColumnsMatch(columns map[string]string, expected map[string]string) bool {
+	for name, dataType := range expected {
+		if columns[name] != dataType {
+			return false
+		}
+	}
+
+	return true
 }

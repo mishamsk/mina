@@ -362,19 +362,7 @@ func validateTagIDs(index int, tagIDs []int64) error {
 }
 
 func validateFQN(fqn string) error {
-	if strings.TrimSpace(fqn) != fqn || fqn == "" {
-		return services.InvalidRequest("fqn must be non-empty without leading or trailing whitespace")
-	}
-	if strings.HasPrefix(fqn, ":") || strings.HasSuffix(fqn, ":") || strings.Contains(fqn, "::") {
-		return services.InvalidRequest("fqn must be colon-separated with non-empty segments")
-	}
-	for segment := range strings.SplitSeq(fqn, ":") {
-		if strings.TrimSpace(segment) != segment || segment == "" {
-			return services.InvalidRequest("fqn segments must be non-empty without leading or trailing whitespace")
-		}
-	}
-
-	return nil
+	return services.ValidateFQN(fqn)
 }
 
 func validateListOptions(opts services.ListOptions) error {

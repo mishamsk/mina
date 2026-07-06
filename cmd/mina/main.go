@@ -86,6 +86,7 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 	root.AddCommand(newVersionCommand(stdout))
 	root.AddCommand(newServeCommand(stdin, stdout, stderr, &configFilePath))
 	root.AddCommand(newMigrateCommand(stdin, stderr, &configFilePath))
+	root.AddCommand(newDBCommand(stdout, stderr, &configFilePath))
 
 	return root
 }
@@ -143,7 +144,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 			}
 
 			if err := serve(stdin, stdout, stderr, cfg, quietValue, seedDemo, assumeYesValue); err != nil {
-				return &exitError{code: 1, err: err}
+				return commandExitError(err)
 			}
 
 			return nil
@@ -211,7 +212,7 @@ func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string
 			}
 
 			if err := migrate(stdin, stderr, cfg, assumeYesValue); err != nil {
-				return &exitError{code: 1, err: err}
+				return commandExitError(err)
 			}
 
 			return nil
@@ -230,6 +231,65 @@ func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string
 		false,
 		"answer yes to database creation and migration prompts "+commandEnvHelp("MINA_YES"),
 	)
+
+	return cmd
+}
+
+func newDBCommand(stdout io.Writer, stderr io.Writer, configFilePath *string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "db",
+		Short:        "Database diagnostics",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+	}
+	cmd.AddCommand(newDBValidateCommand(stdout, stderr, configFilePath))
+
+	return cmd
+}
+
+func newDBValidateCommand(stdout io.Writer, stderr io.Writer, configFilePath *string) *cobra.Command {
+	var shallow bool
+	sources := appconfig.Sources()
+	flagCfg := appconfig.Config{}
+	cmd := &cobra.Command{
+		Use:          "validate",
+		Short:        "Validate a Mina database file",
+		Args:         noPositionalArgs("db validate"),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := appconfig.Load(
+				appconfig.LoadOptions{ConfigFilePath: *configFilePath},
+				appconfig.Overrides{
+					DatabasePath:     configOverride(cmd, "db", flagCfg.DatabasePath),
+					AccountingSchema: configOverride(cmd, "schema", flagCfg.AccountingSchema),
+				},
+			)
+			if err != nil {
+				return err
+			}
+			if cfg.DatabasePath == "" {
+				return errors.New("db validate requires --db")
+			}
+
+			if err := dbValidate(cmd.Context(), cfg, shallow, stdout, stderr); err != nil {
+				var runtimeErr *exitError
+				if errors.As(err, &runtimeErr) {
+					return runtimeErr
+				}
+				return &exitError{code: 1, err: err}
+			}
+
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&flagCfg.DatabasePath, "db", "", "path to the Mina database file "+sourceHelp(sources[appconfig.SourceDatabasePath]))
+	cmd.Flags().StringVar(
+		&flagCfg.AccountingSchema,
+		"schema",
+		"",
+		"DuckDB schema for accounting state "+sourceHelp(sources[appconfig.SourceAccountingSchema]),
+	)
+	cmd.Flags().BoolVar(&shallow, "shallow", false, "validate schema only")
 
 	return cmd
 }
@@ -264,6 +324,15 @@ func commandBoolValue(cmd *cobra.Command, flag string, flagValue bool, envVar st
 	}
 
 	return parsed, nil
+}
+
+func commandExitError(err error) *exitError {
+	code := 1
+	if runtime.IsDatabaseValidationInternalError(err) {
+		code = 2
+	}
+
+	return &exitError{code: code, err: err}
 }
 
 func validateServeConfig(cfg appconfig.Config, quiet bool) error {
@@ -436,6 +505,29 @@ func migrate(stdin io.Reader, stderr io.Writer, cfg appconfig.Config, assumeYes 
 	}()
 
 	return nil
+}
+
+func dbValidate(ctx context.Context, cfg appconfig.Config, shallow bool, stdout io.Writer, stderr io.Writer) error {
+	level := runtime.DatabaseValidationLevelFull
+	if shallow {
+		level = runtime.DatabaseValidationLevelShallow
+	}
+	report, err := runtime.ValidateDatabase(ctx, cfg, level)
+	if err != nil {
+		if runtime.IsDatabaseValidationInternalError(err) {
+			return &exitError{code: 2, err: err}
+		}
+
+		return err
+	}
+	if report.HasErrors() {
+		if err := report.Write(stderr); err != nil {
+			return err
+		}
+		return &exitError{code: 1, err: errors.New("database validation failed")}
+	}
+
+	return report.Write(stdout)
 }
 
 func confirmDatabaseCreation(stdin io.Reader, stderr io.Writer, cfg appconfig.Config, assumeYes bool) (bool, error) {

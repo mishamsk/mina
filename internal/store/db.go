@@ -27,12 +27,20 @@ func OpenInMemory(ctx context.Context) (*sql.DB, error) {
 }
 
 func attachDatabase(ctx context.Context, appDB *AppDB, path string) error {
+	return attachDatabaseWithOptions(ctx, appDB, path, "")
+}
+
+func attachDatabaseReadOnly(ctx context.Context, appDB *AppDB, path string) error {
+	return attachDatabaseWithOptions(ctx, appDB, path, " (READ_ONLY)")
+}
+
+func attachDatabaseWithOptions(ctx context.Context, appDB *AppDB, path string, options string) error {
 	if path == "" {
 		return errors.New("database path is required")
 	}
 	// DuckDB does not accept bind parameters in ATTACH, so the file path is
 	// rendered as a SQL string literal with standard single-quote escaping.
-	if _, err := appDB.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+appDB.accountingDatabaseIdentifier()); err != nil {
+	if _, err := appDB.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+appDB.accountingDatabaseIdentifier()+options); err != nil {
 		return fmt.Errorf("attach accounting database %s: %w", path, err)
 	}
 

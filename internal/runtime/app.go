@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -21,6 +22,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/backups"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
+	"github.com/mishamsk/mina/internal/services/dbvalidation"
 	"github.com/mishamsk/mina/internal/services/demo"
 	"github.com/mishamsk/mina/internal/services/exchangerateloading"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
@@ -87,6 +89,9 @@ func newApp(
 	if err := store.Migrate(ctx, appDB); err != nil {
 		return nil, closeAppDBAfterError(appDB, fmt.Errorf("migrate database: %w", err))
 	}
+	if err := validateStartupDatabase(ctx, cfg, appDB); err != nil {
+		return nil, closeAppDBAfterError(appDB, err)
+	}
 
 	app, err := NewWithAppDB(ctx, appDB, cfg, opts)
 	if err != nil {
@@ -94,6 +99,73 @@ func newApp(
 	}
 
 	return app, nil
+}
+
+// ValidateDatabase opens and validates the selected accounting database without writing to it.
+func ValidateDatabase(ctx context.Context, cfg appconfig.Config, level dbvalidation.Level) (dbvalidation.Report, error) {
+	if err := Validate(cfg, false); err != nil {
+		return dbvalidation.Report{}, err
+	}
+	appDB, err := store.OpenAppDBReadOnly(ctx, AppDBOpenRequest(cfg))
+	if err != nil {
+		return dbvalidation.Report{}, err
+	}
+	defer func() {
+		_ = appDB.Close()
+	}()
+	exists, err := store.AccountingLocationExists(ctx, appDB)
+	if err != nil {
+		return dbvalidation.Report{}, err
+	}
+	if !exists {
+		return dbvalidation.Report{}, fmt.Errorf("accounting schema %q does not exist in database %s", appDB.Location().Schema(), cfg.DatabasePath)
+	}
+
+	return dbvalidation.NewService(
+		store.NewDBValidationStore(appDB),
+		store.NewTransactionStore(appDB),
+	).Validate(ctx, level)
+}
+
+// Database validation levels exposed through runtime so commands stay thin.
+const (
+	DatabaseValidationLevelShallow = dbvalidation.LevelShallow
+	DatabaseValidationLevelFull    = dbvalidation.LevelFull
+)
+
+// IsDatabaseValidationInternalError reports whether err should map to validator exit code 2.
+func IsDatabaseValidationInternalError(err error) bool {
+	return dbvalidation.IsInternal(err)
+}
+
+func validateStartupDatabase(ctx context.Context, cfg appconfig.Config, appDB *store.AppDB) error {
+	if cfg.DatabasePath == "" {
+		return nil
+	}
+	level, enabled, err := startupValidationLevel(cfg)
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		return nil
+	}
+	report, err := dbvalidation.NewService(
+		store.NewDBValidationStore(appDB),
+		store.NewTransactionStore(appDB),
+	).Validate(ctx, level)
+	if err != nil {
+		return err
+	}
+	if !report.HasErrors() {
+		return nil
+	}
+
+	var buffer bytes.Buffer
+	if err := report.Write(&buffer); err != nil {
+		return err
+	}
+
+	return fmt.Errorf("database validation failed:\n%s", strings.TrimSpace(buffer.String()))
 }
 
 // HasPendingMigrations reports whether the configured accounting database would be migrated at startup.

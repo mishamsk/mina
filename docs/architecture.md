@@ -82,6 +82,7 @@ Rules:
 - API errors are stable, machine-readable JSON.
 - Dynamic filters, sort keys, and field names must come from typed allowlists.
 - Hidden accounts, categories, and tags are excluded by default and included only by explicit query.
+- Database validation is a CLI-only pre-trust diagnostic and is deliberately not exposed over REST.
 
 ## Testing
 
