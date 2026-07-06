@@ -324,20 +324,30 @@ r-cur:
 
 # Run the automated review loop.
 [group('agents')]
-review-loop goal branch_or_commit="" base_ref="":
+review-loop goal branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     branch_or_commit={{ quote(branch_or_commit) }}
     base_ref={{ quote(base_ref) }}
-    if [ -n "$branch_or_commit" ] && [ -n "$base_ref" ]; then
-        go run ./internal/tools/reviewloop --base "$base_ref" {{ quote(goal) }} "$branch_or_commit"
-    elif [ -n "$branch_or_commit" ]; then
-        go run ./internal/tools/reviewloop {{ quote(goal) }} "$branch_or_commit"
-    elif [ -n "$base_ref" ]; then
-        go run ./internal/tools/reviewloop --base "$base_ref" {{ quote(goal) }}
+    max_iterations={{ quote(max_iterations) }}
+    claude_review_percent={{ quote(claude_review_percent) }}
+
+    reviewloop_args=()
+    if [ -n "$base_ref" ]; then
+        reviewloop_args+=(--base "$base_ref")
+    fi
+    if [ -n "$max_iterations" ]; then
+        reviewloop_args+=(--max-iterations "$max_iterations")
+    fi
+    if [ -n "$claude_review_percent" ]; then
+        reviewloop_args+=(--claude-review-percent "$claude_review_percent")
+    fi
+
+    if [ -n "$branch_or_commit" ]; then
+        go run ./internal/tools/reviewloop "${reviewloop_args[@]}" {{ quote(goal) }} "$branch_or_commit"
     else
-        go run ./internal/tools/reviewloop {{ quote(goal) }}
+        go run ./internal/tools/reviewloop "${reviewloop_args[@]}" {{ quote(goal) }}
     fi
 
 # Run Codex against an implementation plan.

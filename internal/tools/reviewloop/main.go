@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,14 +23,17 @@ import (
 )
 
 const (
-	modulePath              = "github.com/mishamsk/mina"
-	maxIterations           = 3
-	reviewLoopActiveEnvName = "MINA_REVIEW_LOOP_ACTIVE"
-	reviewLoopBaseEnvName   = "MINA_REVIEWLOOP_BASE"
-	defaultReviewBaseRef    = "main"
-	codexHeartbeatInterval  = time.Minute
-	codexTurnTimeout        = 30 * time.Minute
-	codexNoEventTimeout     = 30 * time.Minute
+	modulePath                           = "github.com/mishamsk/mina"
+	defaultMaxIterations                 = 4
+	defaultClaudeReviewPercent           = 0
+	reviewLoopActiveEnvName              = "MINA_REVIEW_LOOP_ACTIVE"
+	reviewLoopBaseEnvName                = "MINA_REVIEWLOOP_BASE"
+	reviewLoopMaxIterationsEnvName       = "MINA_REVIEWLOOP_MAX_ITERATIONS"
+	reviewLoopClaudeReviewPercentEnvName = "MINA_REVIEWLOOP_CLAUDE_REVIEW_PERCENT"
+	defaultReviewBaseRef                 = "main"
+	codexHeartbeatInterval               = time.Minute
+	codexTurnTimeout                     = 30 * time.Minute
+	codexNoEventTimeout                  = 30 * time.Minute
 )
 
 var (
@@ -63,11 +67,19 @@ var (
 type config struct {
 	root                    string
 	goal                    string
+	maxIterations           int
+	claudeReviewIterations  map[int]bool
 	previousReviewFile      string
 	reviewTarget            reviewTarget
 	templates               reviewTemplates
 	reviewerPrompts         map[string]reviewerPrompt
 	frontendReviewerPrompts map[string]reviewerPrompt
+}
+
+type reviewLoopOptions struct {
+	baseRef             string
+	maxIterations       *int
+	claudeReviewPercent *int
 }
 
 type reviewTarget struct {
@@ -162,7 +174,7 @@ func run(args []string) (int, error) {
 		return 1, err
 	}
 
-	for iteration := 1; iteration <= maxIterations; iteration++ {
+	for iteration := 1; iteration <= cfg.maxIterations; iteration++ {
 		reviewScope := cfg.reviewTarget.scope(iteration)
 		changedFiles, err := cfg.reviewTarget.changedFiles(cfg.root, iteration)
 		if err != nil {
@@ -179,7 +191,7 @@ func run(args []string) (int, error) {
 		}
 		writeProgressLine("selected reviewers: %s", strings.Join(reviewerSelectionNames(reviewerNames), ", "))
 
-		rawReviews, err := runReviewers(cfg, reviewScope, reviewers)
+		rawReviews, err := runReviewers(cfg, reviewScope, reviewers, cfg.claudeReviewIterations[iteration])
 		if err != nil {
 			return 2, err
 		}
@@ -207,8 +219,8 @@ func run(args []string) (int, error) {
 			fmt.Printf("review loop successful after %d iteration(s); no remaining reviews; history: %s\n", iteration, cfg.previousReviewFile)
 			return 0, nil
 		}
-		if iteration == maxIterations {
-			fmt.Printf("review loop stopped after %d iteration(s) with remaining reviews; history: %s\n", maxIterations, cfg.previousReviewFile)
+		if iteration == cfg.maxIterations {
+			fmt.Printf("review loop stopped after %d iteration(s) with remaining reviews; history: %s\n", cfg.maxIterations, cfg.previousReviewFile)
 			return 1, nil
 		}
 
@@ -228,12 +240,12 @@ func run(args []string) (int, error) {
 }
 
 func loadConfig(args []string) (config, error) {
-	args, baseOverride, err := parseReviewLoopArgs(args)
+	args, options, err := parseReviewLoopArgs(args)
 	if err != nil {
 		return config{}, err
 	}
 	if len(args) != 1 && len(args) != 2 {
-		return config{}, errors.New("usage: reviewloop [--base <ref>] <goal> [branch-or-commit]")
+		return config{}, errors.New("usage: reviewloop [--base <ref>] [--max-iterations <count>] [--claude-review-percent <percent>] <goal> [branch-or-commit]")
 	}
 
 	goal := strings.TrimSpace(args[0])
@@ -245,8 +257,16 @@ func loadConfig(args []string) (config, error) {
 	if err != nil {
 		return config{}, err
 	}
-	if baseOverride == "" {
-		baseOverride = strings.TrimSpace(os.Getenv(reviewLoopBaseEnvName))
+	if options.baseRef == "" {
+		options.baseRef = strings.TrimSpace(os.Getenv(reviewLoopBaseEnvName))
+	}
+	maxIterations, err := configuredInt(defaultMaxIterations, reviewLoopMaxIterationsEnvName, options.maxIterations)
+	if err != nil {
+		return config{}, err
+	}
+	claudeReviewPercent, err := configuredInt(defaultClaudeReviewPercent, reviewLoopClaudeReviewPercentEnvName, options.claudeReviewPercent)
+	if err != nil {
+		return config{}, err
 	}
 
 	target := reviewTarget{}
@@ -281,7 +301,7 @@ func loadConfig(args []string) (config, error) {
 	}
 	target.headSHA = headSHA
 	if target.commitSHA == "" {
-		base, err := resolveBranchReviewBase(root, target.branchName, baseOverride)
+		base, err := resolveBranchReviewBase(root, target.branchName, options.baseRef)
 		if err != nil {
 			return config{}, err
 		}
@@ -310,6 +330,8 @@ func loadConfig(args []string) (config, error) {
 	return config{
 		root:                    root,
 		goal:                    goal,
+		maxIterations:           maxIterations,
+		claudeReviewIterations:  claudeReviewIterationSet(maxIterations, claudeReviewPercent),
 		previousReviewFile:      previousReviewFile,
 		reviewTarget:            target,
 		templates:               templates,
@@ -318,33 +340,112 @@ func loadConfig(args []string) (config, error) {
 	}, nil
 }
 
-func parseReviewLoopArgs(args []string) ([]string, string, error) {
+func parseReviewLoopArgs(args []string) ([]string, reviewLoopOptions, error) {
 	var positional []string
-	var baseRef string
+	var options reviewLoopOptions
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "--base":
 			if i+1 >= len(args) {
-				return nil, "", errors.New("--base requires a ref")
+				return nil, reviewLoopOptions{}, errors.New("--base requires a ref")
 			}
 			i++
-			baseRef = strings.TrimSpace(args[i])
-			if baseRef == "" {
-				return nil, "", errors.New("--base ref must not be empty")
+			options.baseRef = strings.TrimSpace(args[i])
+			if options.baseRef == "" {
+				return nil, reviewLoopOptions{}, errors.New("--base ref must not be empty")
 			}
 		case strings.HasPrefix(arg, "--base="):
-			baseRef = strings.TrimSpace(strings.TrimPrefix(arg, "--base="))
-			if baseRef == "" {
-				return nil, "", errors.New("--base ref must not be empty")
+			options.baseRef = strings.TrimSpace(strings.TrimPrefix(arg, "--base="))
+			if options.baseRef == "" {
+				return nil, reviewLoopOptions{}, errors.New("--base ref must not be empty")
 			}
+		case arg == "--max-iterations":
+			value, next, err := parseIntFlagValue(args, i, "--max-iterations")
+			if err != nil {
+				return nil, reviewLoopOptions{}, err
+			}
+			i = next
+			options.maxIterations = &value
+		case strings.HasPrefix(arg, "--max-iterations="):
+			value, err := parseIntValue(strings.TrimPrefix(arg, "--max-iterations="), "--max-iterations")
+			if err != nil {
+				return nil, reviewLoopOptions{}, err
+			}
+			options.maxIterations = &value
+		case arg == "--claude-review-percent":
+			value, next, err := parseIntFlagValue(args, i, "--claude-review-percent")
+			if err != nil {
+				return nil, reviewLoopOptions{}, err
+			}
+			i = next
+			options.claudeReviewPercent = &value
+		case strings.HasPrefix(arg, "--claude-review-percent="):
+			value, err := parseIntValue(strings.TrimPrefix(arg, "--claude-review-percent="), "--claude-review-percent")
+			if err != nil {
+				return nil, reviewLoopOptions{}, err
+			}
+			options.claudeReviewPercent = &value
 		case strings.HasPrefix(arg, "--"):
-			return nil, "", fmt.Errorf("unknown flag %s", arg)
+			return nil, reviewLoopOptions{}, fmt.Errorf("unknown flag %s", arg)
 		default:
 			positional = append(positional, arg)
 		}
 	}
-	return positional, baseRef, nil
+	return positional, options, nil
+}
+
+func parseIntFlagValue(args []string, index int, name string) (int, int, error) {
+	if index+1 >= len(args) {
+		return 0, index, fmt.Errorf("%s requires a value", name)
+	}
+	value, err := parseIntValue(args[index+1], name)
+	return value, index + 1, err
+}
+
+func parseIntValue(value string, name string) (int, error) {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, fmt.Errorf("parse %s: %w", name, err)
+	}
+	return parsed, nil
+}
+
+func configuredInt(defaultValue int, envName string, override *int) (int, error) {
+	value := defaultValue
+	if raw := strings.TrimSpace(os.Getenv(envName)); raw != "" {
+		parsed, err := parseIntValue(raw, envName)
+		if err != nil {
+			return 0, err
+		}
+		value = parsed
+	}
+	if override != nil {
+		value = *override
+	}
+	return value, nil
+}
+
+func claudeReviewIterationSet(maxIterations int, percent int) map[int]bool {
+	iterations := map[int]bool{}
+	if percent <= 0 {
+		return iterations
+	}
+
+	count := maxIterations * percent / 100
+	if count < 1 {
+		count = 1
+	}
+	if count == 1 {
+		iterations[1] = true
+		return iterations
+	}
+
+	for i := 0; i < count; i++ {
+		iteration := 1 + i*(maxIterations-1)/(count-1)
+		iterations[iteration] = true
+	}
+	return iterations
 }
 
 func resolveBranchReviewBase(root string, branchName string, baseOverride string) (reviewBase, error) {
@@ -958,7 +1059,7 @@ func unique(values []string) []string {
 	return result
 }
 
-func runReviewers(cfg config, reviewScope string, reviewers []reviewerPrompt) (string, error) {
+func runReviewers(cfg config, reviewScope string, reviewers []reviewerPrompt, useClaude bool) (string, error) {
 	results := make([]reviewerResult, len(reviewers))
 
 	var wg sync.WaitGroup
@@ -975,12 +1076,13 @@ func runReviewers(cfg config, reviewScope string, reviewers []reviewerPrompt) (s
 				return
 			}
 
-			message, err := runCodex(cfg.root, "reviewer "+reviewer.name, prompt)
+			label := "reviewer " + reviewer.name
+			message, err := runReviewerAgent(cfg.root, label, prompt, useClaude)
 			if err != nil {
 				results[i] = reviewerResult{name: reviewer.name, err: err}
 				return
 			}
-			writeProgressLine("reviewer %s finished", reviewer.name)
+			writeProgressLine("%s finished", label)
 			results[i] = reviewerResult{name: reviewer.name, message: message}
 		})
 	}
@@ -1007,6 +1109,74 @@ func runReviewers(cfg config, reviewScope string, reviewers []reviewerPrompt) (s
 		rawReviews.WriteString(result.message)
 	}
 	return rawReviews.String(), nil
+}
+
+func runReviewerAgent(root string, label string, prompt string, useClaude bool) (string, error) {
+	if useClaude {
+		return runClaude(root, label, prompt)
+	}
+	return runCodex(root, label, prompt)
+}
+
+func runClaude(root string, label string, prompt string) (string, error) {
+	cmd := exec.Command(
+		"claude",
+		"-p",
+		"--output-format", "text",
+		"--model", "opus",
+		"--dangerously-skip-permissions",
+	)
+	cmd.Dir = root
+	cmd.Stdin = strings.NewReader(prompt)
+	cmd.Env = append(os.Environ(), reviewLoopActiveEnvName+"=1")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("%s failed: %w%s", label, err, capturedOutput(stdout.String(), stderr.String()))
+	}
+	writeProgressLine("%s started with claude", label)
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- cmd.Wait()
+	}()
+
+	startedAt := time.Now()
+	heartbeat := time.NewTicker(codexHeartbeatInterval)
+	defer heartbeat.Stop()
+	timeout := time.NewTimer(codexNoEventTimeout)
+	defer timeout.Stop()
+
+	for {
+		select {
+		case err := <-waitCh:
+			if err != nil {
+				return "", fmt.Errorf("%s failed: %w%s", label, err, capturedOutput(stdout.String(), stderr.String()))
+			}
+			return strings.TrimRight(stdout.String(), "\n"), nil
+		case <-heartbeat.C:
+			writeProgressLine(
+				"%s still running with claude; elapsed=%s timeout=30m",
+				label,
+				durationString(time.Since(startedAt)),
+			)
+		case <-timeout.C:
+			if cmd.Process != nil {
+				killProcessGroup(cmd.Process)
+			}
+			err := fmt.Errorf(
+				"%s timed out with claude; no process completion after 30m; elapsed=%s",
+				label,
+				durationString(time.Since(startedAt)),
+			)
+			return "", fmt.Errorf("%w%s", err, capturedOutput(stdout.String(), stderr.String()))
+		}
+	}
 }
 
 func runCodex(root string, label string, prompt string) (string, error) {
