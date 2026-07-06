@@ -333,21 +333,21 @@ review-loop goal branch_or_commit="" base_ref="" max_iterations="" claude_review
     max_iterations={{ quote(max_iterations) }}
     claude_review_percent={{ quote(claude_review_percent) }}
 
-    reviewloop_args=()
+    set --
     if [ -n "$base_ref" ]; then
-        reviewloop_args+=(--base "$base_ref")
+        set -- "$@" --base "$base_ref"
     fi
     if [ -n "$max_iterations" ]; then
-        reviewloop_args+=(--max-iterations "$max_iterations")
+        set -- "$@" --max-iterations "$max_iterations"
     fi
     if [ -n "$claude_review_percent" ]; then
-        reviewloop_args+=(--claude-review-percent "$claude_review_percent")
+        set -- "$@" --claude-review-percent "$claude_review_percent"
     fi
 
     if [ -n "$branch_or_commit" ]; then
-        go run ./internal/tools/reviewloop "${reviewloop_args[@]}" {{ quote(goal) }} "$branch_or_commit"
+        go run ./internal/tools/reviewloop "$@" {{ quote(goal) }} "$branch_or_commit"
     else
-        go run ./internal/tools/reviewloop "${reviewloop_args[@]}" {{ quote(goal) }}
+        go run ./internal/tools/reviewloop "$@" {{ quote(goal) }}
     fi
 
 # Run Codex against an implementation plan.
