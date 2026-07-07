@@ -61,15 +61,15 @@ Task scope details live in the kata issues (`kata show <ref> --agent`); settled 
 
 - [x] Task 1: `5w9q` — prefix-free hierarchy invariant on FQN write paths and db validation (API) — branch `5w9q-prefix-free-invariant`; committed plan: `docs/plans/2026-07-07-prefix-free-hierarchy-invariant.md`
 - [x] Task 2: `mrs9` — hierarchy restructuring API with subtree FQN rewrite, including template PUT unification (API; requires Task 1) — branch `mrs9-restructure-api`
-- [ ] Task 3: `j494` — group-state services and API: derived group hidden state, bulk hide/unhide by group path (API; requires Task 1) — branch `j494-group-state-api`
-- [ ] Task 4: `4hmc` — restructure (rename/move) UI on accounts and reference-data trees (FE; requires Task 2) — branch `4hmc-restructure-ui`
+- [x] Task 3: `j494` — group-state services and API: derived group hidden state, bulk hide/unhide by group path (API; requires Task 1) — branch `j494-group-state-api`
+- [x] Task 4: `4hmc` — restructure (rename/move) UI on accounts and reference-data trees (FE; requires Task 2) — branch `4hmc-restructure-ui`
 
 ## Final Verification
 
-- [ ] On the main working branch with all merged branches: `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] `just test-frontend-e2e` passes
-- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run exactly one and fold unresolved comments into a final fix plan (no further review-loop)
-- [ ] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, kata refs closed, residual findings and unmerged branches
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] On the main working branch with all merged branches: `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] `just test-frontend-e2e` passes
+- [x] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run exactly one and fold unresolved comments into a final fix plan (no further review-loop)
+- [x] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, kata refs closed, residual findings and unmerged branches
+- [x] Move this plan to `docs/plans/completed/`
