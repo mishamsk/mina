@@ -2,8 +2,8 @@ package runtime_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -763,12 +763,11 @@ func TestAccountRejectsHierarchyFQNConflict(t *testing.T) {
 	}
 }
 
-func TestAccountRejectsHierarchyFQNConflictAfterDatabaseReopen(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "mina.duckdb")
-	schema := "account_hierarchy_reopen"
+func TestAccountRejectsHierarchyFQNConflictAgainstStoredState(t *testing.T) {
+	schema := fmt.Sprintf("account_hierarchy_stored_state_%d", time.Now().UnixNano())
 	currency := "USD"
 
-	setup := apptest.New(t, apptest.WithDatabasePath(dbPath), apptest.WithAccountingSchema(schema))
+	setup := newSharedClient(t, apptest.WithAccountingSchema(schema))
 	leaf, err := setup.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "PersistedHierarchy:Leaf",
 		AccountType: httpclient.Balance,
@@ -782,20 +781,20 @@ func TestAccountRejectsHierarchyFQNConflictAfterDatabaseReopen(t *testing.T) {
 	}
 	setup.Close()
 
-	reopened := apptest.New(t, apptest.WithDatabasePath(dbPath), apptest.WithAccountingSchema(schema))
-	extendsPersistedLeaf, err := reopened.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+	storedState := newSharedClient(t, apptest.WithAccountingSchema(schema))
+	extendsStoredLeaf, err := storedState.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "PersistedHierarchy:Leaf:Child",
 		AccountType: httpclient.Balance,
 		Currency:    &currency,
 	})
 	if err != nil {
-		t.Fatalf("extends persisted leaf request: %v", err)
+		t.Fatalf("extends stored leaf request: %v", err)
 	}
-	if extendsPersistedLeaf.StatusCode() != http.StatusConflict {
-		t.Fatalf("extends persisted leaf status = %d, want %d; body %s", extendsPersistedLeaf.StatusCode(), http.StatusConflict, extendsPersistedLeaf.Body)
+	if extendsStoredLeaf.StatusCode() != http.StatusConflict {
+		t.Fatalf("extends stored leaf status = %d, want %d; body %s", extendsStoredLeaf.StatusCode(), http.StatusConflict, extendsStoredLeaf.Body)
 	}
-	if extendsPersistedLeaf.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
-		t.Fatalf("extends persisted leaf code = %q, want %q", extendsPersistedLeaf.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	if extendsStoredLeaf.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("extends stored leaf code = %q, want %q", extendsStoredLeaf.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
 	}
 }
 
