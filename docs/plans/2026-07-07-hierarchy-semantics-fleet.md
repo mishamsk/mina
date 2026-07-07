@@ -9,7 +9,7 @@ Deliver the hierarchy-semantics work set — prefix-free invariant enforcement, 
 - Operator: the Claude session executing this plan. Authors sub-branch plans, launches and waits on Codex, reviews, merges, closes kata issues. Never edits implementation code — all code changes flow through Codex sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
 - Codex: the only implementor, headless, one session at a time.
 - Integration branch ("main working branch"): whatever branch the operator session is currently on when executing this plan. Never touch `main`.
-- This fleet's issue set is the fixed ref list `5w9q`, `mrs9`, `j494`, `4hmc` (inspect with `kata show <ref> --agent`). `4d8j` (featured-groups table) is deliberately deferred backlog and out of scope here.
+- This fleet's issue set carries kata label `hierarchy-semantics`: query with `kata list --label hierarchy-semantics --agent` (refs `5w9q`, `mrs9`, `j494`, `4hmc`). `4d8j` (featured-groups table) is deliberately deferred backlog and out of scope here.
 - `docs/hierarchy-semantics.md` is the owning ground-truth doc for every task in this fleet; every sub-branch plan must follow it, and settled per-issue decisions live in the kata issue comments.
 - The project has no production databases and the schema is evergreen: if a task needs data-model changes, edit the existing migration files in place (no new upgrade migrations) and keep `docs/data-model.md` aligned in the same commit.
 - This plan supersedes Task 18 (`mrs9`) of `docs/plans/2026-07-04-phase-2-ui-fleet.md`; when `mrs9` merges here, tick that task there instead of re-running it.
