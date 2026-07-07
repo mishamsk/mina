@@ -12,18 +12,9 @@ import (
 
 const duckDBDriverName = "duckdb"
 
-// Open opens a DuckDB database handle and verifies it can be reached.
-func Open(ctx context.Context, path string) (*sql.DB, error) {
-	if path == "" {
-		return nil, errors.New("database path is required")
-	}
-
-	return open(ctx, path)
-}
-
 // OpenInMemory opens an in-memory DuckDB database handle and verifies it can be reached.
 func OpenInMemory(ctx context.Context) (*sql.DB, error) {
-	return open(ctx, ":memory:")
+	return open(ctx, ":memory:", 1)
 }
 
 func attachDatabase(ctx context.Context, appDB *AppDB, path string) error {
@@ -67,12 +58,12 @@ func prepareAccountingLocation(ctx context.Context, appDB *AppDB) error {
 	return nil
 }
 
-func open(ctx context.Context, path string) (*sql.DB, error) {
+func open(ctx context.Context, path string, maxOpenConns int) (*sql.DB, error) {
 	db, err := sql.Open(duckDBDriverName, path)
 	if err != nil {
 		return nil, fmt.Errorf("open duckdb database: %w", err)
 	}
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(maxOpenConns)
 
 	if err := db.PingContext(ctx); err != nil {
 		if closeErr := db.Close(); closeErr != nil {

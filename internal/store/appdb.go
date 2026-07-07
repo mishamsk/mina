@@ -10,6 +10,7 @@ import (
 type AppDBOpenRequest struct {
 	Path               string
 	AccountingLocation AccountingLocationConfig
+	MaxOpenConns       int
 }
 
 // AppDB represents the DuckDB handle and selected accounting location.
@@ -35,7 +36,7 @@ func openAppDBWithAttach(
 	request AppDBOpenRequest,
 	attach func(context.Context, *AppDB, string) error,
 ) (*AppDB, error) {
-	db, err := OpenInMemory(ctx)
+	db, err := open(ctx, ":memory:", request.MaxOpenConns)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	goruntime "runtime"
 	"time"
 
 	"github.com/mishamsk/mina/internal/appconfig"
@@ -20,6 +21,7 @@ const (
 	InMemoryAccountingSchema   = "mina"
 	AttachedAccountingDatabase = "accounting"
 	AttachedAccountingSchema   = "main"
+	defaultDuckDBMaxOpenConns  = 2
 )
 
 // Options contains live process dependencies and controls supplied by composition.
@@ -88,7 +90,19 @@ func AppDBOpenRequest(cfg appconfig.Config) store.AppDBOpenRequest {
 	return store.AppDBOpenRequest{
 		Path:               cfg.DatabasePath,
 		AccountingLocation: AccountingLocationConfig(cfg),
+		MaxOpenConns:       duckDBMaxOpenConns(),
 	}
+}
+
+func duckDBMaxOpenConns() int {
+	// Revisit this if real local workloads show higher user or read concurrency.
+	// Two connections currently guard ordinary activity from being fully blocked
+	// by an accidental overlap with one slow read or write.
+	maxOpenConns := defaultDuckDBMaxOpenConns
+	if cpuCount := goruntime.NumCPU(); cpuCount < maxOpenConns {
+		maxOpenConns = cpuCount
+	}
+	return maxOpenConns
 }
 
 type systemClock struct{}

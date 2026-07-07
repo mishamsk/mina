@@ -183,7 +183,7 @@ func HasPendingMigrations(ctx context.Context, cfg appconfig.Config, operationsE
 		}
 	}
 
-	appDB, err := store.OpenAppDB(ctx, AppDBOpenRequest(cfg))
+	appDB, err := store.OpenAppDBReadOnly(ctx, AppDBOpenRequest(cfg))
 	if err != nil {
 		return false, err
 	}
@@ -210,7 +210,7 @@ func AccountingSchemaExists(ctx context.Context, cfg appconfig.Config, operation
 		return false, nil
 	}
 
-	appDB, err := store.OpenAppDB(ctx, AppDBOpenRequest(cfg))
+	appDB, err := store.OpenAppDBReadOnly(ctx, AppDBOpenRequest(cfg))
 	if err != nil {
 		return false, err
 	}

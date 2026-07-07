@@ -11,7 +11,8 @@
 - App instances own one initialized `AppDB`, app service bundle, REST handler, and web UI handler.
 - Startup demo seeding runs after app composition and before HTTP listen.
 - File-backed startup demo seeding refuses when the selected accounting schema already exists.
-- Runtime decides database lifecycle policy, then delegates DuckDB mechanics to store `AppDB` open helpers.
+- Runtime decides DuckDB open policy and database lifecycle, then delegates DuckDB mechanics to store `AppDB` open helpers.
+- Runtime keeps DuckDB connection parallelism fixed and CPU-bounded; it is not app config.
 - Startup runs configured database validation after migration for file-backed accounting state only; error findings abort startup.
 - `ValidateDatabase` opens the selected file-backed accounting state read-only and never writes to the target.
 - Runtime derives accounting database and schema defaults from `appconfig.Config`.
