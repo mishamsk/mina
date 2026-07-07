@@ -83,6 +83,15 @@ func (s *strictServer) CreateAccount(ctx context.Context, request openapi.Create
 	return openapi.CreateAccount201JSONResponse(accountAPIResponse(account)), nil
 }
 
+func (s *strictServer) RestructureAccounts(ctx context.Context, request openapi.RestructureAccountsRequestObject) (openapi.RestructureAccountsResponseObject, error) {
+	movedCount, err := s.deps.Accounts.Restructure(ctx, request.Body.FromFqn, request.Body.ToFqn)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.RestructureAccounts200JSONResponse{MovedCount: movedCount}, nil
+}
+
 func (s *strictServer) DeleteAccount(ctx context.Context, request openapi.DeleteAccountRequestObject) (openapi.DeleteAccountResponseObject, error) {
 	if err := s.deps.Accounts.Delete(ctx, request.AccountId); err != nil {
 		return nil, err
@@ -149,6 +158,15 @@ func (s *strictServer) CreateCategory(ctx context.Context, request openapi.Creat
 	}
 
 	return openapi.CreateCategory201JSONResponse(categoryAPIResponse(category)), nil
+}
+
+func (s *strictServer) RestructureCategories(ctx context.Context, request openapi.RestructureCategoriesRequestObject) (openapi.RestructureCategoriesResponseObject, error) {
+	movedCount, err := s.deps.Categories.Restructure(ctx, request.Body.FromFqn, request.Body.ToFqn)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.RestructureCategories200JSONResponse{MovedCount: movedCount}, nil
 }
 
 func (s *strictServer) DeleteCategory(ctx context.Context, request openapi.DeleteCategoryRequestObject) (openapi.DeleteCategoryResponseObject, error) {
@@ -268,6 +286,15 @@ func (s *strictServer) CreateTag(ctx context.Context, request openapi.CreateTagR
 	}
 
 	return openapi.CreateTag201JSONResponse(tagAPIResponse(tag)), nil
+}
+
+func (s *strictServer) RestructureTags(ctx context.Context, request openapi.RestructureTagsRequestObject) (openapi.RestructureTagsResponseObject, error) {
+	movedCount, err := s.deps.Tags.Restructure(ctx, request.Body.FromFqn, request.Body.ToFqn)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.RestructureTags200JSONResponse{MovedCount: movedCount}, nil
 }
 
 func (s *strictServer) DeleteTag(ctx context.Context, request openapi.DeleteTagRequestObject) (openapi.DeleteTagResponseObject, error) {

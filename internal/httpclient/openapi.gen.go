@@ -1178,6 +1178,17 @@ type PostingStatus string
 // ReconciliationStatus defines model for ReconciliationStatus.
 type ReconciliationStatus string
 
+// RestructureRequest defines model for RestructureRequest.
+type RestructureRequest struct {
+	FromFqn string `json:"from_fqn"`
+	ToFqn   string `json:"to_fqn"`
+}
+
+// RestructureResponse defines model for RestructureResponse.
+type RestructureResponse struct {
+	MovedCount int64 `json:"moved_count"`
+}
+
 // Source defines model for Source.
 type Source string
 
@@ -1643,6 +1654,9 @@ type GetTransactionMonthTotalsParams struct {
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
 
+// RestructureAccountsJSONRequestBody defines body for RestructureAccounts for application/json ContentType.
+type RestructureAccountsJSONRequestBody = RestructureRequest
+
 // UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
 type UpdateAccountJSONRequestBody = UpdateAccountRequest
 
@@ -1651,6 +1665,9 @@ type CreateCreditLimitHistoryJSONRequestBody = CreateCreditLimitHistoryRequest
 
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody = CreateCategoryRequest
+
+// RestructureCategoriesJSONRequestBody defines body for RestructureCategories for application/json ContentType.
+type RestructureCategoriesJSONRequestBody = RestructureRequest
 
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = UpdateCategoryRequest
@@ -1682,11 +1699,17 @@ type BulkUpdateJournalRecordTagsJSONRequestBody = BulkTagRecordsRequest
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = CreateTagRequest
 
+// RestructureTagsJSONRequestBody defines body for RestructureTags for application/json ContentType.
+type RestructureTagsJSONRequestBody = RestructureRequest
+
 // UpdateTagJSONRequestBody defines body for UpdateTag for application/json ContentType.
 type UpdateTagJSONRequestBody = UpdateTagRequest
 
 // CreateTransactionTemplateJSONRequestBody defines body for CreateTransactionTemplate for application/json ContentType.
 type CreateTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
+
+// RestructureTransactionTemplatesJSONRequestBody defines body for RestructureTransactionTemplates for application/json ContentType.
+type RestructureTransactionTemplatesJSONRequestBody = RestructureRequest
 
 // ReplaceTransactionTemplateJSONRequestBody defines body for ReplaceTransactionTemplate for application/json ContentType.
 type ReplaceTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
@@ -1793,6 +1816,11 @@ type ClientInterface interface {
 	// ListAccountBalances request
 	ListAccountBalances(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// RestructureAccountsWithBody request with any body
+	RestructureAccountsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RestructureAccounts(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteAccount request
 	DeleteAccount(ctx context.Context, accountId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1846,6 +1874,11 @@ type ClientInterface interface {
 	CreateCategoryWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateCategory(ctx context.Context, body CreateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RestructureCategoriesWithBody request with any body
+	RestructureCategoriesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RestructureCategories(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteCategory request
 	DeleteCategory(ctx context.Context, categoryId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1936,6 +1969,11 @@ type ClientInterface interface {
 
 	CreateTag(ctx context.Context, body CreateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// RestructureTagsWithBody request with any body
+	RestructureTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RestructureTags(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteTag request
 	DeleteTag(ctx context.Context, tagId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1954,6 +1992,11 @@ type ClientInterface interface {
 	CreateTransactionTemplateWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateTransactionTemplate(ctx context.Context, body CreateTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RestructureTransactionTemplatesWithBody request with any body
+	RestructureTransactionTemplatesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RestructureTransactionTemplates(ctx context.Context, body RestructureTransactionTemplatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteTransactionTemplate request
 	DeleteTransactionTemplate(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2050,6 +2093,30 @@ func (c *Client) CreateAccount(ctx context.Context, body CreateAccountJSONReques
 
 func (c *Client) ListAccountBalances(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAccountBalancesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RestructureAccountsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestructureAccountsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RestructureAccounts(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestructureAccountsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2278,6 +2345,30 @@ func (c *Client) CreateCategoryWithBody(ctx context.Context, contentType string,
 
 func (c *Client) CreateCategory(ctx context.Context, body CreateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateCategoryRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RestructureCategoriesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestructureCategoriesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RestructureCategories(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestructureCategoriesRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2684,6 +2775,30 @@ func (c *Client) CreateTag(ctx context.Context, body CreateTagJSONRequestBody, r
 	return c.Client.Do(req)
 }
 
+func (c *Client) RestructureTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestructureTagsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RestructureTags(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestructureTagsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) DeleteTag(ctx context.Context, tagId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteTagRequest(c.Server, tagId)
 	if err != nil {
@@ -2758,6 +2873,30 @@ func (c *Client) CreateTransactionTemplateWithBody(ctx context.Context, contentT
 
 func (c *Client) CreateTransactionTemplate(ctx context.Context, body CreateTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateTransactionTemplateRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RestructureTransactionTemplatesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestructureTransactionTemplatesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RestructureTransactionTemplates(ctx context.Context, body RestructureTransactionTemplatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRestructureTransactionTemplatesRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3260,6 +3399,46 @@ func NewListAccountBalancesRequest(server string, params *ListAccountBalancesPar
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewRestructureAccountsRequest calls the generic RestructureAccounts builder with application/json body
+func NewRestructureAccountsRequest(server string, body RestructureAccountsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRestructureAccountsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRestructureAccountsRequestWithBody generates requests for RestructureAccounts with any type of body
+func NewRestructureAccountsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/accounts/restructure")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -4216,6 +4395,46 @@ func NewCreateCategoryRequestWithBody(server string, contentType string, body io
 	}
 
 	operationPath := fmt.Sprintf("/api/categories")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRestructureCategoriesRequest calls the generic RestructureCategories builder with application/json body
+func NewRestructureCategoriesRequest(server string, body RestructureCategoriesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRestructureCategoriesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRestructureCategoriesRequestWithBody generates requests for RestructureCategories with any type of body
+func NewRestructureCategoriesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/categories/restructure")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5699,6 +5918,46 @@ func NewCreateTagRequestWithBody(server string, contentType string, body io.Read
 	return req, nil
 }
 
+// NewRestructureTagsRequest calls the generic RestructureTags builder with application/json body
+func NewRestructureTagsRequest(server string, body RestructureTagsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRestructureTagsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRestructureTagsRequestWithBody generates requests for RestructureTags with any type of body
+func NewRestructureTagsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/tags/restructure")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewDeleteTagRequest generates requests for DeleteTag
 func NewDeleteTagRequest(server string, tagId int64) (*http.Request, error) {
 	var err error
@@ -5952,6 +6211,46 @@ func NewCreateTransactionTemplateRequestWithBody(server string, contentType stri
 	}
 
 	operationPath := fmt.Sprintf("/api/transaction-templates")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRestructureTransactionTemplatesRequest calls the generic RestructureTransactionTemplates builder with application/json body
+func NewRestructureTransactionTemplatesRequest(server string, body RestructureTransactionTemplatesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRestructureTransactionTemplatesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRestructureTransactionTemplatesRequestWithBody generates requests for RestructureTransactionTemplates with any type of body
+func NewRestructureTransactionTemplatesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transaction-templates/restructure")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -6845,6 +7144,11 @@ type ClientWithResponsesInterface interface {
 	// ListAccountBalancesWithResponse request
 	ListAccountBalancesWithResponse(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*ListAccountBalancesResponse, error)
 
+	// RestructureAccountsWithBodyWithResponse request with any body
+	RestructureAccountsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureAccountsResponse, error)
+
+	RestructureAccountsWithResponse(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureAccountsResponse, error)
+
 	// DeleteAccountWithResponse request
 	DeleteAccountWithResponse(ctx context.Context, accountId int64, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error)
 
@@ -6898,6 +7202,11 @@ type ClientWithResponsesInterface interface {
 	CreateCategoryWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateCategoryResponse, error)
 
 	CreateCategoryWithResponse(ctx context.Context, body CreateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateCategoryResponse, error)
+
+	// RestructureCategoriesWithBodyWithResponse request with any body
+	RestructureCategoriesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error)
+
+	RestructureCategoriesWithResponse(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error)
 
 	// DeleteCategoryWithResponse request
 	DeleteCategoryWithResponse(ctx context.Context, categoryId int64, reqEditors ...RequestEditorFn) (*DeleteCategoryResponse, error)
@@ -6988,6 +7297,11 @@ type ClientWithResponsesInterface interface {
 
 	CreateTagWithResponse(ctx context.Context, body CreateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTagResponse, error)
 
+	// RestructureTagsWithBodyWithResponse request with any body
+	RestructureTagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error)
+
+	RestructureTagsWithResponse(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error)
+
 	// DeleteTagWithResponse request
 	DeleteTagWithResponse(ctx context.Context, tagId int64, reqEditors ...RequestEditorFn) (*DeleteTagResponse, error)
 
@@ -7006,6 +7320,11 @@ type ClientWithResponsesInterface interface {
 	CreateTransactionTemplateWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTransactionTemplateResponse, error)
 
 	CreateTransactionTemplateWithResponse(ctx context.Context, body CreateTransactionTemplateJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTransactionTemplateResponse, error)
+
+	// RestructureTransactionTemplatesWithBodyWithResponse request with any body
+	RestructureTransactionTemplatesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTransactionTemplatesResponse, error)
+
+	RestructureTransactionTemplatesWithResponse(ctx context.Context, body RestructureTransactionTemplatesJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureTransactionTemplatesResponse, error)
 
 	// DeleteTransactionTemplateWithResponse request
 	DeleteTransactionTemplateWithResponse(ctx context.Context, transactionTemplateId int64, reqEditors ...RequestEditorFn) (*DeleteTransactionTemplateResponse, error)
@@ -7152,6 +7471,39 @@ func (r ListAccountBalancesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListAccountBalancesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RestructureAccountsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RestructureResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON409      *AccountFQNConflict
+}
+
+// Status returns HTTPResponse.Status
+func (r RestructureAccountsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestructureAccountsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestructureAccountsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -7664,6 +8016,39 @@ func (r CreateCategoryResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateCategoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RestructureCategoriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RestructureResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON409      *CategoryFQNConflict
+}
+
+// Status returns HTTPResponse.Status
+func (r RestructureCategoriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestructureCategoriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestructureCategoriesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -8396,6 +8781,39 @@ func (r CreateTagResponse) ContentType() string {
 	return ""
 }
 
+type RestructureTagsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RestructureResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON409      *TagFQNConflict
+}
+
+// Status returns HTTPResponse.Status
+func (r RestructureTagsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestructureTagsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestructureTagsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type DeleteTagResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8555,6 +8973,39 @@ func (r CreateTransactionTemplateResponse) ContentType() string {
 	return ""
 }
 
+type RestructureTransactionTemplatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RestructureResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON409      *TransactionTemplateFQNConflict
+}
+
+// Status returns HTTPResponse.Status
+func (r RestructureTransactionTemplatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RestructureTransactionTemplatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RestructureTransactionTemplatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type DeleteTransactionTemplateResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8624,7 +9075,6 @@ type ReplaceTransactionTemplateResponse struct {
 	JSON200      *TransactionTemplate
 	JSON400      *InvalidRequest
 	JSON404      *NotFound
-	JSON409      *TransactionTemplateFQNConflict
 }
 
 // Status returns HTTPResponse.Status
@@ -9030,6 +9480,23 @@ func (c *ClientWithResponses) ListAccountBalancesWithResponse(ctx context.Contex
 	return ParseListAccountBalancesResponse(rsp)
 }
 
+// RestructureAccountsWithBodyWithResponse request with arbitrary body returning *RestructureAccountsResponse
+func (c *ClientWithResponses) RestructureAccountsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureAccountsResponse, error) {
+	rsp, err := c.RestructureAccountsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestructureAccountsResponse(rsp)
+}
+
+func (c *ClientWithResponses) RestructureAccountsWithResponse(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureAccountsResponse, error) {
+	rsp, err := c.RestructureAccounts(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestructureAccountsResponse(rsp)
+}
+
 // DeleteAccountWithResponse request returning *DeleteAccountResponse
 func (c *ClientWithResponses) DeleteAccountWithResponse(ctx context.Context, accountId int64, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error) {
 	rsp, err := c.DeleteAccount(ctx, accountId, reqEditors...)
@@ -9196,6 +9663,23 @@ func (c *ClientWithResponses) CreateCategoryWithResponse(ctx context.Context, bo
 		return nil, err
 	}
 	return ParseCreateCategoryResponse(rsp)
+}
+
+// RestructureCategoriesWithBodyWithResponse request with arbitrary body returning *RestructureCategoriesResponse
+func (c *ClientWithResponses) RestructureCategoriesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error) {
+	rsp, err := c.RestructureCategoriesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestructureCategoriesResponse(rsp)
+}
+
+func (c *ClientWithResponses) RestructureCategoriesWithResponse(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error) {
+	rsp, err := c.RestructureCategories(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestructureCategoriesResponse(rsp)
 }
 
 // DeleteCategoryWithResponse request returning *DeleteCategoryResponse
@@ -9485,6 +9969,23 @@ func (c *ClientWithResponses) CreateTagWithResponse(ctx context.Context, body Cr
 	return ParseCreateTagResponse(rsp)
 }
 
+// RestructureTagsWithBodyWithResponse request with arbitrary body returning *RestructureTagsResponse
+func (c *ClientWithResponses) RestructureTagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error) {
+	rsp, err := c.RestructureTagsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestructureTagsResponse(rsp)
+}
+
+func (c *ClientWithResponses) RestructureTagsWithResponse(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error) {
+	rsp, err := c.RestructureTags(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestructureTagsResponse(rsp)
+}
+
 // DeleteTagWithResponse request returning *DeleteTagResponse
 func (c *ClientWithResponses) DeleteTagWithResponse(ctx context.Context, tagId int64, reqEditors ...RequestEditorFn) (*DeleteTagResponse, error) {
 	rsp, err := c.DeleteTag(ctx, tagId, reqEditors...)
@@ -9544,6 +10045,23 @@ func (c *ClientWithResponses) CreateTransactionTemplateWithResponse(ctx context.
 		return nil, err
 	}
 	return ParseCreateTransactionTemplateResponse(rsp)
+}
+
+// RestructureTransactionTemplatesWithBodyWithResponse request with arbitrary body returning *RestructureTransactionTemplatesResponse
+func (c *ClientWithResponses) RestructureTransactionTemplatesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTransactionTemplatesResponse, error) {
+	rsp, err := c.RestructureTransactionTemplatesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestructureTransactionTemplatesResponse(rsp)
+}
+
+func (c *ClientWithResponses) RestructureTransactionTemplatesWithResponse(ctx context.Context, body RestructureTransactionTemplatesJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureTransactionTemplatesResponse, error) {
+	rsp, err := c.RestructureTransactionTemplates(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRestructureTransactionTemplatesResponse(rsp)
 }
 
 // DeleteTransactionTemplateWithResponse request returning *DeleteTransactionTemplateResponse
@@ -9828,6 +10346,53 @@ func ParseListAccountBalancesResponse(rsp *http.Response) (*ListAccountBalancesR
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRestructureAccountsResponse parses an HTTP response from a RestructureAccountsWithResponse call
+func ParseRestructureAccountsResponse(rsp *http.Response) (*RestructureAccountsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestructureAccountsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RestructureResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest AccountFQNConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 
@@ -10461,6 +11026,53 @@ func ParseCreateCategoryResponse(rsp *http.Response) (*CreateCategoryResponse, e
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest CategoryFQNConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRestructureCategoriesResponse parses an HTTP response from a RestructureCategoriesWithResponse call
+func ParseRestructureCategoriesResponse(rsp *http.Response) (*RestructureCategoriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestructureCategoriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RestructureResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
 		var dest CategoryFQNConflict
@@ -11324,6 +11936,53 @@ func ParseCreateTagResponse(rsp *http.Response) (*CreateTagResponse, error) {
 	return response, nil
 }
 
+// ParseRestructureTagsResponse parses an HTTP response from a RestructureTagsWithResponse call
+func ParseRestructureTagsResponse(rsp *http.Response) (*RestructureTagsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestructureTagsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RestructureResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest TagFQNConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseDeleteTagResponse parses an HTTP response from a DeleteTagWithResponse call
 func ParseDeleteTagResponse(rsp *http.Response) (*DeleteTagResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -11517,6 +12176,53 @@ func ParseCreateTransactionTemplateResponse(rsp *http.Response) (*CreateTransact
 	return response, nil
 }
 
+// ParseRestructureTransactionTemplatesResponse parses an HTTP response from a RestructureTransactionTemplatesWithResponse call
+func ParseRestructureTransactionTemplatesResponse(rsp *http.Response) (*RestructureTransactionTemplatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RestructureTransactionTemplatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RestructureResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest TransactionTemplateFQNConflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseDeleteTransactionTemplateResponse parses an HTTP response from a DeleteTransactionTemplateWithResponse call
 func ParseDeleteTransactionTemplateResponse(rsp *http.Response) (*DeleteTransactionTemplateResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -11624,13 +12330,6 @@ func ParseReplaceTransactionTemplateResponse(rsp *http.Response) (*ReplaceTransa
 			return nil, err
 		}
 		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest TransactionTemplateFQNConflict
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
 
 	}
 

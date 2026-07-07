@@ -267,6 +267,35 @@ RETURNING account_id, fqn, account_type, is_hidden, is_featured, currency, exter
 	return account, nil
 }
 
+// RestructureFQNs rewrites active account FQNs at or below from to the to prefix.
+func (s *AccountStore) RestructureFQNs(ctx context.Context, from string, to string) (int64, error) {
+	result, err := s.db.query().ExecContext(
+		ctx,
+		`UPDATE `+s.db.accountingName("account")+`
+SET fqn = ? || substr(fqn, length(?) + 1),
+    updated_at = CURRENT_TIMESTAMP
+WHERE tombstoned_at IS NULL
+  AND (fqn = ? OR starts_with(fqn, ? || ':'))`,
+		to,
+		from,
+		from,
+		from,
+	)
+	if err != nil {
+		if isUniqueConstraintError(err) {
+			return 0, fmt.Errorf("%w: active account fqn rewrite conflicts with existing account hierarchy", services.ErrConflict)
+		}
+		return 0, fmt.Errorf("restructure account fqns: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("read restructure account affected rows: %w", err)
+	}
+
+	return affected, nil
+}
+
 // Tombstone marks an account deleted without removing its historical row.
 func (s *AccountStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.query().ExecContext(

@@ -206,9 +206,6 @@ RETURNING transaction_template_id, fqn, parent_fqn, name, level, created_at, upd
 			return services.ErrNotFound
 		}
 		if scanErr != nil {
-			if isUniqueConstraintError(scanErr) {
-				return fmt.Errorf("%w: active transaction template fqn already exists", services.ErrConflict)
-			}
 			return fmt.Errorf("update transaction template: %w", scanErr)
 		}
 		template = replaced
@@ -242,6 +239,35 @@ WHERE transaction_template_id = ? AND tombstoned_at IS NULL`,
 	}
 
 	return template, nil
+}
+
+// RestructureFQNs rewrites active transaction template FQNs at or below from to the to prefix.
+func (s *TransactionTemplateStore) RestructureFQNs(ctx context.Context, from string, to string) (int64, error) {
+	result, err := s.db.query().ExecContext(
+		ctx,
+		`UPDATE `+s.db.accountingName("transaction_template")+`
+SET fqn = ? || substr(fqn, length(?) + 1),
+    updated_at = CURRENT_TIMESTAMP
+WHERE tombstoned_at IS NULL
+  AND (fqn = ? OR starts_with(fqn, ? || ':'))`,
+		to,
+		from,
+		from,
+		from,
+	)
+	if err != nil {
+		if isUniqueConstraintError(err) {
+			return 0, fmt.Errorf("%w: active transaction template fqn rewrite conflicts with existing transaction template hierarchy", services.ErrConflict)
+		}
+		return 0, fmt.Errorf("restructure transaction template fqns: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("read restructure transaction template affected rows: %w", err)
+	}
+
+	return affected, nil
 }
 
 // Tombstone marks a transaction template and its active record defaults deleted.

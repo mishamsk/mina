@@ -1183,6 +1183,17 @@ type PostingStatus string
 // ReconciliationStatus defines model for ReconciliationStatus.
 type ReconciliationStatus string
 
+// RestructureRequest defines model for RestructureRequest.
+type RestructureRequest struct {
+	FromFqn string `json:"from_fqn"`
+	ToFqn   string `json:"to_fqn"`
+}
+
+// RestructureResponse defines model for RestructureResponse.
+type RestructureResponse struct {
+	MovedCount int64 `json:"moved_count"`
+}
+
 // Source defines model for Source.
 type Source string
 
@@ -1648,6 +1659,9 @@ type GetTransactionMonthTotalsParams struct {
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
 
+// RestructureAccountsJSONRequestBody defines body for RestructureAccounts for application/json ContentType.
+type RestructureAccountsJSONRequestBody = RestructureRequest
+
 // UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
 type UpdateAccountJSONRequestBody = UpdateAccountRequest
 
@@ -1656,6 +1670,9 @@ type CreateCreditLimitHistoryJSONRequestBody = CreateCreditLimitHistoryRequest
 
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody = CreateCategoryRequest
+
+// RestructureCategoriesJSONRequestBody defines body for RestructureCategories for application/json ContentType.
+type RestructureCategoriesJSONRequestBody = RestructureRequest
 
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = UpdateCategoryRequest
@@ -1687,11 +1704,17 @@ type BulkUpdateJournalRecordTagsJSONRequestBody = BulkTagRecordsRequest
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = CreateTagRequest
 
+// RestructureTagsJSONRequestBody defines body for RestructureTags for application/json ContentType.
+type RestructureTagsJSONRequestBody = RestructureRequest
+
 // UpdateTagJSONRequestBody defines body for UpdateTag for application/json ContentType.
 type UpdateTagJSONRequestBody = UpdateTagRequest
 
 // CreateTransactionTemplateJSONRequestBody defines body for CreateTransactionTemplate for application/json ContentType.
 type CreateTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
+
+// RestructureTransactionTemplatesJSONRequestBody defines body for RestructureTransactionTemplates for application/json ContentType.
+type RestructureTransactionTemplatesJSONRequestBody = RestructureRequest
 
 // ReplaceTransactionTemplateJSONRequestBody defines body for ReplaceTransactionTemplate for application/json ContentType.
 type ReplaceTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
@@ -1725,6 +1748,9 @@ type ServerInterface interface {
 	// List current and posted-only balances for active balance accounts.
 	// (GET /api/accounts/balances)
 	ListAccountBalances(w http.ResponseWriter, r *http.Request, params ListAccountBalancesParams)
+	// Rename or move an account hierarchy path.
+	// (POST /api/accounts/restructure)
+	RestructureAccounts(w http.ResponseWriter, r *http.Request)
 	// Tombstone an account.
 	// (DELETE /api/accounts/{account_id})
 	DeleteAccount(w http.ResponseWriter, r *http.Request, accountId int64)
@@ -1773,6 +1799,9 @@ type ServerInterface interface {
 	// Create a category.
 	// (POST /api/categories)
 	CreateCategory(w http.ResponseWriter, r *http.Request)
+	// Rename or move a category hierarchy path.
+	// (POST /api/categories/restructure)
+	RestructureCategories(w http.ResponseWriter, r *http.Request)
 	// Tombstone a category.
 	// (DELETE /api/categories/{category_id})
 	DeleteCategory(w http.ResponseWriter, r *http.Request, categoryId int64)
@@ -1842,6 +1871,9 @@ type ServerInterface interface {
 	// Create a tag.
 	// (POST /api/tags)
 	CreateTag(w http.ResponseWriter, r *http.Request)
+	// Rename or move a tag hierarchy path.
+	// (POST /api/tags/restructure)
+	RestructureTags(w http.ResponseWriter, r *http.Request)
 	// Tombstone a tag.
 	// (DELETE /api/tags/{tag_id})
 	DeleteTag(w http.ResponseWriter, r *http.Request, tagId int64)
@@ -1857,6 +1889,9 @@ type ServerInterface interface {
 	// Create a transaction template.
 	// (POST /api/transaction-templates)
 	CreateTransactionTemplate(w http.ResponseWriter, r *http.Request)
+	// Rename or move a transaction template hierarchy path.
+	// (POST /api/transaction-templates/restructure)
+	RestructureTransactionTemplates(w http.ResponseWriter, r *http.Request)
 	// Tombstone a transaction template and its record defaults.
 	// (DELETE /api/transaction-templates/{transaction_template_id})
 	DeleteTransactionTemplate(w http.ResponseWriter, r *http.Request, transactionTemplateId int64)
@@ -1920,6 +1955,12 @@ func (_ Unimplemented) CreateAccount(w http.ResponseWriter, r *http.Request) {
 // List current and posted-only balances for active balance accounts.
 // (GET /api/accounts/balances)
 func (_ Unimplemented) ListAccountBalances(w http.ResponseWriter, r *http.Request, params ListAccountBalancesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename or move an account hierarchy path.
+// (POST /api/accounts/restructure)
+func (_ Unimplemented) RestructureAccounts(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2016,6 +2057,12 @@ func (_ Unimplemented) ListCategories(w http.ResponseWriter, r *http.Request, pa
 // Create a category.
 // (POST /api/categories)
 func (_ Unimplemented) CreateCategory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename or move a category hierarchy path.
+// (POST /api/categories/restructure)
+func (_ Unimplemented) RestructureCategories(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2157,6 +2204,12 @@ func (_ Unimplemented) CreateTag(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Rename or move a tag hierarchy path.
+// (POST /api/tags/restructure)
+func (_ Unimplemented) RestructureTags(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Tombstone a tag.
 // (DELETE /api/tags/{tag_id})
 func (_ Unimplemented) DeleteTag(w http.ResponseWriter, r *http.Request, tagId int64) {
@@ -2184,6 +2237,12 @@ func (_ Unimplemented) ListTransactionTemplates(w http.ResponseWriter, r *http.R
 // Create a transaction template.
 // (POST /api/transaction-templates)
 func (_ Unimplemented) CreateTransactionTemplate(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename or move a transaction template hierarchy path.
+// (POST /api/transaction-templates/restructure)
+func (_ Unimplemented) RestructureTransactionTemplates(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2455,6 +2514,20 @@ func (siw *ServerInterfaceWrapper) ListAccountBalances(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAccountBalances(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestructureAccounts operation middleware
+func (siw *ServerInterfaceWrapper) RestructureAccounts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestructureAccounts(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3206,6 +3279,20 @@ func (siw *ServerInterfaceWrapper) CreateCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateCategory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestructureCategories operation middleware
+func (siw *ServerInterfaceWrapper) RestructureCategories(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestructureCategories(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4264,6 +4351,20 @@ func (siw *ServerInterfaceWrapper) CreateTag(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// RestructureTags operation middleware
+func (siw *ServerInterfaceWrapper) RestructureTags(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestructureTags(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteTag operation middleware
 func (siw *ServerInterfaceWrapper) DeleteTag(w http.ResponseWriter, r *http.Request) {
 
@@ -4435,6 +4536,20 @@ func (siw *ServerInterfaceWrapper) CreateTransactionTemplate(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateTransactionTemplate(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RestructureTransactionTemplates operation middleware
+func (siw *ServerInterfaceWrapper) RestructureTransactionTemplates(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RestructureTransactionTemplates(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5158,6 +5273,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/accounts/balances", wrapper.ListAccountBalances)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/accounts/restructure", wrapper.RestructureAccounts)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/api/accounts/{account_id}", wrapper.DeleteAccount)
 	})
 	r.Group(func(r chi.Router) {
@@ -5204,6 +5322,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/categories", wrapper.CreateCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/categories/restructure", wrapper.RestructureCategories)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/api/categories/{category_id}", wrapper.DeleteCategory)
@@ -5275,6 +5396,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/api/tags", wrapper.CreateTag)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/tags/restructure", wrapper.RestructureTags)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/api/tags/{tag_id}", wrapper.DeleteTag)
 	})
 	r.Group(func(r chi.Router) {
@@ -5288,6 +5412,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/transaction-templates", wrapper.CreateTransactionTemplate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/transaction-templates/restructure", wrapper.RestructureTransactionTemplates)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/api/transaction-templates/{transaction_template_id}", wrapper.DeleteTransactionTemplate)
@@ -5471,6 +5598,70 @@ func (response ListAccountBalances400JSONResponse) VisitListAccountBalancesRespo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureAccountsRequestObject struct {
+	Body *RestructureAccountsJSONRequestBody
+}
+
+type RestructureAccountsResponseObject interface {
+	VisitRestructureAccountsResponse(w http.ResponseWriter) error
+}
+
+type RestructureAccounts200JSONResponse RestructureResponse
+
+func (response RestructureAccounts200JSONResponse) VisitRestructureAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureAccounts400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response RestructureAccounts400JSONResponse) VisitRestructureAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureAccounts404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RestructureAccounts404JSONResponse) VisitRestructureAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureAccounts409JSONResponse struct{ AccountFQNConflictJSONResponse }
+
+func (response RestructureAccounts409JSONResponse) VisitRestructureAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -6273,6 +6464,72 @@ type CreateCategory409JSONResponse struct {
 }
 
 func (response CreateCategory409JSONResponse) VisitCreateCategoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureCategoriesRequestObject struct {
+	Body *RestructureCategoriesJSONRequestBody
+}
+
+type RestructureCategoriesResponseObject interface {
+	VisitRestructureCategoriesResponse(w http.ResponseWriter) error
+}
+
+type RestructureCategories200JSONResponse RestructureResponse
+
+func (response RestructureCategories200JSONResponse) VisitRestructureCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureCategories400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response RestructureCategories400JSONResponse) VisitRestructureCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureCategories404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RestructureCategories404JSONResponse) VisitRestructureCategoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureCategories409JSONResponse struct {
+	CategoryFQNConflictJSONResponse
+}
+
+func (response RestructureCategories409JSONResponse) VisitRestructureCategoriesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -7332,6 +7589,70 @@ func (response CreateTag409JSONResponse) VisitCreateTagResponse(w http.ResponseW
 	return err
 }
 
+type RestructureTagsRequestObject struct {
+	Body *RestructureTagsJSONRequestBody
+}
+
+type RestructureTagsResponseObject interface {
+	VisitRestructureTagsResponse(w http.ResponseWriter) error
+}
+
+type RestructureTags200JSONResponse RestructureResponse
+
+func (response RestructureTags200JSONResponse) VisitRestructureTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTags400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response RestructureTags400JSONResponse) VisitRestructureTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTags404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RestructureTags404JSONResponse) VisitRestructureTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTags409JSONResponse struct{ TagFQNConflictJSONResponse }
+
+func (response RestructureTags409JSONResponse) VisitRestructureTagsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteTagRequestObject struct {
 	TagId int64 `json:"tag_id"`
 }
@@ -7580,6 +7901,72 @@ func (response CreateTransactionTemplate409JSONResponse) VisitCreateTransactionT
 	return err
 }
 
+type RestructureTransactionTemplatesRequestObject struct {
+	Body *RestructureTransactionTemplatesJSONRequestBody
+}
+
+type RestructureTransactionTemplatesResponseObject interface {
+	VisitRestructureTransactionTemplatesResponse(w http.ResponseWriter) error
+}
+
+type RestructureTransactionTemplates200JSONResponse RestructureResponse
+
+func (response RestructureTransactionTemplates200JSONResponse) VisitRestructureTransactionTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTransactionTemplates400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response RestructureTransactionTemplates400JSONResponse) VisitRestructureTransactionTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTransactionTemplates404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RestructureTransactionTemplates404JSONResponse) VisitRestructureTransactionTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RestructureTransactionTemplates409JSONResponse struct {
+	TransactionTemplateFQNConflictJSONResponse
+}
+
+func (response RestructureTransactionTemplates409JSONResponse) VisitRestructureTransactionTemplatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteTransactionTemplateRequestObject struct {
 	TransactionTemplateId int64 `json:"transaction_template_id"`
 }
@@ -7721,22 +8108,6 @@ func (response ReplaceTransactionTemplate404JSONResponse) VisitReplaceTransactio
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ReplaceTransactionTemplate409JSONResponse struct {
-	TransactionTemplateFQNConflictJSONResponse
-}
-
-func (response ReplaceTransactionTemplate409JSONResponse) VisitReplaceTransactionTemplateResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8199,6 +8570,9 @@ type StrictServerInterface interface {
 	// List current and posted-only balances for active balance accounts.
 	// (GET /api/accounts/balances)
 	ListAccountBalances(ctx context.Context, request ListAccountBalancesRequestObject) (ListAccountBalancesResponseObject, error)
+	// Rename or move an account hierarchy path.
+	// (POST /api/accounts/restructure)
+	RestructureAccounts(ctx context.Context, request RestructureAccountsRequestObject) (RestructureAccountsResponseObject, error)
 	// Tombstone an account.
 	// (DELETE /api/accounts/{account_id})
 	DeleteAccount(ctx context.Context, request DeleteAccountRequestObject) (DeleteAccountResponseObject, error)
@@ -8247,6 +8621,9 @@ type StrictServerInterface interface {
 	// Create a category.
 	// (POST /api/categories)
 	CreateCategory(ctx context.Context, request CreateCategoryRequestObject) (CreateCategoryResponseObject, error)
+	// Rename or move a category hierarchy path.
+	// (POST /api/categories/restructure)
+	RestructureCategories(ctx context.Context, request RestructureCategoriesRequestObject) (RestructureCategoriesResponseObject, error)
 	// Tombstone a category.
 	// (DELETE /api/categories/{category_id})
 	DeleteCategory(ctx context.Context, request DeleteCategoryRequestObject) (DeleteCategoryResponseObject, error)
@@ -8316,6 +8693,9 @@ type StrictServerInterface interface {
 	// Create a tag.
 	// (POST /api/tags)
 	CreateTag(ctx context.Context, request CreateTagRequestObject) (CreateTagResponseObject, error)
+	// Rename or move a tag hierarchy path.
+	// (POST /api/tags/restructure)
+	RestructureTags(ctx context.Context, request RestructureTagsRequestObject) (RestructureTagsResponseObject, error)
 	// Tombstone a tag.
 	// (DELETE /api/tags/{tag_id})
 	DeleteTag(ctx context.Context, request DeleteTagRequestObject) (DeleteTagResponseObject, error)
@@ -8331,6 +8711,9 @@ type StrictServerInterface interface {
 	// Create a transaction template.
 	// (POST /api/transaction-templates)
 	CreateTransactionTemplate(ctx context.Context, request CreateTransactionTemplateRequestObject) (CreateTransactionTemplateResponseObject, error)
+	// Rename or move a transaction template hierarchy path.
+	// (POST /api/transaction-templates/restructure)
+	RestructureTransactionTemplates(ctx context.Context, request RestructureTransactionTemplatesRequestObject) (RestructureTransactionTemplatesResponseObject, error)
 	// Tombstone a transaction template and its record defaults.
 	// (DELETE /api/transaction-templates/{transaction_template_id})
 	DeleteTransactionTemplate(ctx context.Context, request DeleteTransactionTemplateRequestObject) (DeleteTransactionTemplateResponseObject, error)
@@ -8480,6 +8863,37 @@ func (sh *strictHandler) ListAccountBalances(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListAccountBalancesResponseObject); ok {
 		if err := validResponse.VisitListAccountBalancesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestructureAccounts operation middleware
+func (sh *strictHandler) RestructureAccounts(w http.ResponseWriter, r *http.Request) {
+	var request RestructureAccountsRequestObject
+
+	var body RestructureAccountsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestructureAccounts(ctx, request.(RestructureAccountsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestructureAccounts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestructureAccountsResponseObject); ok {
+		if err := validResponse.VisitRestructureAccountsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -8906,6 +9320,37 @@ func (sh *strictHandler) CreateCategory(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateCategoryResponseObject); ok {
 		if err := validResponse.VisitCreateCategoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestructureCategories operation middleware
+func (sh *strictHandler) RestructureCategories(w http.ResponseWriter, r *http.Request) {
+	var request RestructureCategoriesRequestObject
+
+	var body RestructureCategoriesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestructureCategories(ctx, request.(RestructureCategoriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestructureCategories")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestructureCategoriesResponseObject); ok {
+		if err := validResponse.VisitRestructureCategoriesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -9569,6 +10014,37 @@ func (sh *strictHandler) CreateTag(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// RestructureTags operation middleware
+func (sh *strictHandler) RestructureTags(w http.ResponseWriter, r *http.Request) {
+	var request RestructureTagsRequestObject
+
+	var body RestructureTagsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestructureTags(ctx, request.(RestructureTagsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestructureTags")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestructureTagsResponseObject); ok {
+		if err := validResponse.VisitRestructureTagsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DeleteTag operation middleware
 func (sh *strictHandler) DeleteTag(w http.ResponseWriter, r *http.Request, tagId int64) {
 	var request DeleteTagRequestObject
@@ -9705,6 +10181,37 @@ func (sh *strictHandler) CreateTransactionTemplate(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateTransactionTemplateResponseObject); ok {
 		if err := validResponse.VisitCreateTransactionTemplateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RestructureTransactionTemplates operation middleware
+func (sh *strictHandler) RestructureTransactionTemplates(w http.ResponseWriter, r *http.Request) {
+	var request RestructureTransactionTemplatesRequestObject
+
+	var body RestructureTransactionTemplatesJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RestructureTransactionTemplates(ctx, request.(RestructureTransactionTemplatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RestructureTransactionTemplates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RestructureTransactionTemplatesResponseObject); ok {
+		if err := validResponse.VisitRestructureTransactionTemplatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -10120,142 +10627,148 @@ func (sh *strictHandler) CancelTransaction(w http.ResponseWriter, r *http.Reques
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"VSZXzHx//38BAAD//w==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

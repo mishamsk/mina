@@ -79,6 +79,7 @@ type Repository interface {
 	List(context.Context, services.ListOptions) (services.PaginatedList[Template], error)
 	ListActiveFQNs(context.Context) ([]ActiveFQN, error)
 	Replace(context.Context, int64, WriteInput) (Template, error)
+	RestructureFQNs(context.Context, string, string) (int64, error)
 	Tombstone(context.Context, int64) error
 }
 
@@ -143,7 +144,7 @@ func (s *Service) Create(ctx context.Context, input WriteInput) (Template, error
 		if err := s.validateTemplateInput(ctx, input.FQN, input.Records); err != nil {
 			return err
 		}
-		if err := s.ensureFQNAvailable(ctx, input.FQN, 0); err != nil {
+		if err := s.ensureFQNAvailable(ctx, input.FQN); err != nil {
 			return err
 		}
 
@@ -192,13 +193,13 @@ func (s *Service) List(ctx context.Context, opts services.ListOptions) (services
 	return s.repo.List(ctx, opts)
 }
 
-func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string, excludeID int64) error {
+func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string) error {
 	refs, err := s.repo.ListActiveFQNs(ctx)
 	if err != nil {
 		return err
 	}
 	for _, ref := range refs {
-		if ref.ID == excludeID || !services.FQNPathConflict(fqn, ref.FQN) {
+		if !services.FQNPathConflict(fqn, ref.FQN) {
 			continue
 		}
 		if fqn == ref.FQN {
@@ -218,24 +219,23 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Temp
 	if err := validateTemplateInputShape(input.FQN, input.Records); err != nil {
 		return Template{}, err
 	}
-	if _, err := s.repo.Get(ctx, id); errors.Is(err, services.ErrNotFound) {
-		return Template{}, services.NotFound("transaction template not found")
-	} else if err != nil {
-		return Template{}, err
-	}
 	var template Template
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateTemplateReferences(ctx, input.Records); err != nil {
+		current, err := s.repo.Get(ctx, id)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("transaction template not found")
+		}
+		if err != nil {
 			return err
 		}
-		if err := s.ensureFQNAvailable(ctx, input.FQN, id); err != nil {
+		if input.FQN != current.FQN {
+			return services.InvalidRequest("fqn cannot be changed by replace; use restructure")
+		}
+		if err := s.validateTemplateReferences(ctx, input.Records); err != nil {
 			return err
 		}
 
 		replaced, err := s.repo.Replace(ctx, id, input)
-		if errors.Is(err, services.ErrConflict) {
-			return services.Conflict("active transaction template fqn already exists")
-		}
 		if errors.Is(err, services.ErrInvalidReference) {
 			return invalidReferenceError()
 		}
@@ -254,15 +254,90 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Temp
 	return template, nil
 }
 
+// Restructure atomically rewrites an active transaction template FQN subtree from one path to another.
+func (s *Service) Restructure(ctx context.Context, from string, to string) (int64, error) {
+	if err := validateFQN(from); err != nil {
+		return 0, err
+	}
+	if err := validateFQN(to); err != nil {
+		return 0, err
+	}
+	if from == to {
+		return 0, services.InvalidRequest("to_fqn must differ from from_fqn")
+	}
+
+	var movedCount int64
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		refs, err := s.repo.ListActiveFQNs(ctx)
+		if err != nil {
+			return err
+		}
+
+		moved := map[int64]ActiveFQN{}
+		for _, ref := range refs {
+			if services.FQNAtOrUnder(ref.FQN, from) {
+				moved[ref.ID] = ref
+			}
+		}
+		if len(moved) == 0 {
+			return services.NotFound("transaction template path not found")
+		}
+
+		if services.FQNAtOrUnder(to, from) && !singleLeafMove(moved, from) {
+			return services.InvalidRequest("transaction template group cannot be moved into its own subtree")
+		}
+
+		for _, ref := range refs {
+			if _, ok := moved[ref.ID]; ok {
+				continue
+			}
+			if services.FQNPathConflict(to, ref.FQN) {
+				return services.Conflict("transaction template destination fqn conflicts with existing transaction template hierarchy")
+			}
+		}
+
+		count, err := s.repo.RestructureFQNs(ctx, from, to)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("transaction template destination fqn conflicts with existing transaction template hierarchy")
+		}
+		if err != nil {
+			return err
+		}
+
+		movedCount = count
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+
+	return movedCount, nil
+}
+
+func singleLeafMove(moved map[int64]ActiveFQN, from string) bool {
+	if len(moved) != 1 {
+		return false
+	}
+	for _, ref := range moved {
+		return ref.FQN == from
+	}
+	return false
+}
+
 // Delete tombstones a transaction template and its active record defaults.
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	if id <= 0 {
 		return services.InvalidRequest("transaction_template_id must be positive")
 	}
 
-	if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
-		return services.NotFound("transaction template not found")
-	} else if err != nil {
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("transaction template not found")
+		} else if err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
 		return err
 	}
 

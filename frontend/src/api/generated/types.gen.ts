@@ -39,6 +39,15 @@ export type AccountListResponse = {
     total_count: number;
 };
 
+export type RestructureRequest = {
+    from_fqn: string;
+    to_fqn: string;
+};
+
+export type RestructureResponse = {
+    moved_count: number;
+};
+
 export type AccountBalance = {
     account_id: number;
     currency: string;
@@ -961,7 +970,7 @@ export type CreateCategoryErrors = {
      */
     400: ErrorResponse;
     /**
-     * The category FQN duplicates an active category or conflicts with the active category hierarchy.
+     * The category FQN duplicates an active category, conflicts with the active category hierarchy, or a category restructure would collide with active budget category/month rows.
      */
     409: ErrorResponse;
 };
@@ -976,6 +985,39 @@ export type CreateCategoryResponses = {
 };
 
 export type CreateCategoryResponse = CreateCategoryResponses[keyof CreateCategoryResponses];
+
+export type RestructureCategoriesData = {
+    body: RestructureRequest;
+    path?: never;
+    query?: never;
+    url: '/api/categories/restructure';
+};
+
+export type RestructureCategoriesErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The category FQN duplicates an active category, conflicts with the active category hierarchy, or a category restructure would collide with active budget category/month rows.
+     */
+    409: ErrorResponse;
+};
+
+export type RestructureCategoriesError = RestructureCategoriesErrors[keyof RestructureCategoriesErrors];
+
+export type RestructureCategoriesResponses = {
+    /**
+     * Category FQNs rewritten.
+     */
+    200: RestructureResponse;
+};
+
+export type RestructureCategoriesResponse = RestructureCategoriesResponses[keyof RestructureCategoriesResponses];
 
 export type DeleteCategoryData = {
     body?: never;
@@ -1136,6 +1178,39 @@ export type CreateTagResponses = {
 };
 
 export type CreateTagResponse = CreateTagResponses[keyof CreateTagResponses];
+
+export type RestructureTagsData = {
+    body: RestructureRequest;
+    path?: never;
+    query?: never;
+    url: '/api/tags/restructure';
+};
+
+export type RestructureTagsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The tag FQN duplicates an active tag or conflicts with the active tag hierarchy.
+     */
+    409: ErrorResponse;
+};
+
+export type RestructureTagsError = RestructureTagsErrors[keyof RestructureTagsErrors];
+
+export type RestructureTagsResponses = {
+    /**
+     * Tag FQNs rewritten.
+     */
+    200: RestructureResponse;
+};
+
+export type RestructureTagsResponse = RestructureTagsResponses[keyof RestructureTagsResponses];
 
 export type DeleteTagData = {
     body?: never;
@@ -1461,6 +1536,39 @@ export type CreateAccountResponses = {
 };
 
 export type CreateAccountResponse = CreateAccountResponses[keyof CreateAccountResponses];
+
+export type RestructureAccountsData = {
+    body: RestructureRequest;
+    path?: never;
+    query?: never;
+    url: '/api/accounts/restructure';
+};
+
+export type RestructureAccountsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The account FQN duplicates an active account or conflicts with the active account hierarchy.
+     */
+    409: ErrorResponse;
+};
+
+export type RestructureAccountsError = RestructureAccountsErrors[keyof RestructureAccountsErrors];
+
+export type RestructureAccountsResponses = {
+    /**
+     * Account FQNs rewritten.
+     */
+    200: RestructureResponse;
+};
+
+export type RestructureAccountsResponse = RestructureAccountsResponses[keyof RestructureAccountsResponses];
 
 export type ListAccountBalancesData = {
     body?: never;
@@ -1942,6 +2050,39 @@ export type CreateTransactionTemplateResponses = {
 
 export type CreateTransactionTemplateResponse = CreateTransactionTemplateResponses[keyof CreateTransactionTemplateResponses];
 
+export type RestructureTransactionTemplatesData = {
+    body: RestructureRequest;
+    path?: never;
+    query?: never;
+    url: '/api/transaction-templates/restructure';
+};
+
+export type RestructureTransactionTemplatesErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The transaction template FQN duplicates an active template or conflicts with the active template hierarchy.
+     */
+    409: ErrorResponse;
+};
+
+export type RestructureTransactionTemplatesError = RestructureTransactionTemplatesErrors[keyof RestructureTransactionTemplatesErrors];
+
+export type RestructureTransactionTemplatesResponses = {
+    /**
+     * Transaction template FQNs rewritten.
+     */
+    200: RestructureResponse;
+};
+
+export type RestructureTransactionTemplatesResponse = RestructureTransactionTemplatesResponses[keyof RestructureTransactionTemplatesResponses];
+
 export type DeleteTransactionTemplateData = {
     body?: never;
     path: {
@@ -2022,10 +2163,6 @@ export type ReplaceTransactionTemplateErrors = {
      * The requested resource was not found.
      */
     404: ErrorResponse;
-    /**
-     * The transaction template FQN duplicates an active template or conflicts with the active template hierarchy.
-     */
-    409: ErrorResponse;
 };
 
 export type ReplaceTransactionTemplateError = ReplaceTransactionTemplateErrors[keyof ReplaceTransactionTemplateErrors];

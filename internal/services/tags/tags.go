@@ -64,6 +64,7 @@ type Repository interface {
 	Get(context.Context, int64, bool) (Tag, error)
 	List(context.Context, ListOptions) (services.PaginatedList[Tag], error)
 	UpdateHidden(context.Context, int64, bool) (Tag, error)
+	RestructureFQNs(context.Context, string, string) (int64, error)
 	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
 }
@@ -204,6 +205,79 @@ func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (T
 	s.cacheActiveReference(tag)
 
 	return tag, nil
+}
+
+// Restructure atomically rewrites an active tag FQN subtree from one path to another.
+func (s *Service) Restructure(ctx context.Context, from string, to string) (int64, error) {
+	if err := validateFQN(from); err != nil {
+		return 0, err
+	}
+	if err := validateFQN(to); err != nil {
+		return 0, err
+	}
+	if from == to {
+		return 0, services.InvalidRequest("to_fqn must differ from from_fqn")
+	}
+
+	var movedCount int64
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		states, err := s.cache.Snapshot(ctx)
+		if err != nil {
+			return err
+		}
+
+		moved := map[int64]tagReferenceState{}
+		for id, state := range states {
+			if state.active && services.FQNAtOrUnder(state.fqn, from) {
+				moved[id] = state
+			}
+		}
+		if len(moved) == 0 {
+			return services.NotFound("tag path not found")
+		}
+
+		if services.FQNAtOrUnder(to, from) && !singleLeafMove(moved, from) {
+			return services.InvalidRequest("tag group cannot be moved into its own subtree")
+		}
+
+		for id, state := range states {
+			if !state.active {
+				continue
+			}
+			if _, ok := moved[id]; ok {
+				continue
+			}
+			if services.FQNPathConflict(to, state.fqn) {
+				return services.Conflict("tag destination fqn conflicts with existing tag hierarchy")
+			}
+		}
+
+		count, err := s.repo.RestructureFQNs(ctx, from, to)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("tag destination fqn conflicts with existing tag hierarchy")
+		}
+		if err != nil {
+			return err
+		}
+
+		movedCount = count
+		s.InvalidateReferenceCache()
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+
+	return movedCount, nil
+}
+
+func singleLeafMove(moved map[int64]tagReferenceState, from string) bool {
+	if len(moved) != 1 {
+		return false
+	}
+	for _, state := range moved {
+		return state.fqn == from
+	}
+	return false
 }
 
 // ActiveUsage reports active resources that reference a tag.

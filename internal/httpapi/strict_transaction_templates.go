@@ -42,6 +42,15 @@ func (s *strictServer) CreateTransactionTemplate(ctx context.Context, request op
 	return openapi.CreateTransactionTemplate201JSONResponse(transactionTemplateAPIResponse(template)), nil
 }
 
+func (s *strictServer) RestructureTransactionTemplates(ctx context.Context, request openapi.RestructureTransactionTemplatesRequestObject) (openapi.RestructureTransactionTemplatesResponseObject, error) {
+	movedCount, err := s.deps.Templates.Restructure(ctx, request.Body.FromFqn, request.Body.ToFqn)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.RestructureTransactionTemplates200JSONResponse{MovedCount: movedCount}, nil
+}
+
 func (s *strictServer) DeleteTransactionTemplate(ctx context.Context, request openapi.DeleteTransactionTemplateRequestObject) (openapi.DeleteTransactionTemplateResponseObject, error) {
 	if err := s.deps.Templates.Delete(ctx, request.TransactionTemplateId); err != nil {
 		return nil, err

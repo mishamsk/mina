@@ -99,6 +99,7 @@ type Repository interface {
 	Get(context.Context, int64, bool) (Category, error)
 	List(context.Context, ListOptions) (services.PaginatedList[Category], error)
 	UpdateHidden(context.Context, int64, bool) (Category, error)
+	RestructureFQNs(context.Context, string, string) (int64, error)
 	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
 }
@@ -248,6 +249,79 @@ func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (C
 	s.cacheActiveReference(category)
 
 	return category, nil
+}
+
+// Restructure atomically rewrites an active category FQN subtree from one path to another.
+func (s *Service) Restructure(ctx context.Context, from string, to string) (int64, error) {
+	if err := validateFQN(from); err != nil {
+		return 0, err
+	}
+	if err := validateFQN(to); err != nil {
+		return 0, err
+	}
+	if from == to {
+		return 0, services.InvalidRequest("to_fqn must differ from from_fqn")
+	}
+
+	var movedCount int64
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		states, err := s.cache.Snapshot(ctx)
+		if err != nil {
+			return err
+		}
+
+		moved := map[int64]categoryReferenceState{}
+		for id, state := range states {
+			if state.active && services.FQNAtOrUnder(state.fqn, from) {
+				moved[id] = state
+			}
+		}
+		if len(moved) == 0 {
+			return services.NotFound("category path not found")
+		}
+
+		if services.FQNAtOrUnder(to, from) && !singleLeafMove(moved, from) {
+			return services.InvalidRequest("category group cannot be moved into its own subtree")
+		}
+
+		for id, state := range states {
+			if !state.active {
+				continue
+			}
+			if _, ok := moved[id]; ok {
+				continue
+			}
+			if services.FQNPathConflict(to, state.fqn) {
+				return services.Conflict("category destination fqn conflicts with existing category hierarchy")
+			}
+		}
+
+		count, err := s.repo.RestructureFQNs(ctx, from, to)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("category restructure conflicts with an existing active budget for the destination path and month")
+		}
+		if err != nil {
+			return err
+		}
+
+		movedCount = count
+		s.InvalidateReferenceCache()
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+
+	return movedCount, nil
+}
+
+func singleLeafMove(moved map[int64]categoryReferenceState, from string) bool {
+	if len(moved) != 1 {
+		return false
+	}
+	for _, state := range moved {
+		return state.fqn == from
+	}
+	return false
 }
 
 // ActiveUsage reports active resources that reference a category.

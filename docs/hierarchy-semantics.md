@@ -65,8 +65,11 @@ leaves and groups.
 - The moved set is every active row whose FQN equals `from` or lives under it.
   An empty moved set is not found. Hidden leaves move with the subtree.
   Tombstoned rows are never rewritten.
-- `to` must pass FQN validation, must differ from `from`, and must not lie
-  under `from` (a node cannot move inside its own subtree).
+- `to` must pass FQN validation and must differ from `from`. When the moved
+  set is more than the single leaf at `from` (i.e. `from` addresses a group),
+  `to` must not lie under `from` (a group cannot move inside its own subtree).
+  When the moved set is exactly the single leaf at `from`, `to` may lie under
+  `from`: that is the leaf-to-group transition.
 - The destination must be **fully unoccupied**: the operation is rejected with
   a conflict when any non-moved active row lies at or under `to`, or is a path
   prefix of `to`. This forbids silent subtree merges and mixed leaf/group

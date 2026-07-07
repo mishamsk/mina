@@ -9,6 +9,7 @@
 - Templates are hierarchical, date-free, reusable manual-entry defaults.
 - Template records are partial defaults and are not required to balance or form complete journal records.
 - Category is the only required record default; account, member, currency, amount, tags, memo, posting status, and reconciliation status are independently optional.
+- Replace preserves template identity and `fqn`; rename and move operations go through restructure.
 - Referenced account, category, member, and tag IDs are validated through dictionary service APIs; hidden accounts, categories, and tags remain valid.
 
 ## Boundaries

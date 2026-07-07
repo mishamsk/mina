@@ -35,9 +35,11 @@
 - Transaction repositories store normalized journal records and own active selected-record checks for bulk operations.
 - Transaction-template repositories store normalized partial record defaults.
 - Dictionary usage queries report active dependency facts only; services decide whether those facts block deletes.
+- Category FQN restructure rewrites active `budget.category_fqn` paths in the same store transaction as the category rewrite.
 - Account balance aggregation reads active transactions and journal records only, includes pending records in current balances, excludes cancelled records, and casts aggregate sums to `DECIMAL(18,8)` in SQL.
 - Account-record running balances are computed over full active account history, exclude cancelled record amounts, and cast aggregate sums to `DECIMAL(18,8)` in SQL.
-- Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; repositories also pre-check active uniqueness to return stable conflict messages.
+- Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; account/category/tag/template creates map index violations after service path checks, while member and exchange-rate writes pre-check uniqueness for stable conflict messages.
+- FQN restructure writes rely on service check-then-write validation and map DuckDB uniqueness conflicts.
 - Account, category, tag, and transaction-template hierarchy fields are read from DuckDB generated virtual columns.
 
 ## Boundaries

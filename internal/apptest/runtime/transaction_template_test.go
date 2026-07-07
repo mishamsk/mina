@@ -172,13 +172,6 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	})
 	originalRecordIDs := transactionTemplateRecordIDs(original.JSON201.Records)
 
-	conflicting := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
-		Fqn: "Bills:Existing",
-		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
-		},
-	})
-
 	duplicate, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
@@ -195,17 +188,20 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 		t.Fatalf("duplicate code = %q, want %q", duplicate.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
 	}
 
-	conflictingReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
-		Fqn: conflicting.JSON201.Fqn,
+	changedFQNReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "Bills:Existing",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{CategoryId: refs.CategoryID},
 		},
 	})
 	if err != nil {
-		t.Fatalf("conflicting replace request: %v", err)
+		t.Fatalf("changed fqn replace request: %v", err)
 	}
-	if conflictingReplace.StatusCode() != http.StatusConflict {
-		t.Fatalf("conflicting replace status = %d, want %d; body %s", conflictingReplace.StatusCode(), http.StatusConflict, conflictingReplace.Body)
+	if changedFQNReplace.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("changed fqn replace status = %d, want %d; body %s", changedFQNReplace.StatusCode(), http.StatusBadRequest, changedFQNReplace.Body)
+	}
+	if changedFQNReplace.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("changed fqn replace code = %q, want %q", changedFQNReplace.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
 	assertTransactionTemplateUnchanged(t, client, original.JSON201.TransactionTemplateId, "Bills:Power", originalRecordIDs)
 
@@ -227,7 +223,7 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	assertTransactionTemplateUnchanged(t, client, original.JSON201.TransactionTemplateId, "Bills:Power", originalRecordIDs)
 
 	missingCategoryReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
-		Fqn: "Bills:Power:Invalid",
+		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{CategoryId: refs.CategoryID + 9999},
 		},
@@ -241,7 +237,7 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	assertTransactionTemplateUnchanged(t, client, original.JSON201.TransactionTemplateId, "Bills:Power", originalRecordIDs)
 
 	missingTemplateReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId+9999, httpclient.TransactionTemplateWriteRequest{
-		Fqn: conflicting.JSON201.Fqn,
+		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{CategoryId: refs.CategoryID + 9999},
 		},
@@ -255,7 +251,7 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 
 	amount := "42"
 	replaced, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
-		Fqn: "Bills:Power:Updated",
+		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
 				CategoryId: refs.CategoryID,
@@ -277,11 +273,11 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	if slices.Contains(originalRecordIDs, replacementRecordID) {
 		t.Fatalf("replacement record id %d was present in old active records %v", replacementRecordID, originalRecordIDs)
 	}
-	assertTransactionTemplateHierarchy(t, *replaced.JSON200, "Bills:Power", "Updated", 2)
+	assertTransactionTemplateHierarchy(t, *replaced.JSON200, "Bills", "Power", 1)
 
 	read := getTransactionTemplate(t, client, original.JSON201.TransactionTemplateId)
-	if read.JSON200.Fqn != "Bills:Power:Updated" || len(read.JSON200.Records) != 1 {
-		t.Fatalf("read replaced template = %+v, want updated fqn with one active record", read.JSON200)
+	if read.JSON200.Fqn != "Bills:Power" || len(read.JSON200.Records) != 1 {
+		t.Fatalf("read replaced template = %+v, want same fqn with one active record", read.JSON200)
 	}
 	if slices.Contains(originalRecordIDs, read.JSON200.Records[0].TransactionTemplateRecordId) {
 		t.Fatalf("read returned tombstoned record id %d", read.JSON200.Records[0].TransactionTemplateRecordId)
@@ -368,37 +364,37 @@ func TestTransactionTemplateRejectsHierarchyFQNConflict(t *testing.T) {
 		},
 	})
 	originalRecordIDs := transactionTemplateRecordIDs(original.JSON201.Records)
-	conflictingReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
+	changedToGroupPathReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Group",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{CategoryId: refs.CategoryID},
 		},
 	})
 	if err != nil {
-		t.Fatalf("conflicting replace request: %v", err)
+		t.Fatalf("changed to group path replace request: %v", err)
 	}
-	if conflictingReplace.StatusCode() != http.StatusConflict {
-		t.Fatalf("conflicting replace status = %d, want %d; body %s", conflictingReplace.StatusCode(), http.StatusConflict, conflictingReplace.Body)
+	if changedToGroupPathReplace.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("changed to group path replace status = %d, want %d; body %s", changedToGroupPathReplace.StatusCode(), http.StatusBadRequest, changedToGroupPathReplace.Body)
 	}
-	if conflictingReplace.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
-		t.Fatalf("conflicting replace code = %q, want %q", conflictingReplace.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	if changedToGroupPathReplace.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("changed to group path replace code = %q, want %q", changedToGroupPathReplace.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
 	assertTransactionTemplateUnchanged(t, client, original.JSON201.TransactionTemplateId, "TemplateHierarchy:Replace", originalRecordIDs)
 
-	extendsLeafReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
+	changedToLeafChildReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Leaf:Child",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{CategoryId: refs.CategoryID},
 		},
 	})
 	if err != nil {
-		t.Fatalf("extends leaf replace request: %v", err)
+		t.Fatalf("changed to leaf child replace request: %v", err)
 	}
-	if extendsLeafReplace.StatusCode() != http.StatusConflict {
-		t.Fatalf("extends leaf replace status = %d, want %d; body %s", extendsLeafReplace.StatusCode(), http.StatusConflict, extendsLeafReplace.Body)
+	if changedToLeafChildReplace.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("changed to leaf child replace status = %d, want %d; body %s", changedToLeafChildReplace.StatusCode(), http.StatusBadRequest, changedToLeafChildReplace.Body)
 	}
-	if extendsLeafReplace.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
-		t.Fatalf("extends leaf replace code = %q, want %q", extendsLeafReplace.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	if changedToLeafChildReplace.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("changed to leaf child replace code = %q, want %q", changedToLeafChildReplace.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
 	assertTransactionTemplateUnchanged(t, client, original.JSON201.TransactionTemplateId, "TemplateHierarchy:Replace", originalRecordIDs)
 

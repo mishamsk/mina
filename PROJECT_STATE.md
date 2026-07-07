@@ -14,6 +14,7 @@
   - Server-computed transaction month spend/income totals and account balances with USD-equivalent aggregation, unconverted counts, and current credit limits.
   - Shorthand transaction creation endpoints for spend, income, refund, and transfer.
   - Transaction-template creation, read, paginated list, full replacement, and tombstone deletion with nested partial record defaults.
+  - Per-entity hierarchy restructure endpoints for accounts, categories, tags, and transaction templates, with atomic subtree FQN rewrite; category restructure rewrites active budget category paths in lockstep; template replacement preserves `fqn`.
   - Transaction semantic shape validation with derived transaction class, summary titles, component summaries, and display amounts in REST responses.
   - Paginated journal-record search with account-FQN prefix register filtering, plus account-record search by account ID.
   - Bulk journal-record category, tag, account, and status updates.

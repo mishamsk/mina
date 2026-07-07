@@ -239,6 +239,30 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "409":
           $ref: "#/components/responses/CategoryFQNConflict"
+  /api/categories/restructure:
+    post:
+      operationId: restructureCategories
+      summary: Rename or move a category hierarchy path.
+      description: Atomically rewrites active category FQNs and active budget category paths equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned categories and budgets are not changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestructureRequest"
+      responses:
+        "200":
+          description: Category FQNs rewritten.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestructureResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/CategoryFQNConflict"
   /api/categories/{category_id}:
     parameters:
       - name: category_id
@@ -377,6 +401,30 @@ paths:
                 $ref: "#/components/schemas/Tag"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/TagFQNConflict"
+  /api/tags/restructure:
+    post:
+      operationId: restructureTags
+      summary: Rename or move a tag hierarchy path.
+      description: Atomically rewrites active tag FQNs equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned tags are not changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestructureRequest"
+      responses:
+        "200":
+          description: Tag FQNs rewritten.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestructureResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/TagFQNConflict"
   /api/tags/{tag_id}:
@@ -663,6 +711,30 @@ paths:
                 $ref: "#/components/schemas/Account"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/AccountFQNConflict"
+  /api/accounts/restructure:
+    post:
+      operationId: restructureAccounts
+      summary: Rename or move an account hierarchy path.
+      description: Atomically rewrites active account FQNs equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned accounts are not changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestructureRequest"
+      responses:
+        "200":
+          description: Account FQNs rewritten.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestructureResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/AccountFQNConflict"
   /api/accounts/balances:
@@ -1107,6 +1179,30 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "409":
           $ref: "#/components/responses/TransactionTemplateFQNConflict"
+  /api/transaction-templates/restructure:
+    post:
+      operationId: restructureTransactionTemplates
+      summary: Rename or move a transaction template hierarchy path.
+      description: Atomically rewrites active transaction template FQNs equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned templates are not changed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestructureRequest"
+      responses:
+        "200":
+          description: Transaction template FQNs rewritten.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestructureResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/TransactionTemplateFQNConflict"
   /api/transaction-templates/{transaction_template_id}:
     parameters:
       - name: transaction_template_id
@@ -1133,7 +1229,7 @@ paths:
     put:
       operationId: replaceTransactionTemplate
       summary: Replace a transaction template.
-      description: Replaces fqn and the full date-free template record set atomically. The transaction_template_id is preserved, previous active record defaults are tombstoned, and replacement records are partial defaults that do not need to balance.
+      description: Replaces the full date-free template record set atomically. The request `fqn` must equal the current template `fqn`; rename and move operations go through `/api/transaction-templates/restructure`. The transaction_template_id is preserved, previous active record defaults are tombstoned, and replacement records are partial defaults that do not need to balance.
       requestBody:
         required: true
         content:
@@ -1151,8 +1247,6 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/TransactionTemplateFQNConflict"
     delete:
       operationId: deleteTransactionTemplate
       summary: Tombstone a transaction template and its record defaults.
@@ -1962,7 +2056,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     CategoryFQNConflict:
-      description: The category FQN duplicates an active category or conflicts with the active category hierarchy.
+      description: The category FQN duplicates an active category, conflicts with the active category hierarchy, or a category restructure would collide with active budget category/month rows.
       content:
         application/json:
           schema:
@@ -2082,6 +2176,27 @@ components:
           format: int64
           minimum: 0
           description: Count of matching accounts before limit and offset are applied.
+    RestructureRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - from_fqn
+        - to_fqn
+      properties:
+        from_fqn:
+          type: string
+        to_fqn:
+          type: string
+    RestructureResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - moved_count
+      properties:
+        moved_count:
+          type: integer
+          format: int64
+          minimum: 0
     AccountBalance:
       type: object
       additionalProperties: false

@@ -228,7 +228,7 @@ func TestDictionaryDeleteAllowsTombstonedTransactionTemplateRecordsUnderActiveTe
 	tags := []int64{replacementRefs.TagID}
 
 	replaced, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), template.TemplateID, httpclient.TransactionTemplateWriteRequest{
-		Fqn: "Guarded:Dictionary:References:Replacement",
+		Fqn: "Guarded:Dictionary:References",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
 				AccountId:  &replacementRefs.CheckingAccountID,

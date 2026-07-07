@@ -153,6 +153,61 @@ RETURNING category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level,
 	return category, nil
 }
 
+// RestructureFQNs rewrites active category FQNs and matching active budget paths.
+func (s *CategoryStore) RestructureFQNs(ctx context.Context, from string, to string) (int64, error) {
+	var affected int64
+	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(
+			ctx,
+			`UPDATE `+s.db.accountingName("category")+`
+SET fqn = ? || substr(fqn, length(?) + 1),
+    updated_at = CURRENT_TIMESTAMP
+WHERE tombstoned_at IS NULL
+  AND (fqn = ? OR starts_with(fqn, ? || ':'))`,
+			to,
+			from,
+			from,
+			from,
+		)
+		if err != nil {
+			if isUniqueConstraintError(err) {
+				return fmt.Errorf("%w: active category fqn rewrite conflicts with existing category hierarchy", services.ErrConflict)
+			}
+			return fmt.Errorf("restructure category fqns: %w", err)
+		}
+
+		affected, err = result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("read restructure category affected rows: %w", err)
+		}
+
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE `+s.db.accountingName("budget")+`
+SET category_fqn = ? || substr(category_fqn, length(?) + 1),
+    updated_at = CURRENT_TIMESTAMP
+WHERE tombstoned_at IS NULL
+  AND (category_fqn = ? OR starts_with(category_fqn, ? || ':'))`,
+			to,
+			from,
+			from,
+			from,
+		); err != nil {
+			if isUniqueConstraintError(err) {
+				return fmt.Errorf("%w: active budget category/month rewrite conflicts with existing budget", services.ErrConflict)
+			}
+			return fmt.Errorf("restructure budget category fqns: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return affected, nil
+}
+
 // Tombstone marks a category deleted without removing its historical row.
 func (s *CategoryStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.query().ExecContext(

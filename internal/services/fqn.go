@@ -2,6 +2,11 @@ package services
 
 import "strings"
 
+// FQNAtOrUnder reports whether fqn equals path or is below path at a segment boundary.
+func FQNAtOrUnder(fqn string, path string) bool {
+	return fqn == path || strings.HasPrefix(fqn, path+":")
+}
+
 // FQNPathConflict reports whether candidate equals, extends, or is a
 // segment-boundary path prefix of existing.
 func FQNPathConflict(candidate string, existing string) bool {
