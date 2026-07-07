@@ -421,3 +421,4 @@ Accounts, categories, tags, and transaction templates use hierarchical naming wi
 
 Hierarchy is encoded directly in the name string. Tree structure is derived at query time when needed.
 Account type and category economic intent are explicit metadata; they are not inferred from FQN prefixes.
+Group/leaf semantics, hierarchy invariants, and restructuring rules are owned by `docs/hierarchy-semantics.md`.
