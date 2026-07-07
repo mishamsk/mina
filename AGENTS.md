@@ -20,6 +20,7 @@ Phase 1 REST APIs are closed. The active build scope is Phase 2: minimal local w
 
 - Never work around environment failures. If the shell, Go toolchain, or repo scripts fail for environmental reasons, stop and ask.
 - The Justfile is the only owner of developer recipes. Run formatting, tests, checks, hooks, and scripts through `just`.
+- `scripts/` contains repo scripts, not product code. Manual benchmark recipes are never agent-required checks and must not be run unless the user explicitly asks.
 - Do not invoke `gofmt`, `go test`, `prek`, or other recipe internals directly unless debugging the recipe itself.
 - Run `just pre-commit` for configured pre-commit checks; the Justfile owns the details.
 - Do not add test code under `internal/tools/**`. Validate internal tool changes with manual smoke checks, `just pre-commit`, and review.

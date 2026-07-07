@@ -302,6 +302,11 @@ test-frontend-e2e: build
     mise exec -- pnpm exec playwright install chromium webkit
     mise exec -- pnpm exec playwright test
 
+# Run a manual local REST responsiveness benchmark with default script settings.
+[group('dev-tooling')]
+bench-rest: build
+    scripts/rest-benchmark.sh
+
 # Run configured pre-commit checks against all tracked files.
 [group('dev-tooling')]
 pre-commit:
