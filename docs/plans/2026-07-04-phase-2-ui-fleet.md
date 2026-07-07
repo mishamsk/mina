@@ -69,11 +69,12 @@ Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = 
 - [x] Task 12: `7ts6` — Accounts chart-of-accounts page (FE) — branch `7ts6-accounts-page`
 - [x] Task 13: `6a1w` — account page with register (FE; requires Task 11) — branch `6a1w-account-register`
 - [x] Task 14: `t3ph` — account group pages (FE; requires Tasks 11 and 13) — branch `t3ph-group-pages`
-- [ ] Task 15: `s5nw` — Categories reference page, establishes the reference pattern (FE) — branch `s5nw-categories-page`
-- [ ] Task 16: `z7t0` — Tags and Members reference pages (FE; requires Task 15) — branch `z7t0-tags-members-pages`
-- [ ] Task 17: `d7av` — command palette: navigation, entry, app actions (FE) — branch `d7av-command-palette`
-- [ ] Task 18: `mrs9` — hierarchy restructuring API with subtree FQN rewrite (API; no UI consumer in this plan) — branch `mrs9-restructure-api`
-- [ ] Task 19: `axf6` — Advanced journal editor tab with shorthand escalation (FE; stretch, only if the fleet gets here) — branch `axf6-journal-editor`
+- [ ] Task 15: `gm9d` — web UI display and interaction papercuts: currency symbols, account view, tag chip shadow, modal close-on-outside-click; includes necessary UI ground-truth doc adjustments (FE) — branch `gm9d-ui-papercuts-2`
+- [ ] Task 16: `s5nw` — Categories reference page, establishes the reference pattern (FE) — branch `s5nw-categories-page`
+- [ ] Task 17: `z7t0` — Tags and Members reference pages (FE; requires Task 16) — branch `z7t0-tags-members-pages`
+- [ ] Task 18: `d7av` — command palette: navigation, entry, app actions (FE) — branch `d7av-command-palette`
+- [ ] Task 19: `mrs9` — hierarchy restructuring API with subtree FQN rewrite (API; no UI consumer in this plan) — branch `mrs9-restructure-api`
+- [ ] Task 20: `axf6` — Advanced journal editor tab with shorthand escalation (FE; stretch, only if the fleet gets here) — branch `axf6-journal-editor`
 
 ## Final Verification
 
