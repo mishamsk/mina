@@ -40,6 +40,7 @@
 - Account-record running balances are computed over full active account history, exclude cancelled record amounts, and cast aggregate sums to `DECIMAL(18,8)` in SQL.
 - Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; account/category/tag/template creates map index violations after service path checks, while member and exchange-rate writes pre-check uniqueness for stable conflict messages.
 - FQN restructure writes rely on service check-then-write validation and map DuckDB uniqueness conflicts.
+- Path-addressed account/category/tag hidden updates rely on service check-then-write validation and issue one bulk `is_hidden` update against active leaves.
 - Account, category, tag, and transaction-template hierarchy fields are read from DuckDB generated virtual columns.
 
 ## Boundaries

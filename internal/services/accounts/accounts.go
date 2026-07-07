@@ -98,6 +98,9 @@ type BalanceListOptions struct {
 	AccountIDs    []int64
 }
 
+// GroupState is an implicit account group derived from active account FQNs.
+type GroupState = services.FQNGroupState
+
 // ReferenceOptions controls account reference validation.
 type ReferenceOptions struct {
 	// AllowHidden permits hidden active accounts as valid write references.
@@ -131,6 +134,7 @@ type Repository interface {
 	ListBalances(context.Context, BalanceListOptions) ([]AccountBalance, error)
 	UpdateMutable(context.Context, int64, UpdateInput) (Account, error)
 	RestructureFQNs(context.Context, string, string) (int64, error)
+	SetHiddenByPath(context.Context, string, bool) error
 	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
 }
@@ -285,6 +289,27 @@ func (s *Service) ListBalances(ctx context.Context, opts BalanceListOptions) ([]
 	})
 }
 
+// GroupStates derives implicit account groups from active leaves.
+func (s *Service) GroupStates(ctx context.Context, includeHidden bool) ([]GroupState, error) {
+	states, err := s.cache.Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	leaves := make([]services.FQNLeafState, 0, len(states))
+	for _, state := range states {
+		if !state.active {
+			continue
+		}
+		leaves = append(leaves, services.FQNLeafState{
+			FQN:      state.fqn,
+			IsHidden: state.reference.IsHidden,
+		})
+	}
+
+	return services.DeriveFQNGroupStates(leaves, includeHidden), nil
+}
+
 // UpdateMutable validates and updates account mutable fields.
 func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput) (Account, error) {
 	if id <= 0 {
@@ -391,6 +416,43 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 	}
 
 	return movedCount, nil
+}
+
+// SetHiddenByPath sets hidden state on every active account leaf at or under path.
+func (s *Service) SetHiddenByPath(ctx context.Context, path string, hidden bool) (int64, error) {
+	if err := validateFQN(path); err != nil {
+		return 0, err
+	}
+
+	var updatedCount int64
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		states, err := s.cache.Snapshot(ctx)
+		if err != nil {
+			return err
+		}
+
+		targetCount := int64(0)
+		for _, state := range states {
+			if state.active && services.FQNAtOrUnder(state.fqn, path) {
+				targetCount++
+			}
+		}
+		if targetCount == 0 {
+			return services.NotFound("account path not found")
+		}
+
+		if err := s.repo.SetHiddenByPath(ctx, path, hidden); err != nil {
+			return err
+		}
+
+		updatedCount = targetCount
+		s.InvalidateReferenceCache()
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+
+	return updatedCount, nil
 }
 
 func singleLeafMove(moved map[int64]accountReferenceState, from string) bool {

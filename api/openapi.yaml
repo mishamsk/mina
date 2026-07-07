@@ -263,6 +263,49 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/CategoryFQNConflict"
+  /api/categories/groups:
+    get:
+      operationId: listCategoryGroups
+      summary: List implicit category groups.
+      description: Returns one item per active category FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
+      parameters:
+        - name: include_hidden
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Category groups in deterministic FQN order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupStateListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /api/categories/set-hidden:
+    post:
+      operationId: setCategoryHiddenByPath
+      summary: Set hidden state for a category path.
+      description: Sets `is_hidden` on every active category leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetHiddenByPathRequest"
+      responses:
+        "200":
+          description: Category hidden state updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetHiddenByPathResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/categories/{category_id}:
     parameters:
       - name: category_id
@@ -427,6 +470,49 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/TagFQNConflict"
+  /api/tags/groups:
+    get:
+      operationId: listTagGroups
+      summary: List implicit tag groups.
+      description: Returns one item per active tag FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
+      parameters:
+        - name: include_hidden
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Tag groups in deterministic FQN order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupStateListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /api/tags/set-hidden:
+    post:
+      operationId: setTagHiddenByPath
+      summary: Set hidden state for a tag path.
+      description: Sets `is_hidden` on every active tag leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetHiddenByPathRequest"
+      responses:
+        "200":
+          description: Tag hidden state updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetHiddenByPathResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/tags/{tag_id}:
     parameters:
       - name: tag_id
@@ -737,6 +823,49 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/AccountFQNConflict"
+  /api/accounts/groups:
+    get:
+      operationId: listAccountGroups
+      summary: List implicit account groups.
+      description: Returns one item per active account FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
+      parameters:
+        - name: include_hidden
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Account groups in deterministic FQN order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupStateListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /api/accounts/set-hidden:
+    post:
+      operationId: setAccountHiddenByPath
+      summary: Set hidden state for an account path.
+      description: Sets `is_hidden` on every active account leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetHiddenByPathRequest"
+      responses:
+        "200":
+          description: Account hidden state updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetHiddenByPathResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/accounts/balances:
     get:
       operationId: listAccountBalances
@@ -2176,6 +2305,35 @@ components:
           format: int64
           minimum: 0
           description: Count of matching accounts before limit and offset are applied.
+    GroupState:
+      type: object
+      additionalProperties: false
+      required:
+        - fqn
+        - parent_fqn
+        - level
+        - is_hidden
+      properties:
+        fqn:
+          type: string
+        parent_fqn:
+          type: string
+          nullable: true
+        level:
+          type: integer
+          minimum: 0
+        is_hidden:
+          type: boolean
+    GroupStateListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - groups
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupState"
     RestructureRequest:
       type: object
       additionalProperties: false
@@ -2194,6 +2352,27 @@ components:
         - moved_count
       properties:
         moved_count:
+          type: integer
+          format: int64
+          minimum: 0
+    SetHiddenByPathRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - path_fqn
+        - is_hidden
+      properties:
+        path_fqn:
+          type: string
+        is_hidden:
+          type: boolean
+    SetHiddenByPathResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - updated_count
+      properties:
+        updated_count:
           type: integer
           format: int64
           minimum: 0

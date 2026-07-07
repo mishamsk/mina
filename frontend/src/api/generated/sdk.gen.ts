@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BulkCategorizeJournalRecordsData, BulkCategorizeJournalRecordsErrors, BulkCategorizeJournalRecordsResponses, BulkReassignJournalRecordAccountData, BulkReassignJournalRecordAccountErrors, BulkReassignJournalRecordAccountResponses, BulkUpdateJournalRecordStatusesData, BulkUpdateJournalRecordStatusesErrors, BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordTagsData, BulkUpdateJournalRecordTagsErrors, BulkUpdateJournalRecordTagsResponses, CancelTransactionData, CancelTransactionErrors, CancelTransactionResponses, CreateAccountData, CreateAccountErrors, CreateAccountResponses, CreateCategoryData, CreateCategoryErrors, CreateCategoryResponses, CreateCreditLimitHistoryData, CreateCreditLimitHistoryErrors, CreateCreditLimitHistoryResponses, CreateExchangeRateData, CreateExchangeRateErrors, CreateExchangeRateResponses, CreateIncomeTransactionData, CreateIncomeTransactionErrors, CreateIncomeTransactionResponses, CreateMemberData, CreateMemberErrors, CreateMemberResponses, CreateRefundTransactionData, CreateRefundTransactionErrors, CreateRefundTransactionResponses, CreateSpendTransactionData, CreateSpendTransactionErrors, CreateSpendTransactionResponses, CreateTagData, CreateTagErrors, CreateTagResponses, CreateTransactionData, CreateTransactionErrors, CreateTransactionResponses, CreateTransactionTemplateData, CreateTransactionTemplateErrors, CreateTransactionTemplateResponses, CreateTransferTransactionData, CreateTransferTransactionErrors, CreateTransferTransactionResponses, DeleteAccountData, DeleteAccountErrors, DeleteAccountResponses, DeleteCategoryData, DeleteCategoryErrors, DeleteCategoryResponses, DeleteCreditLimitHistoryData, DeleteCreditLimitHistoryErrors, DeleteCreditLimitHistoryResponses, DeleteExchangeRateData, DeleteExchangeRateErrors, DeleteExchangeRateResponses, DeleteMemberData, DeleteMemberErrors, DeleteMemberResponses, DeleteTagData, DeleteTagErrors, DeleteTagResponses, DeleteTransactionData, DeleteTransactionErrors, DeleteTransactionResponses, DeleteTransactionTemplateData, DeleteTransactionTemplateErrors, DeleteTransactionTemplateResponses, GetAccountData, GetAccountErrors, GetAccountResponses, GetCategoryData, GetCategoryErrors, GetCategoryResponses, GetCreditLimitHistoryData, GetCreditLimitHistoryErrors, GetCreditLimitHistoryResponses, GetDatabaseBackupRunData, GetDatabaseBackupRunErrors, GetDatabaseBackupRunResponses, GetDatabaseBackupStatusData, GetDatabaseBackupStatusErrors, GetDatabaseBackupStatusResponses, GetExchangeRateData, GetExchangeRateErrors, GetExchangeRateLoadingRunData, GetExchangeRateLoadingRunErrors, GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingStatusData, GetExchangeRateLoadingStatusErrors, GetExchangeRateLoadingStatusResponses, GetExchangeRateResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetMemberData, GetMemberErrors, GetMemberResponses, GetTagData, GetTagErrors, GetTagResponses, GetTransactionData, GetTransactionErrors, GetTransactionMonthTotalsData, GetTransactionMonthTotalsErrors, GetTransactionMonthTotalsResponses, GetTransactionResponses, GetTransactionTemplateData, GetTransactionTemplateErrors, GetTransactionTemplateResponses, ListAccountBalancesData, ListAccountBalancesErrors, ListAccountBalancesResponses, ListAccountsData, ListAccountsErrors, ListAccountsResponses, ListBackgroundOperationsData, ListBackgroundOperationsErrors, ListBackgroundOperationsResponses, ListCategoriesData, ListCategoriesErrors, ListCategoriesResponses, ListCreditLimitHistoryData, ListCreditLimitHistoryErrors, ListCreditLimitHistoryResponses, ListExchangeRatesData, ListExchangeRatesErrors, ListExchangeRatesResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListTagsData, ListTagsErrors, ListTagsResponses, ListTransactionsData, ListTransactionsErrors, ListTransactionsResponses, ListTransactionTemplatesData, ListTransactionTemplatesErrors, ListTransactionTemplatesResponses, ReplaceTransactionData, ReplaceTransactionErrors, ReplaceTransactionResponses, ReplaceTransactionTemplateData, ReplaceTransactionTemplateErrors, ReplaceTransactionTemplateResponses, RestructureAccountsData, RestructureAccountsErrors, RestructureAccountsResponses, RestructureCategoriesData, RestructureCategoriesErrors, RestructureCategoriesResponses, RestructureTagsData, RestructureTagsErrors, RestructureTagsResponses, RestructureTransactionTemplatesData, RestructureTransactionTemplatesErrors, RestructureTransactionTemplatesResponses, SearchAccountJournalRecordsData, SearchAccountJournalRecordsErrors, SearchAccountJournalRecordsResponses, SearchJournalRecordsData, SearchJournalRecordsErrors, SearchJournalRecordsResponses, SeedDemoData, SeedDemoErrors, SeedDemoResponses, StartDatabaseBackupRunData, StartDatabaseBackupRunErrors, StartDatabaseBackupRunResponses, StartExchangeRateLoadingRunData, StartExchangeRateLoadingRunErrors, StartExchangeRateLoadingRunResponses, UpdateAccountData, UpdateAccountErrors, UpdateAccountResponses, UpdateCategoryData, UpdateCategoryErrors, UpdateCategoryResponses, UpdateExchangeRateData, UpdateExchangeRateErrors, UpdateExchangeRateResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberResponses, UpdateTagData, UpdateTagErrors, UpdateTagResponses } from './types.gen';
+import type { BulkCategorizeJournalRecordsData, BulkCategorizeJournalRecordsErrors, BulkCategorizeJournalRecordsResponses, BulkReassignJournalRecordAccountData, BulkReassignJournalRecordAccountErrors, BulkReassignJournalRecordAccountResponses, BulkUpdateJournalRecordStatusesData, BulkUpdateJournalRecordStatusesErrors, BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordTagsData, BulkUpdateJournalRecordTagsErrors, BulkUpdateJournalRecordTagsResponses, CancelTransactionData, CancelTransactionErrors, CancelTransactionResponses, CreateAccountData, CreateAccountErrors, CreateAccountResponses, CreateCategoryData, CreateCategoryErrors, CreateCategoryResponses, CreateCreditLimitHistoryData, CreateCreditLimitHistoryErrors, CreateCreditLimitHistoryResponses, CreateExchangeRateData, CreateExchangeRateErrors, CreateExchangeRateResponses, CreateIncomeTransactionData, CreateIncomeTransactionErrors, CreateIncomeTransactionResponses, CreateMemberData, CreateMemberErrors, CreateMemberResponses, CreateRefundTransactionData, CreateRefundTransactionErrors, CreateRefundTransactionResponses, CreateSpendTransactionData, CreateSpendTransactionErrors, CreateSpendTransactionResponses, CreateTagData, CreateTagErrors, CreateTagResponses, CreateTransactionData, CreateTransactionErrors, CreateTransactionResponses, CreateTransactionTemplateData, CreateTransactionTemplateErrors, CreateTransactionTemplateResponses, CreateTransferTransactionData, CreateTransferTransactionErrors, CreateTransferTransactionResponses, DeleteAccountData, DeleteAccountErrors, DeleteAccountResponses, DeleteCategoryData, DeleteCategoryErrors, DeleteCategoryResponses, DeleteCreditLimitHistoryData, DeleteCreditLimitHistoryErrors, DeleteCreditLimitHistoryResponses, DeleteExchangeRateData, DeleteExchangeRateErrors, DeleteExchangeRateResponses, DeleteMemberData, DeleteMemberErrors, DeleteMemberResponses, DeleteTagData, DeleteTagErrors, DeleteTagResponses, DeleteTransactionData, DeleteTransactionErrors, DeleteTransactionResponses, DeleteTransactionTemplateData, DeleteTransactionTemplateErrors, DeleteTransactionTemplateResponses, GetAccountData, GetAccountErrors, GetAccountResponses, GetCategoryData, GetCategoryErrors, GetCategoryResponses, GetCreditLimitHistoryData, GetCreditLimitHistoryErrors, GetCreditLimitHistoryResponses, GetDatabaseBackupRunData, GetDatabaseBackupRunErrors, GetDatabaseBackupRunResponses, GetDatabaseBackupStatusData, GetDatabaseBackupStatusErrors, GetDatabaseBackupStatusResponses, GetExchangeRateData, GetExchangeRateErrors, GetExchangeRateLoadingRunData, GetExchangeRateLoadingRunErrors, GetExchangeRateLoadingRunResponses, GetExchangeRateLoadingStatusData, GetExchangeRateLoadingStatusErrors, GetExchangeRateLoadingStatusResponses, GetExchangeRateResponses, GetHealthData, GetHealthErrors, GetHealthResponses, GetMemberData, GetMemberErrors, GetMemberResponses, GetTagData, GetTagErrors, GetTagResponses, GetTransactionData, GetTransactionErrors, GetTransactionMonthTotalsData, GetTransactionMonthTotalsErrors, GetTransactionMonthTotalsResponses, GetTransactionResponses, GetTransactionTemplateData, GetTransactionTemplateErrors, GetTransactionTemplateResponses, ListAccountBalancesData, ListAccountBalancesErrors, ListAccountBalancesResponses, ListAccountGroupsData, ListAccountGroupsErrors, ListAccountGroupsResponses, ListAccountsData, ListAccountsErrors, ListAccountsResponses, ListBackgroundOperationsData, ListBackgroundOperationsErrors, ListBackgroundOperationsResponses, ListCategoriesData, ListCategoriesErrors, ListCategoriesResponses, ListCategoryGroupsData, ListCategoryGroupsErrors, ListCategoryGroupsResponses, ListCreditLimitHistoryData, ListCreditLimitHistoryErrors, ListCreditLimitHistoryResponses, ListExchangeRatesData, ListExchangeRatesErrors, ListExchangeRatesResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListTagGroupsData, ListTagGroupsErrors, ListTagGroupsResponses, ListTagsData, ListTagsErrors, ListTagsResponses, ListTransactionsData, ListTransactionsErrors, ListTransactionsResponses, ListTransactionTemplatesData, ListTransactionTemplatesErrors, ListTransactionTemplatesResponses, ReplaceTransactionData, ReplaceTransactionErrors, ReplaceTransactionResponses, ReplaceTransactionTemplateData, ReplaceTransactionTemplateErrors, ReplaceTransactionTemplateResponses, RestructureAccountsData, RestructureAccountsErrors, RestructureAccountsResponses, RestructureCategoriesData, RestructureCategoriesErrors, RestructureCategoriesResponses, RestructureTagsData, RestructureTagsErrors, RestructureTagsResponses, RestructureTransactionTemplatesData, RestructureTransactionTemplatesErrors, RestructureTransactionTemplatesResponses, SearchAccountJournalRecordsData, SearchAccountJournalRecordsErrors, SearchAccountJournalRecordsResponses, SearchJournalRecordsData, SearchJournalRecordsErrors, SearchJournalRecordsResponses, SeedDemoData, SeedDemoErrors, SeedDemoResponses, SetAccountHiddenByPathData, SetAccountHiddenByPathErrors, SetAccountHiddenByPathResponses, SetCategoryHiddenByPathData, SetCategoryHiddenByPathErrors, SetCategoryHiddenByPathResponses, SetTagHiddenByPathData, SetTagHiddenByPathErrors, SetTagHiddenByPathResponses, StartDatabaseBackupRunData, StartDatabaseBackupRunErrors, StartDatabaseBackupRunResponses, StartExchangeRateLoadingRunData, StartExchangeRateLoadingRunErrors, StartExchangeRateLoadingRunResponses, UpdateAccountData, UpdateAccountErrors, UpdateAccountResponses, UpdateCategoryData, UpdateCategoryErrors, UpdateCategoryResponses, UpdateExchangeRateData, UpdateExchangeRateErrors, UpdateExchangeRateResponses, UpdateMemberData, UpdateMemberErrors, UpdateMemberResponses, UpdateTagData, UpdateTagErrors, UpdateTagResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -95,6 +95,27 @@ export const restructureCategories = <ThrowOnError extends boolean = false>(opti
 });
 
 /**
+ * List implicit category groups.
+ *
+ * Returns one item per active category FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
+ */
+export const listCategoryGroups = <ThrowOnError extends boolean = false>(options?: Options<ListCategoryGroupsData, ThrowOnError>): RequestResult<ListCategoryGroupsResponses, ListCategoryGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListCategoryGroupsResponses, ListCategoryGroupsErrors, ThrowOnError>({ url: '/api/categories/groups', ...options });
+
+/**
+ * Set hidden state for a category path.
+ *
+ * Sets `is_hidden` on every active category leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
+ */
+export const setCategoryHiddenByPath = <ThrowOnError extends boolean = false>(options: Options<SetCategoryHiddenByPathData, ThrowOnError>): RequestResult<SetCategoryHiddenByPathResponses, SetCategoryHiddenByPathErrors, ThrowOnError> => (options.client ?? client).post<SetCategoryHiddenByPathResponses, SetCategoryHiddenByPathErrors, ThrowOnError>({
+    url: '/api/categories/set-hidden',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Tombstone a category.
  */
 export const deleteCategory = <ThrowOnError extends boolean = false>(options: Options<DeleteCategoryData, ThrowOnError>): RequestResult<DeleteCategoryResponses, DeleteCategoryErrors, ThrowOnError> => (options.client ?? client).delete<DeleteCategoryResponses, DeleteCategoryErrors, ThrowOnError>({ url: '/api/categories/{category_id}', ...options });
@@ -140,6 +161,27 @@ export const createTag = <ThrowOnError extends boolean = false>(options: Options
  */
 export const restructureTags = <ThrowOnError extends boolean = false>(options: Options<RestructureTagsData, ThrowOnError>): RequestResult<RestructureTagsResponses, RestructureTagsErrors, ThrowOnError> => (options.client ?? client).post<RestructureTagsResponses, RestructureTagsErrors, ThrowOnError>({
     url: '/api/tags/restructure',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List implicit tag groups.
+ *
+ * Returns one item per active tag FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
+ */
+export const listTagGroups = <ThrowOnError extends boolean = false>(options?: Options<ListTagGroupsData, ThrowOnError>): RequestResult<ListTagGroupsResponses, ListTagGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListTagGroupsResponses, ListTagGroupsErrors, ThrowOnError>({ url: '/api/tags/groups', ...options });
+
+/**
+ * Set hidden state for a tag path.
+ *
+ * Sets `is_hidden` on every active tag leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
+ */
+export const setTagHiddenByPath = <ThrowOnError extends boolean = false>(options: Options<SetTagHiddenByPathData, ThrowOnError>): RequestResult<SetTagHiddenByPathResponses, SetTagHiddenByPathErrors, ThrowOnError> => (options.client ?? client).post<SetTagHiddenByPathResponses, SetTagHiddenByPathErrors, ThrowOnError>({
+    url: '/api/tags/set-hidden',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -232,6 +274,27 @@ export const createAccount = <ThrowOnError extends boolean = false>(options: Opt
  */
 export const restructureAccounts = <ThrowOnError extends boolean = false>(options: Options<RestructureAccountsData, ThrowOnError>): RequestResult<RestructureAccountsResponses, RestructureAccountsErrors, ThrowOnError> => (options.client ?? client).post<RestructureAccountsResponses, RestructureAccountsErrors, ThrowOnError>({
     url: '/api/accounts/restructure',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List implicit account groups.
+ *
+ * Returns one item per active account FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
+ */
+export const listAccountGroups = <ThrowOnError extends boolean = false>(options?: Options<ListAccountGroupsData, ThrowOnError>): RequestResult<ListAccountGroupsResponses, ListAccountGroupsErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountGroupsResponses, ListAccountGroupsErrors, ThrowOnError>({ url: '/api/accounts/groups', ...options });
+
+/**
+ * Set hidden state for an account path.
+ *
+ * Sets `is_hidden` on every active account leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
+ */
+export const setAccountHiddenByPath = <ThrowOnError extends boolean = false>(options: Options<SetAccountHiddenByPathData, ThrowOnError>): RequestResult<SetAccountHiddenByPathResponses, SetAccountHiddenByPathErrors, ThrowOnError> => (options.client ?? client).post<SetAccountHiddenByPathResponses, SetAccountHiddenByPathErrors, ThrowOnError>({
+    url: '/api/accounts/set-hidden',
     ...options,
     headers: {
         'Content-Type': 'application/json',

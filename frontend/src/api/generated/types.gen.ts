@@ -39,6 +39,17 @@ export type AccountListResponse = {
     total_count: number;
 };
 
+export type GroupState = {
+    fqn: string;
+    parent_fqn: string | null;
+    level: number;
+    is_hidden: boolean;
+};
+
+export type GroupStateListResponse = {
+    groups: Array<GroupState>;
+};
+
 export type RestructureRequest = {
     from_fqn: string;
     to_fqn: string;
@@ -46,6 +57,15 @@ export type RestructureRequest = {
 
 export type RestructureResponse = {
     moved_count: number;
+};
+
+export type SetHiddenByPathRequest = {
+    path_fqn: string;
+    is_hidden: boolean;
+};
+
+export type SetHiddenByPathResponse = {
+    updated_count: number;
 };
 
 export type AccountBalance = {
@@ -1019,6 +1039,62 @@ export type RestructureCategoriesResponses = {
 
 export type RestructureCategoriesResponse = RestructureCategoriesResponses[keyof RestructureCategoriesResponses];
 
+export type ListCategoryGroupsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        include_hidden?: boolean;
+    };
+    url: '/api/categories/groups';
+};
+
+export type ListCategoryGroupsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type ListCategoryGroupsError = ListCategoryGroupsErrors[keyof ListCategoryGroupsErrors];
+
+export type ListCategoryGroupsResponses = {
+    /**
+     * Category groups in deterministic FQN order.
+     */
+    200: GroupStateListResponse;
+};
+
+export type ListCategoryGroupsResponse = ListCategoryGroupsResponses[keyof ListCategoryGroupsResponses];
+
+export type SetCategoryHiddenByPathData = {
+    body: SetHiddenByPathRequest;
+    path?: never;
+    query?: never;
+    url: '/api/categories/set-hidden';
+};
+
+export type SetCategoryHiddenByPathErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type SetCategoryHiddenByPathError = SetCategoryHiddenByPathErrors[keyof SetCategoryHiddenByPathErrors];
+
+export type SetCategoryHiddenByPathResponses = {
+    /**
+     * Category hidden state updated.
+     */
+    200: SetHiddenByPathResponse;
+};
+
+export type SetCategoryHiddenByPathResponse = SetCategoryHiddenByPathResponses[keyof SetCategoryHiddenByPathResponses];
+
 export type DeleteCategoryData = {
     body?: never;
     path: {
@@ -1211,6 +1287,62 @@ export type RestructureTagsResponses = {
 };
 
 export type RestructureTagsResponse = RestructureTagsResponses[keyof RestructureTagsResponses];
+
+export type ListTagGroupsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        include_hidden?: boolean;
+    };
+    url: '/api/tags/groups';
+};
+
+export type ListTagGroupsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type ListTagGroupsError = ListTagGroupsErrors[keyof ListTagGroupsErrors];
+
+export type ListTagGroupsResponses = {
+    /**
+     * Tag groups in deterministic FQN order.
+     */
+    200: GroupStateListResponse;
+};
+
+export type ListTagGroupsResponse = ListTagGroupsResponses[keyof ListTagGroupsResponses];
+
+export type SetTagHiddenByPathData = {
+    body: SetHiddenByPathRequest;
+    path?: never;
+    query?: never;
+    url: '/api/tags/set-hidden';
+};
+
+export type SetTagHiddenByPathErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type SetTagHiddenByPathError = SetTagHiddenByPathErrors[keyof SetTagHiddenByPathErrors];
+
+export type SetTagHiddenByPathResponses = {
+    /**
+     * Tag hidden state updated.
+     */
+    200: SetHiddenByPathResponse;
+};
+
+export type SetTagHiddenByPathResponse = SetTagHiddenByPathResponses[keyof SetTagHiddenByPathResponses];
 
 export type DeleteTagData = {
     body?: never;
@@ -1569,6 +1701,62 @@ export type RestructureAccountsResponses = {
 };
 
 export type RestructureAccountsResponse = RestructureAccountsResponses[keyof RestructureAccountsResponses];
+
+export type ListAccountGroupsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        include_hidden?: boolean;
+    };
+    url: '/api/accounts/groups';
+};
+
+export type ListAccountGroupsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type ListAccountGroupsError = ListAccountGroupsErrors[keyof ListAccountGroupsErrors];
+
+export type ListAccountGroupsResponses = {
+    /**
+     * Account groups in deterministic FQN order.
+     */
+    200: GroupStateListResponse;
+};
+
+export type ListAccountGroupsResponse = ListAccountGroupsResponses[keyof ListAccountGroupsResponses];
+
+export type SetAccountHiddenByPathData = {
+    body: SetHiddenByPathRequest;
+    path?: never;
+    query?: never;
+    url: '/api/accounts/set-hidden';
+};
+
+export type SetAccountHiddenByPathErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type SetAccountHiddenByPathError = SetAccountHiddenByPathErrors[keyof SetAccountHiddenByPathErrors];
+
+export type SetAccountHiddenByPathResponses = {
+    /**
+     * Account hidden state updated.
+     */
+    200: SetHiddenByPathResponse;
+};
+
+export type SetAccountHiddenByPathResponse = SetAccountHiddenByPathResponses[keyof SetAccountHiddenByPathResponses];
 
 export type ListAccountBalancesData = {
     body?: never;

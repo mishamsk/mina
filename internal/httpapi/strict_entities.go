@@ -58,6 +58,17 @@ func (s *strictServer) ListAccountBalances(ctx context.Context, request openapi.
 	}, nil
 }
 
+func (s *strictServer) ListAccountGroups(ctx context.Context, request openapi.ListAccountGroupsRequestObject) (openapi.ListAccountGroupsResponseObject, error) {
+	groups, err := s.deps.Accounts.GroupStates(ctx, boolParam(request.Params.IncludeHidden))
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.ListAccountGroups200JSONResponse{
+		Groups: groupStateAPIResponses(groups),
+	}, nil
+}
+
 func accountTypeParam(value *openapi.AccountType) *accounts.AccountType {
 	if value == nil {
 		return nil
@@ -90,6 +101,15 @@ func (s *strictServer) RestructureAccounts(ctx context.Context, request openapi.
 	}
 
 	return openapi.RestructureAccounts200JSONResponse{MovedCount: movedCount}, nil
+}
+
+func (s *strictServer) SetAccountHiddenByPath(ctx context.Context, request openapi.SetAccountHiddenByPathRequestObject) (openapi.SetAccountHiddenByPathResponseObject, error) {
+	updatedCount, err := s.deps.Accounts.SetHiddenByPath(ctx, request.Body.PathFqn, request.Body.IsHidden)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.SetAccountHiddenByPath200JSONResponse{UpdatedCount: updatedCount}, nil
 }
 
 func (s *strictServer) DeleteAccount(ctx context.Context, request openapi.DeleteAccountRequestObject) (openapi.DeleteAccountResponseObject, error) {
@@ -147,6 +167,17 @@ func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListC
 	}, nil
 }
 
+func (s *strictServer) ListCategoryGroups(ctx context.Context, request openapi.ListCategoryGroupsRequestObject) (openapi.ListCategoryGroupsResponseObject, error) {
+	groups, err := s.deps.Categories.GroupStates(ctx, boolParam(request.Params.IncludeHidden))
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.ListCategoryGroups200JSONResponse{
+		Groups: groupStateAPIResponses(groups),
+	}, nil
+}
+
 func (s *strictServer) CreateCategory(ctx context.Context, request openapi.CreateCategoryRequestObject) (openapi.CreateCategoryResponseObject, error) {
 	category, err := s.deps.Categories.Create(ctx, categories.CreateInput{
 		FQN:            request.Body.Fqn,
@@ -167,6 +198,15 @@ func (s *strictServer) RestructureCategories(ctx context.Context, request openap
 	}
 
 	return openapi.RestructureCategories200JSONResponse{MovedCount: movedCount}, nil
+}
+
+func (s *strictServer) SetCategoryHiddenByPath(ctx context.Context, request openapi.SetCategoryHiddenByPathRequestObject) (openapi.SetCategoryHiddenByPathResponseObject, error) {
+	updatedCount, err := s.deps.Categories.SetHiddenByPath(ctx, request.Body.PathFqn, request.Body.IsHidden)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.SetCategoryHiddenByPath200JSONResponse{UpdatedCount: updatedCount}, nil
 }
 
 func (s *strictServer) DeleteCategory(ctx context.Context, request openapi.DeleteCategoryRequestObject) (openapi.DeleteCategoryResponseObject, error) {
@@ -276,6 +316,17 @@ func (s *strictServer) ListTags(ctx context.Context, request openapi.ListTagsReq
 	}, nil
 }
 
+func (s *strictServer) ListTagGroups(ctx context.Context, request openapi.ListTagGroupsRequestObject) (openapi.ListTagGroupsResponseObject, error) {
+	groups, err := s.deps.Tags.GroupStates(ctx, boolParam(request.Params.IncludeHidden))
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.ListTagGroups200JSONResponse{
+		Groups: groupStateAPIResponses(groups),
+	}, nil
+}
+
 func (s *strictServer) CreateTag(ctx context.Context, request openapi.CreateTagRequestObject) (openapi.CreateTagResponseObject, error) {
 	tag, err := s.deps.Tags.Create(ctx, tags.CreateInput{
 		FQN:      request.Body.Fqn,
@@ -295,6 +346,15 @@ func (s *strictServer) RestructureTags(ctx context.Context, request openapi.Rest
 	}
 
 	return openapi.RestructureTags200JSONResponse{MovedCount: movedCount}, nil
+}
+
+func (s *strictServer) SetTagHiddenByPath(ctx context.Context, request openapi.SetTagHiddenByPathRequestObject) (openapi.SetTagHiddenByPathResponseObject, error) {
+	updatedCount, err := s.deps.Tags.SetHiddenByPath(ctx, request.Body.PathFqn, request.Body.IsHidden)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.SetTagHiddenByPath200JSONResponse{UpdatedCount: updatedCount}, nil
 }
 
 func (s *strictServer) DeleteTag(ctx context.Context, request openapi.DeleteTagRequestObject) (openapi.DeleteTagResponseObject, error) {
@@ -362,6 +422,24 @@ func accountAPIResponses(accounts []accounts.Account) []openapi.Account {
 	responses := make([]openapi.Account, 0, len(accounts))
 	for _, account := range accounts {
 		responses = append(responses, accountAPIResponse(account))
+	}
+
+	return responses
+}
+
+func groupStateAPIResponse(group services.FQNGroupState) openapi.GroupState {
+	return openapi.GroupState{
+		Fqn:       group.FQN,
+		ParentFqn: group.ParentFQN,
+		Level:     group.Level,
+		IsHidden:  group.IsHidden,
+	}
+}
+
+func groupStateAPIResponses(groups []services.FQNGroupState) []openapi.GroupState {
+	responses := make([]openapi.GroupState, 0, len(groups))
+	for _, group := range groups {
+		responses = append(responses, groupStateAPIResponse(group))
 	}
 
 	return responses

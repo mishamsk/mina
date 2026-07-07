@@ -1077,6 +1077,19 @@ type ExchangeRateLoadingStatusResponseOperationId string
 // ExchangeRateLoadingStatusResponseState defines model for ExchangeRateLoadingStatusResponse.State.
 type ExchangeRateLoadingStatusResponseState string
 
+// GroupState defines model for GroupState.
+type GroupState struct {
+	Fqn       string  `json:"fqn"`
+	IsHidden  bool    `json:"is_hidden"`
+	Level     int     `json:"level"`
+	ParentFqn *string `json:"parent_fqn"`
+}
+
+// GroupStateListResponse defines model for GroupStateListResponse.
+type GroupStateListResponse struct {
+	Groups []GroupState `json:"groups"`
+}
+
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	SchemaVersion int64                `json:"schema_version"`
@@ -1187,6 +1200,17 @@ type RestructureRequest struct {
 // RestructureResponse defines model for RestructureResponse.
 type RestructureResponse struct {
 	MovedCount int64 `json:"moved_count"`
+}
+
+// SetHiddenByPathRequest defines model for SetHiddenByPathRequest.
+type SetHiddenByPathRequest struct {
+	IsHidden bool   `json:"is_hidden"`
+	PathFqn  string `json:"path_fqn"`
+}
+
+// SetHiddenByPathResponse defines model for SetHiddenByPathResponse.
+type SetHiddenByPathResponse struct {
+	UpdatedCount int64 `json:"updated_count"`
 }
 
 // Source defines model for Source.
@@ -1410,6 +1434,11 @@ type ListAccountBalancesParams struct {
 	AccountIds    *[]int64 `form:"account_ids,omitempty" json:"account_ids,omitempty"`
 }
 
+// ListAccountGroupsParams defines parameters for ListAccountGroups.
+type ListAccountGroupsParams struct {
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+}
+
 // GetAccountParams defines parameters for GetAccount.
 type GetAccountParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
@@ -1479,6 +1508,11 @@ type ListCategoriesParamsSort string
 
 // ListCategoriesParamsSortDir defines parameters for ListCategories.
 type ListCategoriesParamsSortDir string
+
+// ListCategoryGroupsParams defines parameters for ListCategoryGroups.
+type ListCategoryGroupsParams struct {
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+}
 
 // GetCategoryParams defines parameters for GetCategory.
 type GetCategoryParams struct {
@@ -1583,6 +1617,11 @@ type ListTagsParamsSort string
 // ListTagsParamsSortDir defines parameters for ListTags.
 type ListTagsParamsSortDir string
 
+// ListTagGroupsParams defines parameters for ListTagGroups.
+type ListTagGroupsParams struct {
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+}
+
 // GetTagParams defines parameters for GetTag.
 type GetTagParams struct {
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
@@ -1657,6 +1696,9 @@ type CreateAccountJSONRequestBody = CreateAccountRequest
 // RestructureAccountsJSONRequestBody defines body for RestructureAccounts for application/json ContentType.
 type RestructureAccountsJSONRequestBody = RestructureRequest
 
+// SetAccountHiddenByPathJSONRequestBody defines body for SetAccountHiddenByPath for application/json ContentType.
+type SetAccountHiddenByPathJSONRequestBody = SetHiddenByPathRequest
+
 // UpdateAccountJSONRequestBody defines body for UpdateAccount for application/json ContentType.
 type UpdateAccountJSONRequestBody = UpdateAccountRequest
 
@@ -1668,6 +1710,9 @@ type CreateCategoryJSONRequestBody = CreateCategoryRequest
 
 // RestructureCategoriesJSONRequestBody defines body for RestructureCategories for application/json ContentType.
 type RestructureCategoriesJSONRequestBody = RestructureRequest
+
+// SetCategoryHiddenByPathJSONRequestBody defines body for SetCategoryHiddenByPath for application/json ContentType.
+type SetCategoryHiddenByPathJSONRequestBody = SetHiddenByPathRequest
 
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = UpdateCategoryRequest
@@ -1701,6 +1746,9 @@ type CreateTagJSONRequestBody = CreateTagRequest
 
 // RestructureTagsJSONRequestBody defines body for RestructureTags for application/json ContentType.
 type RestructureTagsJSONRequestBody = RestructureRequest
+
+// SetTagHiddenByPathJSONRequestBody defines body for SetTagHiddenByPath for application/json ContentType.
+type SetTagHiddenByPathJSONRequestBody = SetHiddenByPathRequest
 
 // UpdateTagJSONRequestBody defines body for UpdateTag for application/json ContentType.
 type UpdateTagJSONRequestBody = UpdateTagRequest
@@ -1816,10 +1864,18 @@ type ClientInterface interface {
 	// ListAccountBalances request
 	ListAccountBalances(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAccountGroups request
+	ListAccountGroups(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RestructureAccountsWithBody request with any body
 	RestructureAccountsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RestructureAccounts(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetAccountHiddenByPathWithBody request with any body
+	SetAccountHiddenByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetAccountHiddenByPath(ctx context.Context, body SetAccountHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteAccount request
 	DeleteAccount(ctx context.Context, accountId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1875,10 +1931,18 @@ type ClientInterface interface {
 
 	CreateCategory(ctx context.Context, body CreateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListCategoryGroups request
+	ListCategoryGroups(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RestructureCategoriesWithBody request with any body
 	RestructureCategoriesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RestructureCategories(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetCategoryHiddenByPathWithBody request with any body
+	SetCategoryHiddenByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetCategoryHiddenByPath(ctx context.Context, body SetCategoryHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteCategory request
 	DeleteCategory(ctx context.Context, categoryId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1969,10 +2033,18 @@ type ClientInterface interface {
 
 	CreateTag(ctx context.Context, body CreateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListTagGroups request
+	ListTagGroups(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RestructureTagsWithBody request with any body
 	RestructureTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RestructureTags(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetTagHiddenByPathWithBody request with any body
+	SetTagHiddenByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetTagHiddenByPath(ctx context.Context, body SetTagHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteTag request
 	DeleteTag(ctx context.Context, tagId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2103,6 +2175,18 @@ func (c *Client) ListAccountBalances(ctx context.Context, params *ListAccountBal
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListAccountGroups(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAccountGroupsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) RestructureAccountsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureAccountsRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -2117,6 +2201,30 @@ func (c *Client) RestructureAccountsWithBody(ctx context.Context, contentType st
 
 func (c *Client) RestructureAccounts(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureAccountsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetAccountHiddenByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAccountHiddenByPathRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetAccountHiddenByPath(ctx context.Context, body SetAccountHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAccountHiddenByPathRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2355,6 +2463,18 @@ func (c *Client) CreateCategory(ctx context.Context, body CreateCategoryJSONRequ
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListCategoryGroups(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListCategoryGroupsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) RestructureCategoriesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureCategoriesRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -2369,6 +2489,30 @@ func (c *Client) RestructureCategoriesWithBody(ctx context.Context, contentType 
 
 func (c *Client) RestructureCategories(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureCategoriesRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetCategoryHiddenByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetCategoryHiddenByPathRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetCategoryHiddenByPath(ctx context.Context, body SetCategoryHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetCategoryHiddenByPathRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2775,6 +2919,18 @@ func (c *Client) CreateTag(ctx context.Context, body CreateTagJSONRequestBody, r
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListTagGroups(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTagGroupsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) RestructureTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureTagsRequestWithBody(c.Server, contentType, body)
 	if err != nil {
@@ -2789,6 +2945,30 @@ func (c *Client) RestructureTagsWithBody(ctx context.Context, contentType string
 
 func (c *Client) RestructureTags(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRestructureTagsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetTagHiddenByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTagHiddenByPathRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetTagHiddenByPath(ctx context.Context, body SetTagHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTagHiddenByPathRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3403,6 +3583,60 @@ func NewListAccountBalancesRequest(server string, params *ListAccountBalancesPar
 	return req, nil
 }
 
+// NewListAccountGroupsRequest generates requests for ListAccountGroups
+func NewListAccountGroupsRequest(server string, params *ListAccountGroupsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/accounts/groups")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeHidden != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewRestructureAccountsRequest calls the generic RestructureAccounts builder with application/json body
 func NewRestructureAccountsRequest(server string, body RestructureAccountsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -3424,6 +3658,46 @@ func NewRestructureAccountsRequestWithBody(server string, contentType string, bo
 	}
 
 	operationPath := fmt.Sprintf("/api/accounts/restructure")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSetAccountHiddenByPathRequest calls the generic SetAccountHiddenByPath builder with application/json body
+func NewSetAccountHiddenByPathRequest(server string, body SetAccountHiddenByPathJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetAccountHiddenByPathRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSetAccountHiddenByPathRequestWithBody generates requests for SetAccountHiddenByPath with any type of body
+func NewSetAccountHiddenByPathRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/accounts/set-hidden")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4414,6 +4688,60 @@ func NewCreateCategoryRequestWithBody(server string, contentType string, body io
 	return req, nil
 }
 
+// NewListCategoryGroupsRequest generates requests for ListCategoryGroups
+func NewListCategoryGroupsRequest(server string, params *ListCategoryGroupsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/categories/groups")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeHidden != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewRestructureCategoriesRequest calls the generic RestructureCategories builder with application/json body
 func NewRestructureCategoriesRequest(server string, body RestructureCategoriesJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -4435,6 +4763,46 @@ func NewRestructureCategoriesRequestWithBody(server string, contentType string, 
 	}
 
 	operationPath := fmt.Sprintf("/api/categories/restructure")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSetCategoryHiddenByPathRequest calls the generic SetCategoryHiddenByPath builder with application/json body
+func NewSetCategoryHiddenByPathRequest(server string, body SetCategoryHiddenByPathJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetCategoryHiddenByPathRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSetCategoryHiddenByPathRequestWithBody generates requests for SetCategoryHiddenByPath with any type of body
+func NewSetCategoryHiddenByPathRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/categories/set-hidden")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5918,6 +6286,60 @@ func NewCreateTagRequestWithBody(server string, contentType string, body io.Read
 	return req, nil
 }
 
+// NewListTagGroupsRequest generates requests for ListTagGroups
+func NewListTagGroupsRequest(server string, params *ListTagGroupsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/tags/groups")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.IncludeHidden != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewRestructureTagsRequest calls the generic RestructureTags builder with application/json body
 func NewRestructureTagsRequest(server string, body RestructureTagsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -5939,6 +6361,46 @@ func NewRestructureTagsRequestWithBody(server string, contentType string, body i
 	}
 
 	operationPath := fmt.Sprintf("/api/tags/restructure")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewSetTagHiddenByPathRequest calls the generic SetTagHiddenByPath builder with application/json body
+func NewSetTagHiddenByPathRequest(server string, body SetTagHiddenByPathJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetTagHiddenByPathRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewSetTagHiddenByPathRequestWithBody generates requests for SetTagHiddenByPath with any type of body
+func NewSetTagHiddenByPathRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/tags/set-hidden")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -7144,10 +7606,18 @@ type ClientWithResponsesInterface interface {
 	// ListAccountBalancesWithResponse request
 	ListAccountBalancesWithResponse(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*ListAccountBalancesResponse, error)
 
+	// ListAccountGroupsWithResponse request
+	ListAccountGroupsWithResponse(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*ListAccountGroupsResponse, error)
+
 	// RestructureAccountsWithBodyWithResponse request with any body
 	RestructureAccountsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureAccountsResponse, error)
 
 	RestructureAccountsWithResponse(ctx context.Context, body RestructureAccountsJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureAccountsResponse, error)
+
+	// SetAccountHiddenByPathWithBodyWithResponse request with any body
+	SetAccountHiddenByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAccountHiddenByPathResponse, error)
+
+	SetAccountHiddenByPathWithResponse(ctx context.Context, body SetAccountHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAccountHiddenByPathResponse, error)
 
 	// DeleteAccountWithResponse request
 	DeleteAccountWithResponse(ctx context.Context, accountId int64, reqEditors ...RequestEditorFn) (*DeleteAccountResponse, error)
@@ -7203,10 +7673,18 @@ type ClientWithResponsesInterface interface {
 
 	CreateCategoryWithResponse(ctx context.Context, body CreateCategoryJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateCategoryResponse, error)
 
+	// ListCategoryGroupsWithResponse request
+	ListCategoryGroupsWithResponse(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*ListCategoryGroupsResponse, error)
+
 	// RestructureCategoriesWithBodyWithResponse request with any body
 	RestructureCategoriesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error)
 
 	RestructureCategoriesWithResponse(ctx context.Context, body RestructureCategoriesJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error)
+
+	// SetCategoryHiddenByPathWithBodyWithResponse request with any body
+	SetCategoryHiddenByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetCategoryHiddenByPathResponse, error)
+
+	SetCategoryHiddenByPathWithResponse(ctx context.Context, body SetCategoryHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*SetCategoryHiddenByPathResponse, error)
 
 	// DeleteCategoryWithResponse request
 	DeleteCategoryWithResponse(ctx context.Context, categoryId int64, reqEditors ...RequestEditorFn) (*DeleteCategoryResponse, error)
@@ -7297,10 +7775,18 @@ type ClientWithResponsesInterface interface {
 
 	CreateTagWithResponse(ctx context.Context, body CreateTagJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTagResponse, error)
 
+	// ListTagGroupsWithResponse request
+	ListTagGroupsWithResponse(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*ListTagGroupsResponse, error)
+
 	// RestructureTagsWithBodyWithResponse request with any body
 	RestructureTagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error)
 
 	RestructureTagsWithResponse(ctx context.Context, body RestructureTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error)
+
+	// SetTagHiddenByPathWithBodyWithResponse request with any body
+	SetTagHiddenByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTagHiddenByPathResponse, error)
+
+	SetTagHiddenByPathWithResponse(ctx context.Context, body SetTagHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTagHiddenByPathResponse, error)
 
 	// DeleteTagWithResponse request
 	DeleteTagWithResponse(ctx context.Context, tagId int64, reqEditors ...RequestEditorFn) (*DeleteTagResponse, error)
@@ -7477,6 +7963,37 @@ func (r ListAccountBalancesResponse) ContentType() string {
 	return ""
 }
 
+type ListAccountGroupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *GroupStateListResponse
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAccountGroupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAccountGroupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListAccountGroupsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RestructureAccountsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -7504,6 +8021,38 @@ func (r RestructureAccountsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RestructureAccountsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetAccountHiddenByPathResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SetHiddenByPathResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r SetAccountHiddenByPathResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetAccountHiddenByPathResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetAccountHiddenByPathResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -8022,6 +8571,37 @@ func (r CreateCategoryResponse) ContentType() string {
 	return ""
 }
 
+type ListCategoryGroupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *GroupStateListResponse
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r ListCategoryGroupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListCategoryGroupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListCategoryGroupsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RestructureCategoriesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8049,6 +8629,38 @@ func (r RestructureCategoriesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RestructureCategoriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetCategoryHiddenByPathResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SetHiddenByPathResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r SetCategoryHiddenByPathResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetCategoryHiddenByPathResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetCategoryHiddenByPathResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -8781,6 +9393,37 @@ func (r CreateTagResponse) ContentType() string {
 	return ""
 }
 
+type ListTagGroupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *GroupStateListResponse
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTagGroupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTagGroupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListTagGroupsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RestructureTagsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8808,6 +9451,38 @@ func (r RestructureTagsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RestructureTagsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetTagHiddenByPathResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SetHiddenByPathResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r SetTagHiddenByPathResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetTagHiddenByPathResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetTagHiddenByPathResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -9480,6 +10155,15 @@ func (c *ClientWithResponses) ListAccountBalancesWithResponse(ctx context.Contex
 	return ParseListAccountBalancesResponse(rsp)
 }
 
+// ListAccountGroupsWithResponse request returning *ListAccountGroupsResponse
+func (c *ClientWithResponses) ListAccountGroupsWithResponse(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*ListAccountGroupsResponse, error) {
+	rsp, err := c.ListAccountGroups(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAccountGroupsResponse(rsp)
+}
+
 // RestructureAccountsWithBodyWithResponse request with arbitrary body returning *RestructureAccountsResponse
 func (c *ClientWithResponses) RestructureAccountsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureAccountsResponse, error) {
 	rsp, err := c.RestructureAccountsWithBody(ctx, contentType, body, reqEditors...)
@@ -9495,6 +10179,23 @@ func (c *ClientWithResponses) RestructureAccountsWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseRestructureAccountsResponse(rsp)
+}
+
+// SetAccountHiddenByPathWithBodyWithResponse request with arbitrary body returning *SetAccountHiddenByPathResponse
+func (c *ClientWithResponses) SetAccountHiddenByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAccountHiddenByPathResponse, error) {
+	rsp, err := c.SetAccountHiddenByPathWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAccountHiddenByPathResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetAccountHiddenByPathWithResponse(ctx context.Context, body SetAccountHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAccountHiddenByPathResponse, error) {
+	rsp, err := c.SetAccountHiddenByPath(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAccountHiddenByPathResponse(rsp)
 }
 
 // DeleteAccountWithResponse request returning *DeleteAccountResponse
@@ -9665,6 +10366,15 @@ func (c *ClientWithResponses) CreateCategoryWithResponse(ctx context.Context, bo
 	return ParseCreateCategoryResponse(rsp)
 }
 
+// ListCategoryGroupsWithResponse request returning *ListCategoryGroupsResponse
+func (c *ClientWithResponses) ListCategoryGroupsWithResponse(ctx context.Context, params *ListCategoryGroupsParams, reqEditors ...RequestEditorFn) (*ListCategoryGroupsResponse, error) {
+	rsp, err := c.ListCategoryGroups(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListCategoryGroupsResponse(rsp)
+}
+
 // RestructureCategoriesWithBodyWithResponse request with arbitrary body returning *RestructureCategoriesResponse
 func (c *ClientWithResponses) RestructureCategoriesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureCategoriesResponse, error) {
 	rsp, err := c.RestructureCategoriesWithBody(ctx, contentType, body, reqEditors...)
@@ -9680,6 +10390,23 @@ func (c *ClientWithResponses) RestructureCategoriesWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseRestructureCategoriesResponse(rsp)
+}
+
+// SetCategoryHiddenByPathWithBodyWithResponse request with arbitrary body returning *SetCategoryHiddenByPathResponse
+func (c *ClientWithResponses) SetCategoryHiddenByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetCategoryHiddenByPathResponse, error) {
+	rsp, err := c.SetCategoryHiddenByPathWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetCategoryHiddenByPathResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetCategoryHiddenByPathWithResponse(ctx context.Context, body SetCategoryHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*SetCategoryHiddenByPathResponse, error) {
+	rsp, err := c.SetCategoryHiddenByPath(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetCategoryHiddenByPathResponse(rsp)
 }
 
 // DeleteCategoryWithResponse request returning *DeleteCategoryResponse
@@ -9969,6 +10696,15 @@ func (c *ClientWithResponses) CreateTagWithResponse(ctx context.Context, body Cr
 	return ParseCreateTagResponse(rsp)
 }
 
+// ListTagGroupsWithResponse request returning *ListTagGroupsResponse
+func (c *ClientWithResponses) ListTagGroupsWithResponse(ctx context.Context, params *ListTagGroupsParams, reqEditors ...RequestEditorFn) (*ListTagGroupsResponse, error) {
+	rsp, err := c.ListTagGroups(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTagGroupsResponse(rsp)
+}
+
 // RestructureTagsWithBodyWithResponse request with arbitrary body returning *RestructureTagsResponse
 func (c *ClientWithResponses) RestructureTagsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RestructureTagsResponse, error) {
 	rsp, err := c.RestructureTagsWithBody(ctx, contentType, body, reqEditors...)
@@ -9984,6 +10720,23 @@ func (c *ClientWithResponses) RestructureTagsWithResponse(ctx context.Context, b
 		return nil, err
 	}
 	return ParseRestructureTagsResponse(rsp)
+}
+
+// SetTagHiddenByPathWithBodyWithResponse request with arbitrary body returning *SetTagHiddenByPathResponse
+func (c *ClientWithResponses) SetTagHiddenByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTagHiddenByPathResponse, error) {
+	rsp, err := c.SetTagHiddenByPathWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTagHiddenByPathResponse(rsp)
+}
+
+func (c *ClientWithResponses) SetTagHiddenByPathWithResponse(ctx context.Context, body SetTagHiddenByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTagHiddenByPathResponse, error) {
+	rsp, err := c.SetTagHiddenByPath(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTagHiddenByPathResponse(rsp)
 }
 
 // DeleteTagWithResponse request returning *DeleteTagResponse
@@ -10352,6 +11105,39 @@ func ParseListAccountBalancesResponse(rsp *http.Response) (*ListAccountBalancesR
 	return response, nil
 }
 
+// ParseListAccountGroupsResponse parses an HTTP response from a ListAccountGroupsWithResponse call
+func ParseListAccountGroupsResponse(rsp *http.Response) (*ListAccountGroupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAccountGroupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GroupStateListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseRestructureAccountsResponse parses an HTTP response from a RestructureAccountsWithResponse call
 func ParseRestructureAccountsResponse(rsp *http.Response) (*RestructureAccountsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -10393,6 +11179,46 @@ func ParseRestructureAccountsResponse(rsp *http.Response) (*RestructureAccountsR
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetAccountHiddenByPathResponse parses an HTTP response from a SetAccountHiddenByPathWithResponse call
+func ParseSetAccountHiddenByPathResponse(rsp *http.Response) (*SetAccountHiddenByPathResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetAccountHiddenByPathResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SetHiddenByPathResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 
@@ -11039,6 +11865,39 @@ func ParseCreateCategoryResponse(rsp *http.Response) (*CreateCategoryResponse, e
 	return response, nil
 }
 
+// ParseListCategoryGroupsResponse parses an HTTP response from a ListCategoryGroupsWithResponse call
+func ParseListCategoryGroupsResponse(rsp *http.Response) (*ListCategoryGroupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListCategoryGroupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GroupStateListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseRestructureCategoriesResponse parses an HTTP response from a RestructureCategoriesWithResponse call
 func ParseRestructureCategoriesResponse(rsp *http.Response) (*RestructureCategoriesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -11080,6 +11939,46 @@ func ParseRestructureCategoriesResponse(rsp *http.Response) (*RestructureCategor
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetCategoryHiddenByPathResponse parses an HTTP response from a SetCategoryHiddenByPathWithResponse call
+func ParseSetCategoryHiddenByPathResponse(rsp *http.Response) (*SetCategoryHiddenByPathResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetCategoryHiddenByPathResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SetHiddenByPathResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 
@@ -11936,6 +12835,39 @@ func ParseCreateTagResponse(rsp *http.Response) (*CreateTagResponse, error) {
 	return response, nil
 }
 
+// ParseListTagGroupsResponse parses an HTTP response from a ListTagGroupsWithResponse call
+func ParseListTagGroupsResponse(rsp *http.Response) (*ListTagGroupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTagGroupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GroupStateListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseRestructureTagsResponse parses an HTTP response from a RestructureTagsWithResponse call
 func ParseRestructureTagsResponse(rsp *http.Response) (*RestructureTagsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -11977,6 +12909,46 @@ func ParseRestructureTagsResponse(rsp *http.Response) (*RestructureTagsResponse,
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetTagHiddenByPathResponse parses an HTTP response from a SetTagHiddenByPathWithResponse call
+func ParseSetTagHiddenByPathResponse(rsp *http.Response) (*SetTagHiddenByPathResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetTagHiddenByPathResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SetHiddenByPathResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

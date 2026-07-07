@@ -208,6 +208,26 @@ WHERE tombstoned_at IS NULL
 	return affected, nil
 }
 
+// SetHiddenByPath sets hidden state on active categories at or below path.
+func (s *CategoryStore) SetHiddenByPath(ctx context.Context, path string, hidden bool) error {
+	_, err := s.db.query().ExecContext(
+		ctx,
+		`UPDATE `+s.db.accountingName("category")+`
+SET is_hidden = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE tombstoned_at IS NULL
+  AND (fqn = ? OR starts_with(fqn, ? || ':'))`,
+		hidden,
+		path,
+		path,
+	)
+	if err != nil {
+		return fmt.Errorf("set category hidden by path: %w", err)
+	}
+
+	return nil
+}
+
 // Tombstone marks a category deleted without removing its historical row.
 func (s *CategoryStore) Tombstone(ctx context.Context, id int64) error {
 	result, err := s.db.query().ExecContext(

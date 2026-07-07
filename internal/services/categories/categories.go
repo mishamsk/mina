@@ -69,6 +69,9 @@ type ListOptions struct {
 	List              services.ListOptions
 }
 
+// GroupState is an implicit category group derived from active category FQNs.
+type GroupState = services.FQNGroupState
+
 // ReferenceOptions controls category reference validation.
 type ReferenceOptions struct {
 	// AllowHidden permits hidden active categories as valid write references.
@@ -100,6 +103,7 @@ type Repository interface {
 	List(context.Context, ListOptions) (services.PaginatedList[Category], error)
 	UpdateHidden(context.Context, int64, bool) (Category, error)
 	RestructureFQNs(context.Context, string, string) (int64, error)
+	SetHiddenByPath(context.Context, string, bool) error
 	ActiveUsage(context.Context, int64) (ActiveUsage, error)
 	Tombstone(context.Context, int64) error
 }
@@ -229,6 +233,27 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (services.Paginate
 	return s.repo.List(ctx, opts)
 }
 
+// GroupStates derives implicit category groups from active leaves.
+func (s *Service) GroupStates(ctx context.Context, includeHidden bool) ([]GroupState, error) {
+	states, err := s.cache.Snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	leaves := make([]services.FQNLeafState, 0, len(states))
+	for _, state := range states {
+		if !state.active {
+			continue
+		}
+		leaves = append(leaves, services.FQNLeafState{
+			FQN:      state.fqn,
+			IsHidden: state.reference.IsHidden,
+		})
+	}
+
+	return services.DeriveFQNGroupStates(leaves, includeHidden), nil
+}
+
 // UpdateHidden validates and updates a category hidden state.
 func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (Category, error) {
 	if id <= 0 {
@@ -312,6 +337,43 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 	}
 
 	return movedCount, nil
+}
+
+// SetHiddenByPath sets hidden state on every active category leaf at or under path.
+func (s *Service) SetHiddenByPath(ctx context.Context, path string, hidden bool) (int64, error) {
+	if err := validateFQN(path); err != nil {
+		return 0, err
+	}
+
+	var updatedCount int64
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		states, err := s.cache.Snapshot(ctx)
+		if err != nil {
+			return err
+		}
+
+		targetCount := int64(0)
+		for _, state := range states {
+			if state.active && services.FQNAtOrUnder(state.fqn, path) {
+				targetCount++
+			}
+		}
+		if targetCount == 0 {
+			return services.NotFound("category path not found")
+		}
+
+		if err := s.repo.SetHiddenByPath(ctx, path, hidden); err != nil {
+			return err
+		}
+
+		updatedCount = targetCount
+		s.InvalidateReferenceCache()
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+
+	return updatedCount, nil
 }
 
 func singleLeafMove(moved map[int64]categoryReferenceState, from string) bool {
