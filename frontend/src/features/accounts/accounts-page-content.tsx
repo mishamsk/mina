@@ -163,6 +163,7 @@ interface AccountsPageContentProps {
   readonly includeHidden: boolean;
   readonly onCreateAccount: (opener: HTMLElement) => void;
   readonly onEditAccount: (account: Account, opener: HTMLElement) => void;
+  readonly onRestructurePath: (fqn: string, opener: HTMLElement) => void;
   readonly search: string;
   readonly typeFilter: AccountTypeFilter;
 }
@@ -172,6 +173,7 @@ export const AccountsPageContent = ({
   includeHidden,
   onCreateAccount,
   onEditAccount,
+  onRestructurePath,
   search,
   typeFilter,
 }: AccountsPageContentProps) => {
@@ -186,6 +188,7 @@ export const AccountsPageContent = ({
       loading={accountsPage.loading}
       onCreateAccount={onCreateAccount}
       onEditAccount={onEditAccount}
+      onRestructurePath={onRestructurePath}
       onRetry={() => {
         void refreshAccountsPage();
       }}

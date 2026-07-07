@@ -226,7 +226,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 ### 5. Accounts (chart of accounts) — Phase 2
 
 - Purpose: manage the unified chart of accounts and enter registers.
-- Layout: tree table grouped by FQN hierarchy; columns: name (path-indented), type badge, currency, balance (`balance` accounts), hidden state. Rows link to account/group pages.
+- Layout: tree table grouped by FQN hierarchy; columns: name (path-indented), type badge, currency, balance (`balance` accounts), a per-row move/rename action (leaf and group rows), hidden state. Rows link to account/group pages.
 - Toolbar: search, type filter, include-hidden toggle. Create/edit in a side panel: FQN, type, currency, external id/system, hidden.
 - Restructuring: rename a node or move it to a new parent from the tree; the whole subtree follows with an FQN prefix rewrite.
 - Credit-limit history for card accounts is managed from the account's edit panel or page header.

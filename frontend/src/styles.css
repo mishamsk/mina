@@ -198,6 +198,12 @@
   }
 }
 
+@keyframes toast-auto-hide {
+  100% {
+    visibility: hidden;
+  }
+}
+
 @layer components {
   .transactions-table-scroll {
     container: transactions-table / inline-size;

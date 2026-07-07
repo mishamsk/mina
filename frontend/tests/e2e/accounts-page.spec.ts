@@ -852,6 +852,163 @@ test("account entry links navigate to account register pages", async ({
   await expect(page.getByRole("heading", { name: "Sapphire" })).toBeVisible();
 });
 
+test("accounts tree moves and renames account paths", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const sourcePrefix = `aaa_restructure:${unique}:Old`;
+  const destinationPrefix = `aaa_restructure:${unique}:New`;
+  const leafSource = `aaa_restructure:${unique}:Solo`;
+  const leafDestination = `aaa_restructure:${unique}:SoloRenamed`;
+  await Promise.all([
+    createAccount(page, { fqn: `${sourcePrefix}:Checking` }),
+    createAccount(page, { fqn: `${sourcePrefix}:Savings` }),
+    createAccount(page, { fqn: leafSource }),
+  ]);
+
+  await page.goto("/accounts");
+  await page.getByLabel("Search").fill(sourcePrefix);
+  const sourceGroupRow = page.locator(
+    `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(sourcePrefix)}"])`,
+  );
+  await expect(sourceGroupRow).toBeVisible({ timeout: 10_000 });
+  await sourceGroupRow.getByRole("button", { name: "Move or rename" }).click();
+  const groupDialog = page.getByRole("dialog", { name: "Move or rename" });
+  await expect(groupDialog).toBeVisible();
+  await expect(groupDialog.getByLabel("From")).toContainText("Old");
+  await groupDialog.getByLabel("To").fill(destinationPrefix);
+  const groupMove = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/accounts/restructure" &&
+      response.request().method() === "POST"
+    );
+  });
+  await groupDialog.getByRole("button", { name: "Move" }).click();
+  const groupResponse = await groupMove;
+  expect(groupResponse.status()).toBe(200);
+  await expect(page.getByText("Moved 2 account(s).")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0, {
+    timeout: 10_000,
+  });
+
+  await page.getByLabel("Search").fill(destinationPrefix);
+  await expect(
+    page.locator(
+      `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(destinationPrefix)}"])`,
+    ),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(
+    page.getByTestId("accounts-tree-row").filter({ hasText: "Checking" }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(
+    page.getByTestId("accounts-tree-row").filter({ hasText: "Savings" }),
+  ).toBeVisible();
+
+  await page.getByLabel("Search").fill(leafSource);
+  const leafRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "Solo" })
+    .first();
+  await expect(leafRow).toBeVisible({ timeout: 10_000 });
+  await leafRow.getByRole("button", { name: "Move or rename" }).click();
+  const leafDialog = page.getByRole("dialog", { name: "Move or rename" });
+  await leafDialog.getByLabel("To").fill(leafDestination);
+  const leafMove = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/accounts/restructure" &&
+      response.request().method() === "POST"
+    );
+  });
+  await leafDialog.getByRole("button", { name: "Move" }).click();
+  const leafResponse = await leafMove;
+  expect(leafResponse.status()).toBe(200);
+  await expect(page.getByText("Moved 1 account(s).")).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.getByLabel("Search").fill(leafDestination);
+  await expect(
+    page.getByTestId("accounts-tree-row").filter({ hasText: "SoloRenamed" }),
+  ).toBeVisible({ timeout: 10_000 });
+});
+
+test("accounts tree restructure handles conflicts and cancel focus", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const source = `aaa_restructure:${unique}:Source`;
+  const target = `aaa_restructure:${unique}:Target:Child`;
+  const cancelSource = `aaa_restructure:${unique}:Cancel`;
+  const cancelDestination = `aaa_restructure:${unique}:Cancelled`;
+  await Promise.all([
+    createAccount(page, { fqn: source }),
+    createAccount(page, { fqn: target }),
+    createAccount(page, { fqn: cancelSource }),
+  ]);
+
+  await page.goto("/accounts");
+  await page.getByLabel("Search").fill(source);
+  const sourceRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "Source" })
+    .first();
+  await expect(sourceRow).toBeVisible({ timeout: 10_000 });
+  await sourceRow.getByRole("button", { name: "Move or rename" }).click();
+  const conflictDialog = page.getByRole("dialog", { name: "Move or rename" });
+  await conflictDialog
+    .getByLabel("To")
+    .fill(`aaa_restructure:${unique}:Target`);
+  const conflictMove = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/accounts/restructure" &&
+      response.request().method() === "POST"
+    );
+  });
+  await conflictDialog.getByRole("button", { name: "Move" }).click();
+  const conflictResponse = await conflictMove;
+  expect(conflictResponse.status()).toBe(409);
+  await expect(conflictDialog).toBeVisible();
+  await expect(
+    conflictDialog.getByText(
+      "account destination fqn conflicts with existing account hierarchy",
+    ),
+  ).toBeVisible();
+  await conflictDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(conflictDialog).toBeHidden();
+
+  await page.getByLabel("Search").fill(cancelSource);
+  const cancelRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "Cancel" })
+    .first();
+  await expect(cancelRow).toBeVisible({ timeout: 10_000 });
+  const cancelOpenButton = cancelRow.getByRole("button", {
+    name: "Move or rename",
+  });
+  await cancelOpenButton.click();
+  const escapeDialog = page.getByRole("dialog", { name: "Move or rename" });
+  await expect(escapeDialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(escapeDialog).toBeHidden();
+  await expect(cancelOpenButton).toBeFocused();
+
+  await cancelOpenButton.click();
+  const cancelDialog = page.getByRole("dialog", { name: "Move or rename" });
+  await cancelDialog.getByLabel("To").fill(cancelDestination);
+  await cancelDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(cancelDialog).toBeHidden();
+  await expect(cancelOpenButton).toBeFocused();
+  await expect(cancelRow).toBeVisible();
+  await page.getByLabel("Search").fill(cancelDestination);
+  await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0);
+});
+
 test("accounts page manages account forms, credit limits, and tombstone delete", async ({
   browserName,
   page,

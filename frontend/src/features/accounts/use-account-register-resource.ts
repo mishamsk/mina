@@ -174,22 +174,23 @@ const ensureTransactions = async (
   const missingIds = [...new Set(transactionIds)].filter(
     (transactionId) =>
       !snapshot.transactionCache[transactionId] &&
-      !snapshot.transactionCacheLoading[transactionId] &&
+      snapshot.transactionCacheLoading[transactionId] === undefined &&
       !snapshot.transactionCacheErrors[transactionId],
   );
 
-  // Concurrent register renders can still race before the loading flag is visible; duplicated fetches settle into the same cache slot.
+  // Same-generation duplicate fetches can still settle into the shared cache slot.
   await Promise.all(
     missingIds.map(async (transactionId) => {
-      setAccountTransactionCacheLoading(transactionId);
+      const generation = setAccountTransactionCacheLoading(transactionId);
       const result = await fetchTransactionById(transactionId);
       if (result.data) {
-        setAccountTransactionCache(result.data);
+        setAccountTransactionCache(result.data, generation);
         return;
       }
       setAccountTransactionCacheError(
         transactionId,
         apiErrorMessage(result.error),
+        generation,
       );
     }),
   );
@@ -198,15 +199,19 @@ const ensureTransactions = async (
 export const refreshAccountTransaction = async (
   transactionId: number,
 ): Promise<void> => {
-  setAccountTransactionCacheLoading(transactionId);
+  const generation = setAccountTransactionCacheLoading(transactionId);
 
   const result = await fetchTransactionById(transactionId);
   if (result.data) {
-    setAccountTransactionCache(result.data);
+    setAccountTransactionCache(result.data, generation);
     return;
   }
 
-  setAccountTransactionCacheError(transactionId, apiErrorMessage(result.error));
+  setAccountTransactionCacheError(
+    transactionId,
+    apiErrorMessage(result.error),
+    generation,
+  );
 };
 
 const fetchAccountRegisterPage = (

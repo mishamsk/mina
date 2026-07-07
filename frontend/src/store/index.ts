@@ -15,6 +15,8 @@ export {
   invalidateAccountHeaders,
   invalidateAccountRegisterPages,
   invalidateAccountTransactionCache,
+  invalidateAllAccountRegisterPages,
+  invalidateAllAccountTransactionCache,
   invalidateGroupRegisterPages,
   mergeAccountsPageAccount,
   removeAccountsPageAccount,

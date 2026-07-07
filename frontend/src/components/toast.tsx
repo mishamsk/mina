@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import { Tooltip } from "@/components/tooltip";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,11 @@ export const Toast = ({
   message,
   onDismiss,
 }: ToastProps) => {
-  const [dismissed, setDismissed] = useState(false);
+  const onDismissRef = useRef(onDismiss);
+
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   useEffect(() => {
     if (!message) {
@@ -28,26 +32,29 @@ export const Toast = ({
     }
 
     const timeoutId = window.setTimeout(() => {
-      setDismissed(true);
+      onDismissRef.current();
     }, durationMs);
     return () => {
       window.clearTimeout(timeoutId);
     };
   }, [durationMs, message]);
 
-  if (!message || dismissed) {
+  if (!message) {
     return null;
   }
 
   const dismiss = () => {
-    setDismissed(true);
     onDismiss();
   };
 
   return (
     <div
       className={cn("fixed right-4 bottom-4 z-40 max-w-sm", containerClassName)}
+      style={{
+        animation: `toast-auto-hide 1ms steps(1, end) ${durationMs}ms forwards`,
+      }}
       role="status"
+      onAnimationEnd={dismiss}
     >
       <Tooltip label={message} asChild>
         <button

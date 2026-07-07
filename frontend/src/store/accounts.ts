@@ -64,11 +64,12 @@ interface AccountsState {
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
   readonly snapshot: AccountsPageSnapshot | undefined;
+  readonly transactionCacheGeneration: number;
   readonly transactionCache: Readonly<
     Record<number, AccountTransactionSnapshot>
   >;
   readonly transactionCacheErrors: Readonly<Record<number, string>>;
-  readonly transactionCacheLoading: Readonly<Record<number, boolean>>;
+  readonly transactionCacheLoading: Readonly<Record<number, number>>;
 }
 
 const initialAccountsState: AccountsState = {
@@ -83,6 +84,7 @@ const initialAccountsState: AccountsState = {
   errorMessage: undefined,
   loading: false,
   snapshot: undefined,
+  transactionCacheGeneration: 1,
   transactionCache: {},
   transactionCacheErrors: {},
   transactionCacheLoading: {},
@@ -637,6 +639,33 @@ export const invalidateGroupRegisterPages = (): void => {
   );
 };
 
+export const invalidateAllAccountRegisterPages = (): void => {
+  useAccountsStore.setState(
+    {
+      registerLastLoadedPageKeyByAccountId: {},
+      registerLastLoadedPageKeyByGroupPrefix: {},
+      registerLoadingPageKey: undefined,
+      registerPageErrors: {},
+      registerPages: {},
+    },
+    false,
+    "AccountsStore/invalidateAllAccountRegisterPages",
+  );
+};
+
+export const invalidateAllAccountTransactionCache = (): void => {
+  useAccountsStore.setState(
+    (state) => ({
+      transactionCacheGeneration: state.transactionCacheGeneration + 1,
+      transactionCache: {},
+      transactionCacheErrors: {},
+      transactionCacheLoading: {},
+    }),
+    false,
+    "AccountsStore/invalidateAllAccountTransactionCache",
+  );
+};
+
 export const invalidateAccountTransactionCache = (
   transactionId: number,
 ): void => {
@@ -661,7 +690,8 @@ export const invalidateAccountTransactionCache = (
 
 export const setAccountTransactionCacheLoading = (
   transactionId: number,
-): void => {
+): number => {
+  const generation = useAccountsStore.getState().transactionCacheGeneration;
   useAccountsStore.setState(
     (state) => {
       const transactionCacheErrors = { ...state.transactionCacheErrors };
@@ -670,20 +700,29 @@ export const setAccountTransactionCacheLoading = (
         transactionCacheErrors,
         transactionCacheLoading: {
           ...state.transactionCacheLoading,
-          [transactionId]: true,
+          [transactionId]: generation,
         },
       };
     },
     false,
     "AccountsStore/setAccountTransactionCacheLoading",
   );
+  return generation;
 };
 
-export const setAccountTransactionCache = (transaction: Transaction): void => {
+export const setAccountTransactionCache = (
+  transaction: Transaction,
+  generation: number,
+): void => {
   useAccountsStore.setState(
     (state) => {
+      if (state.transactionCacheGeneration !== generation) {
+        return state;
+      }
       const transactionCacheErrors = { ...state.transactionCacheErrors };
+      const transactionCacheLoading = { ...state.transactionCacheLoading };
       delete transactionCacheErrors[transaction.transaction_id];
+      delete transactionCacheLoading[transaction.transaction_id];
       return {
         transactionCache: {
           ...state.transactionCache,
@@ -693,10 +732,7 @@ export const setAccountTransactionCache = (transaction: Transaction): void => {
           },
         },
         transactionCacheErrors,
-        transactionCacheLoading: {
-          ...state.transactionCacheLoading,
-          [transaction.transaction_id]: false,
-        },
+        transactionCacheLoading,
       };
     },
     false,
@@ -707,18 +743,23 @@ export const setAccountTransactionCache = (transaction: Transaction): void => {
 export const setAccountTransactionCacheError = (
   transactionId: number,
   errorMessage: string,
+  generation: number,
 ): void => {
   useAccountsStore.setState(
-    (state) => ({
-      transactionCacheErrors: {
-        ...state.transactionCacheErrors,
-        [transactionId]: errorMessage,
-      },
-      transactionCacheLoading: {
-        ...state.transactionCacheLoading,
-        [transactionId]: false,
-      },
-    }),
+    (state) => {
+      if (state.transactionCacheGeneration !== generation) {
+        return state;
+      }
+      const transactionCacheLoading = { ...state.transactionCacheLoading };
+      delete transactionCacheLoading[transactionId];
+      return {
+        transactionCacheErrors: {
+          ...state.transactionCacheErrors,
+          [transactionId]: errorMessage,
+        },
+        transactionCacheLoading,
+      };
+    },
     false,
     "AccountsStore/setAccountTransactionCacheError",
   );

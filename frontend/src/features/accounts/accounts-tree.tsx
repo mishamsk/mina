@@ -1,4 +1,4 @@
-import { EyeOff, Plus, Reload } from "pixelarticons/react";
+import { EyeOff, MagicEdit, Plus, Reload } from "pixelarticons/react";
 import { useMemo } from "react";
 import { Link } from "react-router";
 
@@ -8,6 +8,7 @@ import type {
   AccountType,
   DisplayAmount,
 } from "@/api";
+import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AmountText, FqnPath } from "@/features/ledger";
@@ -25,6 +26,7 @@ interface AccountsTreeProps {
   readonly loading: boolean;
   readonly onCreateAccount?: (opener: HTMLElement) => void;
   readonly onEditAccount?: (account: Account, opener: HTMLElement) => void;
+  readonly onRestructurePath?: (fqn: string, opener: HTMLElement) => void;
   readonly onRetry?: () => void;
   readonly search: string;
   readonly typeFilter: AccountTypeFilter;
@@ -178,29 +180,49 @@ const BalanceAmounts = ({
   </div>
 );
 
+const accountsTreeSkeletonGridClass =
+  "grid grid-cols-[48%_32%_20%] sm:grid-cols-[34%_14%_20%_14%] md:grid-cols-[34%_14%_12%_20%_14%] lg:grid-cols-[34%_14%_12%_20%_14%_8%]";
+
+const accountTreeSkeletonColumnClasses = [
+  "px-3",
+  "hidden px-3 sm:block",
+  "hidden px-3 md:block",
+  "px-2 sm:px-3",
+  "px-1 sm:px-3",
+  "hidden px-3 lg:block",
+] as const;
+
 const AccountsTreeSkeleton = () => (
   <div
     className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
     aria-hidden="true"
   >
-    <div className="grid grid-cols-[minmax(14rem,1fr)_7rem_6rem_9rem_5rem] gap-3 bg-[var(--table-header)] px-3 py-2">
-      {Array.from({ length: 5 }).map((_, index) => (
-        <Skeleton key={index} className="h-5" />
+    <div
+      className={cn(
+        accountsTreeSkeletonGridClass,
+        "bg-[var(--table-header)] py-2",
+      )}
+    >
+      {accountTreeSkeletonColumnClasses.map((className, index) => (
+        <div key={index} className={className}>
+          <Skeleton className="h-5" />
+        </div>
       ))}
     </div>
     {Array.from({ length: 8 }).map((_, index) => (
       <div
         key={index}
         className={cn(
-          "grid grid-cols-[minmax(14rem,1fr)_7rem_6rem_9rem_5rem] gap-3 px-3 py-3",
+          accountsTreeSkeletonGridClass,
+          "py-3",
           index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
         )}
       >
-        <Skeleton className="h-5" />
-        <Skeleton className="h-5" />
-        <Skeleton className="h-5" />
-        <Skeleton className="h-5" />
-        <Skeleton className="h-5" />
+        {accountTreeSkeletonColumnClasses.map((className, columnIndex) => (
+          <div key={columnIndex} className={className}>
+            <Skeleton className="h-5" />
+          </div>
+        ))}
       </div>
     ))}
   </div>
@@ -214,6 +236,7 @@ export const AccountsTree = ({
   loading,
   onCreateAccount,
   onEditAccount,
+  onRestructurePath,
   onRetry,
   search,
   typeFilter,
@@ -304,7 +327,7 @@ export const AccountsTree = ({
         <table className="w-full table-fixed border-collapse text-sm">
           <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-left text-xs font-semibold uppercase">
-              <th scope="col" className="w-[60%] px-3 py-2 sm:w-[44%]">
+              <th scope="col" className="w-[48%] px-3 py-2 sm:w-[34%]">
                 Name
               </th>
               <th
@@ -321,13 +344,19 @@ export const AccountsTree = ({
               </th>
               <th
                 scope="col"
-                className="w-[40%] px-3 py-2 text-right sm:w-[20%]"
+                className="w-[32%] px-2 py-2 text-right sm:w-[20%] sm:px-3"
               >
                 Balance
               </th>
               <th
                 scope="col"
-                className="hidden w-[10%] px-3 py-2 text-center lg:table-cell"
+                className="w-[20%] px-1 py-2 text-center sm:w-[14%] sm:px-3"
+              >
+                Actions
+              </th>
+              <th
+                scope="col"
+                className="hidden w-[8%] px-3 py-2 text-center lg:table-cell"
               >
                 Hidden
               </th>
@@ -426,10 +455,31 @@ export const AccountsTree = ({
                   <td className="hidden px-3 py-2 align-middle font-mono text-sm md:table-cell">
                     {row.account?.currency ?? ""}
                   </td>
-                  <td className="px-3 py-2 text-right align-middle">
+                  <td className="px-2 py-2 text-right align-middle sm:px-3">
                     {row.account?.account_type === "balance" ? (
                       <BalanceAmounts balances={rowBalances} />
                     ) : null}
+                  </td>
+                  <td className="px-1 py-2 align-middle sm:px-3">
+                    <div className="flex justify-center">
+                      {onRestructurePath ? (
+                        <Tooltip label="Move or rename" asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Move or rename"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              event.currentTarget.blur();
+                              onRestructurePath(row.fqn, event.currentTarget);
+                            }}
+                          >
+                            <MagicEdit aria-hidden="true" />
+                          </Button>
+                        </Tooltip>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="hidden px-3 py-2 align-middle lg:table-cell">
                     <div className="flex justify-center">

@@ -11,6 +11,7 @@ import type {
   CreateRefundTransactionRequest,
   CreateSpendTransactionRequest,
   CreateTransferTransactionRequest,
+  RestructureRequest,
   UpdateAccountRequest,
 } from "./generated";
 import {
@@ -33,6 +34,7 @@ import {
   listMembers,
   listTags,
   listTransactions,
+  restructureAccounts as restructureGeneratedAccounts,
   searchAccountJournalRecords,
   searchJournalRecords,
   updateAccount as updateGeneratedAccount,
@@ -359,6 +361,9 @@ export const deleteLedgerAccountById = (accountId: number) =>
       account_id: accountId,
     },
   });
+
+export const restructureLedgerAccounts = (body: RestructureRequest) =>
+  restructureGeneratedAccounts({ body });
 
 export const fetchCreditLimitHistory = (accountId: number) =>
   listGeneratedCreditLimitHistory({

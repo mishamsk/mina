@@ -2,23 +2,51 @@ import { Plus } from "pixelarticons/react";
 import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
-import type { Account } from "@/api";
+import {
+  type Account,
+  isNetworkFailure,
+  restructureLedgerAccounts,
+} from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
+import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
   AccountsPageContent,
   AccountsSidePanel,
   AccountsToolbar,
   readAccountsSearchState,
+  refreshAccountsAfterMutation,
   useAccountsResource,
 } from "@/features/accounts";
 import { PageHeader } from "@/features/app-shell";
+import {
+  RestructureDialog,
+  type RestructureSubmitInput,
+} from "@/features/hierarchy";
 
 interface Notice {
   readonly id: number;
   readonly message: string;
 }
+
+const apiErrorMessage = (error: unknown, fallback: string): string => {
+  if (isNetworkFailure(error)) {
+    return error.message;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "error" in error &&
+    typeof error.error === "object" &&
+    error.error !== null &&
+    "message" in error.error &&
+    typeof error.error.message === "string"
+  ) {
+    return error.error.message;
+  }
+  return fallback;
+};
 
 export const AccountsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -27,9 +55,14 @@ export const AccountsPage = () => {
   const [selectedAccountId, setSelectedAccountId] = useState<
     number | undefined
   >();
+  const [restructurePath, setRestructurePath] = useState<string | undefined>();
+  const [restructureError, setRestructureError] = useState<
+    string | undefined
+  >();
   const [notice, setNotice] = useState<Notice | undefined>();
   const createAccountButtonRef = useRef<HTMLButtonElement | null>(null);
   const panelOpenerRef = useRef<HTMLElement | null>(null);
+  const restructureOpenerRef = useRef<HTMLElement | null>(null);
   const { includeHidden, search, typeFilter } =
     readAccountsSearchState(searchParams);
   const selectedAccount = accountsPage.snapshot?.accounts.find(
@@ -64,12 +97,18 @@ export const AccountsPage = () => {
   };
 
   const openCreatePanel = (opener: HTMLElement) => {
+    setRestructurePath(undefined);
+    setRestructureError(undefined);
+    restructureOpenerRef.current = null;
     panelOpenerRef.current = opener;
     setSelectedAccountId(undefined);
     setPanelMode("create");
   };
 
   const openEditPanel = (account: Account, opener: HTMLElement) => {
+    setRestructurePath(undefined);
+    setRestructureError(undefined);
+    restructureOpenerRef.current = null;
     panelOpenerRef.current = opener;
     setSelectedAccountId(account.account_id);
     setPanelMode("edit");
@@ -79,6 +118,53 @@ export const AccountsPage = () => {
     setPanelMode(undefined);
     setSelectedAccountId(undefined);
     restorePanelOpenerFocus();
+  };
+
+  const openRestructureDialog = (fqn: string, opener: HTMLElement) => {
+    setPanelMode(undefined);
+    setSelectedAccountId(undefined);
+    panelOpenerRef.current = null;
+    restructureOpenerRef.current = opener;
+    setRestructureError(undefined);
+    setRestructurePath(fqn);
+  };
+
+  const restoreRestructureOpenerFocus = () => {
+    const opener = restructureOpenerRef.current;
+    restructureOpenerRef.current = null;
+    if (opener?.isConnected) {
+      window.requestAnimationFrame(() => {
+        focusWithoutTooltip(opener, { preventScroll: true });
+      });
+    }
+  };
+
+  const closeRestructureDialog = () => {
+    setRestructurePath(undefined);
+    setRestructureError(undefined);
+    restoreRestructureOpenerFocus();
+  };
+
+  const submitRestructure = async ({
+    fromFqn,
+    toFqn,
+  }: RestructureSubmitInput) => {
+    setRestructureError(undefined);
+    const result = await restructureLedgerAccounts({
+      from_fqn: fromFqn,
+      to_fqn: toFqn,
+    });
+
+    if (result.data) {
+      closeRestructureDialog();
+      showNotice(`Moved ${result.data.moved_count} account(s).`);
+      await refreshAccountsAfterMutation({ bulk: true });
+      return;
+    }
+
+    setRestructureError(
+      apiErrorMessage(result.error, "Account path could not be moved."),
+    );
   };
 
   const showNotice = (message: string) => {
@@ -131,6 +217,7 @@ export const AccountsPage = () => {
           includeHidden={includeHidden}
           onCreateAccount={openCreatePanel}
           onEditAccount={openEditPanel}
+          onRestructurePath={openRestructureDialog}
           search={search}
           typeFilter={typeFilter}
         />
@@ -153,6 +240,20 @@ export const AccountsPage = () => {
         onClose={closePanel}
         onNotice={showNotice}
       />
+      {restructurePath ? (
+        <RestructureDialog
+          key={restructurePath}
+          entityLabel="Account path"
+          errorMessage={restructureError}
+          fromFqn={restructurePath}
+          hint="The whole account subtree moves with this path."
+          onClearError={() => {
+            setRestructureError(undefined);
+          }}
+          onClose={closeRestructureDialog}
+          onSubmit={submitRestructure}
+        />
+      ) : null}
     </section>
   );
 };
