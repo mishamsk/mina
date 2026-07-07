@@ -636,6 +636,55 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 	})
 }
 
+// Cancel sets all active journal records in a transaction to cancelled.
+func (s *TransactionStore) Cancel(ctx context.Context, id int64) (transactions.Transaction, error) {
+	var transaction transactions.Transaction
+	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
+		var err error
+		transaction, err = scanTransaction(tx.QueryRowContext(
+			ctx,
+			`SELECT transaction_id, initiated_date, created_at, tombstoned_at
+FROM `+s.db.accountingName("transaction")+`
+WHERE transaction_id = ? AND tombstoned_at IS NULL`,
+			id,
+		))
+		if errors.Is(err, sql.ErrNoRows) {
+			return services.ErrNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("get transaction for cancel: %w", err)
+		}
+
+		if _, err := tx.ExecContext(
+			ctx,
+			`UPDATE `+s.db.accountingName("journal_record")+`
+SET posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`),
+    updated_at = CURRENT_TIMESTAMP
+WHERE transaction_id = ?
+  AND tombstoned_at IS NULL
+  AND posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)`,
+			enumValue(transactions.PostingStatusCancelled),
+			id,
+			enumValue(transactions.PostingStatusCancelled),
+		); err != nil {
+			return fmt.Errorf("cancel transaction journal records: %w", err)
+		}
+
+		records, err := recordsByTransactionIDs(ctx, tx, s.db, []int64{id})
+		if err != nil {
+			return err
+		}
+		transaction.Records = records[id]
+
+		return nil
+	})
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+
+	return transaction, nil
+}
+
 // SearchRecords returns active journal records matching filters.
 func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.RecordSearchOptions) (services.PaginatedList[transactions.JournalRecord], error) {
 	withQuery := ""

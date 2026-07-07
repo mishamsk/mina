@@ -1829,6 +1829,7 @@ paths:
     post:
       operationId: bulkUpdateJournalRecordStatuses
       summary: Update posting and reconciliation statuses on selected journal records.
+      description: Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records.
       requestBody:
         required: true
         content:
@@ -1894,6 +1895,30 @@ paths:
       responses:
         "204":
           description: Transaction tombstoned.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/transactions/{transaction_id}/cancel:
+    parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: cancelTransaction
+      summary: Cancel a transaction.
+      description: Sets posting_status to cancelled on all active journal records for the transaction. The operation is idempotent for an already-cancelled transaction and does not change dates or reconciliation status.
+      responses:
+        "200":
+          description: Transaction cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "404":

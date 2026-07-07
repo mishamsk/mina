@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -808,6 +809,63 @@ func TestTransactionRejectsPerCurrencyImbalanceAndDoesNotPersist(t *testing.T) {
 	}
 }
 
+func TestTransactionCancellationInvariantOnCreateAndReplace(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+
+	fullyCancelled := balancedTransactionRequest(refs)
+	fullyCancelled.Records[0].PostingStatus = httpclient.Cancelled
+	fullyCancelled.Records[1].PostingStatus = httpclient.Cancelled
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), fullyCancelled)
+	requireNoTransportError(t, "create fully cancelled transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("fully cancelled create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, created.JSON201.Records, httpclient.Cancelled)
+
+	mixedCreate := balancedTransactionRequest(refs)
+	mixedCreate.Records[0].PostingStatus = httpclient.Cancelled
+	rejectedCreate, err := client.REST().CreateTransactionWithResponse(context.Background(), mixedCreate)
+	requireNoTransportError(t, "create mixed cancelled transaction", err)
+	assertMixedCancellationError(t, "mixed create", rejectedCreate.StatusCode(), rejectedCreate.JSON400, rejectedCreate.Body)
+
+	replacement := replacementTransactionRequest(refs)
+	replacement.Records[0].PostingStatus = httpclient.Cancelled
+	replacement.Records[1].PostingStatus = httpclient.Cancelled
+	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacement)
+	requireNoTransportError(t, "replace fully cancelled transaction", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("fully cancelled replace status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, replaced.JSON200.Records, httpclient.Cancelled)
+
+	mixedReplace := replacementTransactionRequest(refs)
+	mixedReplace.Records[0].PostingStatus = httpclient.Cancelled
+	rejectedReplace, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, mixedReplace)
+	requireNoTransportError(t, "replace mixed cancelled transaction", err)
+	assertMixedCancellationError(t, "mixed replace", rejectedReplace.StatusCode(), rejectedReplace.JSON400, rejectedReplace.Body)
+
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "read after rejected mixed replace", err)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read after rejected mixed replace status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, read.JSON200.Records, httpclient.Cancelled)
+
+	unbalancedCancelled := balancedTransactionRequest(refs)
+	unbalancedCancelled.Records[0].PostingStatus = httpclient.Cancelled
+	unbalancedCancelled.Records[1].PostingStatus = httpclient.Cancelled
+	unbalancedCancelled.Records[1].Amount = "11.00"
+	rejectedUnbalanced, err := client.REST().CreateTransactionWithResponse(context.Background(), unbalancedCancelled)
+	requireNoTransportError(t, "create unbalanced fully cancelled transaction", err)
+	if rejectedUnbalanced.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unbalanced fully cancelled create status = %d, want %d; body %s", rejectedUnbalanced.StatusCode(), http.StatusBadRequest, rejectedUnbalanced.Body)
+	}
+	if rejectedUnbalanced.JSON400 == nil || rejectedUnbalanced.JSON400.Error.Message != "transaction records must balance to zero amount per currency" {
+		t.Fatalf("unbalanced fully cancelled error = %+v, want balance error; body %s", rejectedUnbalanced.JSON400, rejectedUnbalanced.Body)
+	}
+}
+
 func TestTransactionValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
@@ -1233,6 +1291,30 @@ func assertInt64s(t *testing.T, got []int64, want []int64) {
 		if got[i] != want[i] {
 			t.Fatalf("int64 slice at %d = %d, want %d; got %+v", i, got[i], want[i], got)
 		}
+	}
+}
+
+func assertTransactionRecordPostingStatuses(t *testing.T, records []httpclient.JournalRecord, want httpclient.PostingStatus) {
+	t.Helper()
+
+	for index, record := range records {
+		if record.PostingStatus != want {
+			t.Fatalf("record %d posting_status = %q, want %q; records %+v", index, record.PostingStatus, want, records)
+		}
+	}
+}
+
+func assertMixedCancellationError(t *testing.T, label string, gotStatus int, gotBody *httpclient.InvalidRequest, rawBody []byte) {
+	t.Helper()
+
+	if gotStatus != http.StatusBadRequest {
+		t.Fatalf("%s status = %d, want %d; body %s", label, gotStatus, http.StatusBadRequest, rawBody)
+	}
+	if gotBody == nil || gotBody.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("%s error = %+v, want invalid_request; body %s", label, gotBody, rawBody)
+	}
+	if !strings.Contains(gotBody.Error.Message, "all cancelled or none cancelled") {
+		t.Fatalf("%s message = %q, want mixed-cancellation rule; body %s", label, gotBody.Error.Message, rawBody)
 	}
 }
 

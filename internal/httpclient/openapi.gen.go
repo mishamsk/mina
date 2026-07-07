@@ -1995,6 +1995,9 @@ type ClientInterface interface {
 	ReplaceTransactionWithBody(ctx context.Context, transactionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	ReplaceTransaction(ctx context.Context, transactionId int64, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CancelTransaction request
+	CancelTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) ListAccounts(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2983,6 +2986,18 @@ func (c *Client) ReplaceTransactionWithBody(ctx context.Context, transactionId i
 
 func (c *Client) ReplaceTransaction(ctx context.Context, transactionId int64, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReplaceTransactionRequest(c.Server, transactionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CancelTransaction(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelTransactionRequest(c.Server, transactionId)
 	if err != nil {
 		return nil, err
 	}
@@ -6730,6 +6745,40 @@ func NewReplaceTransactionRequestWithBody(server string, transactionId int64, co
 	return req, nil
 }
 
+// NewCancelTransactionRequest generates requests for CancelTransaction
+func NewCancelTransactionRequest(server string, transactionId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "transaction_id", transactionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/%s/cancel", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -6998,6 +7047,9 @@ type ClientWithResponsesInterface interface {
 	ReplaceTransactionWithBodyWithResponse(ctx context.Context, transactionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error)
 
 	ReplaceTransactionWithResponse(ctx context.Context, transactionId int64, body ReplaceTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceTransactionResponse, error)
+
+	// CancelTransactionWithResponse request
+	CancelTransactionWithResponse(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*CancelTransactionResponse, error)
 }
 
 type ListAccountsResponse struct {
@@ -8899,6 +8951,38 @@ func (r ReplaceTransactionResponse) ContentType() string {
 	return ""
 }
 
+type CancelTransactionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Transaction
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelTransactionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelTransactionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CancelTransactionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListAccountsWithResponse request returning *ListAccountsResponse
 func (c *ClientWithResponses) ListAccountsWithResponse(ctx context.Context, params *ListAccountsParams, reqEditors ...RequestEditorFn) (*ListAccountsResponse, error) {
 	rsp, err := c.ListAccounts(ctx, params, reqEditors...)
@@ -9621,6 +9705,15 @@ func (c *ClientWithResponses) ReplaceTransactionWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseReplaceTransactionResponse(rsp)
+}
+
+// CancelTransactionWithResponse request returning *CancelTransactionResponse
+func (c *ClientWithResponses) CancelTransactionWithResponse(ctx context.Context, transactionId int64, reqEditors ...RequestEditorFn) (*CancelTransactionResponse, error) {
+	rsp, err := c.CancelTransaction(ctx, transactionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelTransactionResponse(rsp)
 }
 
 // ParseListAccountsResponse parses an HTTP response from a ListAccountsWithResponse call
@@ -11845,6 +11938,46 @@ func ParseReplaceTransactionResponse(rsp *http.Response) (*ReplaceTransactionRes
 	}
 
 	response := &ReplaceTransactionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Transaction
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCancelTransactionResponse parses an HTTP response from a CancelTransactionWithResponse call
+func ParseCancelTransactionResponse(rsp *http.Response) (*CancelTransactionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelTransactionResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

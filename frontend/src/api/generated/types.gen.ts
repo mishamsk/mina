@@ -2576,3 +2576,34 @@ export type ReplaceTransactionResponses = {
 };
 
 export type ReplaceTransactionResponse = ReplaceTransactionResponses[keyof ReplaceTransactionResponses];
+
+export type CancelTransactionData = {
+    body?: never;
+    path: {
+        transaction_id: number;
+    };
+    query?: never;
+    url: '/api/transactions/{transaction_id}/cancel';
+};
+
+export type CancelTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type CancelTransactionError = CancelTransactionErrors[keyof CancelTransactionErrors];
+
+export type CancelTransactionResponses = {
+    /**
+     * Transaction cancelled.
+     */
+    200: Transaction;
+};
+
+export type CancelTransactionResponse = CancelTransactionResponses[keyof CancelTransactionResponses];

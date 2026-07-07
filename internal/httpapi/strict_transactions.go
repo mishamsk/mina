@@ -218,6 +218,15 @@ func (s *strictServer) GetTransaction(ctx context.Context, request openapi.GetTr
 	return openapi.GetTransaction200JSONResponse(transactionAPIResponse(transaction)), nil
 }
 
+func (s *strictServer) CancelTransaction(ctx context.Context, request openapi.CancelTransactionRequestObject) (openapi.CancelTransactionResponseObject, error) {
+	transaction, err := s.deps.Transactions.Cancel(ctx, request.TransactionId)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.CancelTransaction200JSONResponse(transactionAPIResponse(transaction)), nil
+}
+
 func (s *strictServer) ReplaceTransaction(ctx context.Context, request openapi.ReplaceTransactionRequestObject) (openapi.ReplaceTransactionResponseObject, error) {
 	input, err := transactionAPIInput(request.Body.InitiatedDate, request.Body.Records)
 	if err != nil {

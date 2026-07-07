@@ -75,6 +75,12 @@ A journal record combines:
 Transactions must balance to zero by currency across active records. USD values
 are stored on records when supplied.
 
+Cancellation is transaction-level. Among a transaction's active records, either
+all posting statuses are `cancelled` or none are. Pending and posted records may
+mix within the same transaction. Balance validation includes cancelled records;
+aggregate surfaces such as account balances, month totals, and running balances
+exclude cancelled records.
+
 Record sign follows the existing journal convention: positive amounts debit an
 account and negative amounts credit an account. For `balance` accounts, the
 resulting account balance is interpreted directly as household state.

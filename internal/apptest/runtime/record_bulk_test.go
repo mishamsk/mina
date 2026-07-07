@@ -221,6 +221,111 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	assertRecordIDs(t, originalCategoryRecords.JSON200.Records, []int64{created.JSON201.Records[0].RecordId, created.JSON201.Records[1].RecordId})
 }
 
+func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createSearchRefs(t, client)
+
+	posted := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
+	cancelledStatus := httpclient.Cancelled
+	wholeCancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds:     recordIDs(posted.JSON201.Records),
+		PostingStatus: &cancelledStatus,
+	})
+	requireNoTransportError(t, "bulk cancel whole transaction", err)
+	if wholeCancel.StatusCode() != http.StatusOK {
+		t.Fatalf("whole cancel status = %d, want %d; body %s", wholeCancel.StatusCode(), http.StatusOK, wholeCancel.Body)
+	}
+	assertBulkResponse(t, wholeCancel.JSON200, recordIDs(posted.JSON201.Records))
+	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.Cancelled)
+
+	postedStatus := httpclient.Posted
+	wholeUncancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds:     recordIDs(posted.JSON201.Records),
+		PostingStatus: &postedStatus,
+	})
+	requireNoTransportError(t, "bulk uncancel whole transaction", err)
+	if wholeUncancel.StatusCode() != http.StatusOK {
+		t.Fatalf("whole uncancel status = %d, want %d; body %s", wholeUncancel.StatusCode(), http.StatusOK, wholeUncancel.Body)
+	}
+	assertBulkResponse(t, wholeUncancel.JSON200, recordIDs(posted.JSON201.Records))
+	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.Posted)
+
+	pendingStatus := httpclient.Pending
+	partialPending, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
+		PostingStatus: &pendingStatus,
+	})
+	requireNoTransportError(t, "bulk partial posted to pending", err)
+	if partialPending.StatusCode() != http.StatusOK {
+		t.Fatalf("partial posted to pending status = %d, want %d; body %s", partialPending.StatusCode(), http.StatusOK, partialPending.Body)
+	}
+	assertBulkResponse(t, partialPending.JSON200, []int64{posted.JSON201.Records[0].RecordId})
+	mixedPostingStatuses, err := client.REST().GetTransactionWithResponse(context.Background(), posted.JSON201.TransactionId)
+	requireNoTransportError(t, "read mixed pending and posted transaction", err)
+	if mixedPostingStatuses.StatusCode() != http.StatusOK {
+		t.Fatalf("mixed pending and posted read status = %d, want %d; body %s", mixedPostingStatuses.StatusCode(), http.StatusOK, mixedPostingStatuses.Body)
+	}
+	if got := mixedPostingStatuses.JSON200.Records[0].PostingStatus; got != httpclient.Pending {
+		t.Fatalf("first record posting_status = %q, want %q", got, httpclient.Pending)
+	}
+	if got := mixedPostingStatuses.JSON200.Records[1].PostingStatus; got != httpclient.Posted {
+		t.Fatalf("second record posting_status = %q, want %q", got, httpclient.Posted)
+	}
+	restorePartialPosted, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
+		PostingStatus: &postedStatus,
+	})
+	requireNoTransportError(t, "bulk restore partial posted", err)
+	if restorePartialPosted.StatusCode() != http.StatusOK {
+		t.Fatalf("restore partial posted status = %d, want %d; body %s", restorePartialPosted.StatusCode(), http.StatusOK, restorePartialPosted.Body)
+	}
+	assertBulkResponse(t, restorePartialPosted.JSON200, []int64{posted.JSON201.Records[0].RecordId})
+	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.Posted)
+
+	partialCancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
+		PostingStatus: &cancelledStatus,
+	})
+	requireNoTransportError(t, "bulk partial cancel", err)
+	assertMixedCancellationError(t, "partial cancel", partialCancel.StatusCode(), partialCancel.JSON400, partialCancel.Body)
+	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.Posted)
+
+	fullyCancelled := balancedTransactionRequest(refs.transactionRefs)
+	fullyCancelled.Records[0].PostingStatus = httpclient.Cancelled
+	fullyCancelled.Records[1].PostingStatus = httpclient.Cancelled
+	cancelled := createTransaction(t, client, fullyCancelled)
+	partialUncancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds:     []int64{cancelled.JSON201.Records[0].RecordId},
+		PostingStatus: &pendingStatus,
+	})
+	requireNoTransportError(t, "bulk partial uncancel", err)
+	assertMixedCancellationError(t, "partial uncancel", partialUncancel.StatusCode(), partialUncancel.JSON400, partialUncancel.Body)
+	assertTransactionPostingStatus(t, client, cancelled.JSON201.TransactionId, httpclient.Cancelled)
+
+	first := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
+	second := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
+	spanning := append(recordIDs(first.JSON201.Records), second.JSON201.Records[0].RecordId)
+	spanningResponse, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds:     spanning,
+		PostingStatus: &cancelledStatus,
+	})
+	requireNoTransportError(t, "bulk cancel spanning mixed transaction", err)
+	assertMixedCancellationError(t, "spanning partial cancel", spanningResponse.StatusCode(), spanningResponse.JSON400, spanningResponse.Body)
+	assertTransactionPostingStatus(t, client, first.JSON201.TransactionId, httpclient.Posted)
+	assertTransactionPostingStatus(t, client, second.JSON201.TransactionId, httpclient.Posted)
+
+	reconciliationStatus := httpclient.Unreconciled
+	reconciliationOnly, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds:            []int64{second.JSON201.Records[0].RecordId},
+		ReconciliationStatus: &reconciliationStatus,
+	})
+	requireNoTransportError(t, "bulk reconciliation-only status", err)
+	if reconciliationOnly.StatusCode() != http.StatusOK {
+		t.Fatalf("reconciliation-only status = %d, want %d; body %s", reconciliationOnly.StatusCode(), http.StatusOK, reconciliationOnly.Body)
+	}
+	assertTransactionPostingStatus(t, client, second.JSON201.TransactionId, httpclient.Posted)
+}
+
 func TestRecordBulkOperationsRejectTombstonedTargetReferences(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
@@ -286,4 +391,15 @@ func assertBulkResponse(t *testing.T, got *httpclient.BulkRecordOperationRespons
 	if got.UpdatedCount != len(wantRecordIDs) {
 		t.Fatalf("updated_count = %d, want %d", got.UpdatedCount, len(wantRecordIDs))
 	}
+}
+
+func assertTransactionPostingStatus(t *testing.T, client *apptest.Client, transactionID int64, want httpclient.PostingStatus) {
+	t.Helper()
+
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), transactionID)
+	requireNoTransportError(t, "read transaction posting statuses", err)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read transaction status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, read.JSON200.Records, want)
 }

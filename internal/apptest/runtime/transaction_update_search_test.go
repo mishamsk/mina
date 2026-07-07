@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
@@ -170,6 +171,71 @@ func TestTransactionDeleteTombstonesRecordsBoundary(t *testing.T) {
 	requireNoTransportError(t, "delete transaction", err)
 	if secondDelete.StatusCode() != http.StatusNotFound {
 		t.Fatalf("second delete status = %d, want %d; body %s", secondDelete.StatusCode(), http.StatusNotFound, secondDelete.Body)
+	}
+}
+
+func TestTransactionCancelBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+
+	request := balancedTransactionRequest(refs)
+	request.Records[0].PostingStatus = httpclient.Pending
+	request.Records[0].ReconciliationStatus = httpclient.Unreconciled
+	request.Records[1].PostingStatus = httpclient.Posted
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
+	requireNoTransportError(t, "create transaction to cancel", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("create transaction to cancel status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+
+	cancelled, err := client.REST().CancelTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "cancel transaction", err)
+	if cancelled.StatusCode() != http.StatusOK {
+		t.Fatalf("cancel transaction status = %d, want %d; body %s", cancelled.StatusCode(), http.StatusOK, cancelled.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, cancelled.JSON200.Records, httpclient.Cancelled)
+	assertTransactionCancelPreservedFields(t, created.JSON201.Records, cancelled.JSON200.Records)
+
+	repeated, err := client.REST().CancelTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "repeat cancel transaction", err)
+	if repeated.StatusCode() != http.StatusOK {
+		t.Fatalf("repeat cancel transaction status = %d, want %d; body %s", repeated.StatusCode(), http.StatusOK, repeated.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, repeated.JSON200.Records, httpclient.Cancelled)
+
+	accountIDs := []int64{refs.CheckingAccountId}
+	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})
+	requireNoTransportError(t, "list account balances after cancel", err)
+	if balances.StatusCode() != http.StatusOK {
+		t.Fatalf("list account balances after cancel status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
+	}
+	assertAccountBalances(t, balances.JSON200.Balances, []wantAccountBalance{
+		{accountID: refs.CheckingAccountId, currency: "USD", current: "0.00000000", currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0},
+	})
+
+	totals, err := client.REST().GetTransactionMonthTotalsWithResponse(context.Background(), &httpclient.GetTransactionMonthTotalsParams{Month: "2024-03"})
+	requireNoTransportError(t, "month totals after cancel", err)
+	if totals.StatusCode() != http.StatusOK {
+		t.Fatalf("month totals after cancel status = %d, want %d; body %s", totals.StatusCode(), http.StatusOK, totals.Body)
+	}
+	assertMonthTotal(t, "cancelled transaction spend", totals.JSON200.Spend, "0.00000000", 0)
+
+	missing, err := client.REST().CancelTransactionWithResponse(context.Background(), created.JSON201.TransactionId+9999)
+	requireNoTransportError(t, "cancel missing transaction", err)
+	if missing.StatusCode() != http.StatusNotFound {
+		t.Fatalf("cancel missing transaction status = %d, want %d; body %s", missing.StatusCode(), http.StatusNotFound, missing.Body)
+	}
+
+	tombstoned := createTransaction(t, client, balancedTransactionRequest(refs))
+	deleted, err := client.REST().DeleteTransactionWithResponse(context.Background(), tombstoned.JSON201.TransactionId)
+	requireNoTransportError(t, "delete transaction before cancel", err)
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete transaction before cancel status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+	cancelTombstoned, err := client.REST().CancelTransactionWithResponse(context.Background(), tombstoned.JSON201.TransactionId)
+	requireNoTransportError(t, "cancel tombstoned transaction", err)
+	if cancelTombstoned.StatusCode() != http.StatusNotFound {
+		t.Fatalf("cancel tombstoned transaction status = %d, want %d; body %s", cancelTombstoned.StatusCode(), http.StatusNotFound, cancelTombstoned.Body)
 	}
 }
 
@@ -896,6 +962,37 @@ func assertRecordRunningBalances(t *testing.T, records []httpclient.JournalRecor
 			t.Fatalf("running_balance at %d = %v, want %q; records = %+v", index, record.RunningBalance, want[index], records)
 		}
 	}
+}
+
+func assertTransactionCancelPreservedFields(t *testing.T, before []httpclient.JournalRecord, after []httpclient.JournalRecord) {
+	t.Helper()
+
+	if len(after) != len(before) {
+		t.Fatalf("cancelled record count = %d, want %d; before %+v after %+v", len(after), len(before), before, after)
+	}
+	for index := range before {
+		if !after[index].PendingDate.Equal(before[index].PendingDate) ||
+			!equalOptionalTime(after[index].PostedDate, before[index].PostedDate) ||
+			after[index].ReconciliationStatus != before[index].ReconciliationStatus {
+			t.Fatalf("cancelled record %d preserved fields = pending:%v posted:%v reconciliation:%q, want pending:%v posted:%v reconciliation:%q",
+				index,
+				after[index].PendingDate,
+				after[index].PostedDate,
+				after[index].ReconciliationStatus,
+				before[index].PendingDate,
+				before[index].PostedDate,
+				before[index].ReconciliationStatus,
+			)
+		}
+	}
+}
+
+func equalOptionalTime(left *time.Time, right *time.Time) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+
+	return left.Equal(*right)
 }
 
 func assertEmptyRecordSearchQuery(t *testing.T, client *apptest.Client, rawQuery string) {

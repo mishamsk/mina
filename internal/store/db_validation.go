@@ -15,6 +15,7 @@ import (
 
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/dbvalidation"
+	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/values"
 )
 
@@ -192,6 +193,7 @@ func (s *DBValidationStore) InvariantFindings(ctx context.Context, missingUnique
 	queryChecks := []func(context.Context) ([]dbvalidation.Finding, error){
 		s.unbalancedTransactionFindings,
 		s.shortTransactionFindings,
+		s.mixedCancellationTransactionFindings,
 		s.nonPositiveExchangeRateFindings,
 		s.zeroAmountFindings,
 		s.zeroAmountUSDFindings,
@@ -292,6 +294,44 @@ ORDER BY t.transaction_id`,
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate transaction record-count findings: %w", err)
+	}
+
+	return findings, nil
+}
+
+func (s *DBValidationStore) mixedCancellationTransactionFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`SELECT t.transaction_id
+FROM `+s.db.accountingName("transaction")+` AS t
+JOIN `+s.db.accountingName("journal_record")+` AS jr
+  ON jr.transaction_id = t.transaction_id
+WHERE t.tombstoned_at IS NULL
+  AND jr.tombstoned_at IS NULL
+GROUP BY t.transaction_id
+HAVING COUNT(*) FILTER (WHERE jr.posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`)) > 0
+   AND COUNT(*) FILTER (WHERE jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)) > 0
+ORDER BY t.transaction_id`,
+		enumValue(transactions.PostingStatusCancelled),
+		enumValue(transactions.PostingStatusCancelled),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("check transaction cancellation statuses: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	findings := []dbvalidation.Finding{}
+	for rows.Next() {
+		var transactionID int64
+		if err := rows.Scan(&transactionID); err != nil {
+			return nil, fmt.Errorf("scan transaction cancellation-status finding: %w", err)
+		}
+		findings = append(findings, invariantFinding(dbvalidation.SeverityError, fmt.Sprintf("transaction %d mixes cancelled and non-cancelled active records", transactionID)))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate transaction cancellation-status findings: %w", err)
 	}
 
 	return findings, nil

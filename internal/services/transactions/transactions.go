@@ -27,6 +27,8 @@ const (
 	PostingStatusCancelled PostingStatus = "cancelled"
 )
 
+const mixedCancellationStatusMessage = "transaction records must be all cancelled or none cancelled"
+
 // ReconciliationStatus is a journal record reconciliation state.
 type ReconciliationStatus string
 
@@ -250,6 +252,7 @@ type Repository interface {
 	Create(context.Context, CreateInput) (Transaction, error)
 	Replace(context.Context, int64, CreateInput) (Transaction, error)
 	Get(context.Context, int64) (Transaction, error)
+	Cancel(context.Context, int64) (Transaction, error)
 	List(context.Context, ListOptions) (ListResult, error)
 	MonthTotals(context.Context, MonthTotalsRange) (MonthActivityTotals, error)
 	Tombstone(context.Context, int64) error
@@ -486,6 +489,28 @@ func (s *Service) Get(ctx context.Context, id int64) (Transaction, error) {
 	}
 
 	transaction, err := s.repo.Get(ctx, id)
+	if errors.Is(err, services.ErrNotFound) {
+		return Transaction{}, services.NotFound("transaction not found")
+	}
+	if err != nil {
+		return Transaction{}, err
+	}
+
+	return classifyTransaction(transaction)
+}
+
+// Cancel sets every active record in a transaction to cancelled.
+func (s *Service) Cancel(ctx context.Context, id int64) (Transaction, error) {
+	if id <= 0 {
+		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
+	}
+
+	var transaction Transaction
+	err := s.refs.SerializeReferenceOperation(func() error {
+		var err error
+		transaction, err = s.repo.Cancel(ctx, id)
+		return err
+	})
 	if errors.Is(err, services.ErrNotFound) {
 		return Transaction{}, services.NotFound("transaction not found")
 	}
@@ -833,11 +858,21 @@ func (s *Service) BulkUpdateStatuses(
 		}
 	}
 
-	count, err := s.repo.BulkUpdateStatuses(ctx, recordIDs, postingStatus, reconciliationStatus)
-	if errors.Is(err, services.ErrInvalidReference) {
-		return BulkRecordOperationResponse{}, services.InvalidRequest("records missing or inactive resource")
-	}
-	if err != nil {
+	var count int
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateBulkStatusCancellationInvariant(ctx, recordIDs, postingStatus); err != nil {
+			return err
+		}
+		updated, err := s.repo.BulkUpdateStatuses(ctx, recordIDs, postingStatus, reconciliationStatus)
+		if errors.Is(err, services.ErrInvalidReference) {
+			return services.InvalidRequest("records missing or inactive resource")
+		}
+		if err != nil {
+			return err
+		}
+		count = updated
+		return nil
+	}); err != nil {
 		return BulkRecordOperationResponse{}, err
 	}
 
@@ -945,6 +980,40 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 	return nil
 }
 
+func (s *Service) validateBulkStatusCancellationInvariant(ctx context.Context, recordIDs []int64, postingStatus *PostingStatus) error {
+	if postingStatus == nil {
+		return nil
+	}
+
+	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return services.InvalidRequest("records missing or inactive resource")
+	}
+	if err != nil {
+		return err
+	}
+
+	selected := idSet(recordIDs)
+	found := map[int64]struct{}{}
+	for transactionIndex := range affected {
+		for recordIndex := range affected[transactionIndex].Records {
+			record := &affected[transactionIndex].Records[recordIndex]
+			if _, ok := selected[record.ID]; ok {
+				record.PostingStatus = *postingStatus
+				found[record.ID] = struct{}{}
+			}
+		}
+		if err := validateTransactionCancellationInvariant(affected[transactionIndex].Records); err != nil {
+			return err
+		}
+	}
+	if len(found) != len(selected) {
+		return services.InvalidRequest("records missing or inactive resource")
+	}
+
+	return nil
+}
+
 func (s *Service) semanticDictionaries(ctx context.Context, records []JournalRecordInput) (semanticDictionaries, error) {
 	accountIDs := make([]int64, 0, len(records))
 	categoryIDs := make([]int64, 0, len(records))
@@ -1036,9 +1105,13 @@ func validateTransactionInput(input CreateInput) error {
 	}
 
 	balances := map[string]values.Decimal{}
+	cancelledRecords := 0
 	for index, record := range input.Records {
 		if err := validateJournalRecord(index, record); err != nil {
 			return err
+		}
+		if record.PostingStatus == PostingStatusCancelled {
+			cancelledRecords++
 		}
 		if balance, ok := balances[record.Currency]; ok {
 			updated, err := balance.Add(record.Amount)
@@ -1050,6 +1123,9 @@ func validateTransactionInput(input CreateInput) error {
 			balances[record.Currency] = record.Amount
 		}
 	}
+	if cancelledRecords > 0 && cancelledRecords < len(input.Records) {
+		return invalidMixedCancellationStatusError()
+	}
 	for _, balance := range balances {
 		if !balance.IsZero() {
 			return services.InvalidRequest("transaction records must balance to zero amount per currency")
@@ -1057,6 +1133,24 @@ func validateTransactionInput(input CreateInput) error {
 	}
 
 	return nil
+}
+
+func validateTransactionCancellationInvariant(records []JournalRecord) error {
+	cancelledRecords := 0
+	for _, record := range records {
+		if record.PostingStatus == PostingStatusCancelled {
+			cancelledRecords++
+		}
+	}
+	if cancelledRecords > 0 && cancelledRecords < len(records) {
+		return invalidMixedCancellationStatusError()
+	}
+
+	return nil
+}
+
+func invalidMixedCancellationStatusError() error {
+	return services.InvalidRequest(mixedCancellationStatusMessage)
 }
 
 func validateJournalRecord(index int, record JournalRecordInput) error {
