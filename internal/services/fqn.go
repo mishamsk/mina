@@ -2,6 +2,14 @@ package services
 
 import "strings"
 
+// FQNPathConflict reports whether candidate equals, extends, or is a
+// segment-boundary path prefix of existing.
+func FQNPathConflict(candidate string, existing string) bool {
+	return candidate == existing ||
+		strings.HasPrefix(candidate, existing+":") ||
+		strings.HasPrefix(existing, candidate+":")
+}
+
 // ValidateFQN validates Mina colon-separated hierarchical names.
 func ValidateFQN(fqn string) error {
 	if strings.TrimSpace(fqn) != fqn || fqn == "" {

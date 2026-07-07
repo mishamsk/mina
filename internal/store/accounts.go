@@ -29,14 +29,6 @@ func NewAccountStore(db *AppDB) *AccountStore {
 func (s *AccountStore) Create(ctx context.Context, input accounts.CreateInput) (accounts.Account, error) {
 	var account accounts.Account
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		exists, err := accountFQNExists(ctx, tx, s.db, input.FQN)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return fmt.Errorf("%w: active account fqn already exists", services.ErrConflict)
-		}
-
 		row := tx.QueryRowContext(
 			ctx,
 			`INSERT INTO `+s.db.accountingName("account")+` (fqn, account_type, is_hidden, is_featured, currency, external_id, external_system)
@@ -50,13 +42,14 @@ RETURNING account_id, fqn, account_type, is_hidden, is_featured, currency, exter
 			input.ExternalID,
 			input.ExternalSystem,
 		)
-		account, err = scanAccount(row)
-		if err != nil {
-			if isUniqueConstraintError(err) {
+		created, scanErr := scanAccount(row)
+		if scanErr != nil {
+			if isUniqueConstraintError(scanErr) {
 				return fmt.Errorf("%w: active account fqn already exists", services.ErrConflict)
 			}
-			return fmt.Errorf("insert account: %w", err)
+			return fmt.Errorf("insert account: %w", scanErr)
 		}
+		account = created
 
 		return nil
 	})
@@ -384,23 +377,6 @@ func scanAccountBalance(scanner accountScanner) (accounts.AccountBalance, error)
 	balance.PostedBalance = postedBalance
 
 	return balance, nil
-}
-
-func accountFQNExists(ctx context.Context, tx *sql.Tx, db *AppDB, fqn string) (bool, error) {
-	var id int64
-	err := tx.QueryRowContext(
-		ctx,
-		"SELECT account_id FROM "+db.accountingName("account")+" WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
-		fqn,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check account fqn: %w", err)
-	}
-
-	return true, nil
 }
 
 func activeAccountIDExists(ctx context.Context, queryer sqlQueryer, db *AppDB, id int64) (bool, error) {

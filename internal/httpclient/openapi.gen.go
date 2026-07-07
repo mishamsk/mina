@@ -1348,6 +1348,12 @@ type UpdateTransactionRequest struct {
 	Records       []CreateJournalRecordRequest `json:"records"`
 }
 
+// AccountFQNConflict defines model for AccountFQNConflict.
+type AccountFQNConflict = ErrorResponse
+
+// CategoryFQNConflict defines model for CategoryFQNConflict.
+type CategoryFQNConflict = ErrorResponse
+
 // Conflict defines model for Conflict.
 type Conflict = ErrorResponse
 
@@ -1362,6 +1368,12 @@ type MethodNotAllowed = ErrorResponse
 
 // NotFound defines model for NotFound.
 type NotFound = ErrorResponse
+
+// TagFQNConflict defines model for TagFQNConflict.
+type TagFQNConflict = ErrorResponse
+
+// TransactionTemplateFQNConflict defines model for TransactionTemplateFQNConflict.
+type TransactionTemplateFQNConflict = ErrorResponse
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
@@ -7088,7 +7100,7 @@ type CreateAccountResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *Account
 	JSON400      *InvalidRequest
-	JSON409      *Conflict
+	JSON409      *AccountFQNConflict
 }
 
 // Status returns HTTPResponse.Status
@@ -7631,7 +7643,7 @@ type CreateCategoryResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *Category
 	JSON400      *InvalidRequest
-	JSON409      *Conflict
+	JSON409      *CategoryFQNConflict
 }
 
 // Status returns HTTPResponse.Status
@@ -8357,7 +8369,7 @@ type CreateTagResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *Tag
 	JSON400      *InvalidRequest
-	JSON409      *Conflict
+	JSON409      *TagFQNConflict
 }
 
 // Status returns HTTPResponse.Status
@@ -8516,7 +8528,7 @@ type CreateTransactionTemplateResponse struct {
 	HTTPResponse *http.Response
 	JSON201      *TransactionTemplate
 	JSON400      *InvalidRequest
-	JSON409      *Conflict
+	JSON409      *TransactionTemplateFQNConflict
 }
 
 // Status returns HTTPResponse.Status
@@ -8612,7 +8624,7 @@ type ReplaceTransactionTemplateResponse struct {
 	JSON200      *TransactionTemplate
 	JSON400      *InvalidRequest
 	JSON404      *NotFound
-	JSON409      *Conflict
+	JSON409      *TransactionTemplateFQNConflict
 }
 
 // Status returns HTTPResponse.Status
@@ -9778,7 +9790,7 @@ func ParseCreateAccountResponse(rsp *http.Response) (*CreateAccountResponse, err
 		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
+		var dest AccountFQNConflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -10451,7 +10463,7 @@ func ParseCreateCategoryResponse(rsp *http.Response) (*CreateCategoryResponse, e
 		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
+		var dest CategoryFQNConflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -11301,7 +11313,7 @@ func ParseCreateTagResponse(rsp *http.Response) (*CreateTagResponse, error) {
 		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
+		var dest TagFQNConflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -11494,7 +11506,7 @@ func ParseCreateTransactionTemplateResponse(rsp *http.Response) (*CreateTransact
 		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
+		var dest TransactionTemplateFQNConflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -11614,7 +11626,7 @@ func ParseReplaceTransactionTemplateResponse(rsp *http.Response) (*ReplaceTransa
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Conflict
+		var dest TransactionTemplateFQNConflict
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

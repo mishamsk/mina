@@ -313,6 +313,120 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	}
 }
 
+func TestTransactionTemplateRejectsHierarchyFQNConflict(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionTemplateRefs(t, client)
+
+	createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchy:Leaf",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	extendsLeaf, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchy:Leaf:Child",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	if err != nil {
+		t.Fatalf("extends leaf request: %v", err)
+	}
+	if extendsLeaf.StatusCode() != http.StatusConflict {
+		t.Fatalf("extends leaf status = %d, want %d; body %s", extendsLeaf.StatusCode(), http.StatusConflict, extendsLeaf.Body)
+	}
+	if extendsLeaf.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("extends leaf code = %q, want %q", extendsLeaf.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+
+	createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchy:Group:Child",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	prefixesChild, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchy:Group",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	if err != nil {
+		t.Fatalf("prefixes child request: %v", err)
+	}
+	if prefixesChild.StatusCode() != http.StatusConflict {
+		t.Fatalf("prefixes child status = %d, want %d; body %s", prefixesChild.StatusCode(), http.StatusConflict, prefixesChild.Body)
+	}
+	if prefixesChild.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("prefixes child code = %q, want %q", prefixesChild.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+
+	original := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchy:Replace",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	originalRecordIDs := transactionTemplateRecordIDs(original.JSON201.Records)
+	conflictingReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchy:Group",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	if err != nil {
+		t.Fatalf("conflicting replace request: %v", err)
+	}
+	if conflictingReplace.StatusCode() != http.StatusConflict {
+		t.Fatalf("conflicting replace status = %d, want %d; body %s", conflictingReplace.StatusCode(), http.StatusConflict, conflictingReplace.Body)
+	}
+	if conflictingReplace.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("conflicting replace code = %q, want %q", conflictingReplace.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+	assertTransactionTemplateUnchanged(t, client, original.JSON201.TransactionTemplateId, "TemplateHierarchy:Replace", originalRecordIDs)
+
+	extendsLeafReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchy:Leaf:Child",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	if err != nil {
+		t.Fatalf("extends leaf replace request: %v", err)
+	}
+	if extendsLeafReplace.StatusCode() != http.StatusConflict {
+		t.Fatalf("extends leaf replace status = %d, want %d; body %s", extendsLeafReplace.StatusCode(), http.StatusConflict, extendsLeafReplace.Body)
+	}
+	if extendsLeafReplace.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("extends leaf replace code = %q, want %q", extendsLeafReplace.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+	assertTransactionTemplateUnchanged(t, client, original.JSON201.TransactionTemplateId, "TemplateHierarchy:Replace", originalRecordIDs)
+
+	amount := "7.50"
+	unchangedFQNReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchy:Replace",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID, Amount: &amount},
+			{CategoryId: refs.CategoryID, AccountId: &refs.MerchantAccountID},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unchanged fqn replace request: %v", err)
+	}
+	if unchangedFQNReplace.StatusCode() != http.StatusOK {
+		t.Fatalf("unchanged fqn replace status = %d, want %d; body %s", unchangedFQNReplace.StatusCode(), http.StatusOK, unchangedFQNReplace.Body)
+	}
+	if unchangedFQNReplace.JSON200.Fqn != "TemplateHierarchy:Replace" {
+		t.Fatalf("unchanged fqn replace fqn = %q, want TemplateHierarchy:Replace", unchangedFQNReplace.JSON200.Fqn)
+	}
+	if len(unchangedFQNReplace.JSON200.Records) != 2 {
+		t.Fatalf("unchanged fqn replace record count = %d, want 2; body %+v", len(unchangedFQNReplace.JSON200.Records), unchangedFQNReplace.JSON200)
+	}
+	if slices.Equal(transactionTemplateRecordIDs(unchangedFQNReplace.JSON200.Records), originalRecordIDs) {
+		t.Fatalf("unchanged fqn replace kept original records %v", originalRecordIDs)
+	}
+}
+
 func TestTransactionTemplateValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionTemplateRefs(t, client)

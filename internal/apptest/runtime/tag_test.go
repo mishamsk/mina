@@ -209,6 +209,56 @@ func TestTagRejectsDuplicateActiveFQN(t *testing.T) {
 	}
 }
 
+func TestTagRejectsHierarchyFQNConflict(t *testing.T) {
+	client := newSharedClient(t)
+
+	leaf, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "HierarchyTag:Leaf",
+	})
+	if err != nil {
+		t.Fatalf("leaf create request: %v", err)
+	}
+	if leaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("leaf create status = %d, want %d; body %s", leaf.StatusCode(), http.StatusCreated, leaf.Body)
+	}
+
+	extendsLeaf, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "HierarchyTag:Leaf:Child",
+	})
+	if err != nil {
+		t.Fatalf("extends leaf request: %v", err)
+	}
+	if extendsLeaf.StatusCode() != http.StatusConflict {
+		t.Fatalf("extends leaf status = %d, want %d; body %s", extendsLeaf.StatusCode(), http.StatusConflict, extendsLeaf.Body)
+	}
+	if extendsLeaf.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("extends leaf code = %q, want %q", extendsLeaf.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+
+	child, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "HierarchyTag:Group:Child",
+	})
+	if err != nil {
+		t.Fatalf("child create request: %v", err)
+	}
+	if child.StatusCode() != http.StatusCreated {
+		t.Fatalf("child create status = %d, want %d; body %s", child.StatusCode(), http.StatusCreated, child.Body)
+	}
+
+	prefixesChild, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "HierarchyTag:Group",
+	})
+	if err != nil {
+		t.Fatalf("prefixes child request: %v", err)
+	}
+	if prefixesChild.StatusCode() != http.StatusConflict {
+		t.Fatalf("prefixes child status = %d, want %d; body %s", prefixesChild.StatusCode(), http.StatusConflict, prefixesChild.Body)
+	}
+	if prefixesChild.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("prefixes child code = %q, want %q", prefixesChild.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+}
+
 func TestTagValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 

@@ -510,13 +510,11 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 	category := scenario.Category("Banking:Fees")
 	funding := scenario.AccountWithCurrency("cash:Prefix:Funding", "USD")
 	merchant := scenario.Account("merchant:Prefix:Coffee")
-	chase := scenario.AccountWithCurrency("banks:Chase", "USD")
 	chaseChecking := scenario.AccountWithCurrency("banks:Chase:checking:Joint", "USD")
 	chaseFees := scenario.AccountWithType("banks:Chase:fees", httpclient.Flow)
 	chaserChecking := scenario.AccountWithCurrency("banks:Chaser:checking", "USD")
 	allyChecking := scenario.AccountWithCurrency("banks:Ally:checking", "USD")
 
-	node := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-01", category.CategoryId, chase.AccountId, merchant.AccountId, httpclient.Posted))
 	descendant := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-02", category.CategoryId, chaseChecking.AccountId, merchant.AccountId, httpclient.Posted))
 	flow := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-03", category.CategoryId, funding.AccountId, chaseFees.AccountId, httpclient.Pending))
 	sibling := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-04", category.CategoryId, chaserChecking.AccountId, merchant.AccountId, httpclient.Posted))
@@ -531,12 +529,11 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 		t.Fatalf("prefix records status = %d, want %d; body %s", prefixRecords.StatusCode(), http.StatusOK, prefixRecords.Body)
 	}
 	assertRecordIDs(t, prefixRecords.JSON200.Records, []int64{
-		node.JSON201.Records[0].RecordId,
 		descendant.JSON201.Records[0].RecordId,
 		flow.JSON201.Records[1].RecordId,
 	})
-	if prefixRecords.JSON200.TotalCount != 3 {
-		t.Fatalf("prefix total_count = %d, want 3", prefixRecords.JSON200.TotalCount)
+	if prefixRecords.JSON200.TotalCount != 2 {
+		t.Fatalf("prefix total_count = %d, want 2", prefixRecords.JSON200.TotalCount)
 	}
 
 	exactPrefix := "banks:Chase:checking:Joint"
@@ -550,20 +547,18 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 	assertRecordIDs(t, exactRecords.JSON200.Records, []int64{descendant.JSON201.Records[0].RecordId})
 
 	limitOne := 1
-	offsetOne := 1
 	filteredPage, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
 		AccountFqnPrefix: &prefix,
 		PostingStatus:    ptrTo(httpclient.Posted),
 		Limit:            &limitOne,
-		Offset:           &offsetOne,
 	})
 	requireNoTransportError(t, "search records by account fqn prefix with filters", err)
 	if filteredPage.StatusCode() != http.StatusOK {
 		t.Fatalf("filtered prefix page status = %d, want %d; body %s", filteredPage.StatusCode(), http.StatusOK, filteredPage.Body)
 	}
 	assertRecordIDs(t, filteredPage.JSON200.Records, []int64{descendant.JSON201.Records[0].RecordId})
-	if filteredPage.JSON200.TotalCount != 2 {
-		t.Fatalf("filtered prefix page total_count = %d, want 2", filteredPage.JSON200.TotalCount)
+	if filteredPage.JSON200.TotalCount != 1 {
+		t.Fatalf("filtered prefix page total_count = %d, want 1", filteredPage.JSON200.TotalCount)
 	}
 
 	allRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), nil)
@@ -571,16 +566,16 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 	if allRecords.StatusCode() != http.StatusOK {
 		t.Fatalf("all records status = %d, want %d; body %s", allRecords.StatusCode(), http.StatusOK, allRecords.Body)
 	}
-	if allRecords.JSON200.TotalCount != 10 {
-		t.Fatalf("all records total_count = %d, want 10; sibling=%d other=%d", allRecords.JSON200.TotalCount, sibling.JSON201.TransactionId, other.JSON201.TransactionId)
+	if allRecords.JSON200.TotalCount != 8 {
+		t.Fatalf("all records total_count = %d, want 8; sibling=%d other=%d", allRecords.JSON200.TotalCount, sibling.JSON201.TransactionId, other.JSON201.TransactionId)
 	}
 
 	wildcardPrefix := "banks:Save_1%\\Vault"
-	wildcardNodeAccount := scenario.AccountWithCurrency(wildcardPrefix, "USD")
 	wildcardDescendantAccount := scenario.AccountWithCurrency(wildcardPrefix+":Joint", "USD")
+	wildcardFeeAccount := scenario.AccountWithType(wildcardPrefix+":Fees", httpclient.Flow)
 	wildcardLookalikeAccount := scenario.AccountWithCurrency("banks:Savex1ExtraVault:Joint", "USD")
-	wildcardNode := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-06", category.CategoryId, wildcardNodeAccount.AccountId, merchant.AccountId, httpclient.Posted))
 	wildcardDescendant := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-07", category.CategoryId, wildcardDescendantAccount.AccountId, merchant.AccountId, httpclient.Posted))
+	wildcardFee := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-08", category.CategoryId, funding.AccountId, wildcardFeeAccount.AccountId, httpclient.Posted))
 	createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-08", category.CategoryId, wildcardLookalikeAccount.AccountId, merchant.AccountId, httpclient.Posted))
 
 	wildcardPrefixRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
@@ -591,14 +586,14 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 		t.Fatalf("wildcard prefix records status = %d, want %d; body %s", wildcardPrefixRecords.StatusCode(), http.StatusOK, wildcardPrefixRecords.Body)
 	}
 	assertRecordIDs(t, wildcardPrefixRecords.JSON200.Records, []int64{
-		wildcardNode.JSON201.Records[0].RecordId,
 		wildcardDescendant.JSON201.Records[0].RecordId,
+		wildcardFee.JSON201.Records[1].RecordId,
 	})
 	if wildcardPrefixRecords.JSON200.TotalCount != 2 {
 		t.Fatalf("wildcard prefix total_count = %d, want 2", wildcardPrefixRecords.JSON200.TotalCount)
 	}
 
-	assertInvalidRecordSearchQuery(t, client, "account_fqn_prefix=banks:Chase&account_id="+apptest.FormatID(chase.AccountId))
+	assertInvalidRecordSearchQuery(t, client, "account_fqn_prefix=banks:Chase&account_id="+apptest.FormatID(chaseChecking.AccountId))
 	assertInvalidRecordSearchQuery(t, client, "account_fqn_prefix=banks:Chase&include_running_balance=true")
 	assertInvalidRecordSearchQuery(t, client, "account_fqn_prefix=:bad")
 }

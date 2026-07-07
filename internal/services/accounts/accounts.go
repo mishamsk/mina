@@ -168,15 +168,26 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Account, error
 		return Account{}, err
 	}
 
-	account, err := s.repo.Create(ctx, input)
-	if errors.Is(err, services.ErrConflict) {
-		return Account{}, services.Conflict("active account fqn already exists")
-	}
-	if err != nil {
+	var account Account
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.ensureFQNAvailable(ctx, input.FQN); err != nil {
+			return err
+		}
+
+		created, err := s.repo.Create(ctx, input)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("active account fqn already exists")
+		}
+		if err != nil {
+			return err
+		}
+
+		s.cacheActiveReference(created)
+		account = created
+		return nil
+	}); err != nil {
 		return Account{}, err
 	}
-
-	s.cacheActiveReference(account)
 
 	return account, nil
 }
@@ -370,7 +381,26 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 
 type accountReferenceState struct {
 	reference Reference
+	fqn       string
 	active    bool
+}
+
+func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string) error {
+	states, err := s.cache.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	for _, state := range states {
+		if !state.active || !services.FQNPathConflict(fqn, state.fqn) {
+			continue
+		}
+		if fqn == state.fqn {
+			return services.Conflict("active account fqn already exists")
+		}
+		return services.Conflict("active account fqn conflicts with existing account hierarchy")
+	}
+
+	return nil
 }
 
 func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]accountReferenceState, error) {
@@ -398,6 +428,7 @@ func accountReferenceStateFromAccount(account Account) accountReferenceState {
 			AccountType: account.AccountType,
 			IsHidden:    account.IsHidden,
 		},
+		fqn:    account.FQN,
 		active: account.TombstonedAt == nil,
 	}
 }

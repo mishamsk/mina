@@ -29,6 +29,12 @@ type Template struct {
 	Records      []TemplateRecord
 }
 
+// ActiveFQN is the active template path data needed for hierarchy checks.
+type ActiveFQN struct {
+	ID  int64
+	FQN string
+}
+
 // TemplateRecord is one reusable journal-record default inside a template.
 type TemplateRecord struct {
 	ID                   int64
@@ -71,6 +77,7 @@ type Repository interface {
 	Create(context.Context, WriteInput) (Template, error)
 	Get(context.Context, int64) (Template, error)
 	List(context.Context, services.ListOptions) (services.PaginatedList[Template], error)
+	ListActiveFQNs(context.Context) ([]ActiveFQN, error)
 	Replace(context.Context, int64, WriteInput) (Template, error)
 	Tombstone(context.Context, int64) error
 }
@@ -136,6 +143,9 @@ func (s *Service) Create(ctx context.Context, input WriteInput) (Template, error
 		if err := s.validateTemplateInput(ctx, input.FQN, input.Records); err != nil {
 			return err
 		}
+		if err := s.ensureFQNAvailable(ctx, input.FQN, 0); err != nil {
+			return err
+		}
 
 		created, err := s.repo.Create(ctx, input)
 		if errors.Is(err, services.ErrConflict) {
@@ -182,6 +192,24 @@ func (s *Service) List(ctx context.Context, opts services.ListOptions) (services
 	return s.repo.List(ctx, opts)
 }
 
+func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string, excludeID int64) error {
+	refs, err := s.repo.ListActiveFQNs(ctx)
+	if err != nil {
+		return err
+	}
+	for _, ref := range refs {
+		if ref.ID == excludeID || !services.FQNPathConflict(fqn, ref.FQN) {
+			continue
+		}
+		if fqn == ref.FQN {
+			return services.Conflict("active transaction template fqn already exists")
+		}
+		return services.Conflict("active transaction template fqn conflicts with existing transaction template hierarchy")
+	}
+
+	return nil
+}
+
 // Replace validates and atomically replaces a transaction template's metadata and active records.
 func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Template, error) {
 	if id <= 0 {
@@ -198,6 +226,9 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Temp
 	var template Template
 	if err := s.refs.SerializeReferenceOperation(func() error {
 		if err := s.validateTemplateReferences(ctx, input.Records); err != nil {
+			return err
+		}
+		if err := s.ensureFQNAvailable(ctx, input.FQN, id); err != nil {
 			return err
 		}
 

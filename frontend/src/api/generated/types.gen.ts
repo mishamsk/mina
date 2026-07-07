@@ -961,7 +961,7 @@ export type CreateCategoryErrors = {
      */
     400: ErrorResponse;
     /**
-     * The request conflicts with existing state.
+     * The category FQN duplicates an active category or conflicts with the active category hierarchy.
      */
     409: ErrorResponse;
 };
@@ -1121,7 +1121,7 @@ export type CreateTagErrors = {
      */
     400: ErrorResponse;
     /**
-     * The request conflicts with existing state.
+     * The tag FQN duplicates an active tag or conflicts with the active tag hierarchy.
      */
     409: ErrorResponse;
 };
@@ -1446,7 +1446,7 @@ export type CreateAccountErrors = {
      */
     400: ErrorResponse;
     /**
-     * The request conflicts with existing state.
+     * The account FQN duplicates an active account or conflicts with the active account hierarchy.
      */
     409: ErrorResponse;
 };
@@ -1926,7 +1926,7 @@ export type CreateTransactionTemplateErrors = {
      */
     400: ErrorResponse;
     /**
-     * The request conflicts with existing state.
+     * The transaction template FQN duplicates an active template or conflicts with the active template hierarchy.
      */
     409: ErrorResponse;
 };
@@ -2023,7 +2023,7 @@ export type ReplaceTransactionTemplateErrors = {
      */
     404: ErrorResponse;
     /**
-     * The request conflicts with existing state.
+     * The transaction template FQN duplicates an active template or conflicts with the active template hierarchy.
      */
     409: ErrorResponse;
 };

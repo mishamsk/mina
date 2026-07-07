@@ -58,6 +58,31 @@ func (d *Dictionary[K, V]) GetMany(ctx context.Context, keys []K) (map[K]V, erro
 	}
 }
 
+// Snapshot ensures the dictionary snapshot is loaded and returns all entries.
+func (d *Dictionary[K, V]) Snapshot(ctx context.Context) (map[K]V, error) {
+	for {
+		if err := d.ensureLoaded(ctx); err != nil {
+			return nil, err
+		}
+
+		d.mu.RLock()
+		// An Invalidate between ensureLoaded and this lock would otherwise
+		// read an empty snapshot as authoritative absence.
+		if !d.loaded {
+			d.mu.RUnlock()
+			continue
+		}
+
+		values := make(map[K]V, len(d.entries))
+		for key, value := range d.entries {
+			values[key] = value
+		}
+		d.mu.RUnlock()
+
+		return values, nil
+	}
+}
+
 // Put writes key to the loaded snapshot.
 //
 // Put is a no-op when the snapshot is not currently loaded.

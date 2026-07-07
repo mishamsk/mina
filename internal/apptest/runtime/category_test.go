@@ -195,6 +195,60 @@ func TestCategoryRejectsDuplicateActiveFQN(t *testing.T) {
 	}
 }
 
+func TestCategoryRejectsHierarchyFQNConflict(t *testing.T) {
+	client := newSharedClient(t)
+
+	leaf, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "HierarchyCategory:Leaf",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("leaf create request: %v", err)
+	}
+	if leaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("leaf create status = %d, want %d; body %s", leaf.StatusCode(), http.StatusCreated, leaf.Body)
+	}
+
+	extendsLeaf, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "HierarchyCategory:Leaf:Child",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("extends leaf request: %v", err)
+	}
+	if extendsLeaf.StatusCode() != http.StatusConflict {
+		t.Fatalf("extends leaf status = %d, want %d; body %s", extendsLeaf.StatusCode(), http.StatusConflict, extendsLeaf.Body)
+	}
+	if extendsLeaf.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("extends leaf code = %q, want %q", extendsLeaf.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+
+	child, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "HierarchyCategory:Group:Child",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("child create request: %v", err)
+	}
+	if child.StatusCode() != http.StatusCreated {
+		t.Fatalf("child create status = %d, want %d; body %s", child.StatusCode(), http.StatusCreated, child.Body)
+	}
+
+	prefixesChild, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "HierarchyCategory:Group",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("prefixes child request: %v", err)
+	}
+	if prefixesChild.StatusCode() != http.StatusConflict {
+		t.Fatalf("prefixes child status = %d, want %d; body %s", prefixesChild.StatusCode(), http.StatusConflict, prefixesChild.Body)
+	}
+	if prefixesChild.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("prefixes child code = %q, want %q", prefixesChild.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+}
+
 func TestCategoryListFiltersByEconomicIntent(t *testing.T) {
 	client := newSharedClient(t)
 	scenario := client.Scenario()

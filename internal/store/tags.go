@@ -27,14 +27,6 @@ func NewTagStore(db *AppDB) *TagStore {
 func (s *TagStore) Create(ctx context.Context, input tags.CreateInput) (tags.Tag, error) {
 	var tag tags.Tag
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		exists, err := tagFQNExists(ctx, tx, s.db, input.FQN)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return fmt.Errorf("%w: active tag fqn already exists", services.ErrConflict)
-		}
-
 		row := tx.QueryRowContext(
 			ctx,
 			`INSERT INTO `+s.db.accountingName("tag")+` (fqn, is_hidden)
@@ -43,13 +35,14 @@ RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_a
 			input.FQN,
 			input.IsHidden,
 		)
-		tag, err = scanTag(row)
-		if err != nil {
-			if isUniqueConstraintError(err) {
+		created, scanErr := scanTag(row)
+		if scanErr != nil {
+			if isUniqueConstraintError(scanErr) {
 				return fmt.Errorf("%w: active tag fqn already exists", services.ErrConflict)
 			}
-			return fmt.Errorf("insert tag: %w", err)
+			return fmt.Errorf("insert tag: %w", scanErr)
 		}
+		tag = created
 
 		return nil
 	})
@@ -208,23 +201,6 @@ func scanTag(scanner tagScanner) (tags.Tag, error) {
 	tag.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 
 	return tag, nil
-}
-
-func tagFQNExists(ctx context.Context, tx *sql.Tx, db *AppDB, fqn string) (bool, error) {
-	var id int64
-	err := tx.QueryRowContext(
-		ctx,
-		"SELECT tag_id FROM "+db.accountingName("tag")+" WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
-		fqn,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check tag fqn: %w", err)
-	}
-
-	return true, nil
 }
 
 var tagSortColumns = map[services.SortKey][]string{

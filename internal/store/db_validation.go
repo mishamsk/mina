@@ -219,11 +219,66 @@ func (s *DBValidationStore) InvariantFindings(ctx context.Context, missingUnique
 		return nil, err
 	}
 	findings = append(findings, fqnFindings...)
+	hierarchyFindings, err := s.hierarchyFindings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	findings = append(findings, hierarchyFindings...)
 	duplicateFindings, err := s.duplicateActiveFindings(ctx, missingUniqueIndexes)
 	if err != nil {
 		return nil, err
 	}
 	findings = append(findings, duplicateFindings...)
+
+	return findings, nil
+}
+
+func (s *DBValidationStore) hierarchyFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
+	findings := []dbvalidation.Finding{}
+	for _, table := range []string{"account", "category", "tag", "transaction_template"} {
+		tableFindings, err := s.hierarchyFindingsForTable(ctx, table)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, tableFindings...)
+	}
+
+	return findings, nil
+}
+
+func (s *DBValidationStore) hierarchyFindingsForTable(ctx context.Context, table string) ([]dbvalidation.Finding, error) {
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`SELECT parent.fqn, child.fqn
+FROM `+s.db.accountingName(table)+` AS parent
+JOIN `+s.db.accountingName(table)+` AS child
+  ON starts_with(child.fqn, parent.fqn || ':')
+WHERE parent.tombstoned_at IS NULL
+  AND child.tombstoned_at IS NULL
+ORDER BY parent.fqn, child.fqn`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("check %s fqn hierarchy: %w", table, err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	findings := []dbvalidation.Finding{}
+	for rows.Next() {
+		var parent string
+		var child string
+		if err := rows.Scan(&parent, &child); err != nil {
+			return nil, fmt.Errorf("scan %s fqn hierarchy finding: %w", table, err)
+		}
+		findings = append(findings, invariantFinding(
+			dbvalidation.SeverityError,
+			fmt.Sprintf("%s.fqn hierarchy conflict: %q prefixes %q", table, parent, child),
+		))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate %s fqn hierarchy findings: %w", table, err)
+	}
 
 	return findings, nil
 }
@@ -870,16 +925,20 @@ WHERE c.tombstoned_at IS NULL
 
 func (s *DBValidationStore) fqnReferenceCounts(ctx context.Context, reference validationReference) (int64, int64, error) {
 	childValue := "c." + QuoteIdentifier(reference.childColumn)
+	parentFQNAtOrUnderChild := func(alias string) string {
+		parentValue := alias + "." + QuoteIdentifier(reference.parentColumn)
+		return "(" + parentValue + " = " + childValue + " OR starts_with(" + parentValue + ", " + childValue + " || ':'))"
+	}
 	activeParentExists := `EXISTS (
 	SELECT 1
 	FROM ` + s.db.accountingName(reference.parentTable) + ` AS active_parent
-	WHERE active_parent.` + QuoteIdentifier(reference.parentColumn) + ` = ` + childValue + `
+	WHERE ` + parentFQNAtOrUnderChild("active_parent") + `
 	  AND active_parent.tombstoned_at IS NULL
 )`
 	tombstonedParentExists := `EXISTS (
 	SELECT 1
 	FROM ` + s.db.accountingName(reference.parentTable) + ` AS tombstoned_parent
-	WHERE tombstoned_parent.` + QuoteIdentifier(reference.parentColumn) + ` = ` + childValue + `
+	WHERE ` + parentFQNAtOrUnderChild("tombstoned_parent") + `
 	  AND tombstoned_parent.tombstoned_at IS NOT NULL
 )`
 	query := `SELECT

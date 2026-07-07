@@ -38,6 +38,9 @@ Every rule below is enforced by service-level validation at write time and
 reported by `mina db validate` when found violated in stored data. Reference
 integrity is never enforced by foreign keys.
 
+- `mina db validate` reports prefix-free violations as errors and dangling
+  `budget.category_fqn` group-path references as warnings.
+
 ### Create
 
 - The FQN must pass shared FQN validation (non-empty segments, no stray

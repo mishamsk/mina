@@ -28,14 +28,6 @@ func NewCategoryStore(db *AppDB) *CategoryStore {
 func (s *CategoryStore) Create(ctx context.Context, input categories.CreateInput) (categories.Category, error) {
 	var category categories.Category
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		exists, err := categoryFQNExists(ctx, tx, s.db, input.FQN)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return fmt.Errorf("%w: active category fqn already exists", services.ErrConflict)
-		}
-
 		row := tx.QueryRowContext(
 			ctx,
 			`INSERT INTO `+s.db.accountingName("category")+` (fqn, economic_intent, is_hidden)
@@ -45,13 +37,14 @@ RETURNING category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level,
 			enumValue(input.EconomicIntent),
 			input.IsHidden,
 		)
-		category, err = scanCategory(row)
-		if err != nil {
-			if isUniqueConstraintError(err) {
+		created, scanErr := scanCategory(row)
+		if scanErr != nil {
+			if isUniqueConstraintError(scanErr) {
 				return fmt.Errorf("%w: active category fqn already exists", services.ErrConflict)
 			}
-			return fmt.Errorf("insert category: %w", err)
+			return fmt.Errorf("insert category: %w", scanErr)
 		}
+		category = created
 
 		return nil
 	})
@@ -219,23 +212,6 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 	category.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 
 	return category, nil
-}
-
-func categoryFQNExists(ctx context.Context, tx *sql.Tx, db *AppDB, fqn string) (bool, error) {
-	var id int64
-	err := tx.QueryRowContext(
-		ctx,
-		"SELECT category_id FROM "+db.accountingName("category")+" WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
-		fqn,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check category fqn: %w", err)
-	}
-
-	return true, nil
 }
 
 var categorySortColumns = map[services.SortKey][]string{

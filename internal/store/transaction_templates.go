@@ -31,14 +31,6 @@ func NewTransactionTemplateStore(db *AppDB) *TransactionTemplateStore {
 func (s *TransactionTemplateStore) Create(ctx context.Context, input transactiontemplates.WriteInput) (transactiontemplates.Template, error) {
 	var template transactiontemplates.Template
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		exists, err := transactionTemplateFQNExists(ctx, tx, s.db, input.FQN)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return fmt.Errorf("%w: active transaction template fqn already exists", services.ErrConflict)
-		}
-
 		row := tx.QueryRowContext(
 			ctx,
 			`INSERT INTO `+s.db.accountingName("transaction_template")+` (fqn)
@@ -46,13 +38,14 @@ VALUES (?)
 RETURNING transaction_template_id, fqn, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 		)
-		template, err = scanTransactionTemplate(row)
-		if err != nil {
-			if isUniqueConstraintError(err) {
+		created, scanErr := scanTransactionTemplate(row)
+		if scanErr != nil {
+			if isUniqueConstraintError(scanErr) {
 				return fmt.Errorf("%w: active transaction template fqn already exists", services.ErrConflict)
 			}
-			return fmt.Errorf("insert transaction template: %w", err)
+			return fmt.Errorf("insert transaction template: %w", scanErr)
 		}
+		template = created
 
 		for _, record := range input.Records {
 			if err := insertTransactionTemplateRecord(ctx, tx, s.db, template.ID, record); err != nil {
@@ -152,6 +145,40 @@ WHERE tombstoned_at IS NULL`
 	}, nil
 }
 
+// ListActiveFQNs returns active template IDs and FQNs in deterministic FQN order.
+func (s *TransactionTemplateStore) ListActiveFQNs(ctx context.Context) ([]transactiontemplates.ActiveFQN, error) {
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`SELECT transaction_template_id, fqn
+FROM `+s.db.accountingName("transaction_template")+`
+WHERE tombstoned_at IS NULL
+ORDER BY fqn ASC, transaction_template_id ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list active transaction template fqns: %w", err)
+	}
+
+	refs := []transactiontemplates.ActiveFQN{}
+	for rows.Next() {
+		var ref transactiontemplates.ActiveFQN
+		if err := rows.Scan(&ref.ID, &ref.FQN); err != nil {
+			return nil, fmt.Errorf("scan active transaction template fqn: %w", err)
+		}
+		refs = append(refs, ref)
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate active transaction template fqns: %w; close active transaction template fqn rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate active transaction template fqns: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close active transaction template fqn rows: %w", err)
+	}
+
+	return refs, nil
+}
+
 // Replace atomically replaces a transaction template's metadata and active record defaults.
 func (s *TransactionTemplateStore) Replace(ctx context.Context, id int64, input transactiontemplates.WriteInput) (transactiontemplates.Template, error) {
 	var template transactiontemplates.Template
@@ -164,14 +191,6 @@ func (s *TransactionTemplateStore) Replace(ctx context.Context, id int64, input 
 			return services.ErrNotFound
 		}
 
-		exists, err := transactionTemplateFQNExistsForOtherID(ctx, tx, s.db, id, input.FQN)
-		if err != nil {
-			return err
-		}
-		if exists {
-			return fmt.Errorf("%w: active transaction template fqn already exists", services.ErrConflict)
-		}
-
 		row := tx.QueryRowContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("transaction_template")+`
@@ -182,16 +201,17 @@ RETURNING transaction_template_id, fqn, parent_fqn, name, level, created_at, upd
 			input.FQN,
 			id,
 		)
-		template, err = scanTransactionTemplate(row)
-		if errors.Is(err, sql.ErrNoRows) {
+		replaced, scanErr := scanTransactionTemplate(row)
+		if errors.Is(scanErr, sql.ErrNoRows) {
 			return services.ErrNotFound
 		}
-		if err != nil {
-			if isUniqueConstraintError(err) {
+		if scanErr != nil {
+			if isUniqueConstraintError(scanErr) {
 				return fmt.Errorf("%w: active transaction template fqn already exists", services.ErrConflict)
 			}
-			return fmt.Errorf("update transaction template: %w", err)
+			return fmt.Errorf("update transaction template: %w", scanErr)
 		}
+		template = replaced
 
 		if _, err := tx.ExecContext(
 			ctx,
@@ -455,50 +475,6 @@ ORDER BY transaction_template_id ASC, transaction_template_record_id ASC`,
 
 func (s *TransactionTemplateStore) recordsByTemplateIDs(ctx context.Context, templateIDs []int64) (map[int64][]transactiontemplates.TemplateRecord, error) {
 	return transactionTemplateRecordsByTemplateIDs(ctx, s.db.query(), s.db, templateIDs)
-}
-
-func transactionTemplateFQNExists(ctx context.Context, queryer rowQuerier, db *AppDB, fqn string) (bool, error) {
-	var id int64
-	err := queryer.QueryRowContext(
-		ctx,
-		"SELECT transaction_template_id FROM "+db.accountingName("transaction_template")+" WHERE fqn = ? AND tombstoned_at IS NULL LIMIT 1",
-		fqn,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check transaction template fqn: %w", err)
-	}
-
-	return true, nil
-}
-
-func transactionTemplateFQNExistsForOtherID(
-	ctx context.Context,
-	queryer rowQuerier,
-	db *AppDB,
-	id int64,
-	fqn string,
-) (bool, error) {
-	var foundID int64
-	err := queryer.QueryRowContext(
-		ctx,
-		`SELECT transaction_template_id
-FROM `+db.accountingName("transaction_template")+`
-WHERE fqn = ? AND transaction_template_id != ? AND tombstoned_at IS NULL
-LIMIT 1`,
-		fqn,
-		id,
-	).Scan(&foundID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check transaction template fqn: %w", err)
-	}
-
-	return true, nil
 }
 
 func activeTransactionTemplateExists(ctx context.Context, queryer rowQuerier, db *AppDB, id int64) (bool, error) {

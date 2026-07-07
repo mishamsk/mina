@@ -238,7 +238,7 @@ paths:
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/CategoryFQNConflict"
   /api/categories/{category_id}:
     parameters:
       - name: category_id
@@ -378,7 +378,7 @@ paths:
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/TagFQNConflict"
   /api/tags/{tag_id}:
     parameters:
       - name: tag_id
@@ -664,7 +664,7 @@ paths:
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/AccountFQNConflict"
   /api/accounts/balances:
     get:
       operationId: listAccountBalances
@@ -1106,7 +1106,7 @@ paths:
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/TransactionTemplateFQNConflict"
   /api/transaction-templates/{transaction_template_id}:
     parameters:
       - name: transaction_template_id
@@ -1152,7 +1152,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          $ref: "#/components/responses/Conflict"
+          $ref: "#/components/responses/TransactionTemplateFQNConflict"
     delete:
       operationId: deleteTransactionTemplate
       summary: Tombstone a transaction template and its record defaults.
@@ -1951,6 +1951,30 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     Conflict:
       description: The request conflicts with existing state.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    AccountFQNConflict:
+      description: The account FQN duplicates an active account or conflicts with the active account hierarchy.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    CategoryFQNConflict:
+      description: The category FQN duplicates an active category or conflicts with the active category hierarchy.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TagFQNConflict:
+      description: The tag FQN duplicates an active tag or conflicts with the active tag hierarchy.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TransactionTemplateFQNConflict:
+      description: The transaction template FQN duplicates an active template or conflicts with the active template hierarchy.
       content:
         application/json:
           schema:

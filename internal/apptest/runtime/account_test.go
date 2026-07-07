@@ -3,6 +3,7 @@ package runtime_test
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -688,6 +689,168 @@ func TestAccountRejectsDuplicateActiveFQN(t *testing.T) {
 	}
 	if recreated.StatusCode() != http.StatusCreated {
 		t.Fatalf("recreate status = %d, want %d; body %s", recreated.StatusCode(), http.StatusCreated, recreated.Body)
+	}
+}
+
+func TestAccountRejectsHierarchyFQNConflict(t *testing.T) {
+	client := newSharedClient(t)
+	currency := "USD"
+
+	leaf, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "HierarchyAccount:Leaf",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("leaf create request: %v", err)
+	}
+	if leaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("leaf create status = %d, want %d; body %s", leaf.StatusCode(), http.StatusCreated, leaf.Body)
+	}
+
+	lookalike, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "HierarchyAccount:Leafish:Child",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("lookalike create request: %v", err)
+	}
+	if lookalike.StatusCode() != http.StatusCreated {
+		t.Fatalf("lookalike create status = %d, want %d; body %s", lookalike.StatusCode(), http.StatusCreated, lookalike.Body)
+	}
+
+	extendsLeaf, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "HierarchyAccount:Leaf:Child",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("extends leaf request: %v", err)
+	}
+	if extendsLeaf.StatusCode() != http.StatusConflict {
+		t.Fatalf("extends leaf status = %d, want %d; body %s", extendsLeaf.StatusCode(), http.StatusConflict, extendsLeaf.Body)
+	}
+	if extendsLeaf.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("extends leaf code = %q, want %q", extendsLeaf.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+
+	child, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "HierarchyAccount:Group:Child",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("child create request: %v", err)
+	}
+	if child.StatusCode() != http.StatusCreated {
+		t.Fatalf("child create status = %d, want %d; body %s", child.StatusCode(), http.StatusCreated, child.Body)
+	}
+
+	prefixesChild, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "HierarchyAccount:Group",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("prefixes child request: %v", err)
+	}
+	if prefixesChild.StatusCode() != http.StatusConflict {
+		t.Fatalf("prefixes child status = %d, want %d; body %s", prefixesChild.StatusCode(), http.StatusConflict, prefixesChild.Body)
+	}
+	if prefixesChild.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("prefixes child code = %q, want %q", prefixesChild.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+}
+
+func TestAccountRejectsHierarchyFQNConflictAfterDatabaseReopen(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "mina.duckdb")
+	schema := "account_hierarchy_reopen"
+	currency := "USD"
+
+	setup := apptest.New(t, apptest.WithDatabasePath(dbPath), apptest.WithAccountingSchema(schema))
+	leaf, err := setup.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "PersistedHierarchy:Leaf",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("leaf create request: %v", err)
+	}
+	if leaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("leaf create status = %d, want %d; body %s", leaf.StatusCode(), http.StatusCreated, leaf.Body)
+	}
+	setup.Close()
+
+	reopened := apptest.New(t, apptest.WithDatabasePath(dbPath), apptest.WithAccountingSchema(schema))
+	extendsPersistedLeaf, err := reopened.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "PersistedHierarchy:Leaf:Child",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("extends persisted leaf request: %v", err)
+	}
+	if extendsPersistedLeaf.StatusCode() != http.StatusConflict {
+		t.Fatalf("extends persisted leaf status = %d, want %d; body %s", extendsPersistedLeaf.StatusCode(), http.StatusConflict, extendsPersistedLeaf.Body)
+	}
+	if extendsPersistedLeaf.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+		t.Fatalf("extends persisted leaf code = %q, want %q", extendsPersistedLeaf.JSON409.Error.Code, httpclient.APIErrorCodeConflict)
+	}
+}
+
+func TestAccountAllowsHierarchyPrefixReuseAfterTombstone(t *testing.T) {
+	client := newSharedClient(t)
+	currency := "USD"
+
+	leaf, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "TombstonedHierarchy:Leaf",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("leaf create request: %v", err)
+	}
+	if leaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("leaf create status = %d, want %d; body %s", leaf.StatusCode(), http.StatusCreated, leaf.Body)
+	}
+	deleteAccount(t, client, leaf.JSON201.AccountId)
+
+	childAfterDeletedLeaf, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "TombstonedHierarchy:Leaf:Child",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("child after deleted leaf request: %v", err)
+	}
+	if childAfterDeletedLeaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("child after deleted leaf status = %d, want %d; body %s", childAfterDeletedLeaf.StatusCode(), http.StatusCreated, childAfterDeletedLeaf.Body)
+	}
+
+	child, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "TombstonedHierarchy:Group:Child",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("child create request: %v", err)
+	}
+	if child.StatusCode() != http.StatusCreated {
+		t.Fatalf("child create status = %d, want %d; body %s", child.StatusCode(), http.StatusCreated, child.Body)
+	}
+	deleteAccount(t, client, child.JSON201.AccountId)
+
+	parentAfterDeletedChild, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "TombstonedHierarchy:Group",
+		AccountType: httpclient.Balance,
+		Currency:    &currency,
+	})
+	if err != nil {
+		t.Fatalf("parent after deleted child request: %v", err)
+	}
+	if parentAfterDeletedChild.StatusCode() != http.StatusCreated {
+		t.Fatalf("parent after deleted child status = %d, want %d; body %s", parentAfterDeletedChild.StatusCode(), http.StatusCreated, parentAfterDeletedChild.Body)
 	}
 }
 

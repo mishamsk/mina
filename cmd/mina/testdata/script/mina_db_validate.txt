@@ -106,6 +106,16 @@ duckdbexec $WORK/ref_budget_active_and_tombstoned_category_fqn.db ref_budget_act
 exec mina db validate --db $WORK/ref_budget_active_and_tombstoned_category_fqn.db --schema demo
 stdout 'ok: database is valid'
 
+duckdbclone $WORK/demo.db $WORK/ref_budget_category_group_fqn.db
+duckdbexec $WORK/ref_budget_category_group_fqn.db ref_budget_category_group_fqn.sql
+exec mina db validate --db $WORK/ref_budget_category_group_fqn.db --schema demo
+stdout 'ok: database is valid'
+
+duckdbclone $WORK/demo.db $WORK/ref_budget_missing_category_group_fqn.db
+duckdbexec $WORK/ref_budget_missing_category_group_fqn.db ref_budget_missing_category_group_fqn.sql
+exec mina db validate --db $WORK/ref_budget_missing_category_group_fqn.db --schema demo
+stdout 'warning: referential: active budget.category_fqn references missing category'
+
 # SQL invariant and value-domain cases.
 duckdbclone $WORK/demo.db $WORK/inv_unbalanced.db
 duckdbexec $WORK/inv_unbalanced.db inv_unbalanced.sql
@@ -143,6 +153,19 @@ duckdbexec $WORK/inv_malformed_fqn.db inv_malformed_fqn.sql
 exec mina db validate --db $WORK/inv_malformed_fqn.db --schema demo
 stdout 'warning: invariant: malformed account.fqn "bad::fqn"'
 stdout 'warning: invariant: malformed tag.fqn "bad::tag"'
+
+duckdbclone $WORK/demo.db $WORK/inv_prefix_free_hierarchy.db
+duckdbexec $WORK/inv_prefix_free_hierarchy.db inv_prefix_free_hierarchy.sql
+! exec mina db validate --db $WORK/inv_prefix_free_hierarchy.db --schema demo
+stderr 'error: invariant: account.fqn hierarchy conflict: "ValidateAccount:Leaf" prefixes "ValidateAccount:Leaf:Child"'
+stderr 'error: invariant: category.fqn hierarchy conflict: "ValidateCategory:Leaf" prefixes "ValidateCategory:Leaf:Child"'
+stderr 'error: invariant: tag.fqn hierarchy conflict: "ValidateTag:Leaf" prefixes "ValidateTag:Leaf:Child"'
+stderr 'error: invariant: transaction_template.fqn hierarchy conflict: "ValidateTemplate:Leaf" prefixes "ValidateTemplate:Leaf:Child"'
+
+duckdbclone $WORK/demo.db $WORK/inv_prefix_free_hierarchy_tombstoned.db
+duckdbexec $WORK/inv_prefix_free_hierarchy_tombstoned.db inv_prefix_free_hierarchy_tombstoned.sql
+exec mina db validate --db $WORK/inv_prefix_free_hierarchy_tombstoned.db --schema demo
+stdout 'ok: database is valid'
 
 duckdbclone $WORK/demo.db $WORK/inv_unpaired_external_id.db
 duckdbexec $WORK/inv_unpaired_external_id.db inv_unpaired_external_id.sql

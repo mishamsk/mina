@@ -93,15 +93,26 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Tag, error) {
 		return Tag{}, err
 	}
 
-	tag, err := s.repo.Create(ctx, input)
-	if errors.Is(err, services.ErrConflict) {
-		return Tag{}, services.Conflict("active tag fqn already exists")
-	}
-	if err != nil {
+	var tag Tag
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.ensureFQNAvailable(ctx, input.FQN); err != nil {
+			return err
+		}
+
+		created, err := s.repo.Create(ctx, input)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("active tag fqn already exists")
+		}
+		if err != nil {
+			return err
+		}
+
+		s.cacheActiveReference(created)
+		tag = created
+		return nil
+	}); err != nil {
 		return Tag{}, err
 	}
-
-	s.cacheActiveReference(tag)
 
 	return tag, nil
 }
@@ -240,7 +251,26 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 
 type tagReferenceState struct {
 	reference Reference
+	fqn       string
 	active    bool
+}
+
+func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string) error {
+	states, err := s.cache.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	for _, state := range states {
+		if !state.active || !services.FQNPathConflict(fqn, state.fqn) {
+			continue
+		}
+		if fqn == state.fqn {
+			return services.Conflict("active tag fqn already exists")
+		}
+		return services.Conflict("active tag fqn conflicts with existing tag hierarchy")
+	}
+
+	return nil
 }
 
 func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]tagReferenceState, error) {
@@ -267,6 +297,7 @@ func tagReferenceStateFromTag(tag Tag) tagReferenceState {
 			ID:       tag.ID,
 			IsHidden: tag.IsHidden,
 		},
+		fqn:    tag.FQN,
 		active: tag.TombstonedAt == nil,
 	}
 }

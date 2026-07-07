@@ -131,15 +131,26 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Category, erro
 		return Category{}, services.InvalidRequest("economic_intent must be one of expense, fee, income, refund, transfer, exchange, adjustment, or fx_gain_loss")
 	}
 
-	category, err := s.repo.Create(ctx, input)
-	if errors.Is(err, services.ErrConflict) {
-		return Category{}, services.Conflict("active category fqn already exists")
-	}
-	if err != nil {
+	var category Category
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.ensureFQNAvailable(ctx, input.FQN); err != nil {
+			return err
+		}
+
+		created, err := s.repo.Create(ctx, input)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("active category fqn already exists")
+		}
+		if err != nil {
+			return err
+		}
+
+		s.cacheActiveReference(created)
+		category = created
+		return nil
+	}); err != nil {
 		return Category{}, err
 	}
-
-	s.cacheActiveReference(category)
 
 	return category, nil
 }
@@ -284,7 +295,26 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 
 type categoryReferenceState struct {
 	reference Reference
+	fqn       string
 	active    bool
+}
+
+func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string) error {
+	states, err := s.cache.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+	for _, state := range states {
+		if !state.active || !services.FQNPathConflict(fqn, state.fqn) {
+			continue
+		}
+		if fqn == state.fqn {
+			return services.Conflict("active category fqn already exists")
+		}
+		return services.Conflict("active category fqn conflicts with existing category hierarchy")
+	}
+
+	return nil
 }
 
 func (s *Service) loadReferenceCache(ctx context.Context) (map[int64]categoryReferenceState, error) {
@@ -312,6 +342,7 @@ func categoryReferenceStateFromCategory(category Category) categoryReferenceStat
 			EconomicIntent: category.EconomicIntent,
 			IsHidden:       category.IsHidden,
 		},
+		fqn:    category.FQN,
 		active: category.TombstonedAt == nil,
 	}
 }
