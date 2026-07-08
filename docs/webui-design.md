@@ -63,7 +63,7 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 - Every page uses one header pattern: title (with optional breadcrumb for detail pages) on the left, primary actions on the right, filter/toolbar row beneath when applicable.
 - Pages carry no standing description text. Each page header includes a small help icon button that reveals a short explanatory paragraph on demand (popover or collapsible); the explanation is hidden by default.
 - Overlays: side peek panels for previews, the docked entry panel for transaction entry, centered dialogs only for confirmations.
-- Side peek/detail panels are non-modal: no backdrop, no focus trap, no modal semantics; the underlying list stays interactive so row navigation can drive the panel. `Esc` closes the panel and returns focus to the originating row. Centered dialogs are modal and trap focus.
+- Side peek/detail panels are non-modal: no backdrop, no focus trap, no modal semantics; the underlying list stays interactive so row navigation can drive the panel. `Esc` closes the panel and returns focus to the originating row. Clicking outside the panel also closes it — the click still performs its normal action on the underlying content (a click that opens another record simply moves the panel). The docked entry panel never closes on outside interaction. Centered dialogs are modal and trap focus.
 - Table density (comfortable/compact) is a persisted UI preference.
 
 ## Command Palette
@@ -232,6 +232,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 
 - Purpose: one account's (or account group's) activity and standing; the drill-down target from Overview, the balance strip, and Accounts.
 - Account page header: FQN path, account type badge, currency, current balance and posted-only balance, credit limit with history (when present), external link metadata, hidden marker.
+- The currency appears in the header exactly once as a compact chip next to the type badge (sized like it); balance figures carry the currency only as the amount's own marker — labels stay plain ("Current", "Posted", "Credit limit") — and the balances block right-aligns with the content edge on wide screens, mirroring the account name's left margin.
 - Register: the shared browser in records shape — the account's records with date, transaction counterparty, category, memo, statuses, signed amount. Selecting a record opens the side peek panel showing the full containing transaction; arrow keys walk rows while the panel follows; "Open transaction" jumps to full detail/edit.
 - Running balance: a per-record running balance column, shown only in the default chronological view and hidden whenever filters, search, or non-chronological sort would make it misleading.
 - Group pages: every non-leaf FQN node is a page — subtotal balances of child `balance` accounts plus a combined register across the whole prefix (e.g. `banks:Chase:*`), which naturally includes the group's `flow` accounts (fees, interest) per the prefix-grouping semantics.
