@@ -86,6 +86,10 @@ Rules every theme must satisfy:
 - Loading uses skeletons shaped like the final content, never centered spinners; previous data stays visible while refetching; loading causes no layout shift.
 - Motion is functional, not decorative; `prefers-reduced-motion` is respected.
 - Icons accompany labels; controls are never icon-only except in the collapsed rail and table row actions with tooltips.
+- Three affordance classes stay visually distinct in every theme, so a glance separates "describes", "navigates", and "acts":
+  - Indicators: descriptive marks — class icons, status markers, hidden markers, type/intent badges. Read-only; never interactive beyond a tooltip.
+  - Entity chips: reference values (category, tags, member) rendered as chips; an entity chip is a link to its entity page.
+  - Actions: controls that change state or open another surface. An action that opens a modal, panel, or page renders as a button; an action that toggles an in-place state (hide, feature) renders as a flat toggle icon whose current state is visible in the icon itself.
 
 ## Domain Display Rules
 
@@ -113,7 +117,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 ### Transaction summary line
 
 - Simple two-sided transactions title as `From → To` using the leaf names of both sides: spend → `Joint → TraderJoes` (funding → merchant); income → `AcmePayroll → Joint` (source → destination); refund → `Target → Joint`; transfer → `Joint → Emergency`; exchange → `USD → EUR`; adjustment → affected account leaf. Complex/mixed transactions fall back to memo or the dominant counterparty leaf. Titles are derived server-side or from records as a display convention.
-- Row composition: class icon, initiated date, status marker, description (the `From → To` line) with the memo as a truncated second line (full memo in a tooltip), category, tags, member, display amount. The description column header reads "Description".
+- Row composition: class icon, initiated date, status marker, description (the `From → To` line) with the memo as a truncated second line (full memo in a tooltip), category, tags, member, display amount, and the trailing actions column (open detail as a button action). The description column header reads "Description".
 - Class is encoded as a distinct icon plus its class color in a narrow leftmost column, with the class name in a tooltip; that column's header is hidden except on very wide screens.
 - The date cell is compact: the day (`May 31`) with the year as a de-emphasized second line on every row.
 - The status marker is a very narrow, headerless column tight after the date: a marker icon (e.g. clock for pending) with a tooltip appears only when the transaction is not simply posted; posted rows show nothing.
@@ -121,6 +125,12 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Member uniformity ignores unattributed records (counterparty/flow records rarely carry attribution): exactly one distinct member among attributed records → show it; none attributed → blank (whole-household); multiple distinct → Mixed.
 - The memo second line shows the memo when it is uniform across active records (ignoring empty memos); differing memos omit the second line — never a "Mixed" sentinel as prose. When a mixed-class title already falls back to the memo, the second line is omitted.
 - Tag chips in lines render at the micro size, showing tag leaf names only, filling up to two chip rows within the standard row height; tags that still do not fit collapse into an overflow indicator chip. Tags never increase row height; the transaction detail view shows the complete set.
+
+### Entity chips
+
+- Category, tag, and member values render as entity chips wherever they appear in transaction lines and detail views.
+- Every entity chip is a link: activating it navigates to that entity's page (the shared browser pre-filtered to it). Chips never start inline editing — editing has its own affordance per the inline-editing rule.
+- Entity chips read as one family and stay visually distinct from indicators and actions per the affordance-class rule; non-entity chip-shaped rendering (e.g. amounts) must not read as links.
 
 ### Dates and statuses
 
@@ -144,6 +154,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 ### Tables and filtering
 
 - Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, whole-row affordances for expand/peek (a plain disclosure indicator, not a per-row button), leading checkbox column only once bulk actions exist.
+- Per-row actions live in one narrow trailing actions column — always the rightmost column, in every table — never mid-row. Actions follow the affordance-class rule: surface-opening actions as buttons, in-place state toggles as flat toggle icons.
 - Stable column layout: fixed percentage-based column widths so columns never shift when paging or when row content changes.
 - When horizontal space runs out, columns collapse by priority instead of showing a horizontal scrollbar: status marker first, then member, then tags, then category.
 - Pagination shows "Page X of Y" from server-provided total counts.
@@ -160,6 +171,7 @@ Transaction-level values are editable in place only when the edit maps mechanica
 - Amount: editable on the transaction row only for simple shapes (minimal two-sided single-currency spend/income/refund/transfer) where the change derives mechanically to both records.
 - Everything else is edited per-record in the expanded records view, or through the full form.
 - Inline editors are the shared pickers: category search popup, tag search with multi-select, member popup, account picker with context-aware type filtering.
+- Inline editing has its own trigger, separate from chip navigation: the keyboard edit action on the focused cell, or a hover-revealed edit control on editable cells. Activating an entity chip always navigates, never edits.
 
 ### Bulk operations
 
@@ -226,7 +238,8 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 ### 5. Accounts (chart of accounts) — Phase 2
 
 - Purpose: manage the unified chart of accounts and enter registers.
-- Layout: tree table grouped by FQN hierarchy; columns: name (path-indented), type badge, currency, balance (`balance` accounts), a per-row move/rename action (leaf and group rows), hidden state. Rows link to account/group pages.
+- Layout: tree table grouped by FQN hierarchy; columns: name (path-indented), type badge, currency (ISO code), balance (`balance` accounts), and the trailing actions column. Hidden state renders as the standard eye-off indicator on the row, not as its own wide column. Rows link to account/group pages.
+- Row actions (trailing column, per the affordance-class rule): move/rename and delete as buttons — delete disabled with an explanatory tooltip when the node cannot be deleted; hide/unhide and featured (star) as flat toggle icons. Leaf and group rows carry the actions that apply to them.
 - Toolbar: search, type filter, include-hidden toggle. Create/edit in a side panel: FQN, type, currency, external id/system, hidden.
 - Restructuring: rename a node or move it to a new parent from the tree; the whole subtree follows with an FQN prefix rewrite.
 - Credit-limit history for card accounts is managed from the account's edit panel or page header.
@@ -264,7 +277,8 @@ Mina-specific building blocks every screen composes (names indicative; placement
 - `AmountText` — signed, tabular, currency-code-aware amount with class-aware emphasis.
 - `FqnPath` — de-emphasized-ancestors path renderer with truncation and tooltip.
 - `ClassIcon` / `StatusIcon` — narrow icon-encoded class and status indicators with tooltips; `ClassBadge` chip form remains for detail headers.
-- `TagChip`, `MemberChip`, `AccountTypeBadge`, `IntentBadge`.
+- `CategoryChip`, `TagChip`, `MemberChip` — entity chips linking to their entity pages; `AccountTypeBadge`, `IntentBadge` — descriptive indicators.
+- `RowActions` — the trailing per-row actions cluster: surface-opening button actions plus flat toggle icons, per the affordance-class rule.
 - `EntityPicker` — hierarchical type-ahead combobox with include-hidden, inline-create, and context-aware account-type filtering variants.
 - `FilterBar` / `FilterChip` — URL-backed typed filters.
 - `PageHelp` — header help icon button revealing a hidden-by-default explanation paragraph.
