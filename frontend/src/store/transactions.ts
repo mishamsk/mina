@@ -76,6 +76,7 @@ interface TransactionsState {
     Record<string, CategoryPickerCategoriesSnapshot>
   >;
   readonly categoryPickerCategoryErrors: Readonly<Record<string, string>>;
+  readonly categoryPickerCategoryEpoch: number;
   readonly categoryPickerCategoryLoading: Readonly<Record<string, boolean>>;
   readonly errorMessage: string | undefined;
   readonly featuredBalances: FeaturedBalancesSnapshot | undefined;
@@ -96,6 +97,7 @@ interface TransactionsState {
 const initialTransactionsState: TransactionsState = {
   categoryPickerCategories: {},
   categoryPickerCategoryErrors: {},
+  categoryPickerCategoryEpoch: 0,
   categoryPickerCategoryLoading: {},
   errorMessage: undefined,
   featuredBalances: undefined,
@@ -444,11 +446,18 @@ export const setCategoryPickerCategoriesLoading = (
 export const setCategoryPickerCategories = (
   intents: readonly CategoryEconomicIntent[],
   categories: readonly Category[],
+  requestEpoch?: number,
 ): void => {
   const normalizedIntents = normalizedCategoryPickerIntents(intents);
   const intentKey = categoryPickerIntentKey(normalizedIntents);
   useTransactionsStore.setState(
     (state) => {
+      if (
+        requestEpoch !== undefined &&
+        requestEpoch !== state.categoryPickerCategoryEpoch
+      ) {
+        return state;
+      }
       const categoryPickerCategoryErrors = {
         ...state.categoryPickerCategoryErrors,
       };
@@ -476,21 +485,43 @@ export const setCategoryPickerCategories = (
 export const setCategoryPickerCategoriesError = (
   intents: readonly CategoryEconomicIntent[],
   errorMessage: string,
+  requestEpoch?: number,
 ): void => {
   const intentKey = categoryPickerIntentKey(intents);
   useTransactionsStore.setState(
-    (state) => ({
-      categoryPickerCategoryErrors: {
-        ...state.categoryPickerCategoryErrors,
-        [intentKey]: errorMessage,
-      },
-      categoryPickerCategoryLoading: {
-        ...state.categoryPickerCategoryLoading,
-        [intentKey]: false,
-      },
-    }),
+    (state) => {
+      if (
+        requestEpoch !== undefined &&
+        requestEpoch !== state.categoryPickerCategoryEpoch
+      ) {
+        return state;
+      }
+      return {
+        categoryPickerCategoryErrors: {
+          ...state.categoryPickerCategoryErrors,
+          [intentKey]: errorMessage,
+        },
+        categoryPickerCategoryLoading: {
+          ...state.categoryPickerCategoryLoading,
+          [intentKey]: false,
+        },
+      };
+    },
     false,
     "TransactionsStore/setCategoryPickerCategoriesError",
+  );
+};
+
+export const invalidateCategoryPickerCategories = (): void => {
+  useTransactionsStore.setState(
+    (state) => ({
+      categoryPickerCategories: {},
+      categoryPickerCategoryErrors: {},
+      categoryPickerCategoryEpoch: state.categoryPickerCategoryEpoch + 1,
+      categoryPickerCategoryLoading: {},
+    }),
+    false,
+    "TransactionsStore/invalidateCategoryPickerCategories",
   );
 };
 

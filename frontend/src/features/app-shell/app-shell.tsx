@@ -37,7 +37,7 @@ interface NavItem {
 }
 
 const referenceNavItems: readonly NavItem[] = [
-  { disabled: true, icon: Folder, label: "Categories", to: "/categories" },
+  { icon: Folder, label: "Categories", to: "/categories" },
   { disabled: true, icon: Hash, label: "Tags", to: "/tags" },
   { disabled: true, icon: User, label: "Members", to: "/members" },
   { disabled: true, icon: CardText, label: "Templates", to: "/templates" },

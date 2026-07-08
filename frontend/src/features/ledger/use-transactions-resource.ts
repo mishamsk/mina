@@ -185,17 +185,23 @@ export const useCategoryPickerCategoriesResource = (
       return;
     }
 
+    const requestEpoch = snapshot.categoryPickerCategoryEpoch;
     setCategoryPickerCategoriesLoading(normalizedIntents);
 
     void fetchCategoryPickerCategories(normalizedIntents).then((result) => {
       if (result.data) {
-        setCategoryPickerCategories(normalizedIntents, result.data.categories);
+        setCategoryPickerCategories(
+          normalizedIntents,
+          result.data.categories,
+          requestEpoch,
+        );
         return;
       }
 
       setCategoryPickerCategoriesError(
         normalizedIntents,
         apiErrorMessage(result.error),
+        requestEpoch,
       );
     });
   }, [enabled, intentKey, normalizedIntents, retryToken]);

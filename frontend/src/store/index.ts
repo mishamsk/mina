@@ -52,6 +52,16 @@ export {
   useBootstrapView,
 } from "./bootstrap";
 export {
+  type CategoriesPageSnapshot,
+  clearCategoriesPageLoading,
+  getCategoriesSnapshot,
+  setCategoriesPage,
+  setCategoriesPageError,
+  setCategoriesPageLoading,
+  useCategoriesPageView,
+  useCategoriesStore,
+} from "./categories";
+export {
   getUiPreferencesSnapshot,
   hydrateUiPreferences,
   setSidebarCollapsed,
@@ -81,6 +91,7 @@ export {
   clearLedgerLookupsLoading,
   clearTransactionPageLoading,
   getTransactionsSnapshot,
+  invalidateCategoryPickerCategories,
   invalidateTransactionPages,
   normalizedCategoryPickerIntents,
   setCategoryPickerCategories,

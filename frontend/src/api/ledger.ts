@@ -6,6 +6,7 @@ import {
 import type {
   CategoryEconomicIntent,
   CreateAccountRequest,
+  CreateCategoryRequest,
   CreateCreditLimitHistoryRequest,
   CreateIncomeTransactionRequest,
   CreateRefundTransactionRequest,
@@ -15,9 +16,11 @@ import type {
   RestructureRequest,
   SetHiddenByPathRequest,
   UpdateAccountRequest,
+  UpdateCategoryRequest,
 } from "./generated";
 import {
   createAccount as createGeneratedAccount,
+  createCategory as createGeneratedCategory,
   createCreditLimitHistory as createGeneratedCreditLimitHistory,
   createIncomeTransaction,
   createRefundTransaction,
@@ -25,6 +28,7 @@ import {
   createTransferTransaction,
   deleteAccount as deleteGeneratedAccount,
   deleteAccountsByPath as deleteGeneratedAccountsByPath,
+  deleteCategory as deleteGeneratedCategory,
   deleteCreditLimitHistory as deleteGeneratedCreditLimitHistory,
   deleteTransaction,
   getAccount,
@@ -34,15 +38,19 @@ import {
   listAccountGroups,
   listAccounts,
   listCategories,
+  listCategoryGroups,
   listCreditLimitHistory as listGeneratedCreditLimitHistory,
   listMembers,
   listTags,
   listTransactions,
   restructureAccounts as restructureGeneratedAccounts,
+  restructureCategories as restructureGeneratedCategories,
   searchAccountJournalRecords,
   searchJournalRecords,
   setAccountHiddenByPath as setGeneratedAccountHiddenByPath,
+  setCategoryHiddenByPath as setGeneratedCategoryHiddenByPath,
   updateAccount as updateGeneratedAccount,
+  updateCategory as updateGeneratedCategory,
 } from "./generated";
 
 export interface TransactionPageParams {
@@ -304,6 +312,61 @@ export const fetchAccountsPage = async () => {
   return { accounts, balances, groups };
 };
 
+const listCategoriesPageForManagement = (offset: number) =>
+  listCategories({
+    query: {
+      include_hidden: true,
+      limit: lookupLimit,
+      offset,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+const listAllCategoriesForManagement = async () => {
+  const firstPage = await listCategoriesPageForManagement(0);
+  if (
+    !firstPage.data ||
+    firstPage.data.categories.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+
+  const categories = [...firstPage.data.categories];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    const page = await listCategoriesPageForManagement(offset);
+    if (!page.data) {
+      return page;
+    }
+    categories.push(...page.data.categories);
+  }
+
+  return {
+    ...firstPage,
+    data: {
+      ...firstPage.data,
+      categories,
+    },
+  };
+};
+
+export const fetchCategoriesPage = async () => {
+  const [categories, groups] = await Promise.all([
+    listAllCategoriesForManagement(),
+    listCategoryGroups({
+      query: {
+        include_hidden: true,
+      },
+    }),
+  ]);
+
+  return { categories, groups };
+};
+
 export const fetchOverviewAccountBalances = () => listAccountBalances();
 
 export const fetchOverviewAccounts = () =>
@@ -380,6 +443,33 @@ export const deleteLedgerAccountsByPath = (body: DeleteAccountsByPathRequest) =>
 
 export const restructureLedgerAccounts = (body: RestructureRequest) =>
   restructureGeneratedAccounts({ body });
+
+export const createLedgerCategory = (body: CreateCategoryRequest) =>
+  createGeneratedCategory({ body });
+
+export const updateLedgerCategory = (
+  categoryId: number,
+  body: UpdateCategoryRequest,
+) =>
+  updateGeneratedCategory({
+    body,
+    path: {
+      category_id: categoryId,
+    },
+  });
+
+export const deleteLedgerCategoryById = (categoryId: number) =>
+  deleteGeneratedCategory({
+    path: {
+      category_id: categoryId,
+    },
+  });
+
+export const setLedgerCategoryHiddenByPath = (body: SetHiddenByPathRequest) =>
+  setGeneratedCategoryHiddenByPath({ body });
+
+export const restructureLedgerCategories = (body: RestructureRequest) =>
+  restructureGeneratedCategories({ body });
 
 export const fetchCreditLimitHistory = (accountId: number) =>
   listGeneratedCreditLimitHistory({

@@ -5,6 +5,7 @@ import { AppShell } from "@/features/app-shell";
 import { AccountGroupPage } from "./account-group-page";
 import { AccountPage } from "./account-page";
 import { AccountsPage } from "./accounts-page";
+import { CategoriesPage } from "./categories-page";
 import { OverviewPage } from "./overview-page";
 import { StatusPage } from "./status-page";
 import { TransactionsPage } from "./transactions-page";
@@ -18,6 +19,7 @@ export const AppRoutes = () => (
       <Route path="/accounts" element={<AccountsPage />} />
       <Route path="/accounts/group" element={<AccountGroupPage />} />
       <Route path="/accounts/:accountId" element={<AccountPage />} />
+      <Route path="/categories" element={<CategoriesPage />} />
       <Route path="/status" element={<StatusPage />} />
       <Route path="*" element={<Navigate to="/overview" replace />} />
     </Routes>

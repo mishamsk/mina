@@ -213,6 +213,10 @@
     container: accounts-table / inline-size;
   }
 
+  .reference-table-scroll {
+    container: reference-table / inline-size;
+  }
+
   .account-register-table-scroll {
     container: account-register-table / inline-size;
   }
@@ -458,6 +462,16 @@
     }
 
     .accounts-table .row-actions-overflow {
+      display: inline-flex !important;
+    }
+  }
+
+  @container reference-table (max-width: 720px) {
+    .reference-table .row-actions-buttons .row-actions-button {
+      display: none !important;
+    }
+
+    .reference-table .row-actions-overflow {
       display: inline-flex !important;
     }
   }
