@@ -312,21 +312,6 @@ bench-rest: build
 pre-commit:
     prek run --all-files
 
-# Review branch changes since the merge-base with main.
-[group('review')]
-r-branch:
-    revdiff --untracked "$(git merge-base main HEAD)"
-
-# Review the last commit.
-[group('review')]
-r-last:
-    revdiff HEAD~1
-
-# Review current changes.
-[group('review')]
-r-cur:
-    revdiff --untracked
-
 # Run the automated review loop.
 [group('agents')]
 review-loop goal branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="":
