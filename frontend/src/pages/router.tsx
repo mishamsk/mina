@@ -6,8 +6,10 @@ import { AccountGroupPage } from "./account-group-page";
 import { AccountPage } from "./account-page";
 import { AccountsPage } from "./accounts-page";
 import { CategoriesPage } from "./categories-page";
+import { MembersPage } from "./members-page";
 import { OverviewPage } from "./overview-page";
 import { StatusPage } from "./status-page";
+import { TagsPage } from "./tags-page";
 import { TransactionsPage } from "./transactions-page";
 
 export const AppRoutes = () => (
@@ -20,6 +22,8 @@ export const AppRoutes = () => (
       <Route path="/accounts/group" element={<AccountGroupPage />} />
       <Route path="/accounts/:accountId" element={<AccountPage />} />
       <Route path="/categories" element={<CategoriesPage />} />
+      <Route path="/tags" element={<TagsPage />} />
+      <Route path="/members" element={<MembersPage />} />
       <Route path="/status" element={<StatusPage />} />
       <Route path="*" element={<Navigate to="/overview" replace />} />
     </Routes>

@@ -9,27 +9,35 @@ import type {
   CreateCategoryRequest,
   CreateCreditLimitHistoryRequest,
   CreateIncomeTransactionRequest,
+  CreateMemberRequest,
   CreateRefundTransactionRequest,
   CreateSpendTransactionRequest,
+  CreateTagRequest,
   CreateTransferTransactionRequest,
   DeleteAccountsByPathRequest,
   RestructureRequest,
   SetHiddenByPathRequest,
   UpdateAccountRequest,
   UpdateCategoryRequest,
+  UpdateMemberRequest,
+  UpdateTagRequest,
 } from "./generated";
 import {
   createAccount as createGeneratedAccount,
   createCategory as createGeneratedCategory,
   createCreditLimitHistory as createGeneratedCreditLimitHistory,
   createIncomeTransaction,
+  createMember as createGeneratedMember,
   createRefundTransaction,
   createSpendTransaction,
+  createTag as createGeneratedTag,
   createTransferTransaction,
   deleteAccount as deleteGeneratedAccount,
   deleteAccountsByPath as deleteGeneratedAccountsByPath,
   deleteCategory as deleteGeneratedCategory,
   deleteCreditLimitHistory as deleteGeneratedCreditLimitHistory,
+  deleteMember as deleteGeneratedMember,
+  deleteTag as deleteGeneratedTag,
   deleteTransaction,
   getAccount,
   getTransaction,
@@ -41,16 +49,21 @@ import {
   listCategoryGroups,
   listCreditLimitHistory as listGeneratedCreditLimitHistory,
   listMembers,
+  listTagGroups,
   listTags,
   listTransactions,
   restructureAccounts as restructureGeneratedAccounts,
   restructureCategories as restructureGeneratedCategories,
+  restructureTags as restructureGeneratedTags,
   searchAccountJournalRecords,
   searchJournalRecords,
   setAccountHiddenByPath as setGeneratedAccountHiddenByPath,
   setCategoryHiddenByPath as setGeneratedCategoryHiddenByPath,
+  setTagHiddenByPath as setGeneratedTagHiddenByPath,
   updateAccount as updateGeneratedAccount,
   updateCategory as updateGeneratedCategory,
+  updateMember as updateGeneratedMember,
+  updateTag as updateGeneratedTag,
 } from "./generated";
 
 export interface TransactionPageParams {
@@ -367,6 +380,104 @@ export const fetchCategoriesPage = async () => {
   return { categories, groups };
 };
 
+const listTagsPageForManagement = (offset: number) =>
+  listTags({
+    query: {
+      include_hidden: true,
+      limit: lookupLimit,
+      offset,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+const listAllTagsForManagement = async () => {
+  const firstPage = await listTagsPageForManagement(0);
+  if (
+    !firstPage.data ||
+    firstPage.data.tags.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+
+  const tags = [...firstPage.data.tags];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    const page = await listTagsPageForManagement(offset);
+    if (!page.data) {
+      return page;
+    }
+    tags.push(...page.data.tags);
+  }
+
+  return {
+    ...firstPage,
+    data: {
+      ...firstPage.data,
+      tags,
+    },
+  };
+};
+
+export const fetchTagsPage = async () => {
+  const [tags, groups] = await Promise.all([
+    listAllTagsForManagement(),
+    listTagGroups({
+      query: {
+        include_hidden: true,
+      },
+    }),
+  ]);
+
+  return { groups, tags };
+};
+
+const listMembersPageForManagement = (offset: number) =>
+  listMembers({
+    query: {
+      limit: lookupLimit,
+      offset,
+      sort: "name",
+      sort_dir: "asc",
+    },
+  });
+
+const listAllMembersForManagement = async () => {
+  const firstPage = await listMembersPageForManagement(0);
+  if (
+    !firstPage.data ||
+    firstPage.data.members.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+
+  const members = [...firstPage.data.members];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    const page = await listMembersPageForManagement(offset);
+    if (!page.data) {
+      return page;
+    }
+    members.push(...page.data.members);
+  }
+
+  return {
+    ...firstPage,
+    data: {
+      ...firstPage.data,
+      members,
+    },
+  };
+};
+
+export const fetchMembersPage = () => listAllMembersForManagement();
+
 export const fetchOverviewAccountBalances = () => listAccountBalances();
 
 export const fetchOverviewAccounts = () =>
@@ -470,6 +581,51 @@ export const setLedgerCategoryHiddenByPath = (body: SetHiddenByPathRequest) =>
 
 export const restructureLedgerCategories = (body: RestructureRequest) =>
   restructureGeneratedCategories({ body });
+
+export const createLedgerTag = (body: CreateTagRequest) =>
+  createGeneratedTag({ body });
+
+export const updateLedgerTag = (tagId: number, body: UpdateTagRequest) =>
+  updateGeneratedTag({
+    body,
+    path: {
+      tag_id: tagId,
+    },
+  });
+
+export const deleteLedgerTagById = (tagId: number) =>
+  deleteGeneratedTag({
+    path: {
+      tag_id: tagId,
+    },
+  });
+
+export const setLedgerTagHiddenByPath = (body: SetHiddenByPathRequest) =>
+  setGeneratedTagHiddenByPath({ body });
+
+export const restructureLedgerTags = (body: RestructureRequest) =>
+  restructureGeneratedTags({ body });
+
+export const createLedgerMember = (body: CreateMemberRequest) =>
+  createGeneratedMember({ body });
+
+export const updateLedgerMember = (
+  memberId: number,
+  body: UpdateMemberRequest,
+) =>
+  updateGeneratedMember({
+    body,
+    path: {
+      member_id: memberId,
+    },
+  });
+
+export const deleteLedgerMemberById = (memberId: number) =>
+  deleteGeneratedMember({
+    path: {
+      member_id: memberId,
+    },
+  });
 
 export const fetchCreditLimitHistory = (accountId: number) =>
   listGeneratedCreditLimitHistory({

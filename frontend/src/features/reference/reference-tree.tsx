@@ -112,59 +112,79 @@ const HiddenRowIndicator = ({ label }: { readonly label: string }) => (
   </Tooltip>
 );
 
-const referenceTreeSkeletonGridClass =
-  "grid grid-cols-[58%_24%_18%] sm:grid-cols-[62%_20%_18%]";
+const referenceTreeSkeletonGridClass = (hasBadgeColumn: boolean) =>
+  hasBadgeColumn
+    ? "grid grid-cols-[58%_24%_18%] sm:grid-cols-[62%_20%_18%]"
+    : "grid grid-cols-[76%_24%] sm:grid-cols-[82%_18%]";
 
-const referenceTreeSkeletonColumnClasses = [
-  "px-3",
-  "px-3",
-  "px-1 sm:px-3",
-] as const;
+const referenceTreeSkeletonColumnClasses = (hasBadgeColumn: boolean) =>
+  hasBadgeColumn
+    ? (["px-3", "px-3", "px-1 sm:px-3"] as const)
+    : (["px-3", "px-1 sm:px-3"] as const);
 
 const referenceTreeClickableRowClassName =
   "cursor-pointer " +
   "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] " +
   "focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
 
-const ReferenceTreeSkeleton = () => (
+const ReferenceTreeSkeleton = ({
+  hasBadgeColumn,
+}: {
+  readonly hasBadgeColumn: boolean;
+}) => (
   <div
     className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
     aria-hidden="true"
   >
     <div
       className={cn(
-        referenceTreeSkeletonGridClass,
+        referenceTreeSkeletonGridClass(hasBadgeColumn),
         "bg-[var(--table-header)] py-2",
       )}
     >
-      {referenceTreeSkeletonColumnClasses.map((className, index) => (
-        <div key={index} className={className}>
-          <Skeleton className="h-5" />
-        </div>
-      ))}
+      {referenceTreeSkeletonColumnClasses(hasBadgeColumn).map(
+        (className, index) => (
+          <div key={index} className={className}>
+            <Skeleton className="h-5" />
+          </div>
+        ),
+      )}
     </div>
     {Array.from({ length: 8 }).map((_, index) => (
       <div
         key={index}
         className={cn(
-          referenceTreeSkeletonGridClass,
+          referenceTreeSkeletonGridClass(hasBadgeColumn),
           "py-3",
           index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
         )}
       >
-        {referenceTreeSkeletonColumnClasses.map((className, columnIndex) => (
-          <div key={columnIndex} className={className}>
-            <Skeleton className="h-5" />
-          </div>
-        ))}
+        {referenceTreeSkeletonColumnClasses(hasBadgeColumn).map(
+          (className, columnIndex) => (
+            <div key={columnIndex} className={className}>
+              <Skeleton className="h-5" />
+            </div>
+          ),
+        )}
       </div>
     ))}
   </div>
 );
 
+const badgeColumnWidthClass = "w-[24%] px-3 py-2 sm:w-[20%]";
+const nameColumnWidthClass = (hasBadgeColumn: boolean) =>
+  hasBadgeColumn
+    ? "w-[58%] px-3 py-2 sm:w-[62%]"
+    : "w-[76%] px-3 py-2 sm:w-[82%]";
+
+const actionsColumnWidthClass = (hasBadgeColumn: boolean) =>
+  hasBadgeColumn
+    ? "w-[18%] px-1 py-2 text-center sm:px-3"
+    : "w-[24%] px-1 py-2 text-center sm:w-[18%] sm:px-3";
+
 interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   readonly actionsLabel?: string;
-  readonly badgeHeader: string;
+  readonly badgeHeader?: string;
   readonly emptyAction?: ReactNode;
   readonly emptyDescription: string;
   readonly emptyFilteredDescription: string;
@@ -232,6 +252,7 @@ export const ReferenceTree = <
   rowTestId = "reference-tree-row",
   search,
 }: ReferenceTreeProps<TLeaf, TGroup>) => {
+  const hasBadgeColumn = Boolean(badgeHeader);
   const rows = useMemo(
     () =>
       leaves
@@ -241,7 +262,7 @@ export const ReferenceTree = <
   );
 
   if (loading && !leaves) {
-    return <ReferenceTreeSkeleton />;
+    return <ReferenceTreeSkeleton hasBadgeColumn={hasBadgeColumn} />;
   }
 
   if (errorMessage) {
@@ -301,13 +322,18 @@ export const ReferenceTree = <
         <table className="reference-table w-full table-fixed border-collapse text-sm">
           <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-left text-xs font-semibold uppercase">
-              <th scope="col" className="w-[58%] px-3 py-2 sm:w-[62%]">
+              <th scope="col" className={nameColumnWidthClass(hasBadgeColumn)}>
                 Name
               </th>
-              <th scope="col" className="w-[24%] px-3 py-2 sm:w-[20%]">
-                {badgeHeader}
-              </th>
-              <th scope="col" className="w-[18%] px-1 py-2 text-center sm:px-3">
+              {hasBadgeColumn ? (
+                <th scope="col" className={badgeColumnWidthClass}>
+                  {badgeHeader}
+                </th>
+              ) : null}
+              <th
+                scope="col"
+                className={actionsColumnWidthClass(hasBadgeColumn)}
+              >
                 {actionsLabel}
               </th>
             </tr>
@@ -385,7 +411,9 @@ export const ReferenceTree = <
                       ) : null}
                     </div>
                   </td>
-                  <td className="min-w-0 px-3 py-2">{renderBadge?.(row)}</td>
+                  {hasBadgeColumn ? (
+                    <td className="min-w-0 px-3 py-2">{renderBadge?.(row)}</td>
+                  ) : null}
                   <td className="px-1 py-2 text-right sm:px-3">
                     <RowActions actions={actions} foldable />
                   </td>
