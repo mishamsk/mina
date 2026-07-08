@@ -249,6 +249,82 @@ func TestCategoryRejectsHierarchyFQNConflict(t *testing.T) {
 	}
 }
 
+func TestCategoryAllowsHierarchyLookalikeBoundary(t *testing.T) {
+	client := newSharedClient(t)
+
+	leaf, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "HierarchyCategoryLookalike:Leaf",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("leaf create request: %v", err)
+	}
+	if leaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("leaf create status = %d, want %d; body %s", leaf.StatusCode(), http.StatusCreated, leaf.Body)
+	}
+
+	lookalike, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "HierarchyCategoryLookalike:Leafish:Child",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("lookalike create request: %v", err)
+	}
+	if lookalike.StatusCode() != http.StatusCreated {
+		t.Fatalf("lookalike create status = %d, want %d; body %s", lookalike.StatusCode(), http.StatusCreated, lookalike.Body)
+	}
+}
+
+func TestCategoryAllowsHierarchyPrefixReuseAfterTombstone(t *testing.T) {
+	client := newSharedClient(t)
+
+	leaf, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "TombstonedCategoryHierarchy:Leaf",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("leaf create request: %v", err)
+	}
+	if leaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("leaf create status = %d, want %d; body %s", leaf.StatusCode(), http.StatusCreated, leaf.Body)
+	}
+	deleteCategory(t, client, leaf.JSON201.CategoryId)
+
+	childAfterDeletedLeaf, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "TombstonedCategoryHierarchy:Leaf:Child",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("child after deleted leaf request: %v", err)
+	}
+	if childAfterDeletedLeaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("child after deleted leaf status = %d, want %d; body %s", childAfterDeletedLeaf.StatusCode(), http.StatusCreated, childAfterDeletedLeaf.Body)
+	}
+
+	child, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "TombstonedCategoryHierarchy:Group:Child",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("child create request: %v", err)
+	}
+	if child.StatusCode() != http.StatusCreated {
+		t.Fatalf("child create status = %d, want %d; body %s", child.StatusCode(), http.StatusCreated, child.Body)
+	}
+	deleteCategory(t, client, child.JSON201.CategoryId)
+
+	parentAfterDeletedChild, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "TombstonedCategoryHierarchy:Group",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("parent after deleted child request: %v", err)
+	}
+	if parentAfterDeletedChild.StatusCode() != http.StatusCreated {
+		t.Fatalf("parent after deleted child status = %d, want %d; body %s", parentAfterDeletedChild.StatusCode(), http.StatusCreated, parentAfterDeletedChild.Body)
+	}
+}
+
 func TestCategoryListFiltersByEconomicIntent(t *testing.T) {
 	client := newSharedClient(t)
 	scenario := client.Scenario()

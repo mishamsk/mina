@@ -259,6 +259,76 @@ func TestTagRejectsHierarchyFQNConflict(t *testing.T) {
 	}
 }
 
+func TestTagAllowsHierarchyLookalikeBoundary(t *testing.T) {
+	client := newSharedClient(t)
+
+	leaf, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "HierarchyTagLookalike:Leaf",
+	})
+	if err != nil {
+		t.Fatalf("leaf create request: %v", err)
+	}
+	if leaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("leaf create status = %d, want %d; body %s", leaf.StatusCode(), http.StatusCreated, leaf.Body)
+	}
+
+	lookalike, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "HierarchyTagLookalike:Leafish:Child",
+	})
+	if err != nil {
+		t.Fatalf("lookalike create request: %v", err)
+	}
+	if lookalike.StatusCode() != http.StatusCreated {
+		t.Fatalf("lookalike create status = %d, want %d; body %s", lookalike.StatusCode(), http.StatusCreated, lookalike.Body)
+	}
+}
+
+func TestTagAllowsHierarchyPrefixReuseAfterTombstone(t *testing.T) {
+	client := newSharedClient(t)
+
+	leaf, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "TombstonedTagHierarchy:Leaf",
+	})
+	if err != nil {
+		t.Fatalf("leaf create request: %v", err)
+	}
+	if leaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("leaf create status = %d, want %d; body %s", leaf.StatusCode(), http.StatusCreated, leaf.Body)
+	}
+	deleteTag(t, client, leaf.JSON201.TagId)
+
+	childAfterDeletedLeaf, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "TombstonedTagHierarchy:Leaf:Child",
+	})
+	if err != nil {
+		t.Fatalf("child after deleted leaf request: %v", err)
+	}
+	if childAfterDeletedLeaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("child after deleted leaf status = %d, want %d; body %s", childAfterDeletedLeaf.StatusCode(), http.StatusCreated, childAfterDeletedLeaf.Body)
+	}
+
+	child, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "TombstonedTagHierarchy:Group:Child",
+	})
+	if err != nil {
+		t.Fatalf("child create request: %v", err)
+	}
+	if child.StatusCode() != http.StatusCreated {
+		t.Fatalf("child create status = %d, want %d; body %s", child.StatusCode(), http.StatusCreated, child.Body)
+	}
+	deleteTag(t, client, child.JSON201.TagId)
+
+	parentAfterDeletedChild, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn: "TombstonedTagHierarchy:Group",
+	})
+	if err != nil {
+		t.Fatalf("parent after deleted child request: %v", err)
+	}
+	if parentAfterDeletedChild.StatusCode() != http.StatusCreated {
+		t.Fatalf("parent after deleted child status = %d, want %d; body %s", parentAfterDeletedChild.StatusCode(), http.StatusCreated, parentAfterDeletedChild.Body)
+	}
+}
+
 func TestTagValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 

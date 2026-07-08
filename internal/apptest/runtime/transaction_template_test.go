@@ -423,6 +423,78 @@ func TestTransactionTemplateRejectsHierarchyFQNConflict(t *testing.T) {
 	}
 }
 
+func TestTransactionTemplateAllowsHierarchyLookalikeBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionTemplateRefs(t, client)
+
+	createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchyLookalike:Leaf",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+
+	lookalike, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TemplateHierarchyLookalike:Leafish:Child",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	if err != nil {
+		t.Fatalf("lookalike create request: %v", err)
+	}
+	if lookalike.StatusCode() != http.StatusCreated {
+		t.Fatalf("lookalike create status = %d, want %d; body %s", lookalike.StatusCode(), http.StatusCreated, lookalike.Body)
+	}
+}
+
+func TestTransactionTemplateAllowsHierarchyPrefixReuseAfterTombstone(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionTemplateRefs(t, client)
+
+	leaf := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TombstonedTemplateHierarchy:Leaf",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	deleteTransactionTemplateForRestructure(t, client, leaf.JSON201.TransactionTemplateId)
+
+	childAfterDeletedLeaf, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TombstonedTemplateHierarchy:Leaf:Child",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	if err != nil {
+		t.Fatalf("child after deleted leaf request: %v", err)
+	}
+	if childAfterDeletedLeaf.StatusCode() != http.StatusCreated {
+		t.Fatalf("child after deleted leaf status = %d, want %d; body %s", childAfterDeletedLeaf.StatusCode(), http.StatusCreated, childAfterDeletedLeaf.Body)
+	}
+
+	child := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TombstonedTemplateHierarchy:Group:Child",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	deleteTransactionTemplateForRestructure(t, client, child.JSON201.TransactionTemplateId)
+
+	parentAfterDeletedChild, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
+		Fqn: "TombstonedTemplateHierarchy:Group",
+		Records: []httpclient.TransactionTemplateRecordRequest{
+			{CategoryId: refs.CategoryID},
+		},
+	})
+	if err != nil {
+		t.Fatalf("parent after deleted child request: %v", err)
+	}
+	if parentAfterDeletedChild.StatusCode() != http.StatusCreated {
+		t.Fatalf("parent after deleted child status = %d, want %d; body %s", parentAfterDeletedChild.StatusCode(), http.StatusCreated, parentAfterDeletedChild.Body)
+	}
+}
+
 func TestTransactionTemplateValidationErrors(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionTemplateRefs(t, client)
