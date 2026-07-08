@@ -64,14 +64,14 @@ Task scope details live in the kata issues (`kata show <ref> --agent`); settled 
 - [x] Task 3: `j494` — group-state services and API: derived group hidden state, bulk hide/unhide by group path (API; requires Task 1) — branch `j494-group-state-api`
 - [x] Task 4: `4hmc` — restructure (rename/move) UI on accounts and reference-data trees (FE; requires Task 2) — branch `4hmc-restructure-ui`
 - [x] Task 5: `1316` — serialize single-leaf PATCH cache updates with the reference mutex (API; narrowest possible diff) — branch `1316-serialize-patch-cache`
-- [ ] Task 6: `9w1s` — prefix-free API-boundary test gaps: tombstone exemption and lookalike boundary for categories, tags, templates (API, test-only; narrowest possible diff) — branch `9w1s-prefix-free-test-gaps`
+- [x] Task 6: `9w1s` — prefix-free API-boundary test gaps: tombstone exemption and lookalike boundary for categories, tags, templates (API, test-only; narrowest possible diff) — branch `9w1s-prefix-free-test-gaps`
 
 ## Final Verification
 
-- [ ] On the main working branch with all merged branches: `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] `just test-frontend-e2e` passes
+- [x] On the main working branch with all merged branches: `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] `just test-frontend-e2e` passes
 - [x] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run exactly one and fold unresolved comments into a final fix plan (no further review-loop)
-- [ ] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, kata refs closed, residual findings and unmerged branches
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, kata refs closed, residual findings and unmerged branches
+- [x] Move this plan to `docs/plans/completed/`
