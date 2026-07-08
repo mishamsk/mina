@@ -49,9 +49,9 @@ export const AmountText = ({
     <span
       data-testid={chip ? "amount-chip" : "amount-text"}
       className={cn(
-        "font-mono [overflow-wrap:anywhere] tabular-nums",
+        "font-mono tabular-nums",
         chip
-          ? "bg-card inline-flex min-h-7 max-w-full flex-wrap items-center justify-end border border-[var(--border-ink)] px-2 text-right font-medium shadow-[var(--shadow-chip)]"
+          ? "bg-card inline-flex h-7 max-w-full items-center justify-end overflow-visible border border-[var(--border-ink)] px-2 text-right font-medium whitespace-nowrap shadow-[var(--shadow-chip)]"
           : "inline max-w-full text-right whitespace-normal",
         chip &&
           (transactionClass === "income"
@@ -65,9 +65,7 @@ export const AmountText = ({
         className,
       )}
     >
-      <span className="min-w-0 [overflow-wrap:anywhere]">
-        {formattedAmount}
-      </span>
+      <span>{formattedAmount}</span>
       <span className="text-muted-foreground whitespace-pre">
         {` ${marker}`}
       </span>
@@ -95,9 +93,7 @@ const CompactAmounts = ({
         {amounts.map((amount, index) => (
           <Fragment key={`${amount.currency}:${amount.amount}:${index}`}>
             {index > 0 ? <AmountSeparator /> : null}
-            <span className="min-w-0 [overflow-wrap:anywhere]">
-              {formatDecimalAmount(amount.amount, amount.currency)}
-            </span>
+            <span>{formatDecimalAmount(amount.amount, amount.currency)}</span>
           </Fragment>
         ))}
         <span className="text-muted-foreground whitespace-pre">
@@ -110,9 +106,7 @@ const CompactAmounts = ({
   return amounts.map((amount, index) => (
     <Fragment key={`${amount.currency}:${amount.amount}:${index}`}>
       {index > 0 ? <AmountSeparator /> : null}
-      <span className="min-w-0 [overflow-wrap:anywhere]">
-        {formatDecimalAmount(amount.amount, amount.currency)}
-      </span>
+      <span>{formatDecimalAmount(amount.amount, amount.currency)}</span>
       <span className="text-muted-foreground whitespace-pre">
         {` ${currencyDisplayMarker(amount.currency)}`}
       </span>
@@ -120,45 +114,15 @@ const CompactAmounts = ({
   ));
 };
 
-const compactAmountsLength = (amounts: readonly DisplayAmount[]): number => {
-  const [first] = amounts;
-  if (!first) {
-    return 0;
-  }
-  const oneCurrency = amounts.every(
-    (amount) => amount.currency === first.currency,
-  );
-  if (oneCurrency) {
-    return (
-      amounts
-        .map((amount) => formatDecimalAmount(amount.amount, amount.currency))
-        .join(" / ").length +
-      1 +
-      currencyDisplayMarker(first.currency).length
-    );
-  }
-  return amounts
-    .map(
-      (amount) =>
-        `${formatDecimalAmount(amount.amount, amount.currency)} ${currencyDisplayMarker(amount.currency)}`,
-    )
-    .join(" / ").length;
-};
-
 export const MixedAmounts = ({
   amounts,
 }: {
   readonly amounts: readonly DisplayAmount[];
 }) => {
-  const wraps = compactAmountsLength(amounts) > 24;
-
   return amounts.length > 0 ? (
     <span
       className={cn(
-        "bg-card inline-flex max-w-full items-center justify-end border border-[var(--border-ink)] px-2 text-right font-mono font-medium tabular-nums shadow-[var(--shadow-chip)]",
-        wraps
-          ? "min-h-7 flex-wrap [overflow-wrap:anywhere]"
-          : "h-7 whitespace-nowrap",
+        "bg-card inline-flex h-7 max-w-full items-center justify-end overflow-visible border border-[var(--border-ink)] px-2 text-right font-mono font-medium whitespace-nowrap tabular-nums shadow-[var(--shadow-chip)]",
       )}
       data-testid="amount-chip"
     >

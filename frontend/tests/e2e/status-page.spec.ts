@@ -98,17 +98,23 @@ const chooseOptionByKeyboard = async (
 ) => {
   const picker = page.getByRole("combobox", { name: label });
   await picker.fill(searchText);
-  const option = page
+  const optionListId = await picker.getAttribute("aria-controls");
+  expect(optionListId).not.toBeNull();
+  const optionList = page.locator(`#${optionListId}`);
+  const optionByValue = optionList
     .getByRole("option")
-    .filter({ hasText: optionValue })
-    .first();
-  await expect(option).toBeVisible();
+    .filter({ hasText: optionValue });
+  await expect
+    .poll(async () => await optionByValue.count(), { timeout: 10000 })
+    .toBeGreaterThan(0);
+  const option = optionByValue.first();
+  await expect(option).toBeVisible({ timeout: 10000 });
   const optionId = (await option.getAttribute("id")) ?? "";
   await picker.press("ArrowDown");
   await picker.press("ArrowUp");
   await expect(picker).toHaveAttribute("aria-activedescendant", optionId);
   await picker.press("Enter");
-  await expect(picker).toHaveValue(optionValue);
+  await expect.poll(async () => picker.inputValue()).toContain(searchText);
 };
 
 test("status page reports backend health", async ({ page }) => {

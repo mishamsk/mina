@@ -217,6 +217,21 @@
     container: transaction-detail-records / inline-size;
   }
 
+  .row-actions-button {
+    opacity: 0;
+  }
+
+  .row-actions-button:focus-visible,
+  .row-actions-button[aria-expanded="true"],
+  tr:hover .row-actions-button,
+  tr:focus-within .row-actions-button {
+    opacity: 1;
+  }
+
+  .row-actions .row-actions-overflow {
+    display: none !important;
+  }
+
   .transactions-table .transactions-class-column {
     width: 5%;
   }
@@ -230,15 +245,15 @@
   }
 
   .transactions-table .transactions-description-column {
-    width: 29%;
+    width: 27%;
   }
 
   .transactions-table .transactions-category-column {
-    width: 14%;
+    width: 13%;
   }
 
   .transactions-table .transactions-tags-column {
-    width: 16%;
+    width: 15%;
   }
 
   .transactions-table .transactions-member-column {
@@ -246,39 +261,14 @@
   }
 
   .transactions-table .transactions-amount-column {
-    width: 15%;
+    width: 14%;
+  }
+
+  .transactions-table .transactions-actions-column {
+    width: 5%;
   }
 
   @container transactions-table (max-width: 1120px) {
-    .transactions-table .transactions-status-column {
-      visibility: collapse;
-      width: 0;
-    }
-
-    .transactions-table :is(th, td).transactions-status-column {
-      font-size: 0 !important;
-      padding-right: 0 !important;
-      padding-left: 0 !important;
-    }
-
-    .transactions-table :is(th, td).transactions-status-column > * {
-      display: none !important;
-    }
-
-    .transactions-table .transactions-description-column {
-      width: 31%;
-    }
-
-    .transactions-table .transactions-category-column {
-      width: 14%;
-    }
-
-    .transactions-table .transactions-amount-column {
-      width: 17%;
-    }
-  }
-
-  @container transactions-table (max-width: 920px) {
     .transactions-table .transactions-member-column {
       visibility: collapse;
       width: 0;
@@ -295,19 +285,70 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 29%;
+      width: 25%;
     }
 
     .transactions-table .transactions-category-column {
-      width: 15%;
+      width: 12%;
     }
 
     .transactions-table .transactions-tags-column {
-      width: 17%;
+      width: 14%;
     }
 
     .transactions-table .transactions-amount-column {
       width: 24%;
+    }
+
+    .transactions-table .transactions-actions-column {
+      width: 6%;
+    }
+  }
+
+  @container transactions-table (max-width: 920px) {
+    .transactions-table .transactions-status-column {
+      visibility: collapse;
+      width: 0;
+    }
+
+    .transactions-table :is(th, td).transactions-status-column {
+      font-size: 0 !important;
+      padding-right: 0 !important;
+      padding-left: 0 !important;
+    }
+
+    .transactions-table :is(th, td).transactions-status-column > * {
+      display: none !important;
+    }
+
+    .transactions-table .transactions-description-column {
+      width: 25%;
+    }
+
+    .transactions-table .transactions-category-column {
+      width: 12%;
+    }
+
+    .transactions-table .transactions-tags-column {
+      width: 14%;
+    }
+
+    .transactions-table .transactions-amount-column {
+      width: 28%;
+    }
+
+    .transactions-table .transactions-actions-column {
+      width: 6%;
+    }
+  }
+
+  @container transactions-table (max-width: 820px) {
+    .transactions-table .row-actions-buttons {
+      display: none !important;
+    }
+
+    .transactions-table .row-actions-overflow {
+      display: inline-flex !important;
     }
   }
 
@@ -336,15 +377,19 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 37%;
+      width: 22%;
     }
 
     .transactions-table .transactions-category-column {
-      width: 17%;
+      width: 14%;
     }
 
     .transactions-table .transactions-amount-column {
-      width: 28%;
+      width: 38%;
+    }
+
+    .transactions-table .transactions-actions-column {
+      width: 8%;
     }
   }
 
@@ -373,11 +418,33 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 26%;
+      width: 18%;
     }
 
     .transactions-table .transactions-amount-column {
-      width: 50%;
+      width: 48%;
+    }
+
+    .transactions-table .transactions-actions-column {
+      width: 10%;
+    }
+
+    .transactions-table :is(th, td).transactions-date-column,
+    .transactions-table :is(th, td).transactions-description-column,
+    .transactions-table :is(th, td).transactions-amount-column {
+      padding-right: 0.25rem !important;
+      padding-left: 0.25rem !important;
+    }
+
+    .transactions-table td.transactions-date-column > div {
+      white-space: nowrap;
+    }
+
+    .transactions-table
+      .transactions-amount-column
+      [data-testid="amount-chip"] {
+      padding-right: 0 !important;
+      padding-left: 0 !important;
     }
   }
 

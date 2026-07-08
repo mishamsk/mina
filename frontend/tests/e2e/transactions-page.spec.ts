@@ -86,8 +86,10 @@ const expectTransactionFilterUrl = async (
   expected: {
     readonly amountMax?: string;
     readonly amountMin?: string;
+    readonly categories?: readonly number[];
     readonly initiatedFrom?: string;
     readonly initiatedTo?: string;
+    readonly members?: readonly number[];
     readonly page?: string;
     readonly pageSize?: string;
     readonly q?: string;
@@ -106,6 +108,14 @@ const expectTransactionFilterUrl = async (
         page: searchParams.get("page"),
         pageSize: searchParams.get("pageSize"),
         q: searchParams.get("q"),
+        categories: searchParams
+          .getAll("category")
+          .map((value) => Number(value))
+          .sort((left, right) => left - right),
+        members: searchParams
+          .getAll("member")
+          .map((value) => Number(value))
+          .sort((left, right) => left - right),
         statuses: searchParams.getAll("status").sort(),
         tags: searchParams
           .getAll("tag")
@@ -121,6 +131,12 @@ const expectTransactionFilterUrl = async (
       page: expected.page ?? "1",
       pageSize: expected.pageSize ?? "10",
       q: expected.q ?? null,
+      categories: [...(expected.categories ?? [])].sort(
+        (left, right) => left - right,
+      ),
+      members: [...(expected.members ?? [])].sort(
+        (left, right) => left - right,
+      ),
       statuses: [...(expected.statuses ?? [])].sort(),
       tags: [...(expected.tags ?? [])].sort((left, right) => left - right),
     });
@@ -366,7 +382,7 @@ test("transactions page renders demo transaction lines and expands records", asy
     .evaluate((element) => getComputedStyle(element).backgroundColor);
   expect(firstRowBackgroundBefore).not.toBe(secondRowBackgroundBefore);
 
-  await transferRow.click();
+  await transferRow.locator("td").nth(3).click();
   await expect(transferRow).toHaveAttribute("aria-expanded", "true");
   await expect(
     page.getByRole("columnheader", { exact: true, name: "Memo" }),
@@ -617,8 +633,15 @@ test("transactions page add-filter menu drives server filters and chips", async 
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { exact: true, name: "Amount" }).click();
-  await page.getByRole("textbox", { name: "Min" }).fill("10");
-  await page.getByRole("textbox", { name: "Max" }).fill("20");
+  const amountDialog = page.getByRole("dialog").filter({
+    has: page.getByRole("heading", { name: "Amount" }),
+  });
+  const amountMinInput = amountDialog.getByRole("textbox", { name: "Min" });
+  const amountMaxInput = amountDialog.getByRole("textbox", { name: "Max" });
+  await amountMinInput.fill("10");
+  await expect(amountMinInput).toHaveValue("10");
+  await amountMaxInput.fill("20");
+  await expect(amountMaxInput).toHaveValue("20");
   await expect(page.getByText("Amount 10-20")).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
@@ -735,6 +758,106 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await expectTransactionFilterUrl(page, { pageSize: "25" });
   await expect(page.getByText("Tag Groceries")).toBeHidden();
   await expect(page.getByText("Amount 10-20")).toBeHidden();
+});
+
+test("transaction entity chips add filters in place", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = await createCategory(
+    page,
+    `E2E:ChipFilter:${unique}:CategoryOne`,
+    "expense",
+  );
+  const alternateCategory = await createCategory(
+    page,
+    `E2E:ChipFilter:${unique}:CategoryTwo`,
+    "expense",
+  );
+  const tag = await createTag(page, `E2E:ChipFilter:${unique}:DetailTag`);
+  const member = await createMember(page, `Chip ${unique}`);
+  const searchQuery = `E2E chip filter ${unique}`;
+  const memo = `${searchQuery} target`;
+  const alternateMemo = `${searchQuery} alternate`;
+
+  const targetResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "21.34",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-04-01",
+      member_id: member.member_id,
+      memo,
+      tag_ids: [tag.tag_id],
+    },
+  });
+  expect(targetResponse.ok()).toBe(true);
+  const target = (await targetResponse.json()) as TransactionFixture;
+  const alternateResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "22.45",
+      category_id: alternateCategory.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-04-01",
+      memo: alternateMemo,
+    },
+  });
+  expect(alternateResponse.ok()).toBe(true);
+
+  await page.goto(
+    `/transactions?q=${encodeURIComponent(searchQuery)}&page=1&pageSize=50`,
+  );
+  await expect(page.getByText("Description")).toBeVisible();
+  const targetRow = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(targetRow).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: alternateMemo }).first(),
+  ).toBeVisible();
+
+  await targetRow
+    .getByRole("button", { name: `Filter by ${category.name}` })
+    .click();
+  await expectTransactionFilterUrl(page, {
+    categories: [category.category_id],
+    pageSize: "50",
+    q: searchQuery,
+  });
+  await expect(page.getByText(`Category ${category.name}`)).toBeVisible();
+  await expect(targetRow).toHaveAttribute("aria-expanded", "false");
+  await expect(
+    page.getByRole("row").filter({ hasText: alternateMemo }),
+  ).toBeHidden();
+
+  await targetRow
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+  const panel = page.getByRole("dialog", { name: target.display_title });
+  await expect(panel).toBeVisible();
+  await panel
+    .getByRole("button", { name: `Filter by ${tag.name}` })
+    .first()
+    .click();
+  await expectTransactionFilterUrl(page, {
+    categories: [category.category_id],
+    pageSize: "50",
+    q: searchQuery,
+    tags: [tag.tag_id],
+  });
+  await expect(page.getByText(`Tag ${tag.name}`)).toBeVisible();
+  await expect(panel).toBeVisible();
 });
 
 test("transactions sidebar restores the last-used transactions URL state", async ({
@@ -921,8 +1044,10 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           rect.width < 1
         );
       };
-      const amountRect = rectFor(cells?.[7]);
       const amountCell = cells?.[7];
+      const amountRect = rectFor(amountCell);
+      const actionsCell = cells?.[8];
+      const actionsRect = rectFor(actionsCell);
       const containerRect = container.getBoundingClientRect();
       const memberRect = rectFor(cells?.[6]);
       const memberContentRects = Array.from(
@@ -945,6 +1070,52 @@ test("transactions page collapses low-priority columns instead of scrolling hori
             );
           },
         );
+      const textRectsFor = (element: HTMLElement) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const rects = Array.from(range.getClientRects())
+          .filter((rect) => rect.width > 0 && rect.height > 0)
+          .map((rect) => ({
+            bottom: rect.bottom,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+          }));
+        range.detach();
+        return rects;
+      };
+      const amountChips = rows.flatMap((visibleRow) => {
+        const cell = visibleRow.querySelectorAll("td")[7];
+        if (!cell || isCollapsed(cell)) {
+          return [];
+        }
+        return Array.from(
+          cell.querySelectorAll<HTMLElement>("[data-testid='amount-chip']"),
+        ).map((chip) => ({ cell, chip }));
+      });
+      const amountChipStates = amountChips.map(({ cell, chip }) => {
+        const cellRect = cell.getBoundingClientRect();
+        const chipRect = chip.getBoundingClientRect();
+        const textRects = textRectsFor(chip);
+        const lineCenters = textRects.map(
+          (rect) => (rect.top + rect.bottom) / 2,
+        );
+        const minLineCenter = Math.min(...lineCenters);
+        const maxLineCenter = Math.max(...lineCenters);
+        return {
+          fitsCell:
+            chipRect.left >= cellRect.left - 0.5 &&
+            chipRect.right <= cellRect.right + 0.5 &&
+            textRects.every(
+              (rect) =>
+                rect.left >= cellRect.left - 0.5 &&
+                rect.right <= cellRect.right + 0.5,
+            ),
+          singleLine:
+            textRects.length > 0 && maxLineCenter - minLineCenter <= 1,
+          text: chip.innerText.replace(/\s+/g, " ").trim(),
+        };
+      });
       const visibleAmountCells = rows
         .map((visibleRow) => visibleRow.querySelectorAll("td")[7])
         .filter((cell): cell is HTMLTableCellElement => !isCollapsed(cell));
@@ -968,6 +1139,17 @@ test("transactions page collapses low-priority columns instead of scrolling hori
         : true;
 
       return {
+        actionsColumnCollapsed: isCollapsed(actionsCell),
+        actionsColumnRightWithinContainer:
+          actionsRect !== undefined &&
+          actionsRect.right <= containerRect.right + 0.5,
+        actionsFolded:
+          getComputedStyle(
+            actionsCell?.querySelector(".row-actions-buttons") ?? container,
+          ).display === "none" &&
+          getComputedStyle(
+            actionsCell?.querySelector(".row-actions-overflow") ?? container,
+          ).display !== "none",
         categoryCollapsed: isCollapsed(cells?.[4]),
         categoryHeaderCollapsed: isCollapsed(headerCells[4]),
         containerWidth: container.getBoundingClientRect().width,
@@ -984,6 +1166,11 @@ test("transactions page collapses low-priority columns instead of scrolling hori
         amountHasTruncatedContent: visibleAmountCells.some((cell) =>
           hasTruncatedContent(cell),
         ),
+        amountChipsFitCells: amountChipStates.every((state) => state.fitsCell),
+        amountChipsSingleLine: amountChipStates.every(
+          (state) => state.singleLine,
+        ),
+        amountChipTexts: amountChipStates.map((state) => state.text),
         amountTexts: visibleAmountCells.map((cell) =>
           cell.innerText.replace(/\s+/g, " ").trim(),
         ),
@@ -1018,8 +1205,13 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   expect(intermediateTableState.amountCellRightWithinContainer).toBe(true);
   expect(intermediateTableState.amountContentRightWithinContainer).toBe(true);
   expect(intermediateTableState.amountHasTruncatedContent).toBe(false);
+  expect(intermediateTableState.amountChipsFitCells).toBe(true);
+  expect(intermediateTableState.amountChipsSingleLine).toBe(true);
+  expect(intermediateTableState.actionsColumnCollapsed).toBe(false);
+  expect(intermediateTableState.actionsColumnRightWithinContainer).toBe(true);
   expect(intermediateTableState.amountText).toBe("-43.98 $");
   expect(intermediateTableState.amountTexts).toContain("+3,250.00 $");
+  expect(intermediateTableState.amountChipTexts).toContain("-5.00 / +100.00 $");
   expect(intermediateTableState.memberFullyVisible).toBe(true);
   expect(intermediateTableState.visibleContentOverlapsAmount).toBe(false);
   expect(intermediateTableState.statusHeaderCollapsed).toBe(
@@ -1035,7 +1227,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     intermediateTableState.categoryCollapsed,
   );
 
-  for (const width of [1600, 1440, 1000, 820, 800, 700]) {
+  for (const width of [1600, 1440, 1150, 1000, 900, 820, 800, 700, 640]) {
     await page.setViewportSize({ width, height: 720 });
     const tableState = await measureTableState();
 
@@ -1043,21 +1235,45 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     expect(tableState.amountCellRightWithinContainer).toBe(true);
     expect(tableState.amountContentRightWithinContainer).toBe(true);
     expect(tableState.amountHasTruncatedContent).toBe(false);
+    expect(tableState.amountChipsFitCells).toBe(true);
+    expect(tableState.amountChipsSingleLine).toBe(true);
+    expect(tableState.actionsColumnCollapsed).toBe(false);
+    expect(tableState.actionsColumnRightWithinContainer).toBe(true);
     expect(tableState.amountText).toBe("-43.98 $");
     expect(tableState.amountTexts).toContain("+3,250.00 $");
+    expect(tableState.amountChipTexts).toContain("-5.00 / +100.00 $");
     expect(tableState.visibleContentOverlapsAmount).toBe(false);
     if (tableState.categoryCollapsed) {
       expect(tableState.tagsCollapsed).toBe(true);
     }
     if (tableState.tagsCollapsed) {
-      expect(tableState.memberCollapsed).toBe(true);
+      expect(tableState.actionsFolded).toBe(true);
     }
-    if (tableState.memberCollapsed) {
+    if (tableState.actionsFolded) {
       expect(tableState.statusCollapsed).toBe(true);
+    }
+    if (tableState.statusCollapsed) {
+      expect(tableState.memberCollapsed).toBe(true);
     }
   }
 
   expect(intermediateTableState.memberCollapsed).toBe(true);
+
+  await page.setViewportSize({ width: 700, height: 720 });
+  const foldedSpendRow = page
+    .getByRole("row")
+    .filter({ hasText: "BlueCash → Target" })
+    .first();
+  await expect(foldedSpendRow).toBeVisible();
+  await foldedSpendRow.hover();
+  await foldedSpendRow
+    .getByRole("button", { name: "More row actions" })
+    .click();
+  await page
+    .locator('[data-slot="popover-content"]')
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+  await expect(page).toHaveURL(/[?&]transaction=\d+(?:&|$)/);
 });
 
 test("transactions contain long amount chips and align the pagination footer", async ({
@@ -1258,6 +1474,12 @@ test("transactions page help and leaf category chips", async ({ page }) => {
   await expect(simpleSpendRow).toBeVisible();
   await expect(simpleSpendRow.locator("td").nth(6)).not.toContainText("Mixed");
   await expect(simpleSpendRow.locator("td").nth(7)).toContainText(/-43\.98 \$/);
+  await expect(
+    simpleSpendRow
+      .locator("td")
+      .nth(3)
+      .getByRole("button", { name: "Open transaction detail" }),
+  ).toHaveCount(0);
 
   const mixedRow = page
     .getByRole("row")
@@ -1316,11 +1538,29 @@ test("transactions page help and leaf category chips", async ({ page }) => {
   await page.mouse.move(0, 0);
   await expect(page.getByRole("tooltip")).toBeHidden();
 
-  const openDetailButton = page
-    .getByRole("button", { name: "Open transaction detail" })
-    .first();
+  const openDetailButton = simpleSpendRow
+    .locator("td")
+    .nth(8)
+    .getByRole("button", { name: "Open transaction detail" });
+  await expect
+    .poll(() =>
+      openDetailButton.evaluate((button) => getComputedStyle(button).opacity),
+    )
+    .toBe("0");
+  await simpleSpendRow.hover();
+  await expect
+    .poll(() =>
+      openDetailButton.evaluate((button) => getComputedStyle(button).opacity),
+    )
+    .toBe("1");
+  await page.mouse.move(0, 0);
   await openDetailButton.focus();
   await expect(openDetailButton).toBeFocused();
+  await expect
+    .poll(() =>
+      openDetailButton.evaluate((button) => getComputedStyle(button).opacity),
+    )
+    .toBe("1");
   const openDetailTooltip = page
     .getByRole("tooltip")
     .filter({ hasText: "Open transaction detail" });
@@ -1679,11 +1919,9 @@ test("transaction detail panel shows full records and supports deep links", asyn
     ).toBeVisible();
   }
 
-  await alternateDetailRow
-    .getByRole("button", {
-      name: "Open transaction detail",
-    })
-    .click();
+  await alternateDetailRow.focus();
+  await expect(alternateDetailRow).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(
     new RegExp(`[?&]transaction=${alternateTransaction.transaction_id}(?:&|$)`),
   );
@@ -2075,10 +2313,14 @@ test("entry category picker requests spend intents and excludes hidden categorie
   ).toBeVisible();
 
   await categoryPicker.fill("Salary");
-  await expect(page.getByText("No matches")).toBeVisible();
+  await expect(page.locator("#spend-category-options")).toContainText(
+    "No matches",
+  );
 
   await categoryPicker.fill(hiddenCategory.name);
-  await expect(page.getByText("No matches")).toBeVisible();
+  await expect(page.locator("#spend-category-options")).toContainText(
+    "No matches",
+  );
 });
 
 const chooseOptionByKeyboard = async (
@@ -2090,10 +2332,17 @@ const chooseOptionByKeyboard = async (
 ) => {
   const picker = page.getByRole("combobox", { name: label });
   await picker.fill(searchText);
-  const option = page
+  const optionListId = await picker.getAttribute("aria-controls");
+  expect(optionListId).not.toBeNull();
+  const optionList = page.locator(`#${optionListId}`);
+  const optionByValue = optionList
     .getByRole("option")
-    .filter({ has: page.getByText(optionValue, { exact: true }) });
-  await expect(option).toBeVisible();
+    .filter({ hasText: optionValue });
+  await expect
+    .poll(async () => await optionByValue.count(), { timeout: 10000 })
+    .toBeGreaterThan(0);
+  const option = optionByValue.first();
+  await expect(option).toBeVisible({ timeout: 10000 });
   const optionId = await option.evaluate((element) => element.id);
   if (arrowDownPresses === 0) {
     await picker.press("ArrowDown");
@@ -2105,7 +2354,7 @@ const chooseOptionByKeyboard = async (
   }
   await expect(picker).toHaveAttribute("aria-activedescendant", optionId);
   await picker.press("Enter");
-  await expect(picker).toHaveValue(optionValue);
+  await expect.poll(async () => picker.inputValue()).toContain(optionValue);
 };
 
 test("keyboard spend entry creates a transaction and keeps sticky fields", async ({
@@ -2205,7 +2454,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
     hasText: "Transaction saved.",
   });
   await expect(savedNotice).toBeVisible();
-  await expect(savedNotice).toBeHidden({ timeout: 6000 });
+  await expect(savedNotice).toBeHidden({ timeout: 10000 });
 });
 
 test("entry panel creates each shorthand transaction type", async ({

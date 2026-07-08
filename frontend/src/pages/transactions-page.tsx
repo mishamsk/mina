@@ -84,6 +84,7 @@ export const TransactionsPage = () => {
   const [entryPanelOpen, setEntryPanelOpen] = useState(false);
   const [entryPanelRevision, setEntryPanelRevision] = useState(0);
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
+  const [rowActionsOverflowOpen, setRowActionsOverflowOpen] = useState(false);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | undefined>();
   const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
   const filters = useMemo(
@@ -173,6 +174,31 @@ export const TransactionsPage = () => {
     },
     [cancelDateJump, setSearchParams],
   );
+  const addEntityFilter = useCallback(
+    (kind: "category" | "member" | "tag", id: number) => {
+      cancelDateJump();
+      setSearchParams((current) => {
+        const currentFilters = readTransactionFiltersFromSearchParams(current);
+        const nextFilters =
+          kind === "category"
+            ? {
+                ...currentFilters,
+                categoryIds: [...currentFilters.categoryIds, id],
+              }
+            : kind === "tag"
+              ? {
+                  ...currentFilters,
+                  tagIds: [...currentFilters.tagIds, id],
+                }
+              : {
+                  ...currentFilters,
+                  memberIds: [...currentFilters.memberIds, id],
+                };
+        return writeTransactionFiltersToSearchParams(current, nextFilters);
+      });
+    },
+    [cancelDateJump, setSearchParams],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -181,6 +207,7 @@ export const TransactionsPage = () => {
       if (
         detail.selectedTransactionId ||
         filterPopoverOpen ||
+        rowActionsOverflowOpen ||
         event.key.toLowerCase() !== "n" ||
         event.metaKey ||
         event.ctrlKey ||
@@ -200,7 +227,12 @@ export const TransactionsPage = () => {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [detail.selectedTransactionId, filterPopoverOpen, openEntryPanel]);
+  }, [
+    detail.selectedTransactionId,
+    filterPopoverOpen,
+    openEntryPanel,
+    rowActionsOverflowOpen,
+  ]);
 
   const setPage = useCallback(
     (nextPage: number) => {
@@ -306,6 +338,15 @@ export const TransactionsPage = () => {
             }
             loading={loading}
             lookups={lookups.snapshot}
+            onFilterCategory={(categoryId) => {
+              addEntityFilter("category", categoryId);
+            }}
+            onFilterMember={(memberId) => {
+              addEntityFilter("member", memberId);
+            }}
+            onFilterTag={(tagId) => {
+              addEntityFilter("tag", tagId);
+            }}
             onNewTransaction={openEntryPanel}
             onNextPage={() => {
               setPage(page + 1);
@@ -323,6 +364,7 @@ export const TransactionsPage = () => {
             onPreviousPage={() => {
               setPage(Math.max(defaultTransactionPage, page - 1));
             }}
+            onRowActionsOverflowOpenChange={setRowActionsOverflowOpen}
             page={page}
             pageSize={pageSize}
             totalCount={totalCount}
@@ -363,6 +405,15 @@ export const TransactionsPage = () => {
             lookups={lookups.snapshot}
             onClose={detail.closeTransactionDetail}
             onDelete={detail.deleteSelectedTransaction}
+            onFilterCategory={(categoryId) => {
+              addEntityFilter("category", categoryId);
+            }}
+            onFilterMember={(memberId) => {
+              addEntityFilter("member", memberId);
+            }}
+            onFilterTag={(tagId) => {
+              addEntityFilter("tag", tagId);
+            }}
             onRestoreFocus={detail.restoreDetailFocus}
             transaction={detail.transaction}
           />

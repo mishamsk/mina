@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import type { DisplayAmount, JournalRecord, Tag, Transaction } from "@/api";
+import { RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +33,7 @@ import {
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
+import { MemberChip } from "./member-chip";
 import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
 
 interface TransactionBrowserProps {
@@ -39,11 +41,18 @@ interface TransactionBrowserProps {
   readonly hasNextPage: boolean;
   readonly loading: boolean;
   readonly lookups: LedgerLookupsSnapshot | undefined;
+  readonly onFilterCategory?: (categoryId: number) => void;
+  readonly onFilterMember?: (memberId: number) => void;
+  readonly onFilterTag?: (tagId: number) => void;
   readonly onNewTransaction: () => void;
   readonly onNextPage: () => void;
-  readonly onOpenTransaction: (transaction: Transaction) => void;
+  readonly onOpenTransaction: (
+    transaction: Transaction,
+    opener?: HTMLElement,
+  ) => void;
   readonly onPageSizeChange: (pageSize: number) => void;
   readonly onPreviousPage: () => void;
+  readonly onRowActionsOverflowOpenChange?: (open: boolean) => void;
   readonly page: number;
   readonly pageSize: number;
   readonly totalCount: number | undefined;
@@ -76,8 +85,9 @@ const LoadingRows = () => (
     {Array.from({ length: 6 }).map((_, index) => (
       <div
         key={index}
-        className="grid grid-cols-[5%_10%_29%_14%_17%_7%_6%_12%] gap-3 border-b border-[var(--hairline)] p-3 last:border-b-0"
+        className="grid grid-cols-[5fr_10fr_4fr_27fr_13fr_15fr_7fr_14fr_5fr] gap-3 border-b border-[var(--hairline)] p-3 last:border-b-0"
       >
+        <Skeleton className="h-6" />
         <Skeleton className="h-6" />
         <Skeleton className="h-6" />
         <Skeleton className="h-6" />
@@ -182,7 +192,13 @@ const useClippedTagIds = (
   return element && isOverflowing ? clippedTagIds : emptyClippedTagIds;
 };
 
-const TagChipsLine = ({ tags }: { readonly tags: readonly Tag[] }) => {
+const TagChipsLine = ({
+  onFilterTag,
+  tags,
+}: {
+  readonly onFilterTag?: (tagId: number) => void;
+  readonly tags: readonly Tag[];
+}) => {
   const { isOverflowing, ref } = useElementOverflow<HTMLDivElement>();
   const rootRef = useRef<HTMLDivElement>(null);
   const focusedTagIdRef = useRef<number | null>(null);
@@ -272,7 +288,18 @@ const TagChipsLine = ({ tags }: { readonly tags: readonly Tag[] }) => {
               className={cn("inline-flex shrink-0", isClipped && "invisible")}
               data-tag-id={tag.tag_id}
             >
-              <TagChip label={tag.name} micro tooltip={tag.fqn} />
+              <TagChip
+                label={tag.name}
+                micro
+                tooltip={tag.fqn}
+                onActivate={
+                  onFilterTag
+                    ? () => {
+                        onFilterTag(tag.tag_id);
+                      }
+                    : undefined
+                }
+              />
             </span>
           );
         })}
@@ -288,15 +315,6 @@ const TagChipsLine = ({ tags }: { readonly tags: readonly Tag[] }) => {
     </div>
   );
 };
-
-const MemberChip = ({ name }: { readonly name: string }) => (
-  <Tooltip
-    label={name}
-    className="font-heading text-foreground inline-grid size-6 place-items-center border border-[var(--border-ink)] bg-[var(--color-class-adjustment-bright)] text-[11px] font-semibold uppercase shadow-[var(--shadow-chip)]"
-  >
-    <span>{name.slice(0, 2)}</span>
-  </Tooltip>
-);
 
 const MixedSentinel = ({ label = "Mixed" }: { readonly label?: string }) => (
   <span className="font-heading text-foreground bg-card inline-flex h-5 items-center border border-[var(--border-ink)] px-1.5 text-[11px] font-semibold uppercase shadow-[var(--shadow-chip)]">
@@ -401,11 +419,15 @@ export const TransactionBrowser = ({
   hasNextPage,
   loading,
   lookups,
+  onFilterCategory,
+  onFilterMember,
+  onFilterTag,
   onNewTransaction,
   onNextPage,
   onOpenTransaction,
   onPageSizeChange,
   onPreviousPage,
+  onRowActionsOverflowOpenChange,
   page,
   pageSize,
   totalCount,
@@ -474,23 +496,31 @@ export const TransactionBrowser = ({
             <col className="transactions-tags-column" />
             <col className="transactions-member-column" />
             <col className="transactions-amount-column" />
+            <col className="transactions-actions-column" />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-foreground border-b-2 border-[var(--border-ink)] text-left text-xs font-semibold uppercase">
-              <th className="px-3 py-2">
+              <th className="transactions-class-column px-3 py-2">
                 <span className="sr-only min-[1920px]:not-sr-only">Class</span>
               </th>
-              <th className="px-3 py-2">Date</th>
+              <th className="transactions-date-column px-3 py-2">Date</th>
               <th className="transactions-status-column px-1 py-2">
                 <span className="sr-only">Status</span>
               </th>
-              <th className="px-3 py-2">Description</th>
+              <th className="transactions-description-column px-3 py-2">
+                Description
+              </th>
               <th className="transactions-category-column px-3 py-2">
                 Category
               </th>
               <th className="transactions-tags-column px-3 py-2">Tags</th>
               <th className="transactions-member-column px-3 py-2">Member</th>
-              <th className="px-3 py-2 text-right">Amount</th>
+              <th className="transactions-amount-column px-3 py-2 text-right">
+                Amount
+              </th>
+              <th className="transactions-actions-column px-2 py-2 text-right">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -552,7 +582,7 @@ export const TransactionBrowser = ({
 
                       if (event.key === "Enter") {
                         event.preventDefault();
-                        onOpenTransaction(transaction);
+                        onOpenTransaction(transaction, event.currentTarget);
                         return;
                       }
 
@@ -564,12 +594,12 @@ export const TransactionBrowser = ({
                       toggleExpanded();
                     }}
                   >
-                    <td className="px-3 py-2">
+                    <td className="transactions-class-column px-3 py-2">
                       <ClassIcon
                         transactionClass={transaction.transaction_class}
                       />
                     </td>
-                    <td className="px-3 py-2 font-mono">
+                    <td className="transactions-date-column px-3 py-2 font-mono">
                       <div>{initiatedDate.day}</div>
                       <div className="text-muted-foreground text-xs">
                         {initiatedDate.year}
@@ -582,7 +612,7 @@ export const TransactionBrowser = ({
                         <StatusIcon status={postingStatus} />
                       )}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="transactions-description-column px-3 py-2">
                       <div
                         className={cn(
                           "flex min-w-0 gap-2",
@@ -610,7 +640,7 @@ export const TransactionBrowser = ({
                         </span>
                         <div
                           className={cn(
-                            "grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-2",
+                            "grid min-w-0 flex-1",
                             memo ? "items-start" : "items-center",
                           )}
                         >
@@ -634,19 +664,6 @@ export const TransactionBrowser = ({
                               </Tooltip>
                             ) : null}
                           </div>
-                          <Tooltip label="Open transaction detail" asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              aria-label="Open transaction detail"
-                              onClick={() => {
-                                onOpenTransaction(transaction);
-                              }}
-                            >
-                              <Open aria-hidden="true" />
-                            </Button>
-                          </Tooltip>
                         </div>
                       </div>
                     </td>
@@ -654,7 +671,17 @@ export const TransactionBrowser = ({
                       {category === "mixed" ? (
                         <MixedSentinel />
                       ) : category ? (
-                        <FqnPath value={category.fqn} variant="leaf-chip" />
+                        <FqnPath
+                          value={category.fqn}
+                          variant="leaf-chip"
+                          onActivate={
+                            onFilterCategory
+                              ? () => {
+                                  onFilterCategory(category.category_id);
+                                }
+                              : undefined
+                          }
+                        />
                       ) : null}
                     </td>
                     <td className="transactions-tags-column px-3 py-1">
@@ -662,7 +689,7 @@ export const TransactionBrowser = ({
                         {tags === "mixed" ? (
                           <MixedSentinel />
                         ) : (
-                          <TagChipsLine tags={tags} />
+                          <TagChipsLine tags={tags} onFilterTag={onFilterTag} />
                         )}
                       </div>
                     </td>
@@ -671,12 +698,21 @@ export const TransactionBrowser = ({
                         {member === "mixed" ? (
                           <MixedSentinel />
                         ) : member ? (
-                          <MemberChip name={member.name} />
+                          <MemberChip
+                            name={member.name}
+                            onActivate={
+                              onFilterMember
+                                ? () => {
+                                    onFilterMember(member.member_id);
+                                  }
+                                : undefined
+                            }
+                          />
                         ) : null}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-right align-middle">
-                      <div className="flex min-w-0 flex-row flex-wrap items-center justify-end gap-1">
+                    <td className="transactions-amount-column px-3 py-2 text-right align-middle">
+                      <div className="flex min-w-0 flex-row flex-nowrap items-center justify-end gap-1 overflow-visible">
                         {transaction.transaction_class === "mixed" ? (
                           <MixedAmounts amounts={amounts} />
                         ) : (
@@ -701,10 +737,25 @@ export const TransactionBrowser = ({
                         )}
                       </div>
                     </td>
+                    <td className="transactions-actions-column px-2 py-2 text-right align-middle">
+                      <RowActions
+                        foldable
+                        onOverflowOpenChange={onRowActionsOverflowOpenChange}
+                        actions={[
+                          {
+                            icon: <Open aria-hidden="true" />,
+                            label: "Open transaction detail",
+                            onSelect: (opener) => {
+                              onOpenTransaction(transaction, opener);
+                            },
+                          },
+                        ]}
+                      />
+                    </td>
                   </tr>
                   {expanded ? (
                     <tr className="border-b border-[var(--border-ink)]">
-                      <td colSpan={8} className="max-w-0 overflow-hidden p-0">
+                      <td colSpan={9} className="max-w-0 overflow-hidden p-0">
                         <RecordsTable
                           records={transaction.records}
                           maps={maps}

@@ -258,6 +258,14 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
     },
     [setSearchParams],
   );
+  const openTransactionsEntityFilter = useCallback(
+    (kind: "category" | "member" | "tag", id: number) => {
+      const next = new URLSearchParams();
+      next.append(kind, String(id));
+      void navigate(`/transactions?${next.toString()}`);
+    },
+    [navigate],
+  );
   const closeRecordPeek = useCallback(() => {
     const recordId = selectedRecordId;
     setSearchParams((current) => {
@@ -329,6 +337,15 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
           loading={!selectedTransaction && !selectedTransactionError}
           maps={maps}
           onClose={closeRecordPeek}
+          onFilterCategory={(categoryId) => {
+            openTransactionsEntityFilter("category", categoryId);
+          }}
+          onFilterMember={(memberId) => {
+            openTransactionsEntityFilter("member", memberId);
+          }}
+          onFilterTag={(tagId) => {
+            openTransactionsEntityFilter("tag", tagId);
+          }}
           onRetry={() => {
             void refreshAccountTransaction(selectedRecord.transaction_id);
           }}

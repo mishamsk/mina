@@ -99,11 +99,11 @@ export const useTransactionDetail = ({
   const loading = detailNeedsFetch || Boolean(transaction && !lookupsLoaded);
 
   const openTransactionDetail = useCallback(
-    (nextTransaction: Transaction) => {
+    (nextTransaction: Transaction, opener?: HTMLElement) => {
       setSuppressedDetailFetchId(undefined);
       const activeElement = document.activeElement;
       detailRestoreFocusRef.current =
-        activeElement instanceof HTMLElement ? activeElement : null;
+        opener ?? (activeElement instanceof HTMLElement ? activeElement : null);
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set("transaction", String(nextTransaction.transaction_id));
@@ -126,7 +126,10 @@ export const useTransactionDetail = ({
     const fallback = document.querySelector<HTMLElement>(
       restoreFallbackSelector,
     );
-    focusWithoutTooltip(detailRestoreFocusRef.current ?? fallback, {
+    const target = detailRestoreFocusRef.current?.isConnected
+      ? detailRestoreFocusRef.current
+      : fallback;
+    focusWithoutTooltip(target, {
       preventScroll: true,
     });
   }, []);

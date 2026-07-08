@@ -15,6 +15,7 @@ export {
 } from "./format";
 export { FqnPath } from "./fqn-path";
 export { ClassIcon, StatusIcon } from "./line-icons";
+export { MemberChip } from "./member-chip";
 export { TagChip } from "./tag-chip";
 export { TransactionBrowser } from "./transaction-browser";
 export {

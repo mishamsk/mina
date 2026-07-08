@@ -8,7 +8,7 @@ import type {
   AccountType,
   DisplayAmount,
 } from "@/api";
-import { Tooltip } from "@/components/tooltip";
+import { RowActions } from "@/components/row-actions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AmountText, FqnPath } from "@/features/ledger";
@@ -181,15 +181,15 @@ const BalanceAmounts = ({
 );
 
 const accountsTreeSkeletonGridClass =
-  "grid grid-cols-[48%_32%_20%] sm:grid-cols-[34%_14%_20%_14%] md:grid-cols-[34%_14%_12%_20%_14%] lg:grid-cols-[34%_14%_12%_20%_14%_8%]";
+  "grid grid-cols-[48%_32%_20%] sm:grid-cols-[34%_14%_32%_20%] md:grid-cols-[34%_14%_12%_20%_20%] lg:grid-cols-[34%_14%_12%_20%_8%_12%]";
 
 const accountTreeSkeletonColumnClasses = [
   "px-3",
   "hidden px-3 sm:block",
   "hidden px-3 md:block",
   "px-2 sm:px-3",
-  "px-1 sm:px-3",
   "hidden px-3 lg:block",
+  "px-1 sm:px-3",
 ] as const;
 
 const AccountsTreeSkeleton = () => (
@@ -350,15 +350,15 @@ export const AccountsTree = ({
               </th>
               <th
                 scope="col"
-                className="w-[20%] px-1 py-2 text-center sm:w-[14%] sm:px-3"
-              >
-                Actions
-              </th>
-              <th
-                scope="col"
                 className="hidden w-[8%] px-3 py-2 text-center lg:table-cell"
               >
                 Hidden
+              </th>
+              <th
+                scope="col"
+                className="w-[20%] px-1 py-2 text-center sm:px-3 lg:w-[12%]"
+              >
+                Actions
               </th>
             </tr>
           </thead>
@@ -460,27 +460,6 @@ export const AccountsTree = ({
                       <BalanceAmounts balances={rowBalances} />
                     ) : null}
                   </td>
-                  <td className="px-1 py-2 align-middle sm:px-3">
-                    <div className="flex justify-center">
-                      {onRestructurePath ? (
-                        <Tooltip label="Move or rename" asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label="Move or rename"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              event.currentTarget.blur();
-                              onRestructurePath(row.fqn, event.currentTarget);
-                            }}
-                          >
-                            <MagicEdit aria-hidden="true" />
-                          </Button>
-                        </Tooltip>
-                      ) : null}
-                    </div>
-                  </td>
                   <td className="hidden px-3 py-2 align-middle lg:table-cell">
                     <div className="flex justify-center">
                       {row.account?.is_hidden ? (
@@ -490,6 +469,25 @@ export const AccountsTree = ({
                         />
                       ) : null}
                     </div>
+                  </td>
+                  <td className="px-1 py-2 align-middle sm:px-3">
+                    <RowActions
+                      actions={
+                        onRestructurePath
+                          ? [
+                              {
+                                icon: <MagicEdit aria-hidden="true" />,
+                                label: "Move or rename",
+                                onSelect: (opener) => {
+                                  opener.blur();
+                                  onRestructurePath(row.fqn, opener);
+                                },
+                              },
+                            ]
+                          : []
+                      }
+                      className="justify-center"
+                    />
                   </td>
                 </tr>
               );

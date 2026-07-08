@@ -21,6 +21,7 @@ import {
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { StatusIcon } from "./line-icons";
+import { MemberChip } from "./member-chip";
 import { TagChip } from "./tag-chip";
 
 interface TransactionDetailPanelProps {
@@ -29,6 +30,9 @@ interface TransactionDetailPanelProps {
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
   readonly onDelete: (transaction: Transaction) => Promise<void>;
+  readonly onFilterCategory?: (categoryId: number) => void;
+  readonly onFilterMember?: (memberId: number) => void;
+  readonly onFilterTag?: (tagId: number) => void;
   readonly onRestoreFocus: () => void;
   readonly transaction: Transaction | undefined;
 }
@@ -126,9 +130,11 @@ const DetailAmountSummary = ({
 
 const RecordTagSet = ({
   maps,
+  onFilterTag,
   record,
 }: {
   readonly maps: LookupMaps;
+  readonly onFilterTag?: (tagId: number) => void;
   readonly record: JournalRecord;
 }) => {
   const tags = record.tag_ids
@@ -138,7 +144,18 @@ const RecordTagSet = ({
   return tags.length > 0 ? (
     <div className="flex max-w-full flex-wrap gap-1">
       {tags.map((tag) => (
-        <TagChip key={tag.tag_id} label={tag.name} tooltip={tag.fqn} />
+        <TagChip
+          key={tag.tag_id}
+          label={tag.name}
+          tooltip={tag.fqn}
+          onActivate={
+            onFilterTag
+              ? () => {
+                  onFilterTag(tag.tag_id);
+                }
+              : undefined
+          }
+        />
       ))}
     </div>
   ) : null;
@@ -146,9 +163,15 @@ const RecordTagSet = ({
 
 const DetailRecordsTable = ({
   maps,
+  onFilterCategory,
+  onFilterMember,
+  onFilterTag,
   records,
 }: {
   readonly maps: LookupMaps;
+  readonly onFilterCategory?: (categoryId: number) => void;
+  readonly onFilterMember?: (memberId: number) => void;
+  readonly onFilterTag?: (tagId: number) => void;
   readonly records: readonly JournalRecord[];
 }) => (
   <div
@@ -216,14 +239,32 @@ const DetailRecordsTable = ({
                 className="detail-records-category-column min-w-0 px-2 py-2"
                 data-label="Category"
               >
-                {category ? <FqnPath value={category.fqn} /> : "Uncategorized"}
+                {category ? (
+                  <FqnPath
+                    value={category.fqn}
+                    variant="full-chip"
+                    onActivate={
+                      onFilterCategory
+                        ? () => {
+                            onFilterCategory(category.category_id);
+                          }
+                        : undefined
+                    }
+                  />
+                ) : (
+                  "Uncategorized"
+                )}
               </td>
               <td
                 className="detail-records-tags-column min-w-0 px-2 py-2"
                 data-label="Tags"
               >
                 <div className="max-w-full overflow-hidden">
-                  <RecordTagSet maps={maps} record={record} />
+                  <RecordTagSet
+                    maps={maps}
+                    onFilterTag={onFilterTag}
+                    record={record}
+                  />
                 </div>
               </td>
               <td
@@ -231,9 +272,16 @@ const DetailRecordsTable = ({
                 data-label="Member"
               >
                 {member ? (
-                  <Tooltip label={member.name} className="block">
-                    <span className="block truncate">{member.name}</span>
-                  </Tooltip>
+                  <MemberChip
+                    name={member.name}
+                    onActivate={
+                      onFilterMember
+                        ? () => {
+                            onFilterMember(member.member_id);
+                          }
+                        : undefined
+                    }
+                  />
                 ) : null}
               </td>
               <td
@@ -290,9 +338,15 @@ export const TransactionDetailErrorContent = ({
 
 export const TransactionDetailContent = ({
   maps,
+  onFilterCategory,
+  onFilterMember,
+  onFilterTag,
   transaction,
 }: {
   readonly maps: LookupMaps;
+  readonly onFilterCategory?: (categoryId: number) => void;
+  readonly onFilterMember?: (memberId: number) => void;
+  readonly onFilterTag?: (tagId: number) => void;
   readonly transaction: Transaction;
 }) => {
   const summaryMemo = lineMemo(transaction);
@@ -324,7 +378,13 @@ export const TransactionDetailContent = ({
         >
           Journal records
         </h3>
-        <DetailRecordsTable maps={maps} records={transaction.records} />
+        <DetailRecordsTable
+          maps={maps}
+          onFilterCategory={onFilterCategory}
+          onFilterMember={onFilterMember}
+          onFilterTag={onFilterTag}
+          records={transaction.records}
+        />
       </section>
 
       <section
@@ -362,6 +422,9 @@ export const TransactionDetailPanel = ({
   lookups,
   onClose,
   onDelete,
+  onFilterCategory,
+  onFilterMember,
+  onFilterTag,
   onRestoreFocus,
   transaction,
 }: TransactionDetailPanelProps) => {
@@ -532,7 +595,13 @@ export const TransactionDetailPanel = ({
         ) : errorMessage ? (
           <TransactionDetailErrorContent errorMessage={errorMessage} />
         ) : transaction ? (
-          <TransactionDetailContent maps={maps} transaction={transaction} />
+          <TransactionDetailContent
+            maps={maps}
+            onFilterCategory={onFilterCategory}
+            onFilterMember={onFilterMember}
+            onFilterTag={onFilterTag}
+            transaction={transaction}
+          />
         ) : null}
       </div>
       {transaction && !loading && !errorMessage ? (

@@ -11,6 +11,12 @@ interface CategoryFixture {
   readonly fqn: string;
 }
 
+interface TagFixture {
+  readonly fqn: string;
+  readonly name: string;
+  readonly tag_id: number;
+}
+
 interface BalanceFixture {
   readonly account_id: number;
   readonly currency: string;
@@ -83,6 +89,14 @@ const createHiddenAccount = async (
   fqn: string,
 ): Promise<AccountFixture> => {
   return createAccount(page, { fqn, hidden: true });
+};
+
+const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
+  const response = await page.request.post("/api/tags", {
+    data: { fqn, is_hidden: false },
+  });
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as TagFixture;
 };
 
 const findByFqn = <T extends { readonly fqn: string }>(
@@ -559,6 +573,59 @@ test("account page renders header and paginated running-balance register", async
   await expect(page.getByLabel("Hidden account")).toBeVisible();
 });
 
+test("account register peek tag chips open transactions with tag filter", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const tag = await createTag(page, `E2E:PeekFilter:${unique}:RegisterTag`);
+  const memo = `E2E register peek tag filter ${unique}`;
+
+  const transactionResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "13.57",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-04-01",
+        memo,
+        tag_ids: [tag.tag_id],
+      },
+    },
+  );
+  expect(transactionResponse.ok()).toBe(true);
+
+  await page.goto(`/accounts/${fundingAccount.account_id}?page=1&pageSize=50`);
+  await expect(page.getByText("Register", { exact: true })).toBeVisible();
+  const recordRow = page
+    .getByTestId("account-register-row")
+    .filter({ hasText: memo })
+    .first();
+  await expect(recordRow).toBeVisible();
+  await recordRow.click();
+  const peekPanel = page.getByTestId("account-peek-panel");
+  await expect(peekPanel).toBeVisible();
+  await peekPanel
+    .getByRole("button", { name: `Filter by ${tag.name}` })
+    .first()
+    .click();
+
+  await expect(page).toHaveURL(
+    new RegExp(`/transactions\\?tag=${tag.tag_id}$`),
+  );
+  await expect(page.getByText(`Tag ${tag.name}`)).toBeVisible();
+});
+
 test("account group page renders subtotals and combined prefix register", async ({
   browserName,
   page,
@@ -869,11 +936,48 @@ test("accounts tree moves and renames account paths", async ({
 
   await page.goto("/accounts");
   await page.getByLabel("Search").fill(sourcePrefix);
+  await expect
+    .poll(() =>
+      page
+        .getByTestId("accounts-table-scroll")
+        .getByRole("columnheader")
+        .evaluateAll((headers) =>
+          headers
+            .filter((header) => {
+              const style = getComputedStyle(header);
+              return (
+                style.display !== "none" &&
+                style.visibility !== "collapse" &&
+                header.getBoundingClientRect().width >= 1
+              );
+            })
+            .map((header) => header.textContent?.trim() ?? ""),
+        ),
+    )
+    .toEqual(["Name", "Type", "Currency", "Balance", "Hidden", "Actions"]);
   const sourceGroupRow = page.locator(
     `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(sourcePrefix)}"])`,
   );
   await expect(sourceGroupRow).toBeVisible({ timeout: 10_000 });
-  await sourceGroupRow.getByRole("button", { name: "Move or rename" }).click();
+  const sourceGroupMoveButton = sourceGroupRow.getByRole("button", {
+    name: "Move or rename",
+  });
+  await expect
+    .poll(() =>
+      sourceGroupMoveButton.evaluate(
+        (button) => getComputedStyle(button).opacity,
+      ),
+    )
+    .toBe("0");
+  await sourceGroupRow.hover();
+  await expect
+    .poll(() =>
+      sourceGroupMoveButton.evaluate(
+        (button) => getComputedStyle(button).opacity,
+      ),
+    )
+    .toBe("1");
+  await sourceGroupMoveButton.click();
   const groupDialog = page.getByRole("dialog", { name: "Move or rename" });
   await expect(groupDialog).toBeVisible();
   await expect(groupDialog.getByLabel("From")).toContainText("Old");
@@ -991,6 +1095,18 @@ test("accounts tree restructure handles conflicts and cancel focus", async ({
   const cancelOpenButton = cancelRow.getByRole("button", {
     name: "Move or rename",
   });
+  await expect
+    .poll(() =>
+      cancelOpenButton.evaluate((button) => getComputedStyle(button).opacity),
+    )
+    .toBe("0");
+  await cancelOpenButton.focus();
+  await expect(cancelOpenButton).toBeFocused();
+  await expect
+    .poll(() =>
+      cancelOpenButton.evaluate((button) => getComputedStyle(button).opacity),
+    )
+    .toBe("1");
   await cancelOpenButton.click();
   const escapeDialog = page.getByRole("dialog", { name: "Move or rename" });
   await expect(escapeDialog).toBeVisible();

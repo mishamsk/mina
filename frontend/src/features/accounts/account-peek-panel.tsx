@@ -17,6 +17,9 @@ interface AccountPeekPanelProps {
   readonly loading: boolean;
   readonly maps: LookupMaps;
   readonly onClose: () => void;
+  readonly onFilterCategory?: (categoryId: number) => void;
+  readonly onFilterMember?: (memberId: number) => void;
+  readonly onFilterTag?: (tagId: number) => void;
   readonly onRetry: () => void;
   readonly transaction: Transaction | undefined;
 }
@@ -26,6 +29,9 @@ export const AccountPeekPanel = ({
   loading,
   maps,
   onClose,
+  onFilterCategory,
+  onFilterMember,
+  onFilterTag,
   onRetry,
   transaction,
 }: AccountPeekPanelProps) => {
@@ -93,7 +99,13 @@ export const AccountPeekPanel = ({
             </div>
           </div>
         ) : transaction ? (
-          <TransactionDetailContent maps={maps} transaction={transaction} />
+          <TransactionDetailContent
+            maps={maps}
+            onFilterCategory={onFilterCategory}
+            onFilterMember={onFilterMember}
+            onFilterTag={onFilterTag}
+            transaction={transaction}
+          />
         ) : null}
       </div>
 
