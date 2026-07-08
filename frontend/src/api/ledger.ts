@@ -13,6 +13,7 @@ import type {
   CreateRefundTransactionRequest,
   CreateSpendTransactionRequest,
   CreateTagRequest,
+  CreateTransactionRequest,
   CreateTransferTransactionRequest,
   DeleteAccountsByPathRequest,
   RestructureRequest,
@@ -31,6 +32,7 @@ import {
   createRefundTransaction,
   createSpendTransaction,
   createTag as createGeneratedTag,
+  createTransaction as createGeneratedTransaction,
   createTransferTransaction,
   deleteAccount as deleteGeneratedAccount,
   deleteAccountsByPath as deleteGeneratedAccountsByPath,
@@ -712,3 +714,6 @@ export const createRefund = (body: CreateRefundTransactionRequest) =>
 
 export const createTransfer = (body: CreateTransferTransactionRequest) =>
   createTransferTransaction({ body });
+
+export const createJournalTransaction = (body: CreateTransactionRequest) =>
+  createGeneratedTransaction({ body });

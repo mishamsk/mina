@@ -29,6 +29,23 @@ interface TransactionFixture {
   readonly transaction_id: number;
 }
 
+interface JournalRecordFixture {
+  readonly account_id: number;
+  readonly amount: string;
+  readonly category_id: number;
+  readonly currency: string;
+  readonly member_id?: number | null;
+  readonly memo?: string | null;
+  readonly posting_status: string;
+  readonly reconciliation_status: string;
+  readonly source: string;
+  readonly tag_ids: readonly number[];
+}
+
+interface TransactionDetailFixture extends TransactionFixture {
+  readonly records: readonly JournalRecordFixture[];
+}
+
 interface TransactionListFixture {
   readonly offset: number;
   readonly total_count: number;
@@ -222,6 +239,22 @@ const createAccount = async (
   expect(response.ok()).toBe(true);
   return (await response.json()) as AccountFixture;
 };
+
+const comparableRecords = (records: readonly JournalRecordFixture[]) =>
+  records
+    .map((record) => ({
+      account_id: record.account_id,
+      amount: record.amount,
+      category_id: record.category_id,
+      currency: record.currency,
+      member_id: record.member_id ?? null,
+      memo: record.memo ?? null,
+      posting_status: record.posting_status,
+      reconciliation_status: record.reconciliation_status,
+      source: record.source,
+      tag_ids: [...record.tag_ids].sort((left, right) => left - right),
+    }))
+    .sort((left, right) => left.account_id - right.account_id);
 
 const hideTag = async (page: Page, tag: TagFixture): Promise<void> => {
   const response = await page.request.patch(`/api/tags/${tag.tag_id}`, {
@@ -2412,9 +2445,14 @@ const chooseOptionByKeyboard = async (
   label: string,
   searchText: string,
   optionValue: string,
-  arrowDownPresses = 0,
+  options: {
+    readonly arrowDownPresses?: number;
+    readonly scope?: Locator;
+  } = {},
 ) => {
-  const picker = page.getByRole("combobox", { name: label });
+  const arrowDownPresses = options.arrowDownPresses ?? 0;
+  const pickerScope = options.scope ?? page;
+  const picker = pickerScope.getByRole("combobox", { name: label });
   await picker.click();
   await expect(picker).toBeFocused();
   await picker.fill("");
@@ -2442,6 +2480,80 @@ const chooseOptionByKeyboard = async (
   await expect(picker).toHaveAttribute("aria-activedescendant", optionId);
   await picker.press("Enter");
   await expect.poll(async () => picker.inputValue()).toContain(optionValue);
+};
+
+const journalRecord = (page: Page, index: number): Locator =>
+  page.locator(`[aria-label="Journal record ${index}"]`);
+
+const expectAdvancedRecordUsableAtDockedWidth = async (
+  page: Page,
+  record: Locator,
+) => {
+  const layout = await record.evaluate((recordElement) => {
+    const panel = recordElement.closest<HTMLElement>(
+      "aside[aria-labelledby='entry-panel-title']",
+    );
+    const fields = Array.from(
+      recordElement.querySelectorAll<HTMLElement>("[data-field-label]"),
+    );
+    const controls = Array.from(
+      recordElement.querySelectorAll<HTMLElement>("input, select, textarea"),
+    ).filter((element) => {
+      const box = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      return (
+        box.width > 0 &&
+        box.height > 0 &&
+        style.display !== "none" &&
+        style.visibility !== "hidden"
+      );
+    });
+    const controlWidths = controls.map(
+      (element) => element.getBoundingClientRect().width,
+    );
+
+    return {
+      labelsVisible: fields.every((field) => {
+        const label = field.firstElementChild;
+        if (!(label instanceof HTMLElement)) {
+          return false;
+        }
+        const box = label.getBoundingClientRect();
+        return label.innerText.trim().length > 0 && box.width > 0;
+      }),
+      minControlWidth:
+        controlWidths.length > 0 ? Math.min(...controlWidths) : 0,
+      noPanelHorizontalScroll: panel
+        ? panel.scrollWidth <= panel.clientWidth + 1
+        : false,
+    };
+  });
+
+  expect(layout.labelsVisible).toBe(true);
+  expect(layout.minControlWidth).toBeGreaterThanOrEqual(120);
+  expect(layout.noPanelHorizontalScroll).toBe(true);
+
+  await record.getByLabel("Amount").fill("1.23");
+  await expect(record.getByLabel("Amount")).toHaveValue("1.23");
+  await record.getByLabel("Amount").fill("");
+  await expect
+    .poll(async () =>
+      page
+        .locator("aside[aria-labelledby='entry-panel-title']")
+        .evaluate((panel) => panel.scrollWidth <= panel.clientWidth + 1),
+    )
+    .toBe(true);
+};
+
+const expectAdvancedBalanceStatus = async (
+  page: Page,
+  currency: string,
+  status: "Balanced" | "Unbalanced",
+) => {
+  const balanceMeter = page.getByLabel("Advanced transaction balance");
+  await expect(
+    balanceMeter.getByLabel(`${currency} balance status`),
+  ).toHaveText(status);
 };
 
 test("keyboard spend entry creates a transaction and keeps sticky fields", async ({
@@ -2515,7 +2627,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
     "Funding account",
     "credit_card",
     "credit_card:Chase:Sapphire",
-    1,
+    { arrowDownPresses: 1 },
   );
   await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books");
   await chooseOptionByKeyboard(
@@ -2641,4 +2753,254 @@ test("entry panel creates each shorthand transaction type", async ({
   await page.getByLabel("Memo").fill("E2E tab transfer");
   await page.getByRole("button", { name: "Save and add another" }).click();
   await expect(page.getByText("Entries this session: 4")).toBeVisible();
+});
+
+test("advanced journal entry gates balance, persists drafts, and saves records", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const memo = `E2E advanced journal ${unique}`;
+
+  await page.goto("/transactions?page=1&pageSize=10");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await page.getByRole("tab", { name: "Advanced" }).click();
+  await expect(
+    page.getByRole("heading", { name: "New journal" }),
+  ).toBeVisible();
+
+  const saveButton = page.getByRole("button", { name: "Save and add another" });
+  await expect(saveButton).toBeDisabled();
+
+  const firstRecord = journalRecord(page, 1);
+  const secondRecord = journalRecord(page, 2);
+
+  await expectAdvancedRecordUsableAtDockedWidth(page, firstRecord);
+  await expect(
+    firstRecord.getByLabel("Record 1 reconciliation status"),
+  ).toHaveCount(0);
+
+  await firstRecord.getByLabel("Amount").fill("0");
+  await firstRecord.getByLabel("Amount").blur();
+  await expect(
+    firstRecord.getByText(
+      "Enter a signed non-zero amount with up to 8 decimals.",
+    ),
+  ).toBeVisible();
+  await firstRecord.getByLabel("Amount").fill("-10.00");
+  await secondRecord.getByLabel("Amount").fill("9.00");
+  await expectAdvancedBalanceStatus(page, "USD", "Unbalanced");
+  await expect(saveButton).toBeDisabled();
+  await secondRecord.getByLabel("Amount").fill("10.00");
+  await expectAdvancedBalanceStatus(page, "USD", "Balanced");
+
+  await firstRecord.getByLabel("Memo").fill(memo);
+  await page.getByRole("button", { name: "Close entry panel" }).click();
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "New journal" }),
+  ).toBeVisible();
+  await expect(firstRecord.getByLabel("Amount")).toHaveValue("-10.00");
+  await expect(firstRecord.getByLabel("Memo")).toHaveValue(memo);
+
+  await page.getByLabel("Date").fill("2026-05-31");
+  await chooseOptionByKeyboard(page, "Account", "Wallet", "cash:Wallet", {
+    scope: firstRecord,
+  });
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    "Books",
+    "Entertainment:Books",
+    { scope: firstRecord },
+  );
+
+  await chooseOptionByKeyboard(
+    page,
+    "Account",
+    "Chase:Joint",
+    "checking:Chase:Joint",
+    { scope: secondRecord },
+  );
+  await secondRecord.getByLabel("Amount").fill("-5.00");
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    "Books",
+    "Entertainment:Books",
+    { scope: secondRecord },
+  );
+
+  await page.getByRole("button", { name: "Add record" }).click();
+  const thirdRecord = journalRecord(page, 3);
+  await chooseOptionByKeyboard(page, "Account", "Books", "merchant:Books", {
+    scope: thirdRecord,
+  });
+  await thirdRecord.getByLabel("Amount").fill("15.00");
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    "Books",
+    "Entertainment:Books",
+    { scope: thirdRecord },
+  );
+  await thirdRecord.getByLabel("Memo").fill(memo);
+
+  await expectAdvancedBalanceStatus(page, "USD", "Balanced");
+  await expect(saveButton).toBeEnabled();
+  await saveButton.click();
+
+  await expect(page.getByText("Entries this session: 1")).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+});
+
+test("spend entry escalates to matching journal records", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const memo = `E2E escalation ${unique}`;
+  const amount = "13.47";
+
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+
+  await page.goto("/transactions?page=1&pageSize=10");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+
+  await page.getByLabel("Date").fill("2026-05-31");
+  await page.getByLabel("Amount").fill(amount);
+  await chooseOptionByKeyboard(
+    page,
+    "Funding account",
+    "Wallet",
+    "cash:Wallet",
+  );
+  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books");
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    "Books",
+    "Entertainment:Books",
+  );
+  await page.getByLabel("Memo").fill(memo);
+  await page.getByRole("button", { name: "Edit as journal" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "New journal" }),
+  ).toBeVisible();
+  const firstRecord = journalRecord(page, 1);
+  const secondRecord = journalRecord(page, 2);
+  await expect(
+    firstRecord.getByRole("combobox", { name: "Account" }),
+  ).toHaveValue("cash:Wallet");
+  await expect(firstRecord.getByLabel("Amount")).toHaveValue(`-${amount}`);
+  await expect(
+    firstRecord.getByRole("combobox", { name: "Category" }),
+  ).toHaveValue("Entertainment:Books");
+  await expect(firstRecord.getByLabel("Memo")).toHaveValue(memo);
+  await expect(
+    secondRecord.getByRole("combobox", { name: "Account" }),
+  ).toHaveValue("merchant:Books");
+  await expect(secondRecord.getByLabel("Amount")).toHaveValue(amount);
+
+  const saveResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      response.request().method() === "POST"
+    );
+  });
+  await page.getByRole("button", { name: "Save and add another" }).click();
+  const saveResponse = await saveResponsePromise;
+  expect(saveResponse.ok()).toBe(true);
+  const escalated = (await saveResponse.json()) as TransactionDetailFixture;
+
+  const directResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount,
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-05-31",
+      memo,
+      posting_status: "posted",
+      reconciliation_status: "unreconciled",
+      tag_ids: [],
+    },
+  });
+  expect(directResponse.ok()).toBe(true);
+  const direct = (await directResponse.json()) as TransactionDetailFixture;
+  expect(comparableRecords(escalated.records)).toEqual(
+    comparableRecords(direct.records),
+  );
+
+  await page.getByRole("tab", { name: "Income" }).click();
+  await page.getByLabel("Amount").fill("7.25");
+  await chooseOptionByKeyboard(
+    page,
+    "Destination account",
+    "Wallet",
+    "cash:Wallet",
+  );
+  await page.getByRole("button", { name: "Edit as journal" }).click();
+  await expect(
+    journalRecord(page, 1).getByRole("combobox", { name: "Account" }),
+  ).toHaveValue("cash:Wallet");
+  await expect(journalRecord(page, 1).getByLabel("Amount")).toHaveValue("7.25");
+  await expect(
+    journalRecord(page, 2).getByRole("combobox", { name: "Account" }),
+  ).toHaveValue("");
+  await expect(journalRecord(page, 2).getByLabel("Amount")).toHaveValue(
+    "-7.25",
+  );
+});
+
+test("advanced journal account picker follows selected category intent", async ({
+  page,
+}) => {
+  await page.goto("/transactions?page=1&pageSize=10");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await page.getByRole("tab", { name: "Advanced" }).click();
+
+  const firstRecord = journalRecord(page, 1);
+  await chooseOptionByKeyboard(page, "Category", "ransfer", "Transfer", {
+    scope: firstRecord,
+  });
+
+  const accountPicker = firstRecord.getByRole("combobox", { name: "Account" });
+  await accountPicker.fill("merchant:Books");
+  await expect(
+    page.locator("#advanced-record-0-account-options"),
+  ).toContainText("No matches");
+  await accountPicker.fill("Wallet");
+  await expect(
+    page.locator("#advanced-record-0-account-options").getByText("cash:Wallet"),
+  ).toBeVisible();
+
+  const categoryPicker = firstRecord.getByRole("combobox", {
+    name: "Category",
+  });
+  await categoryPicker.fill("");
+  await accountPicker.fill("merchant:Books");
+  await expect(accountPicker).toHaveValue("merchant:Books");
 });

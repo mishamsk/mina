@@ -42,7 +42,8 @@
   - Global command palette opens with `Cmd/Ctrl+K`, supports routed-page and account/group navigation by typed name, launches transaction entry tabs, and starts database backup or exchange-rate loading runs.
   - Categories and Tags pages show searchable FQN trees with hidden controls, move/rename, and create/edit/delete side-panel workflows; Categories also show intent badges.
   - Members page shows a searchable flat member list with create/rename/delete side-panel workflows.
-  - Transaction entry category pickers fetch API-filtered category lists by tab economic intent.
+  - Transaction entry includes shorthand spend/income/refund/transfer tabs plus an Advanced journal editor with balanced multi-record saves, intent-guided account pickers, draft persistence, and edit-as-journal escalation from shorthand tabs.
+  - Transaction entry category pickers fetch API-filtered category lists by shorthand tab economic intent.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:
   - Runtime owns accounting location defaults, opens an in-memory DuckDB process database, and selects either an attached accounting database file or the in-memory accounting database with configurable schema fallback.

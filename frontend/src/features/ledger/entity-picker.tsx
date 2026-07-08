@@ -17,6 +17,7 @@ interface EntityPickerProps {
   readonly disabled?: boolean;
   readonly id: string;
   readonly label: string;
+  readonly labelClassName?: string;
   readonly onChange: (id: number | undefined) => void;
   readonly onOpenChange?: (open: boolean) => void;
   readonly options: readonly EntityOption[];
@@ -32,6 +33,7 @@ export const EntityPicker = ({
   disabled = false,
   id,
   label,
+  labelClassName,
   onChange,
   onOpenChange,
   options,
@@ -70,7 +72,10 @@ export const EntityPicker = ({
 
   return (
     <div className="relative flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-semibold">
+      <label
+        htmlFor={id}
+        className={cn("text-sm font-semibold", labelClassName)}
+      >
         {label}
       </label>
       <input
@@ -128,8 +133,10 @@ export const EntityPicker = ({
           }
 
           if (event.key === "Escape") {
-            event.preventDefault();
-            updateOpen(false);
+            if (open) {
+              event.preventDefault();
+              updateOpen(false);
+            }
             return;
           }
 
@@ -212,6 +219,7 @@ export const EntityPicker = ({
 interface EntityMultiPickerProps {
   readonly id: string;
   readonly label: string;
+  readonly labelClassName?: string;
   readonly onChange: (ids: readonly number[]) => void;
   readonly onOpenChange?: (open: boolean) => void;
   readonly options: readonly EntityOption[];
@@ -222,6 +230,7 @@ interface EntityMultiPickerProps {
 export const EntityMultiPicker = ({
   id,
   label,
+  labelClassName,
   onChange,
   onOpenChange,
   options,
@@ -239,6 +248,7 @@ export const EntityMultiPicker = ({
         clearOnSelect
         id={id}
         label={label}
+        labelClassName={labelClassName}
         onOpenChange={onOpenChange}
         options={availableOptions}
         placeholder={placeholder}
