@@ -53,9 +53,13 @@ from these semantics.
   - **Confirm as-is**: the occurrence becomes a normal transaction.
   - **Dismiss**: skip this one occurrence; the schedule anchor is unchanged.
   - **Cancel**: stop the whole definition (see definition lifecycle).
-  - **Defer** (interval schedules only): re-anchor the whole schedule — this
-    and all future occurrences shift by the deferred offset. The offset
-    defaults to one cadence interval and is user-editable.
+- **Defer** (interval schedules only) acts on the schedule, not on a
+  materialized occurrence: it re-anchors the whole schedule so the next
+  **non-materialized** occurrence and everything after it shift by the
+  deferred offset. The offset defaults to one cadence interval and is
+  user-editable. Already-materialized occurrences — the due occurrence under
+  review or a future occurrence confirmed early — never participate in defer
+  and remain individually reviewable.
 - There is no confirm-with-edits: if the actual amount or date differed,
   confirm first and then edit the resulting transaction like any other. The
   same contract applies to future automatic confirmation on a match to an
