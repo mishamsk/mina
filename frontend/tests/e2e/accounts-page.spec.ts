@@ -267,8 +267,11 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     page.getByTestId("accounts-tree-row").filter({ hasText: "Vault" }),
   ).toHaveCount(0);
 
-  await page.getByLabel("Include hidden").click();
+  const includeHiddenToggle = page.getByLabel("Include hidden");
+  await expect(includeHiddenToggle).toHaveAttribute("aria-pressed", "false");
+  await includeHiddenToggle.click();
   await expect(page).toHaveURL(/hidden=true/);
+  await expect(includeHiddenToggle).toHaveAttribute("aria-pressed", "true");
   const hiddenRow = page
     .getByTestId("accounts-tree-row")
     .filter({ hasText: "Vault" })
@@ -393,15 +396,18 @@ test("account page renders header and paginated running-balance register", async
 
   await expect(page.getByRole("heading", { name: "Card" })).toBeVisible();
   await expect(page.getByText("Balance", { exact: true })).toBeVisible();
-  await expect(page.getByText("USD").first()).toBeVisible();
-  await expect(page.getByText("Current USD")).toBeVisible();
-  await expect(page.getByText("Posted USD")).toBeVisible();
+  await expect(page.getByText("USD", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Current", { exact: true })).toBeVisible();
+  await expect(page.getByText("Posted", { exact: true })).toBeVisible();
+  await expect(page.getByText("Current USD")).toHaveCount(0);
+  await expect(page.getByText("Posted USD")).toHaveCount(0);
   const currentBalanceText = formatUsdMarkerAmount(
     balance?.current_balance ?? "0",
   );
   expect(balance?.posted_balance).toBe(balance?.current_balance);
   await expect(page.getByText(currentBalanceText)).toHaveCount(2);
-  await expect(page.getByText("Credit limit USD")).toBeVisible();
+  await expect(page.getByText("Credit limit", { exact: true })).toBeVisible();
+  await expect(page.getByText("Credit limit USD")).toHaveCount(0);
   await expect(page.getByText("5,000.00 $")).toHaveCount(2);
   await expect(
     page.locator("li").filter({ hasText: "5,000.00 $" }).getByText("May 1"),
@@ -470,13 +476,31 @@ test("account page renders header and paginated running-balance register", async
     })
     .toBe(true);
 
-  await firstRow.focus();
-  await expect(firstRow).toBeFocused();
-  await page.keyboard.press("ArrowDown");
   const secondRow = page
     .getByTestId("account-register-row")
     .filter({ hasText: secondRecord.memo ?? "" })
     .first();
+  await page.getByRole("heading", { exact: true, name: "Card" }).click();
+  await expect(peekPanel).toBeHidden();
+  await expect(page).not.toHaveURL(/[?&]record=/);
+
+  await firstRow.click();
+  await expect(peekPanel).toBeVisible();
+  await secondRow.click({ position: { x: 16, y: 16 } });
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]record=${secondRecord.record_id}(?:&|$)`),
+  );
+  await expect(
+    peekPanel.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(secondRecord.memo ?? "");
+
+  await firstRow.evaluate((element) => {
+    if (element instanceof HTMLElement) {
+      element.focus();
+    }
+  });
+  await expect(firstRow).toBeFocused();
+  await page.keyboard.press("ArrowDown");
   await expect(secondRow).toBeFocused();
   await expect(page).toHaveURL(
     new RegExp(`[?&]record=${secondRecord.record_id}(?:&|$)`),
@@ -923,6 +947,7 @@ test("accounts tree moves and renames account paths", async ({
   browserName,
   page,
 }) => {
+  await page.setViewportSize({ width: 1920, height: 760 });
   const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const sourcePrefix = `aaa_restructure:${unique}:Old`;
   const destinationPrefix = `aaa_restructure:${unique}:New`;
@@ -954,7 +979,7 @@ test("accounts tree moves and renames account paths", async ({
             .map((header) => header.textContent?.trim() ?? ""),
         ),
     )
-    .toEqual(["Name", "Type", "Currency", "Balance", "Hidden", "Actions"]);
+    .toEqual(["Name", "Type", "Currency", "Balance", "Actions"]);
   const sourceGroupRow = page.locator(
     `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(sourcePrefix)}"])`,
   );
@@ -1044,6 +1069,7 @@ test("accounts tree restructure handles conflicts and cancel focus", async ({
   browserName,
   page,
 }) => {
+  await page.setViewportSize({ width: 1920, height: 760 });
   const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const source = `aaa_restructure:${unique}:Source`;
   const target = `aaa_restructure:${unique}:Target:Child`;
@@ -1125,10 +1151,213 @@ test("accounts tree restructure handles conflicts and cancel focus", async ({
   await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0);
 });
 
+test("accounts tree row quick actions hide feature and delete rows", async ({
+  browserName,
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 760 });
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const base = `aaa_quick:${unique}`;
+  const hiddenAccount = await createAccount(page, {
+    fqn: `${base}:HideMe`,
+  });
+  const featuredAccount = await createAccount(page, {
+    fqn: `${base}:FeatureMe`,
+  });
+  const leafDeleteAccount = await createAccount(page, {
+    fqn: `${base}:DeleteLeaf`,
+  });
+  const blockedAccount = await createAccount(page, {
+    fqn: `${base}:BlockedLeaf`,
+  });
+  const successGroupPrefix = `${base}:DeleteGroup`;
+  const conflictGroupPrefix = `${base}:ConflictGroup`;
+  await Promise.all([
+    createAccount(page, { fqn: `${successGroupPrefix}:One` }),
+    createAccount(page, { fqn: `${successGroupPrefix}:Two` }),
+  ]);
+  const conflictAccount = await createAccount(page, {
+    fqn: `${conflictGroupPrefix}:One`,
+  });
+  await createAccount(page, { fqn: `${conflictGroupPrefix}:Two` });
+
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const merchant = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const createBlockingSpend = async (
+    fundingAccountId: number,
+    memo: string,
+  ): Promise<void> => {
+    const response = await page.request.post("/api/transactions/spend", {
+      data: {
+        amount: "4.25",
+        category_id: category.category_id,
+        counterparty_account_id: merchant.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccountId,
+        initiated_date: "2026-03-01",
+        memo,
+      },
+    });
+    expect(response.ok()).toBe(true);
+  };
+  await createBlockingSpend(blockedAccount.account_id, `${base}:blocked`);
+
+  await page.goto("/accounts");
+
+  await page.getByLabel("Search").fill(hiddenAccount.fqn);
+  const hiddenRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "HideMe" })
+    .first();
+  await expect(hiddenRow).toBeVisible();
+  const hideRequest = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${hiddenAccount.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  await hiddenRow.getByRole("button", { name: "Hide account" }).click();
+  await hideRequest;
+  await expect(
+    page.getByTestId("accounts-tree-row").filter({ hasText: "HideMe" }),
+  ).toHaveCount(0);
+  await page.getByLabel("Include hidden").click();
+  const includedHiddenRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "HideMe" })
+    .first();
+  await expect(includedHiddenRow.getByLabel("Hidden account")).toBeVisible();
+
+  await page.getByLabel("Search").fill(featuredAccount.fqn);
+  const featuredRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "FeatureMe" })
+    .first();
+  await expect(featuredRow).toBeVisible();
+  const featureRequest = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${featuredAccount.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  await featuredRow.getByRole("button", { name: "Feature account" }).click();
+  await featureRequest;
+  await expect(
+    featuredRow.getByRole("button", { name: "Unfeature account" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByTestId("featured-balance-row").filter({ hasText: "FeatureMe" }),
+  ).toBeVisible({ timeout: 10_000 });
+  await featuredRow.hover();
+  await expect(
+    featuredRow.getByRole("button", { name: "Delete account" }),
+  ).not.toHaveAttribute("aria-disabled", "true");
+
+  await page.getByLabel("Search").fill(blockedAccount.fqn);
+  const blockedRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "BlockedLeaf" })
+    .first();
+  await expect(blockedRow).toBeVisible();
+  await blockedRow.hover();
+  const blockedDelete = blockedRow.getByRole("button", {
+    name: "Delete account",
+  });
+  await expect(blockedDelete).toHaveAttribute("aria-disabled", "true");
+  await blockedDelete.hover();
+  await expect(
+    page.getByText("Account has active dependent records."),
+  ).toBeVisible();
+
+  await page.getByLabel("Search").fill(leafDeleteAccount.fqn);
+  const leafDeleteRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "DeleteLeaf" })
+    .first();
+  await expect(leafDeleteRow).toBeVisible();
+  await leafDeleteRow.hover();
+  await leafDeleteRow.getByRole("button", { name: "Delete account" }).click();
+  const leafDeleteDialog = page.getByRole("alertdialog", {
+    name: "Delete account",
+  });
+  await expect(leafDeleteDialog).toContainText(leafDeleteAccount.fqn);
+  const leafDeleteRequest = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${leafDeleteAccount.account_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await leafDeleteDialog
+    .getByRole("button", { name: "Delete account" })
+    .click();
+  await leafDeleteRequest;
+  await expect(
+    page.getByTestId("accounts-tree-row").filter({ hasText: "DeleteLeaf" }),
+  ).toHaveCount(0);
+
+  await page.getByLabel("Search").fill(successGroupPrefix);
+  const successGroupRow = page.locator(
+    `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(successGroupPrefix)}"])`,
+  );
+  await expect(successGroupRow).toBeVisible();
+  await successGroupRow.hover();
+  await successGroupRow
+    .getByRole("button", { name: "Delete account group" })
+    .click();
+  const groupDeleteDialog = page.getByRole("alertdialog", {
+    name: "Delete account group",
+  });
+  await expect(groupDeleteDialog).toContainText("2 account(s)");
+  const groupDeleteRequest = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/accounts/delete-by-path" &&
+      response.request().method() === "POST"
+    );
+  });
+  await groupDeleteDialog.getByRole("button", { name: "Delete group" }).click();
+  await groupDeleteRequest;
+  await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0);
+
+  await page.getByLabel("Search").fill(conflictGroupPrefix);
+  const conflictGroupRow = page.locator(
+    `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(conflictGroupPrefix)}"])`,
+  );
+  await expect(conflictGroupRow).toBeVisible();
+  await conflictGroupRow.hover();
+  await conflictGroupRow
+    .getByRole("button", { name: "Delete account group" })
+    .click();
+  const conflictDialog = page.getByRole("alertdialog", {
+    name: "Delete account group",
+  });
+  await expect(conflictDialog).toContainText("2 account(s)");
+  await createBlockingSpend(conflictAccount.account_id, `${base}:conflict`);
+  const conflictDeleteRequest = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/accounts/delete-by-path" &&
+      response.request().method() === "POST" &&
+      response.status() === 409
+    );
+  });
+  await conflictDialog.getByRole("button", { name: "Delete group" }).click();
+  await conflictDeleteRequest;
+  await expect(conflictDialog.getByRole("alert")).toBeVisible();
+});
+
 test("accounts page manages account forms, credit limits, and tombstone delete", async ({
   browserName,
   page,
 }) => {
+  await page.setViewportSize({ width: 1920, height: 760 });
   const unique = Date.now().toString(36);
   const fqn = `aaa_e2e:accounts:${browserName}:${unique}:Checking`;
 

@@ -5,6 +5,7 @@ import { useShallow } from "zustand/react/shallow";
 import type {
   Account,
   AccountBalance,
+  AccountGroupState,
   AccountRecordsPageParams,
   CreditLimitHistory,
   GroupRecordsPageParams,
@@ -17,6 +18,7 @@ import { createSelectors } from "./selectors";
 export interface AccountsPageSnapshot {
   readonly accounts: readonly Account[];
   readonly balances: readonly AccountBalance[];
+  readonly groups: readonly AccountGroupState[];
   readonly loadedAt: string;
 }
 
@@ -352,7 +354,11 @@ export const mergeAccountsPageAccount = (account: Account): void => {
           snapshotAccount,
         ]),
       );
-      accountsById.set(account.account_id, account);
+      const existingAccount = accountsById.get(account.account_id);
+      accountsById.set(account.account_id, {
+        ...account,
+        deletable: account.deletable ?? existingAccount?.deletable,
+      });
 
       return {
         errorMessage: undefined,

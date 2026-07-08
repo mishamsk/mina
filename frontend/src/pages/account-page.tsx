@@ -149,24 +149,33 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
     },
     [navigate],
   );
-  const closeRecordPeek = useCallback(() => {
-    const recordId = selectedRecordId;
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete("record");
-      return next;
-    });
-    window.requestAnimationFrame(() => {
-      const fallback = recordId
-        ? document.querySelector<HTMLElement>(`[data-record-id="${recordId}"]`)
-        : null;
-      const target = restoreRecordFocusRef.current?.isConnected
-        ? restoreRecordFocusRef.current
-        : fallback;
-      target?.focus({ preventScroll: true });
-      restoreRecordFocusRef.current = null;
-    });
-  }, [selectedRecordId, setSearchParams]);
+  const closeRecordPeek = useCallback(
+    (options?: { readonly restoreFocus?: boolean }) => {
+      const recordId = selectedRecordId;
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete("record");
+        return next;
+      });
+      if (options?.restoreFocus === false) {
+        restoreRecordFocusRef.current = null;
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        const fallback = recordId
+          ? document.querySelector<HTMLElement>(
+              `[data-record-id="${recordId}"]`,
+            )
+          : null;
+        const target = restoreRecordFocusRef.current?.isConnected
+          ? restoreRecordFocusRef.current
+          : fallback;
+        target?.focus({ preventScroll: true });
+        restoreRecordFocusRef.current = null;
+      });
+    },
+    [selectedRecordId, setSearchParams],
+  );
 
   return (
     <section

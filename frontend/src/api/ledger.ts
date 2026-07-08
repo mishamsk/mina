@@ -11,7 +11,9 @@ import type {
   CreateRefundTransactionRequest,
   CreateSpendTransactionRequest,
   CreateTransferTransactionRequest,
+  DeleteAccountsByPathRequest,
   RestructureRequest,
+  SetHiddenByPathRequest,
   UpdateAccountRequest,
 } from "./generated";
 import {
@@ -22,12 +24,14 @@ import {
   createSpendTransaction,
   createTransferTransaction,
   deleteAccount as deleteGeneratedAccount,
+  deleteAccountsByPath as deleteGeneratedAccountsByPath,
   deleteCreditLimitHistory as deleteGeneratedCreditLimitHistory,
   deleteTransaction,
   getAccount,
   getTransaction,
   getTransactionMonthTotals,
   listAccountBalances,
+  listAccountGroups,
   listAccounts,
   listCategories,
   listCreditLimitHistory as listGeneratedCreditLimitHistory,
@@ -37,6 +41,7 @@ import {
   restructureAccounts as restructureGeneratedAccounts,
   searchAccountJournalRecords,
   searchJournalRecords,
+  setAccountHiddenByPath as setGeneratedAccountHiddenByPath,
   updateAccount as updateGeneratedAccount,
 } from "./generated";
 
@@ -274,7 +279,7 @@ export const fetchFeaturedAccountBalances = async () => {
 };
 
 export const fetchAccountsPage = async () => {
-  const [accounts, balances] = await Promise.all([
+  const [accounts, balances, groups] = await Promise.all([
     listAccounts({
       query: {
         include_hidden: true,
@@ -289,9 +294,14 @@ export const fetchAccountsPage = async () => {
         include_hidden: true,
       },
     }),
+    listAccountGroups({
+      query: {
+        include_hidden: true,
+      },
+    }),
   ]);
 
-  return { accounts, balances };
+  return { accounts, balances, groups };
 };
 
 export const fetchOverviewAccountBalances = () => listAccountBalances();
@@ -361,6 +371,12 @@ export const deleteLedgerAccountById = (accountId: number) =>
       account_id: accountId,
     },
   });
+
+export const setLedgerAccountHiddenByPath = (body: SetHiddenByPathRequest) =>
+  setGeneratedAccountHiddenByPath({ body });
+
+export const deleteLedgerAccountsByPath = (body: DeleteAccountsByPathRequest) =>
+  deleteGeneratedAccountsByPath({ body });
 
 export const restructureLedgerAccounts = (body: RestructureRequest) =>
   restructureGeneratedAccounts({ body });

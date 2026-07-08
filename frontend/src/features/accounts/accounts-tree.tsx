@@ -1,20 +1,38 @@
-import { EyeOff, MagicEdit, Plus, Reload } from "pixelarticons/react";
-import { useMemo } from "react";
+import {
+  Eye,
+  EyeOff,
+  MagicEdit,
+  Plus,
+  Reload,
+  Star,
+  Trash,
+} from "pixelarticons/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import type {
   Account,
   AccountBalance,
+  AccountGroupState,
   AccountType,
   DisplayAmount,
 } from "@/api";
-import { RowActions } from "@/components/row-actions";
+import {
+  deleteLedgerAccountById,
+  deleteLedgerAccountsByPath,
+  isNetworkFailure,
+  setLedgerAccountHiddenByPath,
+  updateLedgerAccount,
+} from "@/api";
+import { type RowAction, RowActions } from "@/components/row-actions";
+import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AmountText, FqnPath } from "@/features/ledger";
 import { cn } from "@/lib/utils";
 
 import { AccountTypeBadge } from "./account-type-badge";
+import { refreshAccountsAfterMutation } from "./use-accounts-resource";
 
 export type AccountTypeFilter = AccountType | "all";
 
@@ -22,10 +40,12 @@ interface AccountsTreeProps {
   readonly accounts: readonly Account[] | undefined;
   readonly balances: readonly AccountBalance[] | undefined;
   readonly errorMessage?: string;
+  readonly groups: readonly AccountGroupState[] | undefined;
   readonly includeHidden: boolean;
   readonly loading: boolean;
   readonly onCreateAccount?: (opener: HTMLElement) => void;
   readonly onEditAccount?: (account: Account, opener: HTMLElement) => void;
+  readonly onNotice?: (message: string) => void;
   readonly onRestructurePath?: (fqn: string, opener: HTMLElement) => void;
   readonly onRetry?: () => void;
   readonly search: string;
@@ -38,6 +58,37 @@ interface AccountTreeRow {
   readonly fqn: string;
   readonly hasChildren: boolean;
 }
+
+type AccountDeleteTarget =
+  | {
+      readonly account: Account;
+      readonly kind: "account";
+      readonly opener: HTMLElement;
+    }
+  | {
+      readonly accountCount: number;
+      readonly fqn: string;
+      readonly kind: "group";
+      readonly opener: HTMLElement;
+    };
+
+const apiErrorMessage = (error: unknown, fallback: string): string => {
+  if (isNetworkFailure(error)) {
+    return error.message;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "error" in error &&
+    typeof error.error === "object" &&
+    error.error !== null &&
+    "message" in error.error &&
+    typeof error.error.message === "string"
+  ) {
+    return error.error.message;
+  }
+  return fallback;
+};
 
 const accountTypeMatches = (
   account: Account,
@@ -52,6 +103,15 @@ const interactiveTargetSelector =
   "a, button, input, select, textarea, summary, [role='button'], " +
   "[contenteditable='true'], " +
   "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
+
+const deleteDialogFocusableSelector = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
 
 const isInteractiveTarget = (
   target: EventTarget | null,
@@ -180,15 +240,26 @@ const BalanceAmounts = ({
   </div>
 );
 
+const HiddenRowIndicator = ({ label }: { readonly label: string }) => (
+  <Tooltip
+    focusable={false}
+    label={label}
+    className="text-foreground inline-flex shrink-0"
+  >
+    <span aria-label={label} className="inline-flex">
+      <EyeOff aria-hidden="true" className="size-4" />
+    </span>
+  </Tooltip>
+);
+
 const accountsTreeSkeletonGridClass =
-  "grid grid-cols-[48%_32%_20%] sm:grid-cols-[34%_14%_32%_20%] md:grid-cols-[34%_14%_12%_20%_20%] lg:grid-cols-[34%_14%_12%_20%_8%_12%]";
+  "grid grid-cols-[48%_32%_20%] sm:grid-cols-[36%_14%_30%_20%] md:grid-cols-[36%_14%_12%_24%_14%]";
 
 const accountTreeSkeletonColumnClasses = [
   "px-3",
   "hidden px-3 sm:block",
   "hidden px-3 md:block",
   "px-2 sm:px-3",
-  "hidden px-3 lg:block",
   "px-1 sm:px-3",
 ] as const;
 
@@ -232,15 +303,27 @@ export const AccountsTree = ({
   accounts,
   balances,
   errorMessage,
+  groups,
   includeHidden,
   loading,
   onCreateAccount,
   onEditAccount,
+  onNotice,
   onRestructurePath,
   onRetry,
   search,
   typeFilter,
 }: AccountsTreeProps) => {
+  const [deleteTarget, setDeleteTarget] = useState<
+    AccountDeleteTarget | undefined
+  >();
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<
+    string | undefined
+  >();
+  const [deleting, setDeleting] = useState(false);
+  const accountsTableScrollRef = useRef<HTMLDivElement | null>(null);
+  const deleteDialogRef = useRef<HTMLElement | null>(null);
+  const cancelDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const rows = useMemo(
     () =>
       accounts
@@ -252,6 +335,214 @@ export const AccountsTree = ({
     () => balancesByAccountId(balances),
     [balances],
   );
+  const groupByFqn = useMemo(
+    () => new Map((groups ?? []).map((group) => [group.fqn, group])),
+    [groups],
+  );
+  const accountCountByGroupFqn = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const account of accounts ?? []) {
+      const segments = account.fqn.split(":");
+      for (let index = 1; index <= segments.length; index += 1) {
+        const prefix = segments.slice(0, index).join(":");
+        counts.set(prefix, (counts.get(prefix) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [accounts]);
+
+  const closeDeleteDialog = useCallback(() => {
+    if (deleting) {
+      return;
+    }
+    const opener = deleteTarget?.opener;
+    setDeleteTarget(undefined);
+    setDeleteErrorMessage(undefined);
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) {
+        focusWithoutTooltip(opener, { preventScroll: true });
+      }
+    });
+  }, [deleteTarget?.opener, deleting]);
+
+  const focusDeleteSuccessFallback = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const searchField = document.getElementById("accounts-search");
+      if (searchField instanceof HTMLElement && searchField.isConnected) {
+        focusWithoutTooltip(searchField, { preventScroll: true });
+        return;
+      }
+
+      const tableScroll = accountsTableScrollRef.current;
+      if (tableScroll?.isConnected) {
+        focusWithoutTooltip(tableScroll, { preventScroll: true });
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (deleting) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        closeDeleteDialog();
+        return;
+      }
+
+      if (event.key !== "Tab") {
+        return;
+      }
+
+      const trapRoot = deleteDialogRef.current;
+      if (!trapRoot) {
+        return;
+      }
+      const focusable = Array.from(
+        trapRoot.querySelectorAll<HTMLElement>(deleteDialogFocusableSelector),
+      ).filter((element) => !element.hasAttribute("disabled"));
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) {
+        event.preventDefault();
+        trapRoot.focus();
+        return;
+      }
+
+      if (!trapRoot.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+        return;
+      }
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
+
+      if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, { capture: true });
+    window.requestAnimationFrame(() => {
+      cancelDeleteButtonRef.current?.focus({ preventScroll: true });
+    });
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, { capture: true });
+    };
+  }, [closeDeleteDialog, deleteTarget, deleting]);
+
+  const showNotice = (message: string) => {
+    onNotice?.(message);
+  };
+
+  const showQuickToggleError = (error: unknown, fallback: string) => {
+    showNotice(apiErrorMessage(error, fallback));
+  };
+
+  const toggleAccountHidden = async (account: Account) => {
+    const result = await updateLedgerAccount(account.account_id, {
+      is_hidden: !account.is_hidden,
+    });
+    if (!result.data) {
+      showQuickToggleError(result.error, "Account hidden state was not saved.");
+      return;
+    }
+    await refreshAccountsAfterMutation({ account: result.data });
+    showNotice(result.data.is_hidden ? "Account hidden." : "Account unhidden.");
+  };
+
+  const toggleAccountFeatured = async (account: Account) => {
+    const result = await updateLedgerAccount(account.account_id, {
+      is_featured: !account.is_featured,
+    });
+    if (!result.data) {
+      showQuickToggleError(result.error, "Featured state was not saved.");
+      return;
+    }
+    await refreshAccountsAfterMutation({ account: result.data });
+    showNotice(
+      result.data.is_featured ? "Account featured." : "Account unfeatured.",
+    );
+  };
+
+  const toggleGroupHidden = async (group: AccountGroupState) => {
+    const result = await setLedgerAccountHiddenByPath({
+      is_hidden: !group.is_hidden,
+      path_fqn: group.fqn,
+    });
+    if (!result.data) {
+      showQuickToggleError(
+        result.error,
+        "Account group hidden state was not saved.",
+      );
+      return;
+    }
+    await refreshAccountsAfterMutation({ bulk: true });
+    showNotice(
+      group.is_hidden ? "Account group unhidden." : "Account group hidden.",
+    );
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) {
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteErrorMessage(undefined);
+    const result =
+      deleteTarget.kind === "account"
+        ? await deleteLedgerAccountById(deleteTarget.account.account_id)
+        : await deleteLedgerAccountsByPath({ path_fqn: deleteTarget.fqn });
+
+    if (
+      deleteTarget.kind === "account" &&
+      (result.data !== undefined || !result.error)
+    ) {
+      await refreshAccountsAfterMutation({
+        removedAccountId: deleteTarget.account.account_id,
+      });
+      showNotice("Account deleted.");
+      setDeleting(false);
+      setDeleteTarget(undefined);
+      focusDeleteSuccessFallback();
+      return;
+    }
+
+    if (deleteTarget.kind === "group" && result.data) {
+      await refreshAccountsAfterMutation({ bulk: true });
+      showNotice(`Deleted ${result.data.deleted_count} account(s).`);
+      setDeleting(false);
+      setDeleteTarget(undefined);
+      focusDeleteSuccessFallback();
+      return;
+    }
+
+    setDeleting(false);
+    setDeleteErrorMessage(
+      apiErrorMessage(
+        result.error,
+        deleteTarget.kind === "account"
+          ? "Account could not be deleted."
+          : "Account group could not be deleted.",
+      ),
+    );
+  };
 
   if (loading && !accounts) {
     return <AccountsTreeSkeleton />;
@@ -319,182 +610,357 @@ export const AccountsTree = ({
   }
 
   return (
-    <div className="bg-card min-h-0 overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]">
-      <div
-        className="max-h-full overflow-auto"
-        data-testid="accounts-table-scroll"
-      >
-        <table className="w-full table-fixed border-collapse text-sm">
-          <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
-            <tr className="font-heading text-left text-xs font-semibold uppercase">
-              <th scope="col" className="w-[48%] px-3 py-2 sm:w-[34%]">
-                Name
-              </th>
-              <th
-                scope="col"
-                className="hidden w-[14%] px-3 py-2 sm:table-cell"
-              >
-                Type
-              </th>
-              <th
-                scope="col"
-                className="hidden w-[12%] px-3 py-2 md:table-cell"
-              >
-                Currency
-              </th>
-              <th
-                scope="col"
-                className="w-[32%] px-2 py-2 text-right sm:w-[20%] sm:px-3"
-              >
-                Balance
-              </th>
-              <th
-                scope="col"
-                className="hidden w-[8%] px-3 py-2 text-center lg:table-cell"
-              >
-                Hidden
-              </th>
-              <th
-                scope="col"
-                className="w-[20%] px-1 py-2 text-center sm:px-3 lg:w-[12%]"
-              >
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => {
-              const rowBalances = row.account
-                ? (accountBalancesById.get(row.account.account_id) ?? [])
-                : [];
-              return (
-                <tr
-                  key={row.fqn}
-                  data-testid="accounts-tree-row"
-                  role={row.account ? "button" : undefined}
-                  tabIndex={row.account ? 0 : undefined}
-                  className={cn(
-                    index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
-                    row.account ? "text-foreground" : "text-muted-foreground",
-                    row.account &&
-                      "cursor-pointer hover:bg-[var(--color-interactive-bright)]",
-                    !row.account &&
-                      "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
-                  )}
-                  onClick={(event) => {
-                    if (row.account) {
-                      onEditAccount?.(row.account, event.currentTarget);
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (!row.account) {
-                      return;
-                    }
-                    if (
-                      isInteractiveTarget(event.target, event.currentTarget)
-                    ) {
-                      return;
-                    }
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      onEditAccount?.(row.account, event.currentTarget);
-                    }
-                  }}
+    <>
+      <div className="bg-card min-h-0 overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]">
+        <div
+          ref={accountsTableScrollRef}
+          className="accounts-table-scroll max-h-full overflow-auto"
+          data-testid="accounts-table-scroll"
+          tabIndex={-1}
+        >
+          <table className="accounts-table w-full table-fixed border-collapse text-sm">
+            <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
+              <tr className="font-heading text-left text-xs font-semibold uppercase">
+                <th scope="col" className="w-[48%] px-3 py-2 sm:w-[36%]">
+                  Name
+                </th>
+                <th
+                  scope="col"
+                  className="hidden w-[14%] px-3 py-2 sm:table-cell"
                 >
-                  <td className="overflow-hidden px-3 py-2 align-middle">
-                    <div
-                      className="min-w-0 overflow-hidden"
-                      style={{ paddingLeft: `${row.depth * 1.25}rem` }}
-                    >
-                      {row.account ? (
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <Link
-                            to={`/accounts/${row.account.account_id}`}
-                            className="focus-visible:outline-ring inline-flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                            }}
-                          >
-                            <FqnPath value={row.fqn} focusable={false} />
-                            {row.account.is_hidden ? (
-                              <EyeOff
-                                aria-hidden="true"
-                                className="size-4 shrink-0 lg:hidden"
-                              />
-                            ) : null}
-                          </Link>
-                          {row.hasChildren ? (
-                            <Link
-                              to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
-                              className="focus-visible:outline-ring border border-[var(--border-ink)] bg-[var(--band)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase shadow-[var(--shadow-chip)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                              }}
-                            >
-                              Group
-                            </Link>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <Link
-                          to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
-                          className="focus-visible:outline-ring flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                        >
-                          <FqnPath value={row.fqn} focusable={false} />
-                        </Link>
-                      )}
-                    </div>
-                  </td>
-                  <td className="hidden px-3 py-2 align-middle sm:table-cell">
-                    {row.account ? (
-                      <AccountTypeBadge
-                        accountType={row.account.account_type}
-                      />
-                    ) : null}
-                  </td>
-                  <td className="hidden px-3 py-2 align-middle font-mono text-sm md:table-cell">
-                    {row.account?.currency ?? ""}
-                  </td>
-                  <td className="px-2 py-2 text-right align-middle sm:px-3">
-                    {row.account?.account_type === "balance" ? (
-                      <BalanceAmounts balances={rowBalances} />
-                    ) : null}
-                  </td>
-                  <td className="hidden px-3 py-2 align-middle lg:table-cell">
-                    <div className="flex justify-center">
-                      {row.account?.is_hidden ? (
-                        <EyeOff
-                          aria-label="Hidden account"
-                          className="size-4"
-                        />
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-1 py-2 align-middle sm:px-3">
-                    <RowActions
-                      actions={
-                        onRestructurePath
+                  Type
+                </th>
+                <th
+                  scope="col"
+                  className="hidden w-[12%] px-3 py-2 md:table-cell"
+                >
+                  Currency
+                </th>
+                <th
+                  scope="col"
+                  className="w-[32%] px-2 py-2 text-right sm:w-[30%] sm:px-3 md:w-[24%]"
+                >
+                  Balance
+                </th>
+                <th
+                  scope="col"
+                  className="w-[20%] px-1 py-2 text-center sm:px-3 md:w-[14%]"
+                >
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const account = row.account;
+                const rowBalances = account
+                  ? (accountBalancesById.get(account.account_id) ?? [])
+                  : [];
+                const group = groupByFqn.get(row.fqn);
+                const rowHidden =
+                  account?.is_hidden ?? group?.is_hidden ?? false;
+                const groupActions: RowAction[] = group
+                  ? [
+                      {
+                        icon: group.is_hidden ? (
+                          <EyeOff aria-hidden="true" />
+                        ) : (
+                          <Eye aria-hidden="true" />
+                        ),
+                        kind: "toggle" as const,
+                        label: group.is_hidden ? "Unhide group" : "Hide group",
+                        onToggle: () => {
+                          void toggleGroupHidden(group);
+                        },
+                        pressed: group.is_hidden,
+                      },
+                      {
+                        disabled: !group.deletable,
+                        disabledReason:
+                          "Account group has active dependent records.",
+                        icon: <Trash aria-hidden="true" />,
+                        label: "Delete account group",
+                        onSelect: (opener: HTMLElement) => {
+                          setDeleteErrorMessage(undefined);
+                          setDeleteTarget({
+                            accountCount:
+                              accountCountByGroupFqn.get(row.fqn) ?? 0,
+                            fqn: row.fqn,
+                            kind: "group",
+                            opener,
+                          });
+                        },
+                      },
+                    ]
+                  : [];
+                const rowActions: RowAction[] = account
+                  ? [
+                      {
+                        icon: account.is_hidden ? (
+                          <EyeOff aria-hidden="true" />
+                        ) : (
+                          <Eye aria-hidden="true" />
+                        ),
+                        kind: "toggle" as const,
+                        label: account.is_hidden
+                          ? "Unhide account"
+                          : "Hide account",
+                        onToggle: () => {
+                          void toggleAccountHidden(account);
+                        },
+                        pressed: account.is_hidden,
+                      },
+                      {
+                        icon: (
+                          <Star
+                            aria-hidden="true"
+                            className={
+                              account.is_featured
+                                ? "text-[var(--color-class-adjustment-ink)]"
+                                : undefined
+                            }
+                          />
+                        ),
+                        kind: "toggle" as const,
+                        label: account.is_featured
+                          ? "Unfeature account"
+                          : "Feature account",
+                        onToggle: () => {
+                          void toggleAccountFeatured(account);
+                        },
+                        pressed: account.is_featured,
+                      },
+                      ...(onRestructurePath
+                        ? [
+                            {
+                              icon: <MagicEdit aria-hidden="true" />,
+                              label: "Move or rename",
+                              onSelect: (opener: HTMLElement) => {
+                                opener.blur();
+                                onRestructurePath(row.fqn, opener);
+                              },
+                            },
+                          ]
+                        : []),
+                      {
+                        disabled: account.deletable !== true,
+                        disabledReason: "Account has active dependent records.",
+                        icon: <Trash aria-hidden="true" />,
+                        label: "Delete account",
+                        onSelect: (opener: HTMLElement) => {
+                          setDeleteErrorMessage(undefined);
+                          setDeleteTarget({
+                            account,
+                            kind: "account",
+                            opener,
+                          });
+                        },
+                      },
+                      ...groupActions,
+                    ]
+                  : group
+                    ? [
+                        ...groupActions.slice(0, 1),
+                        ...(onRestructurePath
                           ? [
                               {
                                 icon: <MagicEdit aria-hidden="true" />,
                                 label: "Move or rename",
-                                onSelect: (opener) => {
+                                onSelect: (opener: HTMLElement) => {
                                   opener.blur();
                                   onRestructurePath(row.fqn, opener);
                                 },
                               },
                             ]
-                          : []
+                          : []),
+                        ...groupActions.slice(1),
+                      ]
+                    : [];
+                return (
+                  <tr
+                    key={row.fqn}
+                    data-testid="accounts-tree-row"
+                    role={account ? "button" : undefined}
+                    tabIndex={account ? 0 : undefined}
+                    className={cn(
+                      index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
+                      account ? "text-foreground" : "text-muted-foreground",
+                      account &&
+                        "cursor-pointer hover:bg-[var(--color-interactive-bright)]",
+                      !account &&
+                        "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
+                    )}
+                    onClick={(event) => {
+                      if (account) {
+                        onEditAccount?.(account, event.currentTarget);
                       }
-                      className="justify-center"
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    }}
+                    onKeyDown={(event) => {
+                      if (!account) {
+                        return;
+                      }
+                      if (
+                        isInteractiveTarget(event.target, event.currentTarget)
+                      ) {
+                        return;
+                      }
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        onEditAccount?.(account, event.currentTarget);
+                      }
+                    }}
+                  >
+                    <td className="overflow-hidden px-3 py-2 align-middle">
+                      <div
+                        className="min-w-0 overflow-hidden"
+                        style={{ paddingLeft: `${row.depth * 1.25}rem` }}
+                      >
+                        {account ? (
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <Link
+                              to={`/accounts/${account.account_id}`}
+                              className="focus-visible:outline-ring inline-flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                              }}
+                            >
+                              <FqnPath value={row.fqn} focusable={false} />
+                            </Link>
+                            {rowHidden ? (
+                              <HiddenRowIndicator label="Hidden account" />
+                            ) : null}
+                            {row.hasChildren ? (
+                              <Link
+                                to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
+                                className="focus-visible:outline-ring border border-[var(--border-ink)] bg-[var(--band)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase shadow-[var(--shadow-chip)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                }}
+                              >
+                                Group
+                              </Link>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Link
+                              to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
+                              className="focus-visible:outline-ring flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                            >
+                              <FqnPath value={row.fqn} focusable={false} />
+                            </Link>
+                            {rowHidden ? (
+                              <HiddenRowIndicator label="Hidden account group" />
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="hidden px-3 py-2 align-middle sm:table-cell">
+                      {account ? (
+                        <AccountTypeBadge accountType={account.account_type} />
+                      ) : null}
+                    </td>
+                    <td className="hidden px-3 py-2 align-middle font-mono text-sm md:table-cell">
+                      {account?.currency ?? ""}
+                    </td>
+                    <td className="px-2 py-2 text-right align-middle sm:px-3">
+                      {account?.account_type === "balance" ? (
+                        <BalanceAmounts balances={rowBalances} />
+                      ) : null}
+                    </td>
+                    <td className="px-1 py-2 align-middle sm:px-3">
+                      <RowActions
+                        foldable
+                        actions={rowActions}
+                        className="justify-center"
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+      {deleteTarget ? (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--frame),transparent_18%)] p-4"
+          role="presentation"
+        >
+          <section
+            ref={deleteDialogRef}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-row-title"
+            aria-describedby="delete-account-row-description"
+            className="bg-card w-[min(480px,100%)] border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
+            tabIndex={-1}
+          >
+            <h3
+              id="delete-account-row-title"
+              className="font-heading text-base font-bold uppercase"
+            >
+              {deleteTarget.kind === "account"
+                ? "Delete account"
+                : "Delete account group"}
+            </h3>
+            <div
+              id="delete-account-row-description"
+              className="font-body text-muted-foreground mt-3 space-y-2 text-sm"
+            >
+              <p className="flex flex-wrap items-center gap-1">
+                <span>Delete</span>
+                <span className="text-foreground font-mono break-all">
+                  {deleteTarget.kind === "account"
+                    ? deleteTarget.account.fqn
+                    : deleteTarget.fqn}
+                </span>
+                <span>?</span>
+              </p>
+              <p>
+                {deleteTarget.kind === "account"
+                  ? "This tombstones the account and removes it from default account lists and pickers."
+                  : `This tombstones ${deleteTarget.accountCount} account(s) in the subtree and removes them from default account lists and pickers.`}
+              </p>
+            </div>
+            {deleteErrorMessage ? (
+              <p
+                className="border-destructive text-destructive mt-3 border-2 p-2 text-sm"
+                role="alert"
+              >
+                {deleteErrorMessage}
+              </p>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                ref={cancelDeleteButtonRef}
+                type="button"
+                variant="outline"
+                disabled={deleting}
+                onClick={closeDeleteDialog}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deleting}
+                onClick={() => {
+                  void confirmDelete();
+                }}
+              >
+                <Trash aria-hidden="true" />
+                {deleting
+                  ? "Deleting"
+                  : deleteTarget.kind === "account"
+                    ? "Delete account"
+                    : "Delete group"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
   );
 };

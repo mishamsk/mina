@@ -2,6 +2,7 @@ import { EyeOff } from "pixelarticons/react";
 
 import type { AccountBalance, CreditLimitHistory, DisplayAmount } from "@/api";
 import { Tooltip } from "@/components/tooltip";
+import { Badge } from "@/components/ui/badge";
 import { AmountText, FqnPath } from "@/features/ledger";
 import { formatLocalCivilDate } from "@/utils/date";
 
@@ -59,9 +60,9 @@ export const AccountHeader = ({
             />
             <AccountTypeBadge accountType={account.account_type} />
             {account.currency ? (
-              <span className="border border-[var(--border-ink)] bg-[var(--band)] px-2 py-1 font-mono text-xs font-semibold shadow-[var(--shadow-chip)]">
+              <Badge variant="outline" className="bg-[var(--band)]">
                 {account.currency}
-              </span>
+              </Badge>
             ) : null}
             {account.is_hidden ? (
               <span
@@ -96,8 +97,8 @@ export const AccountHeader = ({
           ) : null}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[28rem]">
-          <div className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-3">
+        <div className="flex flex-col gap-3 sm:flex-row lg:ml-auto lg:justify-end">
+          <div className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-3 sm:min-w-56">
             <p className="font-heading text-xs font-semibold uppercase">
               Balances
             </p>
@@ -108,18 +109,14 @@ export const AccountHeader = ({
                     key={`${balance.currency}:${balance.current_balance}:${balance.posted_balance}`}
                     className="grid grid-cols-[1fr_auto] gap-3 font-mono text-sm"
                   >
-                    <dt className="text-muted-foreground">
-                      Current {balance.currency}
-                    </dt>
+                    <dt className="text-muted-foreground">Current</dt>
                     <dd className="text-right">
                       <BalanceAmount
                         amount={balance.current_balance}
                         currency={balance.currency}
                       />
                     </dd>
-                    <dt className="text-muted-foreground">
-                      Posted {balance.currency}
-                    </dt>
+                    <dt className="text-muted-foreground">Posted</dt>
                     <dd className="text-right">
                       <BalanceAmount
                         amount={balance.posted_balance}
@@ -128,9 +125,7 @@ export const AccountHeader = ({
                     </dd>
                     {balance.credit_limit ? (
                       <>
-                        <dt className="text-muted-foreground">
-                          Credit limit {balance.currency}
-                        </dt>
+                        <dt className="text-muted-foreground">Credit limit</dt>
                         <dd className="text-right">
                           <BalanceAmount
                             amount={balance.credit_limit}

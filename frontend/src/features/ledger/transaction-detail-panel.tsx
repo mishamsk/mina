@@ -5,6 +5,7 @@ import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
 
@@ -45,6 +46,8 @@ const focusableSelector = [
   "textarea:not([disabled])",
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
+
+const floatingOverlaySelectors = ["[data-page-help-content]"] as const;
 
 const formatTimestamp = (value: string): string =>
   new Intl.DateTimeFormat(undefined, {
@@ -142,7 +145,7 @@ const RecordTagSet = ({
     .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag));
 
   return tags.length > 0 ? (
-    <div className="flex max-w-full flex-wrap gap-1">
+    <div className="flex max-w-full flex-wrap gap-1 pb-0.5">
       {tags.map((tag) => (
         <TagChip
           key={tag.tag_id}
@@ -175,7 +178,7 @@ const DetailRecordsTable = ({
   readonly records: readonly JournalRecord[];
 }) => (
   <div
-    className="transaction-detail-records-table max-w-full overflow-hidden border-2 border-[var(--border-ink)]"
+    className="transaction-detail-records-table max-w-full overflow-visible border-2 border-[var(--border-ink)]"
     data-testid="transaction-detail-records-table"
   >
     <table className="w-full table-fixed border-collapse text-sm">
@@ -236,7 +239,7 @@ const DetailRecordsTable = ({
                 />
               </td>
               <td
-                className="detail-records-category-column min-w-0 px-2 py-2"
+                className="detail-records-category-column min-w-0 px-2 py-2 pb-2.5"
                 data-label="Category"
               >
                 {category ? (
@@ -256,10 +259,10 @@ const DetailRecordsTable = ({
                 )}
               </td>
               <td
-                className="detail-records-tags-column min-w-0 px-2 py-2"
+                className="detail-records-tags-column min-w-0 px-2 py-2 pb-2.5"
                 data-label="Tags"
               >
-                <div className="max-w-full overflow-hidden">
+                <div className="max-w-full overflow-visible">
                   <RecordTagSet
                     maps={maps}
                     onFilterTag={onFilterTag}
@@ -432,12 +435,23 @@ export const TransactionDetailPanel = ({
   const deleteDialogRef = useRef<HTMLElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const cancelDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
+  const restoreFocusOnCloseRef = useRef(true);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteErrorMessage, setDeleteErrorMessage] = useState<
     string | undefined
   >();
   const [deleting, setDeleting] = useState(false);
+
+  useOutsidePointerClose({
+    enabled: !confirmDeleteOpen,
+    floatingOverlaySelectors,
+    onOutsideClose: () => {
+      restoreFocusOnCloseRef.current = false;
+      onClose();
+    },
+    ref: panelRef,
+  });
 
   const closeDeleteConfirmation = useCallback(() => {
     if (deleting) {
@@ -458,7 +472,9 @@ export const TransactionDetailPanel = ({
 
   useEffect(() => {
     return () => {
-      onRestoreFocus();
+      if (restoreFocusOnCloseRef.current) {
+        onRestoreFocus();
+      }
     };
   }, [onRestoreFocus]);
 
@@ -468,13 +484,25 @@ export const TransactionDetailPanel = ({
         if (event.defaultPrevented) {
           return;
         }
+        if (confirmDeleteOpen) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeDeleteConfirmation();
+          return;
+        }
+
+        const target = event.target;
+        if (
+          (target instanceof Element &&
+            target.closest("[data-slot='popover-content']")) ||
+          document.querySelector("[data-slot='popover-content']")
+        ) {
+          return;
+        }
+
         event.preventDefault();
         event.stopPropagation();
-        if (confirmDeleteOpen) {
-          closeDeleteConfirmation();
-        } else {
-          onClose();
-        }
+        onClose();
         return;
       }
 

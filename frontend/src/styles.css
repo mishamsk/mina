@@ -209,6 +209,10 @@
     container: transactions-table / inline-size;
   }
 
+  .accounts-table-scroll {
+    container: accounts-table / inline-size;
+  }
+
   .account-register-table-scroll {
     container: account-register-table / inline-size;
   }
@@ -445,6 +449,16 @@
       [data-testid="amount-chip"] {
       padding-right: 0 !important;
       padding-left: 0 !important;
+    }
+  }
+
+  @container accounts-table (max-width: 960px) {
+    .accounts-table .row-actions-buttons .row-actions-button {
+      display: none !important;
+    }
+
+    .accounts-table .row-actions-overflow {
+      display: inline-flex !important;
     }
   }
 

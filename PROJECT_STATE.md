@@ -36,7 +36,7 @@
   - The app shell shows a featured-account balance strip on every route when featured accounts exist, backed by account metadata and server balances.
   - Overview is the landing page, with active balance accounts grouped by FQN root, approximate USD subtotals, credit remaining, current-month spend/income pulse, and recent activity links.
   - Transactions page uses server-derived transaction titles, URL-backed server-side search/filter chips, date-jump anchored pagination, trailing hover-revealed row actions, entity chips that add filters in place, and a URL-addressable detail side panel with full journal records and delete confirmation.
-  - Accounts page shows the chart of accounts as a searchable/filterable FQN tree with trailing hover-revealed row actions, hidden-account controls, account create/edit, credit-limit history management, tombstone delete, and URL-addressable account registers with running balances, transaction peeks, and balance-surface links.
+  - Accounts page shows the chart of accounts as a searchable/filterable FQN tree with trailing row quick actions for hide/unhide, featured, move/rename, and delete, account create/edit, credit-limit history management, and URL-addressable account registers with running balances, transaction peeks, and balance-surface links.
   - Accounts tree supports prefix-addressed account rename/move for leaves and groups, with subtree FQN rewrites through the restructure API.
   - Account group pages show descendant balance-account subtotals and combined prefix registers across balance and flow accounts, with transaction peeks and links from account trees and overview balance groups.
   - Transaction entry category pickers fetch API-filtered category lists by tab economic intent.

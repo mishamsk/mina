@@ -1,9 +1,10 @@
-import { Search } from "pixelarticons/react";
+import { Eye, EyeOff, Search } from "pixelarticons/react";
 import { useCallback } from "react";
 import type { SetURLSearchParams } from "react-router";
 
 import type { Account, AccountType } from "@/api";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip } from "@/components/tooltip";
+import { Button } from "@/components/ui/button";
 import type { AccountsPageSnapshot } from "@/store";
 
 import type { AccountTypeFilter } from "./accounts-tree";
@@ -140,16 +141,31 @@ export const AccountsToolbar = ({
         </select>
       </div>
 
-      <label className="bg-card flex h-9 items-center gap-2 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]">
-        <Checkbox
-          checked={includeHidden}
+      <Tooltip
+        label={
+          includeHidden ? "Hide hidden accounts" : "Include hidden accounts"
+        }
+        asChild
+      >
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
           aria-label="Include hidden"
-          onCheckedChange={(checked) => {
-            setIncludeHidden(checked === true);
+          aria-pressed={includeHidden}
+          className="aria-pressed:bg-[var(--table-header)]"
+          onClick={() => {
+            setIncludeHidden(!includeHidden);
           }}
-        />
-        Include hidden
-      </label>
+        >
+          {includeHidden ? (
+            <EyeOff aria-hidden="true" data-icon="inline-start" />
+          ) : (
+            <Eye aria-hidden="true" data-icon="inline-start" />
+          )}
+          Include hidden
+        </Button>
+      </Tooltip>
     </div>
   );
 };
@@ -163,6 +179,7 @@ interface AccountsPageContentProps {
   readonly includeHidden: boolean;
   readonly onCreateAccount: (opener: HTMLElement) => void;
   readonly onEditAccount: (account: Account, opener: HTMLElement) => void;
+  readonly onNotice?: (message: string) => void;
   readonly onRestructurePath: (fqn: string, opener: HTMLElement) => void;
   readonly search: string;
   readonly typeFilter: AccountTypeFilter;
@@ -173,6 +190,7 @@ export const AccountsPageContent = ({
   includeHidden,
   onCreateAccount,
   onEditAccount,
+  onNotice,
   onRestructurePath,
   search,
   typeFilter,
@@ -186,8 +204,10 @@ export const AccountsPageContent = ({
       }
       includeHidden={includeHidden}
       loading={accountsPage.loading}
+      groups={accountsPage.snapshot?.groups}
       onCreateAccount={onCreateAccount}
       onEditAccount={onEditAccount}
+      onNotice={onNotice}
       onRestructurePath={onRestructurePath}
       onRetry={() => {
         void refreshAccountsPage();

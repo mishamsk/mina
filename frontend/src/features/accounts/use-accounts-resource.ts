@@ -52,7 +52,8 @@ const isCurrentAccountsPageLoad = (generation: number): boolean =>
 
 const accountsPageLoaded = (
   result: Awaited<ReturnType<typeof fetchAccountsPage>>,
-): boolean => Boolean(result.accounts.data && result.balances.data);
+): boolean =>
+  Boolean(result.accounts.data && result.balances.data && result.groups.data);
 
 const waitForAccountsPageRetry = (): Promise<void> =>
   new Promise((resolve) => {
@@ -102,9 +103,15 @@ const loadAccountsPage = async (
     return;
   }
 
+  if (!result.groups.data) {
+    setAccountsPageError(apiErrorMessage(result.groups.error));
+    return;
+  }
+
   setAccountsPage({
     accounts: result.accounts.data.accounts,
     balances: result.balances.data.balances,
+    groups: result.groups.data.groups,
   });
 };
 

@@ -1,5 +1,5 @@
 import { Close, Open, Reload } from "pixelarticons/react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link } from "react-router";
 
 import type { Transaction } from "@/api";
@@ -11,18 +11,25 @@ import {
   TransactionDetailErrorContent,
   TransactionDetailLoadingContent,
 } from "@/features/ledger";
+import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
 
 interface AccountPeekPanelProps {
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
   readonly maps: LookupMaps;
-  readonly onClose: () => void;
+  readonly onClose: (options?: AccountPeekPanelCloseOptions) => void;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
   readonly onRetry: () => void;
   readonly transaction: Transaction | undefined;
 }
+
+interface AccountPeekPanelCloseOptions {
+  readonly restoreFocus?: boolean;
+}
+
+const floatingOverlaySelectors = ["[data-page-help-content]"] as const;
 
 export const AccountPeekPanel = ({
   errorMessage,
@@ -35,6 +42,16 @@ export const AccountPeekPanel = ({
   onRetry,
   transaction,
 }: AccountPeekPanelProps) => {
+  const panelRef = useRef<HTMLElement | null>(null);
+
+  useOutsidePointerClose({
+    floatingOverlaySelectors,
+    onOutsideClose: () => {
+      onClose({ restoreFocus: false });
+    },
+    ref: panelRef,
+  });
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) {
@@ -56,6 +73,7 @@ export const AccountPeekPanel = ({
 
   return (
     <aside
+      ref={panelRef}
       aria-label="Transaction peek"
       className="bg-card fixed top-4 right-4 bottom-4 z-40 flex w-[min(780px,calc(100vw-2rem))] max-w-full flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
       data-testid="account-peek-panel"
@@ -78,7 +96,9 @@ export const AccountPeekPanel = ({
             variant="outline"
             size="icon-sm"
             aria-label="Close transaction peek"
-            onClick={onClose}
+            onClick={() => {
+              onClose();
+            }}
           >
             <Close aria-hidden="true" />
           </Button>

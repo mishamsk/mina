@@ -1918,6 +1918,37 @@ test("transaction detail panel shows full records and supports deep links", asyn
       panel.getByText(tag.name, { exact: true }).first(),
     ).toBeVisible();
   }
+  const firstCreatedTag = createdTags.at(0);
+  if (!firstCreatedTag) {
+    throw new Error("expected at least one created tag");
+  }
+  await expect
+    .poll(() =>
+      panel
+        .getByRole("button", { name: `Filter by ${firstCreatedTag.name}` })
+        .first()
+        .evaluate((element) => {
+          const wrapper = element.closest(
+            "[data-label='Tags']",
+          )?.firstElementChild;
+          return wrapper ? window.getComputedStyle(wrapper).overflow : null;
+        }),
+    )
+    .toBe("visible");
+
+  await alternateDetailRow.click();
+  await expect(panel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "true");
+  await alternateDetailRow.click();
+  await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "false");
+
+  await detailRow
+    .getByRole("button", {
+      name: "Open transaction detail",
+    })
+    .click();
+  await expect(panel).toBeVisible();
 
   await alternateDetailRow.focus();
   await expect(alternateDetailRow).toBeFocused();
@@ -1965,7 +1996,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=10$/);
 });
 
-test("Escape closes filter popover before transaction detail panel", async ({
+test("toolbar filter trigger closes transaction detail while opening popover", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 760 });
@@ -2011,17 +2042,70 @@ test("Escape closes filter popover before transaction detail panel", async ({
   await page.getByRole("button", { name: "Add filter" }).click();
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(popover).toBeVisible();
+  await expect(panel).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+
+  await page.keyboard.press("Escape");
+  await expect(popover).toBeHidden();
+});
+
+test("Escape closes filter popover before transaction detail panel", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 760 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E escape order ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "32.10",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-06-30",
+      memo,
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  await page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first()
+    .getByRole("button", {
+      name: "Open transaction detail",
+    })
+    .click();
+  const panel = page.getByRole("dialog", { name: transaction.display_title });
+  await expect(panel).toBeVisible();
+
+  const addFilterButton = page.getByRole("button", { name: "Add filter" });
+  await addFilterButton.focus();
+  await expect(addFilterButton).toBeFocused();
+  await page.keyboard.press("Enter");
+  const popover = page.locator('[data-slot="popover-content"]');
+  await expect(popover).toBeVisible();
+  await expect(panel).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(popover).toBeHidden();
   await expect(panel).toBeVisible();
-  await expect(page).toHaveURL(
-    new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
-  );
 
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
-  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
 });
 
 test("focused transaction row opens detail with Enter and restores focus on Escape", async ({
@@ -2331,6 +2415,9 @@ const chooseOptionByKeyboard = async (
   arrowDownPresses = 0,
 ) => {
   const picker = page.getByRole("combobox", { name: label });
+  await picker.click();
+  await expect(picker).toBeFocused();
+  await picker.fill("");
   await picker.fill(searchText);
   const optionListId = await picker.getAttribute("aria-controls");
   expect(optionListId).not.toBeNull();

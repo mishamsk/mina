@@ -217,6 +217,7 @@ export const AccountsPage = () => {
           includeHidden={includeHidden}
           onCreateAccount={openCreatePanel}
           onEditAccount={openEditPanel}
+          onNotice={showNotice}
           onRestructurePath={openRestructureDialog}
           search={search}
           typeFilter={typeFilter}
