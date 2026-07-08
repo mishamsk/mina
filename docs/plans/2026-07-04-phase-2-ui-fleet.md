@@ -76,7 +76,7 @@ Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = 
 - [x] Task 18: `z7t0` — Tags and Members reference pages (FE; requires Task 17) — branch `z7t0-tags-members-pages`
 - [x] Task 19: `d7av` — command palette: navigation, entry, app actions (FE) — branch `d7av-command-palette`
 - [x] Task 20: `mrs9` — hierarchy restructuring API with subtree FQN rewrite (API; no UI consumer in this plan) — branch `mrs9-restructure-api` (delivered by the hierarchy-semantics fleet)
-- [ ] Task 21: `axf6` — Advanced journal editor tab with shorthand escalation (FE; stretch, only if the fleet gets here) — branch `axf6-journal-editor`
+- [x] Task 21: `axf6` — Advanced journal editor tab with shorthand escalation (FE; stretch, only if the fleet gets here) — branch `axf6-journal-editor`
 
 ## Final Verification
 
