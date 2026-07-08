@@ -163,12 +163,17 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await page.goto("/");
 
   await expect(page).toHaveURL(/\/overview$/);
-  await expect(page.getByLabel("Primary")).toBeVisible();
+  const primaryNav = page.getByLabel("Primary");
+  await expect(primaryNav).toBeVisible();
   await expect(
-    page.getByLabel("Primary").getByRole("button", { name: "New transaction" }),
+    primaryNav.getByRole("button", { name: "New transaction" }),
   ).toBeDisabled();
-  await expect(page.getByRole("link", { name: "Overview" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Transactions" })).toBeVisible();
+  await expect(
+    primaryNav.getByRole("link", { name: "Overview" }),
+  ).toBeVisible();
+  await expect(
+    primaryNav.getByRole("link", { name: "Transactions" }),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   const balanceStrip = page.getByTestId("featured-balance-strip");
   await expect(balanceStrip).toBeVisible();
@@ -177,13 +182,13 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await expect(balanceStrip.getByText("Sapphire")).toBeVisible();
   await expect(balanceStrip).not.toContainText("BlueCash");
 
-  await page.getByRole("link", { name: "Status" }).click();
+  await primaryNav.getByRole("link", { name: "Status" }).click();
 
   await expect(page).toHaveURL(/\/status$/);
   await expect(page.getByRole("heading", { name: "Status" })).toBeVisible();
   await expect(balanceStrip.getByText("Joint")).toBeVisible();
 
-  await page.getByRole("link", { name: "Transactions" }).click();
+  await primaryNav.getByRole("link", { name: "Transactions" }).click();
 
   await expect(page).toHaveURL(/\/transactions$/);
   await expect(
@@ -192,7 +197,7 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
 
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   await expect(
-    page.getByRole("link", { name: "Transactions" }),
+    primaryNav.getByRole("link", { name: "Transactions" }),
   ).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("button", { name: "Settings" })).toBeDisabled();
   await expect(balanceStrip.getByTestId("featured-balance-row")).toHaveCount(0);
@@ -206,7 +211,7 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await expect(featuredTooltip).toContainText("$");
   await page.mouse.move(0, 0);
 
-  const statusIcon = page
+  const statusIcon = primaryNav
     .getByRole("link", { name: "Status" })
     .locator("svg")
     .first();
