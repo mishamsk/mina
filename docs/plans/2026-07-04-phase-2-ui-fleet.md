@@ -74,7 +74,7 @@ Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = 
 - [x] Task 16: `gm9d` — web UI display and interaction papercuts: currency symbols, account view, chart-of-accounts row actions, tag chip shadow, modal close-on-outside-click; ground-truth doc adjustments are operator-owned (committed 94a7c4a) (FE; requires Tasks 15 and 15a) — branch `gm9d-ui-papercuts-2`
 - [x] Task 17: `s5nw` — Categories reference page, establishes the reference pattern (FE) — branch `s5nw-categories-page`
 - [x] Task 18: `z7t0` — Tags and Members reference pages (FE; requires Task 17) — branch `z7t0-tags-members-pages`
-- [ ] Task 19: `d7av` — command palette: navigation, entry, app actions (FE) — branch `d7av-command-palette`
+- [x] Task 19: `d7av` — command palette: navigation, entry, app actions (FE) — branch `d7av-command-palette`
 - [x] Task 20: `mrs9` — hierarchy restructuring API with subtree FQN rewrite (API; no UI consumer in this plan) — branch `mrs9-restructure-api` (delivered by the hierarchy-semantics fleet)
 - [ ] Task 21: `axf6` — Advanced journal editor tab with shorthand escalation (FE; stretch, only if the fleet gets here) — branch `axf6-journal-editor`
 
