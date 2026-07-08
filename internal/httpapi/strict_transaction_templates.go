@@ -106,7 +106,7 @@ func transactionTemplateRecordAPIInputs(records []openapi.TransactionTemplateRec
 			Amount:               amount,
 			TagIDs:               cloneOptionalInt64Slice(record.TagIds),
 			Memo:                 record.Memo,
-			PostingStatus:        transactionAPIPostingStatusPtr(record.PostingStatus),
+			PostingStatus:        transactionAPINonExpectedPostingStatusPtr(record.PostingStatus),
 			ReconciliationStatus: transactionAPIReconciliationStatusPtr(record.ReconciliationStatus),
 		})
 	}

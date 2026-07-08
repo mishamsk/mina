@@ -104,7 +104,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 ### Balances
 
-- A displayed account balance includes posted and pending records; cancelled records are excluded. Account pages additionally show a posted-only figure.
+- A displayed account balance includes posted and pending records; expected and cancelled records are excluded. Account pages additionally show a posted-only figure.
 - Balance semantics follow account type per `docs/accounting-semantics.md`: only `balance` accounts surface balances as household state; `flow` and `system` accounts never appear in balance views.
 
 ### Hierarchical names (accounts, categories, tags, templates)
@@ -137,7 +137,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 - Lists show `initiated_date` as absolute dates: `Jun 30` in the current year, `Jun 30, 2025` otherwise. No relative dates in tables.
 - All dates and times display in the browser's local timezone. Civil-date logic — entry default "today", current-year formatting, date grouping and comparisons — uses local time, never UTC calendar dates. Civil dates stay date-only in storage; timestamp fields stay UTC.
-- Pending records/transactions carry a visible pending indicator and a de-emphasized amount; posted needs no marker; cancelled renders struck-through and de-emphasized. In transaction lines the status column is icon-encoded with a tooltip.
+- Expected and pending records/transactions carry visible status indicators and de-emphasized amounts; posted needs no marker; cancelled renders struck-through and de-emphasized. In transaction lines the status column is icon-encoded with a tooltip.
 - Unreconciled records show a small status indicator (reserved for Phase 5 import workflows; hidden until relevant data exists).
 
 ### Hidden entities and members

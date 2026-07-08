@@ -132,6 +132,11 @@ duckdbexec $WORK/inv_mixed_cancelled_status.db inv_mixed_cancelled_status.sql
 ! exec mina db validate --db $WORK/inv_mixed_cancelled_status.db --schema demo
 stderr 'error: invariant: transaction .* mixes cancelled and non-cancelled active records'
 
+duckdbclone $WORK/demo.db $WORK/inv_mixed_expected_status.db
+duckdbexec $WORK/inv_mixed_expected_status.db inv_mixed_expected_status.sql
+! exec mina db validate --db $WORK/inv_mixed_expected_status.db --schema demo
+stderr 'error: invariant: transaction .* mixes expected and non-expected active records'
+
 duckdbclone $WORK/demo.db $WORK/inv_nonpositive_exchange_rate.db
 duckdbexec $WORK/inv_nonpositive_exchange_rate.db inv_nonpositive_exchange_rate.sql
 ! exec mina db validate --db $WORK/inv_nonpositive_exchange_rate.db --schema demo

@@ -27,7 +27,7 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 		Amount:        "12.34",
 		PendingDate:   "2024-01-01T00:00:00Z",
 		PostedDate:    ptrTo("2024-01-02T00:00:00Z"),
-		PostingStatus: httpclient.Posted,
+		PostingStatus: httpclient.PostingStatusPosted,
 	}))
 	second := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
 		Date:          "2024-01-02",
@@ -39,7 +39,7 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 		Memo:          "Rent",
 		Amount:        "50.00",
 		PendingDate:   "2024-01-05T00:00:00Z",
-		PostingStatus: httpclient.Pending,
+		PostingStatus: httpclient.PostingStatusPending,
 	}))
 	third := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
 		Date:          "2024-01-03",
@@ -52,7 +52,7 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 		Amount:        "75.00",
 		PendingDate:   "2024-01-03T00:00:00Z",
 		PostedDate:    ptrTo("2024-01-04T00:00:00Z"),
-		PostingStatus: httpclient.Posted,
+		PostingStatus: httpclient.PostingStatusPosted,
 	}))
 	fourth := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
 		Date:          "2024-01-04",
@@ -65,7 +65,7 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 		Amount:        "20.00",
 		PendingDate:   "2024-01-04T00:00:00Z",
 		PostedDate:    ptrTo("2024-01-06T00:00:00Z"),
-		PostingStatus: httpclient.Posted,
+		PostingStatus: httpclient.PostingStatusPosted,
 	}))
 	fifth := createTransaction(t, client, transactionListFilterRequest(transactionListFilterInput{
 		Date:          "2024-01-05",
@@ -78,7 +78,7 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 		Amount:        "35.00",
 		PendingDate:   "2024-01-05T12:00:00Z",
 		PostedDate:    ptrTo("2024-01-07T00:00:00Z"),
-		PostingStatus: httpclient.Posted,
+		PostingStatus: httpclient.PostingStatusPosted,
 	}))
 
 	cases := []struct {
@@ -93,7 +93,7 @@ func TestTransactionListFiltersBoundary(t *testing.T) {
 		{name: "category", params: &httpclient.ListTransactionsParams{CategoryId: ptrTo([]int64{refs.SecondCategoryId})}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
 		{name: "tag", params: &httpclient.ListTransactionsParams{TagId: ptrTo([]int64{refs.SecondTagId})}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
 		{name: "member", params: &httpclient.ListTransactionsParams{MemberId: ptrTo([]int64{refs.SecondMemberId})}, want: []int64{fifth.JSON201.TransactionId, second.JSON201.TransactionId}, total: 2},
-		{name: "posting status", params: &httpclient.ListTransactionsParams{PostingStatus: ptrTo([]httpclient.PostingStatus{httpclient.Pending})}, want: []int64{second.JSON201.TransactionId}, total: 1},
+		{name: "posting status", params: &httpclient.ListTransactionsParams{PostingStatus: ptrTo([]httpclient.PostingStatus{httpclient.PostingStatusPending})}, want: []int64{second.JSON201.TransactionId}, total: 1},
 		{name: "amount min", params: &httpclient.ListTransactionsParams{AmountMin: apptest.StringPtr("70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
 		{name: "amount max", params: &httpclient.ListTransactionsParams{AmountMax: apptest.StringPtr("-70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
 		{name: "amount usd min", params: &httpclient.ListTransactionsParams{AmountUsdMin: apptest.StringPtr("70.00")}, want: []int64{third.JSON201.TransactionId}, total: 1},
@@ -138,7 +138,7 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				AmountUsd:            apptest.StringPtr("-30.00"),
 				CategoryId:           refs.CategoryId,
 				Memo:                 &accountMemo,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -149,7 +149,7 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				AmountUsd:            apptest.StringPtr("10.00"),
 				CategoryId:           refs.SecondCategoryId,
 				Memo:                 &categoryMemo,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -160,7 +160,7 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				AmountUsd:            apptest.StringPtr("20.00"),
 				CategoryId:           refs.CategoryId,
 				Memo:                 &searchMemo,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -212,7 +212,7 @@ func TestTransactionListFiltersComposeWithAnchorBoundary(t *testing.T) {
 		Amount:        "9.00",
 		PendingDate:   "2024-01-05T00:00:00Z",
 		PostedDate:    ptrTo("2024-01-06T00:00:00Z"),
-		PostingStatus: httpclient.Posted,
+		PostingStatus: httpclient.PostingStatusPosted,
 	}))
 	third := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-03", "Third")
 	fourth := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-04", "Fourth")
@@ -266,7 +266,7 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 		Amount:        "12.34",
 		PendingDate:   "2024-02-01T00:00:00Z",
 		PostedDate:    ptrTo("2024-02-02T00:00:00Z"),
-		PostingStatus: httpclient.Pending,
+		PostingStatus: httpclient.PostingStatusPending,
 	}))
 	replacement := transactionListFilterRequest(transactionListFilterInput{
 		Date:          "2024-02-03",
@@ -279,7 +279,7 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 		Amount:        "56.78",
 		PendingDate:   "2024-02-03T00:00:00Z",
 		PostedDate:    ptrTo("2024-02-04T00:00:00Z"),
-		PostingStatus: httpclient.Posted,
+		PostingStatus: httpclient.PostingStatusPosted,
 	})
 	replaced, err := client.REST().ReplaceTransactionWithResponse(
 		context.Background(),
@@ -367,8 +367,8 @@ func TestTransactionListFiltersIgnoreReplacedRecordsBoundary(t *testing.T) {
 		},
 		{
 			name:   "posting status",
-			old:    &httpclient.ListTransactionsParams{PostingStatus: ptrTo([]httpclient.PostingStatus{httpclient.Pending})},
-			active: &httpclient.ListTransactionsParams{PostingStatus: ptrTo([]httpclient.PostingStatus{httpclient.Posted})},
+			old:    &httpclient.ListTransactionsParams{PostingStatus: ptrTo([]httpclient.PostingStatus{httpclient.PostingStatusPending})},
+			active: &httpclient.ListTransactionsParams{PostingStatus: ptrTo([]httpclient.PostingStatus{httpclient.PostingStatusPosted})},
 		},
 	}
 

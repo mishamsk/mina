@@ -3,11 +3,14 @@ CREATE TABLE transaction (
 	transaction_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
 	-- Human-facing calendar date the transaction happened, distinct from formal banking timestamps on records that may be future dated.
 	initiated_date DATE NOT NULL,
+	-- Occurrence this transaction was generated from; NULL for non-recurring transactions; the definition is reached via the occurrence.
+	recurring_occurrence_id INTEGER,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	tombstoned_at TIMESTAMP
 );
 
 COMMENT ON COLUMN transaction.initiated_date IS 'Human-facing calendar date the transaction happened, distinct from formal banking timestamps on records that may be future dated.';
+COMMENT ON COLUMN transaction.recurring_occurrence_id IS 'Occurrence this transaction was generated from; NULL for non-recurring transactions; the definition is reached via the occurrence.';
 
 CREATE TABLE journal_record (
 	record_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),

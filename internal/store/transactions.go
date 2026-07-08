@@ -37,7 +37,7 @@ func (s *TransactionStore) Create(ctx context.Context, req transactions.CreateIn
 			ctx,
 			`INSERT INTO `+s.db.accountingName("transaction")+` (initiated_date)
 VALUES (?)
-RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, created_at, tombstoned_at`,
 			civilDateArg(req.InitiatedDate),
 		)
 		var err error
@@ -75,7 +75,7 @@ func (s *TransactionStore) Replace(ctx context.Context, id int64, req transactio
 			`UPDATE `+s.db.accountingName("transaction")+`
 SET initiated_date = ?
 WHERE transaction_id = ? AND tombstoned_at IS NULL
-RETURNING transaction_id, initiated_date, created_at, tombstoned_at`,
+RETURNING transaction_id, initiated_date, recurring_occurrence_id, created_at, tombstoned_at`,
 			civilDateArg(req.InitiatedDate),
 			id,
 		)
@@ -195,6 +195,7 @@ func (s *TransactionStore) MonthTotals(ctx context.Context, monthRange transacti
 	WHERE jr.tombstoned_at IS NULL
 	  AND tx.tombstoned_at IS NULL
 	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
+	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
 	  AND tx.initiated_date >= ?
 	  AND tx.initiated_date < ?
 )
@@ -220,6 +221,7 @@ WHERE total_kind IS NOT NULL`,
 		enumValue(accounts.AccountTypeFlow),
 		enumValue(categories.CategoryEconomicIntentIncome),
 		enumValue(transactions.PostingStatusCancelled),
+		enumValue(transactions.PostingStatusExpected),
 		civilDateArg(monthRange.Start),
 		civilDateArg(monthRange.End),
 	)
@@ -277,7 +279,7 @@ WHERE record_id = ?
 func (s *TransactionStore) Get(ctx context.Context, id int64) (transactions.Transaction, error) {
 	transaction, err := scanTransaction(s.db.query().QueryRowContext(
 		ctx,
-		`SELECT transaction_id, initiated_date, created_at, tombstoned_at
+		`SELECT transaction_id, initiated_date, recurring_occurrence_id, created_at, tombstoned_at
 FROM `+s.db.accountingName("transaction")+`
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		id,
@@ -301,7 +303,7 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 // List returns transactions with nested journal records in deterministic date order.
 func (s *TransactionStore) List(ctx context.Context, opts transactions.ListOptions) (transactions.ListResult, error) {
 	predicate := s.transactionListPredicate(opts)
-	query := `SELECT tx.transaction_id, tx.initiated_date, tx.created_at, tx.tombstoned_at
+	query := `SELECT tx.transaction_id, tx.initiated_date, tx.recurring_occurrence_id, tx.created_at, tx.tombstoned_at
 ` + predicate.query
 	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+predicate.query, predicate.args, "transactions", opts.IncludeTotalCount)
 	if err != nil {
@@ -382,6 +384,10 @@ func (s *TransactionStore) transactionListPredicate(opts transactions.ListOption
 	query := `FROM ` + s.db.accountingName("transaction") + ` tx
 WHERE tx.tombstoned_at IS NULL`
 	args := []any{}
+	if !slices.Contains(opts.PostingStatuses, transactions.PostingStatusExpected) {
+		query += " AND NOT " + s.transactionListRecordExists("jr.posting_status = CAST(? AS "+s.db.accountingName("posting_status")+")")
+		args = append(args, enumValue(transactions.PostingStatusExpected))
+	}
 	if opts.InitiatedDateFrom != nil {
 		query += " AND tx.initiated_date >= ?"
 		args = append(args, civilDateArg(*opts.InitiatedDateFrom))
@@ -643,7 +649,7 @@ func (s *TransactionStore) Cancel(ctx context.Context, id int64) (transactions.T
 		var err error
 		transaction, err = scanTransaction(tx.QueryRowContext(
 			ctx,
-			`SELECT transaction_id, initiated_date, created_at, tombstoned_at
+			`SELECT transaction_id, initiated_date, recurring_occurrence_id, created_at, tombstoned_at
 FROM `+s.db.accountingName("transaction")+`
 WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 			id,
@@ -695,7 +701,8 @@ func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.
 		withQuery = `WITH running_balances AS (
 	SELECT jr.record_id,
 	       SUM(CAST(CASE
-	           WHEN jr.posting_status <> CAST(? AS ` + s.db.accountingName("posting_status") + `) THEN jr.amount
+	           WHEN jr.posting_status <> CAST(? AS ` + s.db.accountingName("posting_status") + `)
+	                AND jr.posting_status <> CAST(? AS ` + s.db.accountingName("posting_status") + `) THEN jr.amount
 	           ELSE CAST(0 AS DECIMAL(18,8))
 	       END AS DECIMAL(18,8))) OVER (
 	           PARTITION BY jr.account_id, jr.currency
@@ -709,7 +716,7 @@ func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.
 `
 		runningBalanceSelect = "rb.running_balance"
 		runningBalanceJoin = "JOIN running_balances rb ON rb.record_id = jr.record_id"
-		runningBalanceArgs = append(runningBalanceArgs, enumValue(transactions.PostingStatusCancelled), *opts.AccountID)
+		runningBalanceArgs = append(runningBalanceArgs, enumValue(transactions.PostingStatusCancelled), enumValue(transactions.PostingStatusExpected), *opts.AccountID)
 	}
 
 	fromQuery := `FROM ` + s.db.accountingName("journal_record") + ` jr
@@ -718,6 +725,10 @@ JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
 JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id`
 	whereQuery := `WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	args := []any{}
+	if opts.PostingStatus == nil {
+		whereQuery += " AND jr.posting_status <> CAST(? AS " + s.db.accountingName("posting_status") + ")"
+		args = append(args, enumValue(transactions.PostingStatusExpected))
+	}
 	if opts.AccountID != nil {
 		whereQuery += " AND jr.account_id = ?"
 		args = append(args, *opts.AccountID)
@@ -979,17 +990,22 @@ type transactionScanner interface {
 func scanTransaction(scanner transactionScanner) (transactions.Transaction, error) {
 	var transaction transactions.Transaction
 	var initiatedDate time.Time
+	var recurringOccurrenceID sql.NullInt64
 	var createdAt time.Time
 	var tombstonedAt sql.NullTime
 	if err := scanner.Scan(
 		&transaction.ID,
 		&initiatedDate,
+		&recurringOccurrenceID,
 		&createdAt,
 		&tombstonedAt,
 	); err != nil {
 		return transactions.Transaction{}, err
 	}
 	transaction.InitiatedDate = values.CivilDateFromTime(initiatedDate)
+	if recurringOccurrenceID.Valid {
+		transaction.RecurringOccurrenceID = &recurringOccurrenceID.Int64
+	}
 	transaction.CreatedAt = createdAt.UTC()
 	transaction.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
 	transaction.Records = []transactions.JournalRecord{}

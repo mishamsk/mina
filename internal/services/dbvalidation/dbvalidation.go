@@ -350,6 +350,12 @@ func (s *Service) classificationFindings(ctx context.Context) ([]Finding, error)
 				Limit:  &limit,
 				Offset: offset,
 			},
+			PostingStatuses: []transactions.PostingStatus{
+				transactions.PostingStatusExpected,
+				transactions.PostingStatusPending,
+				transactions.PostingStatusPosted,
+				transactions.PostingStatusCancelled,
+			},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("list transactions for classification validation: %w", err)

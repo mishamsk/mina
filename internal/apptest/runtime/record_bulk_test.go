@@ -82,7 +82,7 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 		t.Fatalf("bulk account transaction_id = %d, want %d", accountRecords.JSON200.Records[0].TransactionId, created.JSON201.TransactionId)
 	}
 
-	postingStatus := httpclient.Cancelled
+	postingStatus := httpclient.NonExpectedPostingStatusCancelled
 	reconciliationStatus := httpclient.Unreconciled
 	bulkStatus, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:            []int64{firstRecordID, secondRecordID},
@@ -94,8 +94,9 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 		t.Fatalf("bulk status status = %d, want %d; body %s", bulkStatus.StatusCode(), http.StatusOK, bulkStatus.Body)
 	}
 	assertBulkResponse(t, bulkStatus.JSON200, []int64{firstRecordID, secondRecordID})
+	searchPostingStatus := httpclient.PostingStatus(postingStatus)
 	statusRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
-		PostingStatus:        &postingStatus,
+		PostingStatus:        &searchPostingStatus,
 		ReconciliationStatus: &reconciliationStatus,
 	})
 	requireNoTransportError(t, "search records", err)
@@ -187,7 +188,7 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 		t.Fatalf("no-op status status = %d, want %d; body %s", noOpStatus.StatusCode(), http.StatusBadRequest, noOpStatus.Body)
 	}
 
-	invalidStatus := httpclient.PostingStatus("settled")
+	invalidStatus := httpclient.NonExpectedPostingStatus("settled")
 	invalidStatusResponse, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     []int64{firstRecordID},
 		PostingStatus: &invalidStatus,
@@ -221,12 +222,12 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	assertRecordIDs(t, originalCategoryRecords.JSON200.Records, []int64{created.JSON201.Records[0].RecordId, created.JSON201.Records[1].RecordId})
 }
 
-func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
+func TestRecordBulkStatusPostingStatusInvariantsBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
 
 	posted := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
-	cancelledStatus := httpclient.Cancelled
+	cancelledStatus := httpclient.NonExpectedPostingStatusCancelled
 	wholeCancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     recordIDs(posted.JSON201.Records),
 		PostingStatus: &cancelledStatus,
@@ -236,9 +237,9 @@ func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
 		t.Fatalf("whole cancel status = %d, want %d; body %s", wholeCancel.StatusCode(), http.StatusOK, wholeCancel.Body)
 	}
 	assertBulkResponse(t, wholeCancel.JSON200, recordIDs(posted.JSON201.Records))
-	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.Cancelled)
+	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.PostingStatusCancelled)
 
-	postedStatus := httpclient.Posted
+	postedStatus := httpclient.NonExpectedPostingStatusPosted
 	wholeUncancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     recordIDs(posted.JSON201.Records),
 		PostingStatus: &postedStatus,
@@ -248,9 +249,9 @@ func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
 		t.Fatalf("whole uncancel status = %d, want %d; body %s", wholeUncancel.StatusCode(), http.StatusOK, wholeUncancel.Body)
 	}
 	assertBulkResponse(t, wholeUncancel.JSON200, recordIDs(posted.JSON201.Records))
-	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.Posted)
+	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.PostingStatusPosted)
 
-	pendingStatus := httpclient.Pending
+	pendingStatus := httpclient.NonExpectedPostingStatusPending
 	partialPending, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
 		PostingStatus: &pendingStatus,
@@ -265,11 +266,11 @@ func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
 	if mixedPostingStatuses.StatusCode() != http.StatusOK {
 		t.Fatalf("mixed pending and posted read status = %d, want %d; body %s", mixedPostingStatuses.StatusCode(), http.StatusOK, mixedPostingStatuses.Body)
 	}
-	if got := mixedPostingStatuses.JSON200.Records[0].PostingStatus; got != httpclient.Pending {
-		t.Fatalf("first record posting_status = %q, want %q", got, httpclient.Pending)
+	if got := mixedPostingStatuses.JSON200.Records[0].PostingStatus; got != httpclient.PostingStatusPending {
+		t.Fatalf("first record posting_status = %q, want %q", got, httpclient.PostingStatusPending)
 	}
-	if got := mixedPostingStatuses.JSON200.Records[1].PostingStatus; got != httpclient.Posted {
-		t.Fatalf("second record posting_status = %q, want %q", got, httpclient.Posted)
+	if got := mixedPostingStatuses.JSON200.Records[1].PostingStatus; got != httpclient.PostingStatusPosted {
+		t.Fatalf("second record posting_status = %q, want %q", got, httpclient.PostingStatusPosted)
 	}
 	restorePartialPosted, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
@@ -280,7 +281,7 @@ func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
 		t.Fatalf("restore partial posted status = %d, want %d; body %s", restorePartialPosted.StatusCode(), http.StatusOK, restorePartialPosted.Body)
 	}
 	assertBulkResponse(t, restorePartialPosted.JSON200, []int64{posted.JSON201.Records[0].RecordId})
-	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.Posted)
+	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.PostingStatusPosted)
 
 	partialCancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
@@ -288,11 +289,11 @@ func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
 	})
 	requireNoTransportError(t, "bulk partial cancel", err)
 	assertMixedCancellationError(t, "partial cancel", partialCancel.StatusCode(), partialCancel.JSON400, partialCancel.Body)
-	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.Posted)
+	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.PostingStatusPosted)
 
 	fullyCancelled := balancedTransactionRequest(refs.transactionRefs)
-	fullyCancelled.Records[0].PostingStatus = httpclient.Cancelled
-	fullyCancelled.Records[1].PostingStatus = httpclient.Cancelled
+	fullyCancelled.Records[0].PostingStatus = httpclient.PostingStatusCancelled
+	fullyCancelled.Records[1].PostingStatus = httpclient.PostingStatusCancelled
 	cancelled := createTransaction(t, client, fullyCancelled)
 	partialUncancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     []int64{cancelled.JSON201.Records[0].RecordId},
@@ -300,7 +301,7 @@ func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
 	})
 	requireNoTransportError(t, "bulk partial uncancel", err)
 	assertMixedCancellationError(t, "partial uncancel", partialUncancel.StatusCode(), partialUncancel.JSON400, partialUncancel.Body)
-	assertTransactionPostingStatus(t, client, cancelled.JSON201.TransactionId, httpclient.Cancelled)
+	assertTransactionPostingStatus(t, client, cancelled.JSON201.TransactionId, httpclient.PostingStatusCancelled)
 
 	first := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
 	second := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
@@ -311,8 +312,8 @@ func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
 	})
 	requireNoTransportError(t, "bulk cancel spanning mixed transaction", err)
 	assertMixedCancellationError(t, "spanning partial cancel", spanningResponse.StatusCode(), spanningResponse.JSON400, spanningResponse.Body)
-	assertTransactionPostingStatus(t, client, first.JSON201.TransactionId, httpclient.Posted)
-	assertTransactionPostingStatus(t, client, second.JSON201.TransactionId, httpclient.Posted)
+	assertTransactionPostingStatus(t, client, first.JSON201.TransactionId, httpclient.PostingStatusPosted)
+	assertTransactionPostingStatus(t, client, second.JSON201.TransactionId, httpclient.PostingStatusPosted)
 
 	reconciliationStatus := httpclient.Unreconciled
 	reconciliationOnly, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
@@ -323,7 +324,19 @@ func TestRecordBulkStatusCancellationInvariantBoundary(t *testing.T) {
 	if reconciliationOnly.StatusCode() != http.StatusOK {
 		t.Fatalf("reconciliation-only status = %d, want %d; body %s", reconciliationOnly.StatusCode(), http.StatusOK, reconciliationOnly.Body)
 	}
-	assertTransactionPostingStatus(t, client, second.JSON201.TransactionId, httpclient.Posted)
+	assertTransactionPostingStatus(t, client, second.JSON201.TransactionId, httpclient.PostingStatusPosted)
+
+	fullyExpected := balancedTransactionRequest(refs.transactionRefs)
+	fullyExpected.Records[0].PostingStatus = httpclient.PostingStatusExpected
+	fullyExpected.Records[1].PostingStatus = httpclient.PostingStatusExpected
+	expected := createTransaction(t, client, fullyExpected)
+	partialExpectedConfirmation, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds:     []int64{expected.JSON201.Records[0].RecordId},
+		PostingStatus: &pendingStatus,
+	})
+	requireNoTransportError(t, "bulk partial expected confirmation", err)
+	assertMixedExpectedError(t, "partial expected confirmation", partialExpectedConfirmation.StatusCode(), partialExpectedConfirmation.JSON400, partialExpectedConfirmation.Body)
+	assertTransactionPostingStatus(t, client, expected.JSON201.TransactionId, httpclient.PostingStatusExpected)
 }
 
 func TestRecordBulkOperationsRejectTombstonedTargetReferences(t *testing.T) {

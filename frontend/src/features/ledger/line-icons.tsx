@@ -1,5 +1,6 @@
 import {
   ArrowDownBox,
+  Calendar,
   Cancel,
   Chart,
   Clock,
@@ -86,7 +87,8 @@ export const StatusIcon = ({
     return null;
   }
 
-  const Icon = status === "pending" ? Clock : Cancel;
+  const Icon =
+    status === "expected" ? Calendar : status === "pending" ? Clock : Cancel;
   const label = postingStatusLabel(status);
 
   return (
@@ -100,7 +102,8 @@ export const StatusIcon = ({
           aria-hidden="true"
           className={cn(
             "size-5",
-            status === "pending" && "text-[var(--color-status-pending-ink)]",
+            (status === "expected" || status === "pending") &&
+              "text-[var(--color-status-pending-ink)]",
             status === "cancelled" && "text-muted-foreground",
           )}
         />

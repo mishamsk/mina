@@ -148,7 +148,7 @@ func cancelTransactionRecords(t *testing.T, client *apptest.Client, transaction 
 	for _, record := range transaction.Records {
 		recordIDs = append(recordIDs, record.RecordId)
 	}
-	postingStatus := httpclient.Cancelled
+	postingStatus := httpclient.NonExpectedPostingStatusCancelled
 	response, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     recordIDs,
 		PostingStatus: &postingStatus,

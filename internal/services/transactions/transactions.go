@@ -19,6 +19,8 @@ import (
 type PostingStatus string
 
 const (
+	// PostingStatusExpected identifies a pre-confirmation expected journal record.
+	PostingStatusExpected PostingStatus = "expected"
 	// PostingStatusPending identifies a pending journal record.
 	PostingStatusPending PostingStatus = "pending"
 	// PostingStatusPosted identifies a posted journal record.
@@ -28,6 +30,7 @@ const (
 )
 
 const mixedCancellationStatusMessage = "transaction records must be all cancelled or none cancelled"
+const mixedExpectedStatusMessage = "transaction records must be all expected or none expected"
 
 // ReconciliationStatus is a journal record reconciliation state.
 type ReconciliationStatus string
@@ -49,15 +52,16 @@ const (
 
 // Transaction is a double-entry transaction with nested journal records.
 type Transaction struct {
-	ID             int64
-	InitiatedDate  values.CivilDate
-	Class          TransactionClass
-	DisplayTitle   string
-	PrimaryAmounts []DisplayAmount
-	Components     []ClassificationComponent
-	CreatedAt      time.Time
-	TombstonedAt   *time.Time
-	Records        []JournalRecord
+	ID                    int64
+	InitiatedDate         values.CivilDate
+	RecurringOccurrenceID *int64
+	Class                 TransactionClass
+	DisplayTitle          string
+	PrimaryAmounts        []DisplayAmount
+	Components            []ClassificationComponent
+	CreatedAt             time.Time
+	TombstonedAt          *time.Time
+	Records               []JournalRecord
 }
 
 // JournalRecord is one debit or credit entry inside a transaction.
@@ -594,7 +598,7 @@ func validateTransactionListOptions(opts ListOptions) (ListOptions, error) {
 	}
 	for _, status := range opts.PostingStatuses {
 		if err := validatePostingStatus(0, status); err != nil {
-			return ListOptions{}, services.InvalidRequest("posting_status values must be pending, posted, or cancelled")
+			return ListOptions{}, services.InvalidRequest("posting_status values must be expected, pending, posted, or cancelled")
 		}
 	}
 	for _, class := range opts.TransactionClasses {
@@ -860,7 +864,7 @@ func (s *Service) BulkUpdateStatuses(
 
 	var count int
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		if err := s.validateBulkStatusCancellationInvariant(ctx, recordIDs, postingStatus); err != nil {
+		if err := s.validateBulkPostingStatusInvariants(ctx, recordIDs, postingStatus); err != nil {
 			return err
 		}
 		updated, err := s.repo.BulkUpdateStatuses(ctx, recordIDs, postingStatus, reconciliationStatus)
@@ -980,7 +984,7 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 	return nil
 }
 
-func (s *Service) validateBulkStatusCancellationInvariant(ctx context.Context, recordIDs []int64, postingStatus *PostingStatus) error {
+func (s *Service) validateBulkPostingStatusInvariants(ctx context.Context, recordIDs []int64, postingStatus *PostingStatus) error {
 	if postingStatus == nil {
 		return nil
 	}
@@ -1004,6 +1008,9 @@ func (s *Service) validateBulkStatusCancellationInvariant(ctx context.Context, r
 			}
 		}
 		if err := validateTransactionCancellationInvariant(affected[transactionIndex].Records); err != nil {
+			return err
+		}
+		if err := validateTransactionExpectedInvariant(affected[transactionIndex].Records); err != nil {
 			return err
 		}
 	}
@@ -1106,12 +1113,16 @@ func validateTransactionInput(input CreateInput) error {
 
 	balances := map[string]values.Decimal{}
 	cancelledRecords := 0
+	expectedRecords := 0
 	for index, record := range input.Records {
 		if err := validateJournalRecord(index, record); err != nil {
 			return err
 		}
 		if record.PostingStatus == PostingStatusCancelled {
 			cancelledRecords++
+		}
+		if record.PostingStatus == PostingStatusExpected {
+			expectedRecords++
 		}
 		if balance, ok := balances[record.Currency]; ok {
 			updated, err := balance.Add(record.Amount)
@@ -1125,6 +1136,9 @@ func validateTransactionInput(input CreateInput) error {
 	}
 	if cancelledRecords > 0 && cancelledRecords < len(input.Records) {
 		return invalidMixedCancellationStatusError()
+	}
+	if expectedRecords > 0 && expectedRecords < len(input.Records) {
+		return invalidMixedExpectedStatusError()
 	}
 	for _, balance := range balances {
 		if !balance.IsZero() {
@@ -1149,8 +1163,26 @@ func validateTransactionCancellationInvariant(records []JournalRecord) error {
 	return nil
 }
 
+func validateTransactionExpectedInvariant(records []JournalRecord) error {
+	expectedRecords := 0
+	for _, record := range records {
+		if record.PostingStatus == PostingStatusExpected {
+			expectedRecords++
+		}
+	}
+	if expectedRecords > 0 && expectedRecords < len(records) {
+		return invalidMixedExpectedStatusError()
+	}
+
+	return nil
+}
+
 func invalidMixedCancellationStatusError() error {
 	return services.InvalidRequest(mixedCancellationStatusMessage)
+}
+
+func invalidMixedExpectedStatusError() error {
+	return services.InvalidRequest(mixedExpectedStatusMessage)
 }
 
 func validateJournalRecord(index int, record JournalRecordInput) error {
@@ -1229,7 +1261,7 @@ func validateRecordSearchOptions(opts RecordSearchOptions) error {
 	}
 	if opts.PostingStatus != nil {
 		if err := validatePostingStatus(0, *opts.PostingStatus); err != nil {
-			return services.InvalidRequest("posting_status must be pending, posted, or cancelled")
+			return services.InvalidRequest("posting_status must be expected, pending, posted, or cancelled")
 		}
 	}
 	if opts.ReconciliationStatus != nil {
@@ -1361,10 +1393,10 @@ func bulkRecordOperationResponse(recordIDs []int64, count int) BulkRecordOperati
 
 func validatePostingStatus(index int, status PostingStatus) error {
 	switch status {
-	case PostingStatusPending, PostingStatusPosted, PostingStatusCancelled:
+	case PostingStatusExpected, PostingStatusPending, PostingStatusPosted, PostingStatusCancelled:
 		return nil
 	default:
-		return services.InvalidRequest(indexedField(index, "posting_status") + " must be pending, posted, or cancelled")
+		return services.InvalidRequest(indexedField(index, "posting_status") + " must be expected, pending, posted, or cancelled")
 	}
 }
 

@@ -870,7 +870,7 @@ paths:
     get:
       operationId: listAccountBalances
       summary: List current and posted-only balances for active balance accounts.
-      description: Returns server-computed per-currency balances for active `balance` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
+      description: Returns server-computed per-currency balances for active `balance` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
       parameters:
         - name: include_hidden
           in: query
@@ -1480,6 +1480,7 @@ paths:
         - name: posting_status
           in: query
           required: false
+          description: Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
           style: form
           explode: true
           schema:
@@ -1602,7 +1603,7 @@ paths:
     get:
       operationId: getTransactionMonthTotals
       summary: Get server-computed spend and income totals for a civil month.
-      description: Aggregates active, non-cancelled journal records by transaction initiated_date for the requested YYYY-MM month. Expense and fee component records increase spend, income component records increase income, refund records are excluded from both spend and gross income, and transfer/exchange/adjustment/fx_gain_loss records are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
+      description: Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense and fee component records increase spend, income component records increase income, refund records are excluded from both spend and gross income, and transfer/exchange/adjustment/fx_gain_loss records are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
       parameters:
         - name: month
           in: query
@@ -1737,6 +1738,7 @@ paths:
         - name: posting_status
           in: query
           required: false
+          description: Filters records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
           schema:
             $ref: "#/components/schemas/PostingStatus"
         - name: reconciliation_status
@@ -1878,6 +1880,7 @@ paths:
         - name: posting_status
           in: query
           required: false
+          description: Filters account register records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
           schema:
             $ref: "#/components/schemas/PostingStatus"
         - name: reconciliation_status
@@ -2052,7 +2055,7 @@ paths:
     post:
       operationId: bulkUpdateJournalRecordStatuses
       summary: Update posting and reconciliation statuses on selected journal records.
-      description: Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records.
+      description: Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.
       requestBody:
         required: true
         content:
@@ -2398,7 +2401,7 @@ components:
           pattern: ^([A-Z]{3}|C::.+)$
         current_balance:
           type: string
-          description: JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+          description: JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
           pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
           maxLength: 40
         credit_limit:
@@ -2413,7 +2416,7 @@ components:
           maxLength: 40
         posted_balance:
           type: string
-          description: JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+          description: JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
           pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
           maxLength: 40
         unconverted_count:
@@ -2861,7 +2864,7 @@ components:
             format: int64
             minimum: 1
         posting_status:
-          $ref: "#/components/schemas/PostingStatus"
+          $ref: "#/components/schemas/NonExpectedPostingStatus"
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
     BulkRecordOperationResponse:
@@ -3302,7 +3305,7 @@ components:
           nullable: true
         posting_status:
           allOf:
-            - $ref: "#/components/schemas/PostingStatus"
+            - $ref: "#/components/schemas/NonExpectedPostingStatus"
           nullable: true
         reconciliation_status:
           allOf:
@@ -3620,7 +3623,7 @@ components:
         running_balance:
           type: string
           nullable: true
-          description: JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+          description: JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
           pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
           maxLength: 40
         category_id:
@@ -3682,6 +3685,13 @@ components:
           minimum: 0
           description: Count of matching journal records before limit and offset are applied.
     PostingStatus:
+      type: string
+      enum:
+        - expected
+        - pending
+        - posted
+        - cancelled
+    NonExpectedPostingStatus:
       type: string
       enum:
         - pending
@@ -3881,6 +3891,7 @@ components:
       required:
         - transaction_id
         - initiated_date
+        - recurring_occurrence_id
         - transaction_class
         - display_title
         - primary_amounts
@@ -3895,6 +3906,11 @@ components:
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
+        recurring_occurrence_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
         transaction_class:
           $ref: "#/components/schemas/TransactionClass"
         display_title:

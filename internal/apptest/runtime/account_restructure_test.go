@@ -77,7 +77,7 @@ func TestAccountRestructureLeavesTombstonedFQNsAndKeepsReferencesReachable(t *te
 	checking := createAccountForRestructure(t, client, "restructure:Register:Old", httpclient.Balance, false, &currency)
 	merchant := createAccountForRestructure(t, client, "restructure:Register:Merchant", httpclient.Flow, false, nil)
 	category := client.Scenario().Category("Restructure:Register")
-	transaction := createBalanceTransactionWithAmountUSD(t, client, checking.AccountId, merchant.AccountId, category.CategoryId, "USD", "-12.34", "12.34", "-12.34", "12.34", httpclient.Posted)
+	transaction := createBalanceTransactionWithAmountUSD(t, client, checking.AccountId, merchant.AccountId, category.CategoryId, "USD", "-12.34", "12.34", "-12.34", "12.34", httpclient.PostingStatusPosted)
 
 	restructureAccounts(t, client, "restructure:Register:Old", "restructure:Register:New")
 	assertAccountFQN(t, client, checking.AccountId, "restructure:Register:New")

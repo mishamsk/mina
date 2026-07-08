@@ -311,7 +311,7 @@ func (s *strictServer) BulkUpdateJournalRecordStatuses(ctx context.Context, requ
 	response, err := s.deps.Transactions.BulkUpdateStatuses(
 		ctx,
 		request.Body.RecordIds,
-		transactionAPIPostingStatusPtr(request.Body.PostingStatus),
+		transactionAPINonExpectedPostingStatusPtr(request.Body.PostingStatus),
 		transactionAPIReconciliationStatusPtr(request.Body.ReconciliationStatus),
 	)
 	if err != nil {
@@ -485,15 +485,16 @@ func journalRecordAPIInputs(records []openapi.CreateJournalRecordRequest) ([]tra
 
 func transactionAPIResponse(transaction transactions.Transaction) openapi.Transaction {
 	return openapi.Transaction{
-		TransactionId:    transaction.ID,
-		InitiatedDate:    openAPIDate(transaction.InitiatedDate),
-		TransactionClass: openapi.TransactionClass(transaction.Class),
-		DisplayTitle:     transaction.DisplayTitle,
-		PrimaryAmounts:   displayAmountAPIResponses(transaction.PrimaryAmounts),
-		Components:       classificationComponentAPIResponses(transaction.Components),
-		CreatedAt:        transaction.CreatedAt.UTC(),
-		TombstonedAt:     nullableTimestampTime(transaction.TombstonedAt),
-		Records:          journalRecordAPIResponses(transaction.Records),
+		TransactionId:         transaction.ID,
+		InitiatedDate:         openAPIDate(transaction.InitiatedDate),
+		TransactionClass:      openapi.TransactionClass(transaction.Class),
+		DisplayTitle:          transaction.DisplayTitle,
+		PrimaryAmounts:        displayAmountAPIResponses(transaction.PrimaryAmounts),
+		Components:            classificationComponentAPIResponses(transaction.Components),
+		RecurringOccurrenceId: transaction.RecurringOccurrenceID,
+		CreatedAt:             transaction.CreatedAt.UTC(),
+		TombstonedAt:          nullableTimestampTime(transaction.TombstonedAt),
+		Records:               journalRecordAPIResponses(transaction.Records),
 	}
 }
 
@@ -638,6 +639,15 @@ func transactionAPIClassSlice(classes *[]openapi.TransactionClass) []transaction
 }
 
 func transactionAPIPostingStatusPtr(status *openapi.PostingStatus) *transactions.PostingStatus {
+	if status == nil {
+		return nil
+	}
+	value := transactions.PostingStatus(*status)
+
+	return &value
+}
+
+func transactionAPINonExpectedPostingStatusPtr(status *openapi.NonExpectedPostingStatus) *transactions.PostingStatus {
 	if status == nil {
 		return nil
 	}

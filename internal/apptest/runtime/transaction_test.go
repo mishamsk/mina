@@ -26,6 +26,9 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	if created.JSON201.InitiatedDate.String() != "2024-03-10" {
 		t.Fatalf("initiated_date = %q, want 2024-03-10", created.JSON201.InitiatedDate)
 	}
+	if created.JSON201.RecurringOccurrenceId != nil {
+		t.Fatalf("created recurring_occurrence_id = %v, want nil", created.JSON201.RecurringOccurrenceId)
+	}
 	if len(created.JSON201.Records) != 2 {
 		t.Fatalf("created record count = %d, want 2; body %+v", len(created.JSON201.Records), created.JSON201)
 	}
@@ -47,6 +50,9 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	if read.JSON200.TransactionId != created.JSON201.TransactionId {
 		t.Fatalf("read transaction id = %d, want %d", read.JSON200.TransactionId, created.JSON201.TransactionId)
 	}
+	if read.JSON200.RecurringOccurrenceId != nil {
+		t.Fatalf("read recurring_occurrence_id = %v, want nil", read.JSON200.RecurringOccurrenceId)
+	}
 	if len(read.JSON200.Records) != 2 {
 		t.Fatalf("read record count = %d, want 2; body %+v", len(read.JSON200.Records), read.JSON200)
 	}
@@ -66,6 +72,9 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	}
 	if list.JSON200.Transactions[0].TransactionId != created.JSON201.TransactionId || len(list.JSON200.Transactions[0].Records) != 2 {
 		t.Fatalf("listed transaction = %+v, want id %d with 2 records", list.JSON200.Transactions[0], created.JSON201.TransactionId)
+	}
+	if list.JSON200.Transactions[0].RecurringOccurrenceId != nil {
+		t.Fatalf("listed recurring_occurrence_id = %v, want nil", list.JSON200.Transactions[0].RecurringOccurrenceId)
 	}
 }
 
@@ -397,8 +406,8 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
 	record := created.JSON201.Records[0]
-	if record.PostingStatus != httpclient.Posted {
-		t.Fatalf("posting_status = %q, want %q", record.PostingStatus, httpclient.Posted)
+	if record.PostingStatus != httpclient.PostingStatusPosted {
+		t.Fatalf("posting_status = %q, want %q", record.PostingStatus, httpclient.PostingStatusPosted)
 	}
 	if record.ReconciliationStatus != httpclient.Reconciled {
 		t.Fatalf("reconciliation_status = %q, want %q", record.ReconciliationStatus, httpclient.Reconciled)
@@ -434,8 +443,8 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	if readRecord.RecordId != record.RecordId {
 		t.Fatalf("read record id = %d, want %d", readRecord.RecordId, record.RecordId)
 	}
-	if readRecord.PostingStatus != httpclient.Posted {
-		t.Fatalf("read posting_status = %q, want %q", readRecord.PostingStatus, httpclient.Posted)
+	if readRecord.PostingStatus != httpclient.PostingStatusPosted {
+		t.Fatalf("read posting_status = %q, want %q", readRecord.PostingStatus, httpclient.PostingStatusPosted)
 	}
 	if readRecord.ReconciliationStatus != httpclient.Reconciled {
 		t.Fatalf("read reconciliation_status = %q, want %q", readRecord.ReconciliationStatus, httpclient.Reconciled)
@@ -499,7 +508,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				Memo:                 &memo,
 				PendingDate:          &pendingDate,
 				PostedDate:           &postedDate,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -509,7 +518,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				Amount:               "12.34",
 				AmountUsd:            apptest.StringPtr("12.34"),
 				CategoryId:           refs.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -633,7 +642,7 @@ func TestTransactionCreateInfersMissingAmountUSD(t *testing.T) {
 				Currency:             "EUR",
 				Amount:               "-11.00",
 				CategoryId:           refs.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -642,7 +651,7 @@ func TestTransactionCreateInfersMissingAmountUSD(t *testing.T) {
 				Currency:             "EUR",
 				Amount:               "11.00",
 				CategoryId:           refs.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -687,7 +696,7 @@ func TestTransactionLeavesUnrepresentableInferredAmountUSDNull(t *testing.T) {
 				Currency:             currency,
 				Amount:               "-100.00",
 				CategoryId:           refs.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -696,7 +705,7 @@ func TestTransactionLeavesUnrepresentableInferredAmountUSDNull(t *testing.T) {
 				Currency:             currency,
 				Amount:               "100.00",
 				CategoryId:           refs.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -731,7 +740,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Amount:               "-110.00",
 				AmountUsd:            apptest.StringPtr("-110.00"),
 				CategoryId:           exchangeCategory.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -741,7 +750,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Amount:               "110.00",
 				AmountUsd:            apptest.StringPtr("110.00"),
 				CategoryId:           exchangeCategory.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -751,7 +760,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Amount:               "-100.00",
 				AmountUsd:            apptest.StringPtr("-110.00"),
 				CategoryId:           exchangeCategory.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -761,7 +770,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Amount:               "100.00",
 				AmountUsd:            nil,
 				CategoryId:           exchangeCategory.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -814,33 +823,33 @@ func TestTransactionCancellationInvariantOnCreateAndReplace(t *testing.T) {
 	refs := createTransactionRefs(t, client)
 
 	fullyCancelled := balancedTransactionRequest(refs)
-	fullyCancelled.Records[0].PostingStatus = httpclient.Cancelled
-	fullyCancelled.Records[1].PostingStatus = httpclient.Cancelled
+	fullyCancelled.Records[0].PostingStatus = httpclient.PostingStatusCancelled
+	fullyCancelled.Records[1].PostingStatus = httpclient.PostingStatusCancelled
 	created, err := client.REST().CreateTransactionWithResponse(context.Background(), fullyCancelled)
 	requireNoTransportError(t, "create fully cancelled transaction", err)
 	if created.StatusCode() != http.StatusCreated {
 		t.Fatalf("fully cancelled create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
-	assertTransactionRecordPostingStatuses(t, created.JSON201.Records, httpclient.Cancelled)
+	assertTransactionRecordPostingStatuses(t, created.JSON201.Records, httpclient.PostingStatusCancelled)
 
 	mixedCreate := balancedTransactionRequest(refs)
-	mixedCreate.Records[0].PostingStatus = httpclient.Cancelled
+	mixedCreate.Records[0].PostingStatus = httpclient.PostingStatusCancelled
 	rejectedCreate, err := client.REST().CreateTransactionWithResponse(context.Background(), mixedCreate)
 	requireNoTransportError(t, "create mixed cancelled transaction", err)
 	assertMixedCancellationError(t, "mixed create", rejectedCreate.StatusCode(), rejectedCreate.JSON400, rejectedCreate.Body)
 
 	replacement := replacementTransactionRequest(refs)
-	replacement.Records[0].PostingStatus = httpclient.Cancelled
-	replacement.Records[1].PostingStatus = httpclient.Cancelled
+	replacement.Records[0].PostingStatus = httpclient.PostingStatusCancelled
+	replacement.Records[1].PostingStatus = httpclient.PostingStatusCancelled
 	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacement)
 	requireNoTransportError(t, "replace fully cancelled transaction", err)
 	if replaced.StatusCode() != http.StatusOK {
 		t.Fatalf("fully cancelled replace status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
 	}
-	assertTransactionRecordPostingStatuses(t, replaced.JSON200.Records, httpclient.Cancelled)
+	assertTransactionRecordPostingStatuses(t, replaced.JSON200.Records, httpclient.PostingStatusCancelled)
 
 	mixedReplace := replacementTransactionRequest(refs)
-	mixedReplace.Records[0].PostingStatus = httpclient.Cancelled
+	mixedReplace.Records[0].PostingStatus = httpclient.PostingStatusCancelled
 	rejectedReplace, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, mixedReplace)
 	requireNoTransportError(t, "replace mixed cancelled transaction", err)
 	assertMixedCancellationError(t, "mixed replace", rejectedReplace.StatusCode(), rejectedReplace.JSON400, rejectedReplace.Body)
@@ -850,11 +859,11 @@ func TestTransactionCancellationInvariantOnCreateAndReplace(t *testing.T) {
 	if read.StatusCode() != http.StatusOK {
 		t.Fatalf("read after rejected mixed replace status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
 	}
-	assertTransactionRecordPostingStatuses(t, read.JSON200.Records, httpclient.Cancelled)
+	assertTransactionRecordPostingStatuses(t, read.JSON200.Records, httpclient.PostingStatusCancelled)
 
 	unbalancedCancelled := balancedTransactionRequest(refs)
-	unbalancedCancelled.Records[0].PostingStatus = httpclient.Cancelled
-	unbalancedCancelled.Records[1].PostingStatus = httpclient.Cancelled
+	unbalancedCancelled.Records[0].PostingStatus = httpclient.PostingStatusCancelled
+	unbalancedCancelled.Records[1].PostingStatus = httpclient.PostingStatusCancelled
 	unbalancedCancelled.Records[1].Amount = "11.00"
 	rejectedUnbalanced, err := client.REST().CreateTransactionWithResponse(context.Background(), unbalancedCancelled)
 	requireNoTransportError(t, "create unbalanced fully cancelled transaction", err)
@@ -863,6 +872,77 @@ func TestTransactionCancellationInvariantOnCreateAndReplace(t *testing.T) {
 	}
 	if rejectedUnbalanced.JSON400 == nil || rejectedUnbalanced.JSON400.Error.Message != "transaction records must balance to zero amount per currency" {
 		t.Fatalf("unbalanced fully cancelled error = %+v, want balance error; body %s", rejectedUnbalanced.JSON400, rejectedUnbalanced.Body)
+	}
+}
+
+func TestTransactionExpectedInvariantOnCreateReplaceAndBulkTarget(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+
+	fullyExpected := balancedTransactionRequest(refs)
+	fullyExpected.Records[0].PostingStatus = httpclient.PostingStatusExpected
+	fullyExpected.Records[1].PostingStatus = httpclient.PostingStatusExpected
+	created, err := client.REST().CreateTransactionWithResponse(context.Background(), fullyExpected)
+	requireNoTransportError(t, "create fully expected transaction", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("fully expected create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, created.JSON201.Records, httpclient.PostingStatusExpected)
+
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "read fully expected transaction", err)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("fully expected read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, read.JSON200.Records, httpclient.PostingStatusExpected)
+
+	replaceTarget := createTransaction(t, client, balancedTransactionRequest(refs))
+	fullyExpectedReplacement := replacementTransactionRequest(refs)
+	fullyExpectedReplacement.Records[0].PostingStatus = httpclient.PostingStatusExpected
+	fullyExpectedReplacement.Records[1].PostingStatus = httpclient.PostingStatusExpected
+	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), replaceTarget.JSON201.TransactionId, fullyExpectedReplacement)
+	requireNoTransportError(t, "replace fully expected transaction", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("fully expected replace status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, replaced.JSON200.Records, httpclient.PostingStatusExpected)
+
+	readReplaced, err := client.REST().GetTransactionWithResponse(context.Background(), replaceTarget.JSON201.TransactionId)
+	requireNoTransportError(t, "read replaced fully expected transaction", err)
+	if readReplaced.StatusCode() != http.StatusOK {
+		t.Fatalf("fully expected replace read status = %d, want %d; body %s", readReplaced.StatusCode(), http.StatusOK, readReplaced.Body)
+	}
+	assertTransactionRecordPostingStatuses(t, readReplaced.JSON200.Records, httpclient.PostingStatusExpected)
+
+	mixedCreate := balancedTransactionRequest(refs)
+	mixedCreate.Records[0].PostingStatus = httpclient.PostingStatusExpected
+	rejectedCreate, err := client.REST().CreateTransactionWithResponse(context.Background(), mixedCreate)
+	requireNoTransportError(t, "create mixed expected transaction", err)
+	assertMixedExpectedError(t, "mixed expected create", rejectedCreate.StatusCode(), rejectedCreate.JSON400, rejectedCreate.Body)
+
+	mixedReplace := replacementTransactionRequest(refs)
+	mixedReplace.Records[0].PostingStatus = httpclient.PostingStatusExpected
+	rejectedReplace, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, mixedReplace)
+	requireNoTransportError(t, "replace mixed expected transaction", err)
+	assertMixedExpectedError(t, "mixed expected replace", rejectedReplace.StatusCode(), rejectedReplace.JSON400, rejectedReplace.Body)
+
+	expectedStatus := httpclient.NonExpectedPostingStatus("expected")
+	rejectedBulk, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
+		RecordIds: []int64{
+			created.JSON201.Records[0].RecordId,
+			created.JSON201.Records[1].RecordId,
+		},
+		PostingStatus: &expectedStatus,
+	})
+	requireNoTransportError(t, "bulk update status to expected", err)
+	if rejectedBulk.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("bulk expected target status = %d, want %d; body %s", rejectedBulk.StatusCode(), http.StatusBadRequest, rejectedBulk.Body)
+	}
+	if rejectedBulk.JSON400 == nil || rejectedBulk.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("bulk expected target error = %+v, want invalid_request; body %s", rejectedBulk.JSON400, rejectedBulk.Body)
+	}
+	if strings.Contains(rejectedBulk.JSON400.Error.Message, "pending, posted, or cancelled") {
+		t.Fatalf("bulk expected target message = %q, want schema-level rejection; body %s", rejectedBulk.JSON400.Error.Message, rejectedBulk.Body)
 	}
 }
 
@@ -1238,7 +1318,7 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				Memo:                 &memo,
 				PendingDate:          &pendingDate,
 				PostedDate:           &postedDate,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -1248,7 +1328,7 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				Amount:               "12.34",
 				AmountUsd:            apptest.StringPtr("12.34"),
 				CategoryId:           refs.CategoryId,
-				PostingStatus:        httpclient.Posted,
+				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.Manual,
 			},
@@ -1315,6 +1395,20 @@ func assertMixedCancellationError(t *testing.T, label string, gotStatus int, got
 	}
 	if !strings.Contains(gotBody.Error.Message, "all cancelled or none cancelled") {
 		t.Fatalf("%s message = %q, want mixed-cancellation rule; body %s", label, gotBody.Error.Message, rawBody)
+	}
+}
+
+func assertMixedExpectedError(t *testing.T, label string, gotStatus int, gotBody *httpclient.InvalidRequest, rawBody []byte) {
+	t.Helper()
+
+	if gotStatus != http.StatusBadRequest {
+		t.Fatalf("%s status = %d, want %d; body %s", label, gotStatus, http.StatusBadRequest, rawBody)
+	}
+	if gotBody == nil || gotBody.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("%s error = %+v, want invalid_request; body %s", label, gotBody, rawBody)
+	}
+	if !strings.Contains(gotBody.Error.Message, "all expected or none expected") {
+		t.Fatalf("%s message = %q, want mixed-expected rule; body %s", label, gotBody.Error.Message, rawBody)
 	}
 }
 

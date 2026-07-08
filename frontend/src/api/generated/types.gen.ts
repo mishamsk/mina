@@ -76,7 +76,7 @@ export type AccountBalance = {
     account_id: number;
     currency: string;
     /**
-     * JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     * JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     current_balance: string;
     /**
@@ -88,7 +88,7 @@ export type AccountBalance = {
      */
     current_balance_usd: string;
     /**
-     * JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     * JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     posted_balance: string;
     /**
@@ -260,7 +260,7 @@ export type BulkReassignRecordsAccountRequest = {
  */
 export type BulkUpdateRecordStatusRequest = {
     record_ids: Array<number>;
-    posting_status?: PostingStatus;
+    posting_status?: NonExpectedPostingStatus;
     reconciliation_status?: ReconciliationStatus;
 };
 
@@ -427,7 +427,7 @@ export type TransactionTemplateRecordRequest = {
     amount?: string | null;
     tag_ids?: Array<number>;
     memo?: string | null;
-    posting_status?: PostingStatus | null;
+    posting_status?: NonExpectedPostingStatus | null;
     reconciliation_status?: ReconciliationStatus | null;
 };
 
@@ -536,7 +536,7 @@ export type JournalRecord = {
      */
     amount_usd: string | null;
     /**
-     * JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     * JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     running_balance?: string | null;
     category_id: number;
@@ -568,7 +568,9 @@ export type JournalRecordSearchResponse = {
     total_count: number;
 };
 
-export type PostingStatus = 'pending' | 'posted' | 'cancelled';
+export type PostingStatus = 'expected' | 'pending' | 'posted' | 'cancelled';
+
+export type NonExpectedPostingStatus = 'pending' | 'posted' | 'cancelled';
 
 export type ReconciliationStatus = 'reconciled' | 'unreconciled';
 
@@ -637,6 +639,10 @@ export type TransactionTemplateListResponse = {
 export type Transaction = {
     transaction_id: number;
     initiated_date: string;
+    /**
+     * Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
+     */
+    recurring_occurrence_id: number | null;
     transaction_class: TransactionClass;
     /**
      * Server-derived transaction summary title for transaction lines.
@@ -2384,6 +2390,9 @@ export type ListTransactionsData = {
         category_id?: Array<number>;
         tag_id?: Array<number>;
         member_id?: Array<number>;
+        /**
+         * Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
+         */
         posting_status?: Array<PostingStatus>;
         transaction_class?: Array<TransactionClass>;
         /**
@@ -2598,6 +2607,9 @@ export type SearchJournalRecordsData = {
         category_id?: number;
         tag_id?: number;
         member_id?: number;
+        /**
+         * Filters records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
+         */
         posting_status?: PostingStatus;
         reconciliation_status?: ReconciliationStatus;
         /**
@@ -2656,6 +2668,9 @@ export type SearchAccountJournalRecordsData = {
         category_id?: number;
         tag_id?: number;
         member_id?: number;
+        /**
+         * Filters account register records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
+         */
         posting_status?: PostingStatus;
         reconciliation_status?: ReconciliationStatus;
         /**

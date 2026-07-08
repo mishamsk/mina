@@ -54,5 +54,6 @@
   - Store-owned database backup sources use DuckDB database copy into provider-owned target files and reject in-memory accounting sources.
   - Exchange-rate loading infers non-USD journal-record needs, upserts active `USD -> currency` rates, and backfills resolvable null `amount_usd` values.
   - Transaction templates are stored as normalized active/tombstoned template and record-default rows with write-time reference checks.
+  - Schema is prepared for recurring transactions with EXPECTED posting status default exclusion and nullable transaction occurrence back-pointers.
   - Tombstone-aware reads and list defaults for applicable resources.
   - Store-owned allowlists for dynamic filtering and sorting.

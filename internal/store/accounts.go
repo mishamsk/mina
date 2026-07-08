@@ -11,6 +11,7 @@ import (
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
+	"github.com/mishamsk/mina/internal/services/transactions"
 )
 
 // AccountStore persists accounts.
@@ -162,6 +163,7 @@ func (s *AccountStore) ListBalances(ctx context.Context, opts accounts.BalanceLi
 	WHERE jr.tombstoned_at IS NULL
 	  AND tx.tombstoned_at IS NULL
 	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
+	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
 )
 SELECT a.account_id,
        COALESCE(ar.currency, a.currency) AS currency,
@@ -183,7 +185,7 @@ LEFT JOIN active_records ar ON ar.account_id = a.account_id
 `+filter+`
 GROUP BY a.account_id, COALESCE(ar.currency, a.currency)
 ORDER BY a.account_id ASC, currency ASC`,
-		append([]any{"CANCELLED", "POSTED"}, args...)...,
+		append([]any{enumValue(transactions.PostingStatusCancelled), enumValue(transactions.PostingStatusExpected), enumValue(transactions.PostingStatusPosted)}, args...)...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list account balances: %w", err)

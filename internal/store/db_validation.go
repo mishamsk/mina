@@ -20,7 +20,7 @@ import (
 )
 
 // PinnedMigrationContentHash is the validator-reviewed sha256 of embedded migration SQL.
-const PinnedMigrationContentHash = "0da0ecee11fa6158dbe91ff7631e4ffd04c9c59e8ac8d4c4545a47ca4f1689a5"
+const PinnedMigrationContentHash = "b7ea35257645995b08d6c90d40bf5fb7ae45ba780cd2e3944034564219a5f678"
 
 const validationTrimSpaceCharactersSQL = `' ' || ` +
 	`chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || ` +
@@ -194,6 +194,7 @@ func (s *DBValidationStore) InvariantFindings(ctx context.Context, missingUnique
 		s.unbalancedTransactionFindings,
 		s.shortTransactionFindings,
 		s.mixedCancellationTransactionFindings,
+		s.mixedExpectedTransactionFindings,
 		s.nonPositiveExchangeRateFindings,
 		s.zeroAmountFindings,
 		s.zeroAmountUSDFindings,
@@ -355,6 +356,39 @@ ORDER BY t.transaction_id`,
 }
 
 func (s *DBValidationStore) mixedCancellationTransactionFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
+	return s.mixedPostingStatusTransactionFindings(
+		ctx,
+		transactions.PostingStatusCancelled,
+		"check transaction cancellation statuses",
+		"scan transaction cancellation-status finding",
+		"iterate transaction cancellation-status findings",
+		func(transactionID int64) string {
+			return fmt.Sprintf("transaction %d mixes cancelled and non-cancelled active records", transactionID)
+		},
+	)
+}
+
+func (s *DBValidationStore) mixedExpectedTransactionFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
+	return s.mixedPostingStatusTransactionFindings(
+		ctx,
+		transactions.PostingStatusExpected,
+		"check transaction expected statuses",
+		"scan transaction expected-status finding",
+		"iterate transaction expected-status findings",
+		func(transactionID int64) string {
+			return fmt.Sprintf("transaction %d mixes expected and non-expected active records", transactionID)
+		},
+	)
+}
+
+func (s *DBValidationStore) mixedPostingStatusTransactionFindings(
+	ctx context.Context,
+	status transactions.PostingStatus,
+	checkErr string,
+	scanErr string,
+	iterateErr string,
+	message func(int64) string,
+) ([]dbvalidation.Finding, error) {
 	rows, err := s.db.query().QueryContext(
 		ctx,
 		`SELECT t.transaction_id
@@ -367,11 +401,11 @@ GROUP BY t.transaction_id
 HAVING COUNT(*) FILTER (WHERE jr.posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`)) > 0
    AND COUNT(*) FILTER (WHERE jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)) > 0
 ORDER BY t.transaction_id`,
-		enumValue(transactions.PostingStatusCancelled),
-		enumValue(transactions.PostingStatusCancelled),
+		enumValue(status),
+		enumValue(status),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("check transaction cancellation statuses: %w", err)
+		return nil, fmt.Errorf("%s: %w", checkErr, err)
 	}
 	defer func() {
 		_ = rows.Close()
@@ -381,12 +415,12 @@ ORDER BY t.transaction_id`,
 	for rows.Next() {
 		var transactionID int64
 		if err := rows.Scan(&transactionID); err != nil {
-			return nil, fmt.Errorf("scan transaction cancellation-status finding: %w", err)
+			return nil, fmt.Errorf("%s: %w", scanErr, err)
 		}
-		findings = append(findings, invariantFinding(dbvalidation.SeverityError, fmt.Sprintf("transaction %d mixes cancelled and non-cancelled active records", transactionID)))
+		findings = append(findings, invariantFinding(dbvalidation.SeverityError, message(transactionID)))
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate transaction cancellation-status findings: %w", err)
+		return nil, fmt.Errorf("%s: %w", iterateErr, err)
 	}
 
 	return findings, nil
@@ -845,6 +879,8 @@ func validationReferenceWaivers() []string {
 		"account.parent_fqn",
 		"category.parent_fqn",
 		"tag.parent_fqn",
+		// Recurring occurrence storage owns this reference once recurring operations land.
+		"transaction.recurring_occurrence_id",
 		"transaction_template.parent_fqn",
 	}
 }

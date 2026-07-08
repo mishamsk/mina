@@ -628,7 +628,7 @@ func record(accountID int64, categoryID int64, currency string, amount string) h
 		Currency:             currency,
 		Amount:               amount,
 		AmountUsd:            nil,
-		PostingStatus:        httpclient.Posted,
+		PostingStatus:        httpclient.PostingStatusPosted,
 		ReconciliationStatus: httpclient.Reconciled,
 		Source:               httpclient.Manual,
 	}

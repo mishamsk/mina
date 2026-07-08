@@ -51,6 +51,7 @@ export const compactTransactionClassLabel = (
 
 const postingStatusLabels: Record<PostingStatus, string> = {
   cancelled: "Cancelled",
+  expected: "Expected",
   pending: "Pending",
   posted: "Posted",
 };

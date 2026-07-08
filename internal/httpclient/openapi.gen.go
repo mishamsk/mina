@@ -202,6 +202,27 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for NonExpectedPostingStatus.
+const (
+	NonExpectedPostingStatusCancelled NonExpectedPostingStatus = "cancelled"
+	NonExpectedPostingStatusPending   NonExpectedPostingStatus = "pending"
+	NonExpectedPostingStatusPosted    NonExpectedPostingStatus = "posted"
+)
+
+// Valid indicates whether the value is a known member of the NonExpectedPostingStatus enum.
+func (e NonExpectedPostingStatus) Valid() bool {
+	switch e {
+	case NonExpectedPostingStatusCancelled:
+		return true
+	case NonExpectedPostingStatusPending:
+		return true
+	case NonExpectedPostingStatusPosted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OperationRunReferenceResponseOperationId.
 const (
 	OperationRunReferenceResponseOperationIdDatabaseBackup      OperationRunReferenceResponseOperationId = "database-backup"
@@ -267,19 +288,22 @@ func (e OperationRunResponseStatus) Valid() bool {
 
 // Defines values for PostingStatus.
 const (
-	Cancelled PostingStatus = "cancelled"
-	Pending   PostingStatus = "pending"
-	Posted    PostingStatus = "posted"
+	PostingStatusCancelled PostingStatus = "cancelled"
+	PostingStatusExpected  PostingStatus = "expected"
+	PostingStatusPending   PostingStatus = "pending"
+	PostingStatusPosted    PostingStatus = "posted"
 )
 
 // Valid indicates whether the value is a known member of the PostingStatus enum.
 func (e PostingStatus) Valid() bool {
 	switch e {
-	case Cancelled:
+	case PostingStatusCancelled:
 		return true
-	case Pending:
+	case PostingStatusExpected:
 		return true
-	case Posted:
+	case PostingStatusPending:
+		return true
+	case PostingStatusPosted:
 		return true
 	default:
 		return false
@@ -705,13 +729,13 @@ type AccountBalance struct {
 	CreditLimit *string `json:"credit_limit,omitempty"`
 	Currency    string  `json:"currency"`
 
-	// CurrentBalance JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	// CurrentBalance JSON string, not a JSON number. Posted plus pending aggregate DECIMAL(18,8) balance in this currency; cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	CurrentBalance string `json:"current_balance"`
 
 	// CurrentBalanceUsd JSON string, not a JSON number. Approximate USD-equivalent DECIMAL(18,8) aggregate using stored journal-record amount_usd values only; no query-time exchange-rate conversion is performed. Partial when unconverted_count is greater than zero. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	CurrentBalanceUsd string `json:"current_balance_usd"`
 
-	// PostedBalance JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	// PostedBalance JSON string, not a JSON number. Posted-only aggregate DECIMAL(18,8) balance in this currency; cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	PostedBalance string `json:"posted_balance"`
 
 	// UnconvertedCount Count of active non-cancelled records contributing to this balance row that do not have amount_usd.
@@ -775,9 +799,9 @@ type BulkTagRecordsRequest struct {
 
 // BulkUpdateRecordStatusRequest Provide posting_status, reconciliation_status, or both.
 type BulkUpdateRecordStatusRequest struct {
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
-	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	RecordIds            []int64               `json:"record_ids"`
+	PostingStatus        *NonExpectedPostingStatus `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus     `json:"reconciliation_status,omitempty"`
+	RecordIds            []int64                   `json:"record_ids"`
 }
 
 // Category defines model for Category.
@@ -1128,7 +1152,7 @@ type JournalRecord struct {
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
 
-	// RunningBalance JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	// RunningBalance JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	RunningBalance *string    `json:"running_balance,omitempty"`
 	Source         Source     `json:"source"`
 	TagIds         []int64    `json:"tag_ids"`
@@ -1161,6 +1185,9 @@ type MemberListResponse struct {
 	// TotalCount Count of matching members before limit and offset are applied.
 	TotalCount int64 `json:"total_count"`
 }
+
+// NonExpectedPostingStatus defines model for NonExpectedPostingStatus.
+type NonExpectedPostingStatus string
 
 // OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
 type OperationRunReferenceResponse struct {
@@ -1246,13 +1273,16 @@ type Transaction struct {
 	CreatedAt  time.Time              `json:"created_at"`
 
 	// DisplayTitle Server-derived transaction summary title for transaction lines.
-	DisplayTitle     string             `json:"display_title"`
-	InitiatedDate    openapi_types.Date `json:"initiated_date"`
-	PrimaryAmounts   []DisplayAmount    `json:"primary_amounts"`
-	Records          []JournalRecord    `json:"records"`
-	TombstonedAt     *time.Time         `json:"tombstoned_at,omitempty"`
-	TransactionClass TransactionClass   `json:"transaction_class"`
-	TransactionId    int64              `json:"transaction_id"`
+	DisplayTitle   string             `json:"display_title"`
+	InitiatedDate  openapi_types.Date `json:"initiated_date"`
+	PrimaryAmounts []DisplayAmount    `json:"primary_amounts"`
+	Records        []JournalRecord    `json:"records"`
+
+	// RecurringOccurrenceId Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
+	RecurringOccurrenceId *int64           `json:"recurring_occurrence_id"`
+	TombstonedAt          *time.Time       `json:"tombstoned_at,omitempty"`
+	TransactionClass      TransactionClass `json:"transaction_class"`
+	TransactionId         int64            `json:"transaction_id"`
 }
 
 // TransactionClass defines model for TransactionClass.
@@ -1335,14 +1365,14 @@ type TransactionTemplateRecordRequest struct {
 	AccountId *int64 `json:"account_id,omitempty"`
 
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount               *string               `json:"amount,omitempty"`
-	CategoryId           int64                 `json:"category_id"`
-	Currency             *string               `json:"currency,omitempty"`
-	MemberId             *int64                `json:"member_id,omitempty"`
-	Memo                 *string               `json:"memo,omitempty"`
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
-	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+	Amount               *string                   `json:"amount,omitempty"`
+	CategoryId           int64                     `json:"category_id"`
+	Currency             *string                   `json:"currency,omitempty"`
+	MemberId             *int64                    `json:"member_id,omitempty"`
+	Memo                 *string                   `json:"memo,omitempty"`
+	PostingStatus        *NonExpectedPostingStatus `json:"posting_status,omitempty"`
+	ReconciliationStatus *ReconciliationStatus     `json:"reconciliation_status,omitempty"`
+	TagIds               *[]int64                  `json:"tag_ids,omitempty"`
 }
 
 // TransactionTemplateWriteRequest defines model for TransactionTemplateWriteRequest.
@@ -1464,9 +1494,11 @@ type ListCreditLimitHistoryParamsSortDir string
 
 // SearchAccountJournalRecordsParams defines parameters for SearchAccountJournalRecords.
 type SearchAccountJournalRecordsParams struct {
-	CategoryId           *int64                `form:"category_id,omitempty" json:"category_id,omitempty"`
-	TagId                *int64                `form:"tag_id,omitempty" json:"tag_id,omitempty"`
-	MemberId             *int64                `form:"member_id,omitempty" json:"member_id,omitempty"`
+	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
+	TagId      *int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+	MemberId   *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
+
+	// PostingStatus Filters account register records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
 	PostingStatus        *PostingStatus        `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
@@ -1575,10 +1607,12 @@ type SearchJournalRecordsParams struct {
 	AccountId *int64 `form:"account_id,omitempty" json:"account_id,omitempty"`
 
 	// AccountFqnPrefix Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.
-	AccountFqnPrefix     *string               `form:"account_fqn_prefix,omitempty" json:"account_fqn_prefix,omitempty"`
-	CategoryId           *int64                `form:"category_id,omitempty" json:"category_id,omitempty"`
-	TagId                *int64                `form:"tag_id,omitempty" json:"tag_id,omitempty"`
-	MemberId             *int64                `form:"member_id,omitempty" json:"member_id,omitempty"`
+	AccountFqnPrefix *string `form:"account_fqn_prefix,omitempty" json:"account_fqn_prefix,omitempty"`
+	CategoryId       *int64  `form:"category_id,omitempty" json:"category_id,omitempty"`
+	TagId            *int64  `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+	MemberId         *int64  `form:"member_id,omitempty" json:"member_id,omitempty"`
+
+	// PostingStatus Filters records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
 	PostingStatus        *PostingStatus        `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
@@ -1652,11 +1686,13 @@ type ListTransactionsParams struct {
 	Offset  *int                           `form:"offset,omitempty" json:"offset,omitempty"`
 
 	// AnchorDate Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.
-	AnchorDate       *openapi_types.Date `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
-	AccountId        *[]int64            `form:"account_id,omitempty" json:"account_id,omitempty"`
-	CategoryId       *[]int64            `form:"category_id,omitempty" json:"category_id,omitempty"`
-	TagId            *[]int64            `form:"tag_id,omitempty" json:"tag_id,omitempty"`
-	MemberId         *[]int64            `form:"member_id,omitempty" json:"member_id,omitempty"`
+	AnchorDate *openapi_types.Date `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+	AccountId  *[]int64            `form:"account_id,omitempty" json:"account_id,omitempty"`
+	CategoryId *[]int64            `form:"category_id,omitempty" json:"category_id,omitempty"`
+	TagId      *[]int64            `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+	MemberId   *[]int64            `form:"member_id,omitempty" json:"member_id,omitempty"`
+
+	// PostingStatus Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
 	PostingStatus    *[]PostingStatus    `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 	TransactionClass *[]TransactionClass `form:"transaction_class,omitempty" json:"transaction_class,omitempty"`
 

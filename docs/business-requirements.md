@@ -110,7 +110,7 @@ Three dates track the lifecycle:
 
 ### Record Status
 
-- **Posting status**: Pending, Posted, or Cancelled
+- **Posting status**: Expected, Pending, Posted, or Cancelled
 - **Reconciliation status**: Reconciled or Unreconciled (for matching with imports)
 - **Source**: How the record was created (manual entry in Phase 1)
 

@@ -57,7 +57,7 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 	fullCurrency := "USD"
 	debitAmount := "-30"
 	creditAmount := "20"
-	postingStatus := httpclient.Posted
+	postingStatus := httpclient.NonExpectedPostingStatusPosted
 	reconciliationStatus := httpclient.Unreconciled
 	full := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Transfers:Planning",
@@ -86,7 +86,7 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 	if len(fullRead.JSON200.Records) != 2 {
 		t.Fatalf("full template record count = %d, want 2; body %+v", len(fullRead.JSON200.Records), fullRead.JSON200)
 	}
-	assertRichTemplateRecord(t, fullRead.JSON200.Records[0], refs, debitAmount, fullMemo, postingStatus, reconciliationStatus)
+	assertRichTemplateRecord(t, fullRead.JSON200.Records[0], refs, debitAmount, fullMemo, httpclient.PostingStatusPosted, reconciliationStatus)
 	if fullRead.JSON200.Records[1].Amount == nil || *fullRead.JSON200.Records[1].Amount != "20.00000000" {
 		t.Fatalf("second amount = %v, want 20.00000000", fullRead.JSON200.Records[1].Amount)
 	}
@@ -557,7 +557,7 @@ func TestTransactionTemplateValidationErrors(t *testing.T) {
 		},
 	})
 
-	unsupportedStatus := httpclient.PostingStatus("unknown")
+	unsupportedStatus := httpclient.NonExpectedPostingStatus("unknown")
 	assertInvalidTransactionTemplateCreate(t, client, "unsupported posting status", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:PostingStatus",
 		Records: []httpclient.TransactionTemplateRecordRequest{

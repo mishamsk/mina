@@ -305,7 +305,7 @@ export const setAccountHiddenByPath = <ThrowOnError extends boolean = false>(opt
 /**
  * List current and posted-only balances for active balance accounts.
  *
- * Returns server-computed per-currency balances for active `balance` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
+ * Returns server-computed per-currency balances for active `balance` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
  */
 export const listAccountBalances = <ThrowOnError extends boolean = false>(options?: Options<ListAccountBalancesData, ThrowOnError>): RequestResult<ListAccountBalancesResponses, ListAccountBalancesErrors, ThrowOnError> => (options?.client ?? client).get<ListAccountBalancesResponses, ListAccountBalancesErrors, ThrowOnError>({ url: '/api/accounts/balances', ...options });
 
@@ -474,7 +474,7 @@ export const createTransaction = <ThrowOnError extends boolean = false>(options:
 /**
  * Get server-computed spend and income totals for a civil month.
  *
- * Aggregates active, non-cancelled journal records by transaction initiated_date for the requested YYYY-MM month. Expense and fee component records increase spend, income component records increase income, refund records are excluded from both spend and gross income, and transfer/exchange/adjustment/fx_gain_loss records are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
+ * Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense and fee component records increase spend, income component records increase income, refund records are excluded from both spend and gross income, and transfer/exchange/adjustment/fx_gain_loss records are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
  */
 export const getTransactionMonthTotals = <ThrowOnError extends boolean = false>(options: Options<GetTransactionMonthTotalsData, ThrowOnError>): RequestResult<GetTransactionMonthTotalsResponses, GetTransactionMonthTotalsErrors, ThrowOnError> => (options.client ?? client).get<GetTransactionMonthTotalsResponses, GetTransactionMonthTotalsErrors, ThrowOnError>({ url: '/api/transactions/month-totals', ...options });
 
@@ -575,7 +575,7 @@ export const bulkReassignJournalRecordAccount = <ThrowOnError extends boolean = 
 /**
  * Update posting and reconciliation statuses on selected journal records.
  *
- * Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records.
+ * Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.
  */
 export const bulkUpdateJournalRecordStatuses = <ThrowOnError extends boolean = false>(options: Options<BulkUpdateJournalRecordStatusesData, ThrowOnError>): RequestResult<BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordStatusesErrors, ThrowOnError> => (options.client ?? client).post<BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordStatusesErrors, ThrowOnError>({
     url: '/api/records/bulk/status',

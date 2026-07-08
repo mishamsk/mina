@@ -73,7 +73,7 @@ func TestShorthandTransactionCreateOptionalFieldsAmountUSDAndReadShapes(t *testi
 	memo := "Manual coffee"
 	pendingDate := apptest.Timestamp("2024-04-05T14:30:00Z")
 	postedDate := apptest.Timestamp("2024-04-06T15:45:00Z")
-	postingStatus := httpclient.Pending
+	postingStatus := httpclient.PostingStatusPending
 	reconciliationStatus := httpclient.Unreconciled
 
 	created := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
@@ -105,8 +105,8 @@ func TestShorthandTransactionCreateOptionalFieldsAmountUSDAndReadShapes(t *testi
 		if record.PostedDate == nil || !record.PostedDate.Equal(postedDate) {
 			t.Fatalf("posted_date = %v, want %v", record.PostedDate, postedDate)
 		}
-		if record.PostingStatus != httpclient.Pending {
-			t.Fatalf("posting_status = %q, want %q", record.PostingStatus, httpclient.Pending)
+		if record.PostingStatus != httpclient.PostingStatusPending {
+			t.Fatalf("posting_status = %q, want %q", record.PostingStatus, httpclient.PostingStatusPending)
 		}
 		if record.ReconciliationStatus != httpclient.Unreconciled {
 			t.Fatalf("reconciliation_status = %q, want %q", record.ReconciliationStatus, httpclient.Unreconciled)
@@ -565,8 +565,8 @@ func assertDefaultShorthandRecords(t *testing.T, transaction httpclient.Transact
 	t.Helper()
 
 	for _, record := range transaction.Records {
-		if record.PostingStatus != httpclient.Posted {
-			t.Fatalf("default posting_status = %q, want %q", record.PostingStatus, httpclient.Posted)
+		if record.PostingStatus != httpclient.PostingStatusPosted {
+			t.Fatalf("default posting_status = %q, want %q", record.PostingStatus, httpclient.PostingStatusPosted)
 		}
 		if record.ReconciliationStatus != httpclient.Reconciled {
 			t.Fatalf("default reconciliation_status = %q, want %q", record.ReconciliationStatus, httpclient.Reconciled)
