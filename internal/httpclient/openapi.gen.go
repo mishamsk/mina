@@ -678,20 +678,23 @@ type APIErrorCode string
 
 // Account defines model for Account.
 type Account struct {
-	AccountId      int64       `json:"account_id"`
-	AccountType    AccountType `json:"account_type"`
-	CreatedAt      time.Time   `json:"created_at"`
-	Currency       *string     `json:"currency,omitempty"`
-	ExternalId     *string     `json:"external_id,omitempty"`
-	ExternalSystem *string     `json:"external_system,omitempty"`
-	Fqn            string      `json:"fqn"`
-	IsFeatured     bool        `json:"is_featured"`
-	IsHidden       bool        `json:"is_hidden"`
-	Level          int         `json:"level"`
-	Name           string      `json:"name"`
-	ParentFqn      *string     `json:"parent_fqn"`
-	TombstonedAt   *time.Time  `json:"tombstoned_at,omitempty"`
-	UpdatedAt      time.Time   `json:"updated_at"`
+	AccountId   int64       `json:"account_id"`
+	AccountType AccountType `json:"account_type"`
+	CreatedAt   time.Time   `json:"created_at"`
+	Currency    *string     `json:"currency,omitempty"`
+
+	// Deletable Populated in listAccounts responses. True when the active account has no active dependent resources and can be tombstone-deleted.
+	Deletable      *bool      `json:"deletable,omitempty"`
+	ExternalId     *string    `json:"external_id,omitempty"`
+	ExternalSystem *string    `json:"external_system,omitempty"`
+	Fqn            string     `json:"fqn"`
+	IsFeatured     bool       `json:"is_featured"`
+	IsHidden       bool       `json:"is_hidden"`
+	Level          int        `json:"level"`
+	Name           string     `json:"name"`
+	ParentFqn      *string    `json:"parent_fqn"`
+	TombstonedAt   *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // AccountBalance defines model for AccountBalance.
@@ -718,6 +721,21 @@ type AccountBalance struct {
 // AccountBalanceListResponse defines model for AccountBalanceListResponse.
 type AccountBalanceListResponse struct {
 	Balances []AccountBalance `json:"balances"`
+}
+
+// AccountGroupState defines model for AccountGroupState.
+type AccountGroupState struct {
+	// Deletable For account groups, true when every active account in the subtree, including hidden active accounts, can be tombstone-deleted.
+	Deletable bool    `json:"deletable"`
+	Fqn       string  `json:"fqn"`
+	IsHidden  bool    `json:"is_hidden"`
+	Level     int     `json:"level"`
+	ParentFqn *string `json:"parent_fqn"`
+}
+
+// AccountGroupStateListResponse defines model for AccountGroupStateListResponse.
+type AccountGroupStateListResponse struct {
+	Groups []AccountGroupState `json:"groups"`
 }
 
 // AccountListResponse defines model for AccountListResponse.
@@ -1010,6 +1028,16 @@ type DatabaseBackupStatusResponseOperationId string
 
 // DatabaseBackupStatusResponseState defines model for DatabaseBackupStatusResponse.State.
 type DatabaseBackupStatusResponseState string
+
+// DeleteAccountsByPathRequest defines model for DeleteAccountsByPathRequest.
+type DeleteAccountsByPathRequest struct {
+	PathFqn string `json:"path_fqn"`
+}
+
+// DeleteAccountsByPathResult defines model for DeleteAccountsByPathResult.
+type DeleteAccountsByPathResult struct {
+	DeletedCount int64 `json:"deleted_count"`
+}
 
 // DemoSeedResponse defines model for DemoSeedResponse.
 type DemoSeedResponse struct {
@@ -1693,6 +1721,9 @@ type GetTransactionMonthTotalsParams struct {
 // CreateAccountJSONRequestBody defines body for CreateAccount for application/json ContentType.
 type CreateAccountJSONRequestBody = CreateAccountRequest
 
+// DeleteAccountsByPathJSONRequestBody defines body for DeleteAccountsByPath for application/json ContentType.
+type DeleteAccountsByPathJSONRequestBody = DeleteAccountsByPathRequest
+
 // RestructureAccountsJSONRequestBody defines body for RestructureAccounts for application/json ContentType.
 type RestructureAccountsJSONRequestBody = RestructureRequest
 
@@ -1863,6 +1894,11 @@ type ClientInterface interface {
 
 	// ListAccountBalances request
 	ListAccountBalances(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteAccountsByPathWithBody request with any body
+	DeleteAccountsByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	DeleteAccountsByPath(ctx context.Context, body DeleteAccountsByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAccountGroups request
 	ListAccountGroups(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2165,6 +2201,30 @@ func (c *Client) CreateAccount(ctx context.Context, body CreateAccountJSONReques
 
 func (c *Client) ListAccountBalances(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListAccountBalancesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteAccountsByPathWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAccountsByPathRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteAccountsByPath(ctx context.Context, body DeleteAccountsByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAccountsByPathRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3579,6 +3639,46 @@ func NewListAccountBalancesRequest(server string, params *ListAccountBalancesPar
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewDeleteAccountsByPathRequest calls the generic DeleteAccountsByPath builder with application/json body
+func NewDeleteAccountsByPathRequest(server string, body DeleteAccountsByPathJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDeleteAccountsByPathRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewDeleteAccountsByPathRequestWithBody generates requests for DeleteAccountsByPath with any type of body
+func NewDeleteAccountsByPathRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/accounts/delete-by-path")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -7606,6 +7706,11 @@ type ClientWithResponsesInterface interface {
 	// ListAccountBalancesWithResponse request
 	ListAccountBalancesWithResponse(ctx context.Context, params *ListAccountBalancesParams, reqEditors ...RequestEditorFn) (*ListAccountBalancesResponse, error)
 
+	// DeleteAccountsByPathWithBodyWithResponse request with any body
+	DeleteAccountsByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteAccountsByPathResponse, error)
+
+	DeleteAccountsByPathWithResponse(ctx context.Context, body DeleteAccountsByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteAccountsByPathResponse, error)
+
 	// ListAccountGroupsWithResponse request
 	ListAccountGroupsWithResponse(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*ListAccountGroupsResponse, error)
 
@@ -7963,10 +8068,43 @@ func (r ListAccountBalancesResponse) ContentType() string {
 	return ""
 }
 
+type DeleteAccountsByPathResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DeleteAccountsByPathResult
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON409      *Conflict
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteAccountsByPathResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteAccountsByPathResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteAccountsByPathResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListAccountGroupsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *GroupStateListResponse
+	JSON200      *AccountGroupStateListResponse
 	JSON400      *InvalidRequest
 }
 
@@ -10155,6 +10293,23 @@ func (c *ClientWithResponses) ListAccountBalancesWithResponse(ctx context.Contex
 	return ParseListAccountBalancesResponse(rsp)
 }
 
+// DeleteAccountsByPathWithBodyWithResponse request with arbitrary body returning *DeleteAccountsByPathResponse
+func (c *ClientWithResponses) DeleteAccountsByPathWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteAccountsByPathResponse, error) {
+	rsp, err := c.DeleteAccountsByPathWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteAccountsByPathResponse(rsp)
+}
+
+func (c *ClientWithResponses) DeleteAccountsByPathWithResponse(ctx context.Context, body DeleteAccountsByPathJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteAccountsByPathResponse, error) {
+	rsp, err := c.DeleteAccountsByPath(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteAccountsByPathResponse(rsp)
+}
+
 // ListAccountGroupsWithResponse request returning *ListAccountGroupsResponse
 func (c *ClientWithResponses) ListAccountGroupsWithResponse(ctx context.Context, params *ListAccountGroupsParams, reqEditors ...RequestEditorFn) (*ListAccountGroupsResponse, error) {
 	rsp, err := c.ListAccountGroups(ctx, params, reqEditors...)
@@ -11105,6 +11260,53 @@ func ParseListAccountBalancesResponse(rsp *http.Response) (*ListAccountBalancesR
 	return response, nil
 }
 
+// ParseDeleteAccountsByPathResponse parses an HTTP response from a DeleteAccountsByPathWithResponse call
+func ParseDeleteAccountsByPathResponse(rsp *http.Response) (*DeleteAccountsByPathResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteAccountsByPathResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DeleteAccountsByPathResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListAccountGroupsResponse parses an HTTP response from a ListAccountGroupsWithResponse call
 func ParseListAccountGroupsResponse(rsp *http.Response) (*ListAccountGroupsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -11120,7 +11322,7 @@ func ParseListAccountGroupsResponse(rsp *http.Response) (*ListAccountGroupsRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest GroupStateListResponse
+		var dest AccountGroupStateListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

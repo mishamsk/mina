@@ -95,6 +95,10 @@ leaves and groups.
 - Tombstoning leaves never violates hierarchy invariants. A group disappears
   when its last active leaf is tombstoned or moved away; this is accepted
   behavior, and restructure makes recreating a path cheap.
+- Accounts support path-scoped tombstone delete. It targets every active account
+  leaf at or under the path, including hidden leaves; tombstoned leaves are
+  ignored. Empty active scope is not found, and any active dependent under the
+  path rejects the whole operation with a conflict.
 - Existing dictionary delete rules (refusing deletes with active dependents)
   are unchanged and are not hierarchy rules.
 

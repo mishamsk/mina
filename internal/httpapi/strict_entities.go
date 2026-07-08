@@ -65,7 +65,7 @@ func (s *strictServer) ListAccountGroups(ctx context.Context, request openapi.Li
 	}
 
 	return openapi.ListAccountGroups200JSONResponse{
-		Groups: groupStateAPIResponses(groups),
+		Groups: accountGroupStateAPIResponses(groups),
 	}, nil
 }
 
@@ -110,6 +110,15 @@ func (s *strictServer) SetAccountHiddenByPath(ctx context.Context, request opena
 	}
 
 	return openapi.SetAccountHiddenByPath200JSONResponse{UpdatedCount: updatedCount}, nil
+}
+
+func (s *strictServer) DeleteAccountsByPath(ctx context.Context, request openapi.DeleteAccountsByPathRequestObject) (openapi.DeleteAccountsByPathResponseObject, error) {
+	deletedCount, err := s.deps.Accounts.DeleteByPath(ctx, request.Body.PathFqn)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.DeleteAccountsByPath200JSONResponse{DeletedCount: deletedCount}, nil
 }
 
 func (s *strictServer) DeleteAccount(ctx context.Context, request openapi.DeleteAccountRequestObject) (openapi.DeleteAccountResponseObject, error) {
@@ -395,6 +404,7 @@ func accountAPIResponse(account accounts.Account) openapi.Account {
 		AccountType:    openapi.AccountType(account.AccountType),
 		IsHidden:       account.IsHidden,
 		IsFeatured:     account.IsFeatured,
+		Deletable:      account.Deletable,
 		Currency:       account.Currency,
 		ExternalId:     account.ExternalID,
 		ExternalSystem: account.ExternalSystem,
@@ -422,6 +432,25 @@ func accountAPIResponses(accounts []accounts.Account) []openapi.Account {
 	responses := make([]openapi.Account, 0, len(accounts))
 	for _, account := range accounts {
 		responses = append(responses, accountAPIResponse(account))
+	}
+
+	return responses
+}
+
+func accountGroupStateAPIResponse(group accounts.GroupState) openapi.AccountGroupState {
+	return openapi.AccountGroupState{
+		Fqn:       group.FQN,
+		ParentFqn: group.ParentFQN,
+		Level:     group.Level,
+		IsHidden:  group.IsHidden,
+		Deletable: group.Deletable,
+	}
+}
+
+func accountGroupStateAPIResponses(groups []accounts.GroupState) []openapi.AccountGroupState {
+	responses := make([]openapi.AccountGroupState, 0, len(groups))
+	for _, group := range groups {
+		responses = append(responses, accountGroupStateAPIResponse(group))
 	}
 
 	return responses

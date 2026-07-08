@@ -37,6 +37,7 @@ type Account struct {
 	AccountType    AccountType
 	IsHidden       bool
 	IsFeatured     bool
+	Deletable      *bool
 	Currency       *string
 	ExternalID     *string
 	ExternalSystem *string
@@ -99,7 +100,10 @@ type BalanceListOptions struct {
 }
 
 // GroupState is an implicit account group derived from active account FQNs.
-type GroupState = services.FQNGroupState
+type GroupState struct {
+	services.FQNGroupState
+	Deletable bool
+}
 
 // ReferenceOptions controls account reference validation.
 type ReferenceOptions struct {
@@ -114,18 +118,6 @@ type Reference struct {
 	IsHidden    bool
 }
 
-// ActiveUsage reports active resources that reference an account.
-type ActiveUsage struct {
-	JournalRecords             bool
-	TransactionTemplateRecords bool
-	CreditLimitHistory         bool
-}
-
-// HasActiveDependents reports whether any active resource references the account.
-func (u ActiveUsage) HasActiveDependents() bool {
-	return u.JournalRecords || u.TransactionTemplateRecords || u.CreditLimitHistory
-}
-
 // Repository persists account state.
 type Repository interface {
 	Create(context.Context, CreateInput) (Account, error)
@@ -135,8 +127,9 @@ type Repository interface {
 	UpdateMutable(context.Context, int64, UpdateInput) (Account, error)
 	RestructureFQNs(context.Context, string, string) (int64, error)
 	SetHiddenByPath(context.Context, string, bool) error
-	ActiveUsage(context.Context, int64) (ActiveUsage, error)
+	ActiveDependentAccountIDs(context.Context, []int64) (map[int64]struct{}, error)
 	Tombstone(context.Context, int64) error
+	TombstoneByPath(context.Context, string) (int64, error)
 }
 
 // ReferenceSerializer serializes dictionary deletes with writes that create dependent references.
@@ -265,7 +258,15 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (services.Paginate
 		return services.PaginatedList[Account]{}, services.InvalidRequest("account_type must be one of balance, flow, or system")
 	}
 
-	return s.repo.List(ctx, opts)
+	list, err := s.repo.List(ctx, opts)
+	if err != nil {
+		return services.PaginatedList[Account]{}, err
+	}
+	if err := s.populateDeleteability(ctx, list.Items); err != nil {
+		return services.PaginatedList[Account]{}, err
+	}
+
+	return list, nil
 }
 
 // ListBalances returns server-computed balances for active balance accounts.
@@ -297,6 +298,17 @@ func (s *Service) GroupStates(ctx context.Context, includeHidden bool) ([]GroupS
 	}
 
 	leaves := make([]services.FQNLeafState, 0, len(states))
+	activeIDs := make([]int64, 0, len(states))
+	for _, state := range states {
+		if !state.active {
+			continue
+		}
+		activeIDs = append(activeIDs, state.reference.ID)
+	}
+	blocked, err := s.repo.ActiveDependentAccountIDs(ctx, activeIDs)
+	if err != nil {
+		return nil, err
+	}
 	for _, state := range states {
 		if !state.active {
 			continue
@@ -307,7 +319,16 @@ func (s *Service) GroupStates(ctx context.Context, includeHidden bool) ([]GroupS
 		})
 	}
 
-	return services.DeriveFQNGroupStates(leaves, includeHidden), nil
+	derived := services.DeriveFQNGroupStates(leaves, includeHidden)
+	groups := make([]GroupState, 0, len(derived))
+	for _, group := range derived {
+		groups = append(groups, GroupState{
+			FQNGroupState: group,
+			Deletable:     accountGroupDeletable(group.FQN, states, blocked),
+		})
+	}
+
+	return groups, nil
 }
 
 // UpdateMutable validates and updates account mutable fields.
@@ -462,6 +483,55 @@ func (s *Service) SetHiddenByPath(ctx context.Context, path string, hidden bool)
 	return updatedCount, nil
 }
 
+// DeleteByPath tombstones every active account leaf at or under path.
+func (s *Service) DeleteByPath(ctx context.Context, path string) (int64, error) {
+	if err := validateFQN(path); err != nil {
+		return 0, err
+	}
+
+	var deletedCount int64
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		states, err := s.cache.Snapshot(ctx)
+		if err != nil {
+			return err
+		}
+
+		targetIDs := []int64{}
+		for _, state := range states {
+			if state.active && services.FQNAtOrUnder(state.fqn, path) {
+				targetIDs = append(targetIDs, state.reference.ID)
+			}
+		}
+		if len(targetIDs) == 0 {
+			return services.NotFound("account path not found")
+		}
+
+		blocked, err := s.repo.ActiveDependentAccountIDs(ctx, targetIDs)
+		if err != nil {
+			return err
+		}
+		if len(blocked) > 0 {
+			return services.Conflict("account is referenced by active resources")
+		}
+
+		count, err := s.repo.TombstoneByPath(ctx, path)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("account path not found")
+		}
+		if err != nil {
+			return err
+		}
+
+		deletedCount = count
+		s.InvalidateReferenceCache()
+		return nil
+	}); err != nil {
+		return 0, err
+	}
+
+	return deletedCount, nil
+}
+
 func singleLeafMove(moved map[int64]accountReferenceState, from string) bool {
 	if len(moved) != 1 {
 		return false
@@ -479,15 +549,6 @@ func (input UpdateInput) hasChanges() bool {
 		input.ExternalSystem.Specified
 }
 
-// ActiveUsage reports active resources that reference an account.
-func (s *Service) ActiveUsage(ctx context.Context, id int64) (ActiveUsage, error) {
-	if id <= 0 {
-		return ActiveUsage{}, services.InvalidRequest("account_id must be positive")
-	}
-
-	return s.repo.ActiveUsage(ctx, id)
-}
-
 // Delete tombstones an account.
 func (s *Service) Delete(ctx context.Context, id int64) error {
 	if id <= 0 {
@@ -500,11 +561,11 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		} else if err != nil {
 			return err
 		}
-		usage, err := s.repo.ActiveUsage(ctx, id)
+		blocked, err := s.repo.ActiveDependentAccountIDs(ctx, []int64{id})
 		if err != nil {
 			return err
 		}
-		if usage.HasActiveDependents() {
+		if _, ok := blocked[id]; ok {
 			return services.Conflict("account is referenced by active resources")
 		}
 		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
@@ -520,6 +581,39 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	}
 
 	return nil
+}
+
+func (s *Service) populateDeleteability(ctx context.Context, accountItems []Account) error {
+	activeIDs := make([]int64, 0, len(accountItems))
+	for _, account := range accountItems {
+		if account.TombstonedAt == nil {
+			activeIDs = append(activeIDs, account.ID)
+		}
+	}
+	blocked, err := s.repo.ActiveDependentAccountIDs(ctx, activeIDs)
+	if err != nil {
+		return err
+	}
+	for index := range accountItems {
+		_, hasDependents := blocked[accountItems[index].ID]
+		deletable := accountItems[index].TombstonedAt == nil && !hasDependents
+		accountItems[index].Deletable = &deletable
+	}
+
+	return nil
+}
+
+func accountGroupDeletable(groupFQN string, states map[int64]accountReferenceState, blocked map[int64]struct{}) bool {
+	for _, state := range states {
+		if !state.active || !services.FQNAtOrUnder(state.fqn, groupFQN) {
+			continue
+		}
+		if _, ok := blocked[state.reference.ID]; ok {
+			return false
+		}
+	}
+
+	return true
 }
 
 type accountReferenceState struct {

@@ -841,7 +841,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GroupStateListResponse"
+                $ref: "#/components/schemas/AccountGroupStateListResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
   /api/accounts/set-hidden:
@@ -866,6 +866,30 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/accounts/delete-by-path:
+    post:
+      operationId: deleteAccountsByPath
+      summary: Tombstone accounts at an account path.
+      description: Tombstones every active account leaf at or under `path_fqn` in one all-or-nothing operation. A leaf path and a group path are handled identically.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteAccountsByPathRequest"
+      responses:
+        "200":
+          description: Accounts tombstoned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteAccountsByPathResult"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /api/accounts/balances:
     get:
       operationId: listAccountBalances
@@ -2262,6 +2286,9 @@ components:
           type: boolean
         is_featured:
           type: boolean
+        deletable:
+          type: boolean
+          description: Populated in listAccounts responses. True when the active account has no active dependent resources and can be tombstone-deleted.
         currency:
           type: string
           nullable: true
@@ -2305,6 +2332,39 @@ components:
           format: int64
           minimum: 0
           description: Count of matching accounts before limit and offset are applied.
+    AccountGroupState:
+      type: object
+      additionalProperties: false
+      required:
+        - fqn
+        - parent_fqn
+        - level
+        - is_hidden
+        - deletable
+      properties:
+        fqn:
+          type: string
+        parent_fqn:
+          type: string
+          nullable: true
+        level:
+          type: integer
+          minimum: 0
+        is_hidden:
+          type: boolean
+        deletable:
+          type: boolean
+          description: For account groups, true when every active account in the subtree, including hidden active accounts, can be tombstone-deleted.
+    AccountGroupStateListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - groups
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountGroupState"
     GroupState:
       type: object
       additionalProperties: false
@@ -2373,6 +2433,24 @@ components:
         - updated_count
       properties:
         updated_count:
+          type: integer
+          format: int64
+          minimum: 0
+    DeleteAccountsByPathRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - path_fqn
+      properties:
+        path_fqn:
+          type: string
+    DeleteAccountsByPathResult:
+      type: object
+      additionalProperties: false
+      required:
+        - deleted_count
+      properties:
+        deleted_count:
           type: integer
           format: int64
           minimum: 0
