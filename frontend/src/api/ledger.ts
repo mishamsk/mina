@@ -15,7 +15,6 @@ import type {
   CreateTagRequest,
   CreateTransactionRequest,
   CreateTransferTransactionRequest,
-  DeleteAccountsByPathRequest,
   RestructureRequest,
   SetHiddenByPathRequest,
   UpdateAccountRequest,
@@ -35,7 +34,6 @@ import {
   createTransaction as createGeneratedTransaction,
   createTransferTransaction,
   deleteAccount as deleteGeneratedAccount,
-  deleteAccountsByPath as deleteGeneratedAccountsByPath,
   deleteCategory as deleteGeneratedCategory,
   deleteCreditLimitHistory as deleteGeneratedCreditLimitHistory,
   deleteMember as deleteGeneratedMember,
@@ -591,9 +589,6 @@ export const deleteLedgerAccountById = (accountId: number) =>
 
 export const setLedgerAccountHiddenByPath = (body: SetHiddenByPathRequest) =>
   setGeneratedAccountHiddenByPath({ body });
-
-export const deleteLedgerAccountsByPath = (body: DeleteAccountsByPathRequest) =>
-  deleteGeneratedAccountsByPath({ body });
 
 export const restructureLedgerAccounts = (body: RestructureRequest) =>
   restructureGeneratedAccounts({ body });

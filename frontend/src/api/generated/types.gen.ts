@@ -43,21 +43,6 @@ export type AccountListResponse = {
     total_count: number;
 };
 
-export type AccountGroupState = {
-    fqn: string;
-    parent_fqn: string | null;
-    level: number;
-    is_hidden: boolean;
-    /**
-     * For account groups, true when every active account in the subtree, including hidden active accounts, can be tombstone-deleted.
-     */
-    deletable: boolean;
-};
-
-export type AccountGroupStateListResponse = {
-    groups: Array<AccountGroupState>;
-};
-
 export type GroupState = {
     fqn: string;
     parent_fqn: string | null;
@@ -85,14 +70,6 @@ export type SetHiddenByPathRequest = {
 
 export type SetHiddenByPathResponse = {
     updated_count: number;
-};
-
-export type DeleteAccountsByPathRequest = {
-    path_fqn: string;
-};
-
-export type DeleteAccountsByPathResult = {
-    deleted_count: number;
 };
 
 export type AccountBalance = {
@@ -1751,7 +1728,7 @@ export type ListAccountGroupsResponses = {
     /**
      * Account groups in deterministic FQN order.
      */
-    200: AccountGroupStateListResponse;
+    200: GroupStateListResponse;
 };
 
 export type ListAccountGroupsResponse = ListAccountGroupsResponses[keyof ListAccountGroupsResponses];
@@ -1784,39 +1761,6 @@ export type SetAccountHiddenByPathResponses = {
 };
 
 export type SetAccountHiddenByPathResponse = SetAccountHiddenByPathResponses[keyof SetAccountHiddenByPathResponses];
-
-export type DeleteAccountsByPathData = {
-    body: DeleteAccountsByPathRequest;
-    path?: never;
-    query?: never;
-    url: '/api/accounts/delete-by-path';
-};
-
-export type DeleteAccountsByPathErrors = {
-    /**
-     * The request is invalid.
-     */
-    400: ErrorResponse;
-    /**
-     * The requested resource was not found.
-     */
-    404: ErrorResponse;
-    /**
-     * The request conflicts with existing state.
-     */
-    409: ErrorResponse;
-};
-
-export type DeleteAccountsByPathError = DeleteAccountsByPathErrors[keyof DeleteAccountsByPathErrors];
-
-export type DeleteAccountsByPathResponses = {
-    /**
-     * Accounts tombstoned.
-     */
-    200: DeleteAccountsByPathResult;
-};
-
-export type DeleteAccountsByPathResponse = DeleteAccountsByPathResponses[keyof DeleteAccountsByPathResponses];
 
 export type ListAccountBalancesData = {
     body?: never;

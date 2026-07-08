@@ -4,15 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/tags"
 )
 
-// ActiveDependentAccountIDs returns active account ids referenced by active resources.
-func (s *AccountStore) ActiveDependentAccountIDs(ctx context.Context, ids []int64) (map[int64]struct{}, error) {
+// ActiveUsage reports active resources that reference accounts.
+func (s *AccountStore) ActiveUsage(ctx context.Context, ids []int64) (map[int64]accounts.ActiveUsage, error) {
 	if len(ids) == 0 {
-		return map[int64]struct{}{}, nil
+		return map[int64]accounts.ActiveUsage{}, nil
 	}
 
 	placeholderList := placeholders(len(ids))
@@ -22,7 +23,7 @@ func (s *AccountStore) ActiveDependentAccountIDs(ctx context.Context, ids []int6
 	args = append(args, int64Args(ids)...)
 	rows, err := s.db.query().QueryContext(
 		ctx,
-		`SELECT jr.account_id AS account_id
+		`SELECT jr.account_id AS account_id, 'journal_records' AS source
 FROM `+s.db.accountingName("journal_record")+` jr
 JOIN `+s.db.accountingName("transaction")+` t
   ON t.transaction_id = jr.transaction_id
@@ -30,7 +31,7 @@ WHERE jr.tombstoned_at IS NULL
   AND t.tombstoned_at IS NULL
   AND jr.account_id IN (`+placeholderList+`)
 UNION
-SELECT ttr.account_id AS account_id
+SELECT ttr.account_id AS account_id, 'transaction_template_records' AS source
 FROM `+s.db.accountingName("transaction_template_record")+` ttr
 JOIN `+s.db.accountingName("transaction_template")+` tt
   ON tt.transaction_template_id = ttr.transaction_template_id
@@ -38,38 +39,54 @@ WHERE ttr.tombstoned_at IS NULL
   AND tt.tombstoned_at IS NULL
   AND ttr.account_id IN (`+placeholderList+`)
 UNION
-SELECT account_id
+SELECT account_id, 'credit_limit_history' AS source
 FROM `+s.db.accountingName("credit_limit_history")+`
 WHERE tombstoned_at IS NULL
   AND account_id IN (`+placeholderList+`)`,
 		args...,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list active account dependent ids: %w", err)
+		return nil, fmt.Errorf("list active account usage: %w", err)
 	}
 
-	blocked := map[int64]struct{}{}
+	usageByID := map[int64]accounts.ActiveUsage{}
 	for rows.Next() {
 		var id int64
-		if err := rows.Scan(&id); err != nil {
+		var source string
+		if err := rows.Scan(&id, &source); err != nil {
 			if closeErr := rows.Close(); closeErr != nil {
-				return nil, fmt.Errorf("scan active account dependent id: %w; close rows: %w", err, closeErr)
+				return nil, fmt.Errorf("scan active account usage: %w; close rows: %w", err, closeErr)
 			}
-			return nil, fmt.Errorf("scan active account dependent id: %w", err)
+			return nil, fmt.Errorf("scan active account usage: %w", err)
 		}
-		blocked[id] = struct{}{}
+
+		usage := usageByID[id]
+		switch source {
+		case "journal_records":
+			usage.JournalRecords = true
+		case "transaction_template_records":
+			usage.TransactionTemplateRecords = true
+		case "credit_limit_history":
+			usage.CreditLimitHistory = true
+		default:
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("scan active account usage source %q; close rows: %w", source, closeErr)
+			}
+			return nil, fmt.Errorf("scan active account usage source %q", source)
+		}
+		usageByID[id] = usage
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return nil, fmt.Errorf("iterate active account dependent ids: %w; close rows: %w", err, closeErr)
+			return nil, fmt.Errorf("iterate active account usage: %w; close rows: %w", err, closeErr)
 		}
-		return nil, fmt.Errorf("iterate active account dependent ids: %w", err)
+		return nil, fmt.Errorf("iterate active account usage: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close active account dependent rows: %w", err)
+		return nil, fmt.Errorf("close active account usage rows: %w", err)
 	}
 
-	return blocked, nil
+	return usageByID, nil
 }
 
 // ActiveUsage reports active resources that reference a category.

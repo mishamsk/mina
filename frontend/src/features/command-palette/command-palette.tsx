@@ -25,8 +25,8 @@ import { type To, useLocation, useNavigate } from "react-router";
 
 import {
   type Account,
-  type AccountGroupState,
   fetchAccountGroupsForLookups,
+  type GroupState,
   isNetworkFailure,
   startDatabaseBackupRun,
   startExchangeRateLoadingRun,
@@ -82,7 +82,7 @@ interface PaletteNotice {
 
 interface AccountGroupLookupState {
   readonly errorMessage: string | undefined;
-  readonly groups: readonly AccountGroupState[] | undefined;
+  readonly groups: readonly GroupState[] | undefined;
   readonly loading: boolean;
 }
 
@@ -480,7 +480,7 @@ export const CommandPalette = () => {
       to: `/accounts/${account.account_id}`,
     }));
 
-    const groupCommands = sortFqnMatches<AccountGroupState>(
+    const groupCommands = sortFqnMatches<GroupState>(
       accountGroupLookups.groups ?? [],
       normalizedQuery,
     ).map<CommandItem>((group) => ({

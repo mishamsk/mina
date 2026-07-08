@@ -1170,16 +1170,6 @@ test("accounts tree row quick actions hide feature and delete rows", async ({
   const blockedAccount = await createAccount(page, {
     fqn: `${base}:BlockedLeaf`,
   });
-  const successGroupPrefix = `${base}:DeleteGroup`;
-  const conflictGroupPrefix = `${base}:ConflictGroup`;
-  await Promise.all([
-    createAccount(page, { fqn: `${successGroupPrefix}:One` }),
-    createAccount(page, { fqn: `${successGroupPrefix}:Two` }),
-  ]);
-  const conflictAccount = await createAccount(page, {
-    fqn: `${conflictGroupPrefix}:One`,
-  });
-  await createAccount(page, { fqn: `${conflictGroupPrefix}:Two` });
 
   const [accounts, categories] = await Promise.all([
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
@@ -1301,56 +1291,6 @@ test("accounts tree row quick actions hide feature and delete rows", async ({
   await expect(
     page.getByTestId("accounts-tree-row").filter({ hasText: "DeleteLeaf" }),
   ).toHaveCount(0);
-
-  await page.getByLabel("Search").fill(successGroupPrefix);
-  const successGroupRow = page.locator(
-    `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(successGroupPrefix)}"])`,
-  );
-  await expect(successGroupRow).toBeVisible();
-  await successGroupRow.hover();
-  await successGroupRow
-    .getByRole("button", { name: "Delete account group" })
-    .click();
-  const groupDeleteDialog = page.getByRole("alertdialog", {
-    name: "Delete account group",
-  });
-  await expect(groupDeleteDialog).toContainText("2 account(s)");
-  const groupDeleteRequest = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === "/api/accounts/delete-by-path" &&
-      response.request().method() === "POST"
-    );
-  });
-  await groupDeleteDialog.getByRole("button", { name: "Delete group" }).click();
-  await groupDeleteRequest;
-  await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0);
-
-  await page.getByLabel("Search").fill(conflictGroupPrefix);
-  const conflictGroupRow = page.locator(
-    `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(conflictGroupPrefix)}"])`,
-  );
-  await expect(conflictGroupRow).toBeVisible();
-  await conflictGroupRow.hover();
-  await conflictGroupRow
-    .getByRole("button", { name: "Delete account group" })
-    .click();
-  const conflictDialog = page.getByRole("alertdialog", {
-    name: "Delete account group",
-  });
-  await expect(conflictDialog).toContainText("2 account(s)");
-  await createBlockingSpend(conflictAccount.account_id, `${base}:conflict`);
-  const conflictDeleteRequest = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === "/api/accounts/delete-by-path" &&
-      response.request().method() === "POST" &&
-      response.status() === 409
-    );
-  });
-  await conflictDialog.getByRole("button", { name: "Delete group" }).click();
-  await conflictDeleteRequest;
-  await expect(conflictDialog.getByRole("alert")).toBeVisible();
 });
 
 test("accounts page manages account forms, credit limits, and tombstone delete", async ({

@@ -5,10 +5,10 @@ import { useShallow } from "zustand/react/shallow";
 import type {
   Account,
   AccountBalance,
-  AccountGroupState,
   AccountRecordsPageParams,
   CreditLimitHistory,
   GroupRecordsPageParams,
+  GroupState,
   JournalRecord,
   Transaction,
 } from "@/api";
@@ -18,7 +18,7 @@ import { createSelectors } from "./selectors";
 export interface AccountsPageSnapshot {
   readonly accounts: readonly Account[];
   readonly balances: readonly AccountBalance[];
-  readonly groups: readonly AccountGroupState[];
+  readonly groups: readonly GroupState[];
   readonly loadedAt: string;
 }
 

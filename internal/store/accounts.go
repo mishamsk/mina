@@ -341,41 +341,6 @@ WHERE account_id = ? AND tombstoned_at IS NULL`,
 	return nil
 }
 
-// TombstoneByPath marks active accounts at or below path deleted without removing historical rows.
-func (s *AccountStore) TombstoneByPath(ctx context.Context, path string) (int64, error) {
-	var affected int64
-	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(
-			ctx,
-			`UPDATE `+s.db.accountingName("account")+`
-SET tombstoned_at = CURRENT_TIMESTAMP,
-    updated_at = CURRENT_TIMESTAMP
-WHERE tombstoned_at IS NULL
-  AND (fqn = ? OR starts_with(fqn, ? || ':'))`,
-			path,
-			path,
-		)
-		if err != nil {
-			return fmt.Errorf("tombstone accounts by path: %w", err)
-		}
-
-		affected, err = result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("read tombstone accounts by path affected rows: %w", err)
-		}
-		if affected == 0 {
-			return services.ErrNotFound
-		}
-
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-
-	return affected, nil
-}
-
 type accountScanner interface {
 	Scan(dest ...any) error
 }

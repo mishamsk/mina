@@ -13,13 +13,12 @@ import { Link } from "react-router";
 import type {
   Account,
   AccountBalance,
-  AccountGroupState,
   AccountType,
   DisplayAmount,
+  GroupState,
 } from "@/api";
 import {
   deleteLedgerAccountById,
-  deleteLedgerAccountsByPath,
   isNetworkFailure,
   setLedgerAccountHiddenByPath,
   updateLedgerAccount,
@@ -40,7 +39,7 @@ interface AccountsTreeProps {
   readonly accounts: readonly Account[] | undefined;
   readonly balances: readonly AccountBalance[] | undefined;
   readonly errorMessage?: string;
-  readonly groups: readonly AccountGroupState[] | undefined;
+  readonly groups: readonly GroupState[] | undefined;
   readonly includeHidden: boolean;
   readonly loading: boolean;
   readonly onCreateAccount?: (opener: HTMLElement) => void;
@@ -59,18 +58,10 @@ interface AccountTreeRow {
   readonly hasChildren: boolean;
 }
 
-type AccountDeleteTarget =
-  | {
-      readonly account: Account;
-      readonly kind: "account";
-      readonly opener: HTMLElement;
-    }
-  | {
-      readonly accountCount: number;
-      readonly fqn: string;
-      readonly kind: "group";
-      readonly opener: HTMLElement;
-    };
+type AccountDeleteTarget = {
+  readonly account: Account;
+  readonly opener: HTMLElement;
+};
 
 const apiErrorMessage = (error: unknown, fallback: string): string => {
   if (isNetworkFailure(error)) {
@@ -339,17 +330,6 @@ export const AccountsTree = ({
     () => new Map((groups ?? []).map((group) => [group.fqn, group])),
     [groups],
   );
-  const accountCountByGroupFqn = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const account of accounts ?? []) {
-      const segments = account.fqn.split(":");
-      for (let index = 1; index <= segments.length; index += 1) {
-        const prefix = segments.slice(0, index).join(":");
-        counts.set(prefix, (counts.get(prefix) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [accounts]);
 
   const closeDeleteDialog = useCallback(() => {
     if (deleting) {
@@ -480,7 +460,7 @@ export const AccountsTree = ({
     );
   };
 
-  const toggleGroupHidden = async (group: AccountGroupState) => {
+  const toggleGroupHidden = async (group: GroupState) => {
     const result = await setLedgerAccountHiddenByPath({
       is_hidden: !group.is_hidden,
       path_fqn: group.fqn,
@@ -505,15 +485,11 @@ export const AccountsTree = ({
 
     setDeleting(true);
     setDeleteErrorMessage(undefined);
-    const result =
-      deleteTarget.kind === "account"
-        ? await deleteLedgerAccountById(deleteTarget.account.account_id)
-        : await deleteLedgerAccountsByPath({ path_fqn: deleteTarget.fqn });
+    const result = await deleteLedgerAccountById(
+      deleteTarget.account.account_id,
+    );
 
-    if (
-      deleteTarget.kind === "account" &&
-      (result.data !== undefined || !result.error)
-    ) {
+    if (result.data !== undefined || !result.error) {
       await refreshAccountsAfterMutation({
         removedAccountId: deleteTarget.account.account_id,
       });
@@ -524,23 +500,9 @@ export const AccountsTree = ({
       return;
     }
 
-    if (deleteTarget.kind === "group" && result.data) {
-      await refreshAccountsAfterMutation({ bulk: true });
-      showNotice(`Deleted ${result.data.deleted_count} account(s).`);
-      setDeleting(false);
-      setDeleteTarget(undefined);
-      focusDeleteSuccessFallback();
-      return;
-    }
-
     setDeleting(false);
     setDeleteErrorMessage(
-      apiErrorMessage(
-        result.error,
-        deleteTarget.kind === "account"
-          ? "Account could not be deleted."
-          : "Account group could not be deleted.",
-      ),
+      apiErrorMessage(result.error, "Account could not be deleted."),
     );
   };
 
@@ -659,40 +621,21 @@ export const AccountsTree = ({
                 const group = groupByFqn.get(row.fqn);
                 const rowHidden =
                   account?.is_hidden ?? group?.is_hidden ?? false;
-                const groupActions: RowAction[] = group
-                  ? [
-                      {
-                        icon: group.is_hidden ? (
-                          <EyeOff aria-hidden="true" />
-                        ) : (
-                          <Eye aria-hidden="true" />
-                        ),
-                        kind: "toggle" as const,
-                        label: group.is_hidden ? "Unhide group" : "Hide group",
-                        onToggle: () => {
-                          void toggleGroupHidden(group);
-                        },
-                        pressed: group.is_hidden,
+                const groupHiddenAction: RowAction | undefined = group
+                  ? {
+                      icon: group.is_hidden ? (
+                        <EyeOff aria-hidden="true" />
+                      ) : (
+                        <Eye aria-hidden="true" />
+                      ),
+                      kind: "toggle" as const,
+                      label: group.is_hidden ? "Unhide group" : "Hide group",
+                      onToggle: () => {
+                        void toggleGroupHidden(group);
                       },
-                      {
-                        disabled: !group.deletable,
-                        disabledReason:
-                          "Account group has active dependent records.",
-                        icon: <Trash aria-hidden="true" />,
-                        label: "Delete account group",
-                        onSelect: (opener: HTMLElement) => {
-                          setDeleteErrorMessage(undefined);
-                          setDeleteTarget({
-                            accountCount:
-                              accountCountByGroupFqn.get(row.fqn) ?? 0,
-                            fqn: row.fqn,
-                            kind: "group",
-                            opener,
-                          });
-                        },
-                      },
-                    ]
-                  : [];
+                      pressed: group.is_hidden,
+                    }
+                  : undefined;
                 const rowActions: RowAction[] = account
                   ? [
                       {
@@ -751,16 +694,15 @@ export const AccountsTree = ({
                           setDeleteErrorMessage(undefined);
                           setDeleteTarget({
                             account,
-                            kind: "account",
                             opener,
                           });
                         },
                       },
-                      ...groupActions,
+                      ...(groupHiddenAction ? [groupHiddenAction] : []),
                     ]
-                  : group
+                  : groupHiddenAction
                     ? [
-                        ...groupActions.slice(0, 1),
+                        groupHiddenAction,
                         ...(onRestructurePath
                           ? [
                               {
@@ -773,7 +715,6 @@ export const AccountsTree = ({
                               },
                             ]
                           : []),
-                        ...groupActions.slice(1),
                       ]
                     : [];
                 return (
@@ -901,9 +842,7 @@ export const AccountsTree = ({
               id="delete-account-row-title"
               className="font-heading text-base font-bold uppercase"
             >
-              {deleteTarget.kind === "account"
-                ? "Delete account"
-                : "Delete account group"}
+              Delete account
             </h3>
             <div
               id="delete-account-row-description"
@@ -912,16 +851,13 @@ export const AccountsTree = ({
               <p className="flex flex-wrap items-center gap-1">
                 <span>Delete</span>
                 <span className="text-foreground font-mono break-all">
-                  {deleteTarget.kind === "account"
-                    ? deleteTarget.account.fqn
-                    : deleteTarget.fqn}
+                  {deleteTarget.account.fqn}
                 </span>
                 <span>?</span>
               </p>
               <p>
-                {deleteTarget.kind === "account"
-                  ? "This tombstones the account and removes it from default account lists and pickers."
-                  : `This tombstones ${deleteTarget.accountCount} account(s) in the subtree and removes them from default account lists and pickers.`}
+                This tombstones the account and removes it from default account
+                lists and pickers.
               </p>
             </div>
             {deleteErrorMessage ? (
@@ -951,11 +887,7 @@ export const AccountsTree = ({
                 }}
               >
                 <Trash aria-hidden="true" />
-                {deleting
-                  ? "Deleting"
-                  : deleteTarget.kind === "account"
-                    ? "Delete account"
-                    : "Delete group"}
+                {deleting ? "Deleting" : "Delete account"}
               </Button>
             </div>
           </section>
