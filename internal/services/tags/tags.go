@@ -219,15 +219,22 @@ func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (T
 		return Tag{}, services.InvalidRequest("is_hidden is required")
 	}
 
-	tag, err := s.repo.UpdateHidden(ctx, id, *isHidden)
-	if errors.Is(err, services.ErrNotFound) {
-		return Tag{}, services.NotFound("tag not found")
-	}
-	if err != nil {
+	var tag Tag
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		updated, err := s.repo.UpdateHidden(ctx, id, *isHidden)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("tag not found")
+		}
+		if err != nil {
+			return err
+		}
+
+		s.cacheActiveReference(updated)
+		tag = updated
+		return nil
+	}); err != nil {
 		return Tag{}, err
 	}
-
-	s.cacheActiveReference(tag)
 
 	return tag, nil
 }

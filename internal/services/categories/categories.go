@@ -263,15 +263,22 @@ func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (C
 		return Category{}, services.InvalidRequest("is_hidden is required")
 	}
 
-	category, err := s.repo.UpdateHidden(ctx, id, *isHidden)
-	if errors.Is(err, services.ErrNotFound) {
-		return Category{}, services.NotFound("category not found")
-	}
-	if err != nil {
+	var category Category
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		updated, err := s.repo.UpdateHidden(ctx, id, *isHidden)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("category not found")
+		}
+		if err != nil {
+			return err
+		}
+
+		s.cacheActiveReference(updated)
+		category = updated
+		return nil
+	}); err != nil {
 		return Category{}, err
 	}
-
-	s.cacheActiveReference(category)
 
 	return category, nil
 }

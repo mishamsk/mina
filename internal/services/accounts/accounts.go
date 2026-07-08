@@ -339,18 +339,25 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 		}
 	}
 
-	account, err := s.repo.UpdateMutable(ctx, id, input)
-	if errors.Is(err, services.ErrNotFound) {
-		return Account{}, services.NotFound("account not found")
-	}
-	if errors.Is(err, services.ErrConflict) {
-		return Account{}, services.Conflict("account external identifiers changed; retry with both external_id and external_system")
-	}
-	if err != nil {
+	var account Account
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		updated, err := s.repo.UpdateMutable(ctx, id, input)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("account not found")
+		}
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("account external identifiers changed; retry with both external_id and external_system")
+		}
+		if err != nil {
+			return err
+		}
+
+		s.cacheActiveReference(updated)
+		account = updated
+		return nil
+	}); err != nil {
 		return Account{}, err
 	}
-
-	s.cacheActiveReference(account)
 
 	return account, nil
 }
