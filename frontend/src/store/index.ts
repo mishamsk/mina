@@ -62,6 +62,16 @@ export {
   useCategoriesStore,
 } from "./categories";
 export {
+  closeCommandPalette,
+  getCommandPaletteSnapshot,
+  openCommandPalette,
+  setCommandPaletteOpen,
+  toggleCommandPalette,
+  useCommandPaletteOpen,
+  useCommandPaletteStore,
+  useCommandPaletteView,
+} from "./command-palette";
+export {
   clearMembersPageLoading,
   getMembersSnapshot,
   type MembersPageSnapshot,
@@ -96,6 +106,13 @@ export {
   useTagsPageView,
   useTagsStore,
 } from "./tags";
+export {
+  closeTransactionEntryPanel,
+  getTransactionEntryPanelSnapshot,
+  openTransactionEntryPanel,
+  useTransactionEntryPanelStore,
+  useTransactionEntryPanelView,
+} from "./transaction-entry";
 export type {
   CategoryPickerCategoriesSnapshot,
   FeaturedBalanceRow,

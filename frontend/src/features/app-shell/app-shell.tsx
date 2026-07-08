@@ -9,20 +9,26 @@ import {
   ListBox,
   Menu,
   Plus,
+  Search,
   SettingsCog2,
   User,
   Wallet,
 } from "pixelarticons/react";
 import type { ComponentType, ReactNode, SVGProps } from "react";
+import { useEffect } from "react";
 import { NavLink, type To } from "react-router";
 
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { CommandPalette } from "@/features/command-palette";
 import { BalanceStrip } from "@/features/featured-balances";
 import { cn } from "@/lib/utils";
 import {
+  getCommandPaletteSnapshot,
+  openCommandPalette,
   setSidebarCollapsed,
+  toggleCommandPalette,
   useLastTransactionsPageSearch,
   usePreferencesView,
 } from "@/store";
@@ -47,6 +53,17 @@ const utilityNavItems: readonly NavItem[] = [
   { icon: Chart, label: "Status", to: "/status" },
   { disabled: true, icon: SettingsCog2, label: "Settings", to: "/settings" },
 ];
+
+const modalOverlaySelector =
+  "[role='alertdialog'], [role='dialog'][aria-modal='true'], [data-slot='popover-content']";
+
+const isVisibleOverlay = (element: Element): boolean =>
+  element instanceof HTMLElement && element.getClientRects().length > 0;
+
+const hasActiveOverlay = (): boolean =>
+  Array.from(document.querySelectorAll(modalOverlaySelector)).some(
+    isVisibleOverlay,
+  );
 
 interface AppShellProps {
   readonly children: ReactNode;
@@ -157,6 +174,33 @@ const NewTransactionButton = ({
   );
 };
 
+const CommandPaletteButton = ({
+  collapsed,
+}: {
+  readonly collapsed: boolean;
+}) => {
+  const button = (
+    <Button
+      type="button"
+      variant="outline"
+      className={cn("w-full", collapsed && "px-0")}
+      aria-label="Command palette"
+      onClick={openCommandPalette}
+    >
+      <Search aria-hidden="true" />
+      <span className={cn(collapsed && "sr-only")}>Command palette</span>
+    </Button>
+  );
+
+  return collapsed ? (
+    <Tooltip label="Command palette" className="w-full" asChild>
+      {button}
+    </Tooltip>
+  ) : (
+    button
+  );
+};
+
 export const AppShell = ({ children }: AppShellProps) => {
   const {
     preferences: { sidebarCollapsed },
@@ -174,6 +218,33 @@ export const AppShell = ({ children }: AppShellProps) => {
     },
     { icon: Wallet, label: "Accounts", to: "/accounts" },
   ];
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key.toLocaleLowerCase() !== "k" ||
+        event.altKey ||
+        event.shiftKey ||
+        (!event.metaKey && !event.ctrlKey)
+      ) {
+        return;
+      }
+
+      const commandPaletteOpen = getCommandPaletteSnapshot().open;
+      if (!commandPaletteOpen && hasActiveOverlay()) {
+        event.preventDefault();
+        return;
+      }
+
+      event.preventDefault();
+      toggleCommandPalette();
+    };
+
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
+    };
+  }, []);
 
   return (
     <div className="bg-background text-foreground min-h-svh">
@@ -205,7 +276,10 @@ export const AppShell = ({ children }: AppShellProps) => {
         </div>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-3">
-          <NewTransactionButton collapsed={sidebarCollapsed} />
+          <div className="flex flex-col gap-2">
+            <NewTransactionButton collapsed={sidebarCollapsed} />
+            <CommandPaletteButton collapsed={sidebarCollapsed} />
+          </div>
 
           <SidebarNav collapsed={sidebarCollapsed} items={primaryNavItems} />
 
@@ -274,6 +348,7 @@ export const AppShell = ({ children }: AppShellProps) => {
           {children}
         </div>
       </main>
+      <CommandPalette />
     </div>
   );
 };

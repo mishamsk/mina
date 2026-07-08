@@ -39,6 +39,7 @@
   - Accounts page shows the chart of accounts as a searchable/filterable FQN tree with trailing row quick actions for hide/unhide, featured, move/rename, and delete, account create/edit, credit-limit history management, and URL-addressable account registers with running balances, transaction peeks, and balance-surface links.
   - Accounts tree supports prefix-addressed account rename/move for leaves and groups, with subtree FQN rewrites through the restructure API.
   - Account group pages show descendant balance-account subtotals and combined prefix registers across balance and flow accounts, with transaction peeks and links from account trees and overview balance groups.
+  - Global command palette opens with `Cmd/Ctrl+K`, supports routed-page and account/group navigation by typed name, launches transaction entry tabs, and starts database backup or exchange-rate loading runs.
   - Categories and Tags pages show searchable FQN trees with hidden controls, move/rename, and create/edit/delete side-panel workflows; Categories also show intent badges.
   - Members page shows a searchable flat member list with create/rename/delete side-panel workflows.
   - Transaction entry category pickers fetch API-filtered category lists by tab economic intent.

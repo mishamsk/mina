@@ -45,6 +45,7 @@ import {
 import { useCategoryPickerCategoriesResource } from "./use-transactions-resource";
 
 interface EntryPanelProps {
+  readonly initialTab?: TransactionEntryType;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
   readonly onSaved: (transaction: Transaction) => Promise<void>;
@@ -425,6 +426,7 @@ const visibleMember = (member: Member): boolean => !member.tombstoned_at;
 const visibleTag = (tag: Tag): boolean => !tag.is_hidden && !tag.tombstoned_at;
 
 export const EntryPanel = ({
+  initialTab,
   lookups,
   onClose,
   onSaved,
@@ -442,6 +444,24 @@ export const EntryPanel = ({
   >();
   const entryPanelRef = useRef<HTMLElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const rememberedActiveTabRef = useRef<TransactionEntryType>("spend");
+  const initialTabOverrideRef = useRef<TransactionEntryType | undefined>(
+    undefined,
+  );
+  const userSelectedActiveTabRef = useRef(false);
+
+  const draftForStorage = useCallback(
+    (nextDraft: TransactionEntryDraft): TransactionEntryDraft => {
+      if (initialTabOverrideRef.current && !userSelectedActiveTabRef.current) {
+        return {
+          ...nextDraft,
+          activeTab: rememberedActiveTabRef.current,
+        };
+      }
+      return nextDraft;
+    },
+    [],
+  );
 
   const activeTab = draft.activeTab;
   const activeTabDraft = draft.tabs[activeTab];
@@ -460,7 +480,18 @@ export const EntryPanel = ({
     let active = true;
     void readTransactionEntryDraft().then((storedDraft) => {
       if (active) {
-        setDraft(migrateStoredDraft(storedDraft));
+        const migratedDraft = migrateStoredDraft(storedDraft);
+        rememberedActiveTabRef.current = migratedDraft.activeTab;
+        initialTabOverrideRef.current = initialTab;
+        userSelectedActiveTabRef.current = false;
+        setDraft(
+          initialTab
+            ? {
+                ...migratedDraft,
+                activeTab: initialTab,
+              }
+            : migratedDraft,
+        );
         setDraftReady(true);
       }
     });
@@ -468,15 +499,15 @@ export const EntryPanel = ({
     return () => {
       active = false;
     };
-  }, [open]);
+  }, [initialTab, open]);
 
   useEffect(() => {
     if (!open || !draftReady) {
       return;
     }
 
-    void writeTransactionEntryDraft(draft);
-  }, [draft, draftReady, open]);
+    void writeTransactionEntryDraft(draftForStorage(draft));
+  }, [draft, draftForStorage, draftReady, open]);
 
   useEffect(() => {
     if (!open || !draftReady) {
@@ -588,6 +619,8 @@ export const EntryPanel = ({
   );
 
   const updateActiveTab = (entryType: TransactionEntryType) => {
+    userSelectedActiveTabRef.current = true;
+    rememberedActiveTabRef.current = entryType;
     setDraft((currentDraft) => ({ ...currentDraft, activeTab: entryType }));
     setFieldErrors({});
     setGeneralError(undefined);
@@ -689,7 +722,7 @@ export const EntryPanel = ({
       setFieldErrors({});
       setGeneralError(undefined);
       setSessionCount((count) => count + 1);
-      await writeTransactionEntryDraft(nextDraft);
+      await writeTransactionEntryDraft(draftForStorage(nextDraft));
       return;
     }
 
@@ -697,7 +730,7 @@ export const EntryPanel = ({
     const apiFieldErrors = fieldErrorsFromAPI(message);
     setFieldErrors(apiFieldErrors);
     setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);
-  }, [activeTab, activeTabDraft, canSubmit, draft, onSaved]);
+  }, [activeTab, activeTabDraft, canSubmit, draft, draftForStorage, onSaved]);
 
   const primaryAccountValue = accountValue(
     activeTabDraft,

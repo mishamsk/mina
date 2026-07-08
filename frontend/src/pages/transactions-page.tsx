@@ -24,7 +24,13 @@ import {
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
 import type { TransactionFilters } from "@/models/transaction-filters";
-import { setLastTransactionsPageSearch } from "@/store";
+import {
+  closeTransactionEntryPanel,
+  getCommandPaletteSnapshot,
+  openTransactionEntryPanel,
+  setLastTransactionsPageSearch,
+  useTransactionEntryPanelView,
+} from "@/store";
 
 interface SaveNotice {
   readonly id: number;
@@ -81,8 +87,7 @@ const TransactionSearchInput = ({
 export const TransactionsPage = () => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [entryPanelOpen, setEntryPanelOpen] = useState(false);
-  const [entryPanelRevision, setEntryPanelRevision] = useState(0);
+  const entryPanel = useTransactionEntryPanelView();
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
   const [rowActionsOverflowOpen, setRowActionsOverflowOpen] = useState(false);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | undefined>();
@@ -127,8 +132,7 @@ export const TransactionsPage = () => {
   }, [location.search]);
 
   const openEntryPanel = useCallback(() => {
-    setEntryPanelRevision((revision) => revision + 1);
-    setEntryPanelOpen(true);
+    openTransactionEntryPanel();
     setSaveNotice(undefined);
   }, []);
 
@@ -207,6 +211,7 @@ export const TransactionsPage = () => {
       if (
         detail.selectedTransactionId ||
         filterPopoverOpen ||
+        getCommandPaletteSnapshot().open ||
         rowActionsOverflowOpen ||
         event.key.toLowerCase() !== "n" ||
         event.metaKey ||
@@ -323,7 +328,7 @@ export const TransactionsPage = () => {
       <div
         className={cn(
           "grid min-h-0 min-w-0 flex-1 gap-6",
-          entryPanelOpen && "lg:grid-cols-[minmax(0,1fr)_360px]",
+          entryPanel.open && "lg:grid-cols-[minmax(0,1fr)_360px]",
         )}
       >
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
@@ -379,12 +384,11 @@ export const TransactionsPage = () => {
           onDismiss={dismissSaveNotice}
         />
         <EntryPanel
-          key={entryPanelRevision}
+          key={entryPanel.revision}
+          initialTab={entryPanel.initialTab}
           lookups={lookups.snapshot}
-          open={entryPanelOpen}
-          onClose={() => {
-            setEntryPanelOpen(false);
-          }}
+          open={entryPanel.open}
+          onClose={closeTransactionEntryPanel}
           onSaved={async (transaction: Transaction) => {
             const savedOnCurrentPage = await refreshTransactionPageAfterSave(
               params,

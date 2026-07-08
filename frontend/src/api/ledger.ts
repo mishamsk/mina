@@ -87,6 +87,49 @@ export interface GroupRecordsPageParams {
 
 const lookupLimit = 500;
 
+const listAccountsPageForLookups = (offset: number) =>
+  listAccounts({
+    query: {
+      include_hidden: true,
+      include_tombstoned: true,
+      limit: lookupLimit,
+      offset,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+const listAllAccountsForLookups = async () => {
+  const firstPage = await listAccountsPageForLookups(0);
+  if (
+    !firstPage.data ||
+    firstPage.data.accounts.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+
+  const accounts = [...firstPage.data.accounts];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    const page = await listAccountsPageForLookups(offset);
+    if (!page.data) {
+      return page;
+    }
+    accounts.push(...page.data.accounts);
+  }
+
+  return {
+    ...firstPage,
+    data: {
+      ...firstPage.data,
+      accounts,
+    },
+  };
+};
+
 const dateTimeBound = (date: string, boundary: "end" | "start"): string => {
   const [year = "0", month = "1", day = "1"] = date.split("-");
   const localDate =
@@ -230,16 +273,7 @@ export const deleteTransactionById = (transactionId: number) =>
 
 export const fetchLedgerLookups = async () => {
   const [accounts, categories, tags, members] = await Promise.all([
-    listAccounts({
-      query: {
-        include_hidden: true,
-        include_tombstoned: true,
-        limit: lookupLimit,
-        offset: 0,
-        sort: "fqn",
-        sort_dir: "asc",
-      },
-    }),
+    listAllAccountsForLookups(),
     listCategories({
       query: {
         include_hidden: true,
@@ -273,6 +307,13 @@ export const fetchLedgerLookups = async () => {
 
   return { accounts, categories, members, tags };
 };
+
+export const fetchAccountGroupsForLookups = () =>
+  listAccountGroups({
+    query: {
+      include_hidden: true,
+    },
+  });
 
 export const fetchFeaturedAccountBalances = async () => {
   const accounts = await listAccounts({
