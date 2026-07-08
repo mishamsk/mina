@@ -69,7 +69,7 @@ Task scope details live in the kata issues (`kata show <ref> --agent`). (API) = 
 - [x] Task 12: `7ts6` — Accounts chart-of-accounts page (FE) — branch `7ts6-accounts-page`
 - [x] Task 13: `6a1w` — account page with register (FE; requires Task 11) — branch `6a1w-account-register`
 - [x] Task 14: `t3ph` — account group pages (FE; requires Tasks 11 and 13) — branch `t3ph-group-pages`
-- [ ] Task 15: `fp3e` — align web UI with affordance-class and action-placement design rules: trailing actions column everywhere, button vs flat-toggle-icon pattern, entity chips as links (FE) — branch `fp3e-affordance-classes`
+- [x] Task 15: `fp3e` — align web UI with affordance-class and action-placement design rules: trailing actions column everywhere, button vs flat-toggle-icon pattern, entity chips as links (FE) — branch `fp3e-affordance-classes`
 - [ ] Task 16: `gm9d` — web UI display and interaction papercuts: currency symbols, account view, chart-of-accounts row actions, tag chip shadow, modal close-on-outside-click; includes necessary UI ground-truth doc adjustments (FE; requires Task 15) — branch `gm9d-ui-papercuts-2`
 - [ ] Task 17: `s5nw` — Categories reference page, establishes the reference pattern (FE) — branch `s5nw-categories-page`
 - [ ] Task 18: `z7t0` — Tags and Members reference pages (FE; requires Task 17) — branch `z7t0-tags-members-pages`
