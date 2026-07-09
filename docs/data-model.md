@@ -56,6 +56,11 @@ CREATE TYPE recurring_occurrence_status AS ENUM (
     'DEFERRED'
 );
 
+CREATE TYPE record_link_type AS ENUM (
+    'REFUND',
+    'REIMBURSEMENT'
+);
+
 -- Category table with hierarchical FQN and virtual columns
 CREATE TABLE category (
     category_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
@@ -272,6 +277,31 @@ COMMENT ON COLUMN journal_record.reconciliation_status IS 'Import/reconciliation
 COMMENT ON COLUMN journal_record.source IS 'Origin of this record.';
 COMMENT ON COLUMN journal_record.external_id IS 'Identifier assigned by an external system when this record is linked outside Mina.';
 COMMENT ON COLUMN journal_record.external_system IS 'External system namespace for external_id.';
+
+-- Pairwise metadata link associating a settlement journal record (refund or
+-- reimbursement payout) with an origin journal record (the spend or business
+-- expense it settles).
+CREATE TABLE record_link (
+    record_link_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
+    -- Journal record for the original economic event (the spend being refunded, or the business expense being reimbursed).
+    origin_record_id INTEGER NOT NULL,
+    -- Journal record that settles the origin record (the refund, or the reimbursement payout).
+    settlement_record_id INTEGER NOT NULL,
+    -- Distinguishes refund links from business-expense reimbursement links.
+    link_type record_link_type NOT NULL,
+    -- Optional free-text context for the link.
+    memo TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    tombstoned_at TIMESTAMP,
+
+    UNIQUE(origin_record_id, settlement_record_id, tombstoned_at)
+);
+
+COMMENT ON COLUMN record_link.origin_record_id IS 'Journal record for the original economic event (the spend being refunded, or the business expense being reimbursed).';
+COMMENT ON COLUMN record_link.settlement_record_id IS 'Journal record that settles the origin record (the refund, or the reimbursement payout).';
+COMMENT ON COLUMN record_link.link_type IS 'Distinguishes refund links from business-expense reimbursement links.';
+COMMENT ON COLUMN record_link.memo IS 'Optional free-text context for the link.';
 
 -- Raw provider metadata captured for imported journal records
 CREATE TABLE imported_record_metadata (
@@ -591,6 +621,9 @@ ON budget ((CASE WHEN tombstoned_at IS NULL THEN category_fqn || ':' || CAST(mon
 
 CREATE UNIQUE INDEX imported_record_metadata_active_record_unique
 ON imported_record_metadata ((CASE WHEN tombstoned_at IS NULL THEN record_id ELSE NULL END));
+
+CREATE UNIQUE INDEX record_link_active_pair_unique
+ON record_link ((CASE WHEN tombstoned_at IS NULL THEN CAST(origin_record_id AS VARCHAR) || ':' || CAST(settlement_record_id AS VARCHAR) ELSE NULL END));
 ```
 
 ## Hierarchical Names Encoding

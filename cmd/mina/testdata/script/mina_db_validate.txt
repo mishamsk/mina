@@ -101,6 +101,26 @@ duckdbexec $WORK/ref_tombstoned_imported_metadata_parent.db ref_tombstoned_impor
 exec mina db validate --db $WORK/ref_tombstoned_imported_metadata_parent.db --schema demo
 stdout 'ok: database is valid'
 
+duckdbclone $WORK/demo.db $WORK/ref_dangling_record_link.db
+duckdbexec $WORK/ref_dangling_record_link.db ref_dangling_record_link.sql
+! exec mina db validate --db $WORK/ref_dangling_record_link.db --schema demo
+stderr 'error: referential: active record_link.origin_record_id references missing journal_record'
+
+duckdbclone $WORK/demo.db $WORK/ref_dangling_record_link_settlement.db
+duckdbexec $WORK/ref_dangling_record_link_settlement.db ref_dangling_record_link_settlement.sql
+! exec mina db validate --db $WORK/ref_dangling_record_link_settlement.db --schema demo
+stderr 'error: referential: active record_link.settlement_record_id references missing journal_record'
+
+duckdbclone $WORK/demo.db $WORK/ref_tombstoned_record_link_parent.db
+duckdbexec $WORK/ref_tombstoned_record_link_parent.db ref_tombstoned_record_link_parent.sql
+! exec mina db validate --db $WORK/ref_tombstoned_record_link_parent.db --schema demo
+stderr 'error: referential: active record_link.origin_record_id references tombstoned journal_record'
+
+duckdbclone $WORK/demo.db $WORK/ref_tombstoned_record_link_settlement_parent.db
+duckdbexec $WORK/ref_tombstoned_record_link_settlement_parent.db ref_tombstoned_record_link_settlement_parent.sql
+! exec mina db validate --db $WORK/ref_tombstoned_record_link_settlement_parent.db --schema demo
+stderr 'error: referential: active record_link.settlement_record_id references tombstoned journal_record'
+
 duckdbclone $WORK/demo.db $WORK/ref_dangling_tag.db
 duckdbexec $WORK/ref_dangling_tag.db ref_dangling_tag.sql
 exec mina db validate --db $WORK/ref_dangling_tag.db --schema demo
@@ -215,6 +235,12 @@ duckdbexec $WORK/inv_duplicate_active_imported_metadata.db inv_duplicate_active_
 exec mina db validate --db $WORK/inv_duplicate_active_imported_metadata.db --schema demo
 stdout 'warning: schema: missing unique index imported_record_metadata_active_record_unique'
 stdout 'warning: invariant: duplicate active imported_record_metadata.record_id'
+
+duckdbclone $WORK/demo.db $WORK/inv_duplicate_active_record_link.db
+duckdbexec $WORK/inv_duplicate_active_record_link.db inv_duplicate_active_record_link.sql
+exec mina db validate --db $WORK/inv_duplicate_active_record_link.db --schema demo
+stdout 'warning: schema: missing unique index record_link_active_pair_unique'
+stdout 'warning: invariant: duplicate active record_link origin_record_id/settlement_record_id'
 
 duckdbclone $WORK/demo.db $WORK/inv_mismatched_active_category_index.db
 duckdbexec $WORK/inv_mismatched_active_category_index.db inv_mismatched_active_category_index.sql

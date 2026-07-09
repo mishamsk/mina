@@ -34,6 +34,7 @@
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
 - Transaction repositories store normalized journal records and own active selected-record checks for bulk operations.
 - Transaction-template repositories store normalized partial record defaults.
+- Record-link repositories store pairwise journal-record settlement metadata; services own semantic validation and cascade-tombstone decisions.
 - Recurring repositories store normalized definition record shapes and permanent occurrence rows.
 - Recurring materialization writes occurrence rows, generated transactions, and generated journal records in one store transaction.
 - Recurring pause/resume operations update definition schedule state in store transactions.

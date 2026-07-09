@@ -56,6 +56,7 @@
   - Exchange-rate loading infers non-USD journal-record needs, upserts active `USD -> currency` rates, and backfills resolvable null `amount_usd` values.
   - Transaction templates are stored as normalized active/tombstoned template and record-default rows with write-time reference checks.
   - Imported journal-record metadata rows store provider-neutral fields, raw provider payload JSON, and external provenance.
+  - Pairwise record links are stored for refund and reimbursement settlement as metadata-only associations between journal records.
   - Recurring definitions, definition records, and permanent occurrence rows are stored; review-queue occurrences start with generated EXPECTED transactions linked through transaction occurrence back-pointers.
   - Tombstone-aware reads and list defaults for applicable resources.
   - Store-owned allowlists for dynamic filtering and sorting.
