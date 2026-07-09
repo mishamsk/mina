@@ -40,6 +40,11 @@ from these semantics.
 
 - Occurrences **auto-materialize when due**, unposted, with a distinct status
   that excludes them from default transaction views and reports.
+- Materialization is a catch-up computation triggered by occurrence-facing
+  reads and lifecycle actions; there is no background scheduler. Any workflow
+  that consumes the occurrence queue — including future automated ingestion
+  and imported-transaction matching — must run catch-up materialization
+  first, so matching always sees fully backfilled occurrences.
 - The next or due occurrence can be **confirmed early** from the UI. An early
   manual confirm sets the transaction date to the current date, as that is
   almost certainly the intent.

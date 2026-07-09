@@ -60,6 +60,10 @@ func (s *backupSource) attachTarget(ctx context.Context, path string, targetIden
 }
 
 func (s *backupSource) copyDatabase(ctx context.Context, targetIdentifier string) error {
+	// DuckDB resolves the enum type of a generated column (e.g.
+	// recurring_definition.schedule_class) by unqualified name in the current
+	// catalog during COPY FROM DATABASE, so the accounting database must be
+	// current for the copy to succeed.
 	if _, err := s.db.db.ExecContext(ctx, "USE "+s.db.accountingSchemaName()); err != nil {
 		return backupSourceError(ctx, "select accounting database before copy", err)
 	}

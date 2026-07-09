@@ -76,6 +76,9 @@ func testscriptDuckDBClone(ts *testscript.TestScript, neg bool, args []string) {
 	for _, stmt := range []string{
 		"ATTACH " + duckDBStringLiteral(args[0]) + " AS src (READ_ONLY)",
 		"ATTACH " + duckDBStringLiteral(args[1]) + " AS dst",
+		// DuckDB resolves the enum type of a generated column by unqualified
+		// name in the current catalog during COPY FROM DATABASE, so the source
+		// database must be current; switch back afterwards so DETACH works.
 		"USE src.demo",
 		"COPY FROM DATABASE src TO dst",
 		"USE memory.main",
