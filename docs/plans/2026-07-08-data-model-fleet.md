@@ -60,7 +60,7 @@ Fleet-specific scope rules: `docs/recurring-transactions-semantics.md` is the se
 - [x] Task 1: `nszw` — extend existing schema for recurring: `posting_status` gains `EXPECTED`, `transaction` gains `recurring_occurrence_id`; default views/searches/registers/balances/reports exclude EXPECTED records; narrow DTO updates only (API) — branch `nszw-recurring-schema-prep`
 - [x] Task 2: `zetq` — recurring definitions, definition records, and occurrences: new tables, schedule payload validation, materialization/confirm/dismiss/defer/pause/resume lifecycle, and new APIs per the agreed model in the issue body (API; requires Task 1) — branch `zetq-recurring-operations`
 - [x] Task 3: `pb3q` — raw imported transaction metadata model with raw provider payload JSON column; model only (API) — branch `pb3q-import-metadata-model`
-- [ ] Task 4: `139j` — generic record link model for refunds and business-expense reimbursements: pairwise `record_link` table, record-level, no stored amounts, agreed DDL in the issue body; model only (API) — branch `139j-record-link-model`
+- [x] Task 4: `139j` — generic record link model for refunds and business-expense reimbursements: pairwise `record_link` table, record-level, no stored amounts, agreed DDL in the issue body; model only (API) — branch `139j-record-link-model`
 
 ## Final Verification
 
