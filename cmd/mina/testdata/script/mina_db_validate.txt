@@ -137,6 +137,17 @@ duckdbexec $WORK/inv_mixed_expected_status.db inv_mixed_expected_status.sql
 ! exec mina db validate --db $WORK/inv_mixed_expected_status.db --schema demo
 stderr 'error: invariant: transaction .* mixes expected and non-expected active records'
 
+duckdbclone $WORK/demo.db $WORK/inv_expected_without_occurrence.db
+duckdbexec $WORK/inv_expected_without_occurrence.db inv_expected_without_occurrence.sql
+! exec mina db validate --db $WORK/inv_expected_without_occurrence.db --schema demo
+stderr 'error: invariant: expected transaction .* has no recurring occurrence'
+
+duckdbclone $WORK/demo.db $WORK/inv_recurring_definition_shape.db
+duckdbexec $WORK/inv_recurring_definition_shape.db inv_recurring_definition_shape.sql
+! exec mina db validate --db $WORK/inv_recurring_definition_shape.db --schema demo
+stderr 'error: invariant: recurring definition .* is unbalanced for USD'
+stderr 'error: invariant: active recurring definition .* has fewer than two active records'
+
 duckdbclone $WORK/demo.db $WORK/inv_nonpositive_exchange_rate.db
 duckdbexec $WORK/inv_nonpositive_exchange_rate.db inv_nonpositive_exchange_rate.sql
 ! exec mina db validate --db $WORK/inv_nonpositive_exchange_rate.db --schema demo

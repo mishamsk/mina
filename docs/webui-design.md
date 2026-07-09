@@ -262,7 +262,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 
 ### 8. Future screens — guidance only
 
-- Recurring transactions (Phase 2, requirements TBD): screen behavior stays TBD until `docs/business-requirements.md` defines scheduling, review, and generated-transaction rules.
+- Recurring transactions (Phase 2, future screen): scheduling, review, and generated-transaction rules follow `docs/recurring-transactions-semantics.md`; screen behavior remains out of scope here until a recurring UI screen is planned.
 - Reports (Phase 3): saved searches become named views on the Transactions screen; summary reports follow this document's structural language.
 - Budgets (Phase 4): category-tree budget editor plus month status; reuses category path rendering and amount rules.
 - Import & reconciliation (Phase 5): an inbox pattern — imported records pending match/confirm; reconciliation indicators specified above become active.

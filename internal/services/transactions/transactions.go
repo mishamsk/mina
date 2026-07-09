@@ -48,6 +48,8 @@ type Source string
 const (
 	// SourceManual identifies manually-entered records.
 	SourceManual Source = "manual"
+	// SourceRecurringTemplate identifies records generated from recurring definitions.
+	SourceRecurringTemplate Source = "recurring_template"
 )
 
 // Transaction is a double-entry transaction with nested journal records.
@@ -260,6 +262,8 @@ type Repository interface {
 	List(context.Context, ListOptions) (ListResult, error)
 	MonthTotals(context.Context, MonthTotalsRange) (MonthActivityTotals, error)
 	Tombstone(context.Context, int64) error
+	HasExpectedRecurringOccurrenceTransaction(context.Context, int64) (bool, error)
+	HasExpectedRecurringOccurrenceRecords(context.Context, []int64) (bool, error)
 	SearchRecords(context.Context, RecordSearchOptions) (services.PaginatedList[JournalRecord], error)
 	TransactionsByRecordIDs(context.Context, []int64) ([]Transaction, error)
 	BulkCategorize(context.Context, []int64, int64) (int, error)
@@ -394,6 +398,9 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 
 	var transaction Transaction
 	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateGenericTransactionMutation(ctx, id); err != nil {
+			return err
+		}
 		if err := s.validateInputClassification(ctx, input); err != nil {
 			return err
 		}
@@ -511,6 +518,9 @@ func (s *Service) Cancel(ctx context.Context, id int64) (Transaction, error) {
 
 	var transaction Transaction
 	err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateGenericTransactionMutation(ctx, id); err != nil {
+			return err
+		}
 		var err error
 		transaction, err = s.repo.Cancel(ctx, id)
 		return err
@@ -690,10 +700,25 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return services.InvalidRequest("transaction_id must be positive")
 	}
 
+	if err := s.validateGenericTransactionMutation(ctx, id); err != nil {
+		return err
+	}
 	if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
 		return services.NotFound("transaction not found")
 	} else if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (s *Service) validateGenericTransactionMutation(ctx context.Context, transactionID int64) error {
+	generatedExpected, err := s.repo.HasExpectedRecurringOccurrenceTransaction(ctx, transactionID)
+	if err != nil {
+		return err
+	}
+	if generatedExpected {
+		return services.InvalidRequest("expected recurring transactions must be changed through recurring occurrence endpoints")
 	}
 
 	return nil
@@ -744,6 +769,9 @@ func (s *Service) BulkCategorize(ctx context.Context, recordIDs []int64, categor
 	}
 	var count int
 	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
+			return err
+		}
 		if err := s.validateBulkCategorizeClassification(ctx, recordIDs, categoryID); err != nil {
 			return err
 		}
@@ -782,6 +810,9 @@ func (s *Service) BulkUpdateTags(ctx context.Context, recordIDs []int64, addTagI
 	}
 	var count int
 	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
+			return err
+		}
 		tagIDs := append(append([]int64{}, addTagIDs...), removeTagIDs...)
 		if _, err := s.tags.ValidateActiveReferences(ctx, tagIDs, tags.ReferenceOptions{AllowHidden: true}); err != nil {
 			if errors.Is(err, services.ErrInvalidReference) {
@@ -815,6 +846,9 @@ func (s *Service) BulkReassignAccount(ctx context.Context, recordIDs []int64, ac
 	}
 	var count int
 	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
+			return err
+		}
 		if err := s.validateBulkReassignAccountClassification(ctx, recordIDs, accountID); err != nil {
 			return err
 		}
@@ -864,6 +898,9 @@ func (s *Service) BulkUpdateStatuses(
 
 	var count int
 	if err := s.refs.SerializeReferenceOperation(func() error {
+		if err := s.validateNoExpectedRecurringOccurrenceRecords(ctx, recordIDs); err != nil {
+			return err
+		}
 		if err := s.validateBulkPostingStatusInvariants(ctx, recordIDs, postingStatus); err != nil {
 			return err
 		}
@@ -984,11 +1021,22 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 	return nil
 }
 
+func (s *Service) validateNoExpectedRecurringOccurrenceRecords(ctx context.Context, recordIDs []int64) error {
+	generatedExpected, err := s.repo.HasExpectedRecurringOccurrenceRecords(ctx, recordIDs)
+	if err != nil {
+		return err
+	}
+	if generatedExpected {
+		return services.InvalidRequest("expected recurring transactions must be changed through recurring occurrence endpoints")
+	}
+
+	return nil
+}
+
 func (s *Service) validateBulkPostingStatusInvariants(ctx context.Context, recordIDs []int64, postingStatus *PostingStatus) error {
 	if postingStatus == nil {
 		return nil
 	}
-
 	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
 	if errors.Is(err, services.ErrInvalidReference) {
 		return services.InvalidRequest("records missing or inactive resource")

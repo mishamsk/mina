@@ -60,6 +60,10 @@ func (s *backupSource) attachTarget(ctx context.Context, path string, targetIden
 }
 
 func (s *backupSource) copyDatabase(ctx context.Context, targetIdentifier string) error {
+	if _, err := s.db.db.ExecContext(ctx, "USE "+s.db.accountingSchemaName()); err != nil {
+		return backupSourceError(ctx, "select accounting database before copy", err)
+	}
+
 	sql := "COPY FROM DATABASE " + s.db.accountingDatabaseIdentifier() + " TO " + targetIdentifier
 	_, err := s.db.db.ExecContext(ctx, sql)
 	return backupSourceError(ctx, "copy database", err)

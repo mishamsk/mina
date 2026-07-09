@@ -510,7 +510,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				PostedDate:           &postedDate,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -520,7 +520,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	}
@@ -644,7 +644,7 @@ func TestTransactionCreateInfersMissingAmountUSD(t *testing.T) {
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            eurMerchant.AccountId,
@@ -653,7 +653,7 @@ func TestTransactionCreateInfersMissingAmountUSD(t *testing.T) {
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	}
@@ -698,7 +698,7 @@ func TestTransactionLeavesUnrepresentableInferredAmountUSDNull(t *testing.T) {
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            counterparty.AccountId,
@@ -707,7 +707,7 @@ func TestTransactionLeavesUnrepresentableInferredAmountUSDNull(t *testing.T) {
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	}
@@ -742,7 +742,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            provider.AccountId,
@@ -752,7 +752,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            provider.AccountId,
@@ -762,7 +762,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            cashEUR.AccountId,
@@ -772,7 +772,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	}
@@ -1011,7 +1011,7 @@ func TestTransactionValidationErrors(t *testing.T) {
 	}
 
 	invalidSource := balancedTransactionRequest(refs)
-	invalidSource.Records[0].Source = httpclient.Source("imported")
+	invalidSource.Records[0].Source = httpclient.ManualSource("imported")
 	invalidSourceResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), invalidSource)
 	if err != nil {
 		t.Fatalf("invalid source request: %v", err)
@@ -1320,7 +1320,7 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				PostedDate:           &postedDate,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -1330,7 +1330,7 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	}

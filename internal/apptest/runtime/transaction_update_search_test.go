@@ -104,7 +104,7 @@ func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            eurMerchant.AccountId,
@@ -113,7 +113,7 @@ func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	}
@@ -342,7 +342,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				PendingDate:          &pendingDate,
 				PostingStatus:        httpclient.PostingStatusPending,
 				ReconciliationStatus: httpclient.Unreconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -352,7 +352,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				CategoryId:           refs.SecondCategoryId,
 				PostingStatus:        httpclient.PostingStatusPending,
 				ReconciliationStatus: httpclient.Unreconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	}
@@ -944,7 +944,7 @@ func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransa
 				PostedDate:           &postedDate,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -954,7 +954,7 @@ func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransa
 				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	}
@@ -1005,7 +1005,7 @@ func recordSearchPrefixTransactionRequest(
 				CategoryId:           categoryID,
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            secondAccountID,
@@ -1015,7 +1015,7 @@ func recordSearchPrefixTransactionRequest(
 				CategoryId:           categoryID,
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	}

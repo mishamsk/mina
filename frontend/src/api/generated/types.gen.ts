@@ -231,7 +231,7 @@ export type CreateJournalRecordRequest = {
     posted_date?: string | null;
     posting_status: PostingStatus;
     reconciliation_status: ReconciliationStatus;
-    source: Source;
+    source: ManualSource;
     external_id?: string | null;
     external_system?: string | null;
 };
@@ -431,6 +431,39 @@ export type TransactionTemplateRecordRequest = {
     reconciliation_status?: ReconciliationStatus | null;
 };
 
+export type RecurringDefinitionWriteRequest = {
+    fqn: string;
+    schedule_rule: RecurringScheduleRule;
+    anchor_date: string;
+    template_id?: number | null;
+    records?: Array<RecurringDefinitionRecordRequest>;
+};
+
+export type RecurringDefinitionDeferRequest = {
+    every?: number;
+    unit?: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+};
+
+/**
+ * Versioned recurring schedule payload validated by the recurring service.
+ */
+export type RecurringScheduleRule = {
+    [key: string]: unknown;
+};
+
+export type RecurringDefinitionRecordRequest = {
+    account_id?: number | null;
+    member_id?: number | null;
+    currency?: string | null;
+    /**
+     * JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount?: string | null;
+    category_id?: number | null;
+    tag_ids?: Array<number>;
+    memo?: string | null;
+};
+
 export type CreateTagRequest = {
     fqn: string;
     is_hidden?: boolean;
@@ -574,7 +607,9 @@ export type NonExpectedPostingStatus = 'pending' | 'posted' | 'cancelled';
 
 export type ReconciliationStatus = 'reconciled' | 'unreconciled';
 
-export type Source = 'manual';
+export type ManualSource = 'manual';
+
+export type Source = 'manual' | 'recurring_template';
 
 export type Tag = {
     tag_id: number;
@@ -632,6 +667,75 @@ export type TransactionTemplateListResponse = {
     transaction_templates: Array<TransactionTemplate>;
     /**
      * Count of matching transaction templates before limit and offset are applied.
+     */
+    total_count: number;
+};
+
+export type RecurringScheduleClass = 'interval' | 'date_rule';
+
+export type RecurringDefinition = {
+    recurring_definition_id: number;
+    fqn: string;
+    schedule_rule: RecurringScheduleRule;
+    schedule_class: RecurringScheduleClass;
+    anchor_date: string;
+    definition_version: number;
+    paused_at: string | null;
+    parent_fqn: string | null;
+    name: string;
+    level: number;
+    next_due_date: string | null;
+    created_at: string;
+    updated_at: string;
+    tombstoned_at?: string | null;
+    records: Array<RecurringDefinitionRecord>;
+};
+
+export type RecurringDefinitionRecord = {
+    recurring_definition_record_id: number;
+    recurring_definition_id: number;
+    account_id: number;
+    member_id: number | null;
+    currency: string;
+    /**
+     * JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+     */
+    amount: string;
+    category_id: number;
+    tag_ids: Array<number>;
+    memo: string | null;
+    created_at: string;
+    updated_at: string;
+    tombstoned_at?: string | null;
+};
+
+export type RecurringDefinitionListResponse = {
+    recurring_definitions: Array<RecurringDefinition>;
+    /**
+     * Count of matching recurring definitions before limit and offset are applied.
+     */
+    total_count: number;
+};
+
+export type RecurringOccurrenceStatus = 'expected' | 'confirmed' | 'dismissed' | 'deferred';
+
+export type RecurringOccurrence = {
+    recurring_occurrence_id: number;
+    recurring_definition_id: number;
+    scheduled_date: string;
+    status: RecurringOccurrenceStatus;
+    materialized_definition_version: number;
+    materialized_at: string;
+    reviewed_at: string | null;
+    generated_transaction_id: number | null;
+    created_at: string;
+    updated_at: string;
+};
+
+export type RecurringOccurrenceListResponse = {
+    recurring_occurrences: Array<RecurringOccurrence>;
+    /**
+     * Count of matching recurring occurrences before limit and offset are applied.
      */
     total_count: number;
 };
@@ -2373,6 +2477,388 @@ export type ReplaceTransactionTemplateResponses = {
 };
 
 export type ReplaceTransactionTemplateResponse = ReplaceTransactionTemplateResponses[keyof ReplaceTransactionTemplateResponses];
+
+export type ListRecurringDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        sort?: 'fqn' | 'created_at' | 'updated_at';
+        sort_dir?: 'asc' | 'desc';
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/recurring-definitions';
+};
+
+export type ListRecurringDefinitionsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type ListRecurringDefinitionsError = ListRecurringDefinitionsErrors[keyof ListRecurringDefinitionsErrors];
+
+export type ListRecurringDefinitionsResponses = {
+    /**
+     * Active recurring definitions in caller-selected deterministic order.
+     */
+    200: RecurringDefinitionListResponse;
+};
+
+export type ListRecurringDefinitionsResponse = ListRecurringDefinitionsResponses[keyof ListRecurringDefinitionsResponses];
+
+export type CreateRecurringDefinitionData = {
+    body: RecurringDefinitionWriteRequest;
+    path?: never;
+    query?: never;
+    url: '/api/recurring-definitions';
+};
+
+export type CreateRecurringDefinitionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
+};
+
+export type CreateRecurringDefinitionError = CreateRecurringDefinitionErrors[keyof CreateRecurringDefinitionErrors];
+
+export type CreateRecurringDefinitionResponses = {
+    /**
+     * Recurring definition created.
+     */
+    201: RecurringDefinition;
+};
+
+export type CreateRecurringDefinitionResponse = CreateRecurringDefinitionResponses[keyof CreateRecurringDefinitionResponses];
+
+export type DeleteRecurringDefinitionData = {
+    body?: never;
+    path: {
+        recurring_definition_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-definitions/{recurring_definition_id}';
+};
+
+export type DeleteRecurringDefinitionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type DeleteRecurringDefinitionError = DeleteRecurringDefinitionErrors[keyof DeleteRecurringDefinitionErrors];
+
+export type DeleteRecurringDefinitionResponses = {
+    /**
+     * Recurring definition cancelled.
+     */
+    204: void;
+};
+
+export type DeleteRecurringDefinitionResponse = DeleteRecurringDefinitionResponses[keyof DeleteRecurringDefinitionResponses];
+
+export type GetRecurringDefinitionData = {
+    body?: never;
+    path: {
+        recurring_definition_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-definitions/{recurring_definition_id}';
+};
+
+export type GetRecurringDefinitionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type GetRecurringDefinitionError = GetRecurringDefinitionErrors[keyof GetRecurringDefinitionErrors];
+
+export type GetRecurringDefinitionResponses = {
+    /**
+     * Recurring definition found.
+     */
+    200: RecurringDefinition;
+};
+
+export type GetRecurringDefinitionResponse = GetRecurringDefinitionResponses[keyof GetRecurringDefinitionResponses];
+
+export type ReplaceRecurringDefinitionData = {
+    body: RecurringDefinitionWriteRequest;
+    path: {
+        recurring_definition_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-definitions/{recurring_definition_id}';
+};
+
+export type ReplaceRecurringDefinitionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
+};
+
+export type ReplaceRecurringDefinitionError = ReplaceRecurringDefinitionErrors[keyof ReplaceRecurringDefinitionErrors];
+
+export type ReplaceRecurringDefinitionResponses = {
+    /**
+     * Recurring definition replaced.
+     */
+    200: RecurringDefinition;
+};
+
+export type ReplaceRecurringDefinitionResponse = ReplaceRecurringDefinitionResponses[keyof ReplaceRecurringDefinitionResponses];
+
+export type ConfirmNextRecurringDefinitionData = {
+    body?: never;
+    path: {
+        recurring_definition_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-definitions/{recurring_definition_id}/confirm-next';
+};
+
+export type ConfirmNextRecurringDefinitionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
+};
+
+export type ConfirmNextRecurringDefinitionError = ConfirmNextRecurringDefinitionErrors[keyof ConfirmNextRecurringDefinitionErrors];
+
+export type ConfirmNextRecurringDefinitionResponses = {
+    /**
+     * Next occurrence materialized and confirmed.
+     */
+    200: RecurringOccurrence;
+};
+
+export type ConfirmNextRecurringDefinitionResponse = ConfirmNextRecurringDefinitionResponses[keyof ConfirmNextRecurringDefinitionResponses];
+
+export type DeferRecurringDefinitionData = {
+    body?: RecurringDefinitionDeferRequest;
+    path: {
+        recurring_definition_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-definitions/{recurring_definition_id}/defer';
+};
+
+export type DeferRecurringDefinitionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
+};
+
+export type DeferRecurringDefinitionError = DeferRecurringDefinitionErrors[keyof DeferRecurringDefinitionErrors];
+
+export type DeferRecurringDefinitionResponses = {
+    /**
+     * Next interval occurrence deferred.
+     */
+    200: RecurringOccurrence;
+};
+
+export type DeferRecurringDefinitionResponse = DeferRecurringDefinitionResponses[keyof DeferRecurringDefinitionResponses];
+
+export type PauseRecurringDefinitionData = {
+    body?: never;
+    path: {
+        recurring_definition_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-definitions/{recurring_definition_id}/pause';
+};
+
+export type PauseRecurringDefinitionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type PauseRecurringDefinitionError = PauseRecurringDefinitionErrors[keyof PauseRecurringDefinitionErrors];
+
+export type PauseRecurringDefinitionResponses = {
+    /**
+     * Recurring definition paused.
+     */
+    200: RecurringDefinition;
+};
+
+export type PauseRecurringDefinitionResponse = PauseRecurringDefinitionResponses[keyof PauseRecurringDefinitionResponses];
+
+export type ResumeRecurringDefinitionData = {
+    body?: never;
+    path: {
+        recurring_definition_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-definitions/{recurring_definition_id}/resume';
+};
+
+export type ResumeRecurringDefinitionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type ResumeRecurringDefinitionError = ResumeRecurringDefinitionErrors[keyof ResumeRecurringDefinitionErrors];
+
+export type ResumeRecurringDefinitionResponses = {
+    /**
+     * Recurring definition resumed.
+     */
+    200: RecurringDefinition;
+};
+
+export type ResumeRecurringDefinitionResponse = ResumeRecurringDefinitionResponses[keyof ResumeRecurringDefinitionResponses];
+
+export type ListRecurringOccurrencesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        recurring_definition_id?: number;
+        status?: Array<RecurringOccurrenceStatus>;
+        sort?: 'scheduled_date' | 'created_at' | 'updated_at';
+        sort_dir?: 'asc' | 'desc';
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/recurring-occurrences';
+};
+
+export type ListRecurringOccurrencesErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type ListRecurringOccurrencesError = ListRecurringOccurrencesErrors[keyof ListRecurringOccurrencesErrors];
+
+export type ListRecurringOccurrencesResponses = {
+    /**
+     * Recurring occurrences in caller-selected deterministic order.
+     */
+    200: RecurringOccurrenceListResponse;
+};
+
+export type ListRecurringOccurrencesResponse = ListRecurringOccurrencesResponses[keyof ListRecurringOccurrencesResponses];
+
+export type ConfirmRecurringOccurrenceData = {
+    body?: never;
+    path: {
+        recurring_occurrence_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-occurrences/{recurring_occurrence_id}/confirm';
+};
+
+export type ConfirmRecurringOccurrenceErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type ConfirmRecurringOccurrenceError = ConfirmRecurringOccurrenceErrors[keyof ConfirmRecurringOccurrenceErrors];
+
+export type ConfirmRecurringOccurrenceResponses = {
+    /**
+     * Occurrence confirmed and generated records posted.
+     */
+    200: RecurringOccurrence;
+};
+
+export type ConfirmRecurringOccurrenceResponse = ConfirmRecurringOccurrenceResponses[keyof ConfirmRecurringOccurrenceResponses];
+
+export type DismissRecurringOccurrenceData = {
+    body?: never;
+    path: {
+        recurring_occurrence_id: number;
+    };
+    query?: never;
+    url: '/api/recurring-occurrences/{recurring_occurrence_id}/dismiss';
+};
+
+export type DismissRecurringOccurrenceErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type DismissRecurringOccurrenceError = DismissRecurringOccurrenceErrors[keyof DismissRecurringOccurrenceErrors];
+
+export type DismissRecurringOccurrenceResponses = {
+    /**
+     * Occurrence dismissed and generated transaction tombstoned.
+     */
+    200: RecurringOccurrence;
+};
+
+export type DismissRecurringOccurrenceResponse = DismissRecurringOccurrenceResponses[keyof DismissRecurringOccurrenceResponses];
 
 export type ListTransactionsData = {
     body?: never;

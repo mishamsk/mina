@@ -203,7 +203,7 @@ Search and filter records by:
 - Local web UI development infrastructure and minimal transaction entry/search flows per `docs/webui-design.md`.
 - Transaction templates are hierarchical, date-free, category-bearing manual-entry defaults.
 - Transaction templates are separate from recurring transactions and do not include schedules, cadence, due dates, or generated transaction source state.
-- Recurring transaction scheduling requirements TBD.
+- Recurring transaction scheduling, occurrence review, and generated-transaction rules are defined in `docs/recurring-transactions-semantics.md`.
 
 ## Phase 3: Basic Reporting
 *Requirements TBD. Candidate areas include saved searches, tag/category/member summaries, personal vs. shared expense views, richer summaries, and trend reporting.*

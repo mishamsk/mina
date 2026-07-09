@@ -14,6 +14,7 @@
   - Server-computed transaction month spend/income totals and account balances with USD-equivalent aggregation, unconverted counts, and current credit limits.
   - Shorthand transaction creation endpoints for spend, income, refund, and transfer.
   - Transaction-template creation, read, paginated list, full replacement, and tombstone deletion with nested partial record defaults.
+  - Recurring definition creation, read, paginated list, full replacement, cancel, pause/resume, defer, confirm-next, occurrence review queue, confirm, and dismiss flows.
   - Per-entity hierarchy restructure endpoints for accounts, categories, tags, and transaction templates, with atomic subtree FQN rewrite; category restructure rewrites active budget category paths in lockstep; template replacement preserves `fqn`.
   - Derived group listings and path-addressed bulk hide/unhide for accounts, categories, and tags; group hidden state is computed from active leaves.
   - Transaction semantic shape validation with derived transaction class, summary titles, component summaries, and display amounts in REST responses.
@@ -54,6 +55,6 @@
   - Store-owned database backup sources use DuckDB database copy into provider-owned target files and reject in-memory accounting sources.
   - Exchange-rate loading infers non-USD journal-record needs, upserts active `USD -> currency` rates, and backfills resolvable null `amount_usd` values.
   - Transaction templates are stored as normalized active/tombstoned template and record-default rows with write-time reference checks.
-  - Schema is prepared for recurring transactions with EXPECTED posting status default exclusion and nullable transaction occurrence back-pointers.
+  - Recurring definitions, definition records, and permanent occurrence rows are stored; review-queue occurrences start with generated EXPECTED transactions linked through transaction occurrence back-pointers.
   - Tombstone-aware reads and list defaults for applicable resources.
   - Store-owned allowlists for dynamic filtering and sorting.

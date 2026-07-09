@@ -13,6 +13,7 @@ import (
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
+	"github.com/mishamsk/mina/internal/services/recurring"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/values"
 )
@@ -640,6 +641,54 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 
 		return nil
 	})
+}
+
+// HasExpectedRecurringOccurrenceTransaction reports whether a transaction belongs to a still-expected recurring occurrence.
+func (s *TransactionStore) HasExpectedRecurringOccurrenceTransaction(ctx context.Context, id int64) (bool, error) {
+	var count int
+	if err := s.db.query().QueryRowContext(
+		ctx,
+		`SELECT COUNT(*)
+FROM `+s.db.accountingName("transaction")+` AS t
+JOIN `+s.db.accountingName("recurring_occurrence")+` AS o
+  ON o.recurring_occurrence_id = t.recurring_occurrence_id
+WHERE t.transaction_id = ?
+  AND t.tombstoned_at IS NULL
+  AND o.status = CAST(? AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
+		id,
+		enumValue(recurring.OccurrenceStatusExpected),
+	).Scan(&count); err != nil {
+		return false, fmt.Errorf("check expected recurring occurrence transaction: %w", err)
+	}
+
+	return count > 0, nil
+}
+
+// HasExpectedRecurringOccurrenceRecords reports whether any selected active record belongs to a still-expected recurring occurrence.
+func (s *TransactionStore) HasExpectedRecurringOccurrenceRecords(ctx context.Context, recordIDs []int64) (bool, error) {
+	if len(recordIDs) == 0 {
+		return false, nil
+	}
+
+	var count int
+	if err := s.db.query().QueryRowContext(
+		ctx,
+		`SELECT COUNT(DISTINCT jr.record_id)
+FROM `+s.db.accountingName("journal_record")+` AS jr
+JOIN `+s.db.accountingName("transaction")+` AS t
+  ON t.transaction_id = jr.transaction_id
+JOIN `+s.db.accountingName("recurring_occurrence")+` AS o
+  ON o.recurring_occurrence_id = t.recurring_occurrence_id
+WHERE jr.record_id IN (`+placeholders(len(recordIDs))+`)
+  AND jr.tombstoned_at IS NULL
+  AND t.tombstoned_at IS NULL
+  AND o.status = CAST(? AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
+		append(int64Args(recordIDs), enumValue(recurring.OccurrenceStatusExpected))...,
+	).Scan(&count); err != nil {
+		return false, fmt.Errorf("check expected recurring occurrence records: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 // Cancel sets all active journal records in a transaction to cancelled.

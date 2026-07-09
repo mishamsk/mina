@@ -116,12 +116,13 @@ type Reference struct {
 type ActiveUsage struct {
 	JournalRecords             bool
 	TransactionTemplateRecords bool
+	RecurringDefinitionRecords bool
 	CreditLimitHistory         bool
 }
 
 // HasActiveDependents reports whether any active resource references the account.
 func (u ActiveUsage) HasActiveDependents() bool {
-	return u.JournalRecords || u.TransactionTemplateRecords || u.CreditLimitHistory
+	return u.JournalRecords || u.TransactionTemplateRecords || u.RecurringDefinitionRecords || u.CreditLimitHistory
 }
 
 // Repository persists account state.

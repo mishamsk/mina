@@ -18,6 +18,8 @@ const (
 	SortKeyInitiatedDate SortKey = "initiated_date"
 	// SortKeyName sorts by display name.
 	SortKeyName SortKey = "name"
+	// SortKeyScheduledDate sorts by recurring occurrence scheduled date.
+	SortKeyScheduledDate SortKey = "scheduled_date"
 	// SortKeyToCurrency sorts by target currency.
 	SortKeyToCurrency SortKey = "to_currency"
 	// SortKeyUpdatedAt sorts by update timestamp.

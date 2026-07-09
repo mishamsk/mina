@@ -34,6 +34,10 @@
 - Database-specific constraint and foreign-key errors are mapped before returning from repository implementations.
 - Transaction repositories store normalized journal records and own active selected-record checks for bulk operations.
 - Transaction-template repositories store normalized partial record defaults.
+- Recurring repositories store normalized definition record shapes and permanent occurrence rows.
+- Recurring materialization writes occurrence rows, generated transactions, and generated journal records in one store transaction.
+- Recurring pause/resume operations update definition schedule state in store transactions.
+- Recurring defer and date-rule resume write occurrence audit rows with definition schedule state in one store transaction.
 - Dictionary usage queries report active dependency facts only; services decide whether those facts block deletes.
 - Category FQN restructure rewrites active `budget.category_fqn` paths in the same store transaction as the category rewrite.
 - Transaction list and record search exclude expected records by default; explicit `posting_status=expected` filters include them.
@@ -42,7 +46,7 @@
 - Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; account/category/tag/template creates map index violations after service path checks, while member and exchange-rate writes pre-check uniqueness for stable conflict messages.
 - FQN restructure writes rely on service check-then-write validation and map DuckDB uniqueness conflicts.
 - Path-addressed account/category/tag hidden updates rely on service check-then-write validation and issue one bulk `is_hidden` update against active leaves.
-- Account, category, tag, and transaction-template hierarchy fields are read from DuckDB generated virtual columns.
+- Account, category, tag, transaction-template, and recurring-definition hierarchy fields are read from DuckDB generated virtual columns.
 
 ## Boundaries
 

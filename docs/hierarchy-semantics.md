@@ -1,10 +1,11 @@
 # Hierarchy Semantics
 
 This document defines how hierarchical naming works for accounts, categories,
-tags, and transaction templates: what groups and leaves are, which invariants
-hold, and how every hierarchy-affecting operation behaves. It does not define
-SQL migrations, REST DTO shapes, or UI screens. Table shapes are owned by
-`docs/data-model.md`. Members are a flat list and are out of scope.
+tags, transaction templates, and recurring definitions: what groups and leaves
+are, which invariants hold, and how every hierarchy-affecting operation
+behaves. It does not define SQL migrations, REST DTO shapes, or UI screens.
+Table shapes are owned by `docs/data-model.md`. Members are a flat list and
+are out of scope.
 
 ## Model
 
@@ -13,9 +14,9 @@ Tree structure is derived at query time. There are no parent ids and no group
 rows.
 
 - A **leaf** is a stored row. Only leaves carry entity state (type, intent,
-  currency, hidden, featured, template records) and only leaves can be
-  referenced by other entities (journal records, template records, tag
-  assignments).
+  currency, hidden, featured, template records, recurring schedules) and only
+  leaves can be referenced by other entities (journal records, template
+  records, recurring occurrences, tag assignments).
 - A **group** is an implicit FQN path prefix shared by one or more active
   leaves. Groups are folders: they have no row, no id, and no state of their
   own. A group exists exactly while at least one active leaf lives under it.
@@ -132,9 +133,10 @@ leaves and groups.
 
 - **Materialized group rows** (`is_group` flag in entity tables): required
   attributes (category economic intent, account type and currency, template
-  records) have no honest value for a folder; creation acquires parent-chain
-  ceremony; leaf/group conversions become schema state transitions; validation
-  and API surface grow across all four entity services.
+  records, recurring schedules) have no honest value for a folder; creation
+  acquires parent-chain ceremony; leaf/group conversions become schema state
+  transitions; validation and API surface grow across all hierarchy-owning
+  services.
 - **Normalized folder tables or parent-id adjacency**: parent-child structures
   make hierarchical queries cumbersome in a relational store, force a rework of
   the flat-list-with-`parent_fqn` API contract and the whole query layer, and

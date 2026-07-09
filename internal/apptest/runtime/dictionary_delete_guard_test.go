@@ -173,7 +173,7 @@ func TestDictionaryDeleteAllowsTombstonedTransactionRecordsUnderActiveTransactio
 				MemberId:             &replacementRefs.MemberID,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 				TagIds:               apptest.Int64SlicePtr(replacementRefs.TagID),
 			},
 			{
@@ -184,7 +184,7 @@ func TestDictionaryDeleteAllowsTombstonedTransactionRecordsUnderActiveTransactio
 				Currency:             "USD",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	})

@@ -29,6 +29,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/health"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/operationruns"
+	"github.com/mishamsk/mina/internal/services/recurring"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/transactiontemplates"
@@ -347,6 +348,14 @@ func newAccountingServices(
 	categoryService := categories.NewService(categoryStore, referenceSerializer)
 	tagService := tags.NewService(tagStore, referenceSerializer)
 	memberService := members.NewService(memberStore, referenceSerializer)
+	templateService := transactiontemplates.NewService(
+		store.NewTransactionTemplateStore(appDB),
+		accountService,
+		categoryService,
+		tagService,
+		memberService,
+		referenceSerializer,
+	)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			Health:        health.NewService(store.NewHealthStore(appDB)),
@@ -367,12 +376,15 @@ func newAccountingServices(
 				referenceSerializer,
 				currencyUsageChanged,
 			),
-			Templates: transactiontemplates.NewService(
-				store.NewTransactionTemplateStore(appDB),
+			Templates: templateService,
+			Recurring: recurring.NewService(
+				store.NewRecurringStore(appDB),
 				accountService,
 				categoryService,
 				tagService,
 				memberService,
+				templateService,
+				exchangeRates,
 				referenceSerializer,
 			),
 			Clock: opts.clock(),

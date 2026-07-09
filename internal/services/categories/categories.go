@@ -89,11 +89,12 @@ type Reference struct {
 type ActiveUsage struct {
 	JournalRecords             bool
 	TransactionTemplateRecords bool
+	RecurringDefinitionRecords bool
 }
 
 // HasActiveDependents reports whether any active resource references the category.
 func (u ActiveUsage) HasActiveDependents() bool {
-	return u.JournalRecords || u.TransactionTemplateRecords
+	return u.JournalRecords || u.TransactionTemplateRecords || u.RecurringDefinitionRecords
 }
 
 // Repository persists category state.

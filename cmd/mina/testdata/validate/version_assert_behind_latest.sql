@@ -4,4 +4,4 @@ VALUES ((
 	SELECT MAX(version_id)
 	FROM demo.schema_version
 	WHERE is_applied
-) = 9);
+) = 10);

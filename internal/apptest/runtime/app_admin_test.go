@@ -42,7 +42,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				MemberId:             &missingMemberID,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 				TagIds:               apptest.Int64SlicePtr(900005),
 			},
 			{
@@ -52,7 +52,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				Currency:             "USD",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	})
@@ -84,7 +84,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				MemberId:             &refs.memberID,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 				TagIds:               &tagIDs,
 			},
 			{
@@ -94,7 +94,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				Currency:             "USD",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	})

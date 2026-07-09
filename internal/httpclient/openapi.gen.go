@@ -202,6 +202,21 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for ManualSource.
+const (
+	ManualSourceManual ManualSource = "manual"
+)
+
+// Valid indicates whether the value is a known member of the ManualSource enum.
+func (e ManualSource) Valid() bool {
+	switch e {
+	case ManualSourceManual:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NonExpectedPostingStatus.
 const (
 	NonExpectedPostingStatusCancelled NonExpectedPostingStatus = "cancelled"
@@ -328,15 +343,84 @@ func (e ReconciliationStatus) Valid() bool {
 	}
 }
 
+// Defines values for RecurringDefinitionDeferRequestUnit.
+const (
+	DAY   RecurringDefinitionDeferRequestUnit = "DAY"
+	MONTH RecurringDefinitionDeferRequestUnit = "MONTH"
+	WEEK  RecurringDefinitionDeferRequestUnit = "WEEK"
+	YEAR  RecurringDefinitionDeferRequestUnit = "YEAR"
+)
+
+// Valid indicates whether the value is a known member of the RecurringDefinitionDeferRequestUnit enum.
+func (e RecurringDefinitionDeferRequestUnit) Valid() bool {
+	switch e {
+	case DAY:
+		return true
+	case MONTH:
+		return true
+	case WEEK:
+		return true
+	case YEAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecurringOccurrenceStatus.
+const (
+	Confirmed RecurringOccurrenceStatus = "confirmed"
+	Deferred  RecurringOccurrenceStatus = "deferred"
+	Dismissed RecurringOccurrenceStatus = "dismissed"
+	Expected  RecurringOccurrenceStatus = "expected"
+)
+
+// Valid indicates whether the value is a known member of the RecurringOccurrenceStatus enum.
+func (e RecurringOccurrenceStatus) Valid() bool {
+	switch e {
+	case Confirmed:
+		return true
+	case Deferred:
+		return true
+	case Dismissed:
+		return true
+	case Expected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecurringScheduleClass.
+const (
+	DateRule RecurringScheduleClass = "date_rule"
+	Interval RecurringScheduleClass = "interval"
+)
+
+// Valid indicates whether the value is a known member of the RecurringScheduleClass enum.
+func (e RecurringScheduleClass) Valid() bool {
+	switch e {
+	case DateRule:
+		return true
+	case Interval:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Source.
 const (
-	Manual Source = "manual"
+	Manual            Source = "manual"
+	RecurringTemplate Source = "recurring_template"
 )
 
 // Valid indicates whether the value is a known member of the Source enum.
 func (e Source) Valid() bool {
 	switch e {
 	case Manual:
+		return true
+	case RecurringTemplate:
 		return true
 	default:
 		return false
@@ -571,6 +655,84 @@ func (e ListMembersParamsSortDir) Valid() bool {
 	case ListMembersParamsSortDirAsc:
 		return true
 	case ListMembersParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRecurringDefinitionsParamsSort.
+const (
+	ListRecurringDefinitionsParamsSortCreatedAt ListRecurringDefinitionsParamsSort = "created_at"
+	ListRecurringDefinitionsParamsSortFqn       ListRecurringDefinitionsParamsSort = "fqn"
+	ListRecurringDefinitionsParamsSortUpdatedAt ListRecurringDefinitionsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListRecurringDefinitionsParamsSort enum.
+func (e ListRecurringDefinitionsParamsSort) Valid() bool {
+	switch e {
+	case ListRecurringDefinitionsParamsSortCreatedAt:
+		return true
+	case ListRecurringDefinitionsParamsSortFqn:
+		return true
+	case ListRecurringDefinitionsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRecurringDefinitionsParamsSortDir.
+const (
+	ListRecurringDefinitionsParamsSortDirAsc  ListRecurringDefinitionsParamsSortDir = "asc"
+	ListRecurringDefinitionsParamsSortDirDesc ListRecurringDefinitionsParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListRecurringDefinitionsParamsSortDir enum.
+func (e ListRecurringDefinitionsParamsSortDir) Valid() bool {
+	switch e {
+	case ListRecurringDefinitionsParamsSortDirAsc:
+		return true
+	case ListRecurringDefinitionsParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRecurringOccurrencesParamsSort.
+const (
+	ListRecurringOccurrencesParamsSortCreatedAt     ListRecurringOccurrencesParamsSort = "created_at"
+	ListRecurringOccurrencesParamsSortScheduledDate ListRecurringOccurrencesParamsSort = "scheduled_date"
+	ListRecurringOccurrencesParamsSortUpdatedAt     ListRecurringOccurrencesParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListRecurringOccurrencesParamsSort enum.
+func (e ListRecurringOccurrencesParamsSort) Valid() bool {
+	switch e {
+	case ListRecurringOccurrencesParamsSortCreatedAt:
+		return true
+	case ListRecurringOccurrencesParamsSortScheduledDate:
+		return true
+	case ListRecurringOccurrencesParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRecurringOccurrencesParamsSortDir.
+const (
+	ListRecurringOccurrencesParamsSortDirAsc  ListRecurringOccurrencesParamsSortDir = "asc"
+	ListRecurringOccurrencesParamsSortDirDesc ListRecurringOccurrencesParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListRecurringOccurrencesParamsSortDir enum.
+func (e ListRecurringOccurrencesParamsSortDir) Valid() bool {
+	switch e {
+	case ListRecurringOccurrencesParamsSortDirAsc:
+		return true
+	case ListRecurringOccurrencesParamsSortDirDesc:
 		return true
 	default:
 		return false
@@ -909,7 +1071,7 @@ type CreateJournalRecordRequest struct {
 	PostedDate           *time.Time           `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
-	Source               Source               `json:"source"`
+	Source               ManualSource         `json:"source"`
 	TagIds               *[]int64             `json:"tag_ids,omitempty"`
 }
 
@@ -1169,6 +1331,9 @@ type JournalRecordSearchResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
+// ManualSource defines model for ManualSource.
+type ManualSource string
+
 // Member defines model for Member.
 type Member struct {
 	CreatedAt    time.Time  `json:"created_at"`
@@ -1220,6 +1385,117 @@ type PostingStatus string
 
 // ReconciliationStatus defines model for ReconciliationStatus.
 type ReconciliationStatus string
+
+// RecurringDefinition defines model for RecurringDefinition.
+type RecurringDefinition struct {
+	AnchorDate            openapi_types.Date          `json:"anchor_date"`
+	CreatedAt             time.Time                   `json:"created_at"`
+	DefinitionVersion     int64                       `json:"definition_version"`
+	Fqn                   string                      `json:"fqn"`
+	Level                 int                         `json:"level"`
+	Name                  string                      `json:"name"`
+	NextDueDate           *openapi_types.Date         `json:"next_due_date"`
+	ParentFqn             *string                     `json:"parent_fqn"`
+	PausedAt              *time.Time                  `json:"paused_at"`
+	Records               []RecurringDefinitionRecord `json:"records"`
+	RecurringDefinitionId int64                       `json:"recurring_definition_id"`
+	ScheduleClass         RecurringScheduleClass      `json:"schedule_class"`
+
+	// ScheduleRule Versioned recurring schedule payload validated by the recurring service.
+	ScheduleRule RecurringScheduleRule `json:"schedule_rule"`
+	TombstonedAt *time.Time            `json:"tombstoned_at,omitempty"`
+	UpdatedAt    time.Time             `json:"updated_at"`
+}
+
+// RecurringDefinitionDeferRequest defines model for RecurringDefinitionDeferRequest.
+type RecurringDefinitionDeferRequest struct {
+	Every *int64                               `json:"every,omitempty"`
+	Unit  *RecurringDefinitionDeferRequestUnit `json:"unit,omitempty"`
+}
+
+// RecurringDefinitionDeferRequestUnit defines model for RecurringDefinitionDeferRequest.Unit.
+type RecurringDefinitionDeferRequestUnit string
+
+// RecurringDefinitionListResponse defines model for RecurringDefinitionListResponse.
+type RecurringDefinitionListResponse struct {
+	RecurringDefinitions []RecurringDefinition `json:"recurring_definitions"`
+
+	// TotalCount Count of matching recurring definitions before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
+}
+
+// RecurringDefinitionRecord defines model for RecurringDefinitionRecord.
+type RecurringDefinitionRecord struct {
+	AccountId int64 `json:"account_id"`
+
+	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount                      string     `json:"amount"`
+	CategoryId                  int64      `json:"category_id"`
+	CreatedAt                   time.Time  `json:"created_at"`
+	Currency                    string     `json:"currency"`
+	MemberId                    *int64     `json:"member_id"`
+	Memo                        *string    `json:"memo"`
+	RecurringDefinitionId       int64      `json:"recurring_definition_id"`
+	RecurringDefinitionRecordId int64      `json:"recurring_definition_record_id"`
+	TagIds                      []int64    `json:"tag_ids"`
+	TombstonedAt                *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt                   time.Time  `json:"updated_at"`
+}
+
+// RecurringDefinitionRecordRequest defines model for RecurringDefinitionRecordRequest.
+type RecurringDefinitionRecordRequest struct {
+	AccountId *int64 `json:"account_id,omitempty"`
+
+	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount     *string                   `json:"amount,omitempty"`
+	CategoryId *int64                    `json:"category_id,omitempty"`
+	Currency   *string                   `json:"currency,omitempty"`
+	MemberId   nullable.Nullable[int64]  `json:"member_id,omitempty"`
+	Memo       nullable.Nullable[string] `json:"memo,omitempty"`
+	TagIds     *[]int64                  `json:"tag_ids,omitempty"`
+}
+
+// RecurringDefinitionWriteRequest defines model for RecurringDefinitionWriteRequest.
+type RecurringDefinitionWriteRequest struct {
+	AnchorDate openapi_types.Date                  `json:"anchor_date"`
+	Fqn        string                              `json:"fqn"`
+	Records    *[]RecurringDefinitionRecordRequest `json:"records,omitempty"`
+
+	// ScheduleRule Versioned recurring schedule payload validated by the recurring service.
+	ScheduleRule RecurringScheduleRule `json:"schedule_rule"`
+	TemplateId   *int64                `json:"template_id,omitempty"`
+}
+
+// RecurringOccurrence defines model for RecurringOccurrence.
+type RecurringOccurrence struct {
+	CreatedAt                     time.Time                 `json:"created_at"`
+	GeneratedTransactionId        *int64                    `json:"generated_transaction_id"`
+	MaterializedAt                time.Time                 `json:"materialized_at"`
+	MaterializedDefinitionVersion int64                     `json:"materialized_definition_version"`
+	RecurringDefinitionId         int64                     `json:"recurring_definition_id"`
+	RecurringOccurrenceId         int64                     `json:"recurring_occurrence_id"`
+	ReviewedAt                    *time.Time                `json:"reviewed_at"`
+	ScheduledDate                 openapi_types.Date        `json:"scheduled_date"`
+	Status                        RecurringOccurrenceStatus `json:"status"`
+	UpdatedAt                     time.Time                 `json:"updated_at"`
+}
+
+// RecurringOccurrenceListResponse defines model for RecurringOccurrenceListResponse.
+type RecurringOccurrenceListResponse struct {
+	RecurringOccurrences []RecurringOccurrence `json:"recurring_occurrences"`
+
+	// TotalCount Count of matching recurring occurrences before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
+}
+
+// RecurringOccurrenceStatus defines model for RecurringOccurrenceStatus.
+type RecurringOccurrenceStatus string
+
+// RecurringScheduleClass defines model for RecurringScheduleClass.
+type RecurringScheduleClass string
+
+// RecurringScheduleRule Versioned recurring schedule payload validated by the recurring service.
+type RecurringScheduleRule map[string]interface{}
 
 // RestructureRequest defines model for RestructureRequest.
 type RestructureRequest struct {
@@ -1638,6 +1914,36 @@ type SearchJournalRecordsParams struct {
 	Offset            *int                `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListRecurringDefinitionsParams defines parameters for ListRecurringDefinitions.
+type ListRecurringDefinitionsParams struct {
+	Sort    *ListRecurringDefinitionsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir *ListRecurringDefinitionsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit   *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset  *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListRecurringDefinitionsParamsSort defines parameters for ListRecurringDefinitions.
+type ListRecurringDefinitionsParamsSort string
+
+// ListRecurringDefinitionsParamsSortDir defines parameters for ListRecurringDefinitions.
+type ListRecurringDefinitionsParamsSortDir string
+
+// ListRecurringOccurrencesParams defines parameters for ListRecurringOccurrences.
+type ListRecurringOccurrencesParams struct {
+	RecurringDefinitionId *int64                                 `form:"recurring_definition_id,omitempty" json:"recurring_definition_id,omitempty"`
+	Status                *[]RecurringOccurrenceStatus           `form:"status,omitempty" json:"status,omitempty"`
+	Sort                  *ListRecurringOccurrencesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir               *ListRecurringOccurrencesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit                 *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset                *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListRecurringOccurrencesParamsSort defines parameters for ListRecurringOccurrences.
+type ListRecurringOccurrencesParamsSort string
+
+// ListRecurringOccurrencesParamsSortDir defines parameters for ListRecurringOccurrences.
+type ListRecurringOccurrencesParamsSortDir string
+
 // ListTagsParams defines parameters for ListTags.
 type ListTagsParams struct {
 	IncludeHidden     *bool                  `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
@@ -1779,6 +2085,15 @@ type BulkUpdateJournalRecordStatusesJSONRequestBody = BulkUpdateRecordStatusRequ
 
 // BulkUpdateJournalRecordTagsJSONRequestBody defines body for BulkUpdateJournalRecordTags for application/json ContentType.
 type BulkUpdateJournalRecordTagsJSONRequestBody = BulkTagRecordsRequest
+
+// CreateRecurringDefinitionJSONRequestBody defines body for CreateRecurringDefinition for application/json ContentType.
+type CreateRecurringDefinitionJSONRequestBody = RecurringDefinitionWriteRequest
+
+// ReplaceRecurringDefinitionJSONRequestBody defines body for ReplaceRecurringDefinition for application/json ContentType.
+type ReplaceRecurringDefinitionJSONRequestBody = RecurringDefinitionWriteRequest
+
+// DeferRecurringDefinitionJSONRequestBody defines body for DeferRecurringDefinition for application/json ContentType.
+type DeferRecurringDefinitionJSONRequestBody = RecurringDefinitionDeferRequest
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = CreateTagRequest
@@ -2063,6 +2378,48 @@ type ClientInterface interface {
 	BulkUpdateJournalRecordTagsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	BulkUpdateJournalRecordTags(ctx context.Context, body BulkUpdateJournalRecordTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRecurringDefinitions request
+	ListRecurringDefinitions(ctx context.Context, params *ListRecurringDefinitionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRecurringDefinitionWithBody request with any body
+	CreateRecurringDefinitionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateRecurringDefinition(ctx context.Context, body CreateRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteRecurringDefinition request
+	DeleteRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRecurringDefinition request
+	GetRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReplaceRecurringDefinitionWithBody request with any body
+	ReplaceRecurringDefinitionWithBody(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ReplaceRecurringDefinition(ctx context.Context, recurringDefinitionId int64, body ReplaceRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ConfirmNextRecurringDefinition request
+	ConfirmNextRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeferRecurringDefinitionWithBody request with any body
+	DeferRecurringDefinitionWithBody(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	DeferRecurringDefinition(ctx context.Context, recurringDefinitionId int64, body DeferRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PauseRecurringDefinition request
+	PauseRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ResumeRecurringDefinition request
+	ResumeRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRecurringOccurrences request
+	ListRecurringOccurrences(ctx context.Context, params *ListRecurringOccurrencesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ConfirmRecurringOccurrence request
+	ConfirmRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DismissRecurringOccurrence request
+	DismissRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTags request
 	ListTags(ctx context.Context, params *ListTagsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2912,6 +3269,186 @@ func (c *Client) BulkUpdateJournalRecordTagsWithBody(ctx context.Context, conten
 
 func (c *Client) BulkUpdateJournalRecordTags(ctx context.Context, body BulkUpdateJournalRecordTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewBulkUpdateJournalRecordTagsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRecurringDefinitions(ctx context.Context, params *ListRecurringDefinitionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRecurringDefinitionsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRecurringDefinitionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRecurringDefinitionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateRecurringDefinition(ctx context.Context, body CreateRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRecurringDefinitionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteRecurringDefinitionRequest(c.Server, recurringDefinitionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRecurringDefinitionRequest(c.Server, recurringDefinitionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRecurringDefinitionWithBody(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRecurringDefinitionRequestWithBody(c.Server, recurringDefinitionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ReplaceRecurringDefinition(ctx context.Context, recurringDefinitionId int64, body ReplaceRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReplaceRecurringDefinitionRequest(c.Server, recurringDefinitionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ConfirmNextRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewConfirmNextRecurringDefinitionRequest(c.Server, recurringDefinitionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeferRecurringDefinitionWithBody(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeferRecurringDefinitionRequestWithBody(c.Server, recurringDefinitionId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeferRecurringDefinition(ctx context.Context, recurringDefinitionId int64, body DeferRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeferRecurringDefinitionRequest(c.Server, recurringDefinitionId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PauseRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPauseRecurringDefinitionRequest(c.Server, recurringDefinitionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ResumeRecurringDefinition(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewResumeRecurringDefinitionRequest(c.Server, recurringDefinitionId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListRecurringOccurrences(ctx context.Context, params *ListRecurringOccurrencesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRecurringOccurrencesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ConfirmRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewConfirmRecurringOccurrenceRequest(c.Server, recurringOccurrenceId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DismissRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDismissRecurringOccurrenceRequest(c.Server, recurringOccurrenceId)
 	if err != nil {
 		return nil, err
 	}
@@ -6171,6 +6708,582 @@ func NewBulkUpdateJournalRecordTagsRequestWithBody(server string, contentType st
 	return req, nil
 }
 
+// NewListRecurringDefinitionsRequest generates requests for ListRecurringDefinitions
+func NewListRecurringDefinitionsRequest(server string, params *ListRecurringDefinitionsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.SortDir != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort_dir", *params.SortDir, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateRecurringDefinitionRequest calls the generic CreateRecurringDefinition builder with application/json body
+func NewCreateRecurringDefinitionRequest(server string, body CreateRecurringDefinitionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRecurringDefinitionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateRecurringDefinitionRequestWithBody generates requests for CreateRecurringDefinition with any type of body
+func NewCreateRecurringDefinitionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteRecurringDefinitionRequest generates requests for DeleteRecurringDefinition
+func NewDeleteRecurringDefinitionRequest(server string, recurringDefinitionId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_definition_id", recurringDefinitionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetRecurringDefinitionRequest generates requests for GetRecurringDefinition
+func NewGetRecurringDefinitionRequest(server string, recurringDefinitionId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_definition_id", recurringDefinitionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewReplaceRecurringDefinitionRequest calls the generic ReplaceRecurringDefinition builder with application/json body
+func NewReplaceRecurringDefinitionRequest(server string, recurringDefinitionId int64, body ReplaceRecurringDefinitionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReplaceRecurringDefinitionRequestWithBody(server, recurringDefinitionId, "application/json", bodyReader)
+}
+
+// NewReplaceRecurringDefinitionRequestWithBody generates requests for ReplaceRecurringDefinition with any type of body
+func NewReplaceRecurringDefinitionRequestWithBody(server string, recurringDefinitionId int64, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_definition_id", recurringDefinitionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewConfirmNextRecurringDefinitionRequest generates requests for ConfirmNextRecurringDefinition
+func NewConfirmNextRecurringDefinitionRequest(server string, recurringDefinitionId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_definition_id", recurringDefinitionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions/%s/confirm-next", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeferRecurringDefinitionRequest calls the generic DeferRecurringDefinition builder with application/json body
+func NewDeferRecurringDefinitionRequest(server string, recurringDefinitionId int64, body DeferRecurringDefinitionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDeferRecurringDefinitionRequestWithBody(server, recurringDefinitionId, "application/json", bodyReader)
+}
+
+// NewDeferRecurringDefinitionRequestWithBody generates requests for DeferRecurringDefinition with any type of body
+func NewDeferRecurringDefinitionRequestWithBody(server string, recurringDefinitionId int64, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_definition_id", recurringDefinitionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions/%s/defer", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPauseRecurringDefinitionRequest generates requests for PauseRecurringDefinition
+func NewPauseRecurringDefinitionRequest(server string, recurringDefinitionId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_definition_id", recurringDefinitionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions/%s/pause", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewResumeRecurringDefinitionRequest generates requests for ResumeRecurringDefinition
+func NewResumeRecurringDefinitionRequest(server string, recurringDefinitionId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_definition_id", recurringDefinitionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-definitions/%s/resume", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListRecurringOccurrencesRequest generates requests for ListRecurringOccurrences
+func NewListRecurringOccurrencesRequest(server string, params *ListRecurringOccurrencesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-occurrences")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.RecurringDefinitionId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "recurring_definition_id", *params.RecurringDefinitionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.SortDir != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort_dir", *params.SortDir, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewConfirmRecurringOccurrenceRequest generates requests for ConfirmRecurringOccurrence
+func NewConfirmRecurringOccurrenceRequest(server string, recurringOccurrenceId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_occurrence_id", recurringOccurrenceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-occurrences/%s/confirm", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDismissRecurringOccurrenceRequest generates requests for DismissRecurringOccurrence
+func NewDismissRecurringOccurrenceRequest(server string, recurringOccurrenceId int64) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "recurring_occurrence_id", recurringOccurrenceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/recurring-occurrences/%s/dismiss", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListTagsRequest generates requests for ListTags
 func NewListTagsRequest(server string, params *ListTagsParams) (*http.Request, error) {
 	var err error
@@ -7806,6 +8919,48 @@ type ClientWithResponsesInterface interface {
 
 	BulkUpdateJournalRecordTagsWithResponse(ctx context.Context, body BulkUpdateJournalRecordTagsJSONRequestBody, reqEditors ...RequestEditorFn) (*BulkUpdateJournalRecordTagsResponse, error)
 
+	// ListRecurringDefinitionsWithResponse request
+	ListRecurringDefinitionsWithResponse(ctx context.Context, params *ListRecurringDefinitionsParams, reqEditors ...RequestEditorFn) (*ListRecurringDefinitionsResponse, error)
+
+	// CreateRecurringDefinitionWithBodyWithResponse request with any body
+	CreateRecurringDefinitionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRecurringDefinitionResponse, error)
+
+	CreateRecurringDefinitionWithResponse(ctx context.Context, body CreateRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRecurringDefinitionResponse, error)
+
+	// DeleteRecurringDefinitionWithResponse request
+	DeleteRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*DeleteRecurringDefinitionResponse, error)
+
+	// GetRecurringDefinitionWithResponse request
+	GetRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*GetRecurringDefinitionResponse, error)
+
+	// ReplaceRecurringDefinitionWithBodyWithResponse request with any body
+	ReplaceRecurringDefinitionWithBodyWithResponse(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRecurringDefinitionResponse, error)
+
+	ReplaceRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, body ReplaceRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRecurringDefinitionResponse, error)
+
+	// ConfirmNextRecurringDefinitionWithResponse request
+	ConfirmNextRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*ConfirmNextRecurringDefinitionResponse, error)
+
+	// DeferRecurringDefinitionWithBodyWithResponse request with any body
+	DeferRecurringDefinitionWithBodyWithResponse(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeferRecurringDefinitionResponse, error)
+
+	DeferRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, body DeferRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*DeferRecurringDefinitionResponse, error)
+
+	// PauseRecurringDefinitionWithResponse request
+	PauseRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*PauseRecurringDefinitionResponse, error)
+
+	// ResumeRecurringDefinitionWithResponse request
+	ResumeRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*ResumeRecurringDefinitionResponse, error)
+
+	// ListRecurringOccurrencesWithResponse request
+	ListRecurringOccurrencesWithResponse(ctx context.Context, params *ListRecurringOccurrencesParams, reqEditors ...RequestEditorFn) (*ListRecurringOccurrencesResponse, error)
+
+	// ConfirmRecurringOccurrenceWithResponse request
+	ConfirmRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*ConfirmRecurringOccurrenceResponse, error)
+
+	// DismissRecurringOccurrenceWithResponse request
+	DismissRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*DismissRecurringOccurrenceResponse, error)
+
 	// ListTagsWithResponse request
 	ListTagsWithResponse(ctx context.Context, params *ListTagsParams, reqEditors ...RequestEditorFn) (*ListTagsResponse, error)
 
@@ -9369,6 +10524,390 @@ func (r BulkUpdateJournalRecordTagsResponse) ContentType() string {
 	return ""
 }
 
+type ListRecurringDefinitionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringDefinitionListResponse
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRecurringDefinitionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRecurringDefinitionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRecurringDefinitionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateRecurringDefinitionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *RecurringDefinition
+	JSON400      *InvalidRequest
+	JSON409      *Conflict
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRecurringDefinitionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRecurringDefinitionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateRecurringDefinitionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteRecurringDefinitionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteRecurringDefinitionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteRecurringDefinitionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteRecurringDefinitionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetRecurringDefinitionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringDefinition
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRecurringDefinitionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRecurringDefinitionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRecurringDefinitionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ReplaceRecurringDefinitionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringDefinition
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON409      *Conflict
+}
+
+// Status returns HTTPResponse.Status
+func (r ReplaceRecurringDefinitionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReplaceRecurringDefinitionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReplaceRecurringDefinitionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ConfirmNextRecurringDefinitionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringOccurrence
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON409      *Conflict
+}
+
+// Status returns HTTPResponse.Status
+func (r ConfirmNextRecurringDefinitionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ConfirmNextRecurringDefinitionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ConfirmNextRecurringDefinitionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeferRecurringDefinitionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringOccurrence
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON409      *Conflict
+}
+
+// Status returns HTTPResponse.Status
+func (r DeferRecurringDefinitionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeferRecurringDefinitionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeferRecurringDefinitionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PauseRecurringDefinitionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringDefinition
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r PauseRecurringDefinitionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PauseRecurringDefinitionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PauseRecurringDefinitionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ResumeRecurringDefinitionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringDefinition
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r ResumeRecurringDefinitionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ResumeRecurringDefinitionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ResumeRecurringDefinitionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListRecurringOccurrencesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringOccurrenceListResponse
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRecurringOccurrencesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRecurringOccurrencesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRecurringOccurrencesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ConfirmRecurringOccurrenceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringOccurrence
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r ConfirmRecurringOccurrenceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ConfirmRecurringOccurrenceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ConfirmRecurringOccurrenceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DismissRecurringOccurrenceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RecurringOccurrence
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r DismissRecurringOccurrenceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DismissRecurringOccurrenceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DismissRecurringOccurrenceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListTagsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10707,6 +12246,138 @@ func (c *ClientWithResponses) BulkUpdateJournalRecordTagsWithResponse(ctx contex
 		return nil, err
 	}
 	return ParseBulkUpdateJournalRecordTagsResponse(rsp)
+}
+
+// ListRecurringDefinitionsWithResponse request returning *ListRecurringDefinitionsResponse
+func (c *ClientWithResponses) ListRecurringDefinitionsWithResponse(ctx context.Context, params *ListRecurringDefinitionsParams, reqEditors ...RequestEditorFn) (*ListRecurringDefinitionsResponse, error) {
+	rsp, err := c.ListRecurringDefinitions(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRecurringDefinitionsResponse(rsp)
+}
+
+// CreateRecurringDefinitionWithBodyWithResponse request with arbitrary body returning *CreateRecurringDefinitionResponse
+func (c *ClientWithResponses) CreateRecurringDefinitionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRecurringDefinitionResponse, error) {
+	rsp, err := c.CreateRecurringDefinitionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRecurringDefinitionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateRecurringDefinitionWithResponse(ctx context.Context, body CreateRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRecurringDefinitionResponse, error) {
+	rsp, err := c.CreateRecurringDefinition(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRecurringDefinitionResponse(rsp)
+}
+
+// DeleteRecurringDefinitionWithResponse request returning *DeleteRecurringDefinitionResponse
+func (c *ClientWithResponses) DeleteRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*DeleteRecurringDefinitionResponse, error) {
+	rsp, err := c.DeleteRecurringDefinition(ctx, recurringDefinitionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteRecurringDefinitionResponse(rsp)
+}
+
+// GetRecurringDefinitionWithResponse request returning *GetRecurringDefinitionResponse
+func (c *ClientWithResponses) GetRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*GetRecurringDefinitionResponse, error) {
+	rsp, err := c.GetRecurringDefinition(ctx, recurringDefinitionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRecurringDefinitionResponse(rsp)
+}
+
+// ReplaceRecurringDefinitionWithBodyWithResponse request with arbitrary body returning *ReplaceRecurringDefinitionResponse
+func (c *ClientWithResponses) ReplaceRecurringDefinitionWithBodyWithResponse(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReplaceRecurringDefinitionResponse, error) {
+	rsp, err := c.ReplaceRecurringDefinitionWithBody(ctx, recurringDefinitionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRecurringDefinitionResponse(rsp)
+}
+
+func (c *ClientWithResponses) ReplaceRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, body ReplaceRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceRecurringDefinitionResponse, error) {
+	rsp, err := c.ReplaceRecurringDefinition(ctx, recurringDefinitionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReplaceRecurringDefinitionResponse(rsp)
+}
+
+// ConfirmNextRecurringDefinitionWithResponse request returning *ConfirmNextRecurringDefinitionResponse
+func (c *ClientWithResponses) ConfirmNextRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*ConfirmNextRecurringDefinitionResponse, error) {
+	rsp, err := c.ConfirmNextRecurringDefinition(ctx, recurringDefinitionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseConfirmNextRecurringDefinitionResponse(rsp)
+}
+
+// DeferRecurringDefinitionWithBodyWithResponse request with arbitrary body returning *DeferRecurringDefinitionResponse
+func (c *ClientWithResponses) DeferRecurringDefinitionWithBodyWithResponse(ctx context.Context, recurringDefinitionId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeferRecurringDefinitionResponse, error) {
+	rsp, err := c.DeferRecurringDefinitionWithBody(ctx, recurringDefinitionId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeferRecurringDefinitionResponse(rsp)
+}
+
+func (c *ClientWithResponses) DeferRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, body DeferRecurringDefinitionJSONRequestBody, reqEditors ...RequestEditorFn) (*DeferRecurringDefinitionResponse, error) {
+	rsp, err := c.DeferRecurringDefinition(ctx, recurringDefinitionId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeferRecurringDefinitionResponse(rsp)
+}
+
+// PauseRecurringDefinitionWithResponse request returning *PauseRecurringDefinitionResponse
+func (c *ClientWithResponses) PauseRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*PauseRecurringDefinitionResponse, error) {
+	rsp, err := c.PauseRecurringDefinition(ctx, recurringDefinitionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePauseRecurringDefinitionResponse(rsp)
+}
+
+// ResumeRecurringDefinitionWithResponse request returning *ResumeRecurringDefinitionResponse
+func (c *ClientWithResponses) ResumeRecurringDefinitionWithResponse(ctx context.Context, recurringDefinitionId int64, reqEditors ...RequestEditorFn) (*ResumeRecurringDefinitionResponse, error) {
+	rsp, err := c.ResumeRecurringDefinition(ctx, recurringDefinitionId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseResumeRecurringDefinitionResponse(rsp)
+}
+
+// ListRecurringOccurrencesWithResponse request returning *ListRecurringOccurrencesResponse
+func (c *ClientWithResponses) ListRecurringOccurrencesWithResponse(ctx context.Context, params *ListRecurringOccurrencesParams, reqEditors ...RequestEditorFn) (*ListRecurringOccurrencesResponse, error) {
+	rsp, err := c.ListRecurringOccurrences(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRecurringOccurrencesResponse(rsp)
+}
+
+// ConfirmRecurringOccurrenceWithResponse request returning *ConfirmRecurringOccurrenceResponse
+func (c *ClientWithResponses) ConfirmRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*ConfirmRecurringOccurrenceResponse, error) {
+	rsp, err := c.ConfirmRecurringOccurrence(ctx, recurringOccurrenceId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseConfirmRecurringOccurrenceResponse(rsp)
+}
+
+// DismissRecurringOccurrenceWithResponse request returning *DismissRecurringOccurrenceResponse
+func (c *ClientWithResponses) DismissRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*DismissRecurringOccurrenceResponse, error) {
+	rsp, err := c.DismissRecurringOccurrence(ctx, recurringOccurrenceId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDismissRecurringOccurrenceResponse(rsp)
 }
 
 // ListTagsWithResponse request returning *ListTagsResponse
@@ -12795,6 +14466,486 @@ func ParseBulkUpdateJournalRecordTagsResponse(rsp *http.Response) (*BulkUpdateJo
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRecurringDefinitionsResponse parses an HTTP response from a ListRecurringDefinitionsWithResponse call
+func ParseListRecurringDefinitionsResponse(rsp *http.Response) (*ListRecurringDefinitionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRecurringDefinitionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringDefinitionListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRecurringDefinitionResponse parses an HTTP response from a CreateRecurringDefinitionWithResponse call
+func ParseCreateRecurringDefinitionResponse(rsp *http.Response) (*CreateRecurringDefinitionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRecurringDefinitionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RecurringDefinition
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteRecurringDefinitionResponse parses an HTTP response from a DeleteRecurringDefinitionWithResponse call
+func ParseDeleteRecurringDefinitionResponse(rsp *http.Response) (*DeleteRecurringDefinitionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteRecurringDefinitionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRecurringDefinitionResponse parses an HTTP response from a GetRecurringDefinitionWithResponse call
+func ParseGetRecurringDefinitionResponse(rsp *http.Response) (*GetRecurringDefinitionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRecurringDefinitionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringDefinition
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReplaceRecurringDefinitionResponse parses an HTTP response from a ReplaceRecurringDefinitionWithResponse call
+func ParseReplaceRecurringDefinitionResponse(rsp *http.Response) (*ReplaceRecurringDefinitionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReplaceRecurringDefinitionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringDefinition
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseConfirmNextRecurringDefinitionResponse parses an HTTP response from a ConfirmNextRecurringDefinitionWithResponse call
+func ParseConfirmNextRecurringDefinitionResponse(rsp *http.Response) (*ConfirmNextRecurringDefinitionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ConfirmNextRecurringDefinitionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringOccurrence
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeferRecurringDefinitionResponse parses an HTTP response from a DeferRecurringDefinitionWithResponse call
+func ParseDeferRecurringDefinitionResponse(rsp *http.Response) (*DeferRecurringDefinitionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeferRecurringDefinitionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringOccurrence
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePauseRecurringDefinitionResponse parses an HTTP response from a PauseRecurringDefinitionWithResponse call
+func ParsePauseRecurringDefinitionResponse(rsp *http.Response) (*PauseRecurringDefinitionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PauseRecurringDefinitionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringDefinition
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseResumeRecurringDefinitionResponse parses an HTTP response from a ResumeRecurringDefinitionWithResponse call
+func ParseResumeRecurringDefinitionResponse(rsp *http.Response) (*ResumeRecurringDefinitionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ResumeRecurringDefinitionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringDefinition
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRecurringOccurrencesResponse parses an HTTP response from a ListRecurringOccurrencesWithResponse call
+func ParseListRecurringOccurrencesResponse(rsp *http.Response) (*ListRecurringOccurrencesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRecurringOccurrencesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringOccurrenceListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseConfirmRecurringOccurrenceResponse parses an HTTP response from a ConfirmRecurringOccurrenceWithResponse call
+func ParseConfirmRecurringOccurrenceResponse(rsp *http.Response) (*ConfirmRecurringOccurrenceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ConfirmRecurringOccurrenceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringOccurrence
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDismissRecurringOccurrenceResponse parses an HTTP response from a DismissRecurringOccurrenceWithResponse call
+func ParseDismissRecurringOccurrenceResponse(rsp *http.Response) (*DismissRecurringOccurrenceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DismissRecurringOccurrenceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RecurringOccurrence
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

@@ -1386,6 +1386,353 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/recurring-definitions:
+    get:
+      operationId: listRecurringDefinitions
+      summary: List recurring definitions.
+      parameters:
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: fqn
+            enum:
+              - fqn
+              - created_at
+              - updated_at
+            x-enum-varnames:
+              - Fqn
+              - CreatedAt
+              - UpdatedAt
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
+            x-enum-varnames:
+              - Asc
+              - Desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Active recurring definitions in caller-selected deterministic order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringDefinitionListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+    post:
+      operationId: createRecurringDefinition
+      summary: Create a recurring definition.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecurringDefinitionWriteRequest"
+      responses:
+        "201":
+          description: Recurring definition created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringDefinition"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/recurring-definitions/{recurring_definition_id}:
+    parameters:
+      - name: recurring_definition_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    get:
+      operationId: getRecurringDefinition
+      summary: Get a recurring definition.
+      responses:
+        "200":
+          description: Recurring definition found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringDefinition"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: replaceRecurringDefinition
+      summary: Replace a recurring definition.
+      description: Replaces the schedule and full complete record set atomically. The recurring_definition_id is preserved, definition_version increments, and previous active records are tombstoned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecurringDefinitionWriteRequest"
+      responses:
+        "200":
+          description: Recurring definition replaced.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringDefinition"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      operationId: deleteRecurringDefinition
+      summary: Cancel a recurring definition.
+      responses:
+        "204":
+          description: Recurring definition cancelled.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/recurring-definitions/{recurring_definition_id}/confirm-next:
+    parameters:
+      - name: recurring_definition_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: confirmNextRecurringDefinition
+      summary: Confirm the next recurring occurrence early.
+      responses:
+        "200":
+          description: Next occurrence materialized and confirmed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringOccurrence"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/recurring-definitions/{recurring_definition_id}/defer:
+    parameters:
+      - name: recurring_definition_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: deferRecurringDefinition
+      summary: Defer the next non-materialized interval occurrence.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecurringDefinitionDeferRequest"
+      responses:
+        "200":
+          description: Next interval occurrence deferred.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringOccurrence"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/recurring-definitions/{recurring_definition_id}/pause:
+    parameters:
+      - name: recurring_definition_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: pauseRecurringDefinition
+      summary: Pause a recurring definition.
+      responses:
+        "200":
+          description: Recurring definition paused.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringDefinition"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/recurring-definitions/{recurring_definition_id}/resume:
+    parameters:
+      - name: recurring_definition_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: resumeRecurringDefinition
+      summary: Resume a recurring definition.
+      responses:
+        "200":
+          description: Recurring definition resumed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringDefinition"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/recurring-occurrences:
+    get:
+      operationId: listRecurringOccurrences
+      summary: List recurring occurrences.
+      description: Runs catch-up materialization through the server's current civil date before listing.
+      parameters:
+        - name: recurring_definition_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: status
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/RecurringOccurrenceStatus"
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: scheduled_date
+            enum:
+              - scheduled_date
+              - created_at
+              - updated_at
+            x-enum-varnames:
+              - ScheduledDate
+              - CreatedAt
+              - UpdatedAt
+        - name: sort_dir
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
+            x-enum-varnames:
+              - Asc
+              - Desc
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Recurring occurrences in caller-selected deterministic order.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringOccurrenceListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /api/recurring-occurrences/{recurring_occurrence_id}/confirm:
+    parameters:
+      - name: recurring_occurrence_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: confirmRecurringOccurrence
+      summary: Confirm a recurring occurrence.
+      responses:
+        "200":
+          description: Occurrence confirmed and generated records posted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringOccurrence"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/recurring-occurrences/{recurring_occurrence_id}/dismiss:
+    parameters:
+      - name: recurring_occurrence_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    post:
+      operationId: dismissRecurringOccurrence
+      summary: Dismiss a recurring occurrence.
+      responses:
+        "200":
+          description: Occurrence dismissed and generated transaction tombstoned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringOccurrence"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/transactions:
     get:
       operationId: listTransactions
@@ -2770,7 +3117,7 @@ components:
         reconciliation_status:
           $ref: "#/components/schemas/ReconciliationStatus"
         source:
-          $ref: "#/components/schemas/Source"
+          $ref: "#/components/schemas/ManualSource"
         external_id:
           type: string
           nullable: true
@@ -3311,6 +3658,97 @@ components:
           allOf:
             - $ref: "#/components/schemas/ReconciliationStatus"
           nullable: true
+    RecurringDefinitionWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - fqn
+        - schedule_rule
+        - anchor_date
+      properties:
+        fqn:
+          type: string
+        schedule_rule:
+          $ref: "#/components/schemas/RecurringScheduleRule"
+        anchor_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+        template_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecurringDefinitionRecordRequest"
+    RecurringDefinitionDeferRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        every:
+          type: integer
+          format: int64
+          minimum: 1
+        unit:
+          type: string
+          enum:
+            - DAY
+            - WEEK
+            - MONTH
+            - YEAR
+    RecurringScheduleRule:
+      type: object
+      additionalProperties: true
+      description: Versioned recurring schedule payload validated by the recurring service.
+    RecurringDefinitionRecordRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        account_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        member_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+          x-go-type: nullable.Nullable[int64]
+          x-go-type-skip-optional-pointer: true
+          x-go-type-import:
+            path: github.com/oapi-codegen/nullable
+        currency:
+          type: string
+          nullable: true
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          nullable: true
+          description: JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        category_id:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        tag_ids:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        memo:
+          type: string
+          nullable: true
+          x-go-type: nullable.Nullable[string]
+          x-go-type-skip-optional-pointer: true
+          x-go-type-import:
+            path: github.com/oapi-codegen/nullable
     CreateTagRequest:
       type: object
       additionalProperties: false
@@ -3702,10 +4140,20 @@ components:
       enum:
         - reconciled
         - unreconciled
+    ManualSource:
+      type: string
+      enum:
+        - manual
+      x-enum-varnames:
+        - ManualSourceManual
     Source:
       type: string
       enum:
         - manual
+        - recurring_template
+      x-enum-varnames:
+        - Manual
+        - RecurringTemplate
     Tag:
       type: object
       additionalProperties: false
@@ -3885,6 +4333,222 @@ components:
           format: int64
           minimum: 0
           description: Count of matching transaction templates before limit and offset are applied.
+    RecurringScheduleClass:
+      type: string
+      enum:
+        - interval
+        - date_rule
+    RecurringDefinition:
+      type: object
+      additionalProperties: false
+      required:
+        - recurring_definition_id
+        - fqn
+        - schedule_rule
+        - schedule_class
+        - anchor_date
+        - definition_version
+        - paused_at
+        - parent_fqn
+        - name
+        - level
+        - next_due_date
+        - created_at
+        - updated_at
+        - records
+      properties:
+        recurring_definition_id:
+          type: integer
+          format: int64
+        fqn:
+          type: string
+        schedule_rule:
+          $ref: "#/components/schemas/RecurringScheduleRule"
+        schedule_class:
+          $ref: "#/components/schemas/RecurringScheduleClass"
+        anchor_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+        definition_version:
+          type: integer
+          format: int64
+          minimum: 1
+        paused_at:
+          type: string
+          format: date-time
+          nullable: true
+        parent_fqn:
+          type: string
+          nullable: true
+        name:
+          type: string
+        level:
+          type: integer
+        next_due_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        tombstoned_at:
+          type: string
+          format: date-time
+          nullable: true
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecurringDefinitionRecord"
+    RecurringDefinitionRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - recurring_definition_record_id
+        - recurring_definition_id
+        - account_id
+        - member_id
+        - currency
+        - amount
+        - category_id
+        - tag_ids
+        - memo
+        - created_at
+        - updated_at
+      properties:
+        recurring_definition_record_id:
+          type: integer
+          format: int64
+        recurring_definition_id:
+          type: integer
+          format: int64
+        account_id:
+          type: integer
+          format: int64
+        member_id:
+          type: integer
+          format: int64
+          nullable: true
+        currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          description: JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 20
+        category_id:
+          type: integer
+          format: int64
+        tag_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        memo:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        tombstoned_at:
+          type: string
+          format: date-time
+          nullable: true
+    RecurringDefinitionListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - recurring_definitions
+        - total_count
+      properties:
+        recurring_definitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecurringDefinition"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching recurring definitions before limit and offset are applied.
+    RecurringOccurrenceStatus:
+      type: string
+      enum:
+        - expected
+        - confirmed
+        - dismissed
+        - deferred
+    RecurringOccurrence:
+      type: object
+      additionalProperties: false
+      required:
+        - recurring_occurrence_id
+        - recurring_definition_id
+        - scheduled_date
+        - status
+        - materialized_definition_version
+        - materialized_at
+        - reviewed_at
+        - generated_transaction_id
+        - created_at
+        - updated_at
+      properties:
+        recurring_occurrence_id:
+          type: integer
+          format: int64
+        recurring_definition_id:
+          type: integer
+          format: int64
+        scheduled_date:
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+        status:
+          $ref: "#/components/schemas/RecurringOccurrenceStatus"
+        materialized_definition_version:
+          type: integer
+          format: int64
+          minimum: 1
+        materialized_at:
+          type: string
+          format: date-time
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        generated_transaction_id:
+          type: integer
+          format: int64
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    RecurringOccurrenceListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - recurring_occurrences
+        - total_count
+      properties:
+        recurring_occurrences:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecurringOccurrence"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of matching recurring occurrences before limit and offset are applied.
     Transaction:
       type: object
       additionalProperties: false

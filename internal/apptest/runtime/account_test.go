@@ -1160,7 +1160,7 @@ func createBalanceTransactionWithOptionalAmountUSD(
 				CategoryId:           categoryID,
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 			{
 				AccountId:            counterAccountID,
@@ -1170,7 +1170,7 @@ func createBalanceTransactionWithOptionalAmountUSD(
 				CategoryId:           categoryID,
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.Manual,
+				Source:               httpclient.ManualSourceManual,
 			},
 		},
 	})

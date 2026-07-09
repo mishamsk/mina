@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"path"
@@ -207,6 +208,21 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for ManualSource.
+const (
+	ManualSourceManual ManualSource = "manual"
+)
+
+// Valid indicates whether the value is a known member of the ManualSource enum.
+func (e ManualSource) Valid() bool {
+	switch e {
+	case ManualSourceManual:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NonExpectedPostingStatus.
 const (
 	NonExpectedPostingStatusCancelled NonExpectedPostingStatus = "cancelled"
@@ -333,15 +349,84 @@ func (e ReconciliationStatus) Valid() bool {
 	}
 }
 
+// Defines values for RecurringDefinitionDeferRequestUnit.
+const (
+	DAY   RecurringDefinitionDeferRequestUnit = "DAY"
+	MONTH RecurringDefinitionDeferRequestUnit = "MONTH"
+	WEEK  RecurringDefinitionDeferRequestUnit = "WEEK"
+	YEAR  RecurringDefinitionDeferRequestUnit = "YEAR"
+)
+
+// Valid indicates whether the value is a known member of the RecurringDefinitionDeferRequestUnit enum.
+func (e RecurringDefinitionDeferRequestUnit) Valid() bool {
+	switch e {
+	case DAY:
+		return true
+	case MONTH:
+		return true
+	case WEEK:
+		return true
+	case YEAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecurringOccurrenceStatus.
+const (
+	Confirmed RecurringOccurrenceStatus = "confirmed"
+	Deferred  RecurringOccurrenceStatus = "deferred"
+	Dismissed RecurringOccurrenceStatus = "dismissed"
+	Expected  RecurringOccurrenceStatus = "expected"
+)
+
+// Valid indicates whether the value is a known member of the RecurringOccurrenceStatus enum.
+func (e RecurringOccurrenceStatus) Valid() bool {
+	switch e {
+	case Confirmed:
+		return true
+	case Deferred:
+		return true
+	case Dismissed:
+		return true
+	case Expected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecurringScheduleClass.
+const (
+	DateRule RecurringScheduleClass = "date_rule"
+	Interval RecurringScheduleClass = "interval"
+)
+
+// Valid indicates whether the value is a known member of the RecurringScheduleClass enum.
+func (e RecurringScheduleClass) Valid() bool {
+	switch e {
+	case DateRule:
+		return true
+	case Interval:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Source.
 const (
-	Manual Source = "manual"
+	Manual            Source = "manual"
+	RecurringTemplate Source = "recurring_template"
 )
 
 // Valid indicates whether the value is a known member of the Source enum.
 func (e Source) Valid() bool {
 	switch e {
 	case Manual:
+		return true
+	case RecurringTemplate:
 		return true
 	default:
 		return false
@@ -576,6 +661,84 @@ func (e ListMembersParamsSortDir) Valid() bool {
 	case ListMembersParamsSortDirAsc:
 		return true
 	case ListMembersParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRecurringDefinitionsParamsSort.
+const (
+	ListRecurringDefinitionsParamsSortCreatedAt ListRecurringDefinitionsParamsSort = "created_at"
+	ListRecurringDefinitionsParamsSortFqn       ListRecurringDefinitionsParamsSort = "fqn"
+	ListRecurringDefinitionsParamsSortUpdatedAt ListRecurringDefinitionsParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListRecurringDefinitionsParamsSort enum.
+func (e ListRecurringDefinitionsParamsSort) Valid() bool {
+	switch e {
+	case ListRecurringDefinitionsParamsSortCreatedAt:
+		return true
+	case ListRecurringDefinitionsParamsSortFqn:
+		return true
+	case ListRecurringDefinitionsParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRecurringDefinitionsParamsSortDir.
+const (
+	ListRecurringDefinitionsParamsSortDirAsc  ListRecurringDefinitionsParamsSortDir = "asc"
+	ListRecurringDefinitionsParamsSortDirDesc ListRecurringDefinitionsParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListRecurringDefinitionsParamsSortDir enum.
+func (e ListRecurringDefinitionsParamsSortDir) Valid() bool {
+	switch e {
+	case ListRecurringDefinitionsParamsSortDirAsc:
+		return true
+	case ListRecurringDefinitionsParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRecurringOccurrencesParamsSort.
+const (
+	ListRecurringOccurrencesParamsSortCreatedAt     ListRecurringOccurrencesParamsSort = "created_at"
+	ListRecurringOccurrencesParamsSortScheduledDate ListRecurringOccurrencesParamsSort = "scheduled_date"
+	ListRecurringOccurrencesParamsSortUpdatedAt     ListRecurringOccurrencesParamsSort = "updated_at"
+)
+
+// Valid indicates whether the value is a known member of the ListRecurringOccurrencesParamsSort enum.
+func (e ListRecurringOccurrencesParamsSort) Valid() bool {
+	switch e {
+	case ListRecurringOccurrencesParamsSortCreatedAt:
+		return true
+	case ListRecurringOccurrencesParamsSortScheduledDate:
+		return true
+	case ListRecurringOccurrencesParamsSortUpdatedAt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListRecurringOccurrencesParamsSortDir.
+const (
+	ListRecurringOccurrencesParamsSortDirAsc  ListRecurringOccurrencesParamsSortDir = "asc"
+	ListRecurringOccurrencesParamsSortDirDesc ListRecurringOccurrencesParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the ListRecurringOccurrencesParamsSortDir enum.
+func (e ListRecurringOccurrencesParamsSortDir) Valid() bool {
+	switch e {
+	case ListRecurringOccurrencesParamsSortDirAsc:
+		return true
+	case ListRecurringOccurrencesParamsSortDirDesc:
 		return true
 	default:
 		return false
@@ -914,7 +1077,7 @@ type CreateJournalRecordRequest struct {
 	PostedDate           *time.Time           `json:"posted_date,omitempty"`
 	PostingStatus        PostingStatus        `json:"posting_status"`
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
-	Source               Source               `json:"source"`
+	Source               ManualSource         `json:"source"`
 	TagIds               *[]int64             `json:"tag_ids,omitempty"`
 }
 
@@ -1174,6 +1337,9 @@ type JournalRecordSearchResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
+// ManualSource defines model for ManualSource.
+type ManualSource string
+
 // Member defines model for Member.
 type Member struct {
 	CreatedAt    time.Time  `json:"created_at"`
@@ -1225,6 +1391,117 @@ type PostingStatus string
 
 // ReconciliationStatus defines model for ReconciliationStatus.
 type ReconciliationStatus string
+
+// RecurringDefinition defines model for RecurringDefinition.
+type RecurringDefinition struct {
+	AnchorDate            openapi_types.Date          `json:"anchor_date"`
+	CreatedAt             time.Time                   `json:"created_at"`
+	DefinitionVersion     int64                       `json:"definition_version"`
+	Fqn                   string                      `json:"fqn"`
+	Level                 int                         `json:"level"`
+	Name                  string                      `json:"name"`
+	NextDueDate           *openapi_types.Date         `json:"next_due_date"`
+	ParentFqn             *string                     `json:"parent_fqn"`
+	PausedAt              *time.Time                  `json:"paused_at"`
+	Records               []RecurringDefinitionRecord `json:"records"`
+	RecurringDefinitionId int64                       `json:"recurring_definition_id"`
+	ScheduleClass         RecurringScheduleClass      `json:"schedule_class"`
+
+	// ScheduleRule Versioned recurring schedule payload validated by the recurring service.
+	ScheduleRule RecurringScheduleRule `json:"schedule_rule"`
+	TombstonedAt *time.Time            `json:"tombstoned_at,omitempty"`
+	UpdatedAt    time.Time             `json:"updated_at"`
+}
+
+// RecurringDefinitionDeferRequest defines model for RecurringDefinitionDeferRequest.
+type RecurringDefinitionDeferRequest struct {
+	Every *int64                               `json:"every,omitempty"`
+	Unit  *RecurringDefinitionDeferRequestUnit `json:"unit,omitempty"`
+}
+
+// RecurringDefinitionDeferRequestUnit defines model for RecurringDefinitionDeferRequest.Unit.
+type RecurringDefinitionDeferRequestUnit string
+
+// RecurringDefinitionListResponse defines model for RecurringDefinitionListResponse.
+type RecurringDefinitionListResponse struct {
+	RecurringDefinitions []RecurringDefinition `json:"recurring_definitions"`
+
+	// TotalCount Count of matching recurring definitions before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
+}
+
+// RecurringDefinitionRecord defines model for RecurringDefinitionRecord.
+type RecurringDefinitionRecord struct {
+	AccountId int64 `json:"account_id"`
+
+	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount                      string     `json:"amount"`
+	CategoryId                  int64      `json:"category_id"`
+	CreatedAt                   time.Time  `json:"created_at"`
+	Currency                    string     `json:"currency"`
+	MemberId                    *int64     `json:"member_id"`
+	Memo                        *string    `json:"memo"`
+	RecurringDefinitionId       int64      `json:"recurring_definition_id"`
+	RecurringDefinitionRecordId int64      `json:"recurring_definition_record_id"`
+	TagIds                      []int64    `json:"tag_ids"`
+	TombstonedAt                *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt                   time.Time  `json:"updated_at"`
+}
+
+// RecurringDefinitionRecordRequest defines model for RecurringDefinitionRecordRequest.
+type RecurringDefinitionRecordRequest struct {
+	AccountId *int64 `json:"account_id,omitempty"`
+
+	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
+	Amount     *string                   `json:"amount,omitempty"`
+	CategoryId *int64                    `json:"category_id,omitempty"`
+	Currency   *string                   `json:"currency,omitempty"`
+	MemberId   nullable.Nullable[int64]  `json:"member_id,omitempty"`
+	Memo       nullable.Nullable[string] `json:"memo,omitempty"`
+	TagIds     *[]int64                  `json:"tag_ids,omitempty"`
+}
+
+// RecurringDefinitionWriteRequest defines model for RecurringDefinitionWriteRequest.
+type RecurringDefinitionWriteRequest struct {
+	AnchorDate openapi_types.Date                  `json:"anchor_date"`
+	Fqn        string                              `json:"fqn"`
+	Records    *[]RecurringDefinitionRecordRequest `json:"records,omitempty"`
+
+	// ScheduleRule Versioned recurring schedule payload validated by the recurring service.
+	ScheduleRule RecurringScheduleRule `json:"schedule_rule"`
+	TemplateId   *int64                `json:"template_id,omitempty"`
+}
+
+// RecurringOccurrence defines model for RecurringOccurrence.
+type RecurringOccurrence struct {
+	CreatedAt                     time.Time                 `json:"created_at"`
+	GeneratedTransactionId        *int64                    `json:"generated_transaction_id"`
+	MaterializedAt                time.Time                 `json:"materialized_at"`
+	MaterializedDefinitionVersion int64                     `json:"materialized_definition_version"`
+	RecurringDefinitionId         int64                     `json:"recurring_definition_id"`
+	RecurringOccurrenceId         int64                     `json:"recurring_occurrence_id"`
+	ReviewedAt                    *time.Time                `json:"reviewed_at"`
+	ScheduledDate                 openapi_types.Date        `json:"scheduled_date"`
+	Status                        RecurringOccurrenceStatus `json:"status"`
+	UpdatedAt                     time.Time                 `json:"updated_at"`
+}
+
+// RecurringOccurrenceListResponse defines model for RecurringOccurrenceListResponse.
+type RecurringOccurrenceListResponse struct {
+	RecurringOccurrences []RecurringOccurrence `json:"recurring_occurrences"`
+
+	// TotalCount Count of matching recurring occurrences before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
+}
+
+// RecurringOccurrenceStatus defines model for RecurringOccurrenceStatus.
+type RecurringOccurrenceStatus string
+
+// RecurringScheduleClass defines model for RecurringScheduleClass.
+type RecurringScheduleClass string
+
+// RecurringScheduleRule Versioned recurring schedule payload validated by the recurring service.
+type RecurringScheduleRule map[string]interface{}
 
 // RestructureRequest defines model for RestructureRequest.
 type RestructureRequest struct {
@@ -1643,6 +1920,36 @@ type SearchJournalRecordsParams struct {
 	Offset            *int                `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListRecurringDefinitionsParams defines parameters for ListRecurringDefinitions.
+type ListRecurringDefinitionsParams struct {
+	Sort    *ListRecurringDefinitionsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir *ListRecurringDefinitionsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit   *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset  *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListRecurringDefinitionsParamsSort defines parameters for ListRecurringDefinitions.
+type ListRecurringDefinitionsParamsSort string
+
+// ListRecurringDefinitionsParamsSortDir defines parameters for ListRecurringDefinitions.
+type ListRecurringDefinitionsParamsSortDir string
+
+// ListRecurringOccurrencesParams defines parameters for ListRecurringOccurrences.
+type ListRecurringOccurrencesParams struct {
+	RecurringDefinitionId *int64                                 `form:"recurring_definition_id,omitempty" json:"recurring_definition_id,omitempty"`
+	Status                *[]RecurringOccurrenceStatus           `form:"status,omitempty" json:"status,omitempty"`
+	Sort                  *ListRecurringOccurrencesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	SortDir               *ListRecurringOccurrencesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+	Limit                 *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset                *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListRecurringOccurrencesParamsSort defines parameters for ListRecurringOccurrences.
+type ListRecurringOccurrencesParamsSort string
+
+// ListRecurringOccurrencesParamsSortDir defines parameters for ListRecurringOccurrences.
+type ListRecurringOccurrencesParamsSortDir string
+
 // ListTagsParams defines parameters for ListTags.
 type ListTagsParams struct {
 	IncludeHidden     *bool                  `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
@@ -1784,6 +2091,15 @@ type BulkUpdateJournalRecordStatusesJSONRequestBody = BulkUpdateRecordStatusRequ
 
 // BulkUpdateJournalRecordTagsJSONRequestBody defines body for BulkUpdateJournalRecordTags for application/json ContentType.
 type BulkUpdateJournalRecordTagsJSONRequestBody = BulkTagRecordsRequest
+
+// CreateRecurringDefinitionJSONRequestBody defines body for CreateRecurringDefinition for application/json ContentType.
+type CreateRecurringDefinitionJSONRequestBody = RecurringDefinitionWriteRequest
+
+// ReplaceRecurringDefinitionJSONRequestBody defines body for ReplaceRecurringDefinition for application/json ContentType.
+type ReplaceRecurringDefinitionJSONRequestBody = RecurringDefinitionWriteRequest
+
+// DeferRecurringDefinitionJSONRequestBody defines body for DeferRecurringDefinition for application/json ContentType.
+type DeferRecurringDefinitionJSONRequestBody = RecurringDefinitionDeferRequest
 
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody = CreateTagRequest
@@ -1964,6 +2280,42 @@ type ServerInterface interface {
 	// Add and remove tags on selected journal records.
 	// (POST /api/records/bulk/tags)
 	BulkUpdateJournalRecordTags(w http.ResponseWriter, r *http.Request)
+	// List recurring definitions.
+	// (GET /api/recurring-definitions)
+	ListRecurringDefinitions(w http.ResponseWriter, r *http.Request, params ListRecurringDefinitionsParams)
+	// Create a recurring definition.
+	// (POST /api/recurring-definitions)
+	CreateRecurringDefinition(w http.ResponseWriter, r *http.Request)
+	// Cancel a recurring definition.
+	// (DELETE /api/recurring-definitions/{recurring_definition_id})
+	DeleteRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64)
+	// Get a recurring definition.
+	// (GET /api/recurring-definitions/{recurring_definition_id})
+	GetRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64)
+	// Replace a recurring definition.
+	// (PUT /api/recurring-definitions/{recurring_definition_id})
+	ReplaceRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64)
+	// Confirm the next recurring occurrence early.
+	// (POST /api/recurring-definitions/{recurring_definition_id}/confirm-next)
+	ConfirmNextRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64)
+	// Defer the next non-materialized interval occurrence.
+	// (POST /api/recurring-definitions/{recurring_definition_id}/defer)
+	DeferRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64)
+	// Pause a recurring definition.
+	// (POST /api/recurring-definitions/{recurring_definition_id}/pause)
+	PauseRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64)
+	// Resume a recurring definition.
+	// (POST /api/recurring-definitions/{recurring_definition_id}/resume)
+	ResumeRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64)
+	// List recurring occurrences.
+	// (GET /api/recurring-occurrences)
+	ListRecurringOccurrences(w http.ResponseWriter, r *http.Request, params ListRecurringOccurrencesParams)
+	// Confirm a recurring occurrence.
+	// (POST /api/recurring-occurrences/{recurring_occurrence_id}/confirm)
+	ConfirmRecurringOccurrence(w http.ResponseWriter, r *http.Request, recurringOccurrenceId int64)
+	// Dismiss a recurring occurrence.
+	// (POST /api/recurring-occurrences/{recurring_occurrence_id}/dismiss)
+	DismissRecurringOccurrence(w http.ResponseWriter, r *http.Request, recurringOccurrenceId int64)
 	// List tags.
 	// (GET /api/tags)
 	ListTags(w http.ResponseWriter, r *http.Request, params ListTagsParams)
@@ -2318,6 +2670,78 @@ func (_ Unimplemented) BulkUpdateJournalRecordStatuses(w http.ResponseWriter, r 
 // Add and remove tags on selected journal records.
 // (POST /api/records/bulk/tags)
 func (_ Unimplemented) BulkUpdateJournalRecordTags(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List recurring definitions.
+// (GET /api/recurring-definitions)
+func (_ Unimplemented) ListRecurringDefinitions(w http.ResponseWriter, r *http.Request, params ListRecurringDefinitionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a recurring definition.
+// (POST /api/recurring-definitions)
+func (_ Unimplemented) CreateRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Cancel a recurring definition.
+// (DELETE /api/recurring-definitions/{recurring_definition_id})
+func (_ Unimplemented) DeleteRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get a recurring definition.
+// (GET /api/recurring-definitions/{recurring_definition_id})
+func (_ Unimplemented) GetRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a recurring definition.
+// (PUT /api/recurring-definitions/{recurring_definition_id})
+func (_ Unimplemented) ReplaceRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Confirm the next recurring occurrence early.
+// (POST /api/recurring-definitions/{recurring_definition_id}/confirm-next)
+func (_ Unimplemented) ConfirmNextRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Defer the next non-materialized interval occurrence.
+// (POST /api/recurring-definitions/{recurring_definition_id}/defer)
+func (_ Unimplemented) DeferRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Pause a recurring definition.
+// (POST /api/recurring-definitions/{recurring_definition_id}/pause)
+func (_ Unimplemented) PauseRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Resume a recurring definition.
+// (POST /api/recurring-definitions/{recurring_definition_id}/resume)
+func (_ Unimplemented) ResumeRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// List recurring occurrences.
+// (GET /api/recurring-occurrences)
+func (_ Unimplemented) ListRecurringOccurrences(w http.ResponseWriter, r *http.Request, params ListRecurringOccurrencesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Confirm a recurring occurrence.
+// (POST /api/recurring-occurrences/{recurring_occurrence_id}/confirm)
+func (_ Unimplemented) ConfirmRecurringOccurrence(w http.ResponseWriter, r *http.Request, recurringOccurrenceId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Dismiss a recurring occurrence.
+// (POST /api/recurring-occurrences/{recurring_occurrence_id}/dismiss)
+func (_ Unimplemented) DismissRecurringOccurrence(w http.ResponseWriter, r *http.Request, recurringOccurrenceId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -4474,6 +4898,424 @@ func (siw *ServerInterfaceWrapper) BulkUpdateJournalRecordTags(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// ListRecurringDefinitions operation middleware
+func (siw *ServerInterfaceWrapper) ListRecurringDefinitions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRecurringDefinitionsParams
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort_dir" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort_dir", r.URL.Query(), &params.SortDir, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort_dir"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_dir", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRecurringDefinitions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRecurringDefinition operation middleware
+func (siw *ServerInterfaceWrapper) CreateRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRecurringDefinition(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteRecurringDefinition operation middleware
+func (siw *ServerInterfaceWrapper) DeleteRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recurring_definition_id" -------------
+	var recurringDefinitionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recurring_definition_id", chi.URLParam(r, "recurring_definition_id"), &recurringDefinitionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteRecurringDefinition(w, r, recurringDefinitionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRecurringDefinition operation middleware
+func (siw *ServerInterfaceWrapper) GetRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recurring_definition_id" -------------
+	var recurringDefinitionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recurring_definition_id", chi.URLParam(r, "recurring_definition_id"), &recurringDefinitionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRecurringDefinition(w, r, recurringDefinitionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceRecurringDefinition operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recurring_definition_id" -------------
+	var recurringDefinitionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recurring_definition_id", chi.URLParam(r, "recurring_definition_id"), &recurringDefinitionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceRecurringDefinition(w, r, recurringDefinitionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfirmNextRecurringDefinition operation middleware
+func (siw *ServerInterfaceWrapper) ConfirmNextRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recurring_definition_id" -------------
+	var recurringDefinitionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recurring_definition_id", chi.URLParam(r, "recurring_definition_id"), &recurringDefinitionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfirmNextRecurringDefinition(w, r, recurringDefinitionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeferRecurringDefinition operation middleware
+func (siw *ServerInterfaceWrapper) DeferRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recurring_definition_id" -------------
+	var recurringDefinitionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recurring_definition_id", chi.URLParam(r, "recurring_definition_id"), &recurringDefinitionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeferRecurringDefinition(w, r, recurringDefinitionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PauseRecurringDefinition operation middleware
+func (siw *ServerInterfaceWrapper) PauseRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recurring_definition_id" -------------
+	var recurringDefinitionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recurring_definition_id", chi.URLParam(r, "recurring_definition_id"), &recurringDefinitionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PauseRecurringDefinition(w, r, recurringDefinitionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeRecurringDefinition operation middleware
+func (siw *ServerInterfaceWrapper) ResumeRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recurring_definition_id" -------------
+	var recurringDefinitionId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recurring_definition_id", chi.URLParam(r, "recurring_definition_id"), &recurringDefinitionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeRecurringDefinition(w, r, recurringDefinitionId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRecurringOccurrences operation middleware
+func (siw *ServerInterfaceWrapper) ListRecurringOccurrences(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRecurringOccurrencesParams
+
+	// ------------- Optional query parameter "recurring_definition_id" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "recurring_definition_id", r.URL.Query(), &params.RecurringDefinitionId, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "recurring_definition_id"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_definition_id", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "sort_dir" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort_dir", r.URL.Query(), &params.SortDir, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort_dir"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort_dir", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRecurringOccurrences(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfirmRecurringOccurrence operation middleware
+func (siw *ServerInterfaceWrapper) ConfirmRecurringOccurrence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recurring_occurrence_id" -------------
+	var recurringOccurrenceId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recurring_occurrence_id", chi.URLParam(r, "recurring_occurrence_id"), &recurringOccurrenceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_occurrence_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfirmRecurringOccurrence(w, r, recurringOccurrenceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DismissRecurringOccurrence operation middleware
+func (siw *ServerInterfaceWrapper) DismissRecurringOccurrence(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recurring_occurrence_id" -------------
+	var recurringOccurrenceId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recurring_occurrence_id", chi.URLParam(r, "recurring_occurrence_id"), &recurringOccurrenceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recurring_occurrence_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DismissRecurringOccurrence(w, r, recurringOccurrenceId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTags operation middleware
 func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Request) {
 
@@ -5682,6 +6524,42 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/records/bulk/tags", wrapper.BulkUpdateJournalRecordTags)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/recurring-definitions", wrapper.ListRecurringDefinitions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/recurring-definitions", wrapper.CreateRecurringDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/api/recurring-definitions/{recurring_definition_id}", wrapper.DeleteRecurringDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/recurring-definitions/{recurring_definition_id}", wrapper.GetRecurringDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/recurring-definitions/{recurring_definition_id}", wrapper.ReplaceRecurringDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/recurring-definitions/{recurring_definition_id}/confirm-next", wrapper.ConfirmNextRecurringDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/recurring-definitions/{recurring_definition_id}/defer", wrapper.DeferRecurringDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/recurring-definitions/{recurring_definition_id}/pause", wrapper.PauseRecurringDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/recurring-definitions/{recurring_definition_id}/resume", wrapper.ResumeRecurringDefinition)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/recurring-occurrences", wrapper.ListRecurringOccurrences)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/recurring-occurrences/{recurring_occurrence_id}/confirm", wrapper.ConfirmRecurringOccurrence)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/recurring-occurrences/{recurring_occurrence_id}/dismiss", wrapper.DismissRecurringOccurrence)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/tags", wrapper.ListTags)
@@ -7975,6 +8853,616 @@ func (response BulkUpdateJournalRecordTags400JSONResponse) VisitBulkUpdateJourna
 	return err
 }
 
+type ListRecurringDefinitionsRequestObject struct {
+	Params ListRecurringDefinitionsParams
+}
+
+type ListRecurringDefinitionsResponseObject interface {
+	VisitListRecurringDefinitionsResponse(w http.ResponseWriter) error
+}
+
+type ListRecurringDefinitions200JSONResponse RecurringDefinitionListResponse
+
+func (response ListRecurringDefinitions200JSONResponse) VisitListRecurringDefinitionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRecurringDefinitions400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response ListRecurringDefinitions400JSONResponse) VisitListRecurringDefinitionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRecurringDefinitionRequestObject struct {
+	Body *CreateRecurringDefinitionJSONRequestBody
+}
+
+type CreateRecurringDefinitionResponseObject interface {
+	VisitCreateRecurringDefinitionResponse(w http.ResponseWriter) error
+}
+
+type CreateRecurringDefinition201JSONResponse RecurringDefinition
+
+func (response CreateRecurringDefinition201JSONResponse) VisitCreateRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRecurringDefinition400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response CreateRecurringDefinition400JSONResponse) VisitCreateRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRecurringDefinition409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateRecurringDefinition409JSONResponse) VisitCreateRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRecurringDefinitionRequestObject struct {
+	RecurringDefinitionId int64 `json:"recurring_definition_id"`
+}
+
+type DeleteRecurringDefinitionResponseObject interface {
+	VisitDeleteRecurringDefinitionResponse(w http.ResponseWriter) error
+}
+
+type DeleteRecurringDefinition204Response struct {
+}
+
+func (response DeleteRecurringDefinition204Response) VisitDeleteRecurringDefinitionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteRecurringDefinition400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response DeleteRecurringDefinition400JSONResponse) VisitDeleteRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteRecurringDefinition404JSONResponse) VisitDeleteRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRecurringDefinitionRequestObject struct {
+	RecurringDefinitionId int64 `json:"recurring_definition_id"`
+}
+
+type GetRecurringDefinitionResponseObject interface {
+	VisitGetRecurringDefinitionResponse(w http.ResponseWriter) error
+}
+
+type GetRecurringDefinition200JSONResponse RecurringDefinition
+
+func (response GetRecurringDefinition200JSONResponse) VisitGetRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRecurringDefinition400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response GetRecurringDefinition400JSONResponse) VisitGetRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetRecurringDefinition404JSONResponse) VisitGetRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRecurringDefinitionRequestObject struct {
+	RecurringDefinitionId int64 `json:"recurring_definition_id"`
+	Body                  *ReplaceRecurringDefinitionJSONRequestBody
+}
+
+type ReplaceRecurringDefinitionResponseObject interface {
+	VisitReplaceRecurringDefinitionResponse(w http.ResponseWriter) error
+}
+
+type ReplaceRecurringDefinition200JSONResponse RecurringDefinition
+
+func (response ReplaceRecurringDefinition200JSONResponse) VisitReplaceRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRecurringDefinition400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response ReplaceRecurringDefinition400JSONResponse) VisitReplaceRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplaceRecurringDefinition404JSONResponse) VisitReplaceRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceRecurringDefinition409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplaceRecurringDefinition409JSONResponse) VisitReplaceRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmNextRecurringDefinitionRequestObject struct {
+	RecurringDefinitionId int64 `json:"recurring_definition_id"`
+}
+
+type ConfirmNextRecurringDefinitionResponseObject interface {
+	VisitConfirmNextRecurringDefinitionResponse(w http.ResponseWriter) error
+}
+
+type ConfirmNextRecurringDefinition200JSONResponse RecurringOccurrence
+
+func (response ConfirmNextRecurringDefinition200JSONResponse) VisitConfirmNextRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmNextRecurringDefinition400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response ConfirmNextRecurringDefinition400JSONResponse) VisitConfirmNextRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmNextRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ConfirmNextRecurringDefinition404JSONResponse) VisitConfirmNextRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmNextRecurringDefinition409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ConfirmNextRecurringDefinition409JSONResponse) VisitConfirmNextRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeferRecurringDefinitionRequestObject struct {
+	RecurringDefinitionId int64 `json:"recurring_definition_id"`
+	Body                  *DeferRecurringDefinitionJSONRequestBody
+}
+
+type DeferRecurringDefinitionResponseObject interface {
+	VisitDeferRecurringDefinitionResponse(w http.ResponseWriter) error
+}
+
+type DeferRecurringDefinition200JSONResponse RecurringOccurrence
+
+func (response DeferRecurringDefinition200JSONResponse) VisitDeferRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeferRecurringDefinition400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response DeferRecurringDefinition400JSONResponse) VisitDeferRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeferRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeferRecurringDefinition404JSONResponse) VisitDeferRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeferRecurringDefinition409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeferRecurringDefinition409JSONResponse) VisitDeferRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseRecurringDefinitionRequestObject struct {
+	RecurringDefinitionId int64 `json:"recurring_definition_id"`
+}
+
+type PauseRecurringDefinitionResponseObject interface {
+	VisitPauseRecurringDefinitionResponse(w http.ResponseWriter) error
+}
+
+type PauseRecurringDefinition200JSONResponse RecurringDefinition
+
+func (response PauseRecurringDefinition200JSONResponse) VisitPauseRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseRecurringDefinition400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response PauseRecurringDefinition400JSONResponse) VisitPauseRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PauseRecurringDefinition404JSONResponse) VisitPauseRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeRecurringDefinitionRequestObject struct {
+	RecurringDefinitionId int64 `json:"recurring_definition_id"`
+}
+
+type ResumeRecurringDefinitionResponseObject interface {
+	VisitResumeRecurringDefinitionResponse(w http.ResponseWriter) error
+}
+
+type ResumeRecurringDefinition200JSONResponse RecurringDefinition
+
+func (response ResumeRecurringDefinition200JSONResponse) VisitResumeRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeRecurringDefinition400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response ResumeRecurringDefinition400JSONResponse) VisitResumeRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeRecurringDefinition404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ResumeRecurringDefinition404JSONResponse) VisitResumeRecurringDefinitionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRecurringOccurrencesRequestObject struct {
+	Params ListRecurringOccurrencesParams
+}
+
+type ListRecurringOccurrencesResponseObject interface {
+	VisitListRecurringOccurrencesResponse(w http.ResponseWriter) error
+}
+
+type ListRecurringOccurrences200JSONResponse RecurringOccurrenceListResponse
+
+func (response ListRecurringOccurrences200JSONResponse) VisitListRecurringOccurrencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRecurringOccurrences400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response ListRecurringOccurrences400JSONResponse) VisitListRecurringOccurrencesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmRecurringOccurrenceRequestObject struct {
+	RecurringOccurrenceId int64 `json:"recurring_occurrence_id"`
+}
+
+type ConfirmRecurringOccurrenceResponseObject interface {
+	VisitConfirmRecurringOccurrenceResponse(w http.ResponseWriter) error
+}
+
+type ConfirmRecurringOccurrence200JSONResponse RecurringOccurrence
+
+func (response ConfirmRecurringOccurrence200JSONResponse) VisitConfirmRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmRecurringOccurrence400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response ConfirmRecurringOccurrence400JSONResponse) VisitConfirmRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ConfirmRecurringOccurrence404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ConfirmRecurringOccurrence404JSONResponse) VisitConfirmRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissRecurringOccurrenceRequestObject struct {
+	RecurringOccurrenceId int64 `json:"recurring_occurrence_id"`
+}
+
+type DismissRecurringOccurrenceResponseObject interface {
+	VisitDismissRecurringOccurrenceResponse(w http.ResponseWriter) error
+}
+
+type DismissRecurringOccurrence200JSONResponse RecurringOccurrence
+
+func (response DismissRecurringOccurrence200JSONResponse) VisitDismissRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissRecurringOccurrence400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response DismissRecurringOccurrence400JSONResponse) VisitDismissRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DismissRecurringOccurrence404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DismissRecurringOccurrence404JSONResponse) VisitDismissRecurringOccurrenceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTagsRequestObject struct {
 	Params ListTagsParams
 }
@@ -9257,6 +10745,42 @@ type StrictServerInterface interface {
 	// Add and remove tags on selected journal records.
 	// (POST /api/records/bulk/tags)
 	BulkUpdateJournalRecordTags(ctx context.Context, request BulkUpdateJournalRecordTagsRequestObject) (BulkUpdateJournalRecordTagsResponseObject, error)
+	// List recurring definitions.
+	// (GET /api/recurring-definitions)
+	ListRecurringDefinitions(ctx context.Context, request ListRecurringDefinitionsRequestObject) (ListRecurringDefinitionsResponseObject, error)
+	// Create a recurring definition.
+	// (POST /api/recurring-definitions)
+	CreateRecurringDefinition(ctx context.Context, request CreateRecurringDefinitionRequestObject) (CreateRecurringDefinitionResponseObject, error)
+	// Cancel a recurring definition.
+	// (DELETE /api/recurring-definitions/{recurring_definition_id})
+	DeleteRecurringDefinition(ctx context.Context, request DeleteRecurringDefinitionRequestObject) (DeleteRecurringDefinitionResponseObject, error)
+	// Get a recurring definition.
+	// (GET /api/recurring-definitions/{recurring_definition_id})
+	GetRecurringDefinition(ctx context.Context, request GetRecurringDefinitionRequestObject) (GetRecurringDefinitionResponseObject, error)
+	// Replace a recurring definition.
+	// (PUT /api/recurring-definitions/{recurring_definition_id})
+	ReplaceRecurringDefinition(ctx context.Context, request ReplaceRecurringDefinitionRequestObject) (ReplaceRecurringDefinitionResponseObject, error)
+	// Confirm the next recurring occurrence early.
+	// (POST /api/recurring-definitions/{recurring_definition_id}/confirm-next)
+	ConfirmNextRecurringDefinition(ctx context.Context, request ConfirmNextRecurringDefinitionRequestObject) (ConfirmNextRecurringDefinitionResponseObject, error)
+	// Defer the next non-materialized interval occurrence.
+	// (POST /api/recurring-definitions/{recurring_definition_id}/defer)
+	DeferRecurringDefinition(ctx context.Context, request DeferRecurringDefinitionRequestObject) (DeferRecurringDefinitionResponseObject, error)
+	// Pause a recurring definition.
+	// (POST /api/recurring-definitions/{recurring_definition_id}/pause)
+	PauseRecurringDefinition(ctx context.Context, request PauseRecurringDefinitionRequestObject) (PauseRecurringDefinitionResponseObject, error)
+	// Resume a recurring definition.
+	// (POST /api/recurring-definitions/{recurring_definition_id}/resume)
+	ResumeRecurringDefinition(ctx context.Context, request ResumeRecurringDefinitionRequestObject) (ResumeRecurringDefinitionResponseObject, error)
+	// List recurring occurrences.
+	// (GET /api/recurring-occurrences)
+	ListRecurringOccurrences(ctx context.Context, request ListRecurringOccurrencesRequestObject) (ListRecurringOccurrencesResponseObject, error)
+	// Confirm a recurring occurrence.
+	// (POST /api/recurring-occurrences/{recurring_occurrence_id}/confirm)
+	ConfirmRecurringOccurrence(ctx context.Context, request ConfirmRecurringOccurrenceRequestObject) (ConfirmRecurringOccurrenceResponseObject, error)
+	// Dismiss a recurring occurrence.
+	// (POST /api/recurring-occurrences/{recurring_occurrence_id}/dismiss)
+	DismissRecurringOccurrence(ctx context.Context, request DismissRecurringOccurrenceRequestObject) (DismissRecurringOccurrenceResponseObject, error)
 	// List tags.
 	// (GET /api/tags)
 	ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error)
@@ -10647,6 +12171,340 @@ func (sh *strictHandler) BulkUpdateJournalRecordTags(w http.ResponseWriter, r *h
 	}
 }
 
+// ListRecurringDefinitions operation middleware
+func (sh *strictHandler) ListRecurringDefinitions(w http.ResponseWriter, r *http.Request, params ListRecurringDefinitionsParams) {
+	var request ListRecurringDefinitionsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRecurringDefinitions(ctx, request.(ListRecurringDefinitionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRecurringDefinitions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRecurringDefinitionsResponseObject); ok {
+		if err := validResponse.VisitListRecurringDefinitionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRecurringDefinition operation middleware
+func (sh *strictHandler) CreateRecurringDefinition(w http.ResponseWriter, r *http.Request) {
+	var request CreateRecurringDefinitionRequestObject
+
+	var body CreateRecurringDefinitionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRecurringDefinition(ctx, request.(CreateRecurringDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRecurringDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRecurringDefinitionResponseObject); ok {
+		if err := validResponse.VisitCreateRecurringDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteRecurringDefinition operation middleware
+func (sh *strictHandler) DeleteRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	var request DeleteRecurringDefinitionRequestObject
+
+	request.RecurringDefinitionId = recurringDefinitionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteRecurringDefinition(ctx, request.(DeleteRecurringDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteRecurringDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteRecurringDefinitionResponseObject); ok {
+		if err := validResponse.VisitDeleteRecurringDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRecurringDefinition operation middleware
+func (sh *strictHandler) GetRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	var request GetRecurringDefinitionRequestObject
+
+	request.RecurringDefinitionId = recurringDefinitionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRecurringDefinition(ctx, request.(GetRecurringDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRecurringDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRecurringDefinitionResponseObject); ok {
+		if err := validResponse.VisitGetRecurringDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceRecurringDefinition operation middleware
+func (sh *strictHandler) ReplaceRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	var request ReplaceRecurringDefinitionRequestObject
+
+	request.RecurringDefinitionId = recurringDefinitionId
+
+	var body ReplaceRecurringDefinitionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceRecurringDefinition(ctx, request.(ReplaceRecurringDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceRecurringDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceRecurringDefinitionResponseObject); ok {
+		if err := validResponse.VisitReplaceRecurringDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConfirmNextRecurringDefinition operation middleware
+func (sh *strictHandler) ConfirmNextRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	var request ConfirmNextRecurringDefinitionRequestObject
+
+	request.RecurringDefinitionId = recurringDefinitionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConfirmNextRecurringDefinition(ctx, request.(ConfirmNextRecurringDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConfirmNextRecurringDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConfirmNextRecurringDefinitionResponseObject); ok {
+		if err := validResponse.VisitConfirmNextRecurringDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeferRecurringDefinition operation middleware
+func (sh *strictHandler) DeferRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	var request DeferRecurringDefinitionRequestObject
+
+	request.RecurringDefinitionId = recurringDefinitionId
+
+	var body DeferRecurringDefinitionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeferRecurringDefinition(ctx, request.(DeferRecurringDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeferRecurringDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeferRecurringDefinitionResponseObject); ok {
+		if err := validResponse.VisitDeferRecurringDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PauseRecurringDefinition operation middleware
+func (sh *strictHandler) PauseRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	var request PauseRecurringDefinitionRequestObject
+
+	request.RecurringDefinitionId = recurringDefinitionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PauseRecurringDefinition(ctx, request.(PauseRecurringDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PauseRecurringDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PauseRecurringDefinitionResponseObject); ok {
+		if err := validResponse.VisitPauseRecurringDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResumeRecurringDefinition operation middleware
+func (sh *strictHandler) ResumeRecurringDefinition(w http.ResponseWriter, r *http.Request, recurringDefinitionId int64) {
+	var request ResumeRecurringDefinitionRequestObject
+
+	request.RecurringDefinitionId = recurringDefinitionId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResumeRecurringDefinition(ctx, request.(ResumeRecurringDefinitionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResumeRecurringDefinition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResumeRecurringDefinitionResponseObject); ok {
+		if err := validResponse.VisitResumeRecurringDefinitionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRecurringOccurrences operation middleware
+func (sh *strictHandler) ListRecurringOccurrences(w http.ResponseWriter, r *http.Request, params ListRecurringOccurrencesParams) {
+	var request ListRecurringOccurrencesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRecurringOccurrences(ctx, request.(ListRecurringOccurrencesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRecurringOccurrences")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRecurringOccurrencesResponseObject); ok {
+		if err := validResponse.VisitListRecurringOccurrencesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ConfirmRecurringOccurrence operation middleware
+func (sh *strictHandler) ConfirmRecurringOccurrence(w http.ResponseWriter, r *http.Request, recurringOccurrenceId int64) {
+	var request ConfirmRecurringOccurrenceRequestObject
+
+	request.RecurringOccurrenceId = recurringOccurrenceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ConfirmRecurringOccurrence(ctx, request.(ConfirmRecurringOccurrenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ConfirmRecurringOccurrence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ConfirmRecurringOccurrenceResponseObject); ok {
+		if err := validResponse.VisitConfirmRecurringOccurrenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DismissRecurringOccurrence operation middleware
+func (sh *strictHandler) DismissRecurringOccurrence(w http.ResponseWriter, r *http.Request, recurringOccurrenceId int64) {
+	var request DismissRecurringOccurrenceRequestObject
+
+	request.RecurringOccurrenceId = recurringOccurrenceId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DismissRecurringOccurrence(ctx, request.(DismissRecurringOccurrenceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DismissRecurringOccurrence")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DismissRecurringOccurrenceResponseObject); ok {
+		if err := validResponse.VisitDismissRecurringOccurrenceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListTags operation middleware
 func (sh *strictHandler) ListTags(w http.ResponseWriter, r *http.Request, params ListTagsParams) {
 	var request ListTagsRequestObject
@@ -11374,159 +13232,179 @@ func (sh *strictHandler) CancelTransaction(w http.ResponseWriter, r *http.Reques
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"gqZ7yx/fFnE8TfdL1snT0/8PAAD//w==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

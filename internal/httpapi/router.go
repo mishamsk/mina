@@ -17,6 +17,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/health"
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/operationruns"
+	"github.com/mishamsk/mina/internal/services/recurring"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/transactiontemplates"
@@ -36,6 +37,7 @@ type Dependencies struct {
 	ExchangeRates *exchangerates.Service
 	Transactions  *transactions.Service
 	Templates     *transactiontemplates.Service
+	Recurring     *recurring.Service
 	Demo          *demo.Service
 	Clock         Clock
 }
