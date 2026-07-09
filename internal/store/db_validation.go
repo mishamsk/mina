@@ -20,7 +20,7 @@ import (
 )
 
 // PinnedMigrationContentHash is the validator-reviewed sha256 of embedded migration SQL.
-const PinnedMigrationContentHash = "c3e8f98caee943a364a1683e47b86dbb1b1d2be1292a89ccc7e1cff49c013e00"
+const PinnedMigrationContentHash = "2a5b98712d81af6de1caca29729e00b3df7d30247e84e619131d3cfbfce45ae2"
 
 const validationTrimSpaceCharactersSQL = `' ' || ` +
 	`chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || ` +
@@ -956,6 +956,12 @@ func activeUniquenessChecks() map[string]activeUniquenessCheck {
 				return duplicateActiveCompositeQuery(s, "budget", "category_fqn", "month")
 			},
 		},
+		"imported_record_metadata_active_record_unique": {
+			message: "duplicate active imported_record_metadata.record_id",
+			query: func(s *DBValidationStore) string {
+				return duplicateActiveQuery(s, "imported_record_metadata", "record_id")
+			},
+		},
 	}
 }
 
@@ -1028,6 +1034,7 @@ func validationReferences() []validationReference {
 		{childTable: "journal_record", childColumn: "category_id", parentTable: "category", parentColumn: "category_id", severity: dbvalidation.SeverityError},
 		{childTable: "journal_record", childColumn: "member_id", parentTable: "member", parentColumn: "member_id", severity: dbvalidation.SeverityWarning},
 		{childTable: "journal_record", childColumn: "tag_ids", parentTable: "tag", parentColumn: "tag_id", kind: validationReferenceArray, severity: dbvalidation.SeverityWarning},
+		{childTable: "imported_record_metadata", childColumn: "record_id", parentTable: "journal_record", parentColumn: "record_id", severity: dbvalidation.SeverityError, allowTombstonedParent: true},
 		{childTable: "transaction", childColumn: "recurring_occurrence_id", parentTable: "recurring_occurrence", parentColumn: "recurring_occurrence_id", severity: dbvalidation.SeverityError},
 		{childTable: "transaction_template_record", childColumn: "transaction_template_id", parentTable: "transaction_template", parentColumn: "transaction_template_id", severity: dbvalidation.SeverityError},
 		{childTable: "transaction_template_record", childColumn: "category_id", parentTable: "category", parentColumn: "category_id", severity: dbvalidation.SeverityError},
