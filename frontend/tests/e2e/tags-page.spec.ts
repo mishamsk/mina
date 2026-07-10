@@ -7,6 +7,38 @@ interface TagFixture {
   readonly tag_id: number;
 }
 
+interface AccountFixture {
+  readonly account_id: number;
+  readonly fqn: string;
+}
+
+interface CategoryFixture {
+  readonly category_id: number;
+  readonly fqn: string;
+}
+
+const listFixtures = async <T>(
+  page: Page,
+  path: string,
+  collectionKey: string,
+): Promise<readonly T[]> => {
+  const response = await page.request.get(
+    `${path}?limit=500&offset=0&sort=fqn&sort_dir=asc`,
+  );
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as Record<string, readonly T[]>;
+  return body[collectionKey] ?? [];
+};
+
+const findByFqn = <T extends { readonly fqn: string }>(
+  fixtures: readonly T[],
+  fqn: string,
+): T => {
+  const fixture = fixtures.find((item) => item.fqn === fqn);
+  expect(fixture, `${fqn} fixture`).toBeDefined();
+  return fixture as T;
+};
+
 const createTag = async (
   page: Page,
   {
@@ -230,6 +262,153 @@ test("tags row actions hide groups and move renamed paths into transaction filte
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
     "No matches",
   );
+});
+
+test("tag delete row actions respect the API deleteability signal", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const blockedFqn = `E2EBlockedTag:${unique}`;
+  const eligibleFqn = `E2EEligibleTag:${unique}`;
+  const conflictFqn = `E2EConflictTag:${unique}`;
+  const groupFqn = `E2ETagGroup:${unique}`;
+  const [blockedTag, eligibleTag, conflictTag, , , accounts, categories] =
+    await Promise.all([
+      createTag(page, { fqn: blockedFqn }),
+      createTag(page, { fqn: eligibleFqn }),
+      createTag(page, { fqn: conflictFqn }),
+      createTag(page, { fqn: `${groupFqn}:One` }),
+      createTag(page, { fqn: `${groupFqn}:Two` }),
+      listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+      listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+    ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const transactionResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "12.34",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-05-31",
+        memo: `E2E tag deleteability ${unique}`,
+        tag_ids: [blockedTag.tag_id],
+      },
+    },
+  );
+  expect(transactionResponse.ok()).toBe(true);
+
+  await page.goto(`/tags?q=${encodeURIComponent(blockedFqn)}`);
+  const blockedRow = page
+    .getByTestId("tags-tree-row")
+    .filter({ hasText: blockedFqn })
+    .first();
+  const blockedDelete = blockedRow.getByRole("button", {
+    name: "Delete tag",
+  });
+  await expect(blockedRow).toBeVisible({ timeout: 10_000 });
+  await expect(blockedDelete).toHaveAttribute("aria-disabled", "true");
+  await blockedDelete.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Tag has active dependent records.",
+  );
+  await blockedDelete.click({ force: true });
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete tag" }),
+  ).toBeHidden();
+  await blockedDelete.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete tag" }),
+  ).toBeHidden();
+
+  await page.goto(`/tags?q=${encodeURIComponent(groupFqn)}`);
+  const groupRow = page
+    .getByTestId("tags-tree-row")
+    .filter({ hasText: groupFqn })
+    .first();
+  await expect(groupRow).toBeVisible({ timeout: 10_000 });
+  await expect(
+    groupRow.getByRole("button", { name: "Delete tag" }),
+  ).toHaveCount(0);
+
+  await page.goto(`/tags?q=${encodeURIComponent(eligibleFqn)}`);
+  const eligibleRow = page
+    .getByTestId("tags-tree-row")
+    .filter({ hasText: eligibleFqn })
+    .first();
+  const eligibleDelete = eligibleRow.getByRole("button", {
+    name: "Delete tag",
+  });
+  await expect(eligibleRow).toBeVisible({ timeout: 10_000 });
+  await expect(eligibleDelete).not.toHaveAttribute("aria-disabled", "true");
+  await eligibleDelete.click();
+  const eligibleDialog = page.getByRole("alertdialog", {
+    name: "Delete tag",
+  });
+  await expect(eligibleDialog).toContainText(eligibleFqn);
+  await eligibleDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(eligibleDialog).toBeHidden();
+  await expect(eligibleRow).toBeVisible();
+
+  await eligibleDelete.click();
+  const deleteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/tags/${eligibleTag.tag_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await eligibleDialog.getByRole("button", { name: "Delete tag" }).click();
+  expect((await deleteResponse).status()).toBe(204);
+  await expect(page.getByText("Tag deleted.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(eligibleRow).toHaveCount(0, { timeout: 10_000 });
+
+  await page.goto(`/tags?q=${encodeURIComponent(conflictFqn)}`);
+  const conflictRow = page
+    .getByTestId("tags-tree-row")
+    .filter({ hasText: conflictFqn })
+    .first();
+  await expect(conflictRow).toBeVisible({ timeout: 10_000 });
+  await page.route(`/api/tags/${conflictTag.tag_id}`, async (route) => {
+    if (route.request().method() !== "DELETE") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify({
+        error: {
+          code: "conflict",
+          message: "Tag has active dependent records.",
+        },
+      }),
+      contentType: "application/json",
+      status: 409,
+    });
+  });
+  await conflictRow.getByRole("button", { name: "Delete tag" }).click();
+  const conflictDialog = page.getByRole("alertdialog", {
+    name: "Delete tag",
+  });
+  const conflictResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/tags/${conflictTag.tag_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await conflictDialog.getByRole("button", { name: "Delete tag" }).click();
+  expect((await conflictResponse).status()).toBe(409);
+  await expect(conflictDialog.getByRole("alert")).toHaveText(
+    "Tag has active dependent records.",
+  );
+  await page.unroute(`/api/tags/${conflictTag.tag_id}`);
 });
 
 test("tags side panel creates edits and deletes tags with conflict feedback", async ({

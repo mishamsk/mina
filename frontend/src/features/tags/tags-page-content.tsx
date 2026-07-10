@@ -1,12 +1,14 @@
-import { Eye, EyeOff, MagicEdit } from "pixelarticons/react";
-import { useRef } from "react";
+import { Eye, EyeOff, MagicEdit, Trash } from "pixelarticons/react";
+import { useRef, useState } from "react";
 
 import type { GroupState, Tag } from "@/api";
 import {
+  deleteLedgerTagById,
   isNetworkFailure,
   setLedgerTagHiddenByPath,
   updateLedgerTag,
 } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import type { RowAction } from "@/components/row-actions";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -33,6 +35,11 @@ interface TagsPageContentProps {
     readonly snapshot: TagsPageSnapshot | undefined;
   };
 }
+
+type TagDeleteTarget = {
+  readonly opener: HTMLElement;
+  readonly tag: Tag;
+};
 
 const apiErrorMessage = (error: unknown, fallback: string): string => {
   if (isNetworkFailure(error)) {
@@ -61,9 +68,54 @@ export const TagsPageContent = ({
   tagsPage,
 }: TagsPageContentProps) => {
   const focusFallbackRef = useRef<HTMLDivElement | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TagDeleteTarget>();
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<
+    string | undefined
+  >();
+  const [deleting, setDeleting] = useState(false);
 
   const showQuickToggleError = (error: unknown, fallback: string) => {
     onNotice(apiErrorMessage(error, fallback), "error");
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleting) {
+      return;
+    }
+    const opener = deleteTarget?.opener;
+    setDeleteTarget(undefined);
+    setDeleteErrorMessage(undefined);
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) {
+        focusWithoutTooltip(opener, { preventScroll: true });
+      }
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) {
+      return;
+    }
+    setDeleting(true);
+    setDeleteErrorMessage(undefined);
+    const result = await deleteLedgerTagById(deleteTarget.tag.tag_id);
+    if (result.data !== undefined || !result.error) {
+      await refreshTagsAfterMutation();
+      onNotice("Tag deleted.");
+      setDeleting(false);
+      setDeleteTarget(undefined);
+      window.requestAnimationFrame(() => {
+        const searchField = document.getElementById("tags-search");
+        if (searchField instanceof HTMLElement && searchField.isConnected) {
+          focusWithoutTooltip(searchField, { preventScroll: true });
+        }
+      });
+      return;
+    }
+    setDeleting(false);
+    setDeleteErrorMessage(
+      apiErrorMessage(result.error, "Tag could not be deleted."),
+    );
   };
 
   const restoreToggleFocus = (opener: HTMLElement) => {
@@ -145,6 +197,16 @@ export const TagsPageContent = ({
           pressed: row.leaf.is_hidden,
         },
         ...moveAction(row),
+        {
+          disabled: row.leaf.deletable !== true,
+          disabledReason: "Tag has active dependent records.",
+          icon: <Trash aria-hidden="true" />,
+          label: "Delete tag",
+          onSelect: (opener: HTMLElement) => {
+            setDeleteErrorMessage(undefined);
+            setDeleteTarget({ opener, tag: row.leaf as Tag });
+          },
+        },
       ];
     }
 
@@ -229,6 +291,35 @@ export const TagsPageContent = ({
           search={search}
         />
       </div>
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Delete tag"
+        errorMessage={deleteErrorMessage}
+        open={deleteTarget !== undefined}
+        pending={deleting}
+        pendingLabel="Deleting"
+        title="Delete tag"
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDeleteDialog();
+          }
+        }}
+      >
+        <p className="flex flex-wrap items-center gap-1">
+          <span>Delete</span>
+          <span className="text-foreground font-mono break-all">
+            {deleteTarget?.tag.fqn}
+          </span>
+          <span>?</span>
+        </p>
+        <p>
+          This tombstones the tag and removes it from default tag lists and
+          pickers.
+        </p>
+      </ConfirmationDialog>
     </div>
   );
 };

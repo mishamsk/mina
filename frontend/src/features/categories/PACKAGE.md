@@ -9,6 +9,8 @@
 - Categories page loads the full category tree joined with derived group state and filters client-side.
 - Category mutations refresh Categories, ledger lookups, Overview, and category picker caches.
 - Bulk category mutations also invalidate transaction page snapshots.
+- Category-row deletes own their named confirmation in the page list; side-panel deletes retain their panel-owned confirmation.
+- Delete affordances use only the API `deletable` signal; dependent-resource rules remain backend-owned.
 
 ## Boundaries
 

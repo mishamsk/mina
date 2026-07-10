@@ -1,12 +1,16 @@
-import { Eye, EyeOff, MagicEdit } from "pixelarticons/react";
+import { Eye, EyeOff, MagicEdit, Trash } from "pixelarticons/react";
+import { useState } from "react";
 
 import type { Category, GroupState } from "@/api";
 import {
+  deleteLedgerCategoryById,
   isNetworkFailure,
   setLedgerCategoryHiddenByPath,
   updateLedgerCategory,
 } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import type { RowAction } from "@/components/row-actions";
+import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import type { CategoriesPageSnapshot } from "@/store";
 
@@ -35,6 +39,11 @@ interface CategoriesPageContentProps {
   readonly onRestructurePath: (fqn: string, opener: HTMLElement) => void;
   readonly search: string;
 }
+
+type CategoryDeleteTarget = {
+  readonly category: Category;
+  readonly opener: HTMLElement;
+};
 
 const apiErrorMessage = (error: unknown, fallback: string): string => {
   if (isNetworkFailure(error)) {
@@ -69,8 +78,58 @@ export const CategoriesPageContent = ({
   onRestructurePath,
   search,
 }: CategoriesPageContentProps) => {
+  const [deleteTarget, setDeleteTarget] = useState<
+    CategoryDeleteTarget | undefined
+  >();
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<
+    string | undefined
+  >();
+  const [deleting, setDeleting] = useState(false);
+
   const showQuickToggleError = (error: unknown, fallback: string) => {
     onNotice(apiErrorMessage(error, fallback), "error");
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleting) {
+      return;
+    }
+    const opener = deleteTarget?.opener;
+    setDeleteTarget(undefined);
+    setDeleteErrorMessage(undefined);
+    window.requestAnimationFrame(() => {
+      if (opener?.isConnected) {
+        focusWithoutTooltip(opener, { preventScroll: true });
+      }
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) {
+      return;
+    }
+    setDeleting(true);
+    setDeleteErrorMessage(undefined);
+    const result = await deleteLedgerCategoryById(
+      deleteTarget.category.category_id,
+    );
+    if (result.data !== undefined || !result.error) {
+      await refreshCategoriesAfterMutation();
+      onNotice("Category deleted.");
+      setDeleting(false);
+      setDeleteTarget(undefined);
+      window.requestAnimationFrame(() => {
+        const searchField = document.getElementById("categories-search");
+        if (searchField instanceof HTMLElement && searchField.isConnected) {
+          focusWithoutTooltip(searchField, { preventScroll: true });
+        }
+      });
+      return;
+    }
+    setDeleting(false);
+    setDeleteErrorMessage(
+      apiErrorMessage(result.error, "Category could not be deleted."),
+    );
   };
 
   const toggleCategoryHidden = async (category: Category) => {
@@ -144,6 +203,16 @@ export const CategoriesPageContent = ({
           pressed: row.leaf.is_hidden,
         },
         ...moveAction(row),
+        {
+          disabled: row.leaf.deletable !== true,
+          disabledReason: "Category has active dependent records.",
+          icon: <Trash aria-hidden="true" />,
+          label: "Delete category",
+          onSelect: (opener: HTMLElement) => {
+            setDeleteErrorMessage(undefined);
+            setDeleteTarget({ category: row.leaf as Category, opener });
+          },
+        },
       ];
     }
 
@@ -228,6 +297,35 @@ export const CategoriesPageContent = ({
           search={search}
         />
       </div>
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Delete category"
+        errorMessage={deleteErrorMessage}
+        open={deleteTarget !== undefined}
+        pending={deleting}
+        pendingLabel="Deleting"
+        title="Delete category"
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDeleteDialog();
+          }
+        }}
+      >
+        <p className="flex flex-wrap items-center gap-1">
+          <span>Delete</span>
+          <span className="text-foreground font-mono break-all">
+            {deleteTarget?.category.fqn}
+          </span>
+          <span>?</span>
+        </p>
+        <p>
+          This tombstones the category and removes it from default category
+          lists and pickers.
+        </p>
+      </ConfirmationDialog>
     </div>
   );
 };

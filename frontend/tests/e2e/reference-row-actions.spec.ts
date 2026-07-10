@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 interface RowActionTarget {
+  readonly actionCount: number;
   readonly buttonActionLabels: readonly string[];
   readonly create: (page: Page, fqn: string) => Promise<void>;
   readonly path: string;
@@ -97,6 +98,7 @@ test("reference row actions fold only when their action cell cannot fit them", a
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const targets: readonly RowActionTarget[] = [
     {
+      actionCount: 4,
       buttonActionLabels: ["Move or rename", "Delete account"],
       create: createAccount,
       path: "/accounts",
@@ -104,14 +106,16 @@ test("reference row actions fold only when their action cell cannot fit them", a
       toggleCount: 2,
     },
     {
-      buttonActionLabels: ["Move or rename"],
+      actionCount: 3,
+      buttonActionLabels: ["Move or rename", "Delete category"],
       create: createCategory,
       path: "/categories",
       rowTestId: "categories-tree-row",
       toggleCount: 1,
     },
     {
-      buttonActionLabels: ["Move or rename"],
+      actionCount: 3,
+      buttonActionLabels: ["Move or rename", "Delete tag"],
       create: createTag,
       path: "/tags",
       rowTestId: "tags-tree-row",
@@ -135,6 +139,10 @@ test("reference row actions fold only when their action cell cannot fit them", a
         .first();
       const rowActions = row.locator(".row-actions");
       await expect(row).toBeVisible();
+      await expect(rowActions).toHaveAttribute(
+        "data-row-actions-count",
+        target.actionCount.toString(),
+      );
 
       if (viewportWidth === 1440) {
         await row.hover();

@@ -14,6 +14,33 @@ interface CategoryFixture {
   readonly fqn: string;
 }
 
+interface AccountFixture {
+  readonly account_id: number;
+  readonly fqn: string;
+}
+
+const listFixtures = async <T>(
+  page: Page,
+  path: string,
+  collectionKey: string,
+): Promise<readonly T[]> => {
+  const response = await page.request.get(
+    `${path}?limit=500&offset=0&sort=fqn&sort_dir=asc`,
+  );
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as Record<string, readonly T[]>;
+  return body[collectionKey] ?? [];
+};
+
+const findByFqn = <T extends { readonly fqn: string }>(
+  fixtures: readonly T[],
+  fqn: string,
+): T => {
+  const fixture = fixtures.find((item) => item.fqn === fqn);
+  expect(fixture, `${fqn} fixture`).toBeDefined();
+  return fixture as T;
+};
+
 const createCategory = async (
   page: Page,
   {
@@ -272,6 +299,153 @@ test("categories row actions hide groups and move renamed paths into transaction
   await expect(
     page.locator("#transactions-filter-category-options"),
   ).toContainText("No matches");
+});
+
+test("category delete row actions respect the API deleteability signal", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const blockedFqn = `E2EBlockedCategory:${unique}`;
+  const eligibleFqn = `E2EEligibleCategory:${unique}`;
+  const conflictFqn = `E2EConflictCategory:${unique}`;
+  const groupFqn = `E2ECategoryGroup:${unique}`;
+  const [blockedCategory, eligibleCategory, conflictCategory, , , accounts] =
+    await Promise.all([
+      createCategory(page, { fqn: blockedFqn }),
+      createCategory(page, { fqn: eligibleFqn }),
+      createCategory(page, { fqn: conflictFqn }),
+      createCategory(page, { fqn: `${groupFqn}:One` }),
+      createCategory(page, { fqn: `${groupFqn}:Two` }),
+      listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const transactionResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "12.34",
+        category_id: blockedCategory.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-05-31",
+        memo: `E2E category deleteability ${unique}`,
+      },
+    },
+  );
+  expect(transactionResponse.ok()).toBe(true);
+
+  await page.goto(`/categories?q=${encodeURIComponent(blockedFqn)}`);
+  const blockedRow = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: blockedFqn })
+    .first();
+  const blockedDelete = blockedRow.getByRole("button", {
+    name: "Delete category",
+  });
+  await expect(blockedRow).toBeVisible({ timeout: 10_000 });
+  await expect(blockedDelete).toHaveAttribute("aria-disabled", "true");
+  await blockedDelete.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Category has active dependent records.",
+  );
+  await blockedDelete.click({ force: true });
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete category" }),
+  ).toBeHidden();
+  await blockedDelete.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete category" }),
+  ).toBeHidden();
+
+  await page.goto(`/categories?q=${encodeURIComponent(groupFqn)}`);
+  const groupRow = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: groupFqn })
+    .first();
+  await expect(groupRow).toBeVisible({ timeout: 10_000 });
+  await expect(
+    groupRow.getByRole("button", { name: "Delete category" }),
+  ).toHaveCount(0);
+
+  await page.goto(`/categories?q=${encodeURIComponent(eligibleFqn)}`);
+  const eligibleRow = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: eligibleFqn })
+    .first();
+  const eligibleDelete = eligibleRow.getByRole("button", {
+    name: "Delete category",
+  });
+  await expect(eligibleRow).toBeVisible({ timeout: 10_000 });
+  await expect(eligibleDelete).not.toHaveAttribute("aria-disabled", "true");
+  await eligibleDelete.click();
+  const eligibleDialog = page.getByRole("alertdialog", {
+    name: "Delete category",
+  });
+  await expect(eligibleDialog).toContainText(eligibleFqn);
+  await eligibleDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(eligibleDialog).toBeHidden();
+  await expect(eligibleRow).toBeVisible();
+
+  await eligibleDelete.click();
+  const deleteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/categories/${eligibleCategory.category_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await eligibleDialog.getByRole("button", { name: "Delete category" }).click();
+  expect((await deleteResponse).status()).toBe(204);
+  await expect(page.getByText("Category deleted.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(eligibleRow).toHaveCount(0, { timeout: 10_000 });
+
+  await page.goto(`/categories?q=${encodeURIComponent(conflictFqn)}`);
+  const conflictRow = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: conflictFqn })
+    .first();
+  await expect(conflictRow).toBeVisible({ timeout: 10_000 });
+  await page.route(
+    `/api/categories/${conflictCategory.category_id}`,
+    async (route) => {
+      if (route.request().method() !== "DELETE") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        body: JSON.stringify({
+          error: {
+            code: "conflict",
+            message: "Category has active dependent records.",
+          },
+        }),
+        contentType: "application/json",
+        status: 409,
+      });
+    },
+  );
+  await conflictRow.getByRole("button", { name: "Delete category" }).click();
+  const conflictDialog = page.getByRole("alertdialog", {
+    name: "Delete category",
+  });
+  const conflictResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/categories/${conflictCategory.category_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await conflictDialog.getByRole("button", { name: "Delete category" }).click();
+  expect((await conflictResponse).status()).toBe(409);
+  await expect(conflictDialog.getByRole("alert")).toHaveText(
+    "Category has active dependent records.",
+  );
+  await page.unroute(`/api/categories/${conflictCategory.category_id}`);
 });
 
 test("categories side panel creates edits and deletes categories with conflict feedback", async ({

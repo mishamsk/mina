@@ -175,6 +175,12 @@ const TagsSidePanelContent = ({
         if (event.defaultPrevented) {
           return;
         }
+        const openModal = document.querySelector<HTMLElement>(
+          "[role='alertdialog'][aria-modal='true']",
+        );
+        if (openModal && openModal !== dialogRef.current) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
         if (tagDeleteOpen) {
