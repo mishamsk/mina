@@ -104,6 +104,7 @@ const expectTransactionFilterUrl = async (
     readonly amountMax?: string;
     readonly amountMin?: string;
     readonly categories?: readonly number[];
+    readonly classes?: readonly string[];
     readonly initiatedFrom?: string;
     readonly initiatedTo?: string;
     readonly members?: readonly number[];
@@ -129,6 +130,7 @@ const expectTransactionFilterUrl = async (
           .getAll("category")
           .map((value) => Number(value))
           .sort((left, right) => left - right),
+        classes: searchParams.getAll("class").sort(),
         members: searchParams
           .getAll("member")
           .map((value) => Number(value))
@@ -151,6 +153,7 @@ const expectTransactionFilterUrl = async (
       categories: [...(expected.categories ?? [])].sort(
         (left, right) => left - right,
       ),
+      classes: [...(expected.classes ?? [])].sort(),
       members: [...(expected.members ?? [])].sort(
         (left, right) => left - right,
       ),
@@ -165,6 +168,7 @@ const transactionRequestHasFilters = (
     readonly amountMax?: string;
     readonly amountMin?: string;
     readonly anchorDate?: string;
+    readonly classes?: readonly string[];
     readonly initiatedFrom?: string;
     readonly initiatedTo?: string;
     readonly limit?: string;
@@ -184,6 +188,8 @@ const transactionRequestHasFilters = (
     params.get("initiated_date_from") === (expected.initiatedFrom ?? null) &&
     params.get("initiated_date_to") === (expected.initiatedTo ?? null) &&
     (expected.limit === undefined || params.get("limit") === expected.limit) &&
+    JSON.stringify(params.getAll("transaction_class").sort()) ===
+      JSON.stringify([...(expected.classes ?? [])].sort()) &&
     JSON.stringify(params.getAll("posting_status").sort()) ===
       JSON.stringify([...(expected.statuses ?? [])].sort()) &&
     JSON.stringify(tags) ===
@@ -791,6 +797,143 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await expectTransactionFilterUrl(page, { pageSize: "25" });
   await expect(page.getByText("Tag Groceries")).toBeHidden();
   await expect(page.getByText("Amount 10-20")).toBeHidden();
+});
+
+test("transactions class toolbar filter owns class URL state", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `E2E class filter ${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const wallet = findByFqn(accounts, "cash:Wallet");
+  const merchant = findByFqn(accounts, "merchant:Books");
+  const joint = findByFqn(accounts, "checking:Chase:Joint");
+  const payroll = findByFqn(accounts, "income:AcmePayroll");
+  const books = findByFqn(categories, "Entertainment:Books");
+  const salary = findByFqn(categories, "Income:Salary");
+  const spendMemo = `${unique} spend`;
+  const incomeMemo = `${unique} income`;
+
+  const [spendResponse, incomeResponse] = await Promise.all([
+    page.request.post("/api/transactions/spend", {
+      data: {
+        amount: "12.34",
+        category_id: books.category_id,
+        counterparty_account_id: merchant.account_id,
+        currency: "USD",
+        funding_account_id: wallet.account_id,
+        initiated_date: "2026-05-31",
+        memo: spendMemo,
+      },
+    }),
+    page.request.post("/api/transactions/income", {
+      data: {
+        amount: "56.78",
+        category_id: salary.category_id,
+        currency: "USD",
+        destination_account_id: joint.account_id,
+        initiated_date: "2026-05-31",
+        memo: incomeMemo,
+        source_account_id: payroll.account_id,
+      },
+    }),
+  ]);
+  expect(spendResponse.ok()).toBe(true);
+  expect(incomeResponse.ok()).toBe(true);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await expect(
+    page.getByRole("row").filter({ hasText: spendMemo }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: incomeMemo }),
+  ).toBeVisible();
+
+  const classFilter = page.getByLabel("Class");
+  const spendRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        classes: ["spend"],
+        limit: "50",
+      })
+    );
+  });
+  await classFilter.selectOption("spend");
+  await spendRequest;
+  await expectTransactionFilterUrl(page, {
+    classes: ["spend"],
+    pageSize: "50",
+    q: unique,
+  });
+  await expect(
+    page.getByRole("row").filter({ hasText: spendMemo }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: incomeMemo }),
+  ).toBeHidden();
+
+  await classFilter.selectOption("all");
+  await expectTransactionFilterUrl(page, { pageSize: "50", q: unique });
+  await expect(
+    page.getByRole("row").filter({ hasText: spendMemo }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: incomeMemo }),
+  ).toBeVisible();
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}&class=income`,
+  );
+  await expect(classFilter).toHaveValue("income");
+  await expect(
+    page.getByRole("row").filter({ hasText: incomeMemo }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: spendMemo }),
+  ).toBeHidden();
+  await page.reload();
+  await expect(classFilter).toHaveValue("income");
+
+  await classFilter.selectOption("spend");
+  await expect(classFilter).toHaveValue("spend");
+  await page.goBack();
+  await expect(classFilter).toHaveValue("income");
+  await page.goForward();
+  await expect(classFilter).toHaveValue("spend");
+
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await expect(
+    page.getByRole("button", { exact: true, name: "Transaction class" }),
+  ).toHaveCount(0);
+
+  const multiClassRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      transactionRequestHasFilters(url, {
+        classes: ["spend", "income"],
+        limit: "50",
+      })
+    );
+  });
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}&class=spend&class=income`,
+  );
+  await multiClassRequest;
+  await expect(classFilter).toHaveValue("spend");
+  await expect(
+    page.getByRole("row").filter({ hasText: spendMemo }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: incomeMemo }),
+  ).toBeVisible();
 });
 
 test("transactions filter toolbar keeps a stable inline trigger geometry", async ({

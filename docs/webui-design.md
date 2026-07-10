@@ -162,7 +162,8 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Moving between pages keeps the current rows visible until the next page arrives — no skeleton flash or flicker for uncached pages (skeletons are for first load only).
 - The browser fills the available viewport height: the table body flexes and the pagination footer sits at a small, consistent inset from the viewport bottom, matching the sidebar's bottom-control inset so the two bottom edges align.
 - Shareable state: filters, search text, sort, and list position live in the URL (per `docs/frontend-architecture.md`). Detail pages are URL-addressable. Sidebar navigation returns to a page's last-used state.
-- Filter bar pattern: a free-text search input plus an "Add filter" menu producing removable typed filter chips. Filter dimensions: account, category, tag, member, amount range, date range (initiated/pending/posted), posting status, reconciliation status, transaction class.
+- Filter bar pattern: a free-text search input plus an "Add filter" menu producing removable typed filter chips. Filter dimensions: account, category, tag, member, amount range, date range (initiated/pending/posted), posting status, reconciliation status.
+- Transaction class is a primary classification: it filters from a standing toolbar dropdown beside search and date jump, not from the Add-filter menu; the dropdown owns the URL-backed class state.
 
 ### Inline editing — the uniformity rule
 

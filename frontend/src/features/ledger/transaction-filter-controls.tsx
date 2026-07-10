@@ -22,20 +22,18 @@ import {
 import type { TransactionFilters } from "@/models/transaction-filters";
 import {
   emptyTransactionFilters,
-  transactionClasses,
   transactionFilterDecimalPattern,
   transactionPostingStatuses,
 } from "@/models/transaction-filters";
 import type { LedgerLookupsSnapshot } from "@/store";
 
 import { EntityMultiPicker, type EntityOption } from "./entity-picker";
-import { postingStatusLabel, transactionClassLabel } from "./format";
+import { postingStatusLabel } from "./format";
 
 type EntityDimension = "account" | "category" | "tag" | "member";
-type EnumDimension = "status" | "class";
 type RangeDimension =
   "amount" | "amountUsd" | "initiated" | "pending" | "posted";
-type FilterDimension = EntityDimension | EnumDimension | RangeDimension;
+type FilterDimension = EntityDimension | "status" | RangeDimension;
 
 interface TransactionFilterControlsProps {
   readonly filters: TransactionFilters;
@@ -55,7 +53,6 @@ const dimensions: readonly DimensionDefinition[] = [
   { id: "tag", label: "Tag" },
   { id: "member", label: "Member" },
   { id: "status", label: "Posting status" },
-  { id: "class", label: "Transaction class" },
   { id: "amount", label: "Amount" },
   { id: "amountUsd", label: "Amount USD" },
   { id: "initiated", label: "Initiated date" },
@@ -141,7 +138,6 @@ const filterCount = (filters: TransactionFilters): number =>
   filters.tagIds.length +
   filters.memberIds.length +
   filters.statuses.length +
-  filters.classes.length +
   [
     rangeLabel("Amount", filters.amountMin, filters.amountMax),
     rangeLabel("Amount USD", filters.amountUsdMin, filters.amountUsdMax),
@@ -584,19 +580,6 @@ export const TransactionFilterControls = ({
       );
     }
 
-    if (selectedDimension === "class") {
-      return (
-        <CheckboxList
-          values={transactionClasses}
-          selectedValues={filters.classes}
-          labelFor={transactionClassLabel}
-          onChange={(classes) => {
-            updateFilters({ ...filters, classes });
-          }}
-        />
-      );
-    }
-
     if (selectedDimension === "amount") {
       return (
         <RangeEditor
@@ -854,20 +837,6 @@ export const TransactionFilterControls = ({
                   ...filters,
                   statuses: filters.statuses.filter(
                     (selectedStatus) => selectedStatus !== status,
-                  ),
-                });
-              }}
-            />
-          ))}
-          {filters.classes.map((transactionClass) => (
-            <FilterChip
-              key={`class-${transactionClass}`}
-              label={`Class ${transactionClassLabel(transactionClass)}`}
-              onRemove={() => {
-                updateFilters({
-                  ...filters,
-                  classes: filters.classes.filter(
-                    (selectedClass) => selectedClass !== transactionClass,
                   ),
                 });
               }}

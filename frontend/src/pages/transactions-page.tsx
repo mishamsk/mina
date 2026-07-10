@@ -14,6 +14,7 @@ import {
   readTransactionPageFromSearchParams,
   refreshTransactionPageAfterSave,
   TransactionBrowser,
+  transactionClassLabel,
   TransactionDetailPanel,
   TransactionFilterControls,
   transactionOffsetFromPage,
@@ -23,7 +24,10 @@ import {
   writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
-import type { TransactionFilters } from "@/models/transaction-filters";
+import {
+  transactionClasses,
+  type TransactionFilters,
+} from "@/models/transaction-filters";
 import {
   closeTransactionEntryPanel,
   getCommandPaletteSnapshot,
@@ -178,6 +182,18 @@ export const TransactionsPage = () => {
     },
     [cancelDateJump, setSearchParams],
   );
+  const setTransactionClassFilter = useCallback(
+    (value: string) => {
+      const transactionClass = transactionClasses.find(
+        (candidate) => candidate === value,
+      );
+      setTransactionFilters({
+        ...filters,
+        classes: transactionClass ? [transactionClass] : [],
+      });
+    },
+    [filters, setTransactionFilters],
+  );
   const addEntityFilter = useCallback(
     (kind: "category" | "member" | "tag", id: number) => {
       cancelDateJump();
@@ -315,6 +331,29 @@ export const TransactionsPage = () => {
                   void jumpToDate(event.currentTarget.value);
                 }}
               />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label
+                htmlFor="transactions-class"
+                className="font-heading text-xs font-semibold text-[var(--frame-muted)] uppercase"
+              >
+                Class
+              </label>
+              <select
+                id="transactions-class"
+                className="bg-card text-foreground h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                value={filters.classes[0] ?? "all"}
+                onChange={(event) => {
+                  setTransactionClassFilter(event.target.value);
+                }}
+              >
+                <option value="all">All classes</option>
+                {transactionClasses.map((transactionClass) => (
+                  <option key={transactionClass} value={transactionClass}>
+                    {transactionClassLabel(transactionClass)}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="mt-5 flex min-w-9 flex-1">
               <TransactionFilterControls
