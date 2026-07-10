@@ -1,12 +1,12 @@
 # Plan: Phase 2 frontend/UI completion slices — sequential sub-branch delivery (21 open Kata issues)
 
-Deliver 21 Phase 2 frontend/UI tasks: 16 audit-sized improvements plus five larger slices covering expanded command-palette transaction search, reference drill-down pages, recurring-occurrence review, and saved-transaction actions. The selector is open `phase-2` frontend issues plus directly related API issues that extend existing endpoint behavior without a data-model change or a new endpoint type; migrations and substantial backend semantic validation remain excluded. Deliver one Kata issue at a time as a Codex-implemented sub-branch of the main working branch, with the Codex session running this plan acting as operator: plan author, reviewer, integrator. This plan is self-contained; it deliberately inlines a modified (strictly sequential) version of the codex-goal-fleet workflow and does not depend on that skill.
+Deliver 21 Phase 2 frontend/UI tasks: 16 audit-sized improvements plus five larger slices covering expanded command-palette transaction search, reference drill-down pages, recurring-occurrence review, and saved-transaction actions. The selector is open `phase-2` frontend issues plus directly related API issues that extend existing endpoint behavior without a data-model change or a new endpoint type; migrations and substantial backend semantic validation remain excluded. Deliver one Kata issue at a time as a Codex-implemented sub-branch of the main working branch, with the Claude session running this plan acting as operator: plan author, reviewer, integrator. This plan is self-contained; it deliberately inlines a modified (strictly sequential) version of the codex-goal-fleet workflow and does not depend on that skill.
 
 ## Plan Context
 
 ### Roles and ground rules
 
-- Operator: the Codex session executing this plan. Authors sub-branch plans, launches and waits on implementor Codex sessions, reviews, merges, closes kata issues. Never edits implementation code — all code changes flow through implementor sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
+- Operator: the Claude session executing this plan. Authors sub-branch plans, launches and waits on implementor Codex sessions, reviews, merges, closes kata issues. Never edits implementation code — all code changes flow through implementor sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
 - Implementor Codex: the only implementor, headless, one session at a time, running `gpt-5.6-terra` with `high` reasoning effort.
 - Integration branch ("main working branch"): whatever branch the operator session is currently on when executing this plan. Never touch `main`.
 - Issue set: `hafw`, `cdd0`, `efrg`, `ja9z`, `0jg6`, `47f4`, `60tx`, `wy32`, `qwjb`, `cqft`, `0tvb`, `pj89`, `e1ke`, `r725`, `4fxe`, `np9z`, `m4ye`, `d608`, `sw33`, `e3fw`, and `ksw0`, selected from `kata list --status all --agent` under the selector above.
@@ -15,7 +15,7 @@ Deliver 21 Phase 2 frontend/UI tasks: 16 audit-sized improvements plus five larg
 
 - Strictly sequential: exactly one active sub-branch / Codex session at any time. Finish (merge or fail) the current task before starting the next.
 - Codex quota exhausted: stop, schedule a timed background wait until the stated reset time, relaunch once. Do not ask the user.
-- Operator (Codex) quota exhausted: stop and wait without asking.
+- Operator (Claude) quota exhausted: stop and wait without asking.
 - Review budget per task: at most ONE `just review-loop`, run by Codex from the initial implementation plan's Final Verification. If review-loop leaves unresolved comments, they fold into operator fix plans — never re-run review-loop.
 - After the Codex session: the operator runs the review below. Findings warrant at most TWO fix plans per task. Every fix plan MUST state "Do not run review-loop." in its Plan Context and omit review-loop from its Final Verification.
 - A task still failing after 2 fix plans: leave the sub-branch unmerged, mark the task failed with findings, then proceed only to a task that is still viable — skip any task that depends on the failed one, directly or transitively. If no viable tasks remain, stop the fleet entirely. Never merge a failing branch; never silently drop scope.
