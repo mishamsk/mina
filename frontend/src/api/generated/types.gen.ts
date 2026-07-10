@@ -541,6 +541,10 @@ export type HealthResponse = {
 export type Member = {
     member_id: number;
     name: string;
+    /**
+     * Populated in listMembers responses. True when the active member has no active dependent resources and can be tombstone-deleted.
+     */
+    deletable?: boolean;
     created_at: string;
     updated_at: string;
     tombstoned_at?: string | null;

@@ -523,6 +523,7 @@ func memberAPIResponse(member members.Member) openapi.Member {
 	return openapi.Member{
 		MemberId:     member.ID,
 		Name:         member.Name,
+		Deletable:    member.Deletable,
 		CreatedAt:    member.CreatedAt.UTC(),
 		UpdatedAt:    member.UpdatedAt.UTC(),
 		TombstonedAt: nullableTimestampTime(member.TombstonedAt),

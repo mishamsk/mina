@@ -1336,7 +1336,10 @@ type ManualSource string
 
 // Member defines model for Member.
 type Member struct {
-	CreatedAt    time.Time  `json:"created_at"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Deletable Populated in listMembers responses. True when the active member has no active dependent resources and can be tombstone-deleted.
+	Deletable    *bool      `json:"deletable,omitempty"`
 	MemberId     int64      `json:"member_id"`
 	Name         string     `json:"name"`
 	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`

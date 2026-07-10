@@ -3986,6 +3986,9 @@ components:
           format: int64
         name:
           type: string
+        deletable:
+          type: boolean
+          description: Populated in listMembers responses. True when the active member has no active dependent resources and can be tombstone-deleted.
         created_at:
           type: string
           format: date-time

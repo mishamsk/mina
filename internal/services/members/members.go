@@ -14,6 +14,7 @@ import (
 type Member struct {
 	ID           int64
 	Name         string
+	Deletable    *bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	TombstonedAt *time.Time
@@ -58,7 +59,7 @@ type Repository interface {
 	Get(context.Context, int64, bool) (Member, error)
 	List(context.Context, ListOptions) (services.PaginatedList[Member], error)
 	UpdateName(context.Context, int64, string) (Member, error)
-	ActiveUsage(context.Context, int64) (ActiveUsage, error)
+	ActiveUsage(context.Context, []int64) (map[int64]ActiveUsage, error)
 	Tombstone(context.Context, int64) error
 }
 
@@ -160,7 +161,15 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Me
 
 // List returns household members using default visibility rules unless explicitly overridden.
 func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Member], error) {
-	return s.repo.List(ctx, opts)
+	list, err := s.repo.List(ctx, opts)
+	if err != nil {
+		return services.PaginatedList[Member]{}, err
+	}
+	if err := s.populateDeleteability(ctx, list.Items); err != nil {
+		return services.PaginatedList[Member]{}, err
+	}
+
+	return list, nil
 }
 
 // UpdateName validates and updates a household member name.
@@ -194,7 +203,12 @@ func (s *Service) ActiveUsage(ctx context.Context, id int64) (ActiveUsage, error
 		return ActiveUsage{}, services.InvalidRequest("member_id must be positive")
 	}
 
-	return s.repo.ActiveUsage(ctx, id)
+	usageByID, err := s.repo.ActiveUsage(ctx, []int64{id})
+	if err != nil {
+		return ActiveUsage{}, err
+	}
+
+	return usageByID[id], nil
 }
 
 // Delete tombstones a household member.
@@ -209,11 +223,11 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		} else if err != nil {
 			return err
 		}
-		usage, err := s.repo.ActiveUsage(ctx, id)
+		usageByID, err := s.repo.ActiveUsage(ctx, []int64{id})
 		if err != nil {
 			return err
 		}
-		if usage.HasActiveDependents() {
+		if usageByID[id].HasActiveDependents() {
 			return services.Conflict("member is referenced by active resources")
 		}
 		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
@@ -226,6 +240,26 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return nil
 	}); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (s *Service) populateDeleteability(ctx context.Context, memberItems []Member) error {
+	activeIDs := make([]int64, 0, len(memberItems))
+	for _, member := range memberItems {
+		if member.TombstonedAt == nil {
+			activeIDs = append(activeIDs, member.ID)
+		}
+	}
+	usageByID, err := s.repo.ActiveUsage(ctx, activeIDs)
+	if err != nil {
+		return err
+	}
+	for index := range memberItems {
+		usage := usageByID[memberItems[index].ID]
+		deletable := memberItems[index].TombstonedAt == nil && !usage.HasActiveDependents()
+		memberItems[index].Deletable = &deletable
 	}
 
 	return nil

@@ -127,6 +127,34 @@ func TestMemberCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 }
 
+func TestMemberListReportsDeleteability(t *testing.T) {
+	client := newSharedClient(t)
+	clearMember := client.Scenario().Member("Clear Member")
+	usedRefs := client.Scenario().TransactionRefs()
+	client.Scenario().BalancedTransaction(usedRefs)
+	tombstonedMember := client.Scenario().Member("Tombstoned Member")
+
+	deleted, err := client.REST().DeleteMemberWithResponse(context.Background(), tombstonedMember.MemberId)
+	if err != nil {
+		t.Fatalf("delete tombstoned member request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete tombstoned member status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+
+	includeTombstoned := true
+	listed, err := client.REST().ListMembersWithResponse(context.Background(), &httpclient.ListMembersParams{IncludeTombstoned: &includeTombstoned})
+	if err != nil {
+		t.Fatalf("list members request: %v", err)
+	}
+	if listed.StatusCode() != http.StatusOK {
+		t.Fatalf("list members status = %d, want %d; body %s", listed.StatusCode(), http.StatusOK, listed.Body)
+	}
+	assertMemberDeletable(t, listed.JSON200.Members, clearMember.MemberId, true)
+	assertMemberDeletable(t, listed.JSON200.Members, usedRefs.MemberID, false)
+	assertMemberDeletable(t, listed.JSON200.Members, tombstonedMember.MemberId, false)
+}
+
 func TestMemberRejectsDuplicateActiveName(t *testing.T) {
 	client := newSharedClient(t)
 
@@ -257,4 +285,23 @@ func assertMemberIDs(t *testing.T, members []httpclient.Member, want []int64) {
 			t.Fatalf("member id at %d = %d, want %d; members = %+v", i, member.MemberId, want[i], members)
 		}
 	}
+}
+
+func assertMemberDeletable(t *testing.T, members []httpclient.Member, memberID int64, deletable bool) {
+	t.Helper()
+
+	for _, member := range members {
+		if member.MemberId != memberID {
+			continue
+		}
+		if member.Deletable == nil {
+			t.Fatalf("member %d deletable = nil, want %t", memberID, deletable)
+		}
+		if *member.Deletable != deletable {
+			t.Fatalf("member %d deletable = %t, want %t; member = %+v", memberID, *member.Deletable, deletable, member)
+		}
+		return
+	}
+
+	t.Fatalf("member %d not found in members = %+v", memberID, members)
 }

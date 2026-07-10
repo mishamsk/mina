@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Service instances own process-local, write-through member reference caches for active-reference validation.
+- List results own the optional deleteability capability; active-resource usage is the eligibility rule.
 
 ## Boundaries
 
