@@ -60,7 +60,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [x] Task 3: `efrg` — Restore internal scrolling and bottom inset on reference tables (frontend layout foundation across reference screens) — branch `efrg-reference-table-scrolling`
 - [x] Task 4: `ja9z` — Fix reference-table trailing action behavior (frontend shared-action foundation; precedes Tasks 5, 7, and 12) — branch `ja9z-reference-row-actions`
 - [x] Task 5: `0jg6` — Add supported edit and delete actions to member rows (frontend member actions; requires Task 4) — branch `0jg6-member-row-actions`
-- [ ] Task 6: `47f4` — Disable ineligible member deletion before confirmation (frontend API consumer; requires Tasks 1 and 5) — branch `47f4-disable-member-delete`
+- [x] Task 6: `47f4` — Disable ineligible member deletion before confirmation (frontend API consumer; requires Tasks 1 and 5) — branch `47f4-disable-member-delete`
 - [ ] Task 7: `60tx` — Reference pages: delete row actions driven by deleteability (parity with accounts) (frontend API consumer; requires Tasks 2 and 4; before setup, the operator commits the issue-required `docs/webui-design.md` §6 rule update on the main working branch) — branch `60tx-reference-delete-actions`
 - [ ] Task 8: `wy32` — Disable ineligible account deletion in the edit panel (frontend deleteability consumer using the existing Account contract) — branch `wy32-disable-account-delete`
 - [ ] Task 9: `qwjb` — Stabilize the transactions filter toolbar (frontend toolbar foundation; precedes Tasks 10 and 11) — branch `qwjb-stable-filter-toolbar`
