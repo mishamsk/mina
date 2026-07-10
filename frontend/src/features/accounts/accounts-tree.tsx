@@ -573,10 +573,13 @@ export const AccountsTree = ({
 
   return (
     <>
-      <div className="bg-card min-h-0 overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]">
+      <div
+        className="bg-card flex h-full min-h-0 flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+        data-testid="accounts-table-frame"
+      >
         <div
           ref={accountsTableScrollRef}
-          className="accounts-table-scroll max-h-full overflow-auto"
+          className="accounts-table-scroll min-h-0 flex-1 overflow-auto"
           data-testid="accounts-table-scroll"
           tabIndex={-1}
         >

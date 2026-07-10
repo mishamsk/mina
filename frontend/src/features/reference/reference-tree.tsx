@@ -313,9 +313,12 @@ export const ReferenceTree = <
   }
 
   return (
-    <div className="bg-card min-h-0 overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]">
+    <div
+      className="bg-card flex h-full min-h-0 flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+      data-testid="reference-table-frame"
+    >
       <div
-        className="reference-table-scroll max-h-full overflow-auto"
+        className="reference-table-scroll min-h-0 flex-1 overflow-auto"
         data-testid="reference-table-scroll"
         tabIndex={-1}
       >
