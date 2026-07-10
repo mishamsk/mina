@@ -52,6 +52,20 @@ interface TransactionListFixture {
   readonly transactions: readonly TransactionFixture[];
 }
 
+const formatLocalDate = (date: Date): string =>
+  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part, index) =>
+      index === 0 ? String(part) : String(part).padStart(2, "0"),
+    )
+    .join("-");
+
+const shiftLocalDate = (anchorDate: string, days: number): string => {
+  const [year = 0, month = 1, day = 1] = anchorDate.split("-").map(Number);
+  const localDate = new Date(year, month - 1, day);
+  localDate.setDate(localDate.getDate() + days);
+  return formatLocalDate(localDate);
+};
+
 const listFixtures = async <T>(
   page: Page,
   path: string,
@@ -496,7 +510,7 @@ test("transactions page uses server pagination controls", async ({ page }) => {
     });
   });
 
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { exact: true, name: "Next" }).click();
   await nextPageRequestStarted;
 
   try {
@@ -525,7 +539,7 @@ test("transactions page uses server pagination controls", async ({ page }) => {
     ),
   ).toBeLessThan(1);
 
-  await page.getByRole("button", { name: "Previous" }).click();
+  await page.getByRole("button", { exact: true, name: "Previous" }).click();
 
   await expect(page).toHaveURL(/page=1/);
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
@@ -947,12 +961,29 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
     .getByRole("heading", { name: "Transactions" })
     .locator("xpath=ancestor::header");
   const addFilterButton = page.getByRole("button", { name: "Add filter" });
+  const dateJumpInput = page.getByLabel("Go to day");
+  const previousDayButton = page.getByRole("button", {
+    name: "Previous day",
+  });
+  const nextDayButton = page.getByRole("button", { name: "Next day" });
   const initialTriggerBox = await addFilterButton.boundingBox();
   const initialToolbarBox = await toolbar.boundingBox();
+  const dateJumpInputBox = await dateJumpInput.boundingBox();
+  const previousDayButtonBox = await previousDayButton.boundingBox();
+  const nextDayButtonBox = await nextDayButton.boundingBox();
   expect(initialTriggerBox).not.toBeNull();
   expect(initialToolbarBox).not.toBeNull();
+  expect(dateJumpInputBox).not.toBeNull();
+  expect(previousDayButtonBox).not.toBeNull();
+  expect(nextDayButtonBox).not.toBeNull();
   expect(initialTriggerBox?.width).toBe(36);
   expect(initialTriggerBox?.height).toBe(36);
+  expect(previousDayButtonBox?.width).toBeGreaterThan(36);
+  expect(previousDayButtonBox?.height).toBe(36);
+  expect(nextDayButtonBox?.width).toBeGreaterThan(36);
+  expect(nextDayButtonBox?.height).toBe(36);
+  expect(previousDayButtonBox?.y).toBe(dateJumpInputBox?.y);
+  expect(nextDayButtonBox?.y).toBe(dateJumpInputBox?.y);
 
   await addFilterButton.focus();
   await page.keyboard.press("Enter");
@@ -1223,9 +1254,9 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
       );
     }),
   ).toHaveLength(0);
-  await expect(page.getByLabel("Go to day")).toHaveValue("");
+  await expect(page.getByLabel("Go to day")).toHaveValue(jumpDate);
 
-  await page.getByRole("button", { name: "Next" }).click();
+  await page.getByRole("button", { exact: true, name: "Next" }).click();
   await expectTransactionsPageUrl(page, landedPage + 1, 10);
   await expect(
     page.getByText(new RegExp(`Page ${landedPage + 1} of \\d+`)),
@@ -1247,6 +1278,113 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   await expect(
     page.getByText(new RegExp(`Page ${oldAnchorPage} of \\d+`)),
   ).toBeVisible();
+});
+
+test("transactions page steps adjacent date anchors", async ({ page }) => {
+  const anchorDate = "2026-05-01";
+  const previousDate = shiftLocalDate(anchorDate, -1);
+  const today = formatLocalDate(new Date());
+  const yesterday = shiftLocalDate(today, -1);
+  const tomorrow = shiftLocalDate(today, 1);
+
+  await page.goto("/transactions?page=1&pageSize=10");
+  const dateJump = page.getByLabel("Go to day");
+  const previousDayButton = page.getByRole("button", {
+    name: "Previous day",
+  });
+  const nextDayButton = page.getByRole("button", { name: "Next day" });
+
+  const anchorResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === anchorDate
+    );
+  });
+  await dateJump.fill(anchorDate);
+  await anchorResponse;
+
+  const previousResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === previousDate
+    );
+  });
+  await previousDayButton.focus();
+  await page.keyboard.press("Enter");
+  const previousPage = (await (
+    await previousResponse
+  ).json()) as TransactionListFixture;
+  const previousLandedPage = Math.floor(previousPage.offset / 10) + 1;
+  await expect(dateJump).toHaveValue(previousDate);
+  await expectTransactionsPageUrl(page, previousLandedPage, 10);
+  await expect(
+    page.getByText(previousPage.transactions[0]!.display_title).first(),
+  ).toBeVisible();
+
+  const nextResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === anchorDate
+    );
+  });
+  await nextDayButton.click();
+  const nextPage = (await (
+    await nextResponse
+  ).json()) as TransactionListFixture;
+  await expect(dateJump).toHaveValue(anchorDate);
+  await expectTransactionsPageUrl(
+    page,
+    Math.floor(nextPage.offset / 10) + 1,
+    10,
+  );
+
+  await page.goto("/transactions?page=1&pageSize=10");
+  await expect(dateJump).toHaveValue("");
+  const noAnchorResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === yesterday
+    );
+  });
+  await previousDayButton.click();
+  const noAnchorPage = (await (
+    await noAnchorResponse
+  ).json()) as TransactionListFixture;
+  await expect(dateJump).toHaveValue(yesterday);
+  await expectTransactionsPageUrl(
+    page,
+    Math.floor(noAnchorPage.offset / 10) + 1,
+    10,
+  );
+
+  const todayResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === today
+    );
+  });
+  await nextDayButton.focus();
+  await page.keyboard.press("Enter");
+  await todayResponse;
+  await expect(dateJump).toHaveValue(today);
+  await expect(nextDayButton).toBeEnabled();
+
+  const tomorrowResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === tomorrow
+    );
+  });
+  await nextDayButton.click();
+  await tomorrowResponse;
+  await expect(dateJump).toHaveValue(tomorrow);
+  await expect(nextDayButton).toBeEnabled();
 });
 
 test("transactions page collapses low-priority columns instead of scrolling horizontally", async ({
@@ -2239,7 +2377,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=10$/);
 });
 
-test("toolbar filter trigger closes transaction detail while opening popover", async ({
+test("toolbar filter trigger opens after transaction detail closes", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 760 });
@@ -2282,10 +2420,12 @@ test("toolbar filter trigger closes transaction detail while opening popover", a
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
 
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+
   await page.getByRole("button", { name: "Add filter" }).click();
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(popover).toBeVisible();
-  await expect(panel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
 
   await page.keyboard.press("Escape");

@@ -13,6 +13,25 @@ import { jumpToTransactionDatePage } from "./use-transactions-resource";
 
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 
+const formatLocalDate = (date: Date): string =>
+  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part, index) =>
+      index === 0
+        ? String(part).padStart(4, "0")
+        : String(part).padStart(2, "0"),
+    )
+    .join("-");
+
+const todayLocalDate = (): string => formatLocalDate(new Date());
+
+const shiftLocalDate = (anchorDate: string, days: -1 | 1): string => {
+  const [year = 0, month = 1, day = 1] = anchorDate.split("-").map(Number);
+  const localDate = new Date(0);
+  localDate.setFullYear(year, month - 1, day);
+  localDate.setDate(localDate.getDate() + days);
+  return formatLocalDate(localDate);
+};
+
 interface UseTransactionDateJumpOptions {
   readonly page: number;
   readonly pageSize: number;
@@ -64,7 +83,6 @@ export const useTransactionDateJump = ({
         }
 
         const landedPage = transactionPageFromOffset(result.offset, pageSize);
-        let dateJumpApplied = false;
         setSearchParams((current) => {
           const currentPage = readTransactionPageFromSearchParams(current);
           const currentFilterSignature = transactionFilterSignature(
@@ -82,12 +100,8 @@ export const useTransactionDateJump = ({
           const next = new URLSearchParams(current);
           next.set("page", String(landedPage));
           next.set("pageSize", String(pageSize));
-          dateJumpApplied = true;
           return next;
         });
-        if (dateJumpApplied) {
-          setDateJumpValue("");
-        }
       } finally {
         if (activeDateJumpIdRef.current === jumpId) {
           setDateJumpLoading(false);
@@ -104,10 +118,24 @@ export const useTransactionDateJump = ({
     ],
   );
 
+  const jumpToAdjacentDate = useCallback(
+    (days: -1 | 1) => {
+      if (dateJumpLoading) {
+        return;
+      }
+
+      const nextDate = shiftLocalDate(dateJumpValue || todayLocalDate(), days);
+      setDateJumpValue(nextDate);
+      void jumpToDate(nextDate);
+    },
+    [dateJumpLoading, dateJumpValue, jumpToDate],
+  );
+
   return {
     cancelDateJump,
     dateJumpLoading,
     dateJumpValue,
+    jumpToAdjacentDate,
     jumpToDate,
     setDateJumpValue,
   };

@@ -1,5 +1,5 @@
-import { Plus } from "pixelarticons/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Plus } from "pixelarticons/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
 
 import type { Transaction } from "@/api";
@@ -95,6 +95,7 @@ export const TransactionsPage = () => {
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
   const [rowActionsOverflowOpen, setRowActionsOverflowOpen] = useState(false);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | undefined>();
+  const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
   const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
   const filters = useMemo(
     () => readTransactionFiltersFromSearchParams(searchParams),
@@ -112,6 +113,7 @@ export const TransactionsPage = () => {
     cancelDateJump,
     dateJumpLoading,
     dateJumpValue,
+    jumpToAdjacentDate,
     jumpToDate,
     setDateJumpValue,
   } = useTransactionDateJump({
@@ -130,6 +132,15 @@ export const TransactionsPage = () => {
     lookups.loading ||
     (Boolean(transactions) && !lookups.snapshot);
   const errorMessage = pageResource.errorMessage ?? lookups.errorMessage;
+
+  useEffect(() => {
+    if (dateJumpLoading || !dateJumpFocusRestoreRef.current) {
+      return;
+    }
+
+    dateJumpFocusRestoreRef.current.focus();
+    dateJumpFocusRestoreRef.current = null;
+  }, [dateJumpLoading]);
 
   useEffect(() => {
     setLastTransactionsPageSearch(location.search);
@@ -311,26 +322,54 @@ export const TransactionsPage = () => {
               >
                 Go to day
               </label>
-              <input
-                id="transactions-date-jump"
-                type="date"
-                className="bg-card text-foreground h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)] aria-disabled:opacity-70"
-                value={dateJumpValue}
-                readOnly={dateJumpLoading}
-                aria-disabled={dateJumpLoading}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  setDateJumpValue(nextValue);
-                  void jumpToDate(nextValue);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") {
-                    return;
-                  }
-                  event.preventDefault();
-                  void jumpToDate(event.currentTarget.value);
-                }}
-              />
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  disabled={dateJumpLoading}
+                  onClick={(event) => {
+                    dateJumpFocusRestoreRef.current = event.currentTarget;
+                    jumpToAdjacentDate(-1);
+                  }}
+                >
+                  <ChevronLeft aria-hidden="true" />
+                  Previous day
+                </Button>
+                <input
+                  id="transactions-date-jump"
+                  type="date"
+                  className="bg-card text-foreground h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)] aria-disabled:opacity-70"
+                  value={dateJumpValue}
+                  readOnly={dateJumpLoading}
+                  aria-disabled={dateJumpLoading}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    setDateJumpValue(nextValue);
+                    void jumpToDate(nextValue);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") {
+                      return;
+                    }
+                    event.preventDefault();
+                    void jumpToDate(event.currentTarget.value);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  disabled={dateJumpLoading}
+                  onClick={(event) => {
+                    dateJumpFocusRestoreRef.current = event.currentTarget;
+                    jumpToAdjacentDate(1);
+                  }}
+                >
+                  <ChevronRight aria-hidden="true" />
+                  Next day
+                </Button>
+              </div>
             </div>
             <div className="flex flex-col gap-1">
               <label
