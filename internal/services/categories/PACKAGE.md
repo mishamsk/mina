@@ -10,6 +10,7 @@
 - Hidden active categories are valid references only when callers explicitly allow hidden references.
 - Category group hidden state is derived from active category leaves, including hidden leaves.
 - Category path hide/unhide targets active leaves at or under the path and invalidates the category reference cache.
+- List responses populate `deletable` from batched active-resource usage; tombstoned categories are never deletable, and DELETE uses the same dependency predicate.
 
 ## Boundaries
 

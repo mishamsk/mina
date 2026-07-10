@@ -2928,6 +2928,9 @@ components:
           $ref: "#/components/schemas/CategoryEconomicIntent"
         is_hidden:
           type: boolean
+        deletable:
+          type: boolean
+          description: Populated in listCategories responses. True when the active category has no active dependent resources and can be tombstone-deleted.
         parent_fqn:
           type: string
           nullable: true
@@ -4177,6 +4180,9 @@ components:
           type: string
         is_hidden:
           type: boolean
+        deletable:
+          type: boolean
+          description: Populated in listTags responses. True when the active tag has no active dependent resources and can be tombstone-deleted.
         parent_fqn:
           type: string
           nullable: true

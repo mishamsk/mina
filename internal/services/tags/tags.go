@@ -20,6 +20,7 @@ type Tag struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	TombstonedAt *time.Time
+	Deletable    *bool
 }
 
 // CreateInput contains fields for creating a tag.
@@ -70,7 +71,7 @@ type Repository interface {
 	UpdateHidden(context.Context, int64, bool) (Tag, error)
 	RestructureFQNs(context.Context, string, string) (int64, error)
 	SetHiddenByPath(context.Context, string, bool) error
-	ActiveUsage(context.Context, int64) (ActiveUsage, error)
+	ActiveUsage(context.Context, []int64) (map[int64]ActiveUsage, error)
 	Tombstone(context.Context, int64) error
 }
 
@@ -187,7 +188,15 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ta
 
 // List returns tags using default visibility rules unless explicitly overridden.
 func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Tag], error) {
-	return s.repo.List(ctx, opts)
+	list, err := s.repo.List(ctx, opts)
+	if err != nil {
+		return services.PaginatedList[Tag]{}, err
+	}
+	if err := s.populateDeleteability(ctx, list.Items); err != nil {
+		return services.PaginatedList[Tag]{}, err
+	}
+
+	return list, nil
 }
 
 // GroupStates derives implicit tag groups from active leaves.
@@ -356,7 +365,12 @@ func (s *Service) ActiveUsage(ctx context.Context, id int64) (ActiveUsage, error
 		return ActiveUsage{}, services.InvalidRequest("tag_id must be positive")
 	}
 
-	return s.repo.ActiveUsage(ctx, id)
+	usageByID, err := s.repo.ActiveUsage(ctx, []int64{id})
+	if err != nil {
+		return ActiveUsage{}, err
+	}
+
+	return usageByID[id], nil
 }
 
 // Delete tombstones a tag.
@@ -371,11 +385,11 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		} else if err != nil {
 			return err
 		}
-		usage, err := s.repo.ActiveUsage(ctx, id)
+		usageByID, err := s.repo.ActiveUsage(ctx, []int64{id})
 		if err != nil {
 			return err
 		}
-		if usage.HasActiveDependents() {
+		if usageByID[id].HasActiveDependents() {
 			return services.Conflict("tag is referenced by active resources")
 		}
 		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
@@ -388,6 +402,26 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return nil
 	}); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (s *Service) populateDeleteability(ctx context.Context, tagItems []Tag) error {
+	activeIDs := make([]int64, 0, len(tagItems))
+	for _, tag := range tagItems {
+		if tag.TombstonedAt == nil {
+			activeIDs = append(activeIDs, tag.ID)
+		}
+	}
+	usageByID, err := s.repo.ActiveUsage(ctx, activeIDs)
+	if err != nil {
+		return err
+	}
+	for index := range tagItems {
+		usage := usageByID[tagItems[index].ID]
+		deletable := tagItems[index].TombstonedAt == nil && !usage.HasActiveDependents()
+		tagItems[index].Deletable = &deletable
 	}
 
 	return nil

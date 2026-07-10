@@ -77,6 +77,95 @@ func TestCategorySetHiddenByPathIgnoresTombstonedLeaves(t *testing.T) {
 	assertSetCategoryHiddenStatus(t, client, "groupstate:Categories:Tombstone:Only", true, http.StatusNotFound, httpclient.APIErrorCodeNotFound)
 }
 
+func TestCategoryAndTagListsReportDeleteability(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+
+	clearCategory := scenario.Category("deleteability:Categories:Clear")
+	clearTag := scenario.Tag("deleteability:Tags:Clear")
+	journalRefs := scenario.TransactionRefs()
+	additionalJournalTag := scenario.Tag("deleteability:Tags:Journal:Additional")
+	journalTransaction := scenario.BalancedTransaction(journalRefs)
+	journalTags, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
+		RecordIds: []int64{journalTransaction.Records[0].RecordId},
+		AddTagIds: apptest.Int64SlicePtr(additionalJournalTag.TagId),
+	})
+	requireNoTransportError(t, "add second tag to journal record", err)
+	if journalTags.StatusCode() != http.StatusOK {
+		t.Fatalf("add second tag to journal record status = %d, want %d; body %s", journalTags.StatusCode(), http.StatusOK, journalTags.Body)
+	}
+	templateRefs := createGuardedTransactionTemplate(t, client)
+	recurringRefs := createRecurringDefinitionRefs(t, client, "DeleteabilityRecurring")
+	createRecurringDefinition(t, client, recurringDefinitionRequest("Deleteability:Recurring", recurringRefs, "-10.00", "10.00", intervalRule(1, "MONTH"), "2024-01-01"))
+	tombstonedCategory := scenario.Category("deleteability:Categories:Tombstoned")
+	tombstonedTag := scenario.Tag("deleteability:Tags:Tombstoned")
+	deleteCategory(t, client, tombstonedCategory.CategoryId)
+	deleteTag(t, client, tombstonedTag.TagId)
+	setCategoryHiddenByPath(t, client, "Food:Restaurants", true)
+	setTagHiddenByPath(t, client, "Trips:Local", true)
+
+	includeHidden := true
+	includeTombstoned := true
+	categories, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		IncludeHidden:     &includeHidden,
+		IncludeTombstoned: &includeTombstoned,
+	})
+	requireNoTransportError(t, "list categories for deleteability", err)
+	if categories.StatusCode() != http.StatusOK {
+		t.Fatalf("list categories for deleteability status = %d, want %d; body %s", categories.StatusCode(), http.StatusOK, categories.Body)
+	}
+	assertCategoryDeletable(t, categories.JSON200.Categories, clearCategory.CategoryId, true)
+	assertCategoryDeletable(t, categories.JSON200.Categories, journalRefs.CategoryID, false)
+	assertCategoryDeletable(t, categories.JSON200.Categories, templateRefs.CategoryID, false)
+	assertCategoryDeletable(t, categories.JSON200.Categories, recurringRefs.CategoryID, false)
+	assertCategoryDeletable(t, categories.JSON200.Categories, tombstonedCategory.CategoryId, false)
+
+	tags, err := client.REST().ListTagsWithResponse(context.Background(), &httpclient.ListTagsParams{
+		IncludeHidden:     &includeHidden,
+		IncludeTombstoned: &includeTombstoned,
+	})
+	requireNoTransportError(t, "list tags for deleteability", err)
+	if tags.StatusCode() != http.StatusOK {
+		t.Fatalf("list tags for deleteability status = %d, want %d; body %s", tags.StatusCode(), http.StatusOK, tags.Body)
+	}
+	assertTagDeletable(t, tags.JSON200.Tags, clearTag.TagId, true)
+	assertTagDeletable(t, tags.JSON200.Tags, journalRefs.TagID, false)
+	assertTagDeletable(t, tags.JSON200.Tags, additionalJournalTag.TagId, false)
+	assertTagDeletable(t, tags.JSON200.Tags, templateRefs.TagID, false)
+	assertTagDeletable(t, tags.JSON200.Tags, recurringRefs.TagID, false)
+	assertTagDeletable(t, tags.JSON200.Tags, tombstonedTag.TagId, false)
+}
+
+func TestCategoryAndTagListsReportAllTombstonedDeleteability(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	category := scenario.Category("deleteability:Categories:OnlyTombstoned")
+	tag := scenario.Tag("deleteability:Tags:OnlyTombstoned")
+	deleteCategory(t, client, category.CategoryId)
+	deleteTag(t, client, tag.TagId)
+
+	includeTombstoned := true
+	categories, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{IncludeTombstoned: &includeTombstoned})
+	requireNoTransportError(t, "list all tombstoned categories for deleteability", err)
+	if categories.StatusCode() != http.StatusOK {
+		t.Fatalf("list all tombstoned categories for deleteability status = %d, want %d; body %s", categories.StatusCode(), http.StatusOK, categories.Body)
+	}
+	if len(categories.JSON200.Categories) != 1 {
+		t.Fatalf("all tombstoned category count = %d, want 1; categories = %+v", len(categories.JSON200.Categories), categories.JSON200.Categories)
+	}
+	assertCategoryDeletable(t, categories.JSON200.Categories, category.CategoryId, false)
+
+	tags, err := client.REST().ListTagsWithResponse(context.Background(), &httpclient.ListTagsParams{IncludeTombstoned: &includeTombstoned})
+	requireNoTransportError(t, "list all tombstoned tags for deleteability", err)
+	if tags.StatusCode() != http.StatusOK {
+		t.Fatalf("list all tombstoned tags for deleteability status = %d, want %d; body %s", tags.StatusCode(), http.StatusOK, tags.Body)
+	}
+	if len(tags.JSON200.Tags) != 1 {
+		t.Fatalf("all tombstoned tag count = %d, want 1; tags = %+v", len(tags.JSON200.Tags), tags.JSON200.Tags)
+	}
+	assertTagDeletable(t, tags.JSON200.Tags, tag.TagId, false)
+}
+
 func TestTagGroupStatesAndSetHiddenByPath(t *testing.T) {
 	client := newSharedClient(t)
 
@@ -299,6 +388,40 @@ func assertSetHiddenErrorCode(t *testing.T, badRequest *httpclient.InvalidReques
 	default:
 		t.Fatalf("unsupported set hidden error status %d", status)
 	}
+}
+
+func assertCategoryDeletable(t *testing.T, categories []httpclient.Category, categoryID int64, deletable bool) {
+	t.Helper()
+	for _, category := range categories {
+		if category.CategoryId != categoryID {
+			continue
+		}
+		if category.Deletable == nil {
+			t.Fatalf("category %d deletable = nil", categoryID)
+		}
+		if *category.Deletable != deletable {
+			t.Fatalf("category %d deletable = %t, want %t; category = %+v", categoryID, *category.Deletable, deletable, category)
+		}
+		return
+	}
+	t.Fatalf("category %d not found in %+v", categoryID, categories)
+}
+
+func assertTagDeletable(t *testing.T, tags []httpclient.Tag, tagID int64, deletable bool) {
+	t.Helper()
+	for _, tag := range tags {
+		if tag.TagId != tagID {
+			continue
+		}
+		if tag.Deletable == nil {
+			t.Fatalf("tag %d deletable = nil", tagID)
+		}
+		if *tag.Deletable != deletable {
+			t.Fatalf("tag %d deletable = %t, want %t; tag = %+v", tagID, *tag.Deletable, deletable, tag)
+		}
+		return
+	}
+	t.Fatalf("tag %d not found in %+v", tagID, tags)
 }
 
 func assertGroupState(t *testing.T, groups []httpclient.GroupState, fqn string, parent *string, level int, hidden bool) {

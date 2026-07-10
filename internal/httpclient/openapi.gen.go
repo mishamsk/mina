@@ -968,8 +968,11 @@ type BulkUpdateRecordStatusRequest struct {
 
 // Category defines model for Category.
 type Category struct {
-	CategoryId     int64                  `json:"category_id"`
-	CreatedAt      time.Time              `json:"created_at"`
+	CategoryId int64     `json:"category_id"`
+	CreatedAt  time.Time `json:"created_at"`
+
+	// Deletable Populated in listCategories responses. True when the active category has no active dependent resources and can be tombstone-deleted.
+	Deletable      *bool                  `json:"deletable,omitempty"`
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
 	Fqn            string                 `json:"fqn"`
 	IsHidden       bool                   `json:"is_hidden"`
@@ -1527,7 +1530,10 @@ type Source string
 
 // Tag defines model for Tag.
 type Tag struct {
-	CreatedAt    time.Time  `json:"created_at"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Deletable Populated in listTags responses. True when the active tag has no active dependent resources and can be tombstone-deleted.
+	Deletable    *bool      `json:"deletable,omitempty"`
 	Fqn          string     `json:"fqn"`
 	IsHidden     bool       `json:"is_hidden"`
 	Level        int        `json:"level"`

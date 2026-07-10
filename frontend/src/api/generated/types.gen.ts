@@ -154,6 +154,10 @@ export type Category = {
     fqn: string;
     economic_intent: CategoryEconomicIntent;
     is_hidden: boolean;
+    /**
+     * Populated in listCategories responses. True when the active category has no active dependent resources and can be tombstone-deleted.
+     */
+    deletable?: boolean;
     parent_fqn: string | null;
     name: string;
     level: number;
@@ -619,6 +623,10 @@ export type Tag = {
     tag_id: number;
     fqn: string;
     is_hidden: boolean;
+    /**
+     * Populated in listTags responses. True when the active tag has no active dependent resources and can be tombstone-deleted.
+     */
+    deletable?: boolean;
     parent_fqn: string | null;
     name: string;
     level: number;

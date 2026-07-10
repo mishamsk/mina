@@ -52,6 +52,7 @@ type Category struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	TombstonedAt   *time.Time
+	Deletable      *bool
 }
 
 // CreateInput contains fields for creating a category.
@@ -105,7 +106,7 @@ type Repository interface {
 	UpdateHidden(context.Context, int64, bool) (Category, error)
 	RestructureFQNs(context.Context, string, string) (int64, error)
 	SetHiddenByPath(context.Context, string, bool) error
-	ActiveUsage(context.Context, int64) (ActiveUsage, error)
+	ActiveUsage(context.Context, []int64) (map[int64]ActiveUsage, error)
 	Tombstone(context.Context, int64) error
 }
 
@@ -231,7 +232,15 @@ func (s *Service) List(ctx context.Context, opts ListOptions) (services.Paginate
 		}
 	}
 
-	return s.repo.List(ctx, opts)
+	list, err := s.repo.List(ctx, opts)
+	if err != nil {
+		return services.PaginatedList[Category]{}, err
+	}
+	if err := s.populateDeleteability(ctx, list.Items); err != nil {
+		return services.PaginatedList[Category]{}, err
+	}
+
+	return list, nil
 }
 
 // GroupStates derives implicit category groups from active leaves.
@@ -400,7 +409,12 @@ func (s *Service) ActiveUsage(ctx context.Context, id int64) (ActiveUsage, error
 		return ActiveUsage{}, services.InvalidRequest("category_id must be positive")
 	}
 
-	return s.repo.ActiveUsage(ctx, id)
+	usageByID, err := s.repo.ActiveUsage(ctx, []int64{id})
+	if err != nil {
+		return ActiveUsage{}, err
+	}
+
+	return usageByID[id], nil
 }
 
 // Delete tombstones a category.
@@ -415,11 +429,11 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		} else if err != nil {
 			return err
 		}
-		usage, err := s.repo.ActiveUsage(ctx, id)
+		usageByID, err := s.repo.ActiveUsage(ctx, []int64{id})
 		if err != nil {
 			return err
 		}
-		if usage.HasActiveDependents() {
+		if usageByID[id].HasActiveDependents() {
 			return services.Conflict("category is referenced by active resources")
 		}
 		if err := s.repo.Tombstone(ctx, id); errors.Is(err, services.ErrNotFound) {
@@ -432,6 +446,26 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return nil
 	}); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (s *Service) populateDeleteability(ctx context.Context, categoryItems []Category) error {
+	activeIDs := make([]int64, 0, len(categoryItems))
+	for _, category := range categoryItems {
+		if category.TombstonedAt == nil {
+			activeIDs = append(activeIDs, category.ID)
+		}
+	}
+	usageByID, err := s.repo.ActiveUsage(ctx, activeIDs)
+	if err != nil {
+		return err
+	}
+	for index := range categoryItems {
+		usage := usageByID[categoryItems[index].ID]
+		deletable := categoryItems[index].TombstonedAt == nil && !usage.HasActiveDependents()
+		categoryItems[index].Deletable = &deletable
 	}
 
 	return nil

@@ -100,48 +100,171 @@ WHERE tombstoned_at IS NULL
 	return usageByID, nil
 }
 
-// ActiveUsage reports active resources that reference a category.
-func (s *CategoryStore) ActiveUsage(ctx context.Context, id int64) (categories.ActiveUsage, error) {
-	journalRecords, err := activeJournalRecordUsage(ctx, s.db, "category_id = ?", id)
-	if err != nil {
-		return categories.ActiveUsage{}, fmt.Errorf("check active category journal record usage: %w", err)
-	}
-	templateRecords, err := activeTransactionTemplateRecordUsage(ctx, s.db, "ttr.category_id = ?", id)
-	if err != nil {
-		return categories.ActiveUsage{}, fmt.Errorf("check active category transaction template usage: %w", err)
-	}
-	recurringRecords, err := activeRecurringDefinitionRecordUsage(ctx, s.db, "rdr.category_id = ?", id)
-	if err != nil {
-		return categories.ActiveUsage{}, fmt.Errorf("check active category recurring definition usage: %w", err)
+// ActiveUsage reports active resources that reference categories.
+func (s *CategoryStore) ActiveUsage(ctx context.Context, ids []int64) (map[int64]categories.ActiveUsage, error) {
+	if len(ids) == 0 {
+		return map[int64]categories.ActiveUsage{}, nil
 	}
 
-	return categories.ActiveUsage{
-		JournalRecords:             journalRecords,
-		TransactionTemplateRecords: templateRecords,
-		RecurringDefinitionRecords: recurringRecords,
-	}, nil
+	placeholderList := placeholders(len(ids))
+	args := make([]any, 0, len(ids)*3)
+	args = append(args, int64Args(ids)...)
+	args = append(args, int64Args(ids)...)
+	args = append(args, int64Args(ids)...)
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`SELECT jr.category_id AS category_id, 'journal_records' AS source
+FROM `+s.db.accountingName("journal_record")+` jr
+JOIN `+s.db.accountingName("transaction")+` t
+  ON t.transaction_id = jr.transaction_id
+WHERE jr.tombstoned_at IS NULL
+  AND t.tombstoned_at IS NULL
+  AND jr.category_id IN (`+placeholderList+`)
+UNION
+SELECT ttr.category_id AS category_id, 'transaction_template_records' AS source
+FROM `+s.db.accountingName("transaction_template_record")+` ttr
+JOIN `+s.db.accountingName("transaction_template")+` tt
+  ON tt.transaction_template_id = ttr.transaction_template_id
+WHERE ttr.tombstoned_at IS NULL
+  AND tt.tombstoned_at IS NULL
+  AND ttr.category_id IN (`+placeholderList+`)
+UNION
+SELECT rdr.category_id AS category_id, 'recurring_definition_records' AS source
+FROM `+s.db.accountingName("recurring_definition_record")+` rdr
+JOIN `+s.db.accountingName("recurring_definition")+` rd
+  ON rd.recurring_definition_id = rdr.recurring_definition_id
+WHERE rdr.tombstoned_at IS NULL
+  AND rd.tombstoned_at IS NULL
+  AND rdr.category_id IN (`+placeholderList+`)`,
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list active category usage: %w", err)
+	}
+
+	usageByID := map[int64]categories.ActiveUsage{}
+	for rows.Next() {
+		var id int64
+		var source string
+		if err := rows.Scan(&id, &source); err != nil {
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("scan active category usage: %w; close rows: %w", err, closeErr)
+			}
+			return nil, fmt.Errorf("scan active category usage: %w", err)
+		}
+
+		usage := usageByID[id]
+		switch source {
+		case "journal_records":
+			usage.JournalRecords = true
+		case "transaction_template_records":
+			usage.TransactionTemplateRecords = true
+		case "recurring_definition_records":
+			usage.RecurringDefinitionRecords = true
+		default:
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("scan active category usage source %q; close rows: %w", source, closeErr)
+			}
+			return nil, fmt.Errorf("scan active category usage source %q", source)
+		}
+		usageByID[id] = usage
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate active category usage: %w; close rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate active category usage: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close active category usage rows: %w", err)
+	}
+
+	return usageByID, nil
 }
 
-// ActiveUsage reports active resources that reference a tag.
-func (s *TagStore) ActiveUsage(ctx context.Context, id int64) (tags.ActiveUsage, error) {
-	journalRecords, err := activeJournalRecordUsage(ctx, s.db, "list_contains(tag_ids, ?)", id)
-	if err != nil {
-		return tags.ActiveUsage{}, fmt.Errorf("check active tag journal record usage: %w", err)
-	}
-	templateRecords, err := activeTransactionTemplateRecordUsage(ctx, s.db, "list_contains(ttr.tag_ids, ?)", id)
-	if err != nil {
-		return tags.ActiveUsage{}, fmt.Errorf("check active tag transaction template usage: %w", err)
-	}
-	recurringRecords, err := activeRecurringDefinitionRecordUsage(ctx, s.db, "list_contains(rdr.tag_ids, ?)", id)
-	if err != nil {
-		return tags.ActiveUsage{}, fmt.Errorf("check active tag recurring definition usage: %w", err)
+// ActiveUsage reports active resources that reference tags.
+func (s *TagStore) ActiveUsage(ctx context.Context, ids []int64) (map[int64]tags.ActiveUsage, error) {
+	if len(ids) == 0 {
+		return map[int64]tags.ActiveUsage{}, nil
 	}
 
-	return tags.ActiveUsage{
-		JournalRecords:             journalRecords,
-		TransactionTemplateRecords: templateRecords,
-		RecurringDefinitionRecords: recurringRecords,
-	}, nil
+	placeholderList := placeholders(len(ids))
+	args := make([]any, 0, len(ids)*3)
+	args = append(args, int64Args(ids)...)
+	args = append(args, int64Args(ids)...)
+	args = append(args, int64Args(ids)...)
+	rows, err := s.db.query().QueryContext(
+		ctx,
+		`SELECT tag.tag_id AS tag_id, 'journal_records' AS source
+FROM `+s.db.accountingName("journal_record")+` jr
+JOIN `+s.db.accountingName("transaction")+` t
+  ON t.transaction_id = jr.transaction_id
+CROSS JOIN UNNEST(jr.tag_ids) AS tag(tag_id)
+WHERE jr.tombstoned_at IS NULL
+  AND t.tombstoned_at IS NULL
+  AND tag.tag_id IN (`+placeholderList+`)
+UNION
+SELECT tag.tag_id AS tag_id, 'transaction_template_records' AS source
+FROM `+s.db.accountingName("transaction_template_record")+` ttr
+JOIN `+s.db.accountingName("transaction_template")+` tt
+  ON tt.transaction_template_id = ttr.transaction_template_id
+CROSS JOIN UNNEST(ttr.tag_ids) AS tag(tag_id)
+WHERE ttr.tombstoned_at IS NULL
+  AND tt.tombstoned_at IS NULL
+  AND tag.tag_id IN (`+placeholderList+`)
+UNION
+SELECT tag.tag_id AS tag_id, 'recurring_definition_records' AS source
+FROM `+s.db.accountingName("recurring_definition_record")+` rdr
+JOIN `+s.db.accountingName("recurring_definition")+` rd
+  ON rd.recurring_definition_id = rdr.recurring_definition_id
+CROSS JOIN UNNEST(rdr.tag_ids) AS tag(tag_id)
+WHERE rdr.tombstoned_at IS NULL
+  AND rd.tombstoned_at IS NULL
+  AND tag.tag_id IN (`+placeholderList+`)`,
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list active tag usage: %w", err)
+	}
+
+	usageByID := map[int64]tags.ActiveUsage{}
+	for rows.Next() {
+		var id int64
+		var source string
+		if err := rows.Scan(&id, &source); err != nil {
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("scan active tag usage: %w; close rows: %w", err, closeErr)
+			}
+			return nil, fmt.Errorf("scan active tag usage: %w", err)
+		}
+
+		usage := usageByID[id]
+		switch source {
+		case "journal_records":
+			usage.JournalRecords = true
+		case "transaction_template_records":
+			usage.TransactionTemplateRecords = true
+		case "recurring_definition_records":
+			usage.RecurringDefinitionRecords = true
+		default:
+			if closeErr := rows.Close(); closeErr != nil {
+				return nil, fmt.Errorf("scan active tag usage source %q; close rows: %w", source, closeErr)
+			}
+			return nil, fmt.Errorf("scan active tag usage source %q", source)
+		}
+		usageByID[id] = usage
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate active tag usage: %w; close rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate active tag usage: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close active tag usage rows: %w", err)
+	}
+
+	return usageByID, nil
 }
 
 // ActiveUsage reports active resources that reference household members.
@@ -224,67 +347,4 @@ WHERE rdr.tombstoned_at IS NULL
 	}
 
 	return usageByID, nil
-}
-
-func activeJournalRecordUsage(ctx context.Context, db *AppDB, predicate string, args ...any) (bool, error) {
-	return scanExists(
-		ctx,
-		db,
-		`SELECT EXISTS (
-SELECT 1
-FROM `+db.accountingName("journal_record")+` jr
-JOIN `+db.accountingName("transaction")+` t
-  ON t.transaction_id = jr.transaction_id
-WHERE jr.tombstoned_at IS NULL
-  AND t.tombstoned_at IS NULL
-  AND `+predicate+`
-LIMIT 1
-)`,
-		args...,
-	)
-}
-
-func activeTransactionTemplateRecordUsage(ctx context.Context, db *AppDB, predicate string, args ...any) (bool, error) {
-	return scanExists(
-		ctx,
-		db,
-		`SELECT EXISTS (
-SELECT 1
-FROM `+db.accountingName("transaction_template_record")+` ttr
-JOIN `+db.accountingName("transaction_template")+` tt
-  ON tt.transaction_template_id = ttr.transaction_template_id
-WHERE ttr.tombstoned_at IS NULL
-  AND tt.tombstoned_at IS NULL
-  AND `+predicate+`
-LIMIT 1
-)`,
-		args...,
-	)
-}
-
-func activeRecurringDefinitionRecordUsage(ctx context.Context, db *AppDB, predicate string, args ...any) (bool, error) {
-	return scanExists(
-		ctx,
-		db,
-		`SELECT EXISTS (
-SELECT 1
-FROM `+db.accountingName("recurring_definition_record")+` rdr
-JOIN `+db.accountingName("recurring_definition")+` rd
-  ON rd.recurring_definition_id = rdr.recurring_definition_id
-WHERE rdr.tombstoned_at IS NULL
-  AND rd.tombstoned_at IS NULL
-  AND `+predicate+`
-LIMIT 1
-)`,
-		args...,
-	)
-}
-
-func scanExists(ctx context.Context, db *AppDB, query string, args ...any) (bool, error) {
-	var exists bool
-	if err := db.query().QueryRowContext(ctx, query, args...).Scan(&exists); err != nil {
-		return false, err
-	}
-
-	return exists, nil
 }

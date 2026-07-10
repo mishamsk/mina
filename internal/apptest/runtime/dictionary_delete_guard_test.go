@@ -136,6 +136,51 @@ func TestDictionaryDeleteBlocksActiveTransactionTemplateReferences(t *testing.T)
 	})
 }
 
+func TestCategoryAndTagDeleteBlockActiveRecurringDefinitionReferences(t *testing.T) {
+	t.Run("category", func(t *testing.T) {
+		client := newSharedClient(t)
+		refs := createRecurringDefinitionRefs(t, client, "RecurringDeleteGuardCategory")
+		createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringDeleteGuard:Category", refs, "-10.00", "10.00", intervalRule(1, "MONTH"), "2024-01-01"))
+
+		response, err := client.REST().DeleteCategoryWithResponse(context.Background(), refs.CategoryID)
+		if err != nil {
+			t.Fatalf("delete category request: %v", err)
+		}
+		assertDeleteConflict(t, "delete category", response.StatusCode(), response.Body, response.JSON409, "category is referenced by active resources")
+		assertCategoryActive(t, client, refs.CategoryID)
+	})
+
+	t.Run("tag", func(t *testing.T) {
+		client := newSharedClient(t)
+		refs := createRecurringDefinitionRefs(t, client, "RecurringDeleteGuardTag")
+		createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringDeleteGuard:Tag", refs, "-10.00", "10.00", intervalRule(1, "MONTH"), "2024-01-01"))
+
+		response, err := client.REST().DeleteTagWithResponse(context.Background(), refs.TagID)
+		if err != nil {
+			t.Fatalf("delete tag request: %v", err)
+		}
+		assertDeleteConflict(t, "delete tag", response.StatusCode(), response.Body, response.JSON409, "tag is referenced by active resources")
+		assertTagActive(t, client, refs.TagID)
+	})
+}
+
+func TestCategoryAndTagDeleteAllowTombstonedRecurringDefinitionReferences(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createRecurringDefinitionRefs(t, client, "TombstonedRecurringDeleteGuard")
+	definition := createRecurringDefinition(t, client, recurringDefinitionRequest("TombstonedRecurringDeleteGuard:Definition", refs, "-10.00", "10.00", intervalRule(1, "MONTH"), "2024-01-01"))
+
+	deleted, err := client.REST().DeleteRecurringDefinitionWithResponse(context.Background(), definition.JSON201.RecurringDefinitionId)
+	if err != nil {
+		t.Fatalf("delete recurring definition request: %v", err)
+	}
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete recurring definition status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+
+	deleteCategory(t, client, refs.CategoryID)
+	deleteTag(t, client, refs.TagID)
+}
+
 func TestDictionaryDeleteAllowsTombstonedTransactionReferences(t *testing.T) {
 	client := newSharedClient(t)
 	refs := client.Scenario().TransactionRefs()
