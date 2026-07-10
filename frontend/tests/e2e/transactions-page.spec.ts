@@ -793,6 +793,73 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await expect(page.getByText("Amount 10-20")).toBeHidden();
 });
 
+test("transactions filter toolbar keeps a stable inline trigger geometry", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 760 });
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const toolbar = page
+    .getByRole("heading", { name: "Transactions" })
+    .locator("xpath=ancestor::header");
+  const addFilterButton = page.getByRole("button", { name: "Add filter" });
+  const initialTriggerBox = await addFilterButton.boundingBox();
+  const initialToolbarBox = await toolbar.boundingBox();
+  expect(initialTriggerBox).not.toBeNull();
+  expect(initialToolbarBox).not.toBeNull();
+  expect(initialTriggerBox?.width).toBe(36);
+  expect(initialTriggerBox?.height).toBe(36);
+
+  await addFilterButton.focus();
+  await page.keyboard.press("Enter");
+  const statusDimension = page.getByRole("button", {
+    exact: true,
+    name: "Posting status",
+  });
+  await statusDimension.focus();
+  await page.keyboard.press("Enter");
+  const pendingCheckbox = page.getByRole("checkbox", { name: "Pending" });
+  await pendingCheckbox.focus();
+  await page.keyboard.press("Space");
+
+  const statusChip = page.getByText("Status Pending", { exact: true });
+  await expect(statusChip).toBeVisible();
+  const triggerWithChipBox = await addFilterButton.boundingBox();
+  const chipBox = await statusChip.boundingBox();
+  const toolbarWithChipBox = await toolbar.boundingBox();
+  expect(triggerWithChipBox).not.toBeNull();
+  expect(chipBox).not.toBeNull();
+  expect(toolbarWithChipBox).not.toBeNull();
+  expect(triggerWithChipBox?.x).toBe(initialTriggerBox?.x);
+  expect(triggerWithChipBox?.y).toBe(initialTriggerBox?.y);
+  expect(toolbarWithChipBox?.height).toBe(initialToolbarBox?.height);
+  expect(chipBox?.x ?? 0).toBeGreaterThan(
+    (triggerWithChipBox?.x ?? 0) + (triggerWithChipBox?.width ?? 0),
+  );
+  expect(
+    Math.abs(
+      (chipBox?.y ?? 0) +
+        (chipBox?.height ?? 0) / 2 -
+        ((triggerWithChipBox?.y ?? 0) + (triggerWithChipBox?.height ?? 0) / 2),
+    ),
+  ).toBeLessThan(1);
+
+  const removeStatusButton = page.getByRole("button", {
+    name: "Remove Status Pending",
+  });
+  await removeStatusButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(statusChip).toBeHidden();
+  const finalTriggerBox = await addFilterButton.boundingBox();
+  const finalToolbarBox = await toolbar.boundingBox();
+  expect(finalTriggerBox).not.toBeNull();
+  expect(finalToolbarBox).not.toBeNull();
+  expect(finalTriggerBox?.x).toBe(initialTriggerBox?.x);
+  expect(finalTriggerBox?.y).toBe(initialTriggerBox?.y);
+  expect(finalToolbarBox?.height).toBe(initialToolbarBox?.height);
+});
+
 test("transaction entity chips add filters in place", async ({
   page,
 }, testInfo) => {

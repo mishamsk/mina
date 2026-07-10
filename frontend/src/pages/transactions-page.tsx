@@ -275,7 +275,7 @@ export const TransactionsPage = () => {
           </Button>
         }
         toolbar={
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-start gap-3">
             <div className="flex min-w-[16rem] flex-col gap-1">
               <label
                 htmlFor="transactions-search"
@@ -316,12 +316,14 @@ export const TransactionsPage = () => {
                 }}
               />
             </div>
-            <TransactionFilterControls
-              filters={filters}
-              lookups={lookups.snapshot}
-              onChange={setTransactionFilters}
-              onOpenChange={setFilterPopoverOpen}
-            />
+            <div className="mt-5 flex min-w-9 flex-1">
+              <TransactionFilterControls
+                filters={filters}
+                lookups={lookups.snapshot}
+                onChange={setTransactionFilters}
+                onOpenChange={setFilterPopoverOpen}
+              />
+            </div>
           </div>
         }
       />

@@ -2,6 +2,10 @@ import { Close, EyeOff, Filter } from "pixelarticons/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Account, Category, Member, Tag } from "@/api";
+import {
+  focusWithoutTooltip,
+  Tooltip as AppTooltip,
+} from "@/components/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -339,6 +343,8 @@ export const TransactionFilterControls = ({
   onChange,
   onOpenChange,
 }: TransactionFilterControlsProps) => {
+  const addFilterTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreAddFilterTriggerFocusRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [selectedDimension, setSelectedDimension] = useState<FilterDimension>();
   const [includeHidden, setIncludeHidden] = useState<
@@ -681,7 +687,7 @@ export const TransactionFilterControls = ({
   )?.label;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-9 flex-1 flex-wrap items-center gap-2">
       <Popover
         open={open}
         onOpenChange={(nextOpen) => {
@@ -692,18 +698,35 @@ export const TransactionFilterControls = ({
           }
         }}
       >
-        <PopoverTrigger asChild>
-          <Button type="button" variant="outline">
-            <Filter aria-hidden="true" />
-            Add filter
-          </Button>
-        </PopoverTrigger>
+        <AppTooltip asChild label="Add filter">
+          <PopoverTrigger asChild>
+            <Button
+              ref={addFilterTriggerRef}
+              type="button"
+              variant="outline"
+              size="icon-lg"
+              aria-label="Add filter"
+            >
+              <Filter aria-hidden="true" />
+            </Button>
+          </PopoverTrigger>
+        </AppTooltip>
         <PopoverContent
+          onCloseAutoFocus={(event) => {
+            if (!restoreAddFilterTriggerFocusRef.current) {
+              return;
+            }
+
+            restoreAddFilterTriggerFocusRef.current = false;
+            event.preventDefault();
+            focusWithoutTooltip(addFilterTriggerRef.current);
+          }}
           onEscapeKeyDown={(event) => {
             event.preventDefault();
             if (entityPickerOpen) {
               return;
             }
+            restoreAddFilterTriggerFocusRef.current = true;
             setOpen(false);
             onOpenChange?.(false);
             selectDimension(undefined);
@@ -738,7 +761,7 @@ export const TransactionFilterControls = ({
       </Popover>
       {activeFilterCount > 0 ? (
         <div
-          className="flex flex-wrap items-center gap-2"
+          className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
           aria-label="Active transaction filters"
         >
           {filters.accountIds.map((accountId) => {
