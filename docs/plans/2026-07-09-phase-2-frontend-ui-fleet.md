@@ -55,8 +55,8 @@ Per-task checklist — every task below runs the full per-task workflow; tick a 
 
 Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect the stated dependencies; otherwise run in the listed order.
 
-- [ ] Task 1: `hafw` — Expose member delete eligibility through the API (API contract; small extension to existing Member responses; enables Task 6) — branch `hafw-member-delete-eligibility`
-- [ ] Task 2: `cdd0` — Categories/tags listings expose deleteability (parity with accounts) (API contract; completed external blocker `n1tb` is satisfied; small extension to existing list responses; enables Task 7) — branch `cdd0-reference-deleteability-api`
+- [x] Task 1: `hafw` — Expose member delete eligibility through the API (API contract; small extension to existing Member responses; enables Task 6) — branch `hafw-member-delete-eligibility`
+- [x] Task 2: `cdd0` — Categories/tags listings expose deleteability (parity with accounts) (API contract; completed external blocker `n1tb` is satisfied; small extension to existing list responses; enables Task 7) — branch `cdd0-reference-deleteability-api`
 - [ ] Task 3: `efrg` — Restore internal scrolling and bottom inset on reference tables (frontend layout foundation across reference screens) — branch `efrg-reference-table-scrolling`
 - [ ] Task 4: `ja9z` — Fix reference-table trailing action behavior (frontend shared-action foundation; precedes Tasks 5, 7, and 12) — branch `ja9z-reference-row-actions`
 - [ ] Task 5: `0jg6` — Add supported edit and delete actions to member rows (frontend member actions; requires Task 4) — branch `0jg6-member-row-actions`
