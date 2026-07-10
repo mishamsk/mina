@@ -249,7 +249,7 @@
   }
 
   .transactions-table .transactions-description-column {
-    width: 27%;
+    width: 26%;
   }
 
   .transactions-table .transactions-category-column {
@@ -265,11 +265,11 @@
   }
 
   .transactions-table .transactions-amount-column {
-    width: 14%;
+    width: 13%;
   }
 
   .transactions-table .transactions-actions-column {
-    width: 5%;
+    width: 7%;
   }
 
   @container transactions-table (max-width: 1120px) {
@@ -301,11 +301,11 @@
     }
 
     .transactions-table .transactions-amount-column {
-      width: 24%;
+      width: 22%;
     }
 
     .transactions-table .transactions-actions-column {
-      width: 6%;
+      width: 8%;
     }
   }
 
@@ -338,15 +338,15 @@
     }
 
     .transactions-table .transactions-amount-column {
-      width: 28%;
+      width: 25%;
     }
 
     .transactions-table .transactions-actions-column {
-      width: 6%;
+      width: 9%;
     }
   }
 
-  @container transactions-table (max-width: 820px) {
+  @container transactions-table (max-width: 860px) {
     .transactions-table .row-actions-buttons {
       display: none !important;
     }

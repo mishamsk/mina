@@ -1,4 +1,10 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import {
+  expect,
+  type Locator,
+  type Page,
+  type Route,
+  test,
+} from "@playwright/test";
 
 interface AccountFixture {
   readonly account_id: number;
@@ -1923,15 +1929,29 @@ test("transactions page help and leaf category chips", async ({ page }) => {
     .locator("td")
     .nth(8)
     .getByRole("button", { name: "Open transaction detail" });
+  const deleteButton = simpleSpendRow
+    .locator("td")
+    .nth(8)
+    .getByRole("button", { name: "Delete transaction" });
   await expect
     .poll(() =>
       openDetailButton.evaluate((button) => getComputedStyle(button).opacity),
+    )
+    .toBe("0");
+  await expect
+    .poll(() =>
+      deleteButton.evaluate((button) => getComputedStyle(button).opacity),
     )
     .toBe("0");
   await simpleSpendRow.hover();
   await expect
     .poll(() =>
       openDetailButton.evaluate((button) => getComputedStyle(button).opacity),
+    )
+    .toBe("1");
+  await expect
+    .poll(() =>
+      deleteButton.evaluate((button) => getComputedStyle(button).opacity),
     )
     .toBe("1");
   await page.mouse.move(0, 0);
@@ -1948,6 +1968,19 @@ test("transactions page help and leaf category chips", async ({ page }) => {
   await expect(openDetailTooltip).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(openDetailTooltip).toBeHidden();
+  await deleteButton.focus();
+  await expect(deleteButton).toBeFocused();
+  await expect
+    .poll(() =>
+      deleteButton.evaluate((button) => getComputedStyle(button).opacity),
+    )
+    .toBe("1");
+  const deleteTooltip = page
+    .getByRole("tooltip")
+    .filter({ hasText: "Delete transaction" });
+  await expect(deleteTooltip).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(deleteTooltip).toBeHidden();
 });
 
 test("transactions line composition uses compact dates and single-line leaf tags", async ({
@@ -2645,6 +2678,124 @@ test("transaction detail delete confirms, tombstones, and refreshes the row", as
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeHidden();
   expect(consoleErrors).toEqual([]);
   expect(failedTransactionRequests).toEqual([]);
+});
+
+test("transaction row quick-delete confirms, handles errors, and preserves row behavior", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E quick delete ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "14.56",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-03",
+      memo,
+    },
+  });
+  expect(spendResponse.ok()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const row = page.locator("tbody > tr[aria-expanded]").filter({
+    hasText: memo,
+  });
+  await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+
+  const openDetailButton = row.getByRole("button", {
+    name: "Open transaction detail",
+  });
+  await openDetailButton.click();
+  await expect(
+    page.getByRole("dialog", { name: transaction.display_title }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+
+  const deleteButton = row.getByRole("button", { name: "Delete transaction" });
+  await deleteButton.click();
+  const confirmDialog = page.getByRole("alertdialog", {
+    name: "Delete transaction",
+  });
+  await expect(confirmDialog).toBeVisible();
+  await expect(
+    confirmDialog.getByText(transaction.display_title),
+  ).toBeVisible();
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await confirmDialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirmDialog).toBeHidden();
+  await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+  await expect(deleteButton).toBeFocused();
+
+  const deleteUrlPattern = `**/api/transactions/${transaction.transaction_id}`;
+  let failNextDelete = true;
+  const failDeleteRoute = async (route: Route) => {
+    if (route.request().method() === "DELETE" && failNextDelete) {
+      failNextDelete = false;
+      await route.fulfill({
+        contentType: "application/json",
+        status: 409,
+        body: JSON.stringify({
+          error: {
+            code: "conflict",
+            message: "Mock quick delete failure.",
+          },
+        }),
+      });
+      return;
+    }
+    await route.fallback();
+  };
+  await page.route(deleteUrlPattern, failDeleteRoute);
+
+  await deleteButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(confirmDialog).toBeVisible();
+  await confirmDialog
+    .getByRole("button", { name: "Delete transaction" })
+    .click();
+  await expect(confirmDialog.getByRole("alert")).toContainText(
+    "Mock quick delete failure.",
+  );
+  await expect(confirmDialog).toBeVisible();
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+  await page.unroute(deleteUrlPattern, failDeleteRoute);
+
+  const deleteRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "DELETE" &&
+      request.url().includes(`/api/transactions/${transaction.transaction_id}`),
+  );
+  await confirmDialog
+    .getByRole("button", { name: "Delete transaction" })
+    .click();
+  await deleteRequest;
+
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction deleted." }),
+  ).toBeVisible();
+  await expect(confirmDialog).toBeHidden();
+  await expect(page.getByRole("row").filter({ hasText: memo })).toBeHidden();
+  await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
 });
 
 test("transactions resolve hidden referenced tags but exclude them from pickers", async ({

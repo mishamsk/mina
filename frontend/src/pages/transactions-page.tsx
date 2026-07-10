@@ -2,7 +2,11 @@ import { ChevronLeft, ChevronRight, Plus } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
 
-import type { Transaction } from "@/api";
+import {
+  deleteTransactionById,
+  isNetworkFailure,
+  type Transaction,
+} from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { Button } from "@/components/ui/button";
@@ -40,6 +44,24 @@ interface SaveNotice {
   readonly id: number;
   readonly message: string;
 }
+
+const apiErrorMessage = (error: unknown): string => {
+  if (isNetworkFailure(error)) {
+    return error.message;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "error" in error &&
+    typeof error.error === "object" &&
+    error.error !== null &&
+    "message" in error.error &&
+    typeof error.error.message === "string"
+  ) {
+    return error.error.message;
+  }
+  return "The API request failed.";
+};
 
 interface TransactionSearchInputProps {
   readonly onSearchChange: (value: string) => void;
@@ -93,6 +115,7 @@ export const TransactionsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const entryPanel = useTransactionEntryPanelView();
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
+  const [quickDeleteDialogOpen, setQuickDeleteDialogOpen] = useState(false);
   const [rowActionsOverflowOpen, setRowActionsOverflowOpen] = useState(false);
   const [saveNotice, setSaveNotice] = useState<SaveNotice | undefined>();
   const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
@@ -171,6 +194,31 @@ export const TransactionsPage = () => {
     transactions,
   });
 
+  const deleteTransactionFromRow = useCallback(
+    async (transaction: Transaction) => {
+      const result = await deleteTransactionById(transaction.transaction_id);
+      if (result.error) {
+        throw new Error(apiErrorMessage(result.error));
+      }
+
+      if (detail.selectedTransactionId === transaction.transaction_id) {
+        detail.closeTransactionDetail();
+      }
+      await refreshTransactionPageAfterSave(
+        params,
+        transaction.transaction_id,
+        transaction,
+      );
+      showSaveNotice("Transaction deleted.");
+    },
+    [
+      detail.closeTransactionDetail,
+      detail.selectedTransactionId,
+      params,
+      showSaveNotice,
+    ],
+  );
+
   const setSearchFilter = useCallback(
     (normalizedSearch: string) => {
       cancelDateJump();
@@ -239,6 +287,7 @@ export const TransactionsPage = () => {
         detail.selectedTransactionId ||
         filterPopoverOpen ||
         getCommandPaletteSnapshot().open ||
+        quickDeleteDialogOpen ||
         rowActionsOverflowOpen ||
         event.key.toLowerCase() !== "n" ||
         event.metaKey ||
@@ -263,6 +312,7 @@ export const TransactionsPage = () => {
     detail.selectedTransactionId,
     filterPopoverOpen,
     openEntryPanel,
+    quickDeleteDialogOpen,
     rowActionsOverflowOpen,
   ]);
 
@@ -433,6 +483,7 @@ export const TransactionsPage = () => {
               addEntityFilter("tag", tagId);
             }}
             onNewTransaction={openEntryPanel}
+            onDeleteTransaction={deleteTransactionFromRow}
             onNextPage={() => {
               setPage(page + 1);
             }}
@@ -449,6 +500,7 @@ export const TransactionsPage = () => {
             onPreviousPage={() => {
               setPage(Math.max(defaultTransactionPage, page - 1));
             }}
+            onDeleteConfirmationOpenChange={setQuickDeleteDialogOpen}
             onRowActionsOverflowOpenChange={setRowActionsOverflowOpen}
             page={page}
             pageSize={pageSize}

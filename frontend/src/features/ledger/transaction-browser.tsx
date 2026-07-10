@@ -1,8 +1,15 @@
-import { ChevronDown, ChevronRight, Open, Plus } from "pixelarticons/react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Open,
+  Plus,
+  Trash,
+} from "pixelarticons/react";
 import {
   type FocusEvent,
   Fragment,
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -10,6 +17,7 @@ import {
 } from "react";
 
 import type { DisplayAmount, JournalRecord, Tag, Transaction } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -22,6 +30,7 @@ import { AmountText, MixedAmounts } from "./amount-text";
 import {
   buildLookupMaps,
   displayAmountKey,
+  formatInitiatedDate,
   formatInitiatedDateParts,
   lineCategory,
   lineDisplayAmounts,
@@ -35,6 +44,7 @@ import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
+import { TransactionDeleteAmountSummary } from "./transaction-detail-panel";
 
 interface TransactionBrowserProps {
   readonly errorMessage: string | undefined;
@@ -45,6 +55,7 @@ interface TransactionBrowserProps {
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
   readonly onNewTransaction: () => void;
+  readonly onDeleteTransaction: (transaction: Transaction) => Promise<void>;
   readonly onNextPage: () => void;
   readonly onOpenTransaction: (
     transaction: Transaction,
@@ -52,6 +63,7 @@ interface TransactionBrowserProps {
   ) => void;
   readonly onPageSizeChange: (pageSize: number) => void;
   readonly onPreviousPage: () => void;
+  readonly onDeleteConfirmationOpenChange?: (open: boolean) => void;
   readonly onRowActionsOverflowOpenChange?: (open: boolean) => void;
   readonly page: number;
   readonly pageSize: number;
@@ -103,6 +115,7 @@ const LoadingRows = () => (
 
 const clippedTagChipSlopPx = 0.5;
 const emptyClippedTagIds: ReadonlySet<number> = new Set();
+const transactionRowSelector = "[data-transaction-row='true']";
 
 const sameTagIdSet = (
   left: ReadonlySet<number>,
@@ -423,10 +436,12 @@ export const TransactionBrowser = ({
   onFilterMember,
   onFilterTag,
   onNewTransaction,
+  onDeleteTransaction,
   onNextPage,
   onOpenTransaction,
   onPageSizeChange,
   onPreviousPage,
+  onDeleteConfirmationOpenChange,
   onRowActionsOverflowOpenChange,
   page,
   pageSize,
@@ -436,7 +451,91 @@ export const TransactionBrowser = ({
   const [expandedTransactionIds, setExpandedTransactionIds] = useState<
     ReadonlySet<number>
   >(new Set());
+  const [deleteDialog, setDeleteDialog] = useState<{
+    readonly opener: HTMLElement;
+    readonly rowIndex: number;
+    readonly transaction: Transaction;
+  }>();
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<
+    string | undefined
+  >();
+  const [deleting, setDeleting] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const deletedRowFocusIndexRef = useRef<number | undefined>(undefined);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
+
+  useEffect(() => {
+    const open = Boolean(deleteDialog);
+    onDeleteConfirmationOpenChange?.(open);
+    return () => {
+      if (open) {
+        onDeleteConfirmationOpenChange?.(false);
+      }
+    };
+  }, [deleteDialog, onDeleteConfirmationOpenChange]);
+
+  const closeDeleteConfirmation = () => {
+    if (deleting) {
+      return;
+    }
+    const opener = deleteDialog?.opener;
+    setDeleteErrorMessage(undefined);
+    setDeleteDialog(undefined);
+    window.requestAnimationFrame(() => {
+      focusWithoutTooltip(opener, { preventScroll: true });
+    });
+  };
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteDialog) {
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteErrorMessage(undefined);
+    try {
+      await onDeleteTransaction(deleteDialog.transaction);
+      deletedRowFocusIndexRef.current = deleteDialog.rowIndex;
+      setDeleteDialog(undefined);
+    } catch (error) {
+      setDeleteErrorMessage(
+        error instanceof Error ? error.message : "The API request failed.",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteDialog, onDeleteTransaction]);
+
+  useLayoutEffect(() => {
+    if (deleteDialog || deletedRowFocusIndexRef.current === undefined) {
+      return;
+    }
+
+    const rowIndex = deletedRowFocusIndexRef.current;
+    deletedRowFocusIndexRef.current = undefined;
+    window.requestAnimationFrame(() => {
+      const root = rootRef.current;
+      if (!root) {
+        return;
+      }
+
+      const rows = Array.from(
+        root.querySelectorAll<HTMLElement>(transactionRowSelector),
+      );
+      const nextRowIndex = Math.min(rowIndex, rows.length - 1);
+      const target =
+        rows[nextRowIndex] ??
+        root.querySelector<HTMLElement>(
+          "[data-testid='transactions-pagination-footer'] button:not(:disabled)",
+        ) ??
+        root.querySelector<HTMLElement>(
+          "[data-testid='transactions-pagination-footer']",
+        ) ??
+        root.querySelector<HTMLElement>("[data-transaction-empty-action]");
+
+      focusWithoutTooltip(target, { preventScroll: true });
+    });
+  }, [deleteDialog, transactions]);
 
   if (loading && !transactions) {
     return <LoadingRows />;
@@ -462,14 +561,22 @@ export const TransactionBrowser = ({
 
   if (!transactions || transactions.length === 0) {
     return (
-      <div className="border-border bg-card border p-10 text-center">
+      <div
+        ref={rootRef}
+        className="border-border bg-card border p-10 text-center"
+      >
         <EmptyStateSprite />
         <h2 className="text-pixel mt-4 text-base">No transactions</h2>
         <p className="text-muted-foreground mx-auto mt-2 max-w-md text-sm">
           Transaction lines appear here after activity is created or demo data
           is seeded.
         </p>
-        <Button type="button" className="mt-5" onClick={onNewTransaction}>
+        <Button
+          type="button"
+          className="mt-5"
+          data-transaction-empty-action
+          onClick={onNewTransaction}
+        >
           <Plus aria-hidden="true" />
           New transaction
         </Button>
@@ -479,6 +586,7 @@ export const TransactionBrowser = ({
 
   return (
     <div
+      ref={rootRef}
       className="flex h-full min-h-0 flex-col gap-3"
       aria-busy={loading ? "true" : undefined}
     >
@@ -564,6 +672,7 @@ export const TransactionBrowser = ({
                       lineInactive && "text-muted-foreground line-through",
                     )}
                     aria-expanded={expanded}
+                    data-transaction-row="true"
                     tabIndex={0}
                     onClick={(event) => {
                       if (
@@ -749,6 +858,18 @@ export const TransactionBrowser = ({
                               onOpenTransaction(transaction, opener);
                             },
                           },
+                          {
+                            icon: <Trash aria-hidden="true" />,
+                            label: "Delete transaction",
+                            onSelect: (opener) => {
+                              setDeleteErrorMessage(undefined);
+                              setDeleteDialog({
+                                opener,
+                                rowIndex: transactionIndex,
+                                transaction,
+                              });
+                            },
+                          },
                         ]}
                       />
                     </td>
@@ -773,6 +894,7 @@ export const TransactionBrowser = ({
       <div
         className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between"
         data-testid="transactions-pagination-footer"
+        tabIndex={-1}
       >
         <div className="flex items-center gap-2 text-sm">
           <label htmlFor="transactions-page-size" className="font-medium">
@@ -829,6 +951,40 @@ export const TransactionBrowser = ({
           </Button>
         </div>
       </div>
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Delete transaction"
+        errorMessage={deleteErrorMessage}
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDeleteConfirmation();
+          }
+        }}
+        open={Boolean(deleteDialog)}
+        pending={deleting}
+        pendingLabel="Deleting"
+        title="Delete transaction"
+      >
+        {deleteDialog ? (
+          <>
+            <p>
+              Delete {deleteDialog.transaction.display_title} from{" "}
+              {formatInitiatedDate(deleteDialog.transaction.initiated_date)} for{" "}
+              <TransactionDeleteAmountSummary
+                transaction={deleteDialog.transaction}
+              />
+              ?
+            </p>
+            <p>
+              This tombstones the transaction and removes it from default
+              transaction lists.
+            </p>
+          </>
+        ) : null}
+      </ConfirmationDialog>
     </div>
   );
 };

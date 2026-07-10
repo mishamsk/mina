@@ -106,7 +106,7 @@ const DetailAmountList = ({
   );
 };
 
-const DetailAmountSummary = ({
+export const TransactionDeleteAmountSummary = ({
   transaction,
 }: {
   readonly transaction: Transaction;
@@ -672,7 +672,7 @@ export const TransactionDetailPanel = ({
               <p>
                 Delete {transaction.display_title} from{" "}
                 {formatInitiatedDate(transaction.initiated_date)} for{" "}
-                <DetailAmountSummary transaction={transaction} />?
+                <TransactionDeleteAmountSummary transaction={transaction} />?
               </p>
               <p>
                 This tombstones the transaction and removes it from default
