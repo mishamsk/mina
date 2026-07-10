@@ -846,17 +846,33 @@ const AccountsSidePanelContent = ({
 
           <div className="flex justify-end gap-2 border-t-2 border-[var(--border-ink)] pt-4">
             {mode === "edit" && account ? (
-              <Button
-                ref={accountDeleteButtonRef}
-                type="button"
-                variant="destructive"
-                onClick={() => {
-                  setAccountDeleteOpen(true);
-                }}
+              <Tooltip
+                label={
+                  account.deletable !== true
+                    ? "Account has active dependent records."
+                    : "Delete account"
+                }
+                asChild
               >
-                <Trash aria-hidden="true" />
-                Delete
-              </Button>
+                <Button
+                  ref={accountDeleteButtonRef}
+                  type="button"
+                  variant="destructive"
+                  aria-disabled={
+                    account.deletable !== true ? "true" : undefined
+                  }
+                  className="aria-disabled:bg-card aria-disabled:text-muted-foreground aria-disabled:border-muted-foreground aria-disabled:hover:bg-card aria-disabled:cursor-not-allowed aria-disabled:shadow-none aria-disabled:hover:shadow-none aria-disabled:active:translate-x-0 aria-disabled:active:translate-y-0"
+                  onClick={() => {
+                    if (account.deletable !== true) {
+                      return;
+                    }
+                    setAccountDeleteOpen(true);
+                  }}
+                >
+                  <Trash aria-hidden="true" />
+                  Delete
+                </Button>
+              </Tooltip>
             ) : null}
             <Button type="submit" disabled={saving}>
               <Check aria-hidden="true" />

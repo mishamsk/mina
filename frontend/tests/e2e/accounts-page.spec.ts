@@ -1264,6 +1264,31 @@ test("accounts tree row quick actions hide feature and delete rows", async ({
   await expect(
     page.getByText("Account has active dependent records."),
   ).toBeVisible();
+  await blockedRow.click();
+  const blockedEditPanel = page.getByRole("dialog", {
+    name: "Edit account",
+  });
+  await expect(blockedEditPanel).toBeVisible();
+  const blockedPanelDelete = blockedEditPanel.getByRole("button", {
+    name: "Delete",
+  });
+  await expect(blockedPanelDelete).toHaveAttribute("aria-disabled", "true");
+  await blockedPanelDelete.hover();
+  await expect(
+    page.getByText("Account has active dependent records."),
+  ).toBeVisible();
+  await blockedPanelDelete.click({ force: true });
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete account" }),
+  ).toHaveCount(0);
+  await blockedPanelDelete.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete account" }),
+  ).toHaveCount(0);
+  await blockedEditPanel
+    .getByRole("button", { name: "Close account panel" })
+    .click();
 
   await page.getByLabel("Search").fill(leafDeleteAccount.fqn);
   const leafDeleteRow = page
