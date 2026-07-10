@@ -380,18 +380,32 @@ const MembersSidePanelContent = ({
 
           <div className="flex justify-end gap-2 border-t-2 border-[var(--border-ink)] pt-4">
             {mode === "edit" && member ? (
-              <Button
-                ref={memberDeleteButtonRef}
-                type="button"
-                variant="destructive"
-                onClick={() => {
-                  setDeleteErrorMessage(undefined);
-                  setMemberDeleteOpen(true);
-                }}
+              <Tooltip
+                label={
+                  member.deletable !== true
+                    ? "Member has attributed records."
+                    : "Delete member"
+                }
+                asChild
               >
-                <Trash aria-hidden="true" />
-                Delete
-              </Button>
+                <Button
+                  ref={memberDeleteButtonRef}
+                  type="button"
+                  variant="destructive"
+                  aria-disabled={member.deletable !== true ? "true" : undefined}
+                  className="aria-disabled:bg-card aria-disabled:text-muted-foreground aria-disabled:border-muted-foreground aria-disabled:cursor-not-allowed aria-disabled:shadow-none"
+                  onClick={() => {
+                    if (member.deletable !== true) {
+                      return;
+                    }
+                    setDeleteErrorMessage(undefined);
+                    setMemberDeleteOpen(true);
+                  }}
+                >
+                  <Trash aria-hidden="true" />
+                  Delete
+                </Button>
+              </Tooltip>
             ) : null}
             <Button type="submit" disabled={saving}>
               <Check aria-hidden="true" />

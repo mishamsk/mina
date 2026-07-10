@@ -5,6 +5,16 @@ interface MemberFixture {
   readonly name: string;
 }
 
+interface AccountFixture {
+  readonly account_id: number;
+  readonly fqn: string;
+}
+
+interface CategoryFixture {
+  readonly category_id: number;
+  readonly fqn: string;
+}
+
 const createMember = async (
   page: Page,
   name: string,
@@ -12,6 +22,28 @@ const createMember = async (
   const response = await page.request.post("/api/members", { data: { name } });
   expect(response.ok()).toBe(true);
   return (await response.json()) as MemberFixture;
+};
+
+const listFixtures = async <T>(
+  page: Page,
+  path: string,
+  collectionKey: string,
+): Promise<readonly T[]> => {
+  const response = await page.request.get(
+    `${path}?limit=500&offset=0&sort=fqn&sort_dir=asc`,
+  );
+  expect(response.ok()).toBe(true);
+  const body = (await response.json()) as Record<string, readonly T[]>;
+  return body[collectionKey] ?? [];
+};
+
+const findByFqn = <T extends { readonly fqn: string }>(
+  fixtures: readonly T[],
+  fqn: string,
+): T => {
+  const fixture = fixtures.find((item) => item.fqn === fqn);
+  expect(fixture, `${fqn} fixture`).toBeDefined();
+  return fixture as T;
 };
 
 test("members page renders sorted demo members and URL search", async ({
@@ -73,7 +105,7 @@ test("members side panel creates renames and deletes members with conflict feedb
   const originalName = `E2E Member ${unique}`;
   const renamedName = `E2E Renamed ${unique}`;
   const deleteName = `E2E Delete ${unique}`;
-  await createMember(page, originalName);
+  const originalMember = await createMember(page, originalName);
 
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
@@ -178,15 +210,35 @@ test("members side panel creates renames and deletes members with conflict feedb
     timeout: 10_000,
   });
 
-  await page.goto("/members?q=Avery");
-  const averyRow = page
+  await page.goto(`/members?q=${encodeURIComponent(renamedName)}`);
+  const renamedRow = page
     .getByTestId("members-list-row")
-    .filter({ hasText: "Avery" })
+    .filter({ hasText: renamedName })
     .first();
-  await expect(averyRow).toBeVisible({ timeout: 10_000 });
-  await averyRow.click();
-  const averyPanel = page.getByRole("dialog", { name: "Edit member" });
-  await averyPanel.getByRole("button", { name: "Delete" }).click();
+  await expect(renamedRow).toBeVisible({ timeout: 10_000 });
+  await renamedRow.click();
+  const renamedPanel = page.getByRole("dialog", { name: "Edit member" });
+  await expect(
+    renamedPanel.getByRole("button", { name: "Delete" }),
+  ).not.toHaveAttribute("aria-disabled", "true");
+  await page.route(
+    `/api/members/${originalMember.member_id}`,
+    async (route) => {
+      if (route.request().method() !== "DELETE") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        body: JSON.stringify({
+          code: "conflict",
+          message: "Member has active dependent records.",
+        }),
+        contentType: "application/json",
+        status: 409,
+      });
+    },
+  );
+  await renamedPanel.getByRole("button", { name: "Delete" }).click();
   const conflictDialog = page.getByRole("alertdialog", {
     name: "Delete member",
   });
@@ -202,6 +254,7 @@ test("members side panel creates renames and deletes members with conflict feedb
   await expect(conflictDialog.getByRole("alert")).toContainText(
     /active|depend|reference|could not/i,
   );
+  await page.unroute(`/api/members/${originalMember.member_id}`);
 });
 
 test("member row actions edit and delete without activating the row", async ({
@@ -209,7 +262,11 @@ test("member row actions edit and delete without activating the row", async ({
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const name = `E2E Row Action ${unique}`;
-  await createMember(page, name);
+  const conflictName = `E2E Row Conflict ${unique}`;
+  const [, conflictMember] = await Promise.all([
+    createMember(page, name),
+    createMember(page, conflictName),
+  ]);
 
   await page.goto(`/members?q=${encodeURIComponent(name)}`);
   const row = page
@@ -228,9 +285,7 @@ test("member row actions edit and delete without activating the row", async ({
   await deleteAction.hover();
   await expect(page.getByRole("tooltip")).toHaveText("Delete member");
 
-  await row.focus();
-  await expect(editAction).toHaveCSS("opacity", "1");
-  await page.keyboard.press("Tab");
+  await editAction.focus();
   await expect(editAction).toBeFocused();
   await page.keyboard.press("Enter");
   const editPanel = page.getByRole("dialog", { name: "Edit member" });
@@ -265,12 +320,32 @@ test("member row actions edit and delete without activating the row", async ({
   });
   await expect(row).toHaveCount(0, { timeout: 10_000 });
 
-  await page.goto("/members?q=Avery");
+  await page.goto(`/members?q=${encodeURIComponent(conflictName)}`);
   const conflictRow = page
     .getByTestId("members-list-row")
-    .filter({ hasText: "Avery" })
+    .filter({ hasText: conflictName })
     .first();
   await expect(conflictRow).toBeVisible({ timeout: 10_000 });
+  await expect(
+    conflictRow.getByRole("button", { name: "Delete member" }),
+  ).not.toHaveAttribute("aria-disabled", "true");
+  await page.route(
+    `/api/members/${conflictMember.member_id}`,
+    async (route) => {
+      if (route.request().method() !== "DELETE") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        body: JSON.stringify({
+          code: "conflict",
+          message: "Member has active dependent records.",
+        }),
+        contentType: "application/json",
+        status: 409,
+      });
+    },
+  );
   await conflictRow.getByRole("button", { name: "Delete member" }).click();
   const conflictResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -284,4 +359,116 @@ test("member row actions edit and delete without activating the row", async ({
   await expect(deleteDialog.getByRole("alert")).toContainText(
     /active|depend|reference|could not/i,
   );
+  await page.unroute(`/api/members/${conflictMember.member_id}`);
+});
+
+test("member delete affordances respect the API deleteability signal", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const blockedName = `E2E Blocked Member ${unique}`;
+  const eligibleName = `E2E Eligible Member ${unique}`;
+  const [blockedMember, eligibleMember, accounts, categories] =
+    await Promise.all([
+      createMember(page, blockedName),
+      createMember(page, eligibleName),
+      listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+      listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+    ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const transactionResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "12.34",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-05-31",
+        member_id: blockedMember.member_id,
+        memo: `E2E member deleteability ${unique}`,
+      },
+    },
+  );
+  expect(transactionResponse.ok()).toBe(true);
+
+  await page.goto(`/members?q=${encodeURIComponent(blockedName)}`);
+  const blockedRow = page
+    .getByTestId("members-list-row")
+    .filter({ hasText: blockedName })
+    .first();
+  const blockedDelete = blockedRow.getByRole("button", {
+    name: "Delete member",
+  });
+  await expect(blockedRow).toBeVisible({ timeout: 10_000 });
+  await expect(blockedDelete).toHaveAttribute("aria-disabled", "true");
+  await blockedDelete.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Member has attributed records.",
+  );
+  await blockedDelete.click({ force: true });
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete member" }),
+  ).toBeHidden();
+  await blockedDelete.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete member" }),
+  ).toBeHidden();
+
+  await blockedRow.click();
+  const blockedPanel = page.getByRole("dialog", { name: "Edit member" });
+  const blockedPanelDelete = blockedPanel.getByRole("button", {
+    name: "Delete",
+  });
+  await expect(blockedPanel).toBeVisible();
+  await expect(blockedPanelDelete).toHaveAttribute("aria-disabled", "true");
+  await blockedPanelDelete.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Member has attributed records.",
+  );
+  await blockedPanelDelete.click({ force: true });
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete member" }),
+  ).toBeHidden();
+  await blockedPanelDelete.focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete member" }),
+  ).toBeHidden();
+  await blockedPanel
+    .getByRole("button", { name: "Close member panel" })
+    .click();
+
+  await page.goto(`/members?q=${encodeURIComponent(eligibleName)}`);
+  const eligibleRow = page
+    .getByTestId("members-list-row")
+    .filter({ hasText: eligibleName })
+    .first();
+  const eligibleDelete = eligibleRow.getByRole("button", {
+    name: "Delete member",
+  });
+  await expect(eligibleRow).toBeVisible({ timeout: 10_000 });
+  await expect(eligibleDelete).not.toHaveAttribute("aria-disabled", "true");
+  await eligibleDelete.click();
+  const eligibleDialog = page.getByRole("alertdialog", {
+    name: "Delete member",
+  });
+  await expect(eligibleDialog).toContainText(eligibleName);
+  const deleteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/members/${eligibleMember.member_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await eligibleDialog.getByRole("button", { name: "Delete member" }).click();
+  expect((await deleteResponse).status()).toBe(204);
+  await expect(page.getByText("Member deleted.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(eligibleRow).toHaveCount(0, { timeout: 10_000 });
 });

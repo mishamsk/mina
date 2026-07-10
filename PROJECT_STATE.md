@@ -42,7 +42,7 @@
   - Account group pages show descendant balance-account subtotals and combined prefix registers across balance and flow accounts, with transaction peeks and links from account trees and overview balance groups.
   - Global command palette opens with `Cmd/Ctrl+K`, supports routed-page and account/group navigation by typed name, launches transaction entry tabs, and starts database backup or exchange-rate loading runs.
   - Categories and Tags pages show searchable FQN trees with hidden controls, move/rename, and create/edit/delete side-panel workflows; Categories also show intent badges.
-  - Members page shows a searchable flat member list with create/rename/delete side-panel workflows and hover/focus-revealed Edit/Delete row actions.
+  - Members page shows a searchable flat member list with create/rename/delete side-panel workflows and hover/focus-revealed Edit/Delete row actions; ineligible deletes are proactively disabled from the API deleteability signal.
   - Accounts, Categories, Tags, and Members retain full-height Arcade Cabinet table frames with internally scrolling data bodies.
   - Transaction entry includes shorthand spend/income/refund/transfer tabs plus an Advanced journal editor with balanced multi-record saves, intent-guided account pickers, draft persistence, and edit-as-journal escalation from shorthand tabs.
   - Transaction entry category pickers fetch API-filtered category lists by shorthand tab economic intent.

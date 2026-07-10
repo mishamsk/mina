@@ -10,6 +10,7 @@
 - Member mutations refresh Members and ledger lookups.
 - Member renames also invalidate transaction page snapshots.
 - Member-row deletes own their named confirmation in the page list; side-panel deletes retain their panel-owned confirmation.
+- Delete affordances use only the API `deletable` signal; dependent-resource rules remain backend-owned.
 
 ## Boundaries
 

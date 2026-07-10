@@ -345,6 +345,8 @@ const MembersList = ({
                           },
                         },
                         {
+                          disabled: member.deletable !== true,
+                          disabledReason: "Member has attributed records.",
                           icon: <Trash aria-hidden="true" />,
                           label: "Delete member",
                           onSelect: (opener) => {
