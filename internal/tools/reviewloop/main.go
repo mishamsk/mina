@@ -1195,6 +1195,8 @@ func runCodex(root string, label string, prompt string) (string, error) {
 	cmd := exec.Command(
 		"codex",
 		"exec",
+		"-m", "gpt-5.6-terra",
+		"-c", "model_reasoning_effort=high",
 		"--json",
 		"--dangerously-bypass-approvals-and-sandbox",
 		"--cd", root,

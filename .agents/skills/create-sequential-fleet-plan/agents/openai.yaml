@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Sequential Fleet Plan"
+  short_description: "Create ordered Kata fleet execution plans"
+  default_prompt: "Use $create-sequential-fleet-plan to turn this goal into an ordered, committed Kata fleet plan."

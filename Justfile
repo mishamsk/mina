@@ -362,6 +362,40 @@ codex-goal plan_file="":
 
     command codex --dangerously-bypass-approvals-and-sandbox "/goal implement ${plan_file}. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
 
+# Run a Codex operator against a sequential fleet plan.
+[group('agents')]
+codex-goal-fleet plan_file="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    plan_file={{ quote(plan_file) }}
+    command -v codex >/dev/null || { echo "missing required tool: codex" >&2; exit 1; }
+    if [ -z "$plan_file" ]; then
+        command -v fzf >/dev/null || { echo "missing required tool: fzf" >&2; exit 1; }
+        if ! plan_file="$(
+            find docs/plans -maxdepth 1 -type f -name '*-fleet.md' | \
+                while IFS= read -r candidate; do
+                    if [[ "$candidate" =~ ^docs/plans/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*-fleet\.md$ ]]; then
+                        printf '%s\n' "$candidate"
+                    fi
+                done | sort | fzf \
+                --prompt='Fleet plan> ' \
+                --preview='sed -n "1,160p" {}'
+        )"; then
+            echo "no fleet plan selected" >&2
+            exit 1
+        fi
+        [ -n "$plan_file" ] || { echo "no fleet plan selected" >&2; exit 1; }
+    fi
+
+    [[ "$plan_file" =~ ^docs/plans/[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*-fleet\.md$ ]] || {
+        echo "fleet plan must match docs/plans/YYYY-MM-DD-<topic>-fleet.md" >&2
+        exit 1
+    }
+    [ -f "$plan_file" ] || { echo "fleet plan not found: $plan_file" >&2; exit 1; }
+
+    command codex -m gpt-5.6-sol -c model_reasoning_effort=xhigh --dangerously-bypass-approvals-and-sandbox "/goal implement @${plan_file} - make sure to follow the workflow exactly as stated in that document. Remember that you are the operator and should never edit code yourself, but only manage implementation & review subagents and prepare plans."
+
 # Start a kata plan-only worktree through Codex.
 [group('agents')]
 codex-kata-plan:
