@@ -7,7 +7,7 @@ Deliver 21 Phase 2 frontend/UI tasks: 16 audit-sized improvements plus five larg
 ### Roles and ground rules
 
 - Operator: the Claude session executing this plan. Authors sub-branch plans, launches and waits on implementor Codex sessions, reviews, merges, closes kata issues. Never edits implementation code — all code changes flow through implementor sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
-- Implementor Codex: the only implementor, headless, one session at a time, running `gpt-5.6-terra` with `high` reasoning effort.
+- Implementor Codex: the only implementor, headless, one session at a time, running `gpt-5.5` with `high` reasoning effort.
 - Integration branch ("main working branch"): whatever branch the operator session is currently on when executing this plan. Never touch `main`.
 - Issue set: `hafw`, `cdd0`, `efrg`, `ja9z`, `0jg6`, `47f4`, `60tx`, `wy32`, `qwjb`, `cqft`, `0tvb`, `pj89`, `e1ke`, `r725`, `4fxe`, `np9z`, `m4ye`, `d608`, `sw33`, `e3fw`, and `ksw0`, selected from `kata list --status all --agent` under the selector above.
 
@@ -28,7 +28,7 @@ Deliver 21 Phase 2 frontend/UI tasks: 16 audit-sized improvements plus five larg
 3. Dispatch: from the sub-worktree, headless in the background (do not use `just codex-goal` — it fails without a terminal), run exactly:
 
    ```sh
-   codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox "/goal implement <plan_file>. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
+   codex exec -m gpt-5.5 -c model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox "/goal implement <plan_file>. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
    ```
 
    Do not touch the worktree while the session runs. Completion signal: plan moved to `docs/plans/completed/` and process exit. Review-loop can take ~10 minutes; use long poll timeouts and do not kill it while heartbeat/progress lines continue.
