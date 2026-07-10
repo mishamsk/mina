@@ -1,6 +1,6 @@
-# Plan: Phase 2 frontend/UI audit fixes — sequential sub-branch delivery (16 capped open Kata issues)
+# Plan: Phase 2 frontend/UI completion slices — sequential sub-branch delivery (21 open Kata issues)
 
-Deliver 16 audit-sized Phase 2 frontend/UI improvements and their small existing-response API enablers, favoring the smaller actionable leaves when the open set exceeds the cap. The selector is open `phase-2` frontend issues plus directly related API issues that extend an existing response without a data-model change or a new endpoint type; larger screens/editing workflows, migrations, and substantial backend semantic validation are excluded. Deliver one Kata issue at a time as a Codex-implemented sub-branch of the main working branch, with the Codex session running this plan acting as operator: plan author, reviewer, integrator. This plan is self-contained; it deliberately inlines a modified (strictly sequential) version of the codex-goal-fleet workflow and does not depend on that skill.
+Deliver 21 Phase 2 frontend/UI tasks: 16 audit-sized improvements plus five larger slices covering expanded command-palette transaction search, reference drill-down pages, recurring-occurrence review, and saved-transaction actions. The selector is open `phase-2` frontend issues plus directly related API issues that extend existing endpoint behavior without a data-model change or a new endpoint type; migrations and substantial backend semantic validation remain excluded. Deliver one Kata issue at a time as a Codex-implemented sub-branch of the main working branch, with the Codex session running this plan acting as operator: plan author, reviewer, integrator. This plan is self-contained; it deliberately inlines a modified (strictly sequential) version of the codex-goal-fleet workflow and does not depend on that skill.
 
 ## Plan Context
 
@@ -9,7 +9,7 @@ Deliver 16 audit-sized Phase 2 frontend/UI improvements and their small existing
 - Operator: the Codex session executing this plan. Authors sub-branch plans, launches and waits on implementor Codex sessions, reviews, merges, closes kata issues. Never edits implementation code — all code changes flow through implementor sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
 - Implementor Codex: the only implementor, headless, one session at a time, running `gpt-5.6-terra` with `high` reasoning effort.
 - Integration branch ("main working branch"): whatever branch the operator session is currently on when executing this plan. Never touch `main`.
-- Issue set: `hafw`, `cdd0`, `efrg`, `ja9z`, `0jg6`, `47f4`, `60tx`, `wy32`, `qwjb`, `cqft`, `0tvb`, `pj89`, `e1ke`, `r725`, `4fxe`, and `np9z`, selected from `kata list --status all --agent` under the selector above.
+- Issue set: `hafw`, `cdd0`, `efrg`, `ja9z`, `0jg6`, `47f4`, `60tx`, `wy32`, `qwjb`, `cqft`, `0tvb`, `pj89`, `e1ke`, `r725`, `4fxe`, `np9z`, `m4ye`, `d608`, `sw33`, `e3fw`, and `ksw0`, selected from `kata list --status all --agent` under the selector above.
 
 ### Rules of engagement
 
@@ -71,6 +71,11 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [ ] Task 14: `r725` — Use neutral styling for income amount chips (frontend amount-chip semantic styling; follows Task 13's layout fix) — branch `r725-neutral-income-amounts`
 - [ ] Task 15: `4fxe` — Use neutral styling for transaction member chips (frontend entity-chip semantic styling) — branch `4fxe-neutral-member-chips`
 - [ ] Task 16: `np9z` — Fill the active featured-account star yellow (frontend toggle-state styling polish) — branch `np9z-featured-star-fill`
+- [ ] Task 17: `m4ye` — Expand transaction free-text search across reference metadata (API search expansion on the existing transactions endpoint; precedes Task 18 by explicit fleet order) — branch `m4ye-expanded-transaction-search`
+- [ ] Task 18: `d608` — Add Alfred-style transaction search to the command palette (frontend command-palette search surface; follows Task 17 so it launches against the expanded field set, although its formal API needs were already satisfied) — branch `d608-command-palette-search`
+- [ ] Task 19: `sw33` — Add category, tag, and member drill-down pages (frontend reference-detail slice using existing transaction filters; enables future `6pdf` and `qkss` follow-ups) — branch `sw33-reference-drilldowns`
+- [ ] Task 20: `e3fw` — Surface EXPECTED recurring transactions in the web UI for manual review (frontend recurring-review slice using existing occurrence APIs; before setup, the operator defines and commits the required recurring-screen UX in `docs/webui-design.md` on the main working branch) — branch `e3fw-recurring-review-ui`
+- [ ] Task 21: `ksw0` — Add Edit, Duplicate, and Split actions for saved transactions (frontend saved-transaction workflow; completed external blocker `axf6` is satisfied) — branch `ksw0-saved-transaction-actions`
 
 ## Final Verification
 
