@@ -11,7 +11,6 @@ import {
   createLedgerMember,
   type CreateMemberRequest,
   deleteLedgerMemberById,
-  isNetworkFailure,
   type Member,
   updateLedgerMember,
   type UpdateMemberRequest,
@@ -19,6 +18,7 @@ import {
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 
+import { memberAPIErrorMessage } from "./member-api-error-message";
 import { refreshMembersAfterMutation } from "./use-members-resource";
 
 type MemberFormField = "general" | "name";
@@ -49,24 +49,6 @@ const formFromMember = (member: Member | undefined): MemberFormState =>
         name: member.name,
       }
     : blankForm();
-
-const apiErrorMessage = (error: unknown, fallback: string): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return fallback;
-};
 
 const fieldErrorsFromAPI = (message: string): MemberFormErrors => {
   const lower = message.toLowerCase();
@@ -165,6 +147,12 @@ const MembersSidePanelContent = ({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (event.defaultPrevented) {
+          return;
+        }
+        const openModal = document.querySelector<HTMLElement>(
+          "[role='alertdialog'][aria-modal='true']",
+        );
+        if (openModal && openModal !== dialogRef.current) {
           return;
         }
         event.preventDefault();
@@ -291,7 +279,10 @@ const MembersSidePanelContent = ({
     }
 
     setSaving(false);
-    const message = apiErrorMessage(result.error, "Member could not be saved.");
+    const message = memberAPIErrorMessage(
+      result.error,
+      "Member could not be saved.",
+    );
     setFieldErrors((current) => ({
       ...current,
       ...fieldErrorsFromAPI(message),
@@ -316,7 +307,7 @@ const MembersSidePanelContent = ({
     }
     setDeletingMember(false);
     setDeleteErrorMessage(
-      apiErrorMessage(result.error, "Member could not be deleted."),
+      memberAPIErrorMessage(result.error, "Member could not be deleted."),
     );
   };
 

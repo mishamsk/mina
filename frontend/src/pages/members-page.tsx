@@ -71,6 +71,12 @@ export const MembersPage = () => {
     restorePanelOpenerFocus();
   };
 
+  const closeDeletedMemberEditor = (memberId: number) => {
+    if (panelMode === "edit" && selectedMemberId === memberId) {
+      closePanel();
+    }
+  };
+
   return (
     <section
       className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
@@ -114,6 +120,8 @@ export const MembersPage = () => {
         <MembersPageContent
           membersPage={membersPage}
           onEditMember={openEditPanel}
+          onMemberDeleted={closeDeletedMemberEditor}
+          onNotice={showNotice}
           search={search}
         />
       </div>

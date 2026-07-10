@@ -203,3 +203,85 @@ test("members side panel creates renames and deletes members with conflict feedb
     /active|depend|reference|could not/i,
   );
 });
+
+test("member row actions edit and delete without activating the row", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const name = `E2E Row Action ${unique}`;
+  await createMember(page, name);
+
+  await page.goto(`/members?q=${encodeURIComponent(name)}`);
+  const row = page
+    .getByTestId("members-list-row")
+    .filter({ hasText: name })
+    .first();
+  const editAction = row.getByRole("button", { name: "Edit member" });
+  const deleteAction = row.getByRole("button", { name: "Delete member" });
+  await expect(row).toBeVisible({ timeout: 10_000 });
+
+  await row.hover();
+  await expect(editAction).toBeVisible();
+  await expect(deleteAction).toBeVisible();
+  await editAction.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Edit member");
+  await deleteAction.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("Delete member");
+
+  await row.focus();
+  await expect(editAction).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Tab");
+  await expect(editAction).toBeFocused();
+  await page.keyboard.press("Enter");
+  const editPanel = page.getByRole("dialog", { name: "Edit member" });
+  await expect(editPanel).toBeVisible();
+  await editPanel.getByRole("button", { name: "Close member panel" }).click();
+  await expect(editPanel).toBeHidden();
+
+  await deleteAction.click();
+  await expect(editPanel).toBeHidden();
+  const deleteDialog = page.getByRole("alertdialog", {
+    name: "Delete member",
+  });
+  await expect(deleteDialog).toContainText(name);
+  await page.keyboard.press("Escape");
+  await expect(deleteDialog).toBeHidden();
+  await expect(editPanel).toBeHidden();
+  await expect(deleteAction).toBeFocused();
+  await expect(row).toBeVisible();
+
+  await deleteAction.click();
+  const deleteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname.startsWith("/api/members/") &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await deleteDialog.getByRole("button", { name: "Delete member" }).click();
+  expect((await deleteResponse).status()).toBe(204);
+  await expect(page.getByText("Member deleted.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(row).toHaveCount(0, { timeout: 10_000 });
+
+  await page.goto("/members?q=Avery");
+  const conflictRow = page
+    .getByTestId("members-list-row")
+    .filter({ hasText: "Avery" })
+    .first();
+  await expect(conflictRow).toBeVisible({ timeout: 10_000 });
+  await conflictRow.getByRole("button", { name: "Delete member" }).click();
+  const conflictResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname.startsWith("/api/members/") &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await deleteDialog.getByRole("button", { name: "Delete member" }).click();
+  expect((await conflictResponse).status()).toBe(409);
+  await expect(deleteDialog.getByRole("alert")).toContainText(
+    /active|depend|reference|could not/i,
+  );
+});

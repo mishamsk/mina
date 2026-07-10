@@ -9,6 +9,7 @@
 - Members page loads the bounded household member list and filters client-side by name.
 - Member mutations refresh Members and ledger lookups.
 - Member renames also invalidate transaction page snapshots.
+- Member-row deletes own their named confirmation in the page list; side-panel deletes retain their panel-owned confirmation.
 
 ## Boundaries
 

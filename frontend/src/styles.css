@@ -454,11 +454,11 @@
 
   /*
    * Fold reference-table action buttons only when the actions-cell container
-   * is narrower than its full 24px-control cluster (including 4px gaps).
+   * is narrower than its full 28px-control cluster (including 4px gaps).
    * Keep this count mapping here with RowActions so future reference tables
    * inherit fit-based folding without a page-specific breakpoint.
    */
-  @container row-actions (width < 24px) {
+  @container row-actions (width < 28px) {
     :is(.accounts-table, .reference-table)
       .row-actions--foldable[data-row-actions-count="1"]
       .row-actions-buttons
@@ -473,7 +473,7 @@
     }
   }
 
-  @container row-actions (width < 52px) {
+  @container row-actions (width < 60px) {
     :is(.accounts-table, .reference-table)
       .row-actions--foldable[data-row-actions-count="2"]
       .row-actions-buttons
@@ -488,7 +488,7 @@
     }
   }
 
-  @container row-actions (width < 80px) {
+  @container row-actions (width < 92px) {
     :is(.accounts-table, .reference-table)
       .row-actions--foldable[data-row-actions-count="3"]
       .row-actions-buttons
@@ -503,7 +503,7 @@
     }
   }
 
-  @container row-actions (width < 108px) {
+  @container row-actions (width < 124px) {
     :is(.accounts-table, .reference-table)
       .row-actions--foldable[data-row-actions-count="4"]
       .row-actions-buttons
@@ -518,7 +518,7 @@
     }
   }
 
-  @container row-actions (width < 136px) {
+  @container row-actions (width < 156px) {
     :is(.accounts-table, .reference-table)
       .row-actions--foldable[data-row-actions-count="5"]
       .row-actions-buttons
@@ -533,7 +533,7 @@
     }
   }
 
-  @container row-actions (width < 164px) {
+  @container row-actions (width < 188px) {
     :is(.accounts-table, .reference-table)
       .row-actions--foldable[data-row-actions-count="6"]
       .row-actions-buttons

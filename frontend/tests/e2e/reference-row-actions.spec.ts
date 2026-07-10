@@ -47,7 +47,7 @@ const rowActionFitState = async (rowActions: Locator) =>
     const availableWidth = element.getBoundingClientRect().width;
     const actionCount = Number(element.dataset.rowActionsCount ?? "0");
     const fullClusterWidth =
-      actionCount === 0 ? 0 : actionCount * 24 + (actionCount - 1) * 4;
+      actionCount === 0 ? 0 : actionCount * 28 + (actionCount - 1) * 4;
     const buttonsFolded = buttonActions.every(
       (button) => window.getComputedStyle(button).display === "none",
     );
@@ -288,8 +288,8 @@ test("Accounts rows fold independently when their action counts differ", async (
 
   expect(parentFit).toBeDefined();
   expect(leafFit).toBeDefined();
-  expect(parentFit?.fullClusterWidth).toBe(136);
-  expect(leafFit?.fullClusterWidth).toBe(108);
+  expect(parentFit?.fullClusterWidth).toBe(156);
+  expect(leafFit?.fullClusterWidth).toBe(124);
   expect(parentFit?.availableWidth).toBeLessThan(
     parentFit?.fullClusterWidth ?? 0,
   );

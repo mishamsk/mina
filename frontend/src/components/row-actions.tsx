@@ -36,7 +36,7 @@ interface RowActionsProps {
 }
 
 const actionButtonClassName =
-  "row-actions-button size-6 border-[var(--border-ink)] bg-card text-foreground shadow-none " +
+  "row-actions-button size-7 border-[var(--border-ink)] bg-card text-foreground shadow-none " +
   "hover:bg-muted hover:shadow-[var(--shadow-chip)] " +
   "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none";
 
@@ -45,7 +45,7 @@ const disabledActionButtonClassName =
   "active:translate-x-0 active:translate-y-0";
 
 const toggleButtonClassName =
-  "row-actions-toggle inline-grid size-6 place-items-center border-0 bg-transparent p-0 " +
+  "row-actions-toggle inline-grid size-7 place-items-center border-0 bg-transparent p-0 " +
   "text-muted-foreground shadow-none hover:text-foreground " +
   "focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2 " +
   "aria-pressed:text-foreground";
@@ -125,7 +125,7 @@ export const RowActions = ({
               <Button
                 type="button"
                 variant="outline"
-                size="icon-xs"
+                size="icon-sm"
                 className={cn(
                   actionButtonClassName,
                   action.disabled && disabledActionButtonClassName,
@@ -165,7 +165,7 @@ export const RowActions = ({
                 ref={overflowTriggerRef}
                 type="button"
                 variant="outline"
-                size="icon-xs"
+                size="icon-sm"
                 className={cn(actionButtonClassName, "row-actions-overflow")}
                 aria-label="More row actions"
                 onClick={(event) => {
