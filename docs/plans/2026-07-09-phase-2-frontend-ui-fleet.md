@@ -65,7 +65,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [x] Task 8: `wy32` — Disable ineligible account deletion in the edit panel (frontend deleteability consumer using the existing Account contract) — branch `wy32-disable-account-delete`
 - [x] Task 9: `qwjb` — Stabilize the transactions filter toolbar (frontend toolbar foundation; precedes Tasks 10 and 11) — branch `qwjb-stable-filter-toolbar`
 - [x] Task 10: `cqft` — Promote transaction class to a top-level filter (frontend URL-backed filter; requires Task 9) — branch `cqft-transaction-class-filter`
-- [ ] Task 11: `0tvb` — Add previous-day and next-day transaction controls (frontend local-date navigation; requires Task 9) — branch `0tvb-adjacent-day-controls`
+- [x] Task 11: `0tvb` — Add previous-day and next-day transaction controls (frontend local-date navigation; requires Task 9) — branch `0tvb-adjacent-day-controls`
 - [ ] Task 12: `pj89` — Add a quick-delete action to transaction rows (frontend transaction RowActions; requires Task 4) — branch `pj89-transaction-quick-delete`
 - [ ] Task 13: `e1ke` — Prevent mixed transaction amounts from overlapping members (frontend responsive amount-layout fix) — branch `e1ke-mixed-amount-overlap`
 - [ ] Task 14: `r725` — Use neutral styling for income amount chips (frontend amount-chip semantic styling; follows Task 13's layout fix) — branch `r725-neutral-income-amounts`
