@@ -155,7 +155,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 ### Tables and filtering
 
 - Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, whole-row affordances for expand/peek (a plain disclosure indicator, not a per-row button), leading checkbox column only once bulk actions exist.
-- Per-row actions live in one narrow trailing actions column — always the rightmost column, in every table — never mid-row. Button-class actions render as compact icon buttons with tooltips, revealed on row hover and row focus (keyboard reaches them through row focus). State toggles stay persistently visible because they carry state. Actions never collapse into an overflow menu for count reasons; only the narrow-screen column-collapse rule folds them.
+- Per-row actions live in one narrow trailing actions column — always the rightmost column, in every table — never mid-row. Button-class actions render as compact icon buttons with tooltips, revealed on row hover and row focus (keyboard reaches them through row focus). State toggles stay persistently visible because they carry state; they never fold. Actions never collapse into an overflow menu for count reasons; button-class actions fold into a single overflow (⋯) menu only when the actions cell runs out of horizontal space — by the column-collapse priority in the transactions browser, and per row when the actions cell cannot fit that row's full action cluster in reference tables.
 - Stable column layout: fixed percentage-based column widths so columns never shift when paging or when row content changes.
 - When horizontal space runs out, columns collapse by priority instead of showing a horizontal scrollbar: member first, then the status marker, then row actions fold into a single overflow (⋯) menu, then tags, then category.
 - Pagination shows "Page X of Y" from server-provided total counts.
@@ -280,7 +280,7 @@ Mina-specific building blocks every screen composes (names indicative; placement
 - `FqnPath` — de-emphasized-ancestors path renderer with truncation and tooltip.
 - `ClassIcon` / `StatusIcon` — narrow icon-encoded class and status indicators with tooltips; `ClassBadge` chip form remains for detail headers.
 - `CategoryChip`, `TagChip`, `MemberChip` — entity chips that add their entity to the active filters; `AccountTypeBadge`, `IntentBadge` — descriptive indicators.
-- `RowActions` — the trailing per-row actions cluster: hover/focus-revealed icon-button actions plus persistent flat toggle icons, folding into an overflow menu per the column-collapse rule.
+- `RowActions` — the trailing per-row actions cluster: hover/focus-revealed icon-button actions plus persistent flat toggle icons, folding button-class actions into an overflow menu only when the actions cell cannot fit the row's full action cluster.
 - `EntityPicker` — hierarchical type-ahead combobox with include-hidden, inline-create, and context-aware account-type filtering variants.
 - `FilterBar` / `FilterChip` — URL-backed typed filters.
 - `PageHelp` — header help icon button revealing a hidden-by-default explanation paragraph.

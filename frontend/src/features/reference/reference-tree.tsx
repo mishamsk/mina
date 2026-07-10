@@ -417,8 +417,12 @@ export const ReferenceTree = <
                   {hasBadgeColumn ? (
                     <td className="min-w-0 px-3 py-2">{renderBadge?.(row)}</td>
                   ) : null}
-                  <td className="px-1 py-2 text-right sm:px-3">
-                    <RowActions actions={actions} foldable />
+                  <td className="px-1 py-2 text-center sm:px-3">
+                    <RowActions
+                      actions={actions}
+                      foldable
+                      className="justify-center"
+                    />
                   </td>
                 </tr>
               );

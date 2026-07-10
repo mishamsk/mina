@@ -244,7 +244,7 @@ const HiddenRowIndicator = ({ label }: { readonly label: string }) => (
 );
 
 const accountsTreeSkeletonGridClass =
-  "grid grid-cols-[48%_32%_20%] sm:grid-cols-[36%_14%_30%_20%] md:grid-cols-[36%_14%_12%_24%_14%]";
+  "grid grid-cols-[44%_32%_24%] sm:grid-cols-[36%_14%_30%_20%] md:grid-cols-[36%_14%_12%_20%_18%]";
 
 const accountTreeSkeletonColumnClasses = [
   "px-3",
@@ -586,7 +586,7 @@ export const AccountsTree = ({
           <table className="accounts-table w-full table-fixed border-collapse text-sm">
             <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
               <tr className="font-heading text-left text-xs font-semibold uppercase">
-                <th scope="col" className="w-[48%] px-3 py-2 sm:w-[36%]">
+                <th scope="col" className="w-[44%] px-3 py-2 sm:w-[36%]">
                   Name
                 </th>
                 <th
@@ -603,13 +603,13 @@ export const AccountsTree = ({
                 </th>
                 <th
                   scope="col"
-                  className="w-[32%] px-2 py-2 text-right sm:w-[30%] sm:px-3 md:w-[24%]"
+                  className="w-[32%] px-2 py-2 text-right sm:w-[30%] sm:px-3 md:w-[20%]"
                 >
                   Balance
                 </th>
                 <th
                   scope="col"
-                  className="w-[20%] px-1 py-2 text-center sm:px-3 md:w-[14%]"
+                  className="w-[24%] px-1 py-2 text-center sm:w-[20%] sm:px-3 md:w-[18%]"
                 >
                   Actions
                 </th>

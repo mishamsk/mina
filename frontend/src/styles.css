@@ -209,14 +209,6 @@
     container: transactions-table / inline-size;
   }
 
-  .accounts-table-scroll {
-    container: accounts-table / inline-size;
-  }
-
-  .reference-table-scroll {
-    container: reference-table / inline-size;
-  }
-
   .account-register-table-scroll {
     container: account-register-table / inline-size;
   }
@@ -238,6 +230,10 @@
 
   .row-actions .row-actions-overflow {
     display: none !important;
+  }
+
+  .row-actions--foldable {
+    container: row-actions / inline-size;
   }
 
   .transactions-table .transactions-class-column {
@@ -456,22 +452,98 @@
     }
   }
 
-  @container accounts-table (max-width: 960px) {
-    .accounts-table .row-actions-buttons .row-actions-button {
+  /*
+   * Fold reference-table action buttons only when the actions-cell container
+   * is narrower than its full 24px-control cluster (including 4px gaps).
+   * Keep this count mapping here with RowActions so future reference tables
+   * inherit fit-based folding without a page-specific breakpoint.
+   */
+  @container row-actions (width < 24px) {
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="1"]
+      .row-actions-buttons
+      .row-actions-button {
       display: none !important;
     }
 
-    .accounts-table .row-actions-overflow {
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="1"]
+      .row-actions-overflow {
       display: inline-flex !important;
     }
   }
 
-  @container reference-table (max-width: 720px) {
-    .reference-table .row-actions-buttons .row-actions-button {
+  @container row-actions (width < 52px) {
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="2"]
+      .row-actions-buttons
+      .row-actions-button {
       display: none !important;
     }
 
-    .reference-table .row-actions-overflow {
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="2"]
+      .row-actions-overflow {
+      display: inline-flex !important;
+    }
+  }
+
+  @container row-actions (width < 80px) {
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="3"]
+      .row-actions-buttons
+      .row-actions-button {
+      display: none !important;
+    }
+
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="3"]
+      .row-actions-overflow {
+      display: inline-flex !important;
+    }
+  }
+
+  @container row-actions (width < 108px) {
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="4"]
+      .row-actions-buttons
+      .row-actions-button {
+      display: none !important;
+    }
+
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="4"]
+      .row-actions-overflow {
+      display: inline-flex !important;
+    }
+  }
+
+  @container row-actions (width < 136px) {
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="5"]
+      .row-actions-buttons
+      .row-actions-button {
+      display: none !important;
+    }
+
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="5"]
+      .row-actions-overflow {
+      display: inline-flex !important;
+    }
+  }
+
+  @container row-actions (width < 164px) {
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="6"]
+      .row-actions-buttons
+      .row-actions-button {
+      display: none !important;
+    }
+
+    :is(.accounts-table, .reference-table)
+      .row-actions--foldable[data-row-actions-count="6"]
+      .row-actions-overflow {
       display: inline-flex !important;
     }
   }

@@ -77,6 +77,7 @@ export const RowActions = ({
 }: RowActionsProps) => {
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowActions = actions.filter(isButtonAction);
+  const actionClusterCount = actions.length;
   const overflowOpenRef = useRef(false);
   const onOverflowOpenChangeRef = useRef(onOverflowOpenChange);
   const overflowTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -104,8 +105,10 @@ export const RowActions = ({
     <div
       className={cn(
         "row-actions inline-flex min-w-0 items-center justify-end gap-1",
+        foldable && "row-actions--foldable w-full",
         className,
       )}
+      data-row-actions-count={actionClusterCount}
     >
       <div className="row-actions-buttons inline-flex items-center justify-end gap-1">
         {actions.map((action) => (
