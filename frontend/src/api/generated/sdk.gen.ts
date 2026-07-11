@@ -126,7 +126,7 @@ export const deleteCategory = <ThrowOnError extends boolean = false>(options: Op
 export const getCategory = <ThrowOnError extends boolean = false>(options: Options<GetCategoryData, ThrowOnError>): RequestResult<GetCategoryResponses, GetCategoryErrors, ThrowOnError> => (options.client ?? client).get<GetCategoryResponses, GetCategoryErrors, ThrowOnError>({ url: '/api/categories/{category_id}', ...options });
 
 /**
- * Update category hidden state.
+ * Update category mutable metadata.
  */
 export const updateCategory = <ThrowOnError extends boolean = false>(options: Options<UpdateCategoryData, ThrowOnError>): RequestResult<UpdateCategoryResponses, UpdateCategoryErrors, ThrowOnError> => (options.client ?? client).patch<UpdateCategoryResponses, UpdateCategoryErrors, ThrowOnError>({
     url: '/api/categories/{category_id}',

@@ -46,6 +46,7 @@ type Category struct {
 	FQN            string
 	EconomicIntent CategoryEconomicIntent
 	IsHidden       bool
+	IsFeatured     bool
 	ParentFQN      *string
 	Name           string
 	Level          int
@@ -60,6 +61,13 @@ type CreateInput struct {
 	FQN            string
 	EconomicIntent CategoryEconomicIntent
 	IsHidden       bool
+	IsFeatured     bool
+}
+
+// UpdateInput contains mutable category fields.
+type UpdateInput struct {
+	IsHidden   *bool
+	IsFeatured *bool
 }
 
 // ListOptions controls category list visibility.
@@ -67,6 +75,7 @@ type ListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
 	EconomicIntents   []CategoryEconomicIntent
+	IsFeatured        *bool
 	List              services.ListOptions
 }
 
@@ -103,7 +112,7 @@ type Repository interface {
 	Create(context.Context, CreateInput) (Category, error)
 	Get(context.Context, int64, bool) (Category, error)
 	List(context.Context, ListOptions) (services.PaginatedList[Category], error)
-	UpdateHidden(context.Context, int64, bool) (Category, error)
+	UpdateMutable(context.Context, int64, UpdateInput) (Category, error)
 	RestructureFQNs(context.Context, string, string) (int64, error)
 	SetHiddenByPath(context.Context, string, bool) error
 	ActiveUsage(context.Context, []int64) (map[int64]ActiveUsage, error)
@@ -264,18 +273,18 @@ func (s *Service) GroupStates(ctx context.Context, includeHidden bool) ([]GroupS
 	return services.DeriveFQNGroupStates(leaves, includeHidden), nil
 }
 
-// UpdateHidden validates and updates a category hidden state.
-func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (Category, error) {
+// UpdateMutable validates and updates mutable category fields.
+func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput) (Category, error) {
 	if id <= 0 {
 		return Category{}, services.InvalidRequest("category_id must be positive")
 	}
-	if isHidden == nil {
-		return Category{}, services.InvalidRequest("is_hidden is required")
+	if !input.hasChanges() {
+		return Category{}, services.InvalidRequest("at least one category field is required")
 	}
 
 	var category Category
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		updated, err := s.repo.UpdateHidden(ctx, id, *isHidden)
+		updated, err := s.repo.UpdateMutable(ctx, id, input)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("category not found")
 		}
@@ -291,6 +300,10 @@ func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (C
 	}
 
 	return category, nil
+}
+
+func (input UpdateInput) hasChanges() bool {
+	return input.IsHidden != nil || input.IsFeatured != nil
 }
 
 // Restructure atomically rewrites an active category FQN subtree from one path to another.

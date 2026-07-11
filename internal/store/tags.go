@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
@@ -29,11 +30,12 @@ func (s *TagStore) Create(ctx context.Context, input tags.CreateInput) (tags.Tag
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("tag")+` (fqn, is_hidden)
-VALUES (?, ?)
-RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("tag")+` (fqn, is_hidden, is_featured)
+VALUES (?, ?, ?)
+RETURNING tag_id, fqn, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 			input.IsHidden,
+			input.IsFeatured,
 		)
 		created, scanErr := scanTag(row)
 		if scanErr != nil {
@@ -55,7 +57,7 @@ RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_a
 
 // Get returns a tag by ID.
 func (s *TagStore) Get(ctx context.Context, id int64, includeTombstoned bool) (tags.Tag, error) {
-	query := `SELECT tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT tag_id, fqn, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("tag") + `
 WHERE tag_id = ?`
 	args := []any{id}
@@ -85,12 +87,16 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		filterQuery += " AND tombstoned_at IS NULL"
 	}
+	if opts.IsFeatured != nil {
+		filterQuery += " AND is_featured = ?"
+		args = append(args, *opts.IsFeatured)
+	}
 	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "tags", opts.List.IncludeTotalCount)
 	if err != nil {
 		return services.PaginatedList[tags.Tag]{}, err
 	}
 
-	query := `SELECT tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT tag_id, fqn, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 ` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, tagSortColumns, services.SortKeyFQN, "tag_id")
 
@@ -123,23 +129,30 @@ WHERE 1 = 1`
 	}, nil
 }
 
-// UpdateHidden updates a tag's hidden state.
-func (s *TagStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (tags.Tag, error) {
-	row := s.db.query().QueryRowContext(
-		ctx,
-		`UPDATE `+s.db.accountingName("tag")+`
-SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
+// UpdateMutable updates mutable tag fields.
+func (s *TagStore) UpdateMutable(ctx context.Context, id int64, input tags.UpdateInput) (tags.Tag, error) {
+	setClauses := []string{}
+	args := []any{}
+	if input.IsHidden != nil {
+		setClauses = append(setClauses, "is_hidden = ?")
+		args = append(args, *input.IsHidden)
+	}
+	if input.IsFeatured != nil {
+		setClauses = append(setClauses, "is_featured = ?")
+		args = append(args, *input.IsFeatured)
+	}
+	args = append(args, id)
+
+	row := s.db.query().QueryRowContext(ctx, `UPDATE `+s.db.accountingName("tag")+`
+SET `+strings.Join(setClauses, ", ")+`, updated_at = CURRENT_TIMESTAMP
 WHERE tag_id = ? AND tombstoned_at IS NULL
-RETURNING tag_id, fqn, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
-		isHidden,
-		id,
-	)
+RETURNING tag_id, fqn, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`, args...)
 	tag, err := scanTag(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return tags.Tag{}, services.ErrNotFound
 	}
 	if err != nil {
-		return tags.Tag{}, fmt.Errorf("update tag hidden state: %w", err)
+		return tags.Tag{}, fmt.Errorf("update tag: %w", err)
 	}
 
 	return tag, nil
@@ -233,6 +246,7 @@ func scanTag(scanner tagScanner) (tags.Tag, error) {
 		&tag.ID,
 		&tag.FQN,
 		&tag.IsHidden,
+		&tag.IsFeatured,
 		&parentFQN,
 		&tag.Name,
 		&tag.Level,

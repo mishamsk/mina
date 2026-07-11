@@ -150,6 +150,7 @@ func (s *strictServer) ListCategories(ctx context.Context, request openapi.ListC
 		IncludeHidden:     boolParam(params.IncludeHidden),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
 		EconomicIntents:   categoryEconomicIntentsFromAPI(params.EconomicIntent),
+		IsFeatured:        params.IsFeatured,
 		List: listOptionsFromParams(
 			params.Sort,
 			params.SortDir,
@@ -184,6 +185,7 @@ func (s *strictServer) CreateCategory(ctx context.Context, request openapi.Creat
 		FQN:            request.Body.Fqn,
 		EconomicIntent: categories.CategoryEconomicIntent(request.Body.EconomicIntent),
 		IsHidden:       request.Body.IsHidden != nil && *request.Body.IsHidden,
+		IsFeatured:     request.Body.IsFeatured != nil && *request.Body.IsFeatured,
 	})
 	if err != nil {
 		return nil, err
@@ -228,8 +230,10 @@ func (s *strictServer) GetCategory(ctx context.Context, request openapi.GetCateg
 }
 
 func (s *strictServer) UpdateCategory(ctx context.Context, request openapi.UpdateCategoryRequestObject) (openapi.UpdateCategoryResponseObject, error) {
-	isHidden := request.Body.IsHidden
-	category, err := s.deps.Categories.UpdateHidden(ctx, request.CategoryId, &isHidden)
+	category, err := s.deps.Categories.UpdateMutable(ctx, request.CategoryId, categories.UpdateInput{
+		IsHidden:   request.Body.IsHidden,
+		IsFeatured: request.Body.IsFeatured,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -310,6 +314,7 @@ func (s *strictServer) ListTags(ctx context.Context, request openapi.ListTagsReq
 	tagList, err := s.deps.Tags.List(ctx, tags.ListOptions{
 		IncludeHidden:     boolParam(params.IncludeHidden),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
+		IsFeatured:        params.IsFeatured,
 		List: listOptionsFromParams(
 			params.Sort,
 			params.SortDir,
@@ -341,8 +346,9 @@ func (s *strictServer) ListTagGroups(ctx context.Context, request openapi.ListTa
 
 func (s *strictServer) CreateTag(ctx context.Context, request openapi.CreateTagRequestObject) (openapi.CreateTagResponseObject, error) {
 	tag, err := s.deps.Tags.Create(ctx, tags.CreateInput{
-		FQN:      request.Body.Fqn,
-		IsHidden: request.Body.IsHidden != nil && *request.Body.IsHidden,
+		FQN:        request.Body.Fqn,
+		IsHidden:   request.Body.IsHidden != nil && *request.Body.IsHidden,
+		IsFeatured: request.Body.IsFeatured != nil && *request.Body.IsFeatured,
 	})
 	if err != nil {
 		return nil, err
@@ -387,8 +393,10 @@ func (s *strictServer) GetTag(ctx context.Context, request openapi.GetTagRequest
 }
 
 func (s *strictServer) UpdateTag(ctx context.Context, request openapi.UpdateTagRequestObject) (openapi.UpdateTagResponseObject, error) {
-	isHidden := request.Body.IsHidden
-	tag, err := s.deps.Tags.UpdateHidden(ctx, request.TagId, &isHidden)
+	tag, err := s.deps.Tags.UpdateMutable(ctx, request.TagId, tags.UpdateInput{
+		IsHidden:   request.Body.IsHidden,
+		IsFeatured: request.Body.IsFeatured,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -500,6 +508,7 @@ func categoryAPIResponse(category categories.Category) openapi.Category {
 		Fqn:            category.FQN,
 		EconomicIntent: openapi.CategoryEconomicIntent(category.EconomicIntent),
 		IsHidden:       category.IsHidden,
+		IsFeatured:     category.IsFeatured,
 		Deletable:      category.Deletable,
 		ParentFqn:      category.ParentFQN,
 		Name:           category.Name,
@@ -558,6 +567,7 @@ func tagAPIResponse(tag tags.Tag) openapi.Tag {
 		TagId:        tag.ID,
 		Fqn:          tag.FQN,
 		IsHidden:     tag.IsHidden,
+		IsFeatured:   tag.IsFeatured,
 		Deletable:    tag.Deletable,
 		ParentFqn:    tag.ParentFQN,
 		Name:         tag.Name,

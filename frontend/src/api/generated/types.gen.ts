@@ -154,6 +154,7 @@ export type Category = {
     fqn: string;
     economic_intent: CategoryEconomicIntent;
     is_hidden: boolean;
+    is_featured: boolean;
     /**
      * Populated in listCategories responses. True when the active category has no active dependent resources and can be tombstone-deleted.
      */
@@ -180,6 +181,7 @@ export type CreateCategoryRequest = {
     fqn: string;
     economic_intent: CategoryEconomicIntent;
     is_hidden?: boolean;
+    is_featured?: boolean;
 };
 
 export type CreateAccountRequest = {
@@ -471,6 +473,7 @@ export type RecurringDefinitionRecordRequest = {
 export type CreateTagRequest = {
     fqn: string;
     is_hidden?: boolean;
+    is_featured?: boolean;
 };
 
 export type CreateMemberRequest = {
@@ -624,6 +627,7 @@ export type Tag = {
     tag_id: number;
     fqn: string;
     is_hidden: boolean;
+    is_featured: boolean;
     /**
      * Populated in listTags responses. True when the active tag has no active dependent resources and can be tombstone-deleted.
      */
@@ -786,7 +790,8 @@ export type TransactionListResponse = {
 };
 
 export type UpdateCategoryRequest = {
-    is_hidden: boolean;
+    is_hidden?: boolean;
+    is_featured?: boolean;
 };
 
 export type UpdateAccountRequest = {
@@ -805,7 +810,8 @@ export type UpdateExchangeRateRequest = {
 };
 
 export type UpdateTagRequest = {
-    is_hidden: boolean;
+    is_hidden?: boolean;
+    is_featured?: boolean;
 };
 
 export type UpdateMemberRequest = {
@@ -1083,6 +1089,7 @@ export type ListCategoriesData = {
     query?: {
         include_hidden?: boolean;
         include_tombstoned?: boolean;
+        is_featured?: boolean;
         economic_intent?: Array<CategoryEconomicIntent>;
         sort?: 'fqn' | 'created_at' | 'updated_at';
         sort_dir?: 'asc' | 'desc';
@@ -1333,6 +1340,7 @@ export type ListTagsData = {
     query?: {
         include_hidden?: boolean;
         include_tombstoned?: boolean;
+        is_featured?: boolean;
         sort?: 'fqn' | 'created_at' | 'updated_at';
         sort_dir?: 'asc' | 'desc';
         limit?: number;

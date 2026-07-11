@@ -71,7 +71,7 @@ func TestTagCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	}
 
 	updated, err := client.REST().UpdateTagWithResponse(context.Background(), created.JSON201.TagId, httpclient.UpdateTagRequest{
-		IsHidden: true,
+		IsHidden: &hiddenValue,
 	})
 	if err != nil {
 		t.Fatalf("update request: %v", err)
@@ -361,22 +361,22 @@ func TestTagValidationErrors(t *testing.T) {
 		t.Fatalf("empty query status = %d, want %d; body %s", emptyQuery.StatusCode(), http.StatusBadRequest, emptyQuery.Body)
 	}
 
-	missingRequired, err := client.REST().UpdateTagWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]any{}))
+	emptyUpdate, err := client.REST().UpdateTagWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]any{}))
 	if err != nil {
-		t.Fatalf("missing required request: %v", err)
+		t.Fatalf("empty update request: %v", err)
 	}
-	if missingRequired.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("missing required status = %d, want %d; body %s", missingRequired.StatusCode(), http.StatusBadRequest, missingRequired.Body)
+	if emptyUpdate.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("empty update status = %d, want %d; body %s", emptyUpdate.StatusCode(), http.StatusBadRequest, emptyUpdate.Body)
 	}
 
-	missingHidden, err := client.REST().UpdateTagWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]string{
+	unexpectedField, err := client.REST().UpdateTagWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]string{
 		"fqn": "Other",
 	}))
 	if err != nil {
-		t.Fatalf("missing hidden request: %v", err)
+		t.Fatalf("unexpected field request: %v", err)
 	}
-	if missingHidden.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("missing hidden status = %d, want %d; body %s", missingHidden.StatusCode(), http.StatusBadRequest, missingHidden.Body)
+	if unexpectedField.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unexpected field status = %d, want %d; body %s", unexpectedField.StatusCode(), http.StatusBadRequest, unexpectedField.Body)
 	}
 
 	extraField, err := client.REST().CreateTagWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
@@ -415,5 +415,83 @@ func assertTagIDs(t *testing.T, tags []httpclient.Tag, want []int64) {
 		if tag.TagId != want[i] {
 			t.Fatalf("tag id at %d = %d, want %d; tags = %+v", i, tag.TagId, want[i], tags)
 		}
+	}
+}
+
+func TestTagFeaturedBoundary(t *testing.T) {
+	client := newSharedClient(t)
+
+	featured := true
+	unfeatured := false
+	defaultTag, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{Fqn: "FeaturedTag:Default"})
+	if err != nil {
+		t.Fatalf("default create request: %v", err)
+	}
+	if defaultTag.StatusCode() != http.StatusCreated {
+		t.Fatalf("default create status = %d, want %d; body %s", defaultTag.StatusCode(), http.StatusCreated, defaultTag.Body)
+	}
+	if defaultTag.JSON201.IsFeatured {
+		t.Fatal("default tag featured = true, want false")
+	}
+
+	featuredTag, err := client.REST().CreateTagWithResponse(context.Background(), httpclient.CreateTagRequest{
+		Fqn:        "FeaturedTag:Explicit",
+		IsFeatured: &featured,
+	})
+	if err != nil {
+		t.Fatalf("featured create request: %v", err)
+	}
+	if featuredTag.StatusCode() != http.StatusCreated {
+		t.Fatalf("featured create status = %d, want %d; body %s", featuredTag.StatusCode(), http.StatusCreated, featuredTag.Body)
+	}
+	if !featuredTag.JSON201.IsFeatured {
+		t.Fatal("featured tag featured = false, want true")
+	}
+
+	featuredOnly, err := client.REST().ListTagsWithResponse(context.Background(), &httpclient.ListTagsParams{IsFeatured: &featured})
+	if err != nil {
+		t.Fatalf("featured list request: %v", err)
+	}
+	if featuredOnly.StatusCode() != http.StatusOK {
+		t.Fatalf("featured list status = %d, want %d; body %s", featuredOnly.StatusCode(), http.StatusOK, featuredOnly.Body)
+	}
+	assertTagIDs(t, featuredOnly.JSON200.Tags, []int64{featuredTag.JSON201.TagId})
+
+	unfeaturedOnly, err := client.REST().ListTagsWithResponse(context.Background(), &httpclient.ListTagsParams{IsFeatured: &unfeatured})
+	if err != nil {
+		t.Fatalf("unfeatured list request: %v", err)
+	}
+	if unfeaturedOnly.StatusCode() != http.StatusOK {
+		t.Fatalf("unfeatured list status = %d, want %d; body %s", unfeaturedOnly.StatusCode(), http.StatusOK, unfeaturedOnly.Body)
+	}
+	assertTagIDs(t, unfeaturedOnly.JSON200.Tags, []int64{defaultTag.JSON201.TagId})
+
+	updated, err := client.REST().UpdateTagWithResponse(context.Background(), defaultTag.JSON201.TagId, httpclient.UpdateTagRequest{IsFeatured: &featured})
+	if err != nil {
+		t.Fatalf("feature update request: %v", err)
+	}
+	if updated.StatusCode() != http.StatusOK {
+		t.Fatalf("feature update status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
+	}
+	if !updated.JSON200.IsFeatured || updated.JSON200.IsHidden {
+		t.Fatalf("feature update = %+v, want featured visible tag", updated.JSON200)
+	}
+
+	unfeaturedUpdate, err := client.REST().UpdateTagWithResponse(context.Background(), defaultTag.JSON201.TagId, httpclient.UpdateTagRequest{IsFeatured: &unfeatured})
+	if err != nil {
+		t.Fatalf("unfeature update request: %v", err)
+	}
+	if unfeaturedUpdate.StatusCode() != http.StatusOK {
+		t.Fatalf("unfeature update status = %d, want %d; body %s", unfeaturedUpdate.StatusCode(), http.StatusOK, unfeaturedUpdate.Body)
+	}
+	if unfeaturedUpdate.JSON200.IsFeatured {
+		t.Fatal("unfeatured tag featured = true, want false")
+	}
+	read, err := client.REST().GetTagWithResponse(context.Background(), defaultTag.JSON201.TagId, nil)
+	if err != nil {
+		t.Fatalf("unfeatured read request: %v", err)
+	}
+	if read.StatusCode() != http.StatusOK || read.JSON200.IsFeatured {
+		t.Fatalf("unfeatured read = status %d body %+v, want persisted unfeatured tag", read.StatusCode(), read.JSON200)
 	}
 }

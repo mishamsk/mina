@@ -14,6 +14,7 @@ type Tag struct {
 	ID           int64
 	FQN          string
 	IsHidden     bool
+	IsFeatured   bool
 	ParentFQN    *string
 	Name         string
 	Level        int
@@ -25,14 +26,22 @@ type Tag struct {
 
 // CreateInput contains fields for creating a tag.
 type CreateInput struct {
-	FQN      string
-	IsHidden bool
+	FQN        string
+	IsHidden   bool
+	IsFeatured bool
+}
+
+// UpdateInput contains mutable tag fields.
+type UpdateInput struct {
+	IsHidden   *bool
+	IsFeatured *bool
 }
 
 // ListOptions controls tag list visibility.
 type ListOptions struct {
 	IncludeHidden     bool
 	IncludeTombstoned bool
+	IsFeatured        *bool
 	List              services.ListOptions
 }
 
@@ -68,7 +77,7 @@ type Repository interface {
 	Create(context.Context, CreateInput) (Tag, error)
 	Get(context.Context, int64, bool) (Tag, error)
 	List(context.Context, ListOptions) (services.PaginatedList[Tag], error)
-	UpdateHidden(context.Context, int64, bool) (Tag, error)
+	UpdateMutable(context.Context, int64, UpdateInput) (Tag, error)
 	RestructureFQNs(context.Context, string, string) (int64, error)
 	SetHiddenByPath(context.Context, string, bool) error
 	ActiveUsage(context.Context, []int64) (map[int64]ActiveUsage, error)
@@ -220,18 +229,18 @@ func (s *Service) GroupStates(ctx context.Context, includeHidden bool) ([]GroupS
 	return services.DeriveFQNGroupStates(leaves, includeHidden), nil
 }
 
-// UpdateHidden validates and updates a tag hidden state.
-func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (Tag, error) {
+// UpdateMutable validates and updates mutable tag fields.
+func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput) (Tag, error) {
 	if id <= 0 {
 		return Tag{}, services.InvalidRequest("tag_id must be positive")
 	}
-	if isHidden == nil {
-		return Tag{}, services.InvalidRequest("is_hidden is required")
+	if !input.hasChanges() {
+		return Tag{}, services.InvalidRequest("at least one tag field is required")
 	}
 
 	var tag Tag
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		updated, err := s.repo.UpdateHidden(ctx, id, *isHidden)
+		updated, err := s.repo.UpdateMutable(ctx, id, input)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("tag not found")
 		}
@@ -247,6 +256,10 @@ func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (T
 	}
 
 	return tag, nil
+}
+
+func (input UpdateInput) hasChanges() bool {
+	return input.IsHidden != nil || input.IsFeatured != nil
 }
 
 // Restructure atomically rewrites an active tag FQN subtree from one path to another.

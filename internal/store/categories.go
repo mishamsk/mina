@@ -30,12 +30,13 @@ func (s *CategoryStore) Create(ctx context.Context, input categories.CreateInput
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("category")+` (fqn, economic_intent, is_hidden)
-VALUES (?, ?, ?)
-RETURNING category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("category")+` (fqn, economic_intent, is_hidden, is_featured)
+VALUES (?, ?, ?, ?)
+RETURNING category_id, fqn, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 			enumValue(input.EconomicIntent),
 			input.IsHidden,
+			input.IsFeatured,
 		)
 		created, scanErr := scanCategory(row)
 		if scanErr != nil {
@@ -57,7 +58,7 @@ RETURNING category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level,
 
 // Get returns a category by ID.
 func (s *CategoryStore) Get(ctx context.Context, id int64, includeTombstoned bool) (categories.Category, error) {
-	query := `SELECT category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT category_id, fqn, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("category") + `
 WHERE category_id = ?`
 	args := []any{id}
@@ -93,12 +94,16 @@ WHERE 1 = 1`
 			args = append(args, enumValue(intent))
 		}
 	}
+	if opts.IsFeatured != nil {
+		filterQuery += " AND is_featured = ?"
+		args = append(args, *opts.IsFeatured)
+	}
 	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "categories", opts.List.IncludeTotalCount)
 	if err != nil {
 		return services.PaginatedList[categories.Category]{}, err
 	}
 
-	query := `SELECT category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at
+	query := `SELECT category_id, fqn, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at
 ` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, categorySortColumns, services.SortKeyFQN, "category_id")
 
@@ -131,23 +136,30 @@ WHERE 1 = 1`
 	}, nil
 }
 
-// UpdateHidden updates a category's hidden state.
-func (s *CategoryStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (categories.Category, error) {
-	row := s.db.query().QueryRowContext(
-		ctx,
-		`UPDATE `+s.db.accountingName("category")+`
-SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
+// UpdateMutable updates mutable category fields.
+func (s *CategoryStore) UpdateMutable(ctx context.Context, id int64, input categories.UpdateInput) (categories.Category, error) {
+	setClauses := []string{}
+	args := []any{}
+	if input.IsHidden != nil {
+		setClauses = append(setClauses, "is_hidden = ?")
+		args = append(args, *input.IsHidden)
+	}
+	if input.IsFeatured != nil {
+		setClauses = append(setClauses, "is_featured = ?")
+		args = append(args, *input.IsFeatured)
+	}
+	args = append(args, id)
+
+	row := s.db.query().QueryRowContext(ctx, `UPDATE `+s.db.accountingName("category")+`
+SET `+strings.Join(setClauses, ", ")+`, updated_at = CURRENT_TIMESTAMP
 WHERE category_id = ? AND tombstoned_at IS NULL
-RETURNING category_id, fqn, economic_intent, is_hidden, parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
-		isHidden,
-		id,
-	)
+RETURNING category_id, fqn, economic_intent, is_hidden, is_featured, parent_fqn, name, level, created_at, updated_at, tombstoned_at`, args...)
 	category, err := scanCategory(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return categories.Category{}, services.ErrNotFound
 	}
 	if err != nil {
-		return categories.Category{}, fmt.Errorf("update category hidden state: %w", err)
+		return categories.Category{}, fmt.Errorf("update category: %w", err)
 	}
 
 	return category, nil
@@ -269,6 +281,7 @@ func scanCategory(scanner categoryScanner) (categories.Category, error) {
 		&category.FQN,
 		&economicIntent,
 		&category.IsHidden,
+		&category.IsFeatured,
 		&parentFQN,
 		&category.Name,
 		&category.Level,

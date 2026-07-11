@@ -9,6 +9,7 @@
 - Service instances own process-local, write-through tag reference caches for active-reference validation.
 - Hidden active tags are valid references only when callers explicitly allow hidden references.
 - Tag group hidden state is derived from active tag leaves, including hidden leaves.
+- Featured state is leaf-only portable metadata; groups have no featured state or derivation.
 - Tag path hide/unhide targets active leaves at or under the path and invalidates the tag reference cache.
 - List responses populate `deletable` from batched active-resource usage; tombstoned tags are never deletable, and DELETE uses the same dependency predicate.
 

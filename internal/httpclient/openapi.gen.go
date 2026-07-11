@@ -975,6 +975,7 @@ type Category struct {
 	Deletable      *bool                  `json:"deletable,omitempty"`
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
 	Fqn            string                 `json:"fqn"`
+	IsFeatured     bool                   `json:"is_featured"`
 	IsHidden       bool                   `json:"is_hidden"`
 	Level          int                    `json:"level"`
 	Name           string                 `json:"name"`
@@ -1009,6 +1010,7 @@ type CreateAccountRequest struct {
 type CreateCategoryRequest struct {
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
 	Fqn            string                 `json:"fqn"`
+	IsFeatured     *bool                  `json:"is_featured,omitempty"`
 	IsHidden       *bool                  `json:"is_hidden,omitempty"`
 }
 
@@ -1129,8 +1131,9 @@ type CreateSpendTransactionRequest struct {
 
 // CreateTagRequest defines model for CreateTagRequest.
 type CreateTagRequest struct {
-	Fqn      string `json:"fqn"`
-	IsHidden *bool  `json:"is_hidden,omitempty"`
+	Fqn        string `json:"fqn"`
+	IsFeatured *bool  `json:"is_featured,omitempty"`
+	IsHidden   *bool  `json:"is_hidden,omitempty"`
 }
 
 // CreateTransactionRequest defines model for CreateTransactionRequest.
@@ -1537,6 +1540,7 @@ type Tag struct {
 	// Deletable Populated in listTags responses. True when the active tag has no active dependent resources and can be tombstone-deleted.
 	Deletable    *bool      `json:"deletable,omitempty"`
 	Fqn          string     `json:"fqn"`
+	IsFeatured   bool       `json:"is_featured"`
 	IsHidden     bool       `json:"is_hidden"`
 	Level        int        `json:"level"`
 	Name         string     `json:"name"`
@@ -1679,7 +1683,8 @@ type UpdateAccountRequest struct {
 
 // UpdateCategoryRequest defines model for UpdateCategoryRequest.
 type UpdateCategoryRequest struct {
-	IsHidden bool `json:"is_hidden"`
+	IsFeatured *bool `json:"is_featured,omitempty"`
+	IsHidden   *bool `json:"is_hidden,omitempty"`
 }
 
 // UpdateExchangeRateRequest defines model for UpdateExchangeRateRequest.
@@ -1700,7 +1705,8 @@ type UpdateMemberRequest struct {
 
 // UpdateTagRequest defines model for UpdateTagRequest.
 type UpdateTagRequest struct {
-	IsHidden bool `json:"is_hidden"`
+	IsFeatured *bool `json:"is_featured,omitempty"`
+	IsHidden   *bool `json:"is_hidden,omitempty"`
 }
 
 // UpdateTransactionRequest defines model for UpdateTransactionRequest.
@@ -1824,6 +1830,7 @@ type SearchAccountJournalRecordsParams struct {
 type ListCategoriesParams struct {
 	IncludeHidden     *bool                        `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 	IncludeTombstoned *bool                        `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	IsFeatured        *bool                        `form:"is_featured,omitempty" json:"is_featured,omitempty"`
 	EconomicIntent    *[]CategoryEconomicIntent    `form:"economic_intent,omitempty" json:"economic_intent,omitempty"`
 	Sort              *ListCategoriesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListCategoriesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
@@ -1966,6 +1973,7 @@ type ListRecurringOccurrencesParamsSortDir string
 type ListTagsParams struct {
 	IncludeHidden     *bool                  `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 	IncludeTombstoned *bool                  `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+	IsFeatured        *bool                  `form:"is_featured,omitempty" json:"is_featured,omitempty"`
 	Sort              *ListTagsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListTagsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
 	Limit             *int                   `form:"limit,omitempty" json:"limit,omitempty"`
@@ -5200,6 +5208,18 @@ func NewListCategoriesRequest(server string, params *ListCategoriesParams) (*htt
 
 		}
 
+		if params.IsFeatured != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "is_featured", *params.IsFeatured, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.EconomicIntent != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "economic_intent", *params.EconomicIntent, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
@@ -7436,6 +7456,18 @@ func NewListTagsRequest(server string, params *ListTagsParams) (*http.Request, e
 		if params.IncludeTombstoned != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_tombstoned", *params.IncludeTombstoned, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IsFeatured != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "is_featured", *params.IsFeatured, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

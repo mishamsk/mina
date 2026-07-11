@@ -75,7 +75,7 @@ func TestCategoryCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	assertCategoryEconomicIntents(t, includeHidden.JSON200.Categories, []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentExpense, httpclient.CategoryEconomicIntentExpense})
 
 	updated, err := client.REST().UpdateCategoryWithResponse(context.Background(), created.JSON201.CategoryId, httpclient.UpdateCategoryRequest{
-		IsHidden: true,
+		IsHidden: &hiddenValue,
 	})
 	if err != nil {
 		t.Fatalf("update request: %v", err)
@@ -454,22 +454,22 @@ func TestCategoryValidationErrors(t *testing.T) {
 		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode(), http.StatusBadRequest, badQuery.Body)
 	}
 
-	missingRequired, err := client.REST().UpdateCategoryWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]any{}))
+	emptyUpdate, err := client.REST().UpdateCategoryWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]any{}))
 	if err != nil {
-		t.Fatalf("missing required request: %v", err)
+		t.Fatalf("empty update request: %v", err)
 	}
-	if missingRequired.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("missing required status = %d, want %d; body %s", missingRequired.StatusCode(), http.StatusBadRequest, missingRequired.Body)
+	if emptyUpdate.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("empty update status = %d, want %d; body %s", emptyUpdate.StatusCode(), http.StatusBadRequest, emptyUpdate.Body)
 	}
 
-	missingHidden, err := client.REST().UpdateCategoryWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]string{
+	unexpectedField, err := client.REST().UpdateCategoryWithBodyWithResponse(context.Background(), 1, "application/json", apptest.JSONReader(map[string]string{
 		"fqn": "Other",
 	}))
 	if err != nil {
-		t.Fatalf("missing hidden request: %v", err)
+		t.Fatalf("unexpected field request: %v", err)
 	}
-	if missingHidden.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("missing hidden status = %d, want %d; body %s", missingHidden.StatusCode(), http.StatusBadRequest, missingHidden.Body)
+	if unexpectedField.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unexpected field status = %d, want %d; body %s", unexpectedField.StatusCode(), http.StatusBadRequest, unexpectedField.Body)
 	}
 
 	extraField, err := client.REST().CreateCategoryWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
@@ -522,5 +522,87 @@ func assertCategoryEconomicIntents(t *testing.T, categories []httpclient.Categor
 		if category.EconomicIntent != want[i] {
 			t.Fatalf("category economic_intent at %d = %q, want %q; categories = %+v", i, category.EconomicIntent, want[i], categories)
 		}
+	}
+}
+
+func TestCategoryFeaturedBoundary(t *testing.T) {
+	client := newSharedClient(t)
+
+	featured := true
+	unfeatured := false
+	defaultCategory, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "FeaturedCategory:Default",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+	})
+	if err != nil {
+		t.Fatalf("default create request: %v", err)
+	}
+	if defaultCategory.StatusCode() != http.StatusCreated {
+		t.Fatalf("default create status = %d, want %d; body %s", defaultCategory.StatusCode(), http.StatusCreated, defaultCategory.Body)
+	}
+	if defaultCategory.JSON201.IsFeatured {
+		t.Fatal("default category featured = true, want false")
+	}
+
+	featuredCategory, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "FeaturedCategory:Explicit",
+		EconomicIntent: httpclient.CategoryEconomicIntentExpense,
+		IsFeatured:     &featured,
+	})
+	if err != nil {
+		t.Fatalf("featured create request: %v", err)
+	}
+	if featuredCategory.StatusCode() != http.StatusCreated {
+		t.Fatalf("featured create status = %d, want %d; body %s", featuredCategory.StatusCode(), http.StatusCreated, featuredCategory.Body)
+	}
+	if !featuredCategory.JSON201.IsFeatured {
+		t.Fatal("featured category featured = false, want true")
+	}
+
+	featuredOnly, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{IsFeatured: &featured})
+	if err != nil {
+		t.Fatalf("featured list request: %v", err)
+	}
+	if featuredOnly.StatusCode() != http.StatusOK {
+		t.Fatalf("featured list status = %d, want %d; body %s", featuredOnly.StatusCode(), http.StatusOK, featuredOnly.Body)
+	}
+	assertCategoryIDs(t, featuredOnly.JSON200.Categories, []int64{featuredCategory.JSON201.CategoryId})
+
+	unfeaturedOnly, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{IsFeatured: &unfeatured})
+	if err != nil {
+		t.Fatalf("unfeatured list request: %v", err)
+	}
+	if unfeaturedOnly.StatusCode() != http.StatusOK {
+		t.Fatalf("unfeatured list status = %d, want %d; body %s", unfeaturedOnly.StatusCode(), http.StatusOK, unfeaturedOnly.Body)
+	}
+	assertCategoryIDs(t, unfeaturedOnly.JSON200.Categories, []int64{defaultCategory.JSON201.CategoryId})
+
+	updated, err := client.REST().UpdateCategoryWithResponse(context.Background(), defaultCategory.JSON201.CategoryId, httpclient.UpdateCategoryRequest{IsFeatured: &featured})
+	if err != nil {
+		t.Fatalf("feature update request: %v", err)
+	}
+	if updated.StatusCode() != http.StatusOK {
+		t.Fatalf("feature update status = %d, want %d; body %s", updated.StatusCode(), http.StatusOK, updated.Body)
+	}
+	if !updated.JSON200.IsFeatured || updated.JSON200.IsHidden {
+		t.Fatalf("feature update = %+v, want featured visible category", updated.JSON200)
+	}
+
+	unfeaturedUpdate, err := client.REST().UpdateCategoryWithResponse(context.Background(), defaultCategory.JSON201.CategoryId, httpclient.UpdateCategoryRequest{IsFeatured: &unfeatured})
+	if err != nil {
+		t.Fatalf("unfeature update request: %v", err)
+	}
+	if unfeaturedUpdate.StatusCode() != http.StatusOK {
+		t.Fatalf("unfeature update status = %d, want %d; body %s", unfeaturedUpdate.StatusCode(), http.StatusOK, unfeaturedUpdate.Body)
+	}
+	if unfeaturedUpdate.JSON200.IsFeatured {
+		t.Fatal("unfeatured category featured = true, want false")
+	}
+	read, err := client.REST().GetCategoryWithResponse(context.Background(), defaultCategory.JSON201.CategoryId, nil)
+	if err != nil {
+		t.Fatalf("unfeatured read request: %v", err)
+	}
+	if read.StatusCode() != http.StatusOK || read.JSON200.IsFeatured {
+		t.Fatalf("unfeatured read = status %d body %+v, want persisted unfeatured category", read.StatusCode(), read.JSON200)
 	}
 }

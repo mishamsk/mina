@@ -169,6 +169,11 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: is_featured
+          in: query
+          required: false
+          schema:
+            type: boolean
         - name: economic_intent
           in: query
           required: false
@@ -338,7 +343,7 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateCategory
-      summary: Update category hidden state.
+      summary: Update category mutable metadata.
       requestBody:
         required: true
         content:
@@ -385,6 +390,11 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: is_featured
+          in: query
+          required: false
+          schema:
+            type: boolean
         - name: sort
           in: query
           required: false
@@ -2950,6 +2960,7 @@ components:
         - fqn
         - economic_intent
         - is_hidden
+        - is_featured
         - parent_fqn
         - name
         - level
@@ -2964,6 +2975,8 @@ components:
         economic_intent:
           $ref: "#/components/schemas/CategoryEconomicIntent"
         is_hidden:
+          type: boolean
+        is_featured:
           type: boolean
         deletable:
           type: boolean
@@ -3024,6 +3037,9 @@ components:
         economic_intent:
           $ref: "#/components/schemas/CategoryEconomicIntent"
         is_hidden:
+          type: boolean
+          default: false
+        is_featured:
           type: boolean
           default: false
     CreateAccountRequest:
@@ -3800,6 +3816,9 @@ components:
         is_hidden:
           type: boolean
           default: false
+        is_featured:
+          type: boolean
+          default: false
     CreateMemberRequest:
       type: object
       additionalProperties: false
@@ -4207,6 +4226,7 @@ components:
         - tag_id
         - fqn
         - is_hidden
+        - is_featured
         - parent_fqn
         - name
         - level
@@ -4219,6 +4239,8 @@ components:
         fqn:
           type: string
         is_hidden:
+          type: boolean
+        is_featured:
           type: boolean
         deletable:
           type: boolean
@@ -4676,10 +4698,10 @@ components:
     UpdateCategoryRequest:
       type: object
       additionalProperties: false
-      required:
-        - is_hidden
       properties:
         is_hidden:
+          type: boolean
+        is_featured:
           type: boolean
     UpdateAccountRequest:
       type: object
@@ -4721,10 +4743,10 @@ components:
     UpdateTagRequest:
       type: object
       additionalProperties: false
-      required:
-        - is_hidden
       properties:
         is_hidden:
+          type: boolean
+        is_featured:
           type: boolean
     UpdateMemberRequest:
       type: object
