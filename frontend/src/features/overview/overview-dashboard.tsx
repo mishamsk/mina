@@ -432,7 +432,7 @@ const RecentActivityLine = ({
                     transaction.transaction_class !== "transfer" &&
                     transaction.transaction_class !== "currency_exchange"
                   }
-                  transactionClass={transaction.transaction_class}
+                  tone="neutral"
                 />
               ))
             )}

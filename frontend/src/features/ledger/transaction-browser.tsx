@@ -840,7 +840,7 @@ export const TransactionBrowser = ({
                                 transaction.transaction_class !==
                                   "currency_exchange"
                               }
-                              transactionClass={transaction.transaction_class}
+                              tone="neutral"
                             />
                           ))
                         )}

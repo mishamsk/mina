@@ -552,6 +552,23 @@ test("transactions page renders demo transaction lines and expands records", asy
   await expect(transferRow).toContainText("→");
   await expect(transferRow).not.toContainText("+120.00 $");
 
+  const incomeRow = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("img", { name: "INCOME" }) })
+    .filter({ hasText: "+3,250.00 $" })
+    .first();
+  await expect(incomeRow).toBeVisible();
+  const incomeAmountChip = incomeRow
+    .getByTestId("amount-chip")
+    .filter({ hasText: "+3,250.00 $" })
+    .first();
+  await expect(incomeAmountChip).toContainText("+3,250.00 $");
+  await expect(incomeAmountChip).toHaveCSS(
+    "background-color",
+    "rgb(255, 255, 255)",
+  );
+  await expect(incomeAmountChip).toHaveCSS("color", "rgb(15, 13, 22)");
+
   const firstRowBackgroundBefore = await transactionRows
     .nth(0)
     .evaluate((element) => getComputedStyle(element).backgroundColor);

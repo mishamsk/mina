@@ -53,12 +53,6 @@ export const AmountText = ({
         chip
           ? "bg-card inline-flex h-7 max-w-full items-center justify-end overflow-visible border border-[var(--border-ink)] px-2 text-right font-medium whitespace-nowrap shadow-[var(--shadow-chip)]"
           : "inline max-w-full text-right whitespace-normal",
-        chip &&
-          (transactionClass === "income"
-            ? "text-foreground bg-[var(--color-class-income-bright)]"
-            : transactionClass === "refund"
-              ? "text-foreground bg-[var(--color-class-income-bright)]"
-              : ""),
         tone === "neutral"
           ? "text-foreground"
           : amountClassName(transactionClass),
