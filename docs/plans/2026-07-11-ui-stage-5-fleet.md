@@ -59,7 +59,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 
 ### Test infra and backend foundations
 
-- [ ] Task 1: `2d1e` — Frontend e2e: stale reused demo servers poison cross-run state (test infra first: every later frontend task runs `just test-frontend-e2e`; stops stale-server flakiness from taxing the whole fleet) — branch `2d1e-e2e-demo-server-hygiene`
+- [x] Task 1: `2d1e` — Frontend e2e: stale reused demo servers poison cross-run state (test infra first: every later frontend task runs `just test-frontend-e2e`; stops stale-server flakiness from taxing the whole fleet) — branch `2d1e-e2e-demo-server-hygiene`
 - [ ] Task 2: `gb60` — Exchange-rate loading fails on malformed local Frankfurter cache ordering + `fyq2` — Invalidate exchange-rate currency cache after recurring materialization (grouped backend exchange fixes, ~1 commit each; gb60 also silences a failure logged on every `just dev --demo` the operator uses for live verification) — branch `gb60-exchange-cache-fixes`
 - [ ] Task 3: `t828` — Add hidden-state semantics for household members (backend/API contract before its UI consumer dcjx, Task 18) — branch `t828-member-hidden-api`
 - [ ] Task 4: `dgkf` — Support changing account type via update API (backend/API contract before its UI consumer 5z54, Task 19) — branch `dgkf-account-type-update-api`
