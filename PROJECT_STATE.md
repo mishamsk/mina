@@ -9,7 +9,7 @@
   - Account, category, tag, and household member CRUD/list flows, including account, category, tag, and member delete eligibility, account featured metadata, and category economic-intent filtering.
   - Account type and category economic-intent metadata for accounting semantics.
   - Exchange-rate and account credit-limit-history flows.
-  - Transaction creation, read, paginated/date-anchored/filtered list, free-text transaction search, full replacement, and tombstone deletion with nested journal records.
+  - Transaction creation, read, paginated/date-anchored/filtered list, free-text transaction search across reference metadata, full replacement, and tombstone deletion with nested journal records.
   - Non-USD `amount_usd` inference on transaction writes using stored `USD -> currency` rates when resolvable.
   - Server-computed transaction month spend/income totals and account balances with USD-equivalent aggregation, unconverted counts, and current credit limits.
   - Shorthand transaction creation endpoints for spend, income, refund, and transfer.

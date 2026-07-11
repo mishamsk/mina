@@ -2029,7 +2029,7 @@ type ListTransactionsParams struct {
 	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
 	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 
-	// Search Case-insensitive contains search over active journal-record memos and counterparty account names.
+	// Search Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.
 	Search *string `form:"search,omitempty" json:"search,omitempty"`
 }
 

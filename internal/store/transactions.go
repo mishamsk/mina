@@ -480,16 +480,29 @@ WHERE tx.tombstoned_at IS NULL`
 		query += " AND " + s.transactionListRecordExists(strings.Join(conditions, " AND "))
 	}
 	if opts.Search != nil {
-		searchPattern := "%" + escapeLikePattern(strings.ToLower(*opts.Search)) + "%"
+		searchTerm := strings.ToLower(*opts.Search)
+		searchPattern := "%" + escapeLikePattern(searchTerm) + "%"
 		query += ` AND EXISTS (
 	SELECT 1
 	FROM ` + s.db.accountingName("journal_record") + ` jr
 	JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
 	JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
+	LEFT JOIN ` + s.db.accountingName("member") + ` m ON m.member_id = jr.member_id
 	WHERE jr.transaction_id = tx.transaction_id
 	  AND jr.tombstoned_at IS NULL
 	  AND (
 		  lower(COALESCE(jr.memo, '')) LIKE ? ESCAPE '\'
+		  OR lower(a.fqn) LIKE ? ESCAPE '\'
+		  OR lower(c.fqn) LIKE ? ESCAPE '\'
+		  OR lower(COALESCE(m.name, '')) LIKE ? ESCAPE '\'
+		  OR lower(jr.currency) = ?
+		  OR lower(COALESCE(a.external_id, '')) LIKE ? ESCAPE '\'
+		  OR EXISTS (
+			  SELECT 1
+			  FROM unnest(jr.tag_ids) AS jr_tag(tag_id)
+			  JOIN ` + s.db.accountingName("tag") + ` tg ON tg.tag_id = jr_tag.tag_id
+			  WHERE lower(tg.fqn) LIKE ? ESCAPE '\'
+		  )
 		  OR (
 			  lower(a.name) LIKE ? ESCAPE '\'
 			  AND (
@@ -510,6 +523,12 @@ WHERE tx.tombstoned_at IS NULL`
 	  )
 )`
 		args = append(args,
+			searchPattern,
+			searchPattern,
+			searchPattern,
+			searchPattern,
+			searchTerm,
+			searchPattern,
 			searchPattern,
 			searchPattern,
 			enumValue(categories.CategoryEconomicIntentExpense),
