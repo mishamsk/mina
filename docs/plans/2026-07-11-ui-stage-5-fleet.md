@@ -69,7 +69,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 ### Shared frontend foundations
 
 - [x] Task 7: `5qj0` — Extract shared browser-page wiring used by transactions page and drill-down shell + `fpa2` — Consolidate ~15 verbatim apiErrorMessage copies into one helper (grouped consolidation refactors; extracting the shared wiring FIRST means the Task 10 toolbar redesign lands once instead of twice in duplicated code) — branch `5qj0-shared-browser-wiring`
-- [ ] Task 8: `xds2` — Extract shared ConfirmDialog and unify dialog/toast z-layers + `pgc2` — Close categories/tags edit panel when its entity is row-deleted (grouped: pgc2 mirrors the members close-on-delete path that xds2 already covers with tests; consolidating dialogs before the reference-table tasks touch delete flows) — branch `xds2-confirm-dialog-consolidation`
+- [x] Task 8: `xds2` — Extract shared ConfirmDialog and unify dialog/toast z-layers + `pgc2` — Close categories/tags edit panel when its entity is row-deleted (grouped: pgc2 mirrors the members close-on-delete path that xds2 already covers with tests; consolidating dialogs before the reference-table tasks touch delete flows) — branch `xds2-confirm-dialog-consolidation`
 - [ ] Task 9: `d9hq` — Adopt the shared themed dropdown component everywhere it fits (before the toolbar redesign so d8z6 builds on the themed class dropdown instead of patching the native one's missing shadow) — branch `d9hq-themed-dropdown-adoption`
 
 ### Transactions toolbar and table display
