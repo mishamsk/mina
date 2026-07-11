@@ -307,6 +307,7 @@ func recurringOccurrenceAPIResponse(occurrence recurring.Occurrence) openapi.Rec
 	return openapi.RecurringOccurrence{
 		RecurringOccurrenceId:         occurrence.ID,
 		RecurringDefinitionId:         occurrence.RecurringDefinitionID,
+		RecurringDefinitionFqn:        occurrence.RecurringDefinitionFQN,
 		ScheduledDate:                 openAPIDate(occurrence.ScheduledDate),
 		Status:                        openapi.RecurringOccurrenceStatus(occurrence.Status),
 		MaterializedDefinitionVersion: occurrence.MaterializedDefinitionVersion,

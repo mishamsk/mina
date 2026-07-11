@@ -4500,6 +4500,7 @@ components:
       required:
         - recurring_occurrence_id
         - recurring_definition_id
+        - recurring_definition_fqn
         - scheduled_date
         - status
         - materialized_definition_version
@@ -4515,6 +4516,8 @@ components:
         recurring_definition_id:
           type: integer
           format: int64
+        recurring_definition_fqn:
+          type: string
         scheduled_date:
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$

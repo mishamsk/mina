@@ -333,6 +333,28 @@ func TestRecurringOccurrenceMaterializationReviewQueueBoundary(t *testing.T) {
 	}
 	assertMonthTotal(t, "expected recurring spend excluded", totals.JSON200.Spend, "0.00000000", 0)
 	assertMonthTotal(t, "expected recurring income excluded", totals.JSON200.Income, "0.00000000", 0)
+
+	deleted, err := client.REST().DeleteRecurringDefinitionWithResponse(context.Background(), definition.JSON201.RecurringDefinitionId)
+	requireNoTransportError(t, "delete recurring definition with expected occurrences", err)
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf("delete recurring definition status = %d, want %d; body %s", deleted.StatusCode(), http.StatusNoContent, deleted.Body)
+	}
+	afterCancel := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+		RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId,
+	})
+	if len(afterCancel.JSON200.RecurringOccurrences) != len(first.JSON200.RecurringOccurrences) {
+		t.Fatalf("cancelled-definition occurrences = %+v, want %d retained occurrences", afterCancel.JSON200.RecurringOccurrences, len(first.JSON200.RecurringOccurrences))
+	}
+	for _, occurrence := range afterCancel.JSON200.RecurringOccurrences {
+		if occurrence.RecurringDefinitionFqn != definition.JSON201.Fqn {
+			t.Fatalf("cancelled-definition occurrence fqn = %q, want %q", occurrence.RecurringDefinitionFqn, definition.JSON201.Fqn)
+		}
+	}
+	confirmed := confirmRecurringOccurrence(t, client, afterCancel.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
+	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.Confirmed)
+	if confirmed.JSON200.RecurringDefinitionFqn != definition.JSON201.Fqn {
+		t.Fatalf("confirmed cancelled-definition occurrence fqn = %q, want %q", confirmed.JSON200.RecurringDefinitionFqn, definition.JSON201.Fqn)
+	}
 }
 
 func TestRecurringExpectedTransactionsRejectGenericMutationsBoundary(t *testing.T) {

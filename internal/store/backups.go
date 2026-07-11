@@ -78,8 +78,14 @@ func (s *backupSource) detachTarget(ctx context.Context, targetIdentifier string
 		return backupSourceError(ctx, "select memory database before detach", err)
 	}
 
-	_, err := s.db.db.ExecContext(ctx, "DETACH "+targetIdentifier)
-	return backupSourceError(ctx, "detach backup target database", err)
+	if _, err := s.db.db.ExecContext(ctx, "DETACH "+targetIdentifier); err != nil {
+		return backupSourceError(ctx, "detach backup target database", err)
+	}
+	if err := useAccountingLocation(ctx, s.db, s.db.db); err != nil {
+		return backupSourceError(ctx, "restore accounting database after detach", err)
+	}
+
+	return nil
 }
 
 func backupTargetIdentifier() string {

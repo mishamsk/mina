@@ -734,6 +734,7 @@ export type RecurringOccurrenceStatus = 'expected' | 'confirmed' | 'dismissed' |
 export type RecurringOccurrence = {
     recurring_occurrence_id: number;
     recurring_definition_id: number;
+    recurring_definition_fqn: string;
     scheduled_date: string;
     status: RecurringOccurrenceStatus;
     materialized_definition_version: number;

@@ -1,4 +1,5 @@
 import {
+  defaultTransactionPostingStatuses,
   normalizeTransactionFilters,
   type TransactionFilters,
 } from "@/models/transaction-filters";
@@ -15,14 +16,17 @@ import type {
   CreateTagRequest,
   CreateTransactionRequest,
   CreateTransferTransactionRequest,
+  RecurringOccurrence,
   RestructureRequest,
   SetHiddenByPathRequest,
+  Transaction,
   UpdateAccountRequest,
   UpdateCategoryRequest,
   UpdateMemberRequest,
   UpdateTagRequest,
 } from "./generated";
 import {
+  confirmRecurringOccurrence as confirmGeneratedRecurringOccurrence,
   createAccount as createGeneratedAccount,
   createCategory as createGeneratedCategory,
   createCreditLimitHistory as createGeneratedCreditLimitHistory,
@@ -39,6 +43,7 @@ import {
   deleteMember as deleteGeneratedMember,
   deleteTag as deleteGeneratedTag,
   deleteTransaction,
+  dismissRecurringOccurrence as dismissGeneratedRecurringOccurrence,
   getAccount,
   getTransaction,
   getTransactionMonthTotals,
@@ -49,6 +54,8 @@ import {
   listCategoryGroups,
   listCreditLimitHistory as listGeneratedCreditLimitHistory,
   listMembers,
+  listRecurringDefinitions,
+  listRecurringOccurrences,
   listTagGroups,
   listTags,
   listTransactions,
@@ -143,6 +150,10 @@ const transactionFilterQuery = (
   filters: Partial<TransactionFilters> | undefined,
 ) => {
   const normalized = normalizeTransactionFilters(filters);
+  const postingStatuses =
+    normalized.statuses.length > 0
+      ? normalized.statuses
+      : defaultTransactionPostingStatuses;
   return {
     ...(normalized.accountIds.length > 0
       ? { account_id: [...normalized.accountIds] }
@@ -183,9 +194,7 @@ const transactionFilterQuery = (
       ? { posted_date_to: dateTimeBound(normalized.postedTo, "end") }
       : {}),
     ...(normalized.search ? { search: normalized.search } : {}),
-    ...(normalized.statuses.length > 0
-      ? { posting_status: [...normalized.statuses] }
-      : {}),
+    posting_status: [...postingStatuses],
     ...(normalized.tagIds.length > 0 ? { tag_id: [...normalized.tagIds] } : {}),
   };
 };
@@ -518,6 +527,169 @@ const listAllMembersForManagement = async () => {
 };
 
 export const fetchMembersPage = () => listAllMembersForManagement();
+
+const listExpectedRecurringOccurrencesPage = (offset: number) =>
+  listRecurringOccurrences({
+    query: {
+      limit: lookupLimit,
+      offset,
+      sort: "scheduled_date",
+      sort_dir: "asc",
+      status: ["expected"],
+    },
+  });
+
+const listRecurringDefinitionsPageForReview = (offset: number) =>
+  listRecurringDefinitions({
+    query: {
+      limit: lookupLimit,
+      offset,
+      sort: "fqn",
+      sort_dir: "asc",
+    },
+  });
+
+const listAllRecurringDefinitionsForReview = async () => {
+  const firstPage = await listRecurringDefinitionsPageForReview(0);
+  if (
+    !firstPage.data ||
+    firstPage.data.recurring_definitions.length >= firstPage.data.total_count
+  ) {
+    return firstPage;
+  }
+
+  const recurringDefinitions = [...firstPage.data.recurring_definitions];
+  for (
+    let offset = lookupLimit;
+    offset < firstPage.data.total_count;
+    offset += lookupLimit
+  ) {
+    const page = await listRecurringDefinitionsPageForReview(offset);
+    if (!page.data) {
+      return page;
+    }
+    recurringDefinitions.push(...page.data.recurring_definitions);
+  }
+
+  return {
+    ...firstPage,
+    data: {
+      ...firstPage.data,
+      recurring_definitions: recurringDefinitions,
+    },
+  };
+};
+
+export const fetchRecurringReviewPage = async () => {
+  const firstOccurrencesPage = await listExpectedRecurringOccurrencesPage(0);
+  let occurrences = firstOccurrencesPage;
+
+  if (!occurrences.data) {
+    return {
+      definitionError: undefined,
+      definitions: [],
+      occurrences,
+      transactionError: undefined,
+      transactions: [],
+    };
+  }
+
+  if (
+    occurrences.data.recurring_occurrences.length < occurrences.data.total_count
+  ) {
+    const recurringOccurrences = [...occurrences.data.recurring_occurrences];
+    for (
+      let offset = lookupLimit;
+      offset < occurrences.data.total_count;
+      offset += lookupLimit
+    ) {
+      const page = await listExpectedRecurringOccurrencesPage(offset);
+      if (!page.data) {
+        return {
+          definitionError: undefined,
+          definitions: [],
+          occurrences: page,
+          transactionError: undefined,
+          transactions: [],
+        };
+      }
+      recurringOccurrences.push(...page.data.recurring_occurrences);
+    }
+
+    occurrences = {
+      ...occurrences,
+      data: {
+        ...occurrences.data,
+        recurring_occurrences: recurringOccurrences,
+      },
+    };
+  }
+
+  const definitions = await listAllRecurringDefinitionsForReview();
+  if (!definitions.data) {
+    return {
+      definitionError: definitions.error,
+      definitions: [],
+      occurrences,
+      transactionError: undefined,
+      transactions: [],
+    };
+  }
+
+  const transactions: Transaction[] = [];
+  for (const occurrence of occurrences.data.recurring_occurrences) {
+    if (occurrence.generated_transaction_id === null) {
+      continue;
+    }
+    const transaction = await getTransaction({
+      path: {
+        transaction_id: occurrence.generated_transaction_id,
+      },
+    });
+    if (!transaction.data) {
+      return {
+        definitionError: undefined,
+        definitions,
+        occurrences,
+        transactionError: transaction.error,
+        transactions,
+      };
+    }
+    transactions.push(transaction.data);
+  }
+
+  return {
+    definitionError: undefined,
+    definitions: definitions.data.recurring_definitions.filter((definition) =>
+      occurrences.data.recurring_occurrences.some(
+        (occurrence) =>
+          occurrence.recurring_definition_id ===
+          definition.recurring_definition_id,
+      ),
+    ),
+    occurrences,
+    transactionError: undefined,
+    transactions,
+  };
+};
+
+export const confirmRecurringOccurrenceById = (
+  occurrence: Pick<RecurringOccurrence, "recurring_occurrence_id">,
+) =>
+  confirmGeneratedRecurringOccurrence({
+    path: {
+      recurring_occurrence_id: occurrence.recurring_occurrence_id,
+    },
+  });
+
+export const dismissRecurringOccurrenceById = (
+  occurrence: Pick<RecurringOccurrence, "recurring_occurrence_id">,
+) =>
+  dismissGeneratedRecurringOccurrence({
+    path: {
+      recurring_occurrence_id: occurrence.recurring_occurrence_id,
+    },
+  });
 
 export const fetchOverviewAccountBalances = () => listAccountBalances();
 

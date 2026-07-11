@@ -1478,6 +1478,7 @@ type RecurringOccurrence struct {
 	GeneratedTransactionId        *int64                    `json:"generated_transaction_id"`
 	MaterializedAt                time.Time                 `json:"materialized_at"`
 	MaterializedDefinitionVersion int64                     `json:"materialized_definition_version"`
+	RecurringDefinitionFqn        string                    `json:"recurring_definition_fqn"`
 	RecurringDefinitionId         int64                     `json:"recurring_definition_id"`
 	RecurringOccurrenceId         int64                     `json:"recurring_occurrence_id"`
 	ReviewedAt                    *time.Time                `json:"reviewed_at"`

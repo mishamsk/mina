@@ -75,7 +75,7 @@ RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(sch
 func (s *RecurringStore) Get(ctx context.Context, id int64) (recurring.Definition, error) {
 	definition, err := scanRecurringDefinition(s.db.query().QueryRowContext(
 		ctx,
-		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(schedule_class AS VARCHAR), anchor_date, definition_version, paused_at,
+		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(d.schedule_class AS VARCHAR), anchor_date, definition_version, paused_at,
 	(SELECT MAX(o.scheduled_date) FROM `+s.db.accountingName("recurring_occurrence")+` AS o WHERE o.recurring_definition_id = d.recurring_definition_id),
 	parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM `+s.db.accountingName("recurring_definition")+` AS d
@@ -293,7 +293,7 @@ WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
 func (s *RecurringStore) ListMaterializationDefinitions(ctx context.Context, today values.CivilDate) ([]recurring.MaterializationDefinition, error) {
 	rows, err := s.db.query().QueryContext(
 		ctx,
-		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(schedule_class AS VARCHAR), anchor_date, definition_version, paused_at,
+		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(d.schedule_class AS VARCHAR), anchor_date, definition_version, paused_at,
 	(SELECT MAX(o.scheduled_date) FROM `+s.db.accountingName("recurring_occurrence")+` AS o WHERE o.recurring_definition_id = d.recurring_definition_id),
 	parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM `+s.db.accountingName("recurring_definition")+` AS d
@@ -412,7 +412,7 @@ func createOccurrenceWithTransactionTx(
 	status recurring.OccurrenceStatus,
 	records []transactions.JournalRecordInput,
 ) (recurring.Occurrence, error) {
-	occurrence, err := scanRecurringOccurrence(tx.QueryRowContext(
+	occurrence, err := scanMaterializedRecurringOccurrence(tx.QueryRowContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("recurring_occurrence")+` (
 	recurring_definition_id, scheduled_date, status, materialized_definition_version, reviewed_at
@@ -433,7 +433,7 @@ RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST
 		definition.DefinitionVersion,
 		enumValue(status),
 		definition.ID,
-	))
+	), definition.FQN)
 	if errors.Is(err, sql.ErrNoRows) {
 		return recurring.Occurrence{}, services.ErrNotFound
 	}
@@ -456,6 +456,8 @@ RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST
 // ListOccurrences returns recurring occurrence rows with generated transaction IDs.
 func (s *RecurringStore) ListOccurrences(ctx context.Context, opts recurring.OccurrenceListOptions) (services.PaginatedList[recurring.Occurrence], error) {
 	filterQuery := `FROM ` + s.db.accountingName("recurring_occurrence") + ` AS o
+JOIN ` + s.db.accountingName("recurring_definition") + ` AS d
+  ON d.recurring_definition_id = o.recurring_definition_id
 LEFT JOIN ` + s.db.accountingName("transaction") + ` AS t
   ON t.recurring_occurrence_id = o.recurring_occurrence_id
 WHERE 1 = 1`
@@ -481,7 +483,7 @@ WHERE 1 = 1`
 		return services.PaginatedList[recurring.Occurrence]{}, err
 	}
 
-	query := `SELECT o.recurring_occurrence_id, o.recurring_definition_id, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
+	query := `SELECT o.recurring_occurrence_id, o.recurring_definition_id, d.fqn, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
 	o.materialized_at, o.reviewed_at, t.transaction_id, o.created_at, o.updated_at
 ` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.ListOptions, recurringOccurrenceSortColumns, services.SortKeyScheduledDate, "o.recurring_occurrence_id")
@@ -678,7 +680,7 @@ func (s *RecurringStore) DeferOccurrenceAndShiftAnchor(
 ) (recurring.Occurrence, error) {
 	var occurrence recurring.Occurrence
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
-		created, err := insertDeferredOccurrence(ctx, tx, s.db, definition.ID, scheduledDate, definition.DefinitionVersion)
+		created, err := insertDeferredOccurrence(ctx, tx, s.db, definition.ID, definition.FQN, scheduledDate, definition.DefinitionVersion)
 		if err != nil {
 			return err
 		}
@@ -767,7 +769,7 @@ WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
 			return services.ErrNotFound
 		}
 		for _, slot := range skippedSlots {
-			if _, err := insertDeferredOccurrence(ctx, tx, s.db, definition.ID, slot, definition.DefinitionVersion); err != nil {
+			if _, err := insertDeferredOccurrence(ctx, tx, s.db, definition.ID, definition.FQN, slot, definition.DefinitionVersion); err != nil {
 				if errors.Is(err, services.ErrConflict) {
 					continue
 				}
@@ -872,10 +874,11 @@ func insertDeferredOccurrence(
 	tx *sql.Tx,
 	db *AppDB,
 	definitionID int64,
+	definitionFQN string,
 	scheduledDate values.CivilDate,
 	definitionVersion int64,
 ) (recurring.Occurrence, error) {
-	occurrence, err := scanRecurringOccurrence(tx.QueryRowContext(
+	occurrence, err := scanMaterializedRecurringOccurrence(tx.QueryRowContext(
 		ctx,
 		`INSERT INTO `+db.accountingName("recurring_occurrence")+` (
 	recurring_definition_id, scheduled_date, status, materialized_definition_version, reviewed_at
@@ -887,7 +890,7 @@ RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST
 		civilDateArg(scheduledDate),
 		enumValue(recurring.OccurrenceStatusDeferred),
 		definitionVersion,
-	))
+	), definitionFQN)
 	if err != nil {
 		if isUniqueConstraintError(err) {
 			return recurring.Occurrence{}, services.ErrConflict
@@ -902,7 +905,21 @@ type recurringOccurrenceScanner interface {
 	Scan(dest ...any) error
 }
 
+func scanMaterializedRecurringOccurrence(scanner recurringOccurrenceScanner, definitionFQN string) (recurring.Occurrence, error) {
+	occurrence, err := scanRecurringOccurrenceFields(scanner, false)
+	if err != nil {
+		return recurring.Occurrence{}, err
+	}
+	occurrence.RecurringDefinitionFQN = definitionFQN
+
+	return occurrence, nil
+}
+
 func scanRecurringOccurrence(scanner recurringOccurrenceScanner) (recurring.Occurrence, error) {
+	return scanRecurringOccurrenceFields(scanner, true)
+}
+
+func scanRecurringOccurrenceFields(scanner recurringOccurrenceScanner, includesDefinitionFQN bool) (recurring.Occurrence, error) {
 	var occurrence recurring.Occurrence
 	var scheduledDate time.Time
 	var status string
@@ -911,9 +928,14 @@ func scanRecurringOccurrence(scanner recurringOccurrenceScanner) (recurring.Occu
 	var materializedAt time.Time
 	var createdAt time.Time
 	var updatedAt time.Time
-	if err := scanner.Scan(
+	dest := []any{
 		&occurrence.ID,
 		&occurrence.RecurringDefinitionID,
+	}
+	if includesDefinitionFQN {
+		dest = append(dest, &occurrence.RecurringDefinitionFQN)
+	}
+	dest = append(dest,
 		&scheduledDate,
 		&status,
 		&occurrence.MaterializedDefinitionVersion,
@@ -922,7 +944,8 @@ func scanRecurringOccurrence(scanner recurringOccurrenceScanner) (recurring.Occu
 		&transactionID,
 		&createdAt,
 		&updatedAt,
-	); err != nil {
+	)
+	if err := scanner.Scan(dest...); err != nil {
 		return recurring.Occurrence{}, err
 	}
 	occurrence.ScheduledDate = values.CivilDateFromTime(scheduledDate)
@@ -941,9 +964,11 @@ func scanRecurringOccurrence(scanner recurringOccurrenceScanner) (recurring.Occu
 func selectRecurringOccurrenceByID(ctx context.Context, queryer rowQuerier, db *AppDB, id int64) (recurring.Occurrence, error) {
 	occurrence, err := scanRecurringOccurrence(queryer.QueryRowContext(
 		ctx,
-		`SELECT o.recurring_occurrence_id, o.recurring_definition_id, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
+		`SELECT o.recurring_occurrence_id, o.recurring_definition_id, d.fqn, o.scheduled_date, CAST(o.status AS VARCHAR), o.materialized_definition_version,
 	o.materialized_at, o.reviewed_at, t.transaction_id, o.created_at, o.updated_at
 FROM `+db.accountingName("recurring_occurrence")+` AS o
+JOIN `+db.accountingName("recurring_definition")+` AS d
+  ON d.recurring_definition_id = o.recurring_definition_id
 LEFT JOIN `+db.accountingName("transaction")+` AS t
   ON t.recurring_occurrence_id = o.recurring_occurrence_id
 WHERE o.recurring_occurrence_id = ?`,

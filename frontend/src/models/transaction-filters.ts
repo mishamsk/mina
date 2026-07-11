@@ -1,6 +1,13 @@
 import type { PostingStatus, TransactionClass } from "@/api/generated";
 
 export const transactionPostingStatuses = [
+  "expected",
+  "pending",
+  "posted",
+  "cancelled",
+] as const satisfies readonly PostingStatus[];
+
+export const defaultTransactionPostingStatuses = [
   "pending",
   "posted",
   "cancelled",

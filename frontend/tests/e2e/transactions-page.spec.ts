@@ -58,6 +58,16 @@ interface TransactionListFixture {
   readonly transactions: readonly TransactionFixture[];
 }
 
+interface RecurringDefinitionFixture {
+  readonly recurring_definition_id: number;
+}
+
+const defaultTransactionRequestStatuses = [
+  "cancelled",
+  "pending",
+  "posted",
+] as const;
+
 const formatLocalDate = (date: Date): string =>
   [date.getFullYear(), date.getMonth() + 1, date.getDate()]
     .map((part, index) =>
@@ -211,7 +221,9 @@ const transactionRequestHasFilters = (
     JSON.stringify(params.getAll("transaction_class").sort()) ===
       JSON.stringify([...(expected.classes ?? [])].sort()) &&
     JSON.stringify(params.getAll("posting_status").sort()) ===
-      JSON.stringify([...(expected.statuses ?? [])].sort()) &&
+      JSON.stringify(
+        [...(expected.statuses ?? defaultTransactionRequestStatuses)].sort(),
+      ) &&
     JSON.stringify(tags) ===
       JSON.stringify(
         [...(expected.tags ?? [])].sort((left, right) => left - right),
@@ -264,6 +276,71 @@ const createAccount = async (
   });
   expect(response.ok()).toBe(true);
   return (await response.json()) as AccountFixture;
+};
+
+const createExpectedRecurringFixture = async (
+  page: Page,
+  unique: string,
+): Promise<{ readonly merchantFqn: string; readonly memo: string }> => {
+  const anchorDate = formatLocalDate(new Date());
+  const checking = await createAccount(
+    page,
+    `e2e:ExpectedFilter:${unique}:Checking`,
+    "balance",
+    "USD",
+  );
+  const merchant = await createAccount(
+    page,
+    `e2e:ExpectedFilter:${unique}:Merchant`,
+    "flow",
+  );
+  const category = await createCategory(
+    page,
+    `e2e:ExpectedFilter:${unique}:Category`,
+    "expense",
+  );
+  const memo = `E2E expected filter ${unique}`;
+  const definition = await page.request.post("/api/recurring-definitions", {
+    data: {
+      anchor_date: anchorDate,
+      fqn: `E2E:ExpectedFilter:${unique}`,
+      schedule_rule: {
+        every: 1,
+        kind: "interval",
+        unit: "YEAR",
+        version: 1,
+      },
+      records: [
+        {
+          account_id: checking.account_id,
+          amount: "-23.45000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: `${memo} funding`,
+          tag_ids: [],
+        },
+        {
+          account_id: merchant.account_id,
+          amount: "23.45000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: `${memo} merchant`,
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  const definitionBody = await definition.text();
+  expect(definition.ok(), definitionBody).toBe(true);
+  const created = JSON.parse(definitionBody) as RecurringDefinitionFixture;
+
+  const materialized = await page.request.get(
+    `/api/recurring-occurrences?recurring_definition_id=${created.recurring_definition_id}` +
+      "&status=expected&limit=500&offset=0",
+  );
+  expect(materialized.ok(), await materialized.text()).toBe(true);
+
+  return { merchantFqn: merchant.fqn, memo };
 };
 
 const deleteTransaction = async (
@@ -954,6 +1031,72 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await expectTransactionFilterUrl(page, { pageSize: "25" });
   await expect(page.getByText("Tag Groceries")).toBeHidden();
   await expect(page.getByText("Amount 10-20")).toBeHidden();
+});
+
+test("transactions posting-status filter can reveal expected recurring lines", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const fixture = await createExpectedRecurringFixture(page, unique);
+  const search = unique;
+
+  const defaultRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("search") === search &&
+      transactionRequestHasFilters(url, { limit: "50" })
+    );
+  });
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}`,
+  );
+  await defaultRequest;
+  await expect(page.getByRole("img", { name: "Expected" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("row")
+      .filter({ hasText: "23.45 $" })
+      .filter({ hasText: fixture.merchantFqn.split(":").at(-1) ?? "Merchant" }),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await page.getByRole("button", { name: "Posting status" }).click();
+  await expect(page.getByText("Expected", { exact: true })).toBeVisible();
+
+  const expectedRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("search") === search &&
+      transactionRequestHasFilters(url, {
+        limit: "50",
+        statuses: ["expected"],
+      })
+    );
+  });
+  await page.getByText("Expected", { exact: true }).click();
+  await expectedRequest;
+
+  await expectTransactionFilterUrl(page, {
+    pageSize: "50",
+    q: search,
+    statuses: ["expected"],
+  });
+  const expectedRow = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("img", { name: "Expected" }) })
+    .filter({ hasText: "23.45 $" })
+    .filter({ hasText: fixture.merchantFqn.split(":").at(-1) ?? "Merchant" });
+  await expect(expectedRow).toBeVisible();
+  await expect(
+    expectedRow.getByRole("img", { name: "Expected" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Remove Status Expected" }).click();
+  await expectTransactionFilterUrl(page, { pageSize: "50", q: search });
+  await expect(page.getByRole("img", { name: "Expected" })).toHaveCount(0);
 });
 
 test("transactions class toolbar filter owns class URL state", async ({

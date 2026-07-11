@@ -1,5 +1,6 @@
 import {
   Archive,
+  Calendar,
   CardText,
   Chart,
   Close,
@@ -216,6 +217,7 @@ export const AppShell = ({ children }: AppShellProps) => {
         search: lastTransactionsPageSearch,
       },
     },
+    { icon: Calendar, label: "Recurring", to: "/recurring" },
     { icon: Wallet, label: "Accounts", to: "/accounts" },
   ];
 

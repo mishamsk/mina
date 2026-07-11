@@ -154,6 +154,7 @@ const (
 type Occurrence struct {
 	ID                            int64
 	RecurringDefinitionID         int64
+	RecurringDefinitionFQN        string
 	ScheduledDate                 values.CivilDate
 	Status                        OccurrenceStatus
 	MaterializedDefinitionVersion int64

@@ -3,18 +3,17 @@ package store
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"strings"
 
-	_ "github.com/duckdb/duckdb-go/v2"
+	duckdb "github.com/duckdb/duckdb-go/v2"
 )
-
-const duckDBDriverName = "duckdb"
 
 // OpenInMemory opens an in-memory DuckDB database handle and verifies it can be reached.
 func OpenInMemory(ctx context.Context) (*sql.DB, error) {
-	return open(ctx, ":memory:", 1)
+	return open(ctx, ":memory:", 1, nil)
 }
 
 func attachDatabase(ctx context.Context, appDB *AppDB, path string) error {
@@ -58,11 +57,20 @@ func prepareAccountingLocation(ctx context.Context, appDB *AppDB) error {
 	return nil
 }
 
-func open(ctx context.Context, path string, maxOpenConns int) (*sql.DB, error) {
-	db, err := sql.Open(duckDBDriverName, path)
+func open(ctx context.Context, path string, maxOpenConns int, init *accountingConnectionInitializer) (*sql.DB, error) {
+	initFn := func(execer driver.ExecerContext) error {
+		return nil
+	}
+	if init != nil {
+		initFn = init.init
+	}
+
+	connector, err := duckdb.NewConnector(path, initFn)
 	if err != nil {
 		return nil, fmt.Errorf("open duckdb database: %w", err)
 	}
+
+	db := sql.OpenDB(connector)
 	db.SetMaxOpenConns(maxOpenConns)
 
 	if err := db.PingContext(ctx); err != nil {

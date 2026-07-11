@@ -647,7 +647,9 @@ export const TransactionBrowser = ({
               const postingStatus = linePostingStatus(transaction);
               const amounts = lineDisplayAmounts(transaction, maps);
               const amountDeemphasized =
-                postingStatus === "pending" || postingStatus === "cancelled";
+                postingStatus === "expected" ||
+                postingStatus === "pending" ||
+                postingStatus === "cancelled";
               const lineInactive = postingStatus === "cancelled";
               const toggleExpanded = () => {
                 setExpandedTransactionIds((current) => {

@@ -18,6 +18,7 @@ type AppDB struct {
 	db       *sql.DB
 	tx       *sql.Tx
 	location AccountingLocation
+	connInit *accountingConnectionInitializer
 	close    func() error
 }
 
@@ -36,12 +37,13 @@ func openAppDBWithAttach(
 	request AppDBOpenRequest,
 	attach func(context.Context, *AppDB, string) error,
 ) (*AppDB, error) {
-	db, err := open(ctx, ":memory:", request.MaxOpenConns)
+	connInit := newAccountingConnectionInitializer()
+	db, err := open(ctx, ":memory:", request.MaxOpenConns, connInit)
 	if err != nil {
 		return nil, err
 	}
 
-	appDB, err := openAppDB(ctx, db, request, attach, func(*AppDB) error { return db.Close() })
+	appDB, err := openAppDB(ctx, db, request, attach, func(*AppDB) error { return db.Close() }, connInit)
 	if err != nil {
 		if closeErr := db.Close(); closeErr != nil {
 			return nil, fmt.Errorf("%w; close database: %w", err, closeErr)
@@ -62,7 +64,7 @@ func OpenAppDBWithProcessDB(ctx context.Context, db *sql.DB, request AppDBOpenRe
 		}
 
 		return detachDatabase(context.Background(), appDB)
-	})
+	}, nil)
 }
 
 func openAppDB(
@@ -71,6 +73,7 @@ func openAppDB(
 	request AppDBOpenRequest,
 	attach func(context.Context, *AppDB, string) error,
 	close func(*AppDB) error,
+	connInit *accountingConnectionInitializer,
 ) (*AppDB, error) {
 	location, err := NewAccountingLocation(ctx, db, request.AccountingLocation)
 	if err != nil {
@@ -79,6 +82,7 @@ func openAppDB(
 	appDB := &AppDB{
 		db:       db,
 		location: location,
+		connInit: connInit,
 	}
 	appDB.close = func() error {
 		return close(appDB)
