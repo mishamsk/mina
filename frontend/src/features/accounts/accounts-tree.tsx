@@ -104,6 +104,9 @@ const deleteDialogFocusableSelector = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
+const filledFeaturedStarPath =
+  "M11 1H13V3H15V7H23V11H21V13H19V16H17V18H16V20H21V22H16V20H14V18H10V20H8V22H3V20H8V18H7V16H5V13H3V11H1V7H9V3H11V1Z";
+
 const isInteractiveTarget = (
   target: EventTarget | null,
   currentTarget: HTMLElement,
@@ -657,15 +660,20 @@ export const AccountsTree = ({
                         pressed: account.is_hidden,
                       },
                       {
-                        icon: (
-                          <Star
+                        icon: account.is_featured ? (
+                          <svg
                             aria-hidden="true"
-                            className={
-                              account.is_featured
-                                ? "text-[var(--color-class-adjustment-ink)]"
-                                : undefined
-                            }
-                          />
+                            className="text-[var(--color-class-adjustment-ink)]"
+                            fill="currentColor"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            width="24"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path d={filledFeaturedStarPath} />
+                          </svg>
+                        ) : (
+                          <Star aria-hidden="true" />
                         ),
                         kind: "toggle" as const,
                         label: account.is_featured

@@ -166,6 +166,22 @@ const renderedLineHeight = async (locator: Locator) => {
   });
 };
 
+const filledFeaturedStarPath =
+  "M11 1H13V3H15V7H23V11H21V13H19V16H17V18H16V20H21V22H16V20H14V18H10V20H8V22H3V20H8V18H7V16H5V13H3V11H1V7H9V3H11V1Z";
+
+const expectFeaturedStarTreatment = async (
+  button: Locator,
+  color: string,
+  expectedPath?: string,
+) => {
+  const icon = button.locator("svg");
+  await expect(icon).toHaveCSS("color", color);
+  await expect(icon).toHaveCSS("fill", color);
+  if (expectedPath !== undefined) {
+    await expect(icon.locator("path")).toHaveAttribute("d", expectedPath);
+  }
+};
+
 test("accounts page renders tree, URL toolbar state, balances, and sidebar navigation", async ({
   browserName,
   page,
@@ -1229,6 +1245,10 @@ test("accounts tree row quick actions hide feature and delete rows", async ({
     .filter({ hasText: "FeatureMe" })
     .first();
   await expect(featuredRow).toBeVisible();
+  await expectFeaturedStarTreatment(
+    featuredRow.getByRole("button", { name: "Feature account" }),
+    "rgb(107, 102, 127)",
+  );
   const featureRequest = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -1241,9 +1261,32 @@ test("accounts tree row quick actions hide feature and delete rows", async ({
   await expect(
     featuredRow.getByRole("button", { name: "Unfeature account" }),
   ).toHaveAttribute("aria-pressed", "true");
+  await expectFeaturedStarTreatment(
+    featuredRow.getByRole("button", { name: "Unfeature account" }),
+    "rgb(122, 93, 0)",
+    filledFeaturedStarPath,
+  );
   await expect(
     page.getByTestId("featured-balance-row").filter({ hasText: "FeatureMe" }),
   ).toBeVisible({ timeout: 10_000 });
+  const unfeatureRequest = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${featuredAccount.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  await featuredRow.getByRole("button", { name: "Unfeature account" }).click();
+  await unfeatureRequest;
+  const revertedFeatureToggle = featuredRow.getByRole("button", {
+    name: "Feature account",
+  });
+  await expect(revertedFeatureToggle).toHaveAttribute("aria-pressed", "false");
+  await page.mouse.move(0, 0);
+  await expectFeaturedStarTreatment(
+    revertedFeatureToggle,
+    "rgb(107, 102, 127)",
+  );
   await featuredRow.hover();
   await expect(
     featuredRow.getByRole("button", { name: "Delete account" }),
