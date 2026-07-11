@@ -45,6 +45,7 @@
   - Categories and Tags pages show searchable FQN trees with hidden controls, move/rename, and create/edit/delete side-panel workflows; Categories also show intent badges.
   - Category and Tag leaf rows carry deleteability-driven delete actions with named confirmation; group rows do not offer delete.
   - Members page shows a searchable flat member list with create/rename/delete side-panel workflows and hover/focus-revealed Edit/Delete row actions; ineligible deletes are proactively disabled from the API deleteability signal.
+  - Categories, Tags, and Members have URL-addressable drill-down pages with metadata and pre-filtered transaction previews.
   - Accounts, Categories, Tags, and Members retain full-height Arcade Cabinet table frames with internally scrolling data bodies.
   - Transaction entry includes shorthand spend/income/refund/transfer tabs plus an Advanced journal editor with balanced multi-record saves, intent-guided account pickers, draft persistence, and edit-as-journal escalation from shorthand tabs.
   - Transaction entry category pickers fetch API-filtered category lists by shorthand tab economic intent.

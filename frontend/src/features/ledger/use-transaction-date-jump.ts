@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { SetURLSearchParams } from "react-router";
 
 import type { TransactionPageParams } from "@/api";
+import type { TransactionFilters } from "@/models/transaction-filters";
 import { transactionFilterSignature } from "@/models/transaction-filters";
 
 import {
@@ -36,6 +37,9 @@ interface UseTransactionDateJumpOptions {
   readonly page: number;
   readonly pageSize: number;
   readonly params: TransactionPageParams;
+  readonly readFiltersFromSearchParams?: (
+    searchParams: URLSearchParams,
+  ) => TransactionFilters;
   readonly setSearchParams: SetURLSearchParams;
 }
 
@@ -43,6 +47,7 @@ export const useTransactionDateJump = ({
   page,
   pageSize,
   params,
+  readFiltersFromSearchParams = readTransactionFiltersFromSearchParams,
   setSearchParams,
 }: UseTransactionDateJumpOptions) => {
   const [dateJumpValue, setDateJumpValue] = useState("");
@@ -86,7 +91,7 @@ export const useTransactionDateJump = ({
         setSearchParams((current) => {
           const currentPage = readTransactionPageFromSearchParams(current);
           const currentFilterSignature = transactionFilterSignature(
-            readTransactionFiltersFromSearchParams(current),
+            readFiltersFromSearchParams(current),
           );
           if (
             activeDateJumpIdRef.current !== jumpId ||
@@ -114,6 +119,7 @@ export const useTransactionDateJump = ({
       pageSize,
       params.filters,
       params.offset,
+      readFiltersFromSearchParams,
       setSearchParams,
     ],
   );

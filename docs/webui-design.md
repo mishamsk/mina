@@ -253,7 +253,8 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Row actions follow the accounts affordance philosophy: rows that can be deleted carry a hover/focus-revealed delete quick action in the trailing actions column, disabled with an explanatory tooltip when the listing reports the entity as not deletable; activation opens the standard confirm dialog naming the entity and calls the existing delete endpoint, with API errors surfaced as the fallback. Group-only rows carry no delete while no group delete operation exists. The side-panel editor keeps its delete.
 - Every dictionary entity is a drill-down target with its own page embedding the shared browser pre-filtered to it, with the same peek panel:
   - Category and tag pages roll up descendants by default (`Food` includes `Food:Restaurants`), with a "this level only" toggle.
-  - Member pages list the records attributed to that member.
+  - Member pages show the transactions attributed to that member through the same shared-browser embedding.
+  - Category, tag, and member pages include a `View all transactions` action that opens the Transactions page with the drill-down scope as URL filters.
 - Categories: economic-intent badge per row; the editor requires intent and explains its classification effect in one line.
 - Templates: template tree with record-default summaries; editor manages the partial record defaults (category required; account, member, currency, amount, tags, memo, statuses optional); primary row action "Use" opens the entry panel prefilled. Templates are reachable by type-ahead from the entry panel and the command palette.
 

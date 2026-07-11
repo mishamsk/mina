@@ -37,6 +37,7 @@ type FilterDimension = EntityDimension | "status" | RangeDimension;
 
 interface TransactionFilterControlsProps {
   readonly filters: TransactionFilters;
+  readonly hiddenDimensions?: readonly FilterDimension[];
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onChange: (filters: TransactionFilters) => void;
   readonly onOpenChange?: (open: boolean) => void;
@@ -132,18 +133,31 @@ const rangeLabel = (
   return undefined;
 };
 
-const filterCount = (filters: TransactionFilters): number =>
-  filters.accountIds.length +
-  filters.categoryIds.length +
-  filters.tagIds.length +
-  filters.memberIds.length +
-  filters.statuses.length +
+const filterCount = (
+  filters: TransactionFilters,
+  hiddenDimensions: ReadonlySet<FilterDimension>,
+): number =>
+  (hiddenDimensions.has("account") ? 0 : filters.accountIds.length) +
+  (hiddenDimensions.has("category") ? 0 : filters.categoryIds.length) +
+  (hiddenDimensions.has("tag") ? 0 : filters.tagIds.length) +
+  (hiddenDimensions.has("member") ? 0 : filters.memberIds.length) +
+  (hiddenDimensions.has("status") ? 0 : filters.statuses.length) +
   [
-    rangeLabel("Amount", filters.amountMin, filters.amountMax),
-    rangeLabel("Amount USD", filters.amountUsdMin, filters.amountUsdMax),
-    rangeLabel("Initiated", filters.initiatedFrom, filters.initiatedTo),
-    rangeLabel("Pending", filters.pendingFrom, filters.pendingTo),
-    rangeLabel("Posted", filters.postedFrom, filters.postedTo),
+    hiddenDimensions.has("amount")
+      ? undefined
+      : rangeLabel("Amount", filters.amountMin, filters.amountMax),
+    hiddenDimensions.has("amountUsd")
+      ? undefined
+      : rangeLabel("Amount USD", filters.amountUsdMin, filters.amountUsdMax),
+    hiddenDimensions.has("initiated")
+      ? undefined
+      : rangeLabel("Initiated", filters.initiatedFrom, filters.initiatedTo),
+    hiddenDimensions.has("pending")
+      ? undefined
+      : rangeLabel("Pending", filters.pendingFrom, filters.pendingTo),
+    hiddenDimensions.has("posted")
+      ? undefined
+      : rangeLabel("Posted", filters.postedFrom, filters.postedTo),
   ].filter(Boolean).length;
 
 interface FilterChipProps {
@@ -335,6 +349,7 @@ const RangeEditor = ({
 
 export const TransactionFilterControls = ({
   filters,
+  hiddenDimensions = [],
   lookups,
   onChange,
   onOpenChange,
@@ -349,6 +364,15 @@ export const TransactionFilterControls = ({
   const [entityPickerOpen, setEntityPickerOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const restoreDimensionRef = useRef<FilterDimension | undefined>(undefined);
+  const hiddenDimensionSet = useMemo(
+    () => new Set<FilterDimension>(hiddenDimensions),
+    [hiddenDimensions],
+  );
+  const visibleDimensions = useMemo(
+    () =>
+      dimensions.filter((dimension) => !hiddenDimensionSet.has(dimension.id)),
+    [hiddenDimensionSet],
+  );
 
   useEffect(() => {
     if (!open) {
@@ -446,7 +470,7 @@ export const TransactionFilterControls = ({
     () => mapById(lookups?.members, (member) => member.member_id),
     [lookups?.members],
   );
-  const activeFilterCount = filterCount(filters);
+  const activeFilterCount = filterCount(filters, hiddenDimensionSet);
 
   const updateFilters = (nextFilters: TransactionFilters) => {
     onChange(nextFilters);
@@ -539,7 +563,7 @@ export const TransactionFilterControls = ({
     if (!selectedDimension) {
       return (
         <div className="grid grid-cols-1 gap-1">
-          {dimensions.map((dimension) => (
+          {visibleDimensions.map((dimension) => (
             <Button
               key={dimension.id}
               type="button"
@@ -747,102 +771,123 @@ export const TransactionFilterControls = ({
           className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
           aria-label="Active transaction filters"
         >
-          {filters.accountIds.map((accountId) => {
-            const account = accountsById.get(accountId);
-            return (
-              <FilterChip
-                key={`account-${accountId}`}
-                hidden={account?.is_hidden}
-                label={
-                  account ? `Account ${account.name}` : `Account #${accountId}`
-                }
-                tooltip={account?.fqn ?? `Selected account ID ${accountId}`}
-                onRemove={() => {
-                  updateFilters({
-                    ...filters,
-                    accountIds: filters.accountIds.filter(
-                      (selectedAccountId) => selectedAccountId !== accountId,
-                    ),
-                  });
-                }}
-              />
-            );
-          })}
-          {filters.categoryIds.map((categoryId) => {
-            const category = categoriesById.get(categoryId);
-            return (
-              <FilterChip
-                key={`category-${categoryId}`}
-                hidden={category?.is_hidden}
-                label={
-                  category
-                    ? `Category ${category.name}`
-                    : `Category #${categoryId}`
-                }
-                tooltip={category?.fqn ?? `Selected category ID ${categoryId}`}
-                onRemove={() => {
-                  updateFilters({
-                    ...filters,
-                    categoryIds: filters.categoryIds.filter(
-                      (selectedCategoryId) => selectedCategoryId !== categoryId,
-                    ),
-                  });
-                }}
-              />
-            );
-          })}
-          {filters.tagIds.map((tagId) => {
-            const tag = tagsById.get(tagId);
-            return (
-              <FilterChip
-                key={`tag-${tagId}`}
-                hidden={tag?.is_hidden}
-                label={tag ? `Tag ${tag.name}` : `Tag #${tagId}`}
-                tooltip={tag?.fqn ?? `Selected tag ID ${tagId}`}
-                onRemove={() => {
-                  updateFilters({
-                    ...filters,
-                    tagIds: filters.tagIds.filter(
-                      (selectedTagId) => selectedTagId !== tagId,
-                    ),
-                  });
-                }}
-              />
-            );
-          })}
-          {filters.memberIds.map((memberId) => {
-            const member = membersById.get(memberId);
-            return (
-              <FilterChip
-                key={`member-${memberId}`}
-                label={member ? `Member ${member.name}` : `Member #${memberId}`}
-                tooltip={member ? undefined : `Selected member ID ${memberId}`}
-                onRemove={() => {
-                  updateFilters({
-                    ...filters,
-                    memberIds: filters.memberIds.filter(
-                      (selectedMemberId) => selectedMemberId !== memberId,
-                    ),
-                  });
-                }}
-              />
-            );
-          })}
-          {filters.statuses.map((status) => (
-            <FilterChip
-              key={`status-${status}`}
-              label={`Status ${postingStatusLabel(status)}`}
-              onRemove={() => {
-                updateFilters({
-                  ...filters,
-                  statuses: filters.statuses.filter(
-                    (selectedStatus) => selectedStatus !== status,
-                  ),
-                });
-              }}
-            />
-          ))}
-          {rangeLabel("Amount", filters.amountMin, filters.amountMax) ? (
+          {!hiddenDimensionSet.has("account")
+            ? filters.accountIds.map((accountId) => {
+                const account = accountsById.get(accountId);
+                return (
+                  <FilterChip
+                    key={`account-${accountId}`}
+                    hidden={account?.is_hidden}
+                    label={
+                      account
+                        ? `Account ${account.name}`
+                        : `Account #${accountId}`
+                    }
+                    tooltip={account?.fqn ?? `Selected account ID ${accountId}`}
+                    onRemove={() => {
+                      updateFilters({
+                        ...filters,
+                        accountIds: filters.accountIds.filter(
+                          (selectedAccountId) =>
+                            selectedAccountId !== accountId,
+                        ),
+                      });
+                    }}
+                  />
+                );
+              })
+            : null}
+          {!hiddenDimensionSet.has("category")
+            ? filters.categoryIds.map((categoryId) => {
+                const category = categoriesById.get(categoryId);
+                return (
+                  <FilterChip
+                    key={`category-${categoryId}`}
+                    hidden={category?.is_hidden}
+                    label={
+                      category
+                        ? `Category ${category.name}`
+                        : `Category #${categoryId}`
+                    }
+                    tooltip={
+                      category?.fqn ?? `Selected category ID ${categoryId}`
+                    }
+                    onRemove={() => {
+                      updateFilters({
+                        ...filters,
+                        categoryIds: filters.categoryIds.filter(
+                          (selectedCategoryId) =>
+                            selectedCategoryId !== categoryId,
+                        ),
+                      });
+                    }}
+                  />
+                );
+              })
+            : null}
+          {!hiddenDimensionSet.has("tag")
+            ? filters.tagIds.map((tagId) => {
+                const tag = tagsById.get(tagId);
+                return (
+                  <FilterChip
+                    key={`tag-${tagId}`}
+                    hidden={tag?.is_hidden}
+                    label={tag ? `Tag ${tag.name}` : `Tag #${tagId}`}
+                    tooltip={tag?.fqn ?? `Selected tag ID ${tagId}`}
+                    onRemove={() => {
+                      updateFilters({
+                        ...filters,
+                        tagIds: filters.tagIds.filter(
+                          (selectedTagId) => selectedTagId !== tagId,
+                        ),
+                      });
+                    }}
+                  />
+                );
+              })
+            : null}
+          {!hiddenDimensionSet.has("member")
+            ? filters.memberIds.map((memberId) => {
+                const member = membersById.get(memberId);
+                return (
+                  <FilterChip
+                    key={`member-${memberId}`}
+                    label={
+                      member ? `Member ${member.name}` : `Member #${memberId}`
+                    }
+                    tooltip={
+                      member ? undefined : `Selected member ID ${memberId}`
+                    }
+                    onRemove={() => {
+                      updateFilters({
+                        ...filters,
+                        memberIds: filters.memberIds.filter(
+                          (selectedMemberId) => selectedMemberId !== memberId,
+                        ),
+                      });
+                    }}
+                  />
+                );
+              })
+            : null}
+          {!hiddenDimensionSet.has("status")
+            ? filters.statuses.map((status) => (
+                <FilterChip
+                  key={`status-${status}`}
+                  label={`Status ${postingStatusLabel(status)}`}
+                  onRemove={() => {
+                    updateFilters({
+                      ...filters,
+                      statuses: filters.statuses.filter(
+                        (selectedStatus) => selectedStatus !== status,
+                      ),
+                    });
+                  }}
+                />
+              ))
+            : null}
+          {!hiddenDimensionSet.has("amount") &&
+          rangeLabel("Amount", filters.amountMin, filters.amountMax) ? (
             <FilterChip
               label={rangeLabel(
                 "Amount",
@@ -859,7 +904,8 @@ export const TransactionFilterControls = ({
               }}
             />
           ) : null}
-          {rangeLabel(
+          {!hiddenDimensionSet.has("amountUsd") &&
+          rangeLabel(
             "Amount USD",
             filters.amountUsdMin,
             filters.amountUsdMax,
@@ -880,7 +926,8 @@ export const TransactionFilterControls = ({
               }}
             />
           ) : null}
-          {rangeLabel(
+          {!hiddenDimensionSet.has("initiated") &&
+          rangeLabel(
             "Initiated",
             filters.initiatedFrom,
             filters.initiatedTo,
@@ -900,7 +947,8 @@ export const TransactionFilterControls = ({
               }}
             />
           ) : null}
-          {rangeLabel("Pending", filters.pendingFrom, filters.pendingTo) ? (
+          {!hiddenDimensionSet.has("pending") &&
+          rangeLabel("Pending", filters.pendingFrom, filters.pendingTo) ? (
             <FilterChip
               label={rangeLabel(
                 "Pending",
@@ -916,7 +964,8 @@ export const TransactionFilterControls = ({
               }}
             />
           ) : null}
-          {rangeLabel("Posted", filters.postedFrom, filters.postedTo) ? (
+          {!hiddenDimensionSet.has("posted") &&
+          rangeLabel("Posted", filters.postedFrom, filters.postedTo) ? (
             <FilterChip
               label={rangeLabel(
                 "Posted",

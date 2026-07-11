@@ -1,4 +1,11 @@
 export {
+  ReferenceDrilldownError,
+  ReferenceDrilldownNotFound,
+  ReferenceDrilldownPage,
+  ReferenceDrilldownSkeleton,
+  referenceTransactionHref,
+} from "./reference-drilldown-page";
+export {
   readReferenceSearchState,
   ReferenceToolbar,
 } from "./reference-toolbar";
