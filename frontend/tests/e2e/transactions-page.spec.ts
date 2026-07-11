@@ -58,6 +58,14 @@ interface TransactionListFixture {
   readonly transactions: readonly TransactionFixture[];
 }
 
+interface StoredTransactionEntryDraftFixture {
+  readonly tabs?: {
+    readonly spend?: {
+      readonly memo?: string;
+    };
+  };
+}
+
 interface RecurringDefinitionFixture {
   readonly recurring_definition_id: number;
 }
@@ -1273,18 +1281,24 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
 
   await addFilterButton.focus();
   await page.keyboard.press("Enter");
-  const statusDimension = page.getByRole("button", {
-    exact: true,
+  const postingStatusButton = page.getByRole("button", {
     name: "Posting status",
   });
-  await statusDimension.focus();
+  await expect(postingStatusButton).toBeVisible();
+  await postingStatusButton.focus();
   await page.keyboard.press("Enter");
+  const expectedCheckbox = page.getByRole("checkbox", { name: "Expected" });
+  await expect(expectedCheckbox).toBeFocused();
   const pendingCheckbox = page.getByRole("checkbox", { name: "Pending" });
-  await pendingCheckbox.focus();
-  await page.keyboard.press("Space");
+  await expect(pendingCheckbox).toBeVisible();
+  await page.getByText("Pending", { exact: true }).click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("status"))
+    .toBe("pending");
 
   const statusChip = page.getByText("Status Pending", { exact: true });
   await expect(statusChip).toBeVisible();
+  await page.keyboard.press("Escape");
   const triggerWithChipBox = await addFilterButton.boundingBox();
   const chipBox = await statusChip.boundingBox();
   const toolbarWithChipBox = await toolbar.boundingBox();
@@ -2795,7 +2809,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
     (row as HTMLElement).focus();
   });
   await expect(alternateDetailRow).toBeFocused();
-  await page.keyboard.press("Enter");
+  await alternateDetailRow.press("Enter");
   await expect(page).toHaveURL(
     new RegExp(`[?&]transaction=${alternateTransaction.transaction_id}(?:&|$)`),
   );
@@ -3109,6 +3123,544 @@ test("transaction detail delete confirms, tombstones, and refreshes the row", as
   expect(failedTransactionRequests).toEqual([]);
 });
 
+test("transaction detail edit opens a fitting spend and replaces the same transaction", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 820 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E edit spend ${unique}`;
+  const updatedMemo = `E2E edit spend updated ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "21.34",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-04",
+      memo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first()
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+
+  const detailPanel = page.getByRole("dialog", {
+    name: transaction.display_title,
+  });
+  await expect(detailPanel).toBeVisible();
+  await detailPanel.getByRole("button", { name: "Edit" }).click();
+
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Spend" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await expect(spendPanel.getByLabel("Amount")).toHaveValue("21.34");
+  await expect(spendPanel.getByLabel("Memo")).toHaveValue(memo);
+
+  await spendPanel.getByLabel("Amount").fill("25.67");
+  await spendPanel.getByLabel("Memo").fill(updatedMemo);
+  const replaceResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT"
+    );
+  });
+  await page.getByRole("button", { name: "Update transaction" }).click();
+  const replaceResponse = await replaceResponsePromise;
+  expect(replaceResponse.ok(), await replaceResponse.text()).toBe(true);
+  const replaced = (await replaceResponse.json()) as TransactionDetailFixture;
+  expect(replaced.transaction_id).toBe(transaction.transaction_id);
+  expect(comparableRecords(replaced.records)).toEqual([
+    {
+      account_id: fundingAccount.account_id,
+      amount: "-25.67000000",
+      category_id: category.category_id,
+      currency: "USD",
+      member_id: null,
+      memo: updatedMemo,
+      posting_status: "posted",
+      reconciliation_status: "reconciled",
+      source: "manual",
+      tag_ids: [],
+    },
+    {
+      account_id: merchantAccount.account_id,
+      amount: "25.67000000",
+      category_id: category.category_id,
+      currency: "USD",
+      member_id: null,
+      memo: updatedMemo,
+      posting_status: "posted",
+      reconciliation_status: "reconciled",
+      source: "manual",
+      tag_ids: [],
+    },
+  ]);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction updated." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: updatedMemo }),
+  ).toBeVisible();
+});
+
+test("transaction detail edit opens non-fitting transactions in the journal editor", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const incomeAccount = findByFqn(accounts, "income:AcmePayroll");
+  const expenseCategory = findByFqn(categories, "Entertainment:Books");
+  const incomeCategory = findByFqn(categories, "Income:Salary");
+  const memo = `E2E edit mixed ${unique}`;
+  const updatedMemo = `E2E edit mixed updated ${unique}`;
+
+  const mixedResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-04",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-10.00000000",
+          category_id: expenseCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "10.00000000",
+          category_id: expenseCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: fundingAccount.account_id,
+          amount: "2.00000000",
+          category_id: incomeCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: incomeAccount.account_id,
+          amount: "-2.00000000",
+          category_id: incomeCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(mixedResponse.ok(), await mixedResponse.text()).toBe(true);
+  const transaction = (await mixedResponse.json()) as TransactionDetailFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first()
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Edit" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Edit journal" }),
+  ).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Advanced" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(journalRecord(page, 4)).toBeVisible();
+  await journalRecord(page, 1).getByLabel("Memo").fill(updatedMemo);
+
+  const replaceResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT"
+    );
+  });
+  await page.getByRole("button", { name: "Update transaction" }).click();
+  const replaceResponse = await replaceResponsePromise;
+  expect(replaceResponse.ok(), await replaceResponse.text()).toBe(true);
+  const replaced = (await replaceResponse.json()) as TransactionDetailFixture;
+  expect(replaced.transaction_id).toBe(transaction.transaction_id);
+  expect(replaced.records.some((record) => record.memo === updatedMemo)).toBe(
+    true,
+  );
+});
+
+test("shorthand edit escalation saves as a replacement", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E edit escalate ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "18.90",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-04",
+      memo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first()
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Edit" }).click();
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await spendPanel.getByLabel("Amount").fill("19.91");
+  await page.getByRole("button", { name: "Edit as journal" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Edit journal" }),
+  ).toBeVisible();
+  await expect(journalRecord(page, 1).getByLabel("Amount")).toHaveValue(
+    "-19.91",
+  );
+  await expect(journalRecord(page, 2).getByLabel("Amount")).toHaveValue(
+    "19.91",
+  );
+
+  const replaceResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT"
+    );
+  });
+  await page.getByRole("button", { name: "Update transaction" }).click();
+  const replaceResponse = await replaceResponsePromise;
+  expect(replaceResponse.ok(), await replaceResponse.text()).toBe(true);
+  const replaced = (await replaceResponse.json()) as TransactionDetailFixture;
+  expect(replaced.transaction_id).toBe(transaction.transaction_id);
+  expect(comparableRecords(replaced.records)).toEqual([
+    {
+      account_id: fundingAccount.account_id,
+      amount: "-19.91000000",
+      category_id: category.category_id,
+      currency: "USD",
+      member_id: null,
+      memo,
+      posting_status: "posted",
+      reconciliation_status: "reconciled",
+      source: "manual",
+      tag_ids: [],
+    },
+    {
+      account_id: merchantAccount.account_id,
+      amount: "19.91000000",
+      category_id: category.category_id,
+      currency: "USD",
+      member_id: null,
+      memo,
+      posting_status: "posted",
+      reconciliation_status: "reconciled",
+      source: "manual",
+      tag_ids: [],
+    },
+  ]);
+});
+
+test("transaction detail duplicate prefills a new entry", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 820 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E duplicate source ${unique}`;
+  const duplicateMemo = `E2E duplicate copy ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "16.45",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-05",
+      memo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first()
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+
+  const detailPanel = page.getByRole("dialog", {
+    name: transaction.display_title,
+  });
+  await expect(detailPanel.getByRole("button", { name: "Edit" })).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { name: "Duplicate" }),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { name: "Split" }),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { name: "Delete" }),
+  ).toBeVisible();
+
+  await detailPanel.getByRole("button", { name: "Duplicate" }).click();
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await expect(spendPanel.getByLabel("Amount")).toHaveValue("16.45");
+  await expect(spendPanel.getByLabel("Memo")).toHaveValue(memo);
+  await spendPanel.getByLabel("Memo").fill(duplicateMemo);
+
+  const createResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions/spend" &&
+      response.request().method() === "POST"
+    );
+  });
+  await page.getByRole("button", { name: "Save and add another" }).click();
+  const createResponse = await createResponsePromise;
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const duplicate = (await createResponse.json()) as TransactionFixture;
+  expect(duplicate.transaction_id).not.toBe(transaction.transaction_id);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction saved." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: duplicateMemo }),
+  ).toBeVisible();
+});
+
+test("transaction detail split opens journal replacement and surfaces replace errors", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const splitAccount = await createAccount(
+    page,
+    `merchant:SplitTarget:${unique}`,
+    "flow",
+  );
+  const memo = `E2E split source ${unique}`;
+  const splitMemo = `E2E split added ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "30.00",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-05",
+      memo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first()
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Split" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Edit journal" }),
+  ).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Advanced" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(journalRecord(page, 1).getByLabel("Amount")).toHaveValue("-30");
+  await expect(journalRecord(page, 2).getByLabel("Amount")).toHaveValue("30");
+
+  await journalRecord(page, 2).getByLabel("Amount").fill("20.00");
+  await page.getByRole("button", { name: "Add record" }).click();
+  const thirdRecord = journalRecord(page, 3);
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    "Books",
+    "Entertainment:Books",
+    { scope: thirdRecord },
+  );
+  await chooseOptionByKeyboard(page, "Account", unique, splitAccount.fqn, {
+    scope: thirdRecord,
+  });
+  await thirdRecord.getByLabel("Amount").fill("10.00");
+  await thirdRecord.getByLabel("Memo").fill(splitMemo);
+
+  const replaceUrlPattern = `**/api/transactions/${transaction.transaction_id}`;
+  await page.route(replaceUrlPattern, async (route) => {
+    if (route.request().method() === "PUT") {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 400,
+        body: JSON.stringify({
+          error: {
+            code: "invalid_request",
+            message: "Forced replace failure",
+          },
+        }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.getByRole("button", { name: "Update transaction" }).click();
+  await expect(page.getByText("Forced replace failure")).toBeVisible();
+  await page.unroute(replaceUrlPattern);
+
+  const replaceResponsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/transactions/${transaction.transaction_id}` &&
+      response.request().method() === "PUT"
+    );
+  });
+  await page.getByRole("button", { name: "Update transaction" }).click();
+  const replaceResponse = await replaceResponsePromise;
+  expect(replaceResponse.ok(), await replaceResponse.text()).toBe(true);
+  const replaced = (await replaceResponse.json()) as TransactionDetailFixture;
+  expect(replaced.transaction_id).toBe(transaction.transaction_id);
+  expect(comparableRecords(replaced.records)).toEqual(
+    comparableRecords([
+      {
+        account_id: fundingAccount.account_id,
+        amount: "-30.00000000",
+        category_id: category.category_id,
+        currency: "USD",
+        member_id: null,
+        memo,
+        posting_status: "posted",
+        reconciliation_status: "reconciled",
+        source: "manual",
+        tag_ids: [],
+      },
+      {
+        account_id: merchantAccount.account_id,
+        amount: "20.00000000",
+        category_id: category.category_id,
+        currency: "USD",
+        member_id: null,
+        memo,
+        posting_status: "posted",
+        reconciliation_status: "reconciled",
+        source: "manual",
+        tag_ids: [],
+      },
+      {
+        account_id: splitAccount.account_id,
+        amount: "10.00000000",
+        category_id: category.category_id,
+        currency: "USD",
+        member_id: null,
+        memo: splitMemo,
+        posting_status: "posted",
+        reconciliation_status: "unreconciled",
+        source: "manual",
+        tag_ids: [],
+      },
+    ]),
+  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction updated." }),
+  ).toBeVisible();
+});
+
 test("transaction row quick-delete confirms, handles errors, and preserves row behavior", async ({
   page,
 }, testInfo) => {
@@ -3394,6 +3946,20 @@ const chooseOptionByKeyboard = async (
     .getByRole("option")
     .filter({ hasText: optionValue });
   await expect
+    .poll(
+      async () => {
+        if ((await picker.inputValue()).includes(optionValue)) {
+          return "selected";
+        }
+        return (await optionByValue.count()) > 0 ? "listed" : "missing";
+      },
+      { timeout: 10000 },
+    )
+    .toMatch(/^(listed|selected)$/);
+  if ((await picker.inputValue()).includes(optionValue)) {
+    return;
+  }
+  await expect
     .poll(async () => await optionByValue.count(), { timeout: 10000 })
     .toBeGreaterThan(0);
   const option = optionByValue.first();
@@ -3423,6 +3989,52 @@ const fillAndExpectValue = async (
     })
     .toBe(value);
 };
+
+const readStoredTransactionEntryDraft = async (
+  page: Page,
+): Promise<StoredTransactionEntryDraftFixture | undefined> =>
+  page.evaluate<StoredTransactionEntryDraftFixture | undefined>(
+    () =>
+      new Promise<StoredTransactionEntryDraftFixture | undefined>(
+        (resolve, reject) => {
+          const openRequest = indexedDB.open("mina-ui-state", 3);
+          openRequest.onerror = () => {
+            reject(
+              new Error(
+                openRequest.error?.message ??
+                  "Failed to open transaction draft store.",
+              ),
+            );
+          };
+          openRequest.onsuccess = () => {
+            const database = openRequest.result;
+            const transaction = database.transaction(
+              "transaction_entry_draft",
+              "readonly",
+            );
+            const getRequest = transaction
+              .objectStore("transaction_entry_draft")
+              .get("transaction-entry");
+            getRequest.onerror = () => {
+              database.close();
+              reject(
+                new Error(
+                  getRequest.error?.message ??
+                    "Failed to read transaction draft.",
+                ),
+              );
+            };
+            getRequest.onsuccess = () => {
+              database.close();
+              resolve(
+                getRequest.result as
+                  StoredTransactionEntryDraftFixture | undefined,
+              );
+            };
+          };
+        },
+      ),
+  );
 
 const journalRecord = (page: Page, index: number): Locator =>
   page.locator(`[aria-label="Journal record ${index}"]`);
@@ -3698,9 +4310,15 @@ test("entry panel creates each shorthand transaction type", async ({
     "checking:Chase:Joint",
     { scope: refundPanel },
   );
-  await chooseOptionByKeyboard(page, "Merchant", "Target", "merchant:Target", {
-    scope: refundPanel,
-  });
+  await chooseOptionByKeyboard(
+    page,
+    "Merchant",
+    "merchant:Target",
+    "merchant:Target",
+    {
+      scope: refundPanel,
+    },
+  );
   await chooseOptionByKeyboard(page, "Category", "Retail", "Refunds:Retail", {
     scope: refundPanel,
   });
@@ -3791,7 +4409,7 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
   await expect(firstRecord.getByLabel("Amount")).toHaveValue("-10.00");
   await expect(firstRecord.getByLabel("Memo")).toHaveValue(memo);
 
-  await page.getByLabel("Date").fill("2026-05-31");
+  await page.getByLabel("Date").fill("2026-07-06");
   await chooseOptionByKeyboard(page, "Account", "Wallet", "cash:Wallet", {
     scope: firstRecord,
   });
@@ -3840,6 +4458,106 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
 
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+});
+
+test("create-mode advanced drafts stay independent when switching tabs and keeping a launch draft", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const advancedMemo = `E2E advanced independent ${unique}`;
+  const keptMemo = `E2E keep draft ${unique}`;
+  const editMemo = `E2E discard prompt edit ${unique}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.00",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-08",
+      memo: editMemo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await page.getByRole("tab", { name: "Advanced" }).click();
+  await expect(
+    page.getByRole("heading", { name: "New journal" }),
+  ).toBeVisible();
+
+  const firstRecord = journalRecord(page, 1);
+  const secondRecord = journalRecord(page, 2);
+  await firstRecord.getByLabel("Amount").fill("-88.10");
+  await firstRecord.getByLabel("Memo").fill(advancedMemo);
+  await secondRecord.getByLabel("Amount").fill("88.10");
+
+  await page.getByRole("tab", { name: "Spend" }).click();
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await spendPanel.getByLabel("Memo").fill(keptMemo);
+  await page.getByRole("tab", { name: "Advanced" }).click();
+
+  await expect(
+    entryPanel.getByRole("heading", { name: "New journal" }),
+  ).toBeVisible();
+  await expect(firstRecord.getByLabel("Amount")).toHaveValue("-88.10");
+  await expect(firstRecord.getByLabel("Memo")).toHaveValue(advancedMemo);
+  await expect(secondRecord.getByLabel("Amount")).toHaveValue("88.10");
+
+  await page.getByRole("tab", { name: "Spend" }).click();
+  await expect(spendPanel.getByLabel("Memo")).toHaveValue(keptMemo);
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({
+      tabs: {
+        spend: {
+          memo: keptMemo,
+        },
+      },
+    });
+  await page.getByRole("button", { name: "Close entry panel" }).click();
+
+  await page
+    .getByRole("row")
+    .filter({ hasText: editMemo })
+    .first()
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+  const detailPanel = page.getByRole("dialog", {
+    name: transaction.display_title,
+  });
+  await expect(detailPanel).toBeVisible();
+  await detailPanel.getByRole("button", { name: "Edit" }).click();
+
+  const discardDialog = page.getByRole("alertdialog", {
+    name: "Discard entry draft",
+  });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "Keep draft" }).click();
+  await expect(discardDialog).toBeHidden();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await expect(spendPanel.getByLabel("Memo")).toHaveValue(keptMemo);
 });
 
 test("spend entry escalates to matching journal records", async ({
@@ -3992,4 +4710,67 @@ test("advanced journal account picker follows selected category intent", async (
   await categoryPicker.fill("");
   await accountPicker.fill("merchant:Books");
   await expect(accountPicker).toHaveValue("merchant:Books");
+});
+
+test("command palette new spend supersedes an active edit launch", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 820 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E palette supersede ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "34.56",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-09",
+      memo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first()
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: "Edit" }).click();
+
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  const editSpendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await expect(editSpendPanel.getByLabel("Amount")).toHaveValue("34.56");
+
+  await page.keyboard.press("Control+K");
+  await expect(
+    page.getByRole("dialog", { name: "Command Palette" }),
+  ).toBeVisible();
+  await page.getByRole("combobox", { name: "Command search" }).fill("spend");
+  await page.getByRole("option", { name: "New spend" }).click();
+
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Spend" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  const newSpendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await expect(newSpendPanel.getByLabel("Amount")).toHaveValue("");
+  await expect(newSpendPanel.getByLabel("Memo")).toHaveValue("");
 });

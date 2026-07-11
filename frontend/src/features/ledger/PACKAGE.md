@@ -13,6 +13,8 @@
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.
 - Lookup-backed pickers use bounded REST lists and exclude hidden entities upstream.
 - Entry supports the spend, income, refund, and transfer shorthand endpoints.
+- Saved-transaction Edit/Split saves are full replacements owned by the entry panel; page routes own the post-save refresh fan-out and notices.
+- Saved-transaction Duplicate reuses entry-panel prefill mapping but stays on the create path.
 - Transaction-entry drafts are per tab and store UI form values only.
 - The active entry tab is a persisted UI preference.
 - Transfer fee rows are not expressible through the transfer shorthand endpoint.

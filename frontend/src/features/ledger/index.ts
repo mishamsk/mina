@@ -1,7 +1,11 @@
 export { AmountText, ApproximateUsdAmount, MixedAmounts } from "./amount-text";
 export { ClassBadge } from "./class-badge";
 export { EntityMultiPicker, EntityPicker } from "./entity-picker";
-export { EntryPanel } from "./entry-panel";
+export {
+  EntryPanel,
+  type EntryPanelLaunch,
+  type EntryPanelSaveContext,
+} from "./entry-panel";
 export {
   buildLookupMaps,
   displayAmountKey,

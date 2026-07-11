@@ -1,4 +1,4 @@
-import { Close, Trash } from "pixelarticons/react";
+import { Close, Copy, MagicEdit, Scissors, Trash } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
@@ -31,6 +31,9 @@ interface TransactionDetailPanelProps {
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
   readonly onDelete: (transaction: Transaction) => Promise<void>;
+  readonly onDuplicate?: (transaction: Transaction) => void;
+  readonly onEdit?: (transaction: Transaction) => void;
+  readonly onSplit?: (transaction: Transaction) => void;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
@@ -425,6 +428,9 @@ export const TransactionDetailPanel = ({
   lookups,
   onClose,
   onDelete,
+  onDuplicate,
+  onEdit,
+  onSplit,
   onFilterCategory,
   onFilterMember,
   onFilterTag,
@@ -633,7 +639,43 @@ export const TransactionDetailPanel = ({
         ) : null}
       </div>
       {transaction && !loading && !errorMessage ? (
-        <div className="bg-card flex justify-end border-t-2 border-[var(--border-ink)] p-4">
+        <div className="bg-card flex flex-wrap justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
+          {onEdit ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onEdit(transaction);
+              }}
+            >
+              <MagicEdit aria-hidden="true" />
+              Edit
+            </Button>
+          ) : null}
+          {onDuplicate ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onDuplicate(transaction);
+              }}
+            >
+              <Copy aria-hidden="true" />
+              Duplicate
+            </Button>
+          ) : null}
+          {onSplit ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onSplit(transaction);
+              }}
+            >
+              <Scissors aria-hidden="true" />
+              Split
+            </Button>
+          ) : null}
           <Button
             ref={deleteButtonRef}
             type="button"

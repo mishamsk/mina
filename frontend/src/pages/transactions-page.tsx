@@ -14,6 +14,8 @@ import { PageHeader } from "@/features/app-shell";
 import {
   defaultTransactionPage,
   EntryPanel,
+  type EntryPanelLaunch,
+  type EntryPanelSaveContext,
   readTransactionFiltersFromSearchParams,
   readTransactionPageFromSearchParams,
   refreshTransactionPageAfterSave,
@@ -117,6 +119,9 @@ export const TransactionsPage = () => {
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
   const [quickDeleteDialogOpen, setQuickDeleteDialogOpen] = useState(false);
   const [rowActionsOverflowOpen, setRowActionsOverflowOpen] = useState(false);
+  const [entryLaunch, setEntryLaunch] = useState<
+    EntryPanelLaunch | undefined
+  >();
   const [saveNotice, setSaveNotice] = useState<SaveNotice | undefined>();
   const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
   const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
@@ -155,6 +160,7 @@ export const TransactionsPage = () => {
     lookups.loading ||
     (Boolean(transactions) && !lookups.snapshot);
   const errorMessage = pageResource.errorMessage ?? lookups.errorMessage;
+  const effectiveEntryLaunch = entryPanel.initialTab ? undefined : entryLaunch;
 
   useEffect(() => {
     if (dateJumpLoading || !dateJumpFocusRestoreRef.current) {
@@ -170,6 +176,7 @@ export const TransactionsPage = () => {
   }, [location.search]);
 
   const openEntryPanel = useCallback(() => {
+    setEntryLaunch(undefined);
     openTransactionEntryPanel();
     setSaveNotice(undefined);
   }, []);
@@ -193,6 +200,16 @@ export const TransactionsPage = () => {
     setSearchParams,
     transactions,
   });
+  const {
+    closeTransactionDetail,
+    selectedTransactionId,
+    deleteSelectedTransaction,
+    errorMessage: detailErrorMessage,
+    loading: detailLoading,
+    openTransactionDetail,
+    restoreDetailFocus,
+    transaction: detailTransaction,
+  } = detail;
 
   const deleteTransactionFromRow = useCallback(
     async (transaction: Transaction) => {
@@ -201,8 +218,8 @@ export const TransactionsPage = () => {
         throw new Error(apiErrorMessage(result.error));
       }
 
-      if (detail.selectedTransactionId === transaction.transaction_id) {
-        detail.closeTransactionDetail();
+      if (selectedTransactionId === transaction.transaction_id) {
+        closeTransactionDetail();
       }
       await refreshTransactionPageAfterSave(
         params,
@@ -211,12 +228,37 @@ export const TransactionsPage = () => {
       );
       showSaveNotice("Transaction deleted.");
     },
-    [
-      detail.closeTransactionDetail,
-      detail.selectedTransactionId,
-      params,
-      showSaveNotice,
-    ],
+    [closeTransactionDetail, params, selectedTransactionId, showSaveNotice],
+  );
+
+  const editTransaction = useCallback(
+    (transaction: Transaction) => {
+      setEntryLaunch({ transaction, type: "edit" });
+      closeTransactionDetail();
+      openTransactionEntryPanel();
+      setSaveNotice(undefined);
+    },
+    [closeTransactionDetail],
+  );
+
+  const duplicateTransaction = useCallback(
+    (transaction: Transaction) => {
+      setEntryLaunch({ transaction, type: "duplicate" });
+      closeTransactionDetail();
+      openTransactionEntryPanel();
+      setSaveNotice(undefined);
+    },
+    [closeTransactionDetail],
+  );
+
+  const splitTransaction = useCallback(
+    (transaction: Transaction) => {
+      setEntryLaunch({ transaction, type: "split" });
+      closeTransactionDetail();
+      openTransactionEntryPanel();
+      setSaveNotice(undefined);
+    },
+    [closeTransactionDetail],
   );
 
   const setSearchFilter = useCallback(
@@ -284,7 +326,8 @@ export const TransactionsPage = () => {
       const target = event.target;
       const targetElement = target instanceof HTMLElement ? target : undefined;
       if (
-        detail.selectedTransactionId ||
+        selectedTransactionId ||
+        entryPanel.open ||
         filterPopoverOpen ||
         getCommandPaletteSnapshot().open ||
         quickDeleteDialogOpen ||
@@ -309,7 +352,8 @@ export const TransactionsPage = () => {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [
-    detail.selectedTransactionId,
+    entryPanel.open,
+    selectedTransactionId,
     filterPopoverOpen,
     openEntryPanel,
     quickDeleteDialogOpen,
@@ -487,7 +531,7 @@ export const TransactionsPage = () => {
             onNextPage={() => {
               setPage(page + 1);
             }}
-            onOpenTransaction={detail.openTransactionDetail}
+            onOpenTransaction={openTransactionDetail}
             onPageSizeChange={(nextPageSize) => {
               cancelDateJump();
               setSearchParams((current) => {
@@ -518,29 +562,45 @@ export const TransactionsPage = () => {
         <EntryPanel
           key={entryPanel.revision}
           initialTab={entryPanel.initialTab}
+          launch={effectiveEntryLaunch}
           lookups={lookups.snapshot}
           open={entryPanel.open}
-          onClose={closeTransactionEntryPanel}
-          onSaved={async (transaction: Transaction) => {
+          onClose={() => {
+            setEntryLaunch(undefined);
+            closeTransactionEntryPanel();
+          }}
+          onSaved={async (
+            transaction: Transaction,
+            context: EntryPanelSaveContext,
+          ) => {
             const savedOnCurrentPage = await refreshTransactionPageAfterSave(
               params,
               transaction.transaction_id,
               transaction,
+              context.previousTransaction,
             );
-            showSaveNotice(
-              savedOnCurrentPage
-                ? "Transaction saved."
-                : "Transaction saved. It may appear on another page.",
-            );
+            setEntryLaunch(undefined);
+            if (context.operation === "updated") {
+              showSaveNotice("Transaction updated.");
+            } else {
+              showSaveNotice(
+                savedOnCurrentPage
+                  ? "Transaction saved."
+                  : "Transaction saved. It may appear on another page.",
+              );
+            }
           }}
         />
-        {detail.selectedTransactionId ? (
+        {selectedTransactionId ? (
           <TransactionDetailPanel
-            errorMessage={detail.errorMessage}
-            loading={detail.loading}
+            errorMessage={detailErrorMessage}
+            loading={detailLoading}
             lookups={lookups.snapshot}
-            onClose={detail.closeTransactionDetail}
-            onDelete={detail.deleteSelectedTransaction}
+            onClose={closeTransactionDetail}
+            onDelete={deleteSelectedTransaction}
+            onDuplicate={duplicateTransaction}
+            onEdit={editTransaction}
+            onSplit={splitTransaction}
             onFilterCategory={(categoryId) => {
               addEntityFilter("category", categoryId);
             }}
@@ -550,8 +610,8 @@ export const TransactionsPage = () => {
             onFilterTag={(tagId) => {
               addEntityFilter("tag", tagId);
             }}
-            onRestoreFocus={detail.restoreDetailFocus}
-            transaction={detail.transaction}
+            onRestoreFocus={restoreDetailFocus}
+            transaction={detailTransaction}
           />
         ) : null}
       </div>

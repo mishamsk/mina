@@ -23,10 +23,14 @@ import {
   createTransfer,
   type CreateTransferTransactionRequest,
   isNetworkFailure,
+  type JournalRecord,
   type Member,
+  replaceLedgerTransaction,
   type Tag,
   type Transaction,
+  type UpdateTransactionRequest,
 } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import type {
@@ -53,10 +57,24 @@ import { useCategoryPickerCategoriesResource } from "./use-transactions-resource
 
 interface EntryPanelProps {
   readonly initialTab?: TransactionEntryType;
+  readonly launch?: EntryPanelLaunch;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
-  readonly onSaved: (transaction: Transaction) => Promise<void>;
+  readonly onSaved: (
+    transaction: Transaction,
+    context: EntryPanelSaveContext,
+  ) => Promise<void>;
   readonly open: boolean;
+}
+
+export type EntryPanelLaunch = {
+  readonly transaction: Transaction;
+  readonly type: "duplicate" | "edit" | "split";
+};
+
+export interface EntryPanelSaveContext {
+  readonly operation: "created" | "updated";
+  readonly previousTransaction?: Transaction;
 }
 
 type FieldName =
@@ -88,6 +106,28 @@ type AdvancedRecordFieldName =
   | "tagIds";
 type AdvancedFieldErrors = Record<string, string>;
 type JournalRecordDraftPostingStatus = JournalRecordRowDraft["postingStatus"];
+
+interface AdvancedValidationOptions {
+  readonly allowExpectedPostingStatus: boolean;
+}
+
+interface ShorthandFit {
+  readonly entryType: ShorthandTransactionEntryType;
+  readonly negativeRecord: JournalRecord;
+  readonly positiveRecord: JournalRecord;
+}
+
+interface ReplacementContext {
+  readonly fit?: ShorthandFit;
+  readonly transaction: Transaction;
+}
+
+interface LaunchDraft {
+  readonly draft: TransactionEntryDraft;
+  readonly replacement?: ReplacementContext;
+}
+
+type DraftPersistenceMode = "launch" | "ordinary";
 
 interface TabConfig {
   readonly categoryIntents: readonly Category["economic_intent"][];
@@ -197,6 +237,11 @@ const blankRecordRowDraft = (): JournalRecordRowDraft => ({
   postingStatus: "posted",
   reconciliationStatus: "unreconciled",
   showDates: false,
+  sourceAmount: undefined,
+  sourceAmountUsd: undefined,
+  sourceCurrency: undefined,
+  sourceExternalId: undefined,
+  sourceExternalSystem: undefined,
   tagIds: [],
 });
 
@@ -294,6 +339,7 @@ const migrateStoredRecordRowDraft = (
       ? storedRow.draftId
       : newJournalRecordDraftId(),
   postingStatus:
+    storedRow?.postingStatus === "expected" ||
     storedRow?.postingStatus === "pending" ||
     storedRow?.postingStatus === "cancelled" ||
     storedRow?.postingStatus === "posted"
@@ -360,6 +406,7 @@ const entityOption = (
   id: number,
 ): EntityOption => ({
   detail: entity.fqn,
+  hidden: entity.is_hidden,
   id,
   label: entity.name,
   searchLabel: entity.fqn,
@@ -424,6 +471,314 @@ const formatMantissa = (mantissa: bigint): string => {
 
 const normalizeCurrency = (currency: string): string =>
   currency.trim().toUpperCase();
+
+const normalizeMemberId = (memberId: number | null | undefined) =>
+  memberId ?? undefined;
+
+const normalizeMemo = (memo: string | null | undefined): string =>
+  memo?.trim() ?? "";
+
+const sortedIds = (ids: readonly number[]): readonly number[] =>
+  [...ids].sort((left, right) => left - right);
+
+const sameIds = (
+  left: readonly number[],
+  right: readonly number[],
+): boolean => {
+  const sortedLeft = sortedIds(left);
+  const sortedRight = sortedIds(right);
+  return (
+    sortedLeft.length === sortedRight.length &&
+    sortedLeft.every((value, index) => value === sortedRight[index])
+  );
+};
+
+const activeTransactionRecords = (
+  transaction: Transaction,
+): readonly JournalRecord[] =>
+  transaction.records.filter((record) => !record.tombstoned_at);
+
+const absoluteMantissa = (amount: string): bigint | undefined => {
+  const mantissa = signedAmountMantissa(amount);
+  if (mantissa === undefined) {
+    return undefined;
+  }
+  return mantissa < 0n ? -mantissa : mantissa;
+};
+
+const inputAmountFromRecord = (record: JournalRecord): string => {
+  const mantissa = absoluteMantissa(record.amount);
+  return mantissa === undefined ? "" : formatMantissa(mantissa);
+};
+
+const padDatePart = (value: number, length = 2): string =>
+  value.toString().padStart(length, "0");
+
+const timestampFraction = (value: string): string => {
+  const match = value.match(/\.\d+(?=Z$|[+-]\d{2}:?\d{2}$|$)/);
+  return match?.[0] ?? "";
+};
+
+const localDateTimeValue = (value: string | null | undefined): string => {
+  if (!value) {
+    return "";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  return `${padDatePart(parsed.getFullYear(), 4)}-${padDatePart(
+    parsed.getMonth() + 1,
+  )}-${padDatePart(parsed.getDate())}T${padDatePart(
+    parsed.getHours(),
+  )}:${padDatePart(parsed.getMinutes())}:${padDatePart(
+    parsed.getSeconds(),
+  )}${timestampFraction(value)}`;
+};
+
+const draftPostingStatus = (
+  status: JournalRecord["posting_status"],
+): JournalRecordDraftPostingStatus => status;
+
+const recordRowDraftFromJournalRecord = (
+  record: JournalRecord,
+): JournalRecordRowDraft => ({
+  accountId: record.account_id,
+  amount: formatMantissa(signedAmountMantissa(record.amount) ?? 0n),
+  categoryId: record.category_id,
+  currency: record.currency,
+  draftId: newJournalRecordDraftId(),
+  memberId: normalizeMemberId(record.member_id),
+  memo: record.memo ?? "",
+  pendingDateTime: localDateTimeValue(record.pending_date),
+  postedDateTime: localDateTimeValue(record.posted_date),
+  postingStatus: draftPostingStatus(record.posting_status),
+  reconciliationStatus: record.reconciliation_status,
+  showDates: Boolean(record.pending_date || record.posted_date),
+  sourceAmount: record.amount,
+  sourceAmountUsd: record.amount_usd,
+  sourceCurrency: record.currency,
+  sourceExternalId: record.external_id,
+  sourceExternalSystem: record.external_system,
+  tagIds: [...record.tag_ids],
+});
+
+const advancedDraftFromTransaction = (
+  transaction: Transaction,
+): AdvancedTransactionEntryDraft => ({
+  date: transaction.initiated_date,
+  records: activeTransactionRecords(transaction).map(
+    recordRowDraftFromJournalRecord,
+  ),
+});
+
+const blankTabDraftIsEmpty = (draft: TransactionEntryTabDraft): boolean =>
+  !draft.amount.trim() &&
+  !draft.categoryId &&
+  normalizeCurrency(draft.currency) === "USD" &&
+  draft.date === localTodayISODate() &&
+  !draft.destinationAccountId &&
+  !draft.fundingAccountId &&
+  !draft.memberId &&
+  !draft.merchantAccountId &&
+  !draft.memo.trim() &&
+  !draft.sourceAccountId &&
+  draft.tagIds.length === 0;
+
+const blankRecordRowDraftIsEmpty = (row: JournalRecordRowDraft): boolean =>
+  !row.accountId &&
+  !row.amount.trim() &&
+  !row.categoryId &&
+  normalizeCurrency(row.currency) === "USD" &&
+  !row.memberId &&
+  !row.memo.trim() &&
+  !row.pendingDateTime.trim() &&
+  !row.postedDateTime.trim() &&
+  row.postingStatus === "posted" &&
+  row.reconciliationStatus === "unreconciled" &&
+  row.tagIds.length === 0;
+
+const draftHasUserInput = (draft: TransactionEntryDraft): boolean =>
+  Object.values(draft.tabs).some(
+    (tabDraft) => !blankTabDraftIsEmpty(tabDraft),
+  ) ||
+  draft.advanced.date !== localTodayISODate() ||
+  draft.advanced.records.length !== 2 ||
+  draft.advanced.records.some((row) => !blankRecordRowDraftIsEmpty(row));
+
+const recordPairHasUniformShorthandFields = (
+  left: JournalRecord,
+  right: JournalRecord,
+): boolean =>
+  left.category_id === right.category_id &&
+  normalizeMemberId(left.member_id) === normalizeMemberId(right.member_id) &&
+  normalizeMemo(left.memo) === normalizeMemo(right.memo) &&
+  left.currency === right.currency &&
+  sameIds(left.tag_ids, right.tag_ids);
+
+const accountHasType = (
+  lookups: LedgerLookupsSnapshot,
+  accountId: number,
+  accountType: Account["account_type"],
+): boolean =>
+  lookups.accounts.some(
+    (account) =>
+      account.account_id === accountId && account.account_type === accountType,
+  );
+
+const shorthandFitFromTransaction = (
+  transaction: Transaction,
+  lookups: LedgerLookupsSnapshot,
+): ShorthandFit | undefined => {
+  const records = activeTransactionRecords(transaction);
+  if (records.length !== 2) {
+    return undefined;
+  }
+
+  const negativeRecord = records.find(
+    (record) => (signedAmountMantissa(record.amount) ?? 0n) < 0n,
+  );
+  const positiveRecord = records.find(
+    (record) => (signedAmountMantissa(record.amount) ?? 0n) > 0n,
+  );
+  if (
+    !negativeRecord ||
+    !positiveRecord ||
+    !recordPairHasUniformShorthandFields(negativeRecord, positiveRecord) ||
+    absoluteMantissa(negativeRecord.amount) !==
+      absoluteMantissa(positiveRecord.amount)
+  ) {
+    return undefined;
+  }
+
+  const entryType =
+    transaction.transaction_class === "spend" ||
+    transaction.transaction_class === "income" ||
+    transaction.transaction_class === "refund" ||
+    transaction.transaction_class === "transfer"
+      ? transaction.transaction_class
+      : undefined;
+  if (!entryType) {
+    return undefined;
+  }
+
+  const expectedAccountTypes: Record<
+    ShorthandTransactionEntryType,
+    readonly [Account["account_type"], Account["account_type"]]
+  > = {
+    income: ["flow", "balance"],
+    refund: ["flow", "balance"],
+    spend: ["balance", "flow"],
+    transfer: ["balance", "balance"],
+  };
+  const [negativeAccountType, positiveAccountType] =
+    expectedAccountTypes[entryType];
+  if (
+    !accountHasType(lookups, negativeRecord.account_id, negativeAccountType) ||
+    !accountHasType(lookups, positiveRecord.account_id, positiveAccountType)
+  ) {
+    return undefined;
+  }
+
+  return { entryType, negativeRecord, positiveRecord };
+};
+
+const tabDraftFromShorthandFit = (
+  transaction: Transaction,
+  fit: ShorthandFit,
+): TransactionEntryTabDraft => {
+  const common = {
+    ...blankTabDraft(),
+    amount: inputAmountFromRecord(fit.positiveRecord),
+    categoryId: fit.positiveRecord.category_id,
+    currency: fit.positiveRecord.currency,
+    date: transaction.initiated_date,
+    memberId: normalizeMemberId(fit.positiveRecord.member_id),
+    memo: fit.positiveRecord.memo ?? "",
+    tagIds: [...fit.positiveRecord.tag_ids],
+  };
+
+  switch (fit.entryType) {
+    case "income":
+      return {
+        ...common,
+        destinationAccountId: fit.positiveRecord.account_id,
+        sourceAccountId: fit.negativeRecord.account_id,
+      };
+    case "refund":
+      return {
+        ...common,
+        destinationAccountId: fit.positiveRecord.account_id,
+        merchantAccountId: fit.negativeRecord.account_id,
+      };
+    case "spend":
+      return {
+        ...common,
+        fundingAccountId: fit.negativeRecord.account_id,
+        merchantAccountId: fit.positiveRecord.account_id,
+      };
+    case "transfer":
+      return {
+        ...common,
+        destinationAccountId: fit.positiveRecord.account_id,
+        sourceAccountId: fit.negativeRecord.account_id,
+      };
+  }
+};
+
+const launchDraftFromTransaction = (
+  launch: EntryPanelLaunch,
+  lookups: LedgerLookupsSnapshot,
+): LaunchDraft => {
+  if (launch.type === "split") {
+    return {
+      draft: {
+        ...defaultDraft(),
+        activeTab: "advanced",
+        advanced: advancedDraftFromTransaction(launch.transaction),
+      },
+      replacement: {
+        transaction: launch.transaction,
+      },
+    };
+  }
+
+  const fit = shorthandFitFromTransaction(launch.transaction, lookups);
+  if (!fit) {
+    return {
+      draft: {
+        ...defaultDraft(),
+        activeTab: "advanced",
+        advanced: advancedDraftFromTransaction(launch.transaction),
+      },
+      replacement:
+        launch.type === "duplicate"
+          ? undefined
+          : {
+              transaction: launch.transaction,
+            },
+    };
+  }
+
+  return {
+    draft: {
+      ...defaultDraft(),
+      activeTab: fit.entryType,
+      advanced: advancedDraftFromTransaction(launch.transaction),
+      tabs: {
+        ...defaultDraft().tabs,
+        [fit.entryType]: tabDraftFromShorthandFit(launch.transaction, fit),
+      },
+    },
+    replacement:
+      launch.type === "duplicate"
+        ? undefined
+        : {
+            fit,
+            transaction: launch.transaction,
+          },
+  };
+};
 
 const validCurrencyPattern = /^([A-Z]{3}|C::.+)$/;
 const categoryEconomicIntents = new Set<Category["economic_intent"]>([
@@ -554,6 +909,7 @@ const advancedFieldError = (
 
 const validateAdvancedDraft = (
   draft: AdvancedTransactionEntryDraft,
+  options: AdvancedValidationOptions = { allowExpectedPostingStatus: true },
 ): AdvancedFieldErrors => {
   const errors: AdvancedFieldErrors = {};
   if (!draft.date) {
@@ -577,6 +933,13 @@ const validateAdvancedDraft = (
     if (!row.categoryId) {
       errors[advancedErrorKey(rowIndex, "categoryId")] =
         "Category is required.";
+    }
+    if (
+      !options.allowExpectedPostingStatus &&
+      row.postingStatus === "expected"
+    ) {
+      errors[advancedErrorKey(rowIndex, "postingStatus")] =
+        "Expected records must be reviewed from Recurring.";
     }
   });
   if (draft.records.length < 2) {
@@ -619,14 +982,194 @@ const allCurrenciesBalanced = (balances: readonly CurrencyBalance[]): boolean =>
   balances.length > 0 && balances.every((balance) => balance.balanced);
 
 const dateTimeToISO = (dateTime: string): string | null => {
-  if (!dateTime.trim()) {
+  const trimmed = dateTime.trim();
+  if (!trimmed) {
     return null;
   }
-  const parsed = new Date(dateTime);
+  const match = trimmed.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(\.\d+)?)?$/,
+  );
+  if (!match) {
+    return null;
+  }
+  const [, year, month, day, hours, minutes, seconds = "0", fraction = ""] =
+    match;
+  const milliseconds = fraction
+    ? Number(fraction.slice(1, 4).padEnd(3, "0"))
+    : 0;
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hours),
+    Number(minutes),
+    Number(seconds),
+    milliseconds,
+  );
   if (Number.isNaN(parsed.getTime())) {
     return null;
   }
-  return parsed.toISOString();
+  const iso = parsed.toISOString();
+  return fraction ? `${iso.slice(0, 19)}${fraction}Z` : iso;
+};
+
+const externalMetadataFromDraftRow = (
+  row: JournalRecordRowDraft,
+): Pick<
+  UpdateTransactionRequest["records"][number],
+  "external_id" | "external_system"
+> => ({
+  ...(row.sourceExternalId !== undefined
+    ? { external_id: row.sourceExternalId }
+    : {}),
+  ...(row.sourceExternalSystem !== undefined
+    ? { external_system: row.sourceExternalSystem }
+    : {}),
+});
+
+const externalMetadataFromJournalRecord = (
+  record: JournalRecord,
+): Pick<
+  UpdateTransactionRequest["records"][number],
+  "external_id" | "external_system"
+> => ({
+  ...(record.external_id !== undefined
+    ? { external_id: record.external_id }
+    : {}),
+  ...(record.external_system !== undefined
+    ? { external_system: record.external_system }
+    : {}),
+});
+
+const amountUsdFromDraftRow = (
+  row: JournalRecordRowDraft,
+): Pick<UpdateTransactionRequest["records"][number], "amount_usd"> => {
+  if (row.sourceAmountUsd === undefined || !row.sourceAmount) {
+    return {};
+  }
+  if (
+    signedAmountMantissa(row.amount) !== signedAmountMantissa(row.sourceAmount)
+  ) {
+    return {};
+  }
+  if (
+    !row.sourceCurrency ||
+    normalizeCurrency(row.currency) !== normalizeCurrency(row.sourceCurrency)
+  ) {
+    return {};
+  }
+  return { amount_usd: row.sourceAmountUsd };
+};
+
+const amountUsdFromJournalRecord = (
+  record: JournalRecord,
+  amount: string,
+  currency: string,
+): Pick<UpdateTransactionRequest["records"][number], "amount_usd"> => {
+  if (signedAmountMantissa(amount) !== signedAmountMantissa(record.amount)) {
+    return {};
+  }
+  if (normalizeCurrency(currency) !== normalizeCurrency(record.currency)) {
+    return {};
+  }
+  return { amount_usd: record.amount_usd };
+};
+
+const updateRecordFromDraftRow = (
+  row: JournalRecordRowDraft,
+): UpdateTransactionRequest["records"][number] => {
+  const amount = normalizeSignedAmount(row.amount)!;
+  const currency = normalizeCurrency(row.currency);
+  return {
+    account_id: row.accountId!,
+    amount,
+    category_id: row.categoryId!,
+    currency,
+    ...amountUsdFromDraftRow(row),
+    ...externalMetadataFromDraftRow(row),
+    member_id: row.memberId ?? null,
+    memo: row.memo.trim() ? row.memo.trim() : null,
+    pending_date: dateTimeToISO(row.pendingDateTime),
+    posted_date: dateTimeToISO(row.postedDateTime),
+    posting_status: row.postingStatus,
+    reconciliation_status: row.reconciliationStatus,
+    source: "manual",
+    tag_ids: [...row.tagIds],
+  };
+};
+
+const updateBodyFromAdvancedDraft = (
+  draft: AdvancedTransactionEntryDraft,
+): UpdateTransactionRequest => ({
+  initiated_date: draft.date,
+  records: draft.records.map(updateRecordFromDraftRow),
+});
+
+const updateRecordFromShorthandDraft = (
+  record: JournalRecord,
+  draft: TransactionEntryTabDraft,
+  accountId: number,
+  amountSign: "negative" | "positive",
+): UpdateTransactionRequest["records"][number] => {
+  const amount = amountWithSign(
+    normalizeAmount(draft.amount) ?? draft.amount,
+    amountSign,
+  );
+  const currency = normalizeCurrency(draft.currency);
+  return {
+    account_id: accountId,
+    amount,
+    category_id: draft.categoryId!,
+    currency,
+    ...amountUsdFromJournalRecord(record, amount, currency),
+    ...externalMetadataFromJournalRecord(record),
+    member_id: draft.memberId ?? null,
+    memo: draft.memo.trim() ? draft.memo.trim() : null,
+    pending_date: record.pending_date,
+    posted_date: record.posted_date ?? null,
+    posting_status: record.posting_status,
+    reconciliation_status: record.reconciliation_status,
+    source: "manual",
+    tag_ids: [...draft.tagIds],
+  };
+};
+
+const updateBodyFromShorthandDraft = (
+  draft: TransactionEntryTabDraft,
+  fit: ShorthandFit,
+): UpdateTransactionRequest => {
+  const negativeAccountId =
+    fit.entryType === "spend"
+      ? draft.fundingAccountId!
+      : fit.entryType === "transfer"
+        ? draft.sourceAccountId!
+        : fit.entryType === "income"
+          ? draft.sourceAccountId!
+          : draft.merchantAccountId!;
+  const positiveAccountId =
+    fit.entryType === "spend"
+      ? draft.merchantAccountId!
+      : fit.entryType === "transfer"
+        ? draft.destinationAccountId!
+        : draft.destinationAccountId!;
+
+  return {
+    initiated_date: draft.date,
+    records: [
+      updateRecordFromShorthandDraft(
+        fit.negativeRecord,
+        draft,
+        negativeAccountId,
+        "negative",
+      ),
+      updateRecordFromShorthandDraft(
+        fit.positiveRecord,
+        draft,
+        positiveAccountId,
+        "positive",
+      ),
+    ],
+  };
 };
 
 const semanticShapeIntentFromAPI = (
@@ -900,6 +1443,7 @@ const accountTypesForCategoryIntent = (
 
 export const EntryPanel = ({
   initialTab,
+  launch,
   lookups,
   onClose,
   onSaved,
@@ -914,6 +1458,15 @@ export const EntryPanel = ({
   const [saving, setSaving] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
   const [categoryRetryToken, setCategoryRetryToken] = useState(0);
+  const [replacement, setReplacement] = useState<
+    ReplacementContext | undefined
+  >();
+  const [pendingLaunchDraft, setPendingLaunchDraft] = useState<
+    LaunchDraft | undefined
+  >();
+  const [draftPersistence, setDraftPersistence] =
+    useState<DraftPersistenceMode>("ordinary");
+  const [confirmDiscardDraftOpen, setConfirmDiscardDraftOpen] = useState(false);
   const [entryPanelMaxHeight, setEntryPanelMaxHeight] = useState<
     number | undefined
   >();
@@ -926,6 +1479,12 @@ export const EntryPanel = ({
     undefined,
   );
   const userSelectedActiveTabRef = useRef(false);
+  const initializedLaunchKeyRef = useRef<string | undefined>(undefined);
+  const latestLookupsRef = useRef<LedgerLookupsSnapshot | undefined>(lookups);
+
+  useEffect(() => {
+    latestLookupsRef.current = lookups;
+  }, [lookups]);
 
   const draftForStorage = useCallback(
     (nextDraft: TransactionEntryDraft): TransactionEntryDraft => {
@@ -954,26 +1513,78 @@ export const EntryPanel = ({
     categoryRetryToken,
   );
 
+  const cancelPendingLaunch = useCallback(() => {
+    setConfirmDiscardDraftOpen(false);
+    setPendingLaunchDraft(undefined);
+    setDraftPersistence("ordinary");
+    window.requestAnimationFrame(() => {
+      dateInputRef.current?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  const discardPendingLaunch = useCallback(() => {
+    if (!pendingLaunchDraft) {
+      return;
+    }
+    void writeTransactionEntryDraft(defaultDraft());
+    setDraft(pendingLaunchDraft.draft);
+    setReplacement(pendingLaunchDraft.replacement);
+    setDraftPersistence("launch");
+    setPendingLaunchDraft(undefined);
+    setConfirmDiscardDraftOpen(false);
+    setFieldErrors({});
+    setAdvancedFieldErrors({});
+    setGeneralError(undefined);
+  }, [pendingLaunchDraft]);
+
+  const launchKey = launch
+    ? `${launch.type}:${launch.transaction.transaction_id}`
+    : `create:${initialTab ?? "remembered"}`;
+  const launchLookupsReady = !launch || Boolean(lookups);
+
   useEffect(() => {
-    if (!open) {
+    if (!open || !launchLookupsReady) {
+      return;
+    }
+    if (initializedLaunchKeyRef.current === launchKey) {
       return;
     }
 
+    initializedLaunchKeyRef.current = launchKey;
     let active = true;
     void readTransactionEntryDraft().then((storedDraft) => {
       if (active) {
         const migratedDraft = migrateStoredDraft(storedDraft);
+        const launchDraft = launch
+          ? launchDraftFromTransaction(launch, latestLookupsRef.current!)
+          : undefined;
         rememberedActiveTabRef.current = migratedDraft.activeTab;
-        initialTabOverrideRef.current = initialTab;
+        initialTabOverrideRef.current = launchDraft ? undefined : initialTab;
         userSelectedActiveTabRef.current = false;
-        setDraft(
-          initialTab
-            ? {
-                ...migratedDraft,
-                activeTab: initialTab,
-              }
-            : migratedDraft,
-        );
+        setReplacement(undefined);
+        setPendingLaunchDraft(undefined);
+        setConfirmDiscardDraftOpen(false);
+        setDraftPersistence("ordinary");
+        if (launchDraft) {
+          if (draftHasUserInput(migratedDraft)) {
+            setDraft(migratedDraft);
+            setPendingLaunchDraft(launchDraft);
+            setConfirmDiscardDraftOpen(true);
+          } else {
+            setDraft(launchDraft.draft);
+            setReplacement(launchDraft.replacement);
+            setDraftPersistence("launch");
+          }
+        } else {
+          setDraft(
+            initialTab
+              ? {
+                  ...migratedDraft,
+                  activeTab: initialTab,
+                }
+              : migratedDraft,
+          );
+        }
         setDraftReady(true);
       }
     });
@@ -981,15 +1592,15 @@ export const EntryPanel = ({
     return () => {
       active = false;
     };
-  }, [initialTab, open]);
+  }, [initialTab, launch, launchKey, launchLookupsReady, open]);
 
   useEffect(() => {
-    if (!open || !draftReady) {
+    if (!open || !draftReady || draftPersistence !== "ordinary") {
       return;
     }
 
     void writeTransactionEntryDraft(draftForStorage(draft));
-  }, [draft, draftForStorage, draftReady, open]);
+  }, [draft, draftForStorage, draftPersistence, draftReady, open]);
 
   useEffect(() => {
     if (!open || !draftReady) {
@@ -1010,6 +1621,9 @@ export const EntryPanel = ({
       if (event.defaultPrevented) {
         return;
       }
+      if (confirmDiscardDraftOpen) {
+        return;
+      }
       if (event.key === "Escape") {
         onClose();
       }
@@ -1018,7 +1632,7 @@ export const EntryPanel = ({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [onClose, open]);
+  }, [confirmDiscardDraftOpen, onClose, open]);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -1043,16 +1657,79 @@ export const EntryPanel = ({
     };
   }, [open]);
 
+  const selectedEntityIds = useMemo(() => {
+    const accountIds = new Set<number>();
+    const categoryIds = new Set<number>();
+    const memberIds = new Set<number>();
+    const tagIds = new Set<number>();
+    const addNumber = (values: Set<number>, value: number | undefined) => {
+      if (value !== undefined) {
+        values.add(value);
+      }
+    };
+    const addTabDraft = (tabDraft: TransactionEntryTabDraft) => {
+      addNumber(accountIds, tabDraft.destinationAccountId);
+      addNumber(accountIds, tabDraft.fundingAccountId);
+      addNumber(accountIds, tabDraft.merchantAccountId);
+      addNumber(accountIds, tabDraft.sourceAccountId);
+      addNumber(categoryIds, tabDraft.categoryId);
+      addNumber(memberIds, tabDraft.memberId);
+      for (const tagId of tabDraft.tagIds) {
+        tagIds.add(tagId);
+      }
+    };
+    for (const tabDraft of Object.values(draft.tabs)) {
+      addTabDraft(tabDraft);
+    }
+    for (const row of draft.advanced.records) {
+      addNumber(accountIds, row.accountId);
+      addNumber(categoryIds, row.categoryId);
+      addNumber(memberIds, row.memberId);
+      for (const tagId of row.tagIds) {
+        tagIds.add(tagId);
+      }
+    }
+    return { accountIds, categoryIds, memberIds, tagIds };
+  }, [draft]);
+
+  const optionAccounts = useMemo(
+    () =>
+      (lookups?.accounts ?? []).filter(
+        (account) =>
+          !account.tombstoned_at &&
+          (visibleAccount(account) ||
+            selectedEntityIds.accountIds.has(account.account_id)),
+      ),
+    [lookups, selectedEntityIds],
+  );
+
   const options = useMemo(() => {
-    const accounts = (lookups?.accounts ?? []).filter(visibleAccount);
-    const categories = categoryPicker.snapshot?.categories ?? [];
+    const categories = [
+      ...(categoryPicker.snapshot?.categories ?? []),
+      ...(lookups?.categories ?? []).filter(
+        (category) =>
+          selectedEntityIds.categoryIds.has(category.category_id) &&
+          !category.tombstoned_at &&
+          !(categoryPicker.snapshot?.categories ?? []).some(
+            (pickerCategory) =>
+              pickerCategory.category_id === category.category_id,
+          ),
+      ),
+    ];
     const allCategories = (lookups?.categories ?? []).filter(
-      (category) => !category.is_hidden && !category.tombstoned_at,
+      (category) =>
+        !category.tombstoned_at &&
+        (!category.is_hidden ||
+          selectedEntityIds.categoryIds.has(category.category_id)),
     );
     const members = (lookups?.members ?? []).filter(visibleMember);
-    const tags = (lookups?.tags ?? []).filter(visibleTag);
+    const tags = (lookups?.tags ?? []).filter(
+      (tag) =>
+        !tag.tombstoned_at &&
+        (visibleTag(tag) || selectedEntityIds.tagIds.has(tag.tag_id)),
+    );
     return {
-      balanceAccounts: accounts
+      balanceAccounts: optionAccounts
         .filter((account) => account.account_type === "balance")
         .map((account) => entityOption(account, account.account_id)),
       allCategories: allCategories.map((category) =>
@@ -1061,14 +1738,14 @@ export const EntryPanel = ({
       categories: categories.map((category) =>
         entityOption(category, category.category_id),
       ),
-      flowAccounts: accounts
+      flowAccounts: optionAccounts
         .filter((account) => account.account_type === "flow")
         .map((account) => entityOption(account, account.account_id)),
       currencies: lookupCurrencies(lookups),
       members: members.map(memberOption),
       tags: tags.map((tag) => entityOption(tag, tag.tag_id)),
     };
-  }, [categoryPicker.snapshot, lookups]);
+  }, [categoryPicker.snapshot, lookups, optionAccounts, selectedEntityIds]);
   const categoryPickerReady =
     activeTab === "advanced" || Boolean(categoryPicker.snapshot);
   const lookupRevision = lookups?.loadedAt ?? "loading";
@@ -1079,30 +1756,37 @@ export const EntryPanel = ({
     lookups && draftReady && categoryPickerReady && !saving,
   );
   const balances = advancedBalances(draft.advanced);
+  const allowExpectedPostingStatus = Boolean(replacement);
+  const advancedValidationOptions = { allowExpectedPostingStatus };
   const advancedCanSubmit =
-    !hasAdvancedErrors(validateAdvancedDraft(draft.advanced)) &&
-    allCurrenciesBalanced(balances);
+    !hasAdvancedErrors(
+      validateAdvancedDraft(draft.advanced, advancedValidationOptions),
+    ) && allCurrenciesBalanced(balances);
   const submitDisabled =
     !canSubmit || (activeTab === "advanced" && !advancedCanSubmit);
 
   const advancedAccountOptions = (
     categoryId: number | undefined,
   ): readonly EntityOption[] => {
-    const accounts = (lookups?.accounts ?? []).filter(visibleAccount);
     const category = (lookups?.categories ?? []).find(
       (lookupCategory) => lookupCategory.category_id === categoryId,
     );
     if (!category) {
-      return accounts.map((account) =>
+      return optionAccounts.map((account) =>
         entityOption(account, account.account_id),
       );
     }
     const validTypes = accountTypesForCategoryIntent(category.economic_intent);
-    return accounts
+    return optionAccounts
       .filter((account) => validTypes.includes(account.account_type))
       .map((account) => entityOption(account, account.account_id));
   };
   const loadingMessage = "Loading lookups...";
+
+  const tabIsAvailable = (entryType: TransactionEntryType): boolean =>
+    !replacement ||
+    entryType === "advanced" ||
+    replacement.fit?.entryType === entryType;
 
   const updateActiveTabDraft = useCallback(
     (patch: Partial<TransactionEntryTabDraft>) => {
@@ -1203,15 +1887,6 @@ export const EntryPanel = ({
     });
   }, []);
 
-  const updateActiveTab = (entryType: TransactionEntryType) => {
-    userSelectedActiveTabRef.current = true;
-    rememberedActiveTabRef.current = entryType;
-    setDraft((currentDraft) => ({ ...currentDraft, activeTab: entryType }));
-    setFieldErrors({});
-    setAdvancedFieldErrors({});
-    setGeneralError(undefined);
-  };
-
   const retryCategoryPicker = () => {
     setCategoryRetryToken((currentToken) => currentToken + 1);
   };
@@ -1221,17 +1896,79 @@ export const EntryPanel = ({
       return;
     }
 
+    const advancedDraft =
+      replacement?.fit?.entryType === activeShorthandTab
+        ? {
+            date: activeTabDraft.date || localTodayISODate(),
+            records: [
+              {
+                ...recordRowDraftFromJournalRecord(
+                  replacement.fit.negativeRecord,
+                ),
+                accountId:
+                  activeShorthandTab === "spend"
+                    ? activeTabDraft.fundingAccountId
+                    : activeShorthandTab === "refund"
+                      ? activeTabDraft.merchantAccountId
+                      : activeTabDraft.sourceAccountId,
+                amount: amountWithSign(activeTabDraft.amount, "negative"),
+                categoryId: activeTabDraft.categoryId,
+                currency: normalizeCurrency(activeTabDraft.currency) || "USD",
+                memberId: activeTabDraft.memberId,
+                memo: activeTabDraft.memo,
+                tagIds: [...activeTabDraft.tagIds],
+              },
+              {
+                ...recordRowDraftFromJournalRecord(
+                  replacement.fit.positiveRecord,
+                ),
+                accountId:
+                  activeShorthandTab === "spend"
+                    ? activeTabDraft.merchantAccountId
+                    : activeTabDraft.destinationAccountId,
+                amount: amountWithSign(activeTabDraft.amount, "positive"),
+                categoryId: activeTabDraft.categoryId,
+                currency: normalizeCurrency(activeTabDraft.currency) || "USD",
+                memberId: activeTabDraft.memberId,
+                memo: activeTabDraft.memo,
+                tagIds: [...activeTabDraft.tagIds],
+              },
+            ],
+          }
+        : shorthandDraftToAdvanced(activeShorthandTab, activeTabDraft);
+
     userSelectedActiveTabRef.current = true;
     rememberedActiveTabRef.current = "advanced";
     setDraft((currentDraft) => ({
       ...currentDraft,
       activeTab: "advanced",
-      advanced: shorthandDraftToAdvanced(activeShorthandTab, activeTabDraft),
+      advanced: advancedDraft,
     }));
     setFieldErrors({});
     setAdvancedFieldErrors({});
     setGeneralError(undefined);
-  }, [activeShorthandTab, activeTabDraft]);
+  }, [activeShorthandTab, activeTabDraft, replacement]);
+
+  const updateActiveTab = (entryType: TransactionEntryType) => {
+    if (!tabIsAvailable(entryType)) {
+      return;
+    }
+    if (
+      entryType === "advanced" &&
+      replacement &&
+      activeShorthandTab &&
+      activeTabDraft
+    ) {
+      editActiveTabAsJournal();
+      return;
+    }
+    userSelectedActiveTabRef.current = true;
+    rememberedActiveTabRef.current = entryType;
+    setDraft((currentDraft) => ({ ...currentDraft, activeTab: entryType }));
+    setFieldErrors({});
+    setAdvancedFieldErrors({});
+    setGeneralError(undefined);
+  };
 
   const validateField = useCallback(
     (field: FieldName) => {
@@ -1260,8 +1997,91 @@ export const EntryPanel = ({
       return;
     }
 
+    if (replacement) {
+      let body: UpdateTransactionRequest | undefined;
+
+      if (activeTab === "advanced") {
+        const nextAdvancedErrors = validateAdvancedDraft(draft.advanced, {
+          allowExpectedPostingStatus: true,
+        });
+        setAdvancedFieldErrors(nextAdvancedErrors);
+        setFieldErrors({});
+        setGeneralError(undefined);
+        if (
+          hasAdvancedErrors(nextAdvancedErrors) ||
+          !allCurrenciesBalanced(advancedBalances(draft.advanced))
+        ) {
+          return;
+        }
+        body = updateBodyFromAdvancedDraft(draft.advanced);
+      } else {
+        if (
+          !activeShorthandTab ||
+          !activeTabDraft ||
+          replacement.fit?.entryType !== activeShorthandTab
+        ) {
+          setGeneralError(
+            "Use the matching shorthand tab or Advanced to update this transaction.",
+          );
+          return;
+        }
+        const nextFieldErrors = validateDraft(
+          activeTabDraft,
+          activeShorthandTab,
+        );
+        setFieldErrors(nextFieldErrors);
+        setGeneralError(undefined);
+        if (hasErrors(nextFieldErrors)) {
+          return;
+        }
+        body = updateBodyFromShorthandDraft(activeTabDraft, replacement.fit);
+      }
+
+      setSaving(true);
+      try {
+        const result = await replaceLedgerTransaction(
+          replacement.transaction.transaction_id,
+          body,
+        );
+
+        if (result.data) {
+          await onSaved(result.data, {
+            operation: "updated",
+            previousTransaction: replacement.transaction,
+          });
+          setFieldErrors({});
+          setAdvancedFieldErrors({});
+          setGeneralError(undefined);
+          onClose();
+          return;
+        }
+
+        const message = apiErrorMessage(result.error);
+        if (activeTab === "advanced") {
+          const apiFieldErrors = advancedFieldErrorsFromAPI(
+            message,
+            draft.advanced,
+            lookups,
+          );
+          setAdvancedFieldErrors(apiFieldErrors);
+          setGeneralError(
+            hasAdvancedErrors(apiFieldErrors) ? undefined : message,
+          );
+        } else {
+          const apiFieldErrors = fieldErrorsFromAPI(message);
+          setFieldErrors(apiFieldErrors);
+          setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);
+        }
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
+
     if (activeTab === "advanced") {
-      const nextAdvancedErrors = validateAdvancedDraft(draft.advanced);
+      const nextAdvancedErrors = validateAdvancedDraft(draft.advanced, {
+        allowExpectedPostingStatus: false,
+      });
       setAdvancedFieldErrors(nextAdvancedErrors);
       setFieldErrors({});
       setGeneralError(undefined);
@@ -1295,7 +2115,6 @@ export const EntryPanel = ({
         const result = await createJournalTransaction(body);
 
         if (result.data) {
-          await onSaved(result.data);
           const nextDraft = {
             ...draft,
             advanced: stickyNextAdvancedDraft(draft.advanced),
@@ -1304,7 +2123,16 @@ export const EntryPanel = ({
           setAdvancedFieldErrors({});
           setGeneralError(undefined);
           setSessionCount((count) => count + 1);
-          await writeTransactionEntryDraft(draftForStorage(nextDraft));
+          if (draftPersistence === "launch") {
+            setDraftPersistence("ordinary");
+          }
+          if (
+            draftPersistence === "ordinary" ||
+            draftPersistence === "launch"
+          ) {
+            await writeTransactionEntryDraft(draftForStorage(nextDraft));
+          }
+          await onSaved(result.data, { operation: "created" });
           return;
         }
 
@@ -1383,7 +2211,6 @@ export const EntryPanel = ({
     setSaving(false);
 
     if (result.data) {
-      await onSaved(result.data);
       const nextTabDraft = stickyNextTabDraft(
         activeShorthandTab,
         activeTabDraft,
@@ -1400,7 +2227,13 @@ export const EntryPanel = ({
       setFieldErrors({});
       setGeneralError(undefined);
       setSessionCount((count) => count + 1);
-      await writeTransactionEntryDraft(draftForStorage(nextDraft));
+      if (draftPersistence === "launch") {
+        setDraftPersistence("ordinary");
+      }
+      if (draftPersistence === "ordinary" || draftPersistence === "launch") {
+        await writeTransactionEntryDraft(draftForStorage(nextDraft));
+      }
+      await onSaved(result.data, { operation: "created" });
       return;
     }
 
@@ -1415,8 +2248,11 @@ export const EntryPanel = ({
     canSubmit,
     draft,
     draftForStorage,
+    draftPersistence,
     lookups,
+    onClose,
     onSaved,
+    replacement,
   ]);
 
   const primaryAccountValue =
@@ -1432,6 +2268,11 @@ export const EntryPanel = ({
     return null;
   }
 
+  const panelModeLabel = replacement ? "Edit transaction" : "New transaction";
+  const panelTitle = replacement
+    ? (activeConfig?.title.replace("New", "Edit") ?? "Edit journal")
+    : (activeConfig?.title ?? "New journal");
+
   return (
     <aside
       ref={entryPanelRef}
@@ -1443,6 +2284,9 @@ export const EntryPanel = ({
       }
       aria-labelledby="entry-panel-title"
       onKeyDown={(event) => {
+        if (confirmDiscardDraftOpen) {
+          return;
+        }
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
           event.preventDefault();
           void submit();
@@ -1452,10 +2296,10 @@ export const EntryPanel = ({
       <div className="flex items-center justify-between border-b-2 border-[var(--border-ink)] p-4">
         <div>
           <p className="text-muted-foreground font-heading text-xs font-semibold uppercase">
-            {tabLabels[activeTab]} entry
+            {replacement ? panelModeLabel : `${tabLabels[activeTab]} entry`}
           </p>
           <h2 id="entry-panel-title" className="text-pixel text-base">
-            {activeConfig?.title ?? "New journal"}
+            {panelTitle}
           </h2>
         </div>
         <Button
@@ -1474,26 +2318,32 @@ export const EntryPanel = ({
         aria-label="Transaction type"
         className="grid grid-cols-5 border-b-2 border-[var(--border-ink)]"
       >
-        {entryTypes.map((entryType) => (
-          <button
-            key={entryType}
-            id={`${entryType}-entry-tab`}
-            type="button"
-            role="tab"
-            aria-controls={`${entryType}-entry-panel`}
-            aria-selected={activeTab === entryType}
-            className={`font-heading h-9 border-r border-[var(--border-ink)] text-xs font-semibold uppercase last:border-r-0 ${
-              activeTab === entryType
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-foreground hover:bg-[var(--color-interactive-bright)]"
-            }`}
-            onClick={() => {
-              updateActiveTab(entryType);
-            }}
-          >
-            {tabLabels[entryType]}
-          </button>
-        ))}
+        {entryTypes.map((entryType) => {
+          const disabled = !tabIsAvailable(entryType);
+          return (
+            <button
+              key={entryType}
+              id={`${entryType}-entry-tab`}
+              type="button"
+              role="tab"
+              aria-controls={`${entryType}-entry-panel`}
+              aria-selected={activeTab === entryType}
+              disabled={disabled}
+              className={`font-heading h-9 border-r border-[var(--border-ink)] text-xs font-semibold uppercase last:border-r-0 ${
+                activeTab === entryType
+                  ? "bg-primary text-primary-foreground"
+                  : disabled
+                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                    : "bg-muted text-foreground hover:bg-[var(--color-interactive-bright)]"
+              }`}
+              onClick={() => {
+                updateActiveTab(entryType);
+              }}
+            >
+              {tabLabels[entryType]}
+            </button>
+          );
+        })}
       </div>
 
       {!ready ? (
@@ -1530,7 +2380,10 @@ export const EntryPanel = ({
                   value={draft.advanced.date}
                   onBlur={() => {
                     setAdvancedFieldErrors(
-                      validateAdvancedDraft(draft.advanced),
+                      validateAdvancedDraft(
+                        draft.advanced,
+                        advancedValidationOptions,
+                      ),
                     );
                   }}
                   onChange={(event) => {
@@ -1627,7 +2480,10 @@ export const EntryPanel = ({
                             value={row.amount}
                             onBlur={() => {
                               setAdvancedFieldErrors(
-                                validateAdvancedDraft(draft.advanced),
+                                validateAdvancedDraft(
+                                  draft.advanced,
+                                  advancedValidationOptions,
+                                ),
                               );
                             }}
                             onChange={(event) => {
@@ -1658,7 +2514,10 @@ export const EntryPanel = ({
                             value={row.currency}
                             onBlur={() => {
                               setAdvancedFieldErrors(
-                                validateAdvancedDraft(draft.advanced),
+                                validateAdvancedDraft(
+                                  draft.advanced,
+                                  advancedValidationOptions,
+                                ),
                               );
                             }}
                             onChange={(event) => {
@@ -1754,6 +2613,15 @@ export const EntryPanel = ({
                                 });
                               }}
                             >
+                              {allowExpectedPostingStatus ||
+                              row.postingStatus === "expected" ? (
+                                <option
+                                  value="expected"
+                                  disabled={!allowExpectedPostingStatus}
+                                >
+                                  Expected
+                                </option>
+                              ) : null}
                               <option value="posted">Posted</option>
                               <option value="pending">Pending</option>
                               <option value="cancelled">Cancelled</option>
@@ -1795,6 +2663,7 @@ export const EntryPanel = ({
                                 <input
                                   id={`advanced-record-${rowIndex}-pending-date`}
                                   type="datetime-local"
+                                  step="any"
                                   className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
                                   value={row.pendingDateTime}
                                   onChange={(event) => {
@@ -1812,6 +2681,7 @@ export const EntryPanel = ({
                                 <input
                                   id={`advanced-record-${rowIndex}-posted-date`}
                                   type="datetime-local"
+                                  step="any"
                                   className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
                                   value={row.postedDateTime}
                                   onChange={(event) => {
@@ -2078,21 +2948,54 @@ export const EntryPanel = ({
           ) : null}
           <div className="flex items-center justify-between gap-3">
             <div className="text-muted-foreground font-mono text-sm">
-              Entries this session:{" "}
-              <span
-                key={sessionCount}
-                className="text-foreground inline-block animate-[score-pop_150ms_steps(2)]"
-              >
-                {sessionCount}
-              </span>
+              {replacement ? (
+                <span>
+                  Replacing transaction #
+                  {replacement.transaction.transaction_id}
+                </span>
+              ) : (
+                <>
+                  Entries this session:{" "}
+                  <span
+                    key={sessionCount}
+                    className="text-foreground inline-block animate-[score-pop_150ms_steps(2)]"
+                  >
+                    {sessionCount}
+                  </span>
+                </>
+              )}
             </div>
             <Button type="submit" disabled={submitDisabled}>
               <Check aria-hidden="true" />
-              {saving ? "Saving" : "Save and add another"}
+              {saving
+                ? "Saving"
+                : replacement
+                  ? "Update transaction"
+                  : "Save and add another"}
             </Button>
           </div>
         </div>
       </form>
+      <ConfirmationDialog
+        cancelLabel="Keep draft"
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Discard draft"
+        errorMessage={undefined}
+        onConfirm={discardPendingLaunch}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            cancelPendingLaunch();
+          }
+        }}
+        open={confirmDiscardDraftOpen}
+        pending={false}
+        pendingLabel="Discarding"
+        title="Discard entry draft"
+      >
+        <p>
+          Opening this saved transaction will replace the current entry draft.
+        </p>
+      </ConfirmationDialog>
     </aside>
   );
 };

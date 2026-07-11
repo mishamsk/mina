@@ -13,7 +13,7 @@ export type TransactionEntryType =
   "spend" | "income" | "refund" | "transfer" | "advanced";
 
 export type JournalRecordDraftPostingStatus =
-  "cancelled" | "pending" | "posted";
+  "cancelled" | "expected" | "pending" | "posted";
 
 export type JournalRecordDraftReconciliationStatus =
   "reconciled" | "unreconciled";
@@ -40,6 +40,11 @@ export interface JournalRecordRowDraft {
   readonly draftId: string;
   readonly memberId: number | undefined;
   readonly memo: string;
+  readonly sourceAmount: string | undefined;
+  readonly sourceAmountUsd: string | null | undefined;
+  readonly sourceCurrency: string | undefined;
+  readonly sourceExternalId: string | null | undefined;
+  readonly sourceExternalSystem: string | null | undefined;
   readonly pendingDateTime: string;
   readonly postedDateTime: string;
   readonly postingStatus: JournalRecordDraftPostingStatus;

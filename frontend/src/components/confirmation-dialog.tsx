@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 
 interface ConfirmationDialogProps {
+  readonly cancelLabel?: string;
   readonly children: ReactNode;
   readonly confirmIcon?: ReactNode;
   readonly confirmLabel: string;
@@ -17,6 +18,7 @@ interface ConfirmationDialogProps {
 }
 
 export const ConfirmationDialog = ({
+  cancelLabel = "Cancel",
   children,
   confirmIcon,
   confirmLabel,
@@ -59,7 +61,7 @@ export const ConfirmationDialog = ({
         <div className="mt-4 flex justify-end gap-2">
           <AlertDialog.Cancel asChild>
             <Button type="button" variant="outline" disabled={pending}>
-              Cancel
+              {cancelLabel}
             </Button>
           </AlertDialog.Cancel>
           <Button

@@ -24,6 +24,7 @@ import type {
   UpdateCategoryRequest,
   UpdateMemberRequest,
   UpdateTagRequest,
+  UpdateTransactionRequest,
 } from "./generated";
 import {
   confirmRecurringOccurrence as confirmGeneratedRecurringOccurrence,
@@ -59,6 +60,7 @@ import {
   listTagGroups,
   listTags,
   listTransactions,
+  replaceTransaction as replaceGeneratedTransaction,
   restructureAccounts as restructureGeneratedAccounts,
   restructureCategories as restructureGeneratedCategories,
   restructureTags as restructureGeneratedTags,
@@ -884,3 +886,14 @@ export const createTransfer = (body: CreateTransferTransactionRequest) =>
 
 export const createJournalTransaction = (body: CreateTransactionRequest) =>
   createGeneratedTransaction({ body });
+
+export const replaceLedgerTransaction = (
+  transactionId: number,
+  body: UpdateTransactionRequest,
+) =>
+  replaceGeneratedTransaction({
+    body,
+    path: {
+      transaction_id: transactionId,
+    },
+  });

@@ -49,6 +49,7 @@
   - Categories, Tags, and Members have URL-addressable drill-down pages with metadata and pre-filtered transaction previews.
   - Accounts, Categories, Tags, and Members retain full-height Arcade Cabinet table frames with internally scrolling data bodies.
   - Transaction entry includes shorthand spend/income/refund/transfer tabs plus an Advanced journal editor with balanced multi-record saves, intent-guided account pickers, draft persistence, and edit-as-journal escalation from shorthand tabs.
+  - Saved transactions support detail-panel Edit, Duplicate, and Split actions with shorthand-fit edit detection, duplicate-as-new-entry prefill, and split-through-journal replacement.
   - Transaction entry category pickers fetch API-filtered category lists by shorthand tab economic intent.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:
