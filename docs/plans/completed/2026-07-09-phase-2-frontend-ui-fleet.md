@@ -79,10 +79,10 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 
 ## Final Verification
 
-- [ ] On the main working branch with all merged branches: `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] `just test-frontend-e2e` passes
-- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run exactly one and fold unresolved comments into a final fix plan (no further review-loop)
-- [ ] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, Kata refs closed, residual findings and unmerged branches (per-task evidence recorded on each closed Kata issue)
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] On the main working branch with all merged branches: `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] `just test-frontend-e2e` passes
+- [x] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run exactly one and fold unresolved comments into a final fix plan (no further review-loop)
+- [x] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, Kata refs closed, residual findings and unmerged branches (per-task evidence recorded on each closed Kata issue)
+- [x] Move this plan to `docs/plans/completed/`
