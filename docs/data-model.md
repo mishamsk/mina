@@ -44,11 +44,6 @@ CREATE TYPE category_economic_intent AS ENUM (
     'FX_GAIN_LOSS'
 );
 
-CREATE TYPE recurring_schedule_class AS ENUM (
-    'INTERVAL',
-    'DATE_RULE'
-);
-
 CREATE TYPE recurring_occurrence_status AS ENUM (
     'EXPECTED',
     'CONFIRMED',
@@ -433,15 +428,6 @@ CREATE TABLE recurring_definition (
     -- Soft delete timestamp; generated history is retained.
     tombstoned_at TIMESTAMP,
 
-    -- Schedule class derived from schedule_rule.kind.
-    schedule_class recurring_schedule_class GENERATED ALWAYS AS (
-        CASE
-            WHEN json_extract_string(schedule_rule, '$.kind') = 'interval'
-            THEN 'INTERVAL'
-            ELSE 'DATE_RULE'
-        END
-    ) VIRTUAL,
-
     -- Parent recurring definition path derived from fqn, or NULL for root definitions.
     parent_fqn TEXT GENERATED ALWAYS AS (
         CASE
@@ -470,7 +456,6 @@ COMMENT ON COLUMN recurring_definition.anchor_date IS 'Schedule anchor and gener
 COMMENT ON COLUMN recurring_definition.definition_version IS 'Monotonic version incremented on every schedule or record-shape edit.';
 COMMENT ON COLUMN recurring_definition.paused_at IS 'Set while paused; paused definitions do not accrue occurrences.';
 COMMENT ON COLUMN recurring_definition.tombstoned_at IS 'Soft delete timestamp; generated history is retained.';
-COMMENT ON COLUMN recurring_definition.schedule_class IS 'Schedule class derived from schedule_rule.kind.';
 COMMENT ON COLUMN recurring_definition.parent_fqn IS 'Parent recurring definition path derived from fqn, or NULL for root definitions.';
 COMMENT ON COLUMN recurring_definition.name IS 'Leaf recurring definition name derived from fqn.';
 COMMENT ON COLUMN recurring_definition.level IS 'Zero-based recurring definition depth derived from fqn.';
