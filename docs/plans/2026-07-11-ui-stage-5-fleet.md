@@ -64,7 +64,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [x] Task 3: `t828` — Add hidden-state semantics for household members (backend/API contract before its UI consumer dcjx, Task 18) — branch `t828-member-hidden-api`
 - [x] Task 4: `dgkf` — Support changing account type via update API (backend/API contract before its UI consumer 5z54, Task 19) — branch `dgkf-account-type-update-api`
 - [x] Task 5: `18w4` — Featured flag for categories and tags (model + API; UX surface later) (backend-only per issue; lands before f9c5 reserves the star indicator slot in Task 16) — branch `18w4-featured-categories-tags-api`
-- [ ] Task 6: `45vz` — Seed real recurring definitions in demo data so the Recurring screen is demonstrable (backend demo seed before the recurring UI direction change b1m2/bnvy, Tasks 22–23, and before live verification of them) — branch `45vz-demo-recurring-definitions`
+- [x] Task 6: `45vz` — Seed real recurring definitions in demo data so the Recurring screen is demonstrable (backend demo seed before the recurring UI direction change b1m2/bnvy, Tasks 22–23, and before live verification of them) — branch `45vz-demo-recurring-definitions`
 
 ### Shared frontend foundations
 
