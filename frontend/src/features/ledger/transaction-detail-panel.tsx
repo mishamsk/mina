@@ -2,6 +2,7 @@ import { Close, Copy, MagicEdit, Scissors, Trash } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +25,7 @@ import { FqnPath } from "./fqn-path";
 import { StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { TagChip } from "./tag-chip";
+import { TransactionDeleteDescription } from "./transaction-delete-description";
 
 interface TransactionDetailPanelProps {
   readonly errorMessage: string | undefined;
@@ -40,15 +42,6 @@ interface TransactionDetailPanelProps {
   readonly onRestoreFocus: () => void;
   readonly transaction: Transaction | undefined;
 }
-
-const focusableSelector = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
 
 const floatingOverlaySelectors = ["[data-page-help-content]"] as const;
 
@@ -106,31 +99,6 @@ const DetailAmountList = ({
     </div>
   ) : (
     <span className="text-muted-foreground">No display amount</span>
-  );
-};
-
-export const TransactionDeleteAmountSummary = ({
-  transaction,
-}: {
-  readonly transaction: Transaction;
-}) => {
-  const amounts = detailDisplayAmounts(transaction);
-  return amounts.length > 0 ? (
-    <span className="inline-flex flex-wrap gap-1">
-      {amounts.map((amount, index) => (
-        <AmountText
-          key={`${displayAmountKey(amount)}:${index}`}
-          amount={amount}
-          positiveSign={
-            transaction.transaction_class !== "transfer" &&
-            transaction.transaction_class !== "currency_exchange"
-          }
-          transactionClass={transaction.transaction_class}
-        />
-      ))}
-    </span>
-  ) : (
-    <span>No display amount</span>
   );
 };
 
@@ -438,9 +406,7 @@ export const TransactionDetailPanel = ({
   transaction,
 }: TransactionDetailPanelProps) => {
   const panelRef = useRef<HTMLElement | null>(null);
-  const deleteDialogRef = useRef<HTMLElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
-  const cancelDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreFocusOnCloseRef = useRef(true);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -490,10 +456,7 @@ export const TransactionDetailPanel = ({
         if (event.defaultPrevented) {
           return;
         }
-        if (confirmDeleteOpen) {
-          event.preventDefault();
-          event.stopPropagation();
-          closeDeleteConfirmation();
+        if (document.querySelector("[role='alertdialog']")) {
           return;
         }
 
@@ -511,63 +474,13 @@ export const TransactionDetailPanel = ({
         onClose();
         return;
       }
-
-      if (event.key !== "Tab") {
-        return;
-      }
-
-      if (!confirmDeleteOpen) {
-        return;
-      }
-
-      const trapRoot = deleteDialogRef.current;
-      if (!trapRoot) {
-        return;
-      }
-      const focusable = Array.from(
-        trapRoot.querySelectorAll<HTMLElement>(focusableSelector),
-      ).filter((element) => !element.hasAttribute("disabled"));
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!first || !last) {
-        event.preventDefault();
-        trapRoot.focus();
-        return;
-      }
-
-      if (!trapRoot.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-        return;
-      }
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-        return;
-      }
-
-      if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
     };
 
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [closeDeleteConfirmation, confirmDeleteOpen, onClose]);
-
-  useEffect(() => {
-    if (!confirmDeleteOpen) {
-      return;
-    }
-
-    window.requestAnimationFrame(() => {
-      cancelDeleteButtonRef.current?.focus({ preventScroll: true });
-    });
-  }, [confirmDeleteOpen]);
+  }, [onClose]);
 
   const openDeleteConfirmation = () => {
     setDeleteErrorMessage(undefined);
@@ -687,73 +600,27 @@ export const TransactionDetailPanel = ({
           </Button>
         </div>
       ) : null}
-      {confirmDeleteOpen && transaction ? (
-        <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--frame),transparent_18%)] p-4"
-          role="presentation"
-        >
-          <section
-            ref={deleteDialogRef}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-transaction-title"
-            aria-describedby="delete-transaction-description"
-            className="bg-card w-[min(480px,100%)] border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
-            tabIndex={-1}
-          >
-            <h3
-              id="delete-transaction-title"
-              className="font-heading text-base font-bold uppercase"
-            >
-              Delete transaction
-            </h3>
-            <div
-              id="delete-transaction-description"
-              className="font-body text-muted-foreground mt-3 space-y-2 text-sm"
-            >
-              <p>
-                Delete {transaction.display_title} from{" "}
-                {formatInitiatedDate(transaction.initiated_date)} for{" "}
-                <TransactionDeleteAmountSummary transaction={transaction} />?
-              </p>
-              <p>
-                This tombstones the transaction and removes it from default
-                transaction lists.
-              </p>
-            </div>
-            {deleteErrorMessage ? (
-              <p
-                className="border-destructive text-destructive mt-3 border-2 p-2 text-sm"
-                role="alert"
-              >
-                {deleteErrorMessage}
-              </p>
-            ) : null}
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                ref={cancelDeleteButtonRef}
-                type="button"
-                variant="outline"
-                onClick={closeDeleteConfirmation}
-                disabled={deleting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => {
-                  void confirmDelete();
-                }}
-                disabled={deleting}
-              >
-                <Trash aria-hidden="true" />
-                {deleting ? "Deleting" : "Delete transaction"}
-              </Button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Delete transaction"
+        errorMessage={deleteErrorMessage}
+        open={confirmDeleteOpen && transaction !== undefined}
+        pending={deleting}
+        pendingLabel="Deleting"
+        title="Delete transaction"
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDeleteConfirmation();
+          }
+        }}
+      >
+        {transaction ? (
+          <TransactionDeleteDescription transaction={transaction} />
+        ) : null}
+      </ConfirmationDialog>
     </aside>
   );
 };

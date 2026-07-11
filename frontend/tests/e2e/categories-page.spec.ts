@@ -64,6 +64,45 @@ const createCategory = async (
   return (await response.json()) as CategoryFixture;
 };
 
+test("category row delete closes the matching open editor", async ({
+  browserName,
+  page,
+}) => {
+  const category = await createCategory(page, {
+    fqn: `E2EDeleteOpen:${browserName}${Date.now()}`,
+  });
+
+  await page.goto(`/categories?q=${encodeURIComponent(category.fqn)}`);
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.click();
+  const panel = page.getByRole("dialog", { name: "Edit category" });
+  await expect(panel).toBeVisible();
+
+  await row.hover();
+  await row.getByRole("button", { name: "Delete category" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Delete category" });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(panel).toBeVisible();
+
+  await row.getByRole("button", { name: "Delete category" }).click();
+  const deleteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/categories/${category.category_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await dialog.getByRole("button", { name: "Delete category" }).click();
+  expect((await deleteResponse).status()).toBe(204);
+  await expect(panel).toBeHidden();
+});
+
 test("categories page renders demo hierarchy, intent badges, URL search, and hidden toggle", async ({
   browserName,
   page,

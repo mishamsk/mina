@@ -9,6 +9,7 @@ import {
   updateLedgerCategory,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import type { RowAction } from "@/components/row-actions";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ interface CategoriesPageContentProps {
     readonly snapshot: CategoriesPageSnapshot | undefined;
   };
   readonly includeHidden: boolean;
+  readonly onCategoryDeleted: (categoryId: number) => void;
   readonly onEditCategory: (category: Category, opener: HTMLElement) => void;
   readonly onNotice: (message: string, tone?: "error" | "success") => void;
   readonly onRestructurePath: (fqn: string, opener: HTMLElement) => void;
@@ -55,6 +57,7 @@ const renderCategoryBadge = (row: ReferenceTreeRow<Category, GroupState>) => {
 export const CategoriesPageContent = ({
   categoriesPage,
   includeHidden,
+  onCategoryDeleted,
   onEditCategory,
   onNotice,
   onRestructurePath,
@@ -97,6 +100,7 @@ export const CategoriesPageContent = ({
     );
     if (result.data !== undefined || !result.error) {
       await refreshCategoriesAfterMutation();
+      onCategoryDeleted(deleteTarget.category.category_id);
       onNotice("Category deleted.");
       setDeleting(false);
       setDeleteTarget(undefined);
@@ -296,17 +300,12 @@ export const CategoriesPageContent = ({
           }
         }}
       >
-        <p className="flex flex-wrap items-center gap-1">
-          <span>Delete</span>
-          <span className="text-foreground font-mono break-all">
-            {deleteTarget?.category.fqn}
-          </span>
-          <span>?</span>
-        </p>
-        <p>
-          This tombstones the category and removes it from default category
-          lists and pickers.
-        </p>
+        {deleteTarget ? (
+          <ReferenceEntityDeleteDescription
+            name={deleteTarget.category.fqn}
+            noun="category"
+          />
+        ) : null}
       </ConfirmationDialog>
     </div>
   );

@@ -30,7 +30,6 @@ import { AmountText, MixedAmounts } from "./amount-text";
 import {
   buildLookupMaps,
   displayAmountKey,
-  formatInitiatedDate,
   formatInitiatedDateParts,
   lineCategory,
   lineDisplayAmounts,
@@ -44,7 +43,7 @@ import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
-import { TransactionDeleteAmountSummary } from "./transaction-detail-panel";
+import { TransactionDeleteDescription } from "./transaction-delete-description";
 
 interface TransactionBrowserProps {
   readonly errorMessage: string | undefined;
@@ -971,20 +970,9 @@ export const TransactionBrowser = ({
         title="Delete transaction"
       >
         {deleteDialog ? (
-          <>
-            <p>
-              Delete {deleteDialog.transaction.display_title} from{" "}
-              {formatInitiatedDate(deleteDialog.transaction.initiated_date)} for{" "}
-              <TransactionDeleteAmountSummary
-                transaction={deleteDialog.transaction}
-              />
-              ?
-            </p>
-            <p>
-              This tombstones the transaction and removes it from default
-              transaction lists.
-            </p>
-          </>
+          <TransactionDeleteDescription
+            transaction={deleteDialog.transaction}
+          />
         ) : null}
       </ConfirmationDialog>
     </div>

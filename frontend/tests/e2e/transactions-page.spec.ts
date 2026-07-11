@@ -3696,8 +3696,15 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   const row = page.locator("tbody > tr[aria-expanded]").filter({
     hasText: memo,
   });
+  const transactionRows = page.locator("tbody > tr[aria-expanded]");
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute("aria-expanded", "false");
+  const deletedRowIndex = await row.evaluate((element) =>
+    Array.from(
+      element.parentElement?.querySelectorAll("tr[aria-expanded]") ?? [],
+    ).indexOf(element),
+  );
+  const rowCountBeforeDelete = await transactionRows.count();
 
   const openDetailButton = row.getByRole("button", {
     name: "Open transaction detail",
@@ -3777,6 +3784,9 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   await expect(confirmDialog).toBeHidden();
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
+  await expect(
+    transactionRows.nth(Math.min(deletedRowIndex, rowCountBeforeDelete - 2)),
+  ).toBeFocused();
 });
 
 test("transactions resolve hidden referenced tags but exclude them from pickers", async ({

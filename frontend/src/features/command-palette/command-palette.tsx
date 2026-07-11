@@ -1357,7 +1357,6 @@ export const CommandPalette = () => {
             ? "text-destructive"
             : "text-[var(--color-money-in)]"
         }
-        containerClassName="z-[60]"
         durationMs={toastDurationMs}
         message={notice?.message}
         onDismiss={dismissNotice}

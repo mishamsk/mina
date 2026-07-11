@@ -7,7 +7,7 @@ import {
   Star,
   Trash,
 } from "pixelarticons/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import type {
@@ -23,6 +23,8 @@ import {
   setLedgerAccountHiddenByPath,
   updateLedgerAccount,
 } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -76,15 +78,6 @@ const interactiveTargetSelector =
   "a, button, input, select, textarea, summary, [role='button'], " +
   "[contenteditable='true'], " +
   "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
-
-const deleteDialogFocusableSelector = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
 
 const filledFeaturedStarPath =
   "M11 1H13V3H15V7H23V11H21V13H19V16H17V18H16V20H21V22H16V20H14V18H10V20H8V22H3V20H8V18H7V16H5V13H3V11H1V7H9V3H11V1Z";
@@ -298,8 +291,6 @@ export const AccountsTree = ({
   >();
   const [deleting, setDeleting] = useState(false);
   const accountsTableScrollRef = useRef<HTMLDivElement | null>(null);
-  const deleteDialogRef = useRef<HTMLElement | null>(null);
-  const cancelDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const rows = useMemo(
     () =>
       accounts
@@ -344,72 +335,6 @@ export const AccountsTree = ({
       }
     });
   }, []);
-
-  useEffect(() => {
-    if (!deleteTarget) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) {
-        return;
-      }
-
-      if (event.key === "Escape") {
-        if (deleting) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        closeDeleteDialog();
-        return;
-      }
-
-      if (event.key !== "Tab") {
-        return;
-      }
-
-      const trapRoot = deleteDialogRef.current;
-      if (!trapRoot) {
-        return;
-      }
-      const focusable = Array.from(
-        trapRoot.querySelectorAll<HTMLElement>(deleteDialogFocusableSelector),
-      ).filter((element) => !element.hasAttribute("disabled"));
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!first || !last) {
-        event.preventDefault();
-        trapRoot.focus();
-        return;
-      }
-
-      if (!trapRoot.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-        return;
-      }
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-        return;
-      }
-
-      if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown, { capture: true });
-    window.requestAnimationFrame(() => {
-      cancelDeleteButtonRef.current?.focus({ preventScroll: true });
-    });
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, { capture: true });
-    };
-  }, [closeDeleteDialog, deleteTarget, deleting]);
 
   const showNotice = (message: string) => {
     onNotice?.(message);
@@ -817,75 +742,30 @@ export const AccountsTree = ({
           </table>
         </div>
       </div>
-      {deleteTarget ? (
-        <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--frame),transparent_18%)] p-4"
-          role="presentation"
-        >
-          <section
-            ref={deleteDialogRef}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-account-row-title"
-            aria-describedby="delete-account-row-description"
-            className="bg-card w-[min(480px,100%)] border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
-            tabIndex={-1}
-          >
-            <h3
-              id="delete-account-row-title"
-              className="font-heading text-base font-bold uppercase"
-            >
-              Delete account
-            </h3>
-            <div
-              id="delete-account-row-description"
-              className="font-body text-muted-foreground mt-3 space-y-2 text-sm"
-            >
-              <p className="flex flex-wrap items-center gap-1">
-                <span>Delete</span>
-                <span className="text-foreground font-mono break-all">
-                  {deleteTarget.account.fqn}
-                </span>
-                <span>?</span>
-              </p>
-              <p>
-                This tombstones the account and removes it from default account
-                lists and pickers.
-              </p>
-            </div>
-            {deleteErrorMessage ? (
-              <p
-                className="border-destructive text-destructive mt-3 border-2 p-2 text-sm"
-                role="alert"
-              >
-                {deleteErrorMessage}
-              </p>
-            ) : null}
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                ref={cancelDeleteButtonRef}
-                type="button"
-                variant="outline"
-                disabled={deleting}
-                onClick={closeDeleteDialog}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={deleting}
-                onClick={() => {
-                  void confirmDelete();
-                }}
-              >
-                <Trash aria-hidden="true" />
-                {deleting ? "Deleting" : "Delete account"}
-              </Button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Delete account"
+        errorMessage={deleteErrorMessage}
+        open={deleteTarget !== undefined}
+        pending={deleting}
+        pendingLabel="Deleting"
+        title="Delete account"
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDeleteDialog();
+          }
+        }}
+      >
+        {deleteTarget ? (
+          <ReferenceEntityDeleteDescription
+            name={deleteTarget.account.fqn}
+            noun="account"
+          />
+        ) : null}
+      </ConfirmationDialog>
     </>
   );
 };

@@ -49,7 +49,10 @@ export const Toast = ({
 
   return (
     <div
-      className={cn("fixed right-4 bottom-4 z-40 max-w-sm", containerClassName)}
+      className={cn(
+        "fixed right-4 bottom-4 z-[70] max-w-sm",
+        containerClassName,
+      )}
       style={{
         animation: `toast-auto-hide 1ms steps(1, end) ${durationMs}ms forwards`,
       }}

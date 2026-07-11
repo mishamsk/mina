@@ -51,7 +51,6 @@ export const RecurringPage = () => {
       <Toast
         key={notice?.id ?? "empty"}
         className="text-[var(--color-money-in)]"
-        containerClassName="z-[70]"
         durationMs={toastDurationMs}
         message={notice?.message}
         onDismiss={() => {

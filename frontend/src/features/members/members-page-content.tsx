@@ -1,5 +1,5 @@
 import { MagicEdit, Reload, Trash } from "pixelarticons/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { deleteLedgerMemberById, type Member } from "@/api";
 import { type RowAction, RowActions } from "@/components/row-actions";
@@ -39,15 +39,6 @@ type MemberDeleteTarget = {
   readonly member: Member;
   readonly opener: HTMLElement;
 };
-
-const deleteDialogFocusableSelector = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
 
 const memberSearchMatches = (name: string, search: string): boolean =>
   search.trim() === "" ||
@@ -110,8 +101,6 @@ const MembersList = ({
     string | undefined
   >();
   const [deleting, setDeleting] = useState(false);
-  const deleteDialogRef = useRef<HTMLElement | null>(null);
-  const cancelDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const rows = useMemo(
     () =>
       members
@@ -133,66 +122,6 @@ const MembersList = ({
       }
     });
   }, [deleteTarget?.opener, deleting]);
-
-  useEffect(() => {
-    if (!deleteTarget) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) {
-        return;
-      }
-      if (event.key === "Escape") {
-        if (deleting) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        closeDeleteDialog();
-        return;
-      }
-      if (event.key !== "Tab") {
-        return;
-      }
-      const trapRoot = deleteDialogRef.current;
-      if (!trapRoot) {
-        return;
-      }
-      const focusable = Array.from(
-        trapRoot.querySelectorAll<HTMLElement>(deleteDialogFocusableSelector),
-      ).filter((element) => !element.hasAttribute("disabled"));
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!first || !last) {
-        event.preventDefault();
-        trapRoot.focus();
-        return;
-      }
-      if (!trapRoot.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-        return;
-      }
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-        return;
-      }
-      if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener("keydown", onKeyDown, { capture: true });
-    window.requestAnimationFrame(() => {
-      cancelDeleteButtonRef.current?.focus({ preventScroll: true });
-    });
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, { capture: true });
-    };
-  }, [closeDeleteDialog, deleteTarget, deleting]);
 
   const confirmDelete = async () => {
     if (!deleteTarget || deleting) {
@@ -364,75 +293,30 @@ const MembersList = ({
           </tbody>
         </table>
       </div>
-      {deleteTarget ? (
-        <div
-          className="fixed inset-0 z-[80] grid place-items-center bg-[color-mix(in_srgb,var(--frame),transparent_18%)] p-4"
-          role="presentation"
-        >
-          <section
-            ref={deleteDialogRef}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-member-row-title"
-            aria-describedby="delete-member-row-description"
-            className="bg-card w-[min(480px,100%)] border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
-            tabIndex={-1}
-          >
-            <h3
-              id="delete-member-row-title"
-              className="font-heading text-base font-bold uppercase"
-            >
-              Delete member
-            </h3>
-            <div
-              id="delete-member-row-description"
-              className="font-body text-muted-foreground mt-3 space-y-2 text-sm"
-            >
-              <p className="flex flex-wrap items-center gap-1">
-                <span>Delete</span>
-                <span className="text-foreground font-mono break-all">
-                  {deleteTarget.member.name}
-                </span>
-                <span>?</span>
-              </p>
-              <p>
-                This tombstones the member and removes it from default member
-                lists and pickers.
-              </p>
-            </div>
-            {deleteErrorMessage ? (
-              <p
-                className="border-destructive text-destructive mt-3 border-2 p-2 text-sm"
-                role="alert"
-              >
-                {deleteErrorMessage}
-              </p>
-            ) : null}
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                ref={cancelDeleteButtonRef}
-                type="button"
-                variant="outline"
-                disabled={deleting}
-                onClick={closeDeleteDialog}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={deleting}
-                onClick={() => {
-                  void confirmDelete();
-                }}
-              >
-                <Trash aria-hidden="true" />
-                {deleting ? "Deleting" : "Delete member"}
-              </Button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Delete member"
+        errorMessage={deleteErrorMessage}
+        open={deleteTarget !== undefined}
+        pending={deleting}
+        pendingLabel="Deleting"
+        title="Delete member"
+        onConfirm={() => {
+          void confirmDelete();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDeleteDialog();
+          }
+        }}
+      >
+        {deleteTarget ? (
+          <ReferenceEntityDeleteDescription
+            name={deleteTarget.member.name}
+            noun="member"
+          />
+        ) : null}
+      </ConfirmationDialog>
     </div>
   );
 };
@@ -490,3 +374,5 @@ export const MembersPageContent = ({
     </div>
   );
 };
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";

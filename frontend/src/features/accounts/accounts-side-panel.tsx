@@ -22,6 +22,8 @@ import {
   type UpdateAccountRequest,
   updateLedgerAccount,
 } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -69,9 +71,6 @@ interface AccountsSidePanelProps {
 
 const validCurrencyPattern = /^([A-Z]{3}|C::.+)$/;
 const nonNegativeDecimalPattern = /^\d+(\.\d{1,8})?$/;
-const focusableSelector =
-  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-
 const blankForm = (): AccountFormState => ({
   accountType: "balance",
   currency: "USD",
@@ -284,10 +283,8 @@ const AccountsSidePanelContent = ({
   const panelRef = useRef<HTMLElement | null>(null);
   const panelSessionActiveRef = useRef(true);
   const accountDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
-  const cancelDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const creditLimitAddButtonRef = useRef<HTMLButtonElement | null>(null);
   const creditLimitDeleteOpenerRef = useRef<HTMLElement | null>(null);
-  const dialogRef = useRef<HTMLElement | null>(null);
   const historyErrorRef = useRef<HTMLParagraphElement | null>(null);
   const [form, setForm] = useState<AccountFormState>(() =>
     mode === "create" ? blankForm() : formFromAccount(account),
@@ -385,52 +382,12 @@ const AccountsSidePanelContent = ({
         if (event.defaultPrevented) {
           return;
         }
+        if (document.querySelector("[role='alertdialog']")) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
-        if (creditLimitDeleteEntry) {
-          closeCreditLimitDelete();
-        } else if (accountDeleteOpen) {
-          closeAccountDelete();
-        } else {
-          onClose();
-        }
-        return;
-      }
-
-      if (
-        event.key !== "Tab" ||
-        (!accountDeleteOpen && !creditLimitDeleteEntry)
-      ) {
-        return;
-      }
-
-      const trapRoot = dialogRef.current;
-      if (!trapRoot) {
-        return;
-      }
-      const focusable = Array.from(
-        trapRoot.querySelectorAll<HTMLElement>(focusableSelector),
-      ).filter((element) => !element.hasAttribute("disabled"));
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!first || !last) {
-        event.preventDefault();
-        trapRoot.focus();
-        return;
-      }
-      if (!trapRoot.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-        return;
-      }
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-        return;
-      }
-      if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
+        onClose();
       }
     };
 
@@ -438,22 +395,7 @@ const AccountsSidePanelContent = ({
     return () => {
       document.removeEventListener("keydown", onKeyDown, { capture: true });
     };
-  }, [
-    accountDeleteOpen,
-    closeAccountDelete,
-    closeCreditLimitDelete,
-    creditLimitDeleteEntry,
-    onClose,
-  ]);
-
-  useEffect(() => {
-    if (!accountDeleteOpen && !creditLimitDeleteEntry) {
-      return;
-    }
-    window.requestAnimationFrame(() => {
-      cancelDeleteButtonRef.current?.focus({ preventScroll: true });
-    });
-  }, [accountDeleteOpen, creditLimitDeleteEntry]);
+  }, [onClose]);
 
   const currencyOptions = useMemo(
     () => [...new Set(currencies)].filter(Boolean).sort(),
@@ -965,141 +907,69 @@ const AccountsSidePanelContent = ({
         ) : null}
       </div>
 
-      {creditLimitDeleteEntry ? (
-        <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--frame),transparent_18%)] p-4"
-          role="presentation"
-        >
-          <section
-            ref={dialogRef}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-credit-limit-title"
-            aria-describedby="delete-credit-limit-description"
-            className="bg-card w-[min(480px,100%)] border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
-            tabIndex={-1}
-          >
-            <h3
-              id="delete-credit-limit-title"
-              className="font-heading text-base font-bold uppercase"
-            >
-              Delete credit limit
-            </h3>
-            <div
-              id="delete-credit-limit-description"
-              className="font-body text-muted-foreground mt-3 space-y-2 text-sm"
-            >
-              <p>
-                Delete credit limit{" "}
-                <AmountText
-                  amount={{
-                    amount: creditLimitDeleteEntry.credit_limit,
-                    currency: creditLimitCurrency,
-                  }}
-                  positiveSign={false}
-                  tone="neutral"
-                />
-                {" from "}
-                {creditLimitDeleteEntry.effective_date}?
-              </p>
-              <p>This tombstones the credit-limit history entry.</p>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                ref={cancelDeleteButtonRef}
-                type="button"
-                variant="outline"
-                disabled={
-                  deletingCreditLimitId ===
-                  creditLimitDeleteEntry.credit_limit_history_id
-                }
-                onClick={closeCreditLimitDelete}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={
-                  deletingCreditLimitId ===
-                  creditLimitDeleteEntry.credit_limit_history_id
-                }
-                onClick={() => {
-                  void deleteCreditLimit(creditLimitDeleteEntry);
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Delete credit limit"
+        errorMessage={undefined}
+        open={creditLimitDeleteEntry !== undefined}
+        pending={
+          deletingCreditLimitId ===
+          creditLimitDeleteEntry?.credit_limit_history_id
+        }
+        pendingLabel="Deleting"
+        title="Delete credit limit"
+        onConfirm={() => {
+          if (creditLimitDeleteEntry) {
+            void deleteCreditLimit(creditLimitDeleteEntry);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeCreditLimitDelete();
+          }
+        }}
+      >
+        {creditLimitDeleteEntry ? (
+          <>
+            <p>
+              Delete credit limit{" "}
+              <AmountText
+                amount={{
+                  amount: creditLimitDeleteEntry.credit_limit,
+                  currency: creditLimitCurrency,
                 }}
-              >
-                <Trash aria-hidden="true" />
-                {deletingCreditLimitId ===
-                creditLimitDeleteEntry.credit_limit_history_id
-                  ? "Deleting"
-                  : "Delete credit limit"}
-              </Button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+                positiveSign={false}
+                tone="neutral"
+              />
+              {" from "}
+              {creditLimitDeleteEntry.effective_date}?
+            </p>
+            <p>This tombstones the credit-limit history entry.</p>
+          </>
+        ) : null}
+      </ConfirmationDialog>
 
-      {accountDeleteOpen && account ? (
-        <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--frame),transparent_18%)] p-4"
-          role="presentation"
-        >
-          <section
-            ref={dialogRef}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-account-title"
-            aria-describedby="delete-account-description"
-            className="bg-card w-[min(480px,100%)] border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
-            tabIndex={-1}
-          >
-            <h3
-              id="delete-account-title"
-              className="font-heading text-base font-bold uppercase"
-            >
-              Delete account
-            </h3>
-            <div
-              id="delete-account-description"
-              className="font-body text-muted-foreground mt-3 space-y-2 text-sm"
-            >
-              <p className="flex flex-wrap items-center gap-1">
-                <span>Delete</span>
-                <span className="text-foreground font-mono break-all">
-                  {account.fqn}
-                </span>
-                <span>?</span>
-              </p>
-              <p>
-                This tombstones the account and removes it from default account
-                lists and pickers.
-              </p>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                ref={cancelDeleteButtonRef}
-                type="button"
-                variant="outline"
-                disabled={deletingAccount}
-                onClick={closeAccountDelete}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={deletingAccount}
-                onClick={() => {
-                  void deleteAccount();
-                }}
-              >
-                <Trash aria-hidden="true" />
-                {deletingAccount ? "Deleting" : "Delete account"}
-              </Button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Delete account"
+        errorMessage={undefined}
+        open={accountDeleteOpen && account !== undefined}
+        pending={deletingAccount}
+        pendingLabel="Deleting"
+        title="Delete account"
+        onConfirm={() => {
+          void deleteAccount();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeAccountDelete();
+          }
+        }}
+      >
+        {account ? (
+          <ReferenceEntityDeleteDescription name={account.fqn} noun="account" />
+        ) : null}
+      </ConfirmationDialog>
     </aside>
   );
 };

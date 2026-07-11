@@ -59,6 +59,39 @@ const createTag = async (
   return (await response.json()) as TagFixture;
 };
 
+test("tag row delete closes the matching open editor", async ({
+  browserName,
+  page,
+}) => {
+  const tag = await createTag(page, {
+    fqn: `E2EDeleteOpen:${browserName}${Date.now()}`,
+  });
+
+  await page.goto(`/tags?q=${encodeURIComponent(tag.fqn)}`);
+  const row = page
+    .getByTestId("tags-tree-row")
+    .filter({ hasText: tag.fqn })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.click();
+  const panel = page.getByRole("dialog", { name: "Edit tag" });
+  await expect(panel).toBeVisible();
+
+  await row.hover();
+  await row.getByRole("button", { name: "Delete tag" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Delete tag" });
+  const deleteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/tags/${tag.tag_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await dialog.getByRole("button", { name: "Delete tag" }).click();
+  expect((await deleteResponse).status()).toBe(204);
+  await expect(panel).toBeHidden();
+});
+
 test("tags page renders demo hierarchy, URL search, and hidden toggle", async ({
   browserName,
   page,

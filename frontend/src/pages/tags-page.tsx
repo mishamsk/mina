@@ -91,6 +91,12 @@ export const TagsPage = () => {
     restorePanelOpenerFocus();
   };
 
+  const closeDeletedTagEditor = (tagId: number) => {
+    if (panelMode === "edit" && selectedTagId === tagId) {
+      closePanel();
+    }
+  };
+
   const openRestructureDialog = (fqn: string, opener: HTMLElement) => {
     setPanelMode(undefined);
     setSelectedTagId(undefined);
@@ -191,6 +197,7 @@ export const TagsPage = () => {
         <TagsPageContent
           includeHidden={includeHidden}
           onEditTag={openEditPanel}
+          onTagDeleted={closeDeletedTagEditor}
           onNotice={showNotice}
           onRestructurePath={openRestructureDialog}
           search={search}
@@ -204,7 +211,6 @@ export const TagsPage = () => {
             ? "text-destructive"
             : "text-[var(--color-money-in)]"
         }
-        containerClassName="z-[70]"
         durationMs={toastDurationMs}
         message={notice?.message}
         onDismiss={() => {

@@ -9,6 +9,7 @@ import {
   updateLedgerTag,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import type { RowAction } from "@/components/row-actions";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export const readTagsSearchState = readReferenceSearchState;
 interface TagsPageContentProps {
   readonly includeHidden: boolean;
   readonly onEditTag: (tag: Tag, opener: HTMLElement) => void;
+  readonly onTagDeleted: (tagId: number) => void;
   readonly onNotice: (message: string, tone?: "error" | "success") => void;
   readonly onRestructurePath: (fqn: string, opener: HTMLElement) => void;
   readonly search: string;
@@ -44,6 +46,7 @@ type TagDeleteTarget = {
 export const TagsPageContent = ({
   includeHidden,
   onEditTag,
+  onTagDeleted,
   onNotice,
   onRestructurePath,
   search,
@@ -83,6 +86,7 @@ export const TagsPageContent = ({
     const result = await deleteLedgerTagById(deleteTarget.tag.tag_id);
     if (result.data !== undefined || !result.error) {
       await refreshTagsAfterMutation();
+      onTagDeleted(deleteTarget.tag.tag_id);
       onNotice("Tag deleted.");
       setDeleting(false);
       setDeleteTarget(undefined);
@@ -290,17 +294,12 @@ export const TagsPageContent = ({
           }
         }}
       >
-        <p className="flex flex-wrap items-center gap-1">
-          <span>Delete</span>
-          <span className="text-foreground font-mono break-all">
-            {deleteTarget?.tag.fqn}
-          </span>
-          <span>?</span>
-        </p>
-        <p>
-          This tombstones the tag and removes it from default tag lists and
-          pickers.
-        </p>
+        {deleteTarget ? (
+          <ReferenceEntityDeleteDescription
+            name={deleteTarget.tag.fqn}
+            noun="tag"
+          />
+        ) : null}
       </ConfirmationDialog>
     </div>
   );

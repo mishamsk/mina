@@ -277,6 +277,11 @@ test("member row actions edit and delete without activating the row", async ({
   const deleteAction = row.getByRole("button", { name: "Delete member" });
   await expect(row).toBeVisible({ timeout: 10_000 });
 
+  await page.mouse.move(0, 0);
+  await row.focus();
+  await expect(editAction).toHaveCSS("opacity", "1");
+  await expect(deleteAction).toHaveCSS("opacity", "1");
+
   await row.hover();
   await expect(editAction).toBeVisible();
   await expect(deleteAction).toBeVisible();
@@ -360,6 +365,46 @@ test("member row actions edit and delete without activating the row", async ({
     /active|depend|reference|could not/i,
   );
   await page.unroute(`/api/members/${conflictMember.member_id}`);
+});
+
+test("member row delete closes the matching open editor and leaves it open on Escape", async ({
+  page,
+}, testInfo) => {
+  const member = await createMember(
+    page,
+    `E2E delete editor ${testInfo.project.name}${Date.now()}`,
+  );
+
+  await page.goto(`/members?q=${encodeURIComponent(member.name)}`);
+  const row = page
+    .getByTestId("members-list-row")
+    .filter({ hasText: member.name })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.click();
+  const panel = page.getByRole("dialog", { name: "Edit member" });
+  await expect(panel).toBeVisible();
+
+  const deleteAction = row.getByRole("button", { name: "Delete member" });
+  await row.hover();
+  await deleteAction.click();
+  const dialog = page.getByRole("alertdialog", { name: "Delete member" });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(panel).toBeVisible();
+
+  await deleteAction.click();
+  const deleteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/members/${member.member_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await dialog.getByRole("button", { name: "Delete member" }).click();
+  expect((await deleteResponse).status()).toBe(204);
+  await expect(panel).toBeHidden();
 });
 
 test("member delete affordances respect the API deleteability signal", async ({

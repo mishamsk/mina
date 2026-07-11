@@ -99,6 +99,12 @@ export const CategoriesPage = () => {
     restorePanelOpenerFocus();
   };
 
+  const closeDeletedCategoryEditor = (categoryId: number) => {
+    if (panelMode === "edit" && selectedCategoryId === categoryId) {
+      closePanel();
+    }
+  };
+
   const openRestructureDialog = (fqn: string, opener: HTMLElement) => {
     setPanelMode(undefined);
     setSelectedCategoryId(undefined);
@@ -201,6 +207,7 @@ export const CategoriesPage = () => {
         <CategoriesPageContent
           categoriesPage={categoriesPage}
           includeHidden={includeHidden}
+          onCategoryDeleted={closeDeletedCategoryEditor}
           onEditCategory={openEditPanel}
           onNotice={showNotice}
           onRestructurePath={openRestructureDialog}
@@ -214,7 +221,6 @@ export const CategoriesPage = () => {
             ? "text-destructive"
             : "text-[var(--color-money-in)]"
         }
-        containerClassName="z-[70]"
         durationMs={toastDurationMs}
         message={notice?.message}
         onDismiss={() => {

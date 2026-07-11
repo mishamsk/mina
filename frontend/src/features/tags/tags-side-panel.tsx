@@ -16,6 +16,8 @@ import {
   updateLedgerTag,
   type UpdateTagRequest,
 } from "@/api";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,9 +39,6 @@ interface TagsSidePanelProps {
   readonly open: boolean;
   readonly tag: Tag | undefined;
 }
-
-const focusableSelector =
-  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 const blankForm = (): TagFormState => ({
   fqn: "",
@@ -115,8 +114,6 @@ const TagsSidePanelContent = ({
   const panelRef = useRef<HTMLElement | null>(null);
   const panelSessionActiveRef = useRef(true);
   const tagDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
-  const cancelDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
-  const dialogRef = useRef<HTMLElement | null>(null);
   const [form, setForm] = useState<TagFormState>(() =>
     mode === "create" ? blankForm() : formFromTag(tag),
   );
@@ -158,54 +155,18 @@ const TagsSidePanelContent = ({
           return;
         }
         const openModal = document.querySelector<HTMLElement>(
-          "[role='alertdialog'][aria-modal='true']",
+          "[role='alertdialog']",
         );
-        if (openModal && openModal !== dialogRef.current) {
+        if (openModal) {
           return;
         }
         event.preventDefault();
         event.stopPropagation();
-        if (tagDeleteOpen) {
-          closeTagDelete();
-        } else if (saving) {
+        if (saving) {
           return;
         } else {
           onClose();
         }
-        return;
-      }
-
-      if (event.key !== "Tab" || !tagDeleteOpen) {
-        return;
-      }
-
-      const trapRoot = dialogRef.current;
-      if (!trapRoot) {
-        return;
-      }
-      const focusable = Array.from(
-        trapRoot.querySelectorAll<HTMLElement>(focusableSelector),
-      ).filter((element) => !element.hasAttribute("disabled"));
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!first || !last) {
-        event.preventDefault();
-        trapRoot.focus();
-        return;
-      }
-      if (!trapRoot.contains(document.activeElement)) {
-        event.preventDefault();
-        first.focus();
-        return;
-      }
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-        return;
-      }
-      if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
       }
     };
 
@@ -213,16 +174,7 @@ const TagsSidePanelContent = ({
     return () => {
       document.removeEventListener("keydown", onKeyDown, { capture: true });
     };
-  }, [closeTagDelete, onClose, saving, tagDeleteOpen]);
-
-  useEffect(() => {
-    if (!tagDeleteOpen) {
-      return;
-    }
-    window.requestAnimationFrame(() => {
-      cancelDeleteButtonRef.current?.focus({ preventScroll: true });
-    });
-  }, [tagDeleteOpen]);
+  }, [onClose, saving]);
 
   const updateForm = (patch: Partial<TagFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -392,18 +344,32 @@ const TagsSidePanelContent = ({
 
           <div className="flex justify-end gap-2 border-t-2 border-[var(--border-ink)] pt-4">
             {mode === "edit" && tag ? (
-              <Button
-                ref={tagDeleteButtonRef}
-                type="button"
-                variant="destructive"
-                onClick={() => {
-                  setDeleteErrorMessage(undefined);
-                  setTagDeleteOpen(true);
-                }}
+              <Tooltip
+                label={
+                  tag.deletable !== true
+                    ? "Tag has active dependent records."
+                    : "Delete tag"
+                }
+                asChild
               >
-                <Trash aria-hidden="true" />
-                Delete
-              </Button>
+                <Button
+                  ref={tagDeleteButtonRef}
+                  type="button"
+                  variant="destructive"
+                  aria-disabled={tag.deletable !== true ? "true" : undefined}
+                  className="aria-disabled:bg-card aria-disabled:text-muted-foreground aria-disabled:border-muted-foreground aria-disabled:hover:bg-card aria-disabled:cursor-not-allowed aria-disabled:shadow-none aria-disabled:hover:shadow-none aria-disabled:active:translate-x-0 aria-disabled:active:translate-y-0"
+                  onClick={() => {
+                    if (tag.deletable !== true) {
+                      return;
+                    }
+                    setDeleteErrorMessage(undefined);
+                    setTagDeleteOpen(true);
+                  }}
+                >
+                  <Trash aria-hidden="true" />
+                  Delete
+                </Button>
+              </Tooltip>
             ) : null}
             <Button type="submit" disabled={saving}>
               <Check aria-hidden="true" />
@@ -413,75 +379,27 @@ const TagsSidePanelContent = ({
         </form>
       </div>
 
-      {tagDeleteOpen && tag ? (
-        <div
-          className="fixed inset-0 z-[60] grid place-items-center bg-[color-mix(in_srgb,var(--frame),transparent_18%)] p-4"
-          role="presentation"
-        >
-          <section
-            ref={dialogRef}
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="delete-tag-title"
-            aria-describedby="delete-tag-description"
-            className="bg-card w-[min(480px,100%)] border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
-            tabIndex={-1}
-          >
-            <h3
-              id="delete-tag-title"
-              className="font-heading text-base font-bold uppercase"
-            >
-              Delete tag
-            </h3>
-            <div
-              id="delete-tag-description"
-              className="font-body text-muted-foreground mt-3 space-y-2 text-sm"
-            >
-              <p className="flex flex-wrap items-center gap-1">
-                <span>Delete</span>
-                <span className="text-foreground font-mono font-medium break-all">
-                  {tag.fqn}
-                </span>
-                <span>?</span>
-              </p>
-              <p>
-                This tombstones the tag and removes it from default tag lists
-                and pickers.
-              </p>
-            </div>
-            {deleteErrorMessage ? (
-              <p
-                className="border-destructive text-destructive mt-3 border-2 p-2 text-sm"
-                role="alert"
-              >
-                {deleteErrorMessage}
-              </p>
-            ) : null}
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                ref={cancelDeleteButtonRef}
-                type="button"
-                variant="outline"
-                disabled={deletingTag}
-                onClick={closeTagDelete}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={deletingTag}
-                onClick={() => {
-                  void deleteTag();
-                }}
-              >
-                <Trash aria-hidden="true" />
-                {deletingTag ? "Deleting" : "Delete tag"}
-              </Button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      <ConfirmationDialog
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Delete tag"
+        errorMessage={deleteErrorMessage}
+        open={tagDeleteOpen && tag !== undefined}
+        pending={deletingTag}
+        pendingLabel="Deleting"
+        title="Delete tag"
+        onConfirm={() => {
+          void deleteTag();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeTagDelete();
+          }
+        }}
+      >
+        {tag ? (
+          <ReferenceEntityDeleteDescription name={tag.fqn} noun="tag" />
+        ) : null}
+      </ConfirmationDialog>
     </aside>
   );
 };
