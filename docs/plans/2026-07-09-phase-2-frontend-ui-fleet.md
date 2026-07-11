@@ -67,7 +67,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [x] Task 10: `cqft` — Promote transaction class to a top-level filter (frontend URL-backed filter; requires Task 9) — branch `cqft-transaction-class-filter`
 - [x] Task 11: `0tvb` — Add previous-day and next-day transaction controls (frontend local-date navigation; requires Task 9) — branch `0tvb-adjacent-day-controls`
 - [x] Task 12: `pj89` — Add a quick-delete action to transaction rows (frontend transaction RowActions; requires Task 4) — branch `pj89-transaction-quick-delete`
-- [ ] Task 13: `e1ke` — Prevent mixed transaction amounts from overlapping members (frontend responsive amount-layout fix) — branch `e1ke-mixed-amount-overlap`
+- [x] Task 13: `e1ke` — Prevent mixed transaction amounts from overlapping members (frontend responsive amount-layout fix) — branch `e1ke-mixed-amount-overlap`
 - [ ] Task 14: `r725` — Use neutral styling for income amount chips (frontend amount-chip semantic styling; follows Task 13's layout fix) — branch `r725-neutral-income-amounts`
 - [ ] Task 15: `4fxe` — Use neutral styling for transaction member chips (frontend entity-chip semantic styling) — branch `4fxe-neutral-member-chips`
 - [ ] Task 16: `np9z` — Fill the active featured-account star yellow (frontend toggle-state styling polish) — branch `np9z-featured-star-fill`
