@@ -10,6 +10,8 @@ import (
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
+const duckDBDriverName = "duckdb"
+
 // OpenInMemory opens an in-memory DuckDB database handle and verifies it can be reached.
 func OpenInMemory(ctx context.Context) (*sql.DB, error) {
 	return open(ctx, ":memory:", 1)
@@ -57,7 +59,7 @@ func prepareAccountingLocation(ctx context.Context, appDB *AppDB) error {
 }
 
 func open(ctx context.Context, path string, maxOpenConns int) (*sql.DB, error) {
-	db, err := sql.Open("duckdb", path)
+	db, err := sql.Open(duckDBDriverName, path)
 	if err != nil {
 		return nil, fmt.Errorf("open duckdb database: %w", err)
 	}

@@ -18,7 +18,7 @@ func Migrate(ctx context.Context, appDB *AppDB) error {
 	if err := prepareAccountingLocation(ctx, appDB); err != nil {
 		return err
 	}
-	if err := useAccountingLocation(ctx, appDB, appDB.db); err != nil {
+	if err := useAccountingLocation(ctx, appDB); err != nil {
 		return err
 	}
 	if err := normalizeSchemaVersionTable(ctx, appDB); err != nil {
@@ -45,7 +45,7 @@ func HasPendingMigrations(ctx context.Context, appDB *AppDB) (bool, error) {
 	if !exists {
 		return true, nil
 	}
-	if err := useAccountingLocation(ctx, appDB, appDB.db); err != nil {
+	if err := useAccountingLocation(ctx, appDB); err != nil {
 		return false, err
 	}
 
@@ -92,14 +92,7 @@ WHERE catalog_name = ?
 		return false, fmt.Errorf("check accounting schema: %w", err)
 	}
 
-	if count == 0 {
-		return false, nil
-	}
-	if err := useAccountingLocation(ctx, appDB, appDB.db); err != nil {
-		return false, err
-	}
-
-	return true, nil
+	return count > 0, nil
 }
 
 func newMigrationProvider(appDB *AppDB) (*goose.Provider, error) {
@@ -119,9 +112,9 @@ func newMigrationProvider(appDB *AppDB) (*goose.Provider, error) {
 	)
 }
 
-func useAccountingLocation(ctx context.Context, appDB *AppDB, queryer sqlQueryer) error {
+func useAccountingLocation(ctx context.Context, appDB *AppDB) error {
 	schemaName := appDB.accountingSchemaName()
-	if _, err := queryer.ExecContext(ctx, "USE "+schemaName); err != nil {
+	if _, err := appDB.db.ExecContext(ctx, "USE "+schemaName); err != nil {
 		return fmt.Errorf("select accounting schema %s: %w", schemaName, err)
 	}
 

@@ -35,9 +35,7 @@ func (s *AppDB) withTx(ctx context.Context, opts *sql.TxOptions, fn func(*sql.Tx
 		return fn(s.tx)
 	}
 
-	return withSQLTx(ctx, s.db, opts, func(tx *sql.Tx) error {
-		return fn(tx)
-	})
+	return withSQLTx(ctx, s.db, opts, fn)
 }
 
 // withSQLTx starts a transaction on a raw process DB and owns commit/rollback.
