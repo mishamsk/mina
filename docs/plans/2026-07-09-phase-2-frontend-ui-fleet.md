@@ -69,7 +69,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [x] Task 12: `pj89` — Add a quick-delete action to transaction rows (frontend transaction RowActions; requires Task 4) — branch `pj89-transaction-quick-delete`
 - [x] Task 13: `e1ke` — Prevent mixed transaction amounts from overlapping members (frontend responsive amount-layout fix) — branch `e1ke-mixed-amount-overlap`
 - [x] Task 14: `r725` — Use neutral styling for income amount chips (frontend amount-chip semantic styling; follows Task 13's layout fix) — branch `r725-neutral-income-amounts`
-- [ ] Task 15: `4fxe` — Use neutral styling for transaction member chips (frontend entity-chip semantic styling) — branch `4fxe-neutral-member-chips`
+- [x] Task 15: `4fxe` — Use neutral styling for transaction member chips (frontend entity-chip semantic styling) — branch `4fxe-neutral-member-chips`
 - [ ] Task 16: `np9z` — Fill the active featured-account star yellow (frontend toggle-state styling polish) — branch `np9z-featured-star-fill`
 - [ ] Task 17: `m4ye` — Expand transaction free-text search across reference metadata (API search expansion on the existing transactions endpoint; precedes Task 18 by explicit fleet order) — branch `m4ye-expanded-transaction-search`
 - [ ] Task 18: `d608` — Add Alfred-style transaction search to the command palette (frontend command-palette search surface; follows Task 17 so it launches against the expanded field set, although its formal API needs were already satisfied) — branch `d608-command-palette-search`
