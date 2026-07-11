@@ -212,11 +212,15 @@ ORDER BY a.account_id ASC, currency ASC`,
 	return balances, nil
 }
 
-// UpdateMutable updates account mutable metadata and external identifiers.
+// UpdateMutable updates account type, mutable metadata, and external identifiers.
 func (s *AccountStore) UpdateMutable(ctx context.Context, id int64, input accounts.UpdateInput) (accounts.Account, error) {
 	setClauses := []string{}
 	args := []any{}
 	partialExternalIdentifierUpdate := input.ExternalID.Specified != input.ExternalSystem.Specified
+	if input.AccountType != nil {
+		setClauses = append(setClauses, "account_type = CAST(? AS "+s.db.accountingName("account_type")+")")
+		args = append(args, enumValue(*input.AccountType))
+	}
 	if input.IsHidden != nil {
 		setClauses = append(setClauses, "is_hidden = ?")
 		args = append(args, *input.IsHidden)

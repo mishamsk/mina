@@ -917,6 +917,12 @@ func (s *TransactionStore) TransactionsByRecordIDs(ctx context.Context, recordID
 	return transactionsByRecordIDs(ctx, s.db.query(), s.db, recordIDs)
 }
 
+// TransactionsByAccountID returns active transactions containing active records
+// for accountID, including all active records in each transaction.
+func (s *TransactionStore) TransactionsByAccountID(ctx context.Context, accountID int64) ([]transactions.Transaction, error) {
+	return transactionsByAccountID(ctx, s.db.query(), s.db, accountID)
+}
+
 // BulkCategorize assigns one active category to active journal records atomically.
 func (s *TransactionStore) BulkCategorize(ctx context.Context, recordIDs []int64, categoryID int64) (int, error) {
 	err := s.db.withTx(ctx, nil, func(tx *sql.Tx) error {
@@ -1345,6 +1351,30 @@ func transactionsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 	return affected, nil
 }
 
+func transactionsByAccountID(ctx context.Context, queryer rowsQuerier, db *AppDB, accountID int64) ([]transactions.Transaction, error) {
+	transactionIDs, err := transactionIDsByAccountID(ctx, queryer, db, accountID)
+	if err != nil {
+		return nil, err
+	}
+	if len(transactionIDs) == 0 {
+		return []transactions.Transaction{}, nil
+	}
+
+	records, err := recordsByTransactionIDs(ctx, queryer, db, transactionIDs)
+	if err != nil {
+		return nil, err
+	}
+	affected := make([]transactions.Transaction, 0, len(transactionIDs))
+	for _, transactionID := range transactionIDs {
+		affected = append(affected, transactions.Transaction{
+			ID:      transactionID,
+			Records: records[transactionID],
+		})
+	}
+
+	return affected, nil
+}
+
 func transactionIDsByRecordIDs(ctx context.Context, queryer rowsQuerier, db *AppDB, recordIDs []int64) ([]int64, error) {
 	rows, err := queryer.QueryContext(
 		ctx,
@@ -1377,6 +1407,43 @@ ORDER BY jr.transaction_id ASC`,
 	}
 	if err := rows.Close(); err != nil {
 		return nil, fmt.Errorf("close affected transaction id rows: %w", err)
+	}
+
+	return transactionIDs, nil
+}
+
+func transactionIDsByAccountID(ctx context.Context, queryer rowsQuerier, db *AppDB, accountID int64) ([]int64, error) {
+	rows, err := queryer.QueryContext(
+		ctx,
+		`SELECT DISTINCT jr.transaction_id
+FROM `+db.accountingName("journal_record")+` jr
+JOIN `+db.accountingName("transaction")+` tr ON tr.transaction_id = jr.transaction_id
+WHERE jr.account_id = ?
+  AND jr.tombstoned_at IS NULL
+  AND tr.tombstoned_at IS NULL
+ORDER BY jr.transaction_id ASC`,
+		accountID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list account transaction ids: %w", err)
+	}
+
+	transactionIDs := []int64{}
+	for rows.Next() {
+		var transactionID int64
+		if err := rows.Scan(&transactionID); err != nil {
+			return nil, fmt.Errorf("scan account transaction id: %w", err)
+		}
+		transactionIDs = append(transactionIDs, transactionID)
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return nil, fmt.Errorf("iterate account transaction ids: %w; close account transaction rows: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("iterate account transaction ids: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("close account transaction rows: %w", err)
 	}
 
 	return transactionIDs, nil

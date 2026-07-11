@@ -11,6 +11,7 @@
 - Account-scoped record search treats the path account ID as a target account and returns not found for missing or inactive accounts.
 - Create/replace infers missing `amount_usd` with posted-date-else-initiated lookup dates and preserves explicit values.
 - Transaction semantic classification uses account/category reference data owned by dictionary service APIs.
+- The transactions service owns hypothetical account-type-change validation by reclassifying every active transaction that references the account with the proposed type.
 - Shorthand create use cases build ordinary same-currency two-record transactions before delegating to full create validation and persistence.
 - The transactions service owns `amount_usd` backfill for active journal records still storing `NULL`.
 - Active records within a transaction must be all cancelled or all non-cancelled, and all expected or none expected; create/replace reject mixed expected/non-expected outcomes, while create, replace, and bulk posting-status updates reject mixed cancelled/non-cancelled outcomes.

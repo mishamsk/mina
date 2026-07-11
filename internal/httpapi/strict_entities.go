@@ -131,6 +131,7 @@ func (s *strictServer) GetAccount(ctx context.Context, request openapi.GetAccoun
 
 func (s *strictServer) UpdateAccount(ctx context.Context, request openapi.UpdateAccountRequestObject) (openapi.UpdateAccountResponseObject, error) {
 	account, err := s.deps.Accounts.UpdateMutable(ctx, request.AccountId, accounts.UpdateInput{
+		AccountType:    accountTypeParam(request.Body.AccountType),
 		IsHidden:       request.Body.IsHidden,
 		IsFeatured:     request.Body.IsFeatured,
 		ExternalID:     optionalNullableString(request.Body.ExternalId),

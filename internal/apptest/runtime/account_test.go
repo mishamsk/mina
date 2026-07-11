@@ -284,7 +284,7 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 		t.Fatal("updated account hidden = false, want true")
 	}
 	if updated.JSON200.AccountType != httpclient.Balance {
-		t.Fatalf("updated account_type = %q, want %q", updated.JSON200.AccountType, httpclient.Balance)
+		t.Fatalf("type-omitted update account_type = %q, want %q", updated.JSON200.AccountType, httpclient.Balance)
 	}
 	if !updated.JSON200.IsFeatured {
 		t.Fatal("updated account featured = false, want true")
@@ -427,6 +427,117 @@ func TestAccountCreateReadListUpdateDeleteBoundary(t *testing.T) {
 	assertAccountIDs(t, withTombstones.JSON200.Accounts, []int64{created.JSON201.AccountId, hidden.JSON201.AccountId, visibleDeleted.JSON201.AccountId, system.JSON201.AccountId})
 	assertAccountTypes(t, withTombstones.JSON200.Accounts, []httpclient.AccountType{httpclient.Balance, httpclient.Balance, httpclient.Balance, httpclient.System})
 	assertAccountFeatured(t, withTombstones.JSON200.Accounts, []bool{true, true, false, false})
+}
+
+func TestAccountTypeChangeBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	currency := "USD"
+
+	empty, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
+		Fqn:         "accounts:TypeChange:Empty",
+		AccountType: httpclient.Flow,
+		Currency:    &currency,
+	})
+	requireNoTransportError(t, "create empty flow account", err)
+	if empty.StatusCode() != http.StatusCreated {
+		t.Fatalf("create empty flow account status = %d, want %d; body %s", empty.StatusCode(), http.StatusCreated, empty.Body)
+	}
+	balanceType := httpclient.Balance
+	emptyChanged, err := client.REST().UpdateAccountWithResponse(context.Background(), empty.JSON201.AccountId, httpclient.UpdateAccountRequest{AccountType: &balanceType})
+	requireNoTransportError(t, "change empty account type", err)
+	if emptyChanged.StatusCode() != http.StatusOK {
+		t.Fatalf("change empty account type status = %d, want %d; body %s", emptyChanged.StatusCode(), http.StatusOK, emptyChanged.Body)
+	}
+	if emptyChanged.JSON200.AccountType != httpclient.Balance {
+		t.Fatalf("changed empty account type = %q, want %q", emptyChanged.JSON200.AccountType, httpclient.Balance)
+	}
+
+	emptyRead, err := client.REST().GetAccountWithResponse(context.Background(), empty.JSON201.AccountId, nil)
+	requireNoTransportError(t, "read changed empty account", err)
+	if emptyRead.StatusCode() != http.StatusOK || emptyRead.JSON200.AccountType != httpclient.Balance {
+		t.Fatalf("read changed empty account = %+v, want balance; body %s", emptyRead.JSON200, emptyRead.Body)
+	}
+	balanceAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &balanceType})
+	requireNoTransportError(t, "list changed balance account", err)
+	if balanceAccounts.StatusCode() != http.StatusOK {
+		t.Fatalf("list changed balance account status = %d, want %d; body %s", balanceAccounts.StatusCode(), http.StatusOK, balanceAccounts.Body)
+	}
+	assertAccountIDs(t, balanceAccounts.JSON200.Accounts, []int64{empty.JSON201.AccountId})
+	flowType := httpclient.Flow
+	flowAccounts, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{AccountType: &flowType})
+	requireNoTransportError(t, "list changed flow account", err)
+	if flowAccounts.StatusCode() != http.StatusOK {
+		t.Fatalf("list changed flow account status = %d, want %d; body %s", flowAccounts.StatusCode(), http.StatusOK, flowAccounts.Body)
+	}
+	assertAccountIDs(t, flowAccounts.JSON200.Accounts, nil)
+	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), nil)
+	requireNoTransportError(t, "list changed account balances", err)
+	if balances.StatusCode() != http.StatusOK {
+		t.Fatalf("list changed account balances status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
+	}
+	assertAccountBalances(t, balances.JSON200.Balances, []wantAccountBalance{{
+		accountID: empty.JSON201.AccountId, currency: "USD", current: "0.00000000", currentUSD: "0.00000000", posted: "0.00000000", unconvertedCount: 0,
+	}})
+
+	funding := scenario.AccountWithCurrency("accounts:TypeChange:Funding", "USD")
+	feeProvider := scenario.Account("accounts:TypeChange:FeeProvider")
+	feeCategory := scenario.CategoryWithIntent("accounts:TypeChange:Fee", httpclient.CategoryEconomicIntentFee)
+	fee := accountTypeChangeTransactionRequest(funding.AccountId, feeProvider.AccountId, feeCategory.CategoryId, "-5.00", "5.00")
+	createdFee, err := client.REST().CreateTransactionWithResponse(context.Background(), fee)
+	requireNoTransportError(t, "create fee transaction", err)
+	if createdFee.StatusCode() != http.StatusCreated {
+		t.Fatalf("create fee transaction status = %d, want %d; body %s", createdFee.StatusCode(), http.StatusCreated, createdFee.Body)
+	}
+	systemType := httpclient.System
+	validChange, err := client.REST().UpdateAccountWithResponse(context.Background(), feeProvider.AccountId, httpclient.UpdateAccountRequest{AccountType: &systemType})
+	requireNoTransportError(t, "change fee provider type", err)
+	if validChange.StatusCode() != http.StatusOK || validChange.JSON200.AccountType != httpclient.System {
+		t.Fatalf("change fee provider type = %+v, want system; body %s", validChange.JSON200, validChange.Body)
+	}
+
+	expenseCategory := scenario.CategoryWithIntent("accounts:TypeChange:Expense", httpclient.CategoryEconomicIntentExpense)
+	postChangeWrite, err := client.REST().CreateTransactionWithResponse(context.Background(), accountTypeChangeTransactionRequest(funding.AccountId, feeProvider.AccountId, expenseCategory.CategoryId, "-1.00", "1.00"))
+	requireNoTransportError(t, "create transaction after type change", err)
+	if postChangeWrite.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("create transaction after type change status = %d, want %d; body %s", postChangeWrite.StatusCode(), http.StatusBadRequest, postChangeWrite.Body)
+	}
+
+	merchant := scenario.Account("accounts:TypeChange:Merchant")
+	createdExpense, err := client.REST().CreateTransactionWithResponse(context.Background(), accountTypeChangeTransactionRequest(funding.AccountId, merchant.AccountId, expenseCategory.CategoryId, "-7.00", "7.00"))
+	requireNoTransportError(t, "create expense transaction", err)
+	if createdExpense.StatusCode() != http.StatusCreated {
+		t.Fatalf("create expense transaction status = %d, want %d; body %s", createdExpense.StatusCode(), http.StatusCreated, createdExpense.Body)
+	}
+	rejectedChange, err := client.REST().UpdateAccountWithResponse(context.Background(), merchant.AccountId, httpclient.UpdateAccountRequest{AccountType: &balanceType})
+	requireNoTransportError(t, "reject invalid account type change", err)
+	if rejectedChange.StatusCode() != http.StatusConflict {
+		t.Fatalf("reject invalid account type change status = %d, want %d; body %s", rejectedChange.StatusCode(), http.StatusConflict, rejectedChange.Body)
+	}
+	if rejectedChange.JSON409 == nil || rejectedChange.JSON409.Error.Code != httpclient.APIErrorCodeConflict || rejectedChange.JSON409.Error.Message != "account type change would invalidate existing transaction records" {
+		t.Fatalf("reject invalid account type change error = %+v, want stable conflict; body %s", rejectedChange.JSON409, rejectedChange.Body)
+	}
+	merchantRead, err := client.REST().GetAccountWithResponse(context.Background(), merchant.AccountId, nil)
+	requireNoTransportError(t, "read rejected account type change", err)
+	if merchantRead.StatusCode() != http.StatusOK || merchantRead.JSON200.AccountType != httpclient.Flow {
+		t.Fatalf("read rejected account type change = %+v, want flow; body %s", merchantRead.JSON200, merchantRead.Body)
+	}
+}
+
+func accountTypeChangeTransactionRequest(fundingAccountID int64, counterpartyAccountID int64, categoryID int64, fundingAmount string, counterpartyAmount string) httpclient.CreateTransactionRequest {
+	return httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-06-01"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			{
+				AccountId: fundingAccountID, CategoryId: categoryID, Currency: "USD", Amount: fundingAmount,
+				PostingStatus: httpclient.PostingStatusPosted, ReconciliationStatus: httpclient.Reconciled, Source: httpclient.ManualSourceManual,
+			},
+			{
+				AccountId: counterpartyAccountID, CategoryId: categoryID, Currency: "USD", Amount: counterpartyAmount,
+				PostingStatus: httpclient.PostingStatusPosted, ReconciliationStatus: httpclient.Reconciled, Source: httpclient.ManualSourceManual,
+			},
+		},
+	}
 }
 
 func TestAccountBalancesBoundary(t *testing.T) {

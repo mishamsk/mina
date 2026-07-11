@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Service instances own process-local, write-through account reference caches for active-reference validation.
+- Account type changes are allowed only when the injected transaction validator confirms every affected active transaction remains semantically valid; unconfigured validation rejects type changes.
 - Hidden active accounts are valid references only when callers explicitly allow hidden references.
 - Account group hidden state is derived from active account leaves, including hidden leaves.
 - Account path hide/unhide targets active leaves at or under the path and invalidates the account reference cache.

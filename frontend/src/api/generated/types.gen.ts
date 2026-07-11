@@ -790,6 +790,7 @@ export type UpdateCategoryRequest = {
 };
 
 export type UpdateAccountRequest = {
+    account_type?: AccountType;
     is_hidden?: boolean;
     is_featured?: boolean;
     external_id?: string | null;
@@ -2036,6 +2037,10 @@ export type UpdateAccountErrors = {
      * The requested resource was not found.
      */
     404: ErrorResponse;
+    /**
+     * The request conflicts with existing state.
+     */
+    409: ErrorResponse;
 };
 
 export type UpdateAccountError = UpdateAccountErrors[keyof UpdateAccountErrors];

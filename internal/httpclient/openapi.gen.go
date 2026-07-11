@@ -1670,6 +1670,7 @@ type TransactionTemplateWriteRequest struct {
 
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
+	AccountType    *AccountType              `json:"account_type,omitempty"`
 	ExternalId     nullable.Nullable[string] `json:"external_id,omitempty"`
 	ExternalSystem nullable.Nullable[string] `json:"external_system,omitempty"`
 	IsFeatured     *bool                     `json:"is_featured,omitempty"`
@@ -9436,6 +9437,7 @@ type UpdateAccountResponse struct {
 	JSON200      *Account
 	JSON400      *InvalidRequest
 	JSON404      *NotFound
+	JSON409      *Conflict
 }
 
 // Status returns HTTPResponse.Status
@@ -13211,6 +13213,13 @@ func ParseUpdateAccountResponse(rsp *http.Response) (*UpdateAccountResponse, err
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 

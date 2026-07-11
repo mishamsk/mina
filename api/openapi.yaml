@@ -965,7 +965,7 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateAccount
-      summary: Update account hidden state and external identifiers.
+      summary: Update mutable account fields.
       requestBody:
         required: true
         content:
@@ -983,6 +983,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
     delete:
       operationId: deleteAccount
       summary: Tombstone an account.
@@ -4683,6 +4685,8 @@ components:
       type: object
       additionalProperties: false
       properties:
+        account_type:
+          $ref: "#/components/schemas/AccountType"
         is_hidden:
           type: boolean
         is_featured:

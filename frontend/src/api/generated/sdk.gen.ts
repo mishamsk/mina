@@ -332,7 +332,7 @@ export const deleteAccount = <ThrowOnError extends boolean = false>(options: Opt
 export const getAccount = <ThrowOnError extends boolean = false>(options: Options<GetAccountData, ThrowOnError>): RequestResult<GetAccountResponses, GetAccountErrors, ThrowOnError> => (options.client ?? client).get<GetAccountResponses, GetAccountErrors, ThrowOnError>({ url: '/api/accounts/{account_id}', ...options });
 
 /**
- * Update account hidden state and external identifiers.
+ * Update mutable account fields.
  */
 export const updateAccount = <ThrowOnError extends boolean = false>(options: Options<UpdateAccountData, ThrowOnError>): RequestResult<UpdateAccountResponses, UpdateAccountErrors, ThrowOnError> => (options.client ?? client).patch<UpdateAccountResponses, UpdateAccountErrors, ThrowOnError>({
     url: '/api/accounts/{account_id}',

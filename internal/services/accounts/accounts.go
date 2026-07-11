@@ -78,6 +78,7 @@ type OptionalStringUpdate struct {
 
 // UpdateInput contains mutable account fields.
 type UpdateInput struct {
+	AccountType    *AccountType
 	IsHidden       *bool
 	IsFeatured     *bool
 	ExternalID     OptionalStringUpdate
@@ -143,11 +144,18 @@ type ReferenceSerializer interface {
 	SerializeReferenceOperation(func() error) error
 }
 
+// TypeChangeValidator verifies that changing an account type preserves the
+// validity of active transactions that reference the account.
+type TypeChangeValidator interface {
+	ValidateAccountTypeChange(context.Context, int64, AccountType) error
+}
+
 // Service owns account use cases and validation.
 type Service struct {
-	repo  Repository
-	refs  ReferenceSerializer
-	cache *refcache.Dictionary[int64, accountReferenceState]
+	repo                Repository
+	refs                ReferenceSerializer
+	typeChangeValidator TypeChangeValidator
+	cache               *refcache.Dictionary[int64, accountReferenceState]
 }
 
 // NewService creates an account service backed by repo.
@@ -155,6 +163,11 @@ func NewService(repo Repository, refs ReferenceSerializer) *Service {
 	service := &Service{repo: repo, refs: refs}
 	service.cache = refcache.NewDictionary(service.loadReferenceCache)
 	return service
+}
+
+// SetTypeChangeValidator connects account type changes to transaction semantic validation.
+func (s *Service) SetTypeChangeValidator(validator TypeChangeValidator) {
+	s.typeChangeValidator = validator
 }
 
 // Create validates and creates an account.
@@ -325,29 +338,50 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 	if !input.hasChanges() {
 		return Account{}, services.InvalidRequest("at least one account field is required")
 	}
-	if input.ExternalID.Specified || input.ExternalSystem.Specified {
-		current, err := s.repo.Get(ctx, id, false)
-		if errors.Is(err, services.ErrNotFound) {
-			return Account{}, services.NotFound("account not found")
-		}
-		if err != nil {
-			return Account{}, err
-		}
-		externalID := current.ExternalID
-		if input.ExternalID.Specified {
-			externalID = input.ExternalID.Value
-		}
-		externalSystem := current.ExternalSystem
-		if input.ExternalSystem.Specified {
-			externalSystem = input.ExternalSystem.Value
-		}
-		if err := validateExternalIdentifiers(externalID, externalSystem); err != nil {
-			return Account{}, err
-		}
+	if input.AccountType != nil && !ValidAccountType(*input.AccountType) {
+		return Account{}, services.InvalidRequest("account_type must be one of balance, flow, or system")
 	}
 
 	var account Account
 	if err := s.refs.SerializeReferenceOperation(func() error {
+		if input.ExternalID.Specified || input.ExternalSystem.Specified || input.AccountType != nil {
+			current, err := s.repo.Get(ctx, id, false)
+			if errors.Is(err, services.ErrNotFound) {
+				return services.NotFound("account not found")
+			}
+			if err != nil {
+				return err
+			}
+			externalID := current.ExternalID
+			if input.ExternalID.Specified {
+				externalID = input.ExternalID.Value
+			}
+			externalSystem := current.ExternalSystem
+			if input.ExternalSystem.Specified {
+				externalSystem = input.ExternalSystem.Value
+			}
+			if err := validateExternalIdentifiers(externalID, externalSystem); err != nil {
+				return err
+			}
+			if input.AccountType != nil {
+				if *input.AccountType == current.AccountType {
+					input.AccountType = nil
+				} else if s.typeChangeValidator == nil {
+					return services.Conflict("account type change would invalidate existing transaction records")
+				} else if err := s.typeChangeValidator.ValidateAccountTypeChange(ctx, id, *input.AccountType); err != nil {
+					var validationErr *services.Error
+					if errors.As(err, &validationErr) {
+						return services.Conflict("account type change would invalidate existing transaction records")
+					}
+					return err
+				}
+			}
+			if !input.hasChanges() {
+				account = current
+				return nil
+			}
+		}
+
 		updated, err := s.repo.UpdateMutable(ctx, id, input)
 		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("account not found")
@@ -480,7 +514,8 @@ func singleLeafMove(moved map[int64]accountReferenceState, from string) bool {
 }
 
 func (input UpdateInput) hasChanges() bool {
-	return input.IsHidden != nil ||
+	return input.AccountType != nil ||
+		input.IsHidden != nil ||
 		input.IsFeatured != nil ||
 		input.ExternalID.Specified ||
 		input.ExternalSystem.Specified

@@ -356,6 +356,17 @@ func newAccountingServices(
 		memberService,
 		referenceSerializer,
 	)
+	transactionService := transactions.NewService(
+		store.NewTransactionStore(appDB),
+		accountService,
+		categoryService,
+		tagService,
+		memberService,
+		exchangeRates,
+		referenceSerializer,
+		currencyUsageChanged,
+	)
+	accountService.SetTypeChangeValidator(transactionService)
 	return appServices{
 		Dependencies: httpapi.Dependencies{
 			Health:        health.NewService(store.NewHealthStore(appDB)),
@@ -366,17 +377,8 @@ func newAccountingServices(
 			Accounts:      accountService,
 			CreditLimits:  creditlimits.NewService(store.NewCreditLimitHistoryStore(appDB), accountService, referenceSerializer),
 			ExchangeRates: exchangeRates,
-			Transactions: transactions.NewService(
-				store.NewTransactionStore(appDB),
-				accountService,
-				categoryService,
-				tagService,
-				memberService,
-				exchangeRates,
-				referenceSerializer,
-				currencyUsageChanged,
-			),
-			Templates: templateService,
+			Transactions:  transactionService,
+			Templates:     templateService,
 			Recurring: recurring.NewService(
 				store.NewRecurringStore(appDB),
 				accountService,

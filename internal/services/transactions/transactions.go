@@ -266,6 +266,7 @@ type Repository interface {
 	HasExpectedRecurringOccurrenceRecords(context.Context, []int64) (bool, error)
 	SearchRecords(context.Context, RecordSearchOptions) (services.PaginatedList[JournalRecord], error)
 	TransactionsByRecordIDs(context.Context, []int64) ([]Transaction, error)
+	TransactionsByAccountID(context.Context, int64) ([]Transaction, error)
 	BulkCategorize(context.Context, []int64, int64) (int, error)
 	BulkUpdateTags(context.Context, []int64, []int64, []int64) (int, error)
 	BulkReassignAccount(context.Context, []int64, int64) (int, error)
@@ -339,6 +340,29 @@ func NewService(
 		refs:                 refs,
 		currencyUsageChanged: currencyUsageChanged,
 	}
+}
+
+// ValidateAccountTypeChange verifies that every active transaction referencing
+// accountID remains classification-valid after its records use newType.
+func (s *Service) ValidateAccountTypeChange(ctx context.Context, accountID int64, newType accounts.AccountType) error {
+	affected, err := s.repo.TransactionsByAccountID(ctx, accountID)
+	if err != nil {
+		return err
+	}
+
+	for transactionIndex := range affected {
+		for recordIndex := range affected[transactionIndex].Records {
+			record := &affected[transactionIndex].Records[recordIndex]
+			if record.AccountID == accountID {
+				record.AccountType = newType
+			}
+		}
+		if err := ValidateTransactionClassification(affected[transactionIndex]); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type semanticDictionaries struct {
