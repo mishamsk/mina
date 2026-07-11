@@ -1180,7 +1180,7 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
 test("transaction entity chips add filters in place", async ({
   page,
 }, testInfo) => {
-  await page.setViewportSize({ width: 1440, height: 760 });
+  await page.setViewportSize({ width: 1600, height: 760 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const accounts = await listFixtures<AccountFixture>(
@@ -1243,6 +1243,27 @@ test("transaction entity chips add filters in place", async ({
   await expect(
     page.getByRole("row").filter({ hasText: alternateMemo }).first(),
   ).toBeVisible();
+
+  const memberChip = targetRow.getByRole("button", {
+    name: `Filter by ${member.name}`,
+  });
+  await expect(memberChip).toBeVisible();
+  await expect(memberChip).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(memberChip).toHaveCSS("color", "rgb(15, 13, 22)");
+  await memberChip.click();
+  await expectTransactionFilterUrl(page, {
+    members: [member.member_id],
+    pageSize: "50",
+    q: searchQuery,
+  });
+  await expect(page.getByText(`Member ${member.name}`)).toBeVisible();
+  await page
+    .getByRole("button", { name: `Remove Member ${member.name}` })
+    .click();
+  await expectTransactionFilterUrl(page, {
+    pageSize: "50",
+    q: searchQuery,
+  });
 
   await targetRow
     .getByRole("button", { name: `Filter by ${category.name}` })

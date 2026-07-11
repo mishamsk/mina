@@ -35,7 +35,7 @@ Every accent is a pair: an **ink form** (dark enough for text on white/band surf
 
 | Accent | Ink form | Bright form | Meaning |
 | --- | --- | --- | --- |
-| Yellow | `#7A5D00` | `#F7E17A` | Highlights, avatar/initial tiles, adjustment class, warnings. |
+| Yellow | `#7A5D00` | `#F7E17A` | Highlights, adjustment class, warnings. |
 | Mint | `#0E7D52` | `#6FE3B8` | Money in: income amounts and class; success states. |
 | Teal | `#0A7A6E` | `#5BE0D2` | Refund class. |
 | Sky | `#1A56C4` | `#92C7F5` | Transfer class, table header band, informational fills. |
@@ -85,7 +85,7 @@ Rules:
 
 ## Shape & Depth
 
-- Radius `0` everywhere. Checkboxes, inputs, cards, dialogs, chips, avatars: all square. Member and merchant initial tiles are square yellow-bright tiles with ink initials.
+- Radius `0` everywhere. Checkboxes, inputs, cards, dialogs, chips, avatars: all square. Member and merchant initial tiles are square neutral entity-chip tiles — white fill, ink outline, ink initials; yellow stays reserved for its semantic uses.
 - Ink outlines: 2px `--border-ink` on landmark components (cards, panels, dialogs, buttons, inputs, the entry panel); 1–2px on in-table chips.
 - Hard shadows, never blurred: `--shadow-pixel: 4px 4px 0 var(--border-ink)` on raised landmarks (cards, dialogs, panels, primary buttons); `--shadow-chip: 2px 2px 0 var(--border-ink)` on chips and small controls — including in-table markers.
 - Press feedback: active buttons translate by their shadow offset and drop the shadow — the control physically presses in. Signature interaction, unchanged.

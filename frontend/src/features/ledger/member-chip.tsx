@@ -8,7 +8,7 @@ interface MemberChipProps {
 
 export const MemberChip = ({ name, onActivate }: MemberChipProps) => {
   const className =
-    "font-heading text-foreground inline-grid size-6 place-items-center border border-[var(--border-ink)] bg-[var(--color-class-adjustment-bright)] text-[11px] font-semibold shadow-[var(--shadow-chip)]";
+    "font-heading text-foreground bg-card inline-grid size-6 place-items-center border border-[var(--border-ink)] text-[11px] font-semibold shadow-[var(--shadow-chip)]";
   const content = <span>{name.slice(0, 2)}</span>;
 
   if (onActivate) {
@@ -18,7 +18,7 @@ export const MemberChip = ({ name, onActivate }: MemberChipProps) => {
           type="button"
           className={cn(
             className,
-            "hover:bg-[color-mix(in_srgb,var(--color-class-adjustment-bright),var(--table-header)_35%)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+            "hover:bg-[color-mix(in_srgb,var(--card),var(--table-header)_35%)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
           )}
           aria-label={`Filter by ${name}`}
           onClick={(event) => {
