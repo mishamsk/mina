@@ -1208,13 +1208,15 @@ type DatabaseBackupStatusResponseState string
 
 // DemoSeedResponse defines model for DemoSeedResponse.
 type DemoSeedResponse struct {
-	Accounts           int `json:"accounts"`
-	Categories         int `json:"categories"`
-	CreditLimitEntries int `json:"credit_limit_entries"`
-	ExchangeRates      int `json:"exchange_rates"`
-	Members            int `json:"members"`
-	Tags               int `json:"tags"`
-	Transactions       int `json:"transactions"`
+	Accounts             int `json:"accounts"`
+	Categories           int `json:"categories"`
+	CreditLimitEntries   int `json:"credit_limit_entries"`
+	ExchangeRates        int `json:"exchange_rates"`
+	Members              int `json:"members"`
+	RecurringDefinitions int `json:"recurring_definitions"`
+	RecurringOccurrences int `json:"recurring_occurrences"`
+	Tags                 int `json:"tags"`
+	Transactions         int `json:"transactions"`
 }
 
 // DisplayAmount defines model for DisplayAmount.

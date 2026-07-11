@@ -2611,6 +2611,8 @@ components:
         - exchange_rates
         - credit_limit_entries
         - transactions
+        - recurring_definitions
+        - recurring_occurrences
       properties:
         members:
           type: integer
@@ -2631,6 +2633,12 @@ components:
           type: integer
           minimum: 0
         transactions:
+          type: integer
+          minimum: 0
+        recurring_definitions:
+          type: integer
+          minimum: 0
+        recurring_occurrences:
           type: integer
           minimum: 0
     Account:

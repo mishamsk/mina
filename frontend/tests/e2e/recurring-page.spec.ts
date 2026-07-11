@@ -17,6 +17,7 @@ interface RecurringDefinitionFixture {
 
 interface RecurringOccurrenceFixture {
   readonly generated_transaction_id: number | null;
+  readonly recurring_definition_fqn: string;
   readonly recurring_occurrence_id: number;
   readonly recurring_definition_id: number;
   readonly scheduled_date: string;
@@ -318,6 +319,35 @@ const expectFixtureRows = async (
 
   return { dueRow, overdueRow };
 };
+
+test("recurring page renders seeded demo occurrences", async ({ page }) => {
+  const response = await page.request.get(
+    "/api/recurring-occurrences?limit=500&offset=0&sort=scheduled_date&sort_dir=asc&status=expected",
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  const body = (await response.json()) as {
+    readonly recurring_occurrences: readonly RecurringOccurrenceFixture[];
+  };
+  const mortgageOccurrence = body.recurring_occurrences.find(
+    (occurrence) =>
+      occurrence.recurring_definition_fqn === "Household:Mortgage" &&
+      occurrence.status === "expected",
+  );
+  expect(
+    mortgageOccurrence,
+    "Expected seeded Mortgage occurrence was not materialized.",
+  ).toBeDefined();
+
+  await page.goto("/recurring");
+
+  const rows = page.getByTestId("recurring-review-row");
+  const mortgageRow = rows.and(
+    recurringOccurrenceRow(page, mortgageOccurrence!),
+  );
+  await expect(mortgageRow).toHaveCount(1);
+  await expect(mortgageRow).toContainText("Mortgage");
+  await expect(mortgageRow.getByRole("img", { name: "Overdue" })).toBeVisible();
+});
 
 test("recurring page reviews expected occurrences", async ({
   page,

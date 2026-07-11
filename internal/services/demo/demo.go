@@ -2,14 +2,17 @@ package demo
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/creditlimits"
 	"github.com/mishamsk/mina/internal/services/exchangerates"
 	"github.com/mishamsk/mina/internal/services/members"
+	"github.com/mishamsk/mina/internal/services/recurring"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/values"
@@ -18,6 +21,12 @@ import (
 // Dependencies are root demo seeding service dependencies.
 type Dependencies struct {
 	Atomic func(context.Context, func(Services) error) error
+	Clock  Clock
+}
+
+// Clock provides the runtime-owned current time for occurrence materialization.
+type Clock interface {
+	Now() time.Time
 }
 
 // Services is the transaction-scoped service set demo seeding uses.
@@ -28,18 +37,21 @@ type Services struct {
 	Members       *members.Service
 	CreditLimits  *creditlimits.Service
 	ExchangeRates *exchangerates.Service
+	Recurring     *recurring.Service
 	Transactions  *transactions.Service
 }
 
 // Summary reports seeded demo data counts.
 type Summary struct {
-	Members            int
-	Accounts           int
-	Categories         int
-	Tags               int
-	ExchangeRates      int
-	CreditLimitEntries int
-	Transactions       int
+	Members              int
+	Accounts             int
+	Categories           int
+	Tags                 int
+	ExchangeRates        int
+	CreditLimitEntries   int
+	Transactions         int
+	RecurringDefinitions int
+	RecurringOccurrences int
 }
 
 // Service owns deterministic demo seeding use cases.
@@ -58,6 +70,7 @@ func (s *Service) Seed(ctx context.Context) (Summary, error) {
 	err := s.deps.Atomic(ctx, func(services Services) error {
 		builder := seedBuilder{
 			services: services,
+			clock:    s.deps.Clock,
 			members:  map[string]int64{},
 			accounts: map[string]int64{},
 			cats:     map[string]int64{},
@@ -79,6 +92,7 @@ func (s *Service) Seed(ctx context.Context) (Summary, error) {
 
 type seedBuilder struct {
 	services Services
+	clock    Clock
 	summary  Summary
 	members  map[string]int64
 	accounts map[string]int64
@@ -103,6 +117,9 @@ func (b *seedBuilder) seed(ctx context.Context) error {
 		return err
 	}
 	if err := b.seedTransactions(ctx); err != nil {
+		return err
+	}
+	if err := b.seedRecurringDefinitions(ctx); err != nil {
 		return err
 	}
 
@@ -295,7 +312,7 @@ func (b *seedBuilder) seedTransactions(ctx context.Context) error {
 	if err := b.seedIncome(ctx); err != nil {
 		return err
 	}
-	if err := b.seedRecurring(ctx); err != nil {
+	if err := b.seedRecurringHistory(ctx); err != nil {
 		return err
 	}
 	if err := b.seedDailySpend(ctx); err != nil {
@@ -335,7 +352,7 @@ func (b *seedBuilder) seedIncome(ctx context.Context) error {
 	return nil
 }
 
-func (b *seedBuilder) seedRecurring(ctx context.Context) error {
+func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 	for _, date := range []string{"2026-04-05", "2026-05-05"} {
 		if err := b.tx(ctx, date,
 			b.rec("checking:Chase:Joint", "", "USD", -300000, -300000, "Housing:Mortgage:Principal", []string{"Shared:Family"}, "Mortgage payment", date),
@@ -386,6 +403,66 @@ func (b *seedBuilder) seedRecurring(ctx context.Context) error {
 			return err
 		}
 	}
+
+	return nil
+}
+
+func (b *seedBuilder) seedRecurringDefinitions(ctx context.Context) error {
+	definitions := []recurring.WriteInput{
+		{
+			FQN:          "Household:Mortgage",
+			ScheduleRule: intervalScheduleRule(1, "MONTH"),
+			AnchorDate:   mustCivilDate("2026-06-05"),
+			Records: []recurring.RecordInput{
+				b.recurringRecord("checking:Chase:Joint", "USD", -300000, "Housing:Mortgage:Principal", []string{"Shared:Family"}, "Mortgage payment"),
+				b.recurringRecord("mortgage:Rocket:Home", "USD", 220000, "Housing:Mortgage:Principal", []string{"Shared:Family"}, "Mortgage principal"),
+				b.recurringRecord("merchant:MortgageEscrow", "USD", 80000, "Housing:Mortgage:Interest", []string{"Shared:Family"}, "Mortgage interest and escrow"),
+			},
+		},
+		{
+			FQN:          "Subscriptions:Netflix",
+			ScheduleRule: intervalScheduleRule(1, "MONTH"),
+			AnchorDate:   mustCivilDate("2026-06-10"),
+			Records: []recurring.RecordInput{
+				b.recurringRecord("checking:Chase:Joint", "USD", -2199, "Entertainment:Streaming", []string{"Shared:Family"}, "Streaming subscription"),
+				b.recurringRecord("merchant:Netflix", "USD", 2199, "Entertainment:Streaming", []string{"Shared:Family"}, "Streaming subscription"),
+			},
+		},
+		{
+			FQN:          "Savings:WeeklyTransfer",
+			ScheduleRule: intervalScheduleRule(1, "WEEK"),
+			AnchorDate:   mustCivilDate("2026-06-01"),
+			Records: []recurring.RecordInput{
+				b.recurringRecord("checking:Chase:Joint", "USD", -25000, "Savings", []string{"Shared:Family"}, "Weekly savings transfer"),
+				b.recurringRecord("savings:Ally:Emergency", "USD", 25000, "Savings", []string{"Shared:Family"}, "Weekly savings transfer"),
+			},
+		},
+		{
+			FQN:          "Debt:CreditCardPayment",
+			ScheduleRule: intervalScheduleRule(1, "MONTH"),
+			AnchorDate:   mustCivilDate("2026-06-12"),
+			Records: []recurring.RecordInput{
+				b.recurringRecord("checking:Chase:Joint", "USD", -172000, "Debt:CreditCardPayment", []string{"CardPayment"}, "Credit card payment"),
+				b.recurringRecord("credit_card:Chase:Sapphire", "USD", 172000, "Debt:CreditCardPayment", []string{"CardPayment"}, "Credit card payment"),
+			},
+		},
+	}
+	today := values.LocalCivilDateFromTime(b.clock.Now())
+	for _, input := range definitions {
+		if _, err := b.services.Recurring.Create(ctx, input); err != nil {
+			return fmt.Errorf("create recurring definition %q: %w", input.FQN, err)
+		}
+		b.summary.RecurringDefinitions++
+	}
+
+	occurrences, err := b.services.Recurring.ListOccurrences(ctx, recurring.OccurrenceListOptions{
+		ListOptions: services.ListOptions{IncludeTotalCount: true},
+		Today:       today,
+	})
+	if err != nil {
+		return fmt.Errorf("materialize recurring occurrences: %w", err)
+	}
+	b.summary.RecurringOccurrences = int(occurrences.TotalCount)
 
 	return nil
 }
@@ -678,6 +755,29 @@ func (b *seedBuilder) rec(
 		ReconciliationStatus: transactions.ReconciliationStatusReconciled,
 		Source:               transactions.SourceManual,
 	}
+}
+
+func (b *seedBuilder) recurringRecord(accountFQN, currency string, amountCents int, categoryFQN string, tagFQNs []string, memo string) recurring.RecordInput {
+	accountID := b.accounts[accountFQN]
+	categoryID := b.cats[categoryFQN]
+	tagIDs := make([]int64, 0, len(tagFQNs))
+	for _, fqn := range tagFQNs {
+		tagIDs = append(tagIDs, b.tags[fqn])
+	}
+	amount := money(amountCents)
+
+	return recurring.RecordInput{
+		AccountID:  &accountID,
+		Currency:   strPtr(currency),
+		Amount:     &amount,
+		CategoryID: &categoryID,
+		TagIDs:     recurring.OptionalInt64Slice{Specified: true, Values: tagIDs},
+		Memo:       recurring.OptionalString{Specified: true, Value: strPtr(memo)},
+	}
+}
+
+func intervalScheduleRule(every int, unit string) json.RawMessage {
+	return json.RawMessage(fmt.Sprintf(`{"version":1,"kind":"interval","every":%d,"unit":%q}`, every, unit))
 }
 
 func decimalPtr(value values.Decimal) *values.Decimal {

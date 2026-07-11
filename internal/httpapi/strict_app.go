@@ -13,12 +13,14 @@ func (s *strictServer) SeedDemo(ctx context.Context, _ openapi.SeedDemoRequestOb
 	}
 
 	return openapi.SeedDemo200JSONResponse{
-		Accounts:           summary.Accounts,
-		Categories:         summary.Categories,
-		CreditLimitEntries: summary.CreditLimitEntries,
-		ExchangeRates:      summary.ExchangeRates,
-		Members:            summary.Members,
-		Tags:               summary.Tags,
-		Transactions:       summary.Transactions,
+		Accounts:             summary.Accounts,
+		Categories:           summary.Categories,
+		CreditLimitEntries:   summary.CreditLimitEntries,
+		ExchangeRates:        summary.ExchangeRates,
+		Members:              summary.Members,
+		RecurringDefinitions: summary.RecurringDefinitions,
+		RecurringOccurrences: summary.RecurringOccurrences,
+		Tags:                 summary.Tags,
+		Transactions:         summary.Transactions,
 	}, nil
 }

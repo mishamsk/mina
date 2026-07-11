@@ -29,7 +29,7 @@
   - Runtime runs non-blocking startup and recurring operations in `serve`, with public operation status and manual trigger APIs.
   - Exchange-rate startup loading uses a Frankfurter USD NDJSON cache file by default; scheduled and manual REST-triggered loading use targeted Frankfurter API requests.
   - Database backups copy the selected file-backed DuckDB accounting database to configured local backup files; empty backup config creates no automatic runs.
-  - `mina serve --demo` seeds deterministic April-May 2026 demo data for new in-memory state or new file-backed schemas.
+  - `mina serve --demo` seeds deterministic demo transactions, June-2026 recurring definitions, and materialized expected occurrences for new in-memory state or new file-backed schemas.
   - File-backed startup demo seeding refuses when the selected accounting schema already exists.
   - File-backed startup runs configurable database validation (`none`, `shallow`, or `full`; default `shallow`) after migrations.
   - CLI-only `mina db validate` runs offline integrity checks with schema, referential, SQL invariant, and transaction-classification layers.

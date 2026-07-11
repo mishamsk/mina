@@ -12,6 +12,8 @@ export type DemoSeedResponse = {
     exchange_rates: number;
     credit_limit_entries: number;
     transactions: number;
+    recurring_definitions: number;
+    recurring_occurrences: number;
 };
 
 export type Account = {

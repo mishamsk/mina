@@ -450,12 +450,14 @@ func demoDependencies(s appServices) demo.Services {
 		Members:       s.Members,
 		CreditLimits:  s.CreditLimits,
 		ExchangeRates: s.ExchangeRates,
+		Recurring:     s.Recurring,
 		Transactions:  s.Transactions,
 	}
 }
 
 func newDemoService(appDB *store.AppDB, cfg appconfig.Config, opts Options, mainServices appServices) *demo.Service {
 	return demo.NewService(demo.Dependencies{
+		Clock: opts.clock(),
 		Atomic: func(ctx context.Context, fn func(demo.Services) error) error {
 			if err := appDB.WithTx(ctx, nil, func(txAppDB *store.AppDB) error {
 				txServices, err := newAccountingServices(txAppDB, cfg, opts, nil, mainServices.ReferenceSerializer)

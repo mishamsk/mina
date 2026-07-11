@@ -3,14 +3,17 @@ package runtime_test
 import (
 	"context"
 	"net/http"
+	"sort"
 	"testing"
+	"time"
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 func TestSeedDemoThroughREST(t *testing.T) {
-	client := newSharedClient(t, apptest.WithAccountingSchema("app_admin_demo_seed"))
+	clock := apptest.NewFakeClock(time.Date(2026, 7, 15, 12, 0, 0, 0, time.Local))
+	client := newSharedClient(t, apptest.WithAccountingSchema("app_admin_demo_seed"), apptest.WithClock(clock))
 
 	seeded, err := client.REST().SeedDemoWithResponse(context.Background())
 	if err != nil {
@@ -23,6 +26,7 @@ func TestSeedDemoThroughREST(t *testing.T) {
 		t.Fatalf("seeded transactions = %d, want at least 100", seeded.JSON200.Transactions)
 	}
 	assertSeededRESTCounts(t, client, *seeded.JSON200)
+	assertSeededRecurringDemoData(t, client, *seeded.JSON200, clock.Now())
 	assertSeededFeaturedBalanceAccounts(t, client)
 }
 
@@ -219,6 +223,179 @@ func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpcli
 		t.Fatalf("listed transactions = %d, want %d", len(transactions.JSON200.Transactions), seeded.Transactions)
 	}
 	assertDemoSemanticCoverage(t, categories.JSON200.Categories, transactions.JSON200.Transactions)
+}
+
+func assertSeededRecurringDemoData(t *testing.T, client *apptest.Client, seeded httpclient.DemoSeedResponse, today time.Time) {
+	t.Helper()
+	ctx := context.Background()
+
+	definitions, err := client.REST().ListRecurringDefinitionsWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list seeded recurring definitions request: %v", err)
+	}
+	if definitions.StatusCode() != http.StatusOK {
+		t.Fatalf("list seeded recurring definitions status = %d, want %d; body %s", definitions.StatusCode(), http.StatusOK, definitions.Body)
+	}
+	if len(definitions.JSON200.RecurringDefinitions) != seeded.RecurringDefinitions {
+		t.Fatalf("listed recurring definitions = %d, want %d", len(definitions.JSON200.RecurringDefinitions), seeded.RecurringDefinitions)
+	}
+
+	expectedStatus := []httpclient.PostingStatus{httpclient.PostingStatusExpected}
+	expectedTransactions, err := client.REST().ListTransactionsWithResponse(ctx, &httpclient.ListTransactionsParams{PostingStatus: &expectedStatus})
+	if err != nil {
+		t.Fatalf("list expected seeded transactions request: %v", err)
+	}
+	if expectedTransactions.StatusCode() != http.StatusOK {
+		t.Fatalf("list expected seeded transactions status = %d, want %d; body %s", expectedTransactions.StatusCode(), http.StatusOK, expectedTransactions.Body)
+	}
+	if len(expectedTransactions.JSON200.Transactions) != seeded.RecurringOccurrences {
+		t.Fatalf("listed expected seeded transactions = %d, want %d", len(expectedTransactions.JSON200.Transactions), seeded.RecurringOccurrences)
+	}
+	for _, transaction := range expectedTransactions.JSON200.Transactions {
+		if transaction.RecurringOccurrenceId == nil {
+			t.Fatalf("expected seeded transaction %d missing recurring occurrence", transaction.TransactionId)
+		}
+		for _, record := range transaction.Records {
+			if record.PostingStatus != httpclient.PostingStatusExpected || record.Source != httpclient.RecurringTemplate {
+				t.Fatalf("expected seeded transaction record = %+v, want expected recurring-template record", record)
+			}
+		}
+	}
+
+	occurrences, err := client.REST().ListRecurringOccurrencesWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list seeded recurring occurrences request: %v", err)
+	}
+	if occurrences.StatusCode() != http.StatusOK {
+		t.Fatalf("list seeded recurring occurrences status = %d, want %d; body %s", occurrences.StatusCode(), http.StatusOK, occurrences.Body)
+	}
+	if len(occurrences.JSON200.RecurringOccurrences) != seeded.RecurringOccurrences {
+		t.Fatalf("listed recurring occurrences = %d, want %d", len(occurrences.JSON200.RecurringOccurrences), seeded.RecurringOccurrences)
+	}
+
+	assertSeededRecurringDemoSeries(t, definitions.JSON200.RecurringDefinitions, occurrences.JSON200.RecurringOccurrences)
+
+	hasUpcomingSchedule := false
+	for _, definition := range definitions.JSON200.RecurringDefinitions {
+		if definition.NextDueDate != nil && definition.NextDueDate.After(today) {
+			hasUpcomingSchedule = true
+			break
+		}
+	}
+	if !hasUpcomingSchedule {
+		t.Fatalf("seeded recurring definitions = %+v, want an upcoming schedule", definitions.JSON200.RecurringDefinitions)
+	}
+}
+
+type expectedRecurringDemoSeries struct {
+	fqn             string
+	anchorDate      string
+	every           int
+	unit            string
+	nextDueDate     string
+	occurrenceDates []string
+}
+
+func assertSeededRecurringDemoSeries(t *testing.T, definitions []httpclient.RecurringDefinition, occurrences []httpclient.RecurringOccurrence) {
+	t.Helper()
+
+	want := []expectedRecurringDemoSeries{
+		{
+			fqn:             "Household:Mortgage",
+			anchorDate:      "2026-06-05",
+			every:           1,
+			unit:            "MONTH",
+			nextDueDate:     "2026-08-05",
+			occurrenceDates: []string{"2026-06-05", "2026-07-05"},
+		},
+		{
+			fqn:             "Subscriptions:Netflix",
+			anchorDate:      "2026-06-10",
+			every:           1,
+			unit:            "MONTH",
+			nextDueDate:     "2026-08-10",
+			occurrenceDates: []string{"2026-06-10", "2026-07-10"},
+		},
+		{
+			fqn:             "Savings:WeeklyTransfer",
+			anchorDate:      "2026-06-01",
+			every:           1,
+			unit:            "WEEK",
+			nextDueDate:     "2026-07-20",
+			occurrenceDates: []string{"2026-06-01", "2026-06-08", "2026-06-15", "2026-06-22", "2026-06-29", "2026-07-06", "2026-07-13"},
+		},
+		{
+			fqn:             "Debt:CreditCardPayment",
+			anchorDate:      "2026-06-12",
+			every:           1,
+			unit:            "MONTH",
+			nextDueDate:     "2026-08-12",
+			occurrenceDates: []string{"2026-06-12", "2026-07-12"},
+		},
+	}
+
+	definitionsByFQN := map[string]httpclient.RecurringDefinition{}
+	for _, definition := range definitions {
+		definitionsByFQN[definition.Fqn] = definition
+	}
+	occurrenceDatesByDefinitionFQN := map[string][]string{}
+	for _, occurrence := range occurrences {
+		if occurrence.Status != httpclient.Expected {
+			t.Fatalf("seeded recurring occurrence = %+v, want EXPECTED status", occurrence)
+		}
+		if occurrence.GeneratedTransactionId == nil {
+			t.Fatalf("seeded recurring occurrence = %+v, want generated transaction", occurrence)
+		}
+		occurrenceDatesByDefinitionFQN[occurrence.RecurringDefinitionFqn] = append(
+			occurrenceDatesByDefinitionFQN[occurrence.RecurringDefinitionFqn],
+			occurrence.ScheduledDate.Format("2006-01-02"),
+		)
+	}
+
+	for _, expected := range want {
+		definition, ok := definitionsByFQN[expected.fqn]
+		if !ok {
+			t.Fatalf("seeded recurring definitions missing %q; definitions = %+v", expected.fqn, definitions)
+		}
+		sort.Strings(occurrenceDatesByDefinitionFQN[expected.fqn])
+		if got := definition.AnchorDate.Format("2006-01-02"); got != expected.anchorDate {
+			t.Fatalf("%s anchor_date = %s, want %s", expected.fqn, got, expected.anchorDate)
+		}
+		if definition.ScheduleClass != httpclient.Interval {
+			t.Fatalf("%s schedule_class = %s, want %s", expected.fqn, definition.ScheduleClass, httpclient.Interval)
+		}
+		assertRecurringIntervalRule(t, expected.fqn, definition.ScheduleRule, expected.every, expected.unit)
+		assertDatePtr(t, definition.NextDueDate, expected.nextDueDate)
+		assertStringSlicesEqual(t, expected.fqn+" occurrence dates", occurrenceDatesByDefinitionFQN[expected.fqn], expected.occurrenceDates)
+	}
+}
+
+func assertRecurringIntervalRule(t *testing.T, fqn string, rule httpclient.RecurringScheduleRule, every int, unit string) {
+	t.Helper()
+	if got := rule["version"]; got != float64(1) {
+		t.Fatalf("%s schedule_rule.version = %v, want 1", fqn, got)
+	}
+	if got := rule["kind"]; got != "interval" {
+		t.Fatalf("%s schedule_rule.kind = %v, want interval", fqn, got)
+	}
+	if got := rule["every"]; got != float64(every) {
+		t.Fatalf("%s schedule_rule.every = %v, want %d", fqn, got, every)
+	}
+	if got := rule["unit"]; got != unit {
+		t.Fatalf("%s schedule_rule.unit = %v, want %s", fqn, got, unit)
+	}
+}
+
+func assertStringSlicesEqual(t *testing.T, label string, got []string, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%s = %+v, want %+v", label, got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("%s = %+v, want %+v", label, got, want)
+		}
+	}
 }
 
 func assertSeededFeaturedBalanceAccounts(t *testing.T, client *apptest.Client) {

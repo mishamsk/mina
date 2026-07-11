@@ -7,7 +7,7 @@
 ## Implicit Contracts
 
 - Demo seeding does not call store repositories or SQL directly.
-- Demo data is deterministic and covers April-May 2026.
+- Demo data includes deterministic April-May 2026 history plus June-2026-anchored recurring definitions; expected occurrences materialize through the runtime clock.
 - Demo seeding assumes callers provide a new empty accounting schema.
 - Demo seeding expects runtime to provide one atomic persistence boundary around the full seed.
 
