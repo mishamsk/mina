@@ -56,7 +56,7 @@ There are no separate "transaction mode" and "record mode" screens; context dete
 
 Structure and navigation only; how any of it looks is owned by the theme specification.
 
-- Fixed left sidebar navigation, collapsible to an icon rail. Sections: Overview, Transactions, Accounts, then a Reference group (Categories, Tags, Members, Templates), then Status/Settings pinned at the bottom.
+- Fixed left sidebar navigation, collapsible to an icon rail. Sections: Overview, Transactions, Recurring, Accounts, then a Reference group (Categories, Tags, Members, Templates), then Status/Settings pinned at the bottom.
 - A compact balance strip of featured accounts is visible from every screen (in or adjacent to the sidebar). Featured is a backend account metadata flag in portable state; strip entries link to account pages.
 - A prominent "New transaction" action is available from every screen, alongside the command palette.
 - Content area is fluid; data tables may use the full content width.
@@ -262,9 +262,19 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Status: backend health, database location/schema, background operations (exchange-rate loading, backups) with recent runs and manual trigger buttons.
 - Settings (UI preferences, persisted per frontend-architecture): table density, default landing screen, theme selection (when themes ship).
 
-### 8. Future screens — guidance only
+### 8. Recurring review — Phase 2
 
-- Recurring transactions (Phase 2, future screen): scheduling, review, and generated-transaction rules follow `docs/recurring-transactions-semantics.md`; screen behavior remains out of scope here until a recurring UI screen is planned.
+- Purpose: manual review of EXPECTED recurring occurrences — the only UI path to confirm or dismiss them; expected occurrences stay out of default transaction lists, registers, and aggregates.
+- A routed `/recurring` page in the primary sidebar section beneath Transactions. Listing follows the occurrence API's lazy catch-up materialization per `docs/recurring-transactions-semantics.md`; opening the page always reflects occurrences through today.
+- Content: one full-height table of EXPECTED occurrences sorted by scheduled date ascending; columns: scheduled date, definition name (hierarchical path rendering), transaction summary (per the transaction-summary-line rules, derived from the definition shape), amount (standard amount rules), and the trailing actions column.
+- Overdue occurrences (scheduled date before today) carry a warning-treatment marker per the theme; ascending sort naturally surfaces them first.
+- Row actions per the affordance-class rules: Confirm is a button-class action that materializes the transaction immediately with the standard toast; Dismiss is a button-class action behind the standard named confirmation dialog. Both surface API errors per the standard feedback rules.
+- Empty state: a quiet "no expected occurrences" presentation.
+- Transactions filter bar: the posting-status filter dimension includes Expected; expected lines render with the existing expected label/icon when explicitly filtered in and remain excluded from defaults otherwise.
+- Definition management (create/edit/pause/defer/cancel) is not part of this screen and remains future-screen scope.
+
+### 9. Future screens — guidance only
+
 - Reports (Phase 3): saved searches become named views on the Transactions screen; summary reports follow this document's structural language.
 - Budgets (Phase 4): category-tree budget editor plus month status; reuses category path rendering and amount rules.
 - Import & reconciliation (Phase 5): an inbox pattern — imported records pending match/confirm; reconciliation indicators specified above become active.
