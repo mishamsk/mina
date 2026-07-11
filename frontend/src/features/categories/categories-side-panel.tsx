@@ -8,12 +8,12 @@ import {
 } from "react";
 
 import {
+  apiErrorMessage,
   type Category,
   type CategoryEconomicIntent,
   type CreateCategoryRequest,
   createLedgerCategory,
   deleteLedgerCategoryById,
-  isNetworkFailure,
   type UpdateCategoryRequest,
   updateLedgerCategory,
 } from "@/api";
@@ -83,24 +83,6 @@ const formFromCategory = (category: Category | undefined): CategoryFormState =>
         isHidden: category.is_hidden,
       }
     : blankForm();
-
-const apiErrorMessage = (error: unknown, fallback: string): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return fallback;
-};
 
 const fieldErrorsFromAPI = (message: string): CategoryFormErrors => {
   const lower = message.toLowerCase();

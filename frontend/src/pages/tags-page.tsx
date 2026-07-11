@@ -2,7 +2,7 @@ import { Plus } from "pixelarticons/react";
 import { useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
-import { isNetworkFailure, restructureLedgerTags, type Tag } from "@/api";
+import { apiErrorMessage, restructureLedgerTags, type Tag } from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip } from "@/components/tooltip";
@@ -26,24 +26,6 @@ interface Notice {
   readonly message: string;
   readonly tone: "error" | "success";
 }
-
-const apiErrorMessage = (error: unknown, fallback: string): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return fallback;
-};
 
 const movedTagMessage = (count: number): string =>
   `Moved ${count} ${count === 1 ? "tag" : "tags"}.`;

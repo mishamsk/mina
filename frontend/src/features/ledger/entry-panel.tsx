@@ -11,6 +11,7 @@ import {
 
 import {
   type Account,
+  apiErrorMessage,
   type Category,
   createIncome,
   type CreateIncomeTransactionRequest,
@@ -22,7 +23,6 @@ import {
   type CreateTransactionRequest,
   createTransfer,
   type CreateTransferTransactionRequest,
-  isNetworkFailure,
   type JournalRecord,
   type Member,
   replaceLedgerTransaction,
@@ -791,24 +791,6 @@ const categoryEconomicIntents = new Set<Category["economic_intent"]>([
   "refund",
   "transfer",
 ]);
-
-const apiErrorMessage = (error: unknown): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return "Transaction could not be saved.";
-};
 
 const fieldErrorsFromAPI = (message: string): FieldErrors => {
   const pairs: readonly [FieldName, readonly string[]][] = [
@@ -2056,7 +2038,10 @@ export const EntryPanel = ({
           return;
         }
 
-        const message = apiErrorMessage(result.error);
+        const message = apiErrorMessage(
+          result.error,
+          "Transaction could not be saved.",
+        );
         if (activeTab === "advanced") {
           const apiFieldErrors = advancedFieldErrorsFromAPI(
             message,
@@ -2136,7 +2121,10 @@ export const EntryPanel = ({
           return;
         }
 
-        const message = apiErrorMessage(result.error);
+        const message = apiErrorMessage(
+          result.error,
+          "Transaction could not be saved.",
+        );
         const apiFieldErrors = advancedFieldErrorsFromAPI(
           message,
           draft.advanced,
@@ -2237,7 +2225,10 @@ export const EntryPanel = ({
       return;
     }
 
-    const message = apiErrorMessage(result.error);
+    const message = apiErrorMessage(
+      result.error,
+      "Transaction could not be saved.",
+    );
     const apiFieldErrors = fieldErrorsFromAPI(message);
     setFieldErrors(apiFieldErrors);
     setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);

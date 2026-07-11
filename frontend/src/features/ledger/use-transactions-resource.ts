@@ -1,11 +1,11 @@
 import { useEffect, useMemo } from "react";
 
 import {
+  apiErrorMessage,
   type CategoryEconomicIntent,
   fetchCategoryPickerCategories,
   fetchLedgerLookups,
   fetchTransactionPage,
-  isNetworkFailure,
   type Transaction,
   type TransactionPageParams,
 } from "@/api";
@@ -36,24 +36,6 @@ import {
   useLedgerLookupsView,
   useTransactionPageView,
 } from "@/store";
-
-const apiErrorMessage = (error: unknown): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return "The API request failed.";
-};
 
 interface LoadedTransactionPage {
   readonly offset: number;

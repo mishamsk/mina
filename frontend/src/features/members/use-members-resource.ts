@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { fetchMembersPage, isNetworkFailure } from "@/api";
+import { apiErrorMessage, fetchMembersPage } from "@/api";
 import { refreshLedgerLookups } from "@/features/ledger";
 import {
   clearMembersPageLoading,
@@ -11,24 +11,6 @@ import {
   setMembersPageLoading,
   useMembersPageView,
 } from "@/store";
-
-const apiErrorMessage = (error: unknown): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return "The API request failed.";
-};
 
 let membersPageLoadGeneration = 0;
 const membersPageRefreshRetryDelayMs = 200;

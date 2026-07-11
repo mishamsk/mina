@@ -2,13 +2,13 @@ import { useEffect, useMemo } from "react";
 
 import {
   type AccountRecordsPageParams,
+  apiErrorMessage,
   fetchAccountHeader,
   fetchAccountRecordsPage,
   fetchGroupRecordsPage,
   fetchLedgerLookups,
   fetchTransactionById,
   type GroupRecordsPageParams,
-  isNetworkFailure,
   type JournalRecord,
   type Transaction,
 } from "@/api";
@@ -81,24 +81,6 @@ interface RegisterResourceOptions<Params> {
   readonly setRegisterPageError: (params: Params, errorMessage: string) => void;
   readonly setRegisterPageLoading: (params: Params) => void;
 }
-
-const apiErrorMessage = (error: unknown): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return "The API request failed.";
-};
 
 const loadLedgerLookups = async (
   shouldCommit: () => boolean = () => true,

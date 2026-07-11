@@ -3,8 +3,8 @@ import { useRef, useState } from "react";
 
 import type { GroupState, Tag } from "@/api";
 import {
+  apiErrorMessage,
   deleteLedgerTagById,
-  isNetworkFailure,
   setLedgerTagHiddenByPath,
   updateLedgerTag,
 } from "@/api";
@@ -39,24 +39,6 @@ interface TagsPageContentProps {
 type TagDeleteTarget = {
   readonly opener: HTMLElement;
   readonly tag: Tag;
-};
-
-const apiErrorMessage = (error: unknown, fallback: string): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return fallback;
 };
 
 export const TagsPageContent = ({

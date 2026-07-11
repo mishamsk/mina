@@ -10,6 +10,7 @@
 - Transaction-row lifted record values follow the uniformity rule in `docs/webui-design.md`; member display ignores unattributed records.
 - Transaction detail panel renders a transaction snapshot passed by the owning page.
 - Transaction detail panel owns the tombstone confirmation UI and delegates delete execution to the owning page.
+- `useTransactionBrowserPage` composes shared browser snapshots, date jumps, transaction detail, row tombstones, pagination, and notices; pages supply their URL filter semantics.
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.
 - Lookup-backed pickers use bounded REST lists and exclude hidden entities upstream.
 - Entry supports the spend, income, refund, and transfer shorthand endpoints.
@@ -23,7 +24,7 @@
 
 - Owns: ledger display atoms, transaction browser, transaction detail panel rendering, record tables, tombstone confirmation UI, bounded lookup pickers, and entry-panel UI mapping.
 - Does not own: REST endpoint generation, accounting validation, durable accounting persistence, route URL state, missing-detail fetches, transaction delete calls, or page snapshot refreshes.
-- Page routes own URL-addressed detail state and REST mutation refresh rules.
+- Page routes own URL filter semantics, URL-addressed detail state, page-specific detail actions, and REST mutation refresh rules beyond shared row tombstones.
 
 ## Testing Notes
 

@@ -8,10 +8,10 @@ import {
 } from "react";
 
 import {
+  apiErrorMessage,
   createLedgerTag,
   type CreateTagRequest,
   deleteLedgerTagById,
-  isNetworkFailure,
   type Tag,
   updateLedgerTag,
   type UpdateTagRequest,
@@ -53,24 +53,6 @@ const formFromTag = (tag: Tag | undefined): TagFormState =>
         isHidden: tag.is_hidden,
       }
     : blankForm();
-
-const apiErrorMessage = (error: unknown, fallback: string): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return fallback;
-};
 
 const fieldErrorsFromAPI = (message: string): TagFormErrors => {
   const lower = message.toLowerCase();

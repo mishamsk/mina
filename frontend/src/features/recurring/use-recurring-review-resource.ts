@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  apiErrorMessage,
   fetchRecurringReviewPage,
-  isNetworkFailure,
   type RecurringDefinition,
   type RecurringOccurrence,
   type Transaction,
@@ -28,24 +28,6 @@ interface RecurringReviewState {
   readonly loading: boolean;
   readonly snapshot: RecurringReviewSnapshot | undefined;
 }
-
-const apiErrorMessage = (error: unknown): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return "The API request failed.";
-};
 
 let recurringReviewLoadGeneration = 0;
 

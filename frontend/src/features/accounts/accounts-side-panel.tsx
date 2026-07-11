@@ -11,6 +11,7 @@ import {
 import {
   type Account,
   type AccountType,
+  apiErrorMessage,
   type CreateAccountRequest,
   createLedgerAccount,
   createLedgerCreditLimitHistory,
@@ -18,7 +19,6 @@ import {
   deleteLedgerAccountById,
   deleteLedgerCreditLimitHistoryById,
   fetchCreditLimitHistory,
-  isNetworkFailure,
   type UpdateAccountRequest,
   updateLedgerAccount,
 } from "@/api";
@@ -94,24 +94,6 @@ const formFromAccount = (account: Account | undefined): AccountFormState =>
         isHidden: account.is_hidden,
       }
     : blankForm();
-
-const apiErrorMessage = (error: unknown, fallback: string): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return fallback;
-};
 
 const fieldErrorsFromAPI = (message: string): AccountFormErrors => {
   const lower = message.toLowerCase();

@@ -1,0 +1,202 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SetURLSearchParams } from "react-router";
+
+import {
+  apiErrorMessage,
+  deleteTransactionById,
+  type Transaction,
+  type TransactionPageParams,
+} from "@/api";
+import type { TransactionFilters } from "@/models/transaction-filters";
+
+import {
+  defaultTransactionPage,
+  readTransactionPageFromSearchParams,
+  transactionOffsetFromPage,
+} from "./transaction-page-position";
+import { useTransactionDateJump } from "./use-transaction-date-jump";
+import { useTransactionDetail } from "./use-transaction-detail";
+import {
+  refreshTransactionPageAfterSave,
+  useTransactionsResource,
+} from "./use-transactions-resource";
+
+interface Notice {
+  readonly id: number;
+  readonly message: string;
+}
+
+interface UseTransactionBrowserPageOptions {
+  readonly filters: TransactionFilters;
+  readonly readFiltersFromSearchParams?: (
+    searchParams: URLSearchParams,
+  ) => TransactionFilters;
+  readonly searchParams: URLSearchParams;
+  readonly setSearchParams: SetURLSearchParams;
+}
+
+export const useTransactionBrowserPage = ({
+  filters,
+  readFiltersFromSearchParams,
+  searchParams,
+  setSearchParams,
+}: UseTransactionBrowserPageOptions) => {
+  const [notice, setNotice] = useState<Notice | undefined>();
+  const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
+  const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
+  const params: TransactionPageParams = useMemo(
+    () => ({
+      filters,
+      limit: pageSize,
+      offset: transactionOffsetFromPage(page, pageSize),
+    }),
+    [filters, page, pageSize],
+  );
+  const {
+    cancelDateJump,
+    dateJumpLoading,
+    dateJumpValue,
+    jumpToAdjacentDate,
+    jumpToDate,
+    setDateJumpValue,
+  } = useTransactionDateJump({
+    page,
+    pageSize,
+    params,
+    readFiltersFromSearchParams,
+    setSearchParams,
+  });
+  const { lookups, page: pageResource } = useTransactionsResource(params);
+  const displayedSnapshot = pageResource.displayedSnapshot;
+  const transactions = displayedSnapshot?.transactions;
+  const totalCount = displayedSnapshot?.totalCount;
+  const loading =
+    pageResource.loading ||
+    dateJumpLoading ||
+    lookups.loading ||
+    (Boolean(transactions) && !lookups.snapshot);
+  const errorMessage = pageResource.errorMessage ?? lookups.errorMessage;
+
+  const showNotice = useCallback((message: string) => {
+    setNotice((current) => ({
+      id: (current?.id ?? 0) + 1,
+      message,
+    }));
+  }, []);
+
+  const dismissNotice = useCallback(() => {
+    setNotice(undefined);
+  }, []);
+
+  useEffect(() => {
+    if (dateJumpLoading || !dateJumpFocusRestoreRef.current) {
+      return;
+    }
+
+    dateJumpFocusRestoreRef.current.focus();
+    dateJumpFocusRestoreRef.current = null;
+  }, [dateJumpLoading]);
+
+  const detail = useTransactionDetail({
+    lookupsLoaded: Boolean(lookups.snapshot),
+    onNotice: showNotice,
+    params,
+    searchParams,
+    setSearchParams,
+    transactions,
+  });
+
+  const deleteTransactionFromRow = useCallback(
+    async (transaction: Transaction) => {
+      const result = await deleteTransactionById(transaction.transaction_id);
+      if (result.error) {
+        throw new Error(apiErrorMessage(result.error));
+      }
+
+      if (detail.selectedTransactionId === transaction.transaction_id) {
+        detail.closeTransactionDetail();
+      }
+      await refreshTransactionPageAfterSave(
+        params,
+        transaction.transaction_id,
+        transaction,
+      );
+      showNotice("Transaction deleted.");
+    },
+    [detail, params, showNotice],
+  );
+
+  const setPage = useCallback(
+    (nextPage: number) => {
+      cancelDateJump();
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("page", String(nextPage));
+        next.set("pageSize", String(pageSize));
+        return next;
+      });
+    },
+    [cancelDateJump, pageSize, setSearchParams],
+  );
+
+  const setPageSize = useCallback(
+    (nextPageSize: number) => {
+      cancelDateJump();
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("page", String(defaultTransactionPage));
+        next.set("pageSize", String(nextPageSize));
+        return next;
+      });
+    },
+    [cancelDateJump, setSearchParams],
+  );
+
+  const jumpToPreviousDate = useCallback(
+    (trigger: HTMLButtonElement) => {
+      dateJumpFocusRestoreRef.current = trigger;
+      jumpToAdjacentDate(-1);
+    },
+    [jumpToAdjacentDate],
+  );
+
+  const jumpToNextDate = useCallback(
+    (trigger: HTMLButtonElement) => {
+      dateJumpFocusRestoreRef.current = trigger;
+      jumpToAdjacentDate(1);
+    },
+    [jumpToAdjacentDate],
+  );
+
+  const changeDateJumpValue = useCallback(
+    (value: string) => {
+      setDateJumpValue(value);
+      void jumpToDate(value);
+    },
+    [jumpToDate, setDateJumpValue],
+  );
+
+  return {
+    cancelDateJump,
+    changeDateJumpValue,
+    dateJumpLoading,
+    dateJumpValue,
+    deleteTransactionFromRow,
+    detail,
+    dismissNotice,
+    errorMessage,
+    jumpToNextDate,
+    jumpToPreviousDate,
+    loading,
+    lookups,
+    notice,
+    page,
+    pageSize,
+    params,
+    setPage,
+    setPageSize,
+    showNotice,
+    totalCount,
+    transactions,
+  };
+};

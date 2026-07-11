@@ -213,7 +213,60 @@ test("category drill-down direct navigation, view-all, refresh, not-found, and d
   ).toHaveAttribute("href", "/categories");
 });
 
-test("category drill-down rolls descendant filters by default and exact scope narrows them", async ({
+test("drill-down transaction row quick-delete confirms, tombstones, and refreshes", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const category = await createCategory(page, `E2EQuickDelete:${unique}`);
+  const memo = `E2E drill-down quick delete ${unique}`;
+  const transaction = await createSpend(page, { category, memo });
+
+  await page.goto(`/categories/${category.category_id}`);
+  const row = page.locator("tbody > tr[aria-expanded]").filter({
+    hasText: memo,
+  });
+  await expect(row).toBeVisible();
+
+  await row.getByRole("button", { name: "Delete transaction" }).click();
+  const confirmDialog = page.getByRole("alertdialog", {
+    name: "Delete transaction",
+  });
+  await expect(confirmDialog).toBeVisible();
+  await expect(
+    confirmDialog.getByText(transaction.display_title),
+  ).toBeVisible();
+
+  const deleteRequest = page.waitForRequest(
+    (request) =>
+      request.method() === "DELETE" &&
+      request.url().includes(`/api/transactions/${transaction.transaction_id}`),
+  );
+  await confirmDialog
+    .getByRole("button", { name: "Delete transaction" })
+    .click();
+  await deleteRequest;
+
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction deleted." }),
+  ).toBeVisible();
+  await expect(confirmDialog).toBeHidden();
+  await expect(page.getByRole("row").filter({ hasText: memo })).toBeHidden();
+});
+
+test("drill-down renders the transaction empty state for a matching entity with no activity", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const category = await createCategory(page, `E2EEmptyPreview:${unique}`);
+
+  await page.goto(`/categories/${category.category_id}`);
+  await expect(
+    page.getByRole("heading", { name: "No transactions" }),
+  ).toBeVisible();
+});
+
+test("category drill-down rolls visible descendants, excludes hidden descendants, and exact scope narrows them", async ({
   page,
 }) => {
   const now = "2026-07-11T12:00:00Z";
@@ -236,6 +289,13 @@ test("category drill-down rolls descendant filters by default and exact scope na
     level: 3,
     name: "Child",
     parent_fqn: "E2EMocked:Parent",
+  };
+  const hiddenChildCategory = {
+    ...childCategory,
+    category_id: 900003,
+    fqn: "E2EMocked:Parent:HiddenChild",
+    is_hidden: true,
+    name: "HiddenChild",
   };
   const transactionFor = (
     transactionId: number,
@@ -276,8 +336,8 @@ test("category drill-down rolls descendant filters by default and exact scope na
     await route.fulfill({
       contentType: "application/json",
       json: {
-        categories: [parentCategory, childCategory],
-        total_count: 2,
+        categories: [parentCategory, childCategory, hiddenChildCategory],
+        total_count: 3,
       },
     });
   });
@@ -299,6 +359,9 @@ test("category drill-down rolls descendant filters by default and exact scope na
       ...(categoryIds.includes("900002")
         ? [transactionFor(910002, 900002, "Child scoped transaction")]
         : []),
+      ...(categoryIds.includes("900003")
+        ? [transactionFor(910003, 900003, "Hidden child transaction")]
+        : []),
     ];
     await route.fulfill({
       contentType: "application/json",
@@ -317,6 +380,9 @@ test("category drill-down rolls descendant filters by default and exact scope na
   await expect(
     page.getByRole("row").filter({ hasText: "Child scoped transaction" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Hidden child transaction" }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "View all transactions" }),
   ).toHaveAttribute(
@@ -388,7 +454,7 @@ test("tag drill-down direct navigation, filters, view-all, not-found, and exact 
   ).toHaveAttribute("href", "/tags");
 });
 
-test("tag drill-down rolls descendant filters by default and exact scope narrows them", async ({
+test("tag drill-down rolls visible descendants, excludes hidden descendants, and exact scope narrows them", async ({
   page,
 }) => {
   const now = "2026-07-11T12:00:00Z";
@@ -410,6 +476,13 @@ test("tag drill-down rolls descendant filters by default and exact scope narrows
     name: "Child",
     parent_fqn: "E2EMockedTag:Parent",
     tag_id: 900102,
+  };
+  const hiddenChildTag = {
+    ...childTag,
+    fqn: "E2EMockedTag:Parent:HiddenChild",
+    is_hidden: true,
+    name: "HiddenChild",
+    tag_id: 900103,
   };
   const transactionFor = (
     transactionId: number,
@@ -450,8 +523,8 @@ test("tag drill-down rolls descendant filters by default and exact scope narrows
     await route.fulfill({
       contentType: "application/json",
       json: {
-        tags: [parentTag, childTag],
-        total_count: 2,
+        tags: [parentTag, childTag, hiddenChildTag],
+        total_count: 3,
       },
     });
   });
@@ -473,6 +546,9 @@ test("tag drill-down rolls descendant filters by default and exact scope narrows
       ...(tagIds.includes("900102")
         ? [transactionFor(910102, 900102, "Child tag transaction")]
         : []),
+      ...(tagIds.includes("900103")
+        ? [transactionFor(910103, 900103, "Hidden child tag transaction")]
+        : []),
     ];
     await route.fulfill({
       contentType: "application/json",
@@ -491,6 +567,9 @@ test("tag drill-down rolls descendant filters by default and exact scope narrows
   await expect(
     page.getByRole("row").filter({ hasText: "Child tag transaction" }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: "Hidden child tag transaction" }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("link", { name: "View all transactions" }),
   ).toHaveAttribute(

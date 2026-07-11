@@ -3,9 +3,9 @@ import type { SetURLSearchParams } from "react-router";
 
 import type { Transaction, TransactionPageParams } from "@/api";
 import {
+  apiErrorMessage,
   deleteTransactionById,
   fetchTransactionById,
-  isNetworkFailure,
 } from "@/api";
 import { focusWithoutTooltip } from "@/components/tooltip";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
@@ -24,24 +24,6 @@ const parseOptionalPositiveInteger = (
     return undefined;
   }
   return parsed;
-};
-
-const apiErrorMessage = (error: unknown): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return "The API request failed.";
 };
 
 const restoreFallbackSelector = "[data-transaction-detail-restore-target]";

@@ -3,8 +3,8 @@ import { useState } from "react";
 
 import type { Category, GroupState } from "@/api";
 import {
+  apiErrorMessage,
   deleteLedgerCategoryById,
-  isNetworkFailure,
   setLedgerCategoryHiddenByPath,
   updateLedgerCategory,
 } from "@/api";
@@ -43,24 +43,6 @@ interface CategoriesPageContentProps {
 type CategoryDeleteTarget = {
   readonly category: Category;
   readonly opener: HTMLElement;
-};
-
-const apiErrorMessage = (error: unknown, fallback: string): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return fallback;
 };
 
 const renderCategoryBadge = (row: ReferenceTreeRow<Category, GroupState>) => {

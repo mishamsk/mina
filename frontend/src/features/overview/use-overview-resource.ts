@@ -3,12 +3,12 @@ import { useEffect } from "react";
 import {
   type Account,
   type AccountBalance,
+  apiErrorMessage,
   fetchAccountsByIds,
   fetchOverviewAccountBalances,
   fetchOverviewAccounts,
   fetchTransactionMonthTotalsByMonth,
   fetchTransactionPage,
-  isNetworkFailure,
   type Transaction,
 } from "@/api";
 import type { OverviewBalanceRow } from "@/store";
@@ -22,24 +22,6 @@ import {
 import { localYearMonth } from "@/utils/date";
 
 const recentActivityLimit = 8;
-
-const apiErrorMessage = (error: unknown): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return "The API request failed.";
-};
 
 let overviewLoadGeneration = 0;
 

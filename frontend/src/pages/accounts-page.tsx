@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router";
 
 import {
   type Account,
-  isNetworkFailure,
+  apiErrorMessage,
   restructureLedgerAccounts,
 } from "@/api";
 import { PageHelp } from "@/components/page-help";
@@ -29,24 +29,6 @@ interface Notice {
   readonly id: number;
   readonly message: string;
 }
-
-const apiErrorMessage = (error: unknown, fallback: string): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return fallback;
-};
 
 export const AccountsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();

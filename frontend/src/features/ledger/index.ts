@@ -24,6 +24,7 @@ export { ClassIcon, StatusIcon } from "./line-icons";
 export { MemberChip } from "./member-chip";
 export { TagChip } from "./tag-chip";
 export { TransactionBrowser } from "./transaction-browser";
+export { TransactionBrowserToolbar } from "./transaction-browser-toolbar";
 export {
   TransactionDetailContent,
   TransactionDetailErrorContent,
@@ -42,6 +43,8 @@ export {
   transactionPageSizes,
   writeTransactionFiltersToSearchParams,
 } from "./transaction-page-position";
+export { TransactionSearchInput } from "./transaction-search-input";
+export { useTransactionBrowserPage } from "./use-transaction-browser-page";
 export { useTransactionDateJump } from "./use-transaction-date-jump";
 export { useTransactionDetail } from "./use-transaction-detail";
 export {

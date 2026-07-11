@@ -25,10 +25,10 @@ import { type To, useLocation, useNavigate } from "react-router";
 
 import {
   type Account,
+  apiErrorMessage,
   fetchAccountGroupsForLookups,
   fetchTransactionPage,
   type GroupState,
-  isNetworkFailure,
   startDatabaseBackupRun,
   startExchangeRateLoadingRun,
   type Transaction,
@@ -224,24 +224,6 @@ const sortFqnMatches = <T extends { readonly fqn: string }>(
     )
     .slice(0, entityResultLimit)
     .map((match) => match.item);
-
-const apiErrorMessage = (error: unknown): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return "The API request failed.";
-};
 
 const groupCommands = (
   commands: readonly CommandItem[],

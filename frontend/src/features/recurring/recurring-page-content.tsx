@@ -14,6 +14,7 @@ import {
   type RecurringOccurrence,
   type Transaction,
 } from "@/api";
+import { apiErrorMessage } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
@@ -48,21 +49,6 @@ interface DismissTarget {
   readonly occurrence: RecurringOccurrence;
   readonly opener: HTMLElement;
 }
-
-const apiErrorMessage = (error: unknown, fallback: string): string => {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return fallback;
-};
 
 const occurrenceSummary = (transaction: Transaction | undefined): string =>
   transaction?.display_title ?? "Generated transaction unavailable";

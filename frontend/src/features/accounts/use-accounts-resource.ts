@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { type Account, fetchAccountsPage, isNetworkFailure } from "@/api";
+import { type Account, apiErrorMessage, fetchAccountsPage } from "@/api";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
 import { refreshLedgerLookups } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
@@ -18,24 +18,6 @@ import {
   setAccountsPageLoading,
   useAccountsPageView,
 } from "@/store";
-
-const apiErrorMessage = (error: unknown): string => {
-  if (isNetworkFailure(error)) {
-    return error.message;
-  }
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "error" in error &&
-    typeof error.error === "object" &&
-    error.error !== null &&
-    "message" in error.error &&
-    typeof error.error.message === "string"
-  ) {
-    return error.error.message;
-  }
-  return "The API request failed.";
-};
 
 let accountsPageLoadGeneration = 0;
 const accountsPageRefreshRetryDelayMs = 200;
