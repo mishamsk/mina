@@ -8,5 +8,6 @@
 - Super snappy at household scale.
 - Automation beyond data integrations: AI-driven classification, reconciliation, workflows, and financial insights.
 - Hackable by agents and humans through REST, MCP, and CLI interfaces.
+- Every Mina capability is equally and fully accessible through REST, MCP, and CLI. The web UI exposes every capability reasonable for a human to operate; programmatic interfaces may expose more.
 - Local-first and portable as a single database file.
 - Built for one household—not as a multi-user SaaS.

@@ -7,7 +7,7 @@ Ownership boundaries:
 - `docs/frontend-architecture.md` owns technical architecture, package boundaries, and data-access rules.
 - `docs/accounting-semantics.md` owns transaction classification and display-amount derivation.
 - `docs/hierarchy-semantics.md` owns group/leaf hierarchy semantics, invariants, and restructuring rules.
-- `docs/business-requirements.md` owns product scope and phasing.
+- `SCOPE.md` owns durable product boundaries; Kata owns planned work and sequencing.
 - `api/openapi.yaml` owns API contracts.
 - Visual styling — themes, color palettes, typography, spacing values, radii, motion aesthetics, iconography — is out of scope and owned by theme specifications; the base theme is `docs/webui-theme-arcade-cabinet.md`. This document stays theme-agnostic; multiple themes are planned, so structure and behavior must not depend on any one visual style.
 

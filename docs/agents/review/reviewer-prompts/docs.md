@@ -11,6 +11,6 @@ Flag problems when:
 - Added statements are ambiguous or contradict the modified doc, owning docs, or nearby code.
 - Missing doc updates leave modified docs with stale or outdated information.
 - Wording is broad, speculative, or verbose enough to make future maintenance harder.
-- `docs/architecture.md` changes without the goal explicitly requiring architecture work or an active plan under `docs/plans/` clearly supporting the change.
+- `VISION.md`, `SCOPE.md`, or `docs/architecture.md` changes without the goal explicitly requiring work on that document or an active plan under `docs/plans/` clearly supporting the change.
 
 Prefer small, actionable findings. Report problems only - no positive observations.
