@@ -1,0 +1,6 @@
+interface:
+  display_name: "Garden Docs"
+  short_description: "Audit and compress Mina living documentation"
+  default_prompt: "Use $garden-docs to audit and compress Mina package docs and PROJECT_STATE.md."
+policy:
+  allow_implicit_invocation: false
