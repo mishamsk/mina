@@ -18,7 +18,7 @@ func Migrate(ctx context.Context, appDB *AppDB) error {
 	if err := prepareAccountingLocation(ctx, appDB); err != nil {
 		return err
 	}
-	if err := enableAccountingConnectionInit(ctx, appDB); err != nil {
+	if err := useAccountingLocation(ctx, appDB, appDB.db); err != nil {
 		return err
 	}
 	if err := normalizeSchemaVersionTable(ctx, appDB); err != nil {
@@ -45,7 +45,7 @@ func HasPendingMigrations(ctx context.Context, appDB *AppDB) (bool, error) {
 	if !exists {
 		return true, nil
 	}
-	if err := enableAccountingConnectionInit(ctx, appDB); err != nil {
+	if err := useAccountingLocation(ctx, appDB, appDB.db); err != nil {
 		return false, err
 	}
 
@@ -95,7 +95,7 @@ WHERE catalog_name = ?
 	if count == 0 {
 		return false, nil
 	}
-	if err := enableAccountingConnectionInit(ctx, appDB); err != nil {
+	if err := useAccountingLocation(ctx, appDB, appDB.db); err != nil {
 		return false, err
 	}
 

@@ -37,7 +37,7 @@ func (s *RecurringStore) Create(ctx context.Context, input recurring.SaveInput) 
 			ctx,
 			`INSERT INTO `+s.db.accountingName("recurring_definition")+` (fqn, schedule_rule, anchor_date)
 VALUES (?, CAST(? AS JSON), ?)
-RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(schedule_class AS VARCHAR), anchor_date, definition_version, paused_at, CAST(NULL AS DATE), parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
+RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at, CAST(NULL AS DATE), parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
 			string(input.ScheduleRule),
 			civilDateArg(input.AnchorDate),
@@ -75,7 +75,7 @@ RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(sch
 func (s *RecurringStore) Get(ctx context.Context, id int64) (recurring.Definition, error) {
 	definition, err := scanRecurringDefinition(s.db.query().QueryRowContext(
 		ctx,
-		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(d.schedule_class AS VARCHAR), anchor_date, definition_version, paused_at,
+		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
 	(SELECT MAX(o.scheduled_date) FROM `+s.db.accountingName("recurring_occurrence")+` AS o WHERE o.recurring_definition_id = d.recurring_definition_id),
 	parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM `+s.db.accountingName("recurring_definition")+` AS d
@@ -108,7 +108,7 @@ WHERE tombstoned_at IS NULL`
 		return services.PaginatedList[recurring.Definition]{}, err
 	}
 
-	query := `SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(schedule_class AS VARCHAR), anchor_date, definition_version, paused_at,
+	query := `SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
 	(SELECT MAX(o.scheduled_date) FROM ` + s.db.accountingName("recurring_occurrence") + ` AS o WHERE o.recurring_definition_id = recurring_definition.recurring_definition_id),
 	parent_fqn, name, level, created_at, updated_at, tombstoned_at
 ` + filterQuery
@@ -200,7 +200,7 @@ SET fqn = ?,
     definition_version = definition_version + 1,
     updated_at = CURRENT_TIMESTAMP
 WHERE recurring_definition_id = ? AND tombstoned_at IS NULL
-RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(schedule_class AS VARCHAR), anchor_date, definition_version, paused_at,
+RETURNING recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
 	CAST(NULL AS DATE),
 	parent_fqn, name, level, created_at, updated_at, tombstoned_at`,
 			input.FQN,
@@ -293,7 +293,7 @@ WHERE recurring_definition_id = ? AND tombstoned_at IS NULL`,
 func (s *RecurringStore) ListMaterializationDefinitions(ctx context.Context, today values.CivilDate) ([]recurring.MaterializationDefinition, error) {
 	rows, err := s.db.query().QueryContext(
 		ctx,
-		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), CAST(d.schedule_class AS VARCHAR), anchor_date, definition_version, paused_at,
+		`SELECT recurring_definition_id, fqn, CAST(schedule_rule AS VARCHAR), anchor_date, definition_version, paused_at,
 	(SELECT MAX(o.scheduled_date) FROM `+s.db.accountingName("recurring_occurrence")+` AS o WHERE o.recurring_definition_id = d.recurring_definition_id),
 	parent_fqn, name, level, created_at, updated_at, tombstoned_at
 FROM `+s.db.accountingName("recurring_definition")+` AS d
@@ -793,7 +793,6 @@ type recurringDefinitionScanner interface {
 func scanRecurringDefinition(scanner recurringDefinitionScanner) (recurring.Definition, error) {
 	var definition recurring.Definition
 	var scheduleRule string
-	var scheduleClass string
 	var anchorDate time.Time
 	var pausedAt sql.NullTime
 	var lastOccurrenceDate sql.NullTime
@@ -805,7 +804,6 @@ func scanRecurringDefinition(scanner recurringDefinitionScanner) (recurring.Defi
 		&definition.ID,
 		&definition.FQN,
 		&scheduleRule,
-		&scheduleClass,
 		&anchorDate,
 		&definition.DefinitionVersion,
 		&pausedAt,
@@ -820,10 +818,11 @@ func scanRecurringDefinition(scanner recurringDefinitionScanner) (recurring.Defi
 		return recurring.Definition{}, err
 	}
 	definition.ScheduleRule = json.RawMessage(scheduleRule)
-	definition.ScheduleClass = recurring.ScheduleClass(strings.ToLower(scheduleClass))
-	if definition.ScheduleClass == "date_rule" {
-		definition.ScheduleClass = recurring.ScheduleClassDateRule
+	scheduleClass, err := recurringScheduleClassFromRule(definition.ScheduleRule)
+	if err != nil {
+		return recurring.Definition{}, err
 	}
+	definition.ScheduleClass = scheduleClass
 	definition.AnchorDate = values.CivilDateFromTime(anchorDate)
 	definition.PausedAt = nullableTimeFromSQL(pausedAt)
 	if lastOccurrenceDate.Valid {
@@ -839,6 +838,19 @@ func scanRecurringDefinition(scanner recurringDefinitionScanner) (recurring.Defi
 	definition.Records = []recurring.DefinitionRecord{}
 
 	return definition, nil
+}
+
+func recurringScheduleClassFromRule(rule json.RawMessage) (recurring.ScheduleClass, error) {
+	var payload struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(rule, &payload); err != nil {
+		return "", fmt.Errorf("decode recurring schedule rule: %w", err)
+	}
+	if payload.Kind == "interval" {
+		return recurring.ScheduleClassInterval, nil
+	}
+	return recurring.ScheduleClassDateRule, nil
 }
 
 func insertGeneratedRecurringTransaction(

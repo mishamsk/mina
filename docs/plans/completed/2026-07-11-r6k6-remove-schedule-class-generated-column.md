@@ -31,46 +31,46 @@ Kill `recurring_definition.schedule_class` (an enum-typed DuckDB GENERATED colum
 
 ### Task/Commit 1: Drop the generated column; derive schedule class in Go
 
-- [ ] Edit migration `00011_create_recurring_transactions.sql`: remove `CREATE TYPE recurring_schedule_class`, the `schedule_class` generated column, and its column comment.
-- [ ] Re-pin `PinnedMigrationContentHash` in `internal/store/db_validation.go`.
-- [ ] `internal/store/recurring.go`: remove `schedule_class` from all five queries and the scan; derive `Definition.ScheduleClass` from `schedule_rule` JSON `kind` per the design above.
-- [ ] Verification
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] `just test-integration` passes
-  - [ ] Commit changes
+- [x] Edit migration `00011_create_recurring_transactions.sql`: remove `CREATE TYPE recurring_schedule_class`, the `schedule_class` generated column, and its column comment.
+- [x] Re-pin `PinnedMigrationContentHash` in `internal/store/db_validation.go`.
+- [x] `internal/store/recurring.go`: remove `schedule_class` from all five queries and the scan; derive `Definition.ScheduleClass` from `schedule_rule` JSON `kind` per the design above.
+- [x] Verification
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] `just test-integration` passes
+  - [x] Commit changes
 
 ### Task/Commit 2: Remove connection-init machinery and store-level USE workarounds
 
-- [ ] Delete `internal/store/connection_init.go`; remove `connInit` from `internal/store/appdb.go` (field + both call paths + `openAppDB` parameter).
-- [ ] `internal/store/db.go`: revert `open()` to plain `sql.Open` with the blank driver import; keep `detachDatabase` as is.
-- [ ] `internal/store/migrations.go`: replace `enableAccountingConnectionInit` call sites with pool-level `useAccountingLocation`; migration-time `USE` behavior unchanged.
-- [ ] `internal/store/backups.go`: remove `USE`-before-`COPY` + enum caveat comment in `copyDatabase`; remove the pre-detach `USE memory.main` and post-detach accounting restore in `detachTarget`.
-- [ ] Revert the `withSQLTx` closure wrapper in `internal/store/tx.go` if nothing still needs it.
-- [ ] Update `internal/store/PACKAGE.md`: drop the connection-initialization invariant line.
-- [ ] Verification
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] `just test-integration` passes (database backup + validation tests exercise COPY/DETACH paths)
-  - [ ] Commit changes
+- [x] Delete `internal/store/connection_init.go`; remove `connInit` from `internal/store/appdb.go` (field + both call paths + `openAppDB` parameter).
+- [x] `internal/store/db.go`: revert `open()` to plain `sql.Open` with the blank driver import; keep `detachDatabase` as is.
+- [x] `internal/store/migrations.go`: replace `enableAccountingConnectionInit` call sites with pool-level `useAccountingLocation`; migration-time `USE` behavior unchanged.
+- [x] `internal/store/backups.go`: remove `USE`-before-`COPY` + enum caveat comment in `copyDatabase`; remove the pre-detach `USE memory.main` and post-detach accounting restore in `detachTarget`.
+- [x] Revert the `withSQLTx` closure wrapper in `internal/store/tx.go` if nothing still needs it.
+- [x] Update `internal/store/PACKAGE.md`: drop the connection-initialization invariant line.
+- [x] Verification
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] `just test-integration` passes (database backup + validation tests exercise COPY/DETACH paths)
+  - [x] Commit changes
 
 ### Task/Commit 3: Remove the apptest reach-through and the testscript USE hack; enforce the boundary
 
-- [ ] Delete `internal/apptest/connection_init.go` and `internal/apptest/runtime/connection_init_test.go` (keep the REST-level `recurring_definition_test.go` additions).
-- [ ] `cmd/mina/cli_smoke_test.go`: remove the two `USE` statements and the enum caveat comment from `duckdbclone`.
-- [ ] `.golangci.yml`: add the depguard rule denying `github.com/mishamsk/mina/internal/store` for `internal/apptest` harness files per the design above; confirm `just pre-commit` runs it clean and that a deliberate scratch violation is caught (do not commit the scratch check).
-- [ ] Verification
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] `just test-integration` passes (CLI smoke testscripts exercise `duckdbclone`)
-  - [ ] Commit changes
+- [x] Delete `internal/apptest/connection_init.go` and `internal/apptest/runtime/connection_init_test.go` (keep the REST-level `recurring_definition_test.go` additions).
+- [x] `cmd/mina/cli_smoke_test.go`: remove the two `USE` statements and the enum caveat comment from `duckdbclone`.
+- [x] `.golangci.yml`: add the depguard rule denying `github.com/mishamsk/mina/internal/store` for `internal/apptest` harness files per the design above; confirm `just pre-commit` runs it clean and that a deliberate scratch violation is caught (do not commit the scratch check).
+- [x] Verification
+  - [x] `just test` passes
+  - [x] `just pre-commit` passes
+  - [x] `just test-integration` passes (CLI smoke testscripts exercise `duckdbclone`)
+  - [x] Commit changes
 
 ## Final Verification
 
-- [ ] `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] `just test-frontend-e2e` passes (recurring review flows exercise materialization over HTTP)
-- [ ] Commit final changes
-- [ ] Run `just review-loop "Remove recurring schedule_class enum generated column (kata r6k6): DuckDB resolves generated-column enum types against the connection's current schema, so the column is dropped from migration 00011 (hash re-pinned) and ScheduleClass is derived in Go from schedule_rule kind; removed connection-init USE machinery, backup and duckdbclone USE workarounds, apptest reach-through test, and caveat comments; added depguard rule denying internal/store to the apptest harness. Constraints: API responses unchanged; migration-time USE and detachDatabase USE memory.main stay; no store-reaching tests; no ground-truth doc edits."`
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] `just test-frontend-e2e` passes (recurring review flows exercise materialization over HTTP)
+- [x] Commit final changes
+- [x] Run `just review-loop "Remove recurring schedule_class enum generated column (kata r6k6): DuckDB resolves generated-column enum types against the connection's current schema, so the column is dropped from migration 00011 (hash re-pinned) and ScheduleClass is derived in Go from schedule_rule kind; removed connection-init USE machinery, backup and duckdbclone USE workarounds, apptest reach-through test, and caveat comments; added depguard rule denying internal/store to the apptest harness. Constraints: API responses unchanged; migration-time USE and detachDatabase USE memory.main stay; no store-reaching tests; no ground-truth doc edits."`
+- [x] Move this plan to `docs/plans/completed/`

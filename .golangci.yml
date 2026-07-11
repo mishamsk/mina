@@ -51,6 +51,16 @@ linters:
               desc: testscript belongs only to the integration test driver
             - pkg: net/http/httptest
               desc: normal app tests should use the apptest client instead of raw handler tests
+        apptest-harness-boundaries:
+          list-mode: lax
+          files:
+            - internal/apptest/*.go
+            - internal/apptest/**/*.go
+            - "**/internal/apptest/*.go"
+            - "**/internal/apptest/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: the app-test harness drives the app through runtime composition and the REST client, never the store directly
         integration-test-boundaries:
           list-mode: strict
           files:
