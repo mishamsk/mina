@@ -8,7 +8,7 @@ const webkitURL = `http://127.0.0.1:${port + 1}`;
 
 const webServer = (serverPort: number, url: string) => ({
   command: `MINA_FX_AUTO_LOAD_ENABLED=false ../bin/mina serve --host 127.0.0.1 --port ${serverPort} --quiet --demo`,
-  reuseExistingServer: !process.env.CI,
+  reuseExistingServer: false,
   timeout: 30_000,
   url: `${url}/api/health`,
 });

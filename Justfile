@@ -312,6 +312,49 @@ test-integration: frontend-build
 [group('dev-tooling')]
 [working-directory: 'frontend']
 test-frontend-e2e: build
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    e2e_port="${MINA_FRONTEND_E2E_PORT:-18080}"
+    e2e_ports=("$e2e_port" "$((e2e_port + 1))")
+
+    command -v lsof >/dev/null || { echo "missing required tool: lsof" >&2; exit 1; }
+
+    for port in "${e2e_ports[@]}"; do
+        lsof_err="$(mktemp)"
+        if ! pids="$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>"$lsof_err")"; then
+            if [[ -s "$lsof_err" ]]; then
+                sed "s/^/failed to inspect e2e port $port with lsof: /" "$lsof_err" >&2
+                rm -f "$lsof_err"
+                exit 1
+            fi
+            pids=""
+        fi
+        rm -f "$lsof_err"
+
+        for pid in $pids; do
+            command_line="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+            if [[ ! "$command_line" =~ (^|.*/)mina\ serve([[:space:]]|$) ]]; then
+                echo "refusing to stop listener on e2e port $port: pid $pid: $command_line" >&2
+                exit 1
+            fi
+
+            echo "stopping stale mina serve listener on e2e port $port: pid $pid: $command_line"
+            kill -TERM "$pid"
+            for _ in {1..50}; do
+                if ! kill -0 "$pid" 2>/dev/null; then
+                    echo "stopped stale mina serve listener on e2e port $port: pid $pid"
+                    break
+                fi
+                sleep 0.1
+            done
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -KILL "$pid"
+                echo "force-stopped stale mina serve listener on e2e port $port: pid $pid"
+            fi
+        done
+    done
+
     mise exec -- pnpm exec playwright install chromium webkit
     mise exec -- pnpm exec playwright test
 
