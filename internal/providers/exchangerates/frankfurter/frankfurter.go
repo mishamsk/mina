@@ -302,6 +302,15 @@ func planCachePopulation(ctx context.Context, opts CacheOptions) (cachePopulatio
 	}()
 	tail, err := inspectCacheTail(ctx, file)
 	if err != nil {
+		if errors.Is(err, loading.ErrMalformedProviderResponse) {
+			tmpPath, tmpErr := seedCacheTemp(opts.Path, file, 0)
+			if tmpErr != nil {
+				return cachePopulationPlan{}, tmpErr
+			}
+
+			return cachePopulationPlan{fetchFrom: opts.From, replaceExisting: true, tempPath: tmpPath}, nil
+		}
+
 		return cachePopulationPlan{}, err
 	}
 	if tail.latest.Time().IsZero() {

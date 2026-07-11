@@ -106,6 +106,49 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 		assertExchangeRateRateOnDate(t, client, "USD", "CHF", "2026-04-10", "0.94000000")
 	})
 
+	t.Run("recurring materialization invalidates needed currency cache", func(t *testing.T) {
+		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-10T12:00:00Z"))
+		provider := apptest.NewFakeExchangeRateProvider()
+		provider.Set("EUR", "2026-04-10", "1.12000000")
+		provider.Set("CHF", "2026-04-10", "0.94000000")
+		client := newSharedClient(
+			t,
+			apptest.WithClock(clock),
+			apptest.WithExchangeRateLoading(false),
+			apptest.WithExchangeRateProviderFactory(provider),
+		)
+		createForeignCurrencyTransaction(t, client, foreignCurrencyTransaction{
+			Currency:      "EUR",
+			InitiatedDate: "2026-04-10",
+			PostedAt:      apptest.TimestampPtr("2026-04-10T12:00:00Z"),
+		})
+		triggerAndWaitForExchangeRateLoad(t, client)
+		assertExchangeRateRateOnDate(t, client, "USD", "EUR", "2026-04-10", "1.12000000")
+
+		refs := createRecurringDefinitionRefs(t, client, "RecurringCurrencyCache")
+		checking := client.Scenario().AccountWithCurrency("checking:RecurringCurrencyCache:CHF", "CHF")
+		refs.CheckingAccountID = checking.AccountId
+		request := recurringDefinitionRequest(
+			"RecurringCurrencyCache:CHF",
+			refs,
+			"-10.00000000",
+			"10.00000000",
+			intervalRule(1, "MONTH"),
+			"2026-04-10",
+		)
+		records := *request.Records
+		records[0].Currency = recurringStringPtr("CHF")
+		records[1].Currency = recurringStringPtr("CHF")
+		request.Records = &records
+		definition := createRecurringDefinition(t, client, request)
+		listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{
+			RecurringDefinitionId: &definition.JSON201.RecurringDefinitionId,
+		})
+
+		triggerAndWaitForExchangeRateLoad(t, client)
+		assertExchangeRateRateOnDate(t, client, "USD", "CHF", "2026-04-10", "0.94000000")
+	})
+
 	t.Run("replacement transaction currency invalidates needed currency cache", func(t *testing.T) {
 		provider := apptest.NewFakeExchangeRateProvider()
 		provider.Set("EUR", "2026-03-31", "1.12000000")

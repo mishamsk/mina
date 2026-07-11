@@ -15,6 +15,7 @@
 - Pause suppresses materialization; resume prevents backlog across the paused window.
 - Definition edits affect only future materialization; existing occurrences keep copied generated transactions.
 - Active definitions protect referenced accounts, categories, members, and tags from tombstone deletes.
+- Generated-record writes notify the runtime currency-usage signal after success.
 
 ## Boundaries
 

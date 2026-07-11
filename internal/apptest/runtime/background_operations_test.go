@@ -226,6 +226,37 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		requireClientResponse(t, "list members after partial-cache startup", err, response.StatusCode(), http.StatusOK, response.Body)
 	})
 
+	t.Run("startup load replaces malformed cache with a full refetch", func(t *testing.T) {
+		schema := fmt.Sprintf("startup_exchange_rate_loading_malformed_cache_%d", time.Now().UnixNano())
+		cacheDir := filepath.Join(t.TempDir(), "mina")
+		clock := apptest.NewFakeClock(apptest.Timestamp("2026-04-01T12:00:00Z"))
+		seedExchangeRateLoadingTransaction(t, schema, clock)
+		writeFrankfurterCache(t, cacheDir,
+			frankfurterCacheRow("2024-04-02", "EUR", "0.93000000")+
+				frankfurterCacheRow("2024-04-01", "EUR", "0.92000000"),
+		)
+		refetched := frankfurterCacheRow("2024-04-02", "EUR", "0.93000000") +
+			frankfurterCacheRow("2026-04-01", "EUR", "1.09000000")
+
+		client := newSharedClient(
+			t,
+			apptest.WithAccountingSchema(schema),
+			apptest.WithCacheDir(cacheDir),
+			apptest.WithClock(clock),
+			apptest.WithOperationsEnabled(true),
+			apptest.WithExchangeRateLoading(true),
+			apptest.WithFrankfurterCacheHTTPClient(cacheHTTPClient(func(_ *http.Request) io.ReadCloser {
+				return io.NopCloser(bytes.NewBufferString(refetched))
+			})),
+		)
+		status := client.PollExchangeRateLoadingStatusRevision(1)
+		if status.LastSuccess == nil || !*status.LastSuccess {
+			t.Fatalf("malformed-cache startup status = %+v, want successful startup run", status)
+		}
+		assertFrankfurterCache(t, cacheDir, refetched)
+		assertExchangeRateRateOnDate(t, client, "USD", "EUR", "2024-04-02", "0.93000000")
+	})
+
 	t.Run("interrupted cache population preserves partial cache and later resumes", func(t *testing.T) {
 		schema := fmt.Sprintf("startup_exchange_rate_loading_interrupted_cache_%d", time.Now().UnixNano())
 		cacheDir := filepath.Join(t.TempDir(), "mina")

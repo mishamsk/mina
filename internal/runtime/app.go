@@ -386,6 +386,7 @@ func newAccountingServices(
 				templateService,
 				exchangeRates,
 				referenceSerializer,
+				currencyUsageChanged,
 			),
 			Clock: opts.clock(),
 		},

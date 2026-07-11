@@ -10,12 +10,12 @@
 - Cache population requests use `base=USD`, all available quotes, and NDJSON streaming.
 - File-provider rows must be Frankfurter v2 NDJSON objects with `date`, `base`, `quote`, and `rate`.
 - Cache row quotes are provider-owned three-letter uppercase ASCII codes and may be outside Mina's accepted domain currency set.
-- Cache rows are ordered ascending by `date`; tail checks use the final row date.
+- Cache rows are ordered ascending by `date`; malformed existing caches are replaced by a full refetch during population.
 - Cache population performs one bounded attempt; runtime retry policy owns subsequent attempts.
 - Existing caches are extended by refetching the latest cached date through the requested end date.
 - Interrupted cache streams may install validated partial rows, then still return the read error.
 - Partial cache installs drop the newest streamed date because that date may be incomplete.
-- HTTP status failures and malformed streamed rows leave the existing cache untouched.
+- HTTP status failures and malformed streamed rows leave the cache untouched; malformed existing caches are the full-refetch exception.
 - Weekend and holiday gaps are accepted by using only returned rows.
 
 ## Boundaries

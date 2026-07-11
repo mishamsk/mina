@@ -243,14 +243,15 @@ type ReferenceSerializer interface {
 
 // Service owns recurring definition use cases and validation.
 type Service struct {
-	repo       Repository
-	accounts   AccountReferenceValidator
-	categories CategoryReferenceValidator
-	tags       TagReferenceValidator
-	members    MemberReferenceValidator
-	templates  TemplateReader
-	amountUSD  AmountUSDDeriver
-	refs       ReferenceSerializer
+	repo                 Repository
+	accounts             AccountReferenceValidator
+	categories           CategoryReferenceValidator
+	tags                 TagReferenceValidator
+	members              MemberReferenceValidator
+	templates            TemplateReader
+	amountUSD            AmountUSDDeriver
+	refs                 ReferenceSerializer
+	currencyUsageChanged func()
 }
 
 // NewService creates a recurring definition service backed by repositories.
@@ -263,16 +264,18 @@ func NewService(
 	templates TemplateReader,
 	amountUSD AmountUSDDeriver,
 	refs ReferenceSerializer,
+	currencyUsageChanged func(),
 ) *Service {
 	return &Service{
-		repo:       repo,
-		accounts:   accounts,
-		categories: categories,
-		tags:       tags,
-		members:    members,
-		templates:  templates,
-		amountUSD:  amountUSD,
-		refs:       refs,
+		repo:                 repo,
+		accounts:             accounts,
+		categories:           categories,
+		tags:                 tags,
+		members:              members,
+		templates:            templates,
+		amountUSD:            amountUSD,
+		refs:                 refs,
+		currencyUsageChanged: currencyUsageChanged,
 	}
 }
 
@@ -368,6 +371,7 @@ func (s *Service) ConfirmOccurrence(ctx context.Context, id int64) (Occurrence, 
 	if err != nil {
 		return Occurrence{}, err
 	}
+	s.notifyCurrencyUsageChanged()
 
 	return occurrence, nil
 }
@@ -427,6 +431,7 @@ func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today val
 	if err != nil {
 		return Occurrence{}, err
 	}
+	s.notifyCurrencyUsageChanged()
 
 	return occurrence, nil
 }
@@ -625,7 +630,18 @@ func (s *Service) materializeDueOccurrences(ctx context.Context, today values.Ci
 		return nil
 	}
 
-	return s.repo.CreateExpectedOccurrences(ctx, occurrences)
+	if err := s.repo.CreateExpectedOccurrences(ctx, occurrences); err != nil {
+		return err
+	}
+	s.notifyCurrencyUsageChanged()
+
+	return nil
+}
+
+func (s *Service) notifyCurrencyUsageChanged() {
+	if s.currencyUsageChanged != nil {
+		s.currencyUsageChanged()
+	}
 }
 
 func (s *Service) generatedJournalRecords(ctx context.Context, definition Definition, scheduledDate values.CivilDate) ([]transactions.JournalRecordInput, error) {
