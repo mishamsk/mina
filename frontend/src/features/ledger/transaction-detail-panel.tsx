@@ -468,7 +468,7 @@ export const TransactionDetailPanel = ({
     window.requestAnimationFrame(() => {
       panelRef.current?.focus({ preventScroll: true });
     });
-  }, []);
+  }, [transaction?.transaction_id]);
 
   useEffect(() => {
     return () => {

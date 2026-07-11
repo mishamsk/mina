@@ -4,6 +4,8 @@ export { EntityMultiPicker, EntityPicker } from "./entity-picker";
 export { EntryPanel } from "./entry-panel";
 export {
   buildLookupMaps,
+  displayAmountKey,
+  formatInitiatedDate,
   formatInitiatedDateParts,
   lineDisplayAmounts,
   lineMemo,

@@ -26,15 +26,32 @@ import { type To, useLocation, useNavigate } from "react-router";
 import {
   type Account,
   fetchAccountGroupsForLookups,
+  fetchTransactionPage,
   type GroupState,
   isNetworkFailure,
   startDatabaseBackupRun,
   startExchangeRateLoadingRun,
+  type Transaction,
 } from "@/api";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FqnPath, refreshLedgerLookups } from "@/features/ledger";
+import {
+  AmountText,
+  ClassIcon,
+  displayAmountKey,
+  formatInitiatedDate,
+  FqnPath,
+  lineDisplayAmounts,
+  lineMemo,
+  linePostingStatus,
+  MixedAmounts,
+  postingStatusLabel,
+  refreshLedgerLookups,
+  StatusIcon,
+  transactionClassLabel,
+} from "@/features/ledger";
+import { formatDecimalAmount } from "@/features/ledger/format";
 import { cn } from "@/lib/utils";
 import type { TransactionEntryType } from "@/models/ui-state";
 import {
@@ -44,6 +61,7 @@ import {
   useLastTransactionsPageSearch,
   useLedgerLookupsView,
 } from "@/store";
+import { currencyDisplayMarker } from "@/utils/currency";
 
 type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -86,6 +104,13 @@ interface AccountGroupLookupState {
   readonly loading: boolean;
 }
 
+interface TransactionSearchState {
+  readonly errorMessage: string | undefined;
+  readonly loading: boolean;
+  readonly query: string;
+  readonly transactions: readonly Transaction[];
+}
+
 const commandGroups: readonly CommandGroup[] = [
   "Navigation",
   "New transaction",
@@ -94,7 +119,11 @@ const commandGroups: readonly CommandGroup[] = [
   "Actions",
 ];
 const entityResultLimit = 8;
+const transactionResultLimit = 20;
+const transactionSearchDebounceMs = 180;
 const commandSkeletonRows = [0, 1, 2, 3] as const;
+const transactionResultGridClass =
+  "grid min-w-0 grid-cols-[3.75rem_1.5rem_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-2 px-2 sm:grid-cols-[4.5rem_1.75rem_1.75rem_minmax(0,1fr)_minmax(0,clamp(7rem,28vw,14rem))] sm:gap-3 sm:px-3";
 
 const domIdPart = (value: string): string => {
   const slug = value
@@ -110,6 +139,9 @@ const domIdPart = (value: string): string => {
 
 const commandOptionId = (commandId: string): string =>
   `command-palette-option-${domIdPart(commandId)}`;
+
+const transactionOptionId = (transactionId: number): string =>
+  `command-palette-transaction-${transactionId}`;
 
 const normalizeSearch = (value: string): string =>
   value.trim().toLocaleLowerCase();
@@ -132,6 +164,15 @@ const transactionsEntrySearch = (search: string): string => {
   params.delete("transaction");
   const nextSearch = params.toString();
   return nextSearch ? `?${nextSearch}` : "";
+};
+
+const transactionDetailSearch = (
+  transactionId: number,
+  search: string,
+): string => {
+  const params = new URLSearchParams(search);
+  params.set("transaction", String(transactionId));
+  return `?${params.toString()}`;
 };
 
 const fqnMatchScore = (fqn: string, query: string): number | undefined => {
@@ -245,6 +286,116 @@ const CommandPaletteResultsSkeleton = () => (
   </div>
 );
 
+const TransactionSearchResultsSkeleton = () => (
+  <div
+    className="flex flex-col gap-2"
+    role="status"
+    aria-label="Loading transaction results"
+  >
+    <Skeleton className="mx-2 mb-1 h-4 w-36" />
+    {commandSkeletonRows.map((row) => (
+      <div
+        key={row}
+        className={cn(
+          transactionResultGridClass,
+          "border-2 border-transparent py-2",
+        )}
+      >
+        <Skeleton className="h-5 w-14" />
+        <Skeleton className="size-5" />
+        <Skeleton className="hidden size-5 sm:block" />
+        <div className="grid gap-1">
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <Skeleton className="h-7 w-20 justify-self-end sm:w-24" />
+      </div>
+    ))}
+  </div>
+);
+
+const MixedSentinel = ({ label = "Mixed" }: { readonly label?: string }) => (
+  <span className="font-heading text-foreground bg-card inline-flex h-5 items-center border border-[var(--border-ink)] px-1.5 text-[11px] font-semibold uppercase shadow-[var(--shadow-chip)]">
+    {label}
+  </span>
+);
+
+const TransactionResultAmounts = ({
+  deemphasized,
+  transaction,
+}: {
+  readonly deemphasized: boolean;
+  readonly transaction: Transaction;
+}) => {
+  const amounts = lineDisplayAmounts(transaction);
+  if (transaction.transaction_class === "mixed") {
+    return (
+      <span className={cn(deemphasized && "text-muted-foreground")}>
+        <MixedAmounts
+          amounts={amounts}
+          className="h-auto min-h-7 flex-wrap overflow-hidden [overflow-wrap:anywhere] whitespace-normal"
+        />
+      </span>
+    );
+  }
+
+  return amounts.map((amount) => (
+    <AmountText
+      key={displayAmountKey(amount)}
+      amount={amount}
+      chip
+      className={cn(
+        "h-auto min-h-7 min-w-0 flex-wrap overflow-hidden [overflow-wrap:anywhere] whitespace-normal",
+        deemphasized && "text-muted-foreground bg-card",
+      )}
+      positiveSign={
+        transaction.transaction_class !== "transfer" &&
+        transaction.transaction_class !== "currency_exchange"
+      }
+      tone="neutral"
+    />
+  ));
+};
+
+const transactionResultAmountLabel = (
+  transaction: Transaction,
+): string | undefined => {
+  const amounts = lineDisplayAmounts(transaction);
+  if (amounts.length === 0) {
+    return undefined;
+  }
+
+  const positiveSign =
+    transaction.transaction_class !== "transfer" &&
+    transaction.transaction_class !== "currency_exchange";
+  return amounts
+    .map(
+      (amount) =>
+        `${formatDecimalAmount(amount.amount, amount.currency, {
+          positiveSign,
+        })} ${currencyDisplayMarker(amount.currency)}`,
+    )
+    .join(", ");
+};
+
+const transactionResultOptionLabel = (
+  transaction: Transaction,
+  memo: string | undefined,
+  postingStatus: ReturnType<typeof linePostingStatus>,
+): string => {
+  const amountLabel = transactionResultAmountLabel(transaction);
+  return [
+    `Transaction ${formatInitiatedDate(transaction.initiated_date)}`,
+    transaction.display_title,
+    `class ${transactionClassLabel(transaction.transaction_class)}`,
+    `status ${postingStatusLabel(postingStatus)}`,
+    amountLabel ? `amount ${amountLabel}` : undefined,
+    memo ? `memo ${memo}` : undefined,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(", ");
+};
+
 export const CommandPalette = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -259,6 +410,7 @@ export const CommandPalette = () => {
   const wasOpenRef = useRef(false);
   const lookupRefreshCycleRef = useRef<number | undefined>(undefined);
   const accountGroupRefreshCycleRef = useRef<number | undefined>(undefined);
+  const transactionSearchRequestRef = useRef(0);
   const [searchState, setSearchState] = useState<PaletteSearchState>({
     activeIndex: 0,
     query: "",
@@ -270,7 +422,16 @@ export const CommandPalette = () => {
       groups: undefined,
       loading: false,
     });
+  const [transactionSearch, setTransactionSearch] =
+    useState<TransactionSearchState>({
+      errorMessage: undefined,
+      loading: false,
+      query: "",
+      transactions: [],
+    });
   const query = searchState.query;
+  const transactionSearchMode = query.startsWith("'");
+  const transactionQuery = transactionSearchMode ? query.slice(1) : "";
 
   const showNotice = useCallback(
     (message: string, kind: PaletteNotice["kind"]) => {
@@ -333,6 +494,10 @@ export const CommandPalette = () => {
   }, [showNotice]);
 
   const commands = useMemo<readonly CommandItem[]>(() => {
+    if (transactionSearchMode) {
+      return [];
+    }
+
     const pageCommands: readonly CommandItem[] = [
       {
         group: "Navigation",
@@ -516,27 +681,58 @@ export const CommandPalette = () => {
     query,
     runDatabaseBackup,
     runExchangeRateLoading,
+    transactionSearchMode,
   ]);
 
   const visibleCommands = useMemo(() => {
+    if (transactionSearchMode) {
+      return [];
+    }
+
     const normalizedQuery = normalizeSearch(query);
     return commands.filter((command) =>
       commandMatches(command, normalizedQuery),
     );
-  }, [commands, query]);
+  }, [commands, query, transactionSearchMode]);
+  const transactionSearchCurrent = transactionSearch.query === transactionQuery;
+  const transactionSearchLoading =
+    Boolean(transactionQuery.trim()) &&
+    (!transactionSearchCurrent || transactionSearch.loading);
+  const transactionSearchErrorMessage = transactionSearchCurrent
+    ? transactionSearch.errorMessage
+    : undefined;
+  const transactionResults = transactionSearchCurrent
+    ? transactionSearch.transactions
+    : [];
+  const resultCount = transactionSearchMode
+    ? transactionResults.length
+    : visibleCommands.length;
   const activeIndex = Math.min(
     searchState.activeIndex,
-    Math.max(0, visibleCommands.length - 1),
+    Math.max(0, resultCount - 1),
   );
   const groupedCommands = useMemo(
-    () => groupCommands(visibleCommands),
-    [visibleCommands],
+    () => (transactionSearchMode ? [] : groupCommands(visibleCommands)),
+    [transactionSearchMode, visibleCommands],
   );
-  const activeCommand = visibleCommands[activeIndex];
-  const activeDescendantId = activeCommand
-    ? commandOptionId(activeCommand.id)
+  const activeCommand = transactionSearchMode
+    ? undefined
+    : visibleCommands[activeIndex];
+  const activeTransaction = transactionSearchMode
+    ? transactionResults[activeIndex]
     : undefined;
+  const activeDescendantId = transactionSearchMode
+    ? activeTransaction
+      ? transactionOptionId(activeTransaction.transaction_id)
+      : undefined
+    : activeCommand
+      ? commandOptionId(activeCommand.id)
+      : undefined;
   const hasCommandResults = groupedCommands.length > 0;
+  const hasTransactionResults = transactionResults.length > 0;
+  const hasPaletteResults = transactionSearchMode
+    ? hasTransactionResults
+    : hasCommandResults;
   const lookupErrorMessage = lookups.snapshot
     ? accountGroupLookups.errorMessage
     : (lookups.errorMessage ?? accountGroupLookups.errorMessage);
@@ -581,6 +777,29 @@ export const CommandPalette = () => {
     [navigate],
   );
 
+  const activateTransaction = useCallback(
+    (transaction: Transaction | undefined) => {
+      if (!transaction) {
+        return;
+      }
+
+      restoreFocusRef.current = null;
+      closeCommandPalette();
+      const detailBaseSearch =
+        location.pathname === "/transactions"
+          ? location.search
+          : lastTransactionsPageSearch;
+      void navigate({
+        pathname: "/transactions",
+        search: transactionDetailSearch(
+          transaction.transaction_id,
+          detailBaseSearch,
+        ),
+      });
+    },
+    [lastTransactionsPageSearch, location.pathname, location.search, navigate],
+  );
+
   useEffect(() => {
     if (open && !wasOpenRef.current) {
       openCycleRef.current += 1;
@@ -588,9 +807,75 @@ export const CommandPalette = () => {
         activeIndex: 0,
         query: "",
       });
+      setTransactionSearch({
+        errorMessage: undefined,
+        loading: false,
+        query: "",
+        transactions: [],
+      });
     }
     wasOpenRef.current = open;
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !transactionSearchMode) {
+      transactionSearchRequestRef.current += 1;
+      return;
+    }
+
+    const trimmedQuery = transactionQuery.trim();
+    const requestId = transactionSearchRequestRef.current + 1;
+    transactionSearchRequestRef.current = requestId;
+
+    if (!trimmedQuery) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      if (transactionSearchRequestRef.current !== requestId) {
+        return;
+      }
+
+      setTransactionSearch((current) => ({
+        errorMessage: undefined,
+        loading: true,
+        query: transactionQuery,
+        transactions:
+          current.query === transactionQuery ? current.transactions : [],
+      }));
+
+      void fetchTransactionPage({
+        filters: { search: transactionQuery },
+        limit: transactionResultLimit,
+        offset: 0,
+      }).then((result) => {
+        if (transactionSearchRequestRef.current !== requestId) {
+          return;
+        }
+
+        if (result.data) {
+          setTransactionSearch({
+            errorMessage: undefined,
+            loading: false,
+            query: transactionQuery,
+            transactions: result.data.transactions,
+          });
+          return;
+        }
+
+        setTransactionSearch({
+          errorMessage: apiErrorMessage(result.error),
+          loading: false,
+          query: transactionQuery,
+          transactions: [],
+        });
+      });
+    }, transactionSearchDebounceMs);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [open, transactionQuery, transactionSearchMode]);
 
   useEffect(() => {
     if (
@@ -730,13 +1015,20 @@ export const CommandPalette = () => {
   };
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === " " && query === "") {
+      event.preventDefault();
+      setSearchState({
+        activeIndex: 0,
+        query: "'",
+      });
+      return;
+    }
+
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setSearchState({
         activeIndex:
-          visibleCommands.length === 0
-            ? 0
-            : Math.min(activeIndex + 1, visibleCommands.length - 1),
+          resultCount === 0 ? 0 : Math.min(activeIndex + 1, resultCount - 1),
         query,
       });
       return;
@@ -753,6 +1045,10 @@ export const CommandPalette = () => {
 
     if (event.key === "Enter") {
       event.preventDefault();
+      if (transactionSearchMode) {
+        activateTransaction(activeTransaction);
+        return;
+      }
       activateCommand(activeCommand);
     }
   };
@@ -796,14 +1092,18 @@ export const CommandPalette = () => {
                 aria-label="Command search"
                 aria-autocomplete="list"
                 aria-controls={
-                  hasCommandResults ? "command-palette-results" : undefined
+                  hasPaletteResults ? "command-palette-results" : undefined
                 }
-                aria-expanded={hasCommandResults}
+                aria-expanded={hasPaletteResults}
                 aria-activedescendant={
-                  hasCommandResults ? activeDescendantId : undefined
+                  hasPaletteResults ? activeDescendantId : undefined
                 }
                 className="bg-card text-foreground placeholder:text-muted-foreground h-10 border-2 border-[var(--border-ink)] px-3 font-mono text-sm shadow-[var(--shadow-chip)]"
-                placeholder="Type a command or page"
+                placeholder={
+                  transactionSearchMode
+                    ? "' search transactions"
+                    : "Type a command or page"
+                }
                 value={query}
                 onChange={(event) => {
                   setSearchState({
@@ -818,7 +1118,137 @@ export const CommandPalette = () => {
               ref={resultsViewportRef}
               className="min-h-0 overflow-y-auto p-2"
             >
-              {groupedCommands.length === 0 ? (
+              {transactionSearchMode ? (
+                <>
+                  {transactionSearchLoading ? (
+                    <TransactionSearchResultsSkeleton />
+                  ) : transactionSearchErrorMessage ? (
+                    <div
+                      className="bg-muted text-destructive px-3 py-4 font-mono text-sm"
+                      role="alert"
+                    >
+                      {transactionSearchErrorMessage}
+                    </div>
+                  ) : transactionResults.length === 0 ? (
+                    <div className="bg-muted text-muted-foreground px-3 py-4 font-mono text-sm">
+                      {transactionQuery.trim()
+                        ? "No matching transactions."
+                        : "Type after the apostrophe to search transactions."}
+                    </div>
+                  ) : (
+                    <div
+                      id="command-palette-results"
+                      role="listbox"
+                      aria-label="Transaction search results"
+                      className="flex flex-col gap-1"
+                    >
+                      {transactionResults.map((transaction, index) => {
+                        const active = index === activeIndex;
+                        const memo = lineMemo(transaction);
+                        const postingStatus = linePostingStatus(transaction);
+                        const amountDeemphasized =
+                          postingStatus === "expected" ||
+                          postingStatus === "pending" ||
+                          postingStatus === "cancelled";
+                        const lineInactive = postingStatus === "cancelled";
+                        const optionLabel = transactionResultOptionLabel(
+                          transaction,
+                          memo,
+                          postingStatus,
+                        );
+                        return (
+                          <button
+                            key={transaction.transaction_id}
+                            id={transactionOptionId(transaction.transaction_id)}
+                            type="button"
+                            role="option"
+                            aria-selected={active}
+                            className={cn(
+                              transactionResultGridClass,
+                              "w-full border-2 border-transparent py-2 text-left font-mono text-sm",
+                              "hover:bg-muted hover:border-[var(--border-ink)]",
+                              active &&
+                                "border-[var(--border-ink)] bg-[var(--color-interactive-bright)] shadow-[var(--shadow-chip)]",
+                              lineInactive &&
+                                "text-muted-foreground line-through",
+                            )}
+                            onMouseEnter={() => {
+                              setSearchState({
+                                activeIndex: index,
+                                query,
+                              });
+                            }}
+                            onClick={() => {
+                              activateTransaction(transaction);
+                            }}
+                            aria-label={optionLabel}
+                          >
+                            <span className="text-muted-foreground shrink-0 text-xs">
+                              {formatInitiatedDate(transaction.initiated_date)}
+                            </span>
+                            <ClassIcon
+                              focusable={false}
+                              transactionClass={transaction.transaction_class}
+                            />
+                            <span className="hidden size-6 shrink-0 place-items-center sm:grid">
+                              {postingStatus === "mixed" ? (
+                                <MixedSentinel />
+                              ) : (
+                                <StatusIcon
+                                  focusable={false}
+                                  status={postingStatus}
+                                />
+                              )}
+                            </span>
+                            <span className="grid min-w-0 gap-0.5">
+                              <Tooltip
+                                focusable={false}
+                                label={transaction.display_title}
+                                className="block min-w-0"
+                              >
+                                <span
+                                  className={cn(
+                                    "block font-semibold",
+                                    active
+                                      ? "[overflow-wrap:anywhere] whitespace-normal"
+                                      : "truncate",
+                                  )}
+                                >
+                                  {transaction.display_title}
+                                </span>
+                              </Tooltip>
+                              {memo ? (
+                                <Tooltip
+                                  focusable={false}
+                                  label={memo}
+                                  className="block min-w-0"
+                                >
+                                  <span
+                                    className={cn(
+                                      "text-muted-foreground block text-xs",
+                                      active
+                                        ? "[overflow-wrap:anywhere] whitespace-normal"
+                                        : "truncate",
+                                    )}
+                                  >
+                                    {memo}
+                                  </span>
+                                </Tooltip>
+                              ) : null}
+                            </span>
+                            <span className="flex min-w-0 flex-wrap justify-end gap-1 overflow-hidden">
+                              <TransactionResultAmounts
+                                deemphasized={amountDeemphasized}
+                                transaction={transaction}
+                              />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              ) : groupedCommands.length === 0 ? (
                 lookups.loading || accountGroupLookups.loading ? (
                   <CommandPaletteResultsSkeleton />
                 ) : (

@@ -110,13 +110,16 @@ const CompactAmounts = ({
 
 export const MixedAmounts = ({
   amounts,
+  className,
 }: {
   readonly amounts: readonly DisplayAmount[];
+  readonly className?: string;
 }) => {
   return amounts.length > 0 ? (
     <span
       className={cn(
         "bg-card inline-flex h-7 max-w-full items-center justify-end overflow-visible border border-[var(--border-ink)] px-2 text-right font-mono font-medium whitespace-nowrap tabular-nums shadow-[var(--shadow-chip)]",
+        className,
       )}
       data-testid="amount-chip"
     >

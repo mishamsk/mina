@@ -72,7 +72,7 @@ A launcher-style command palette (VS Code / Spotlight pattern) is a core Phase 2
 
 - Navigation: jump to any page and any entity page by typed name — accounts, groups, categories, tags, members, templates.
 - Entry: "new spend / income / refund / transfer" commands; typing a template name starts a prefilled entry.
-- Transaction search: free-text search across transactions/records following the `GET /api/transactions?search=` semantics owned by `api/openapi.yaml`; results open the transaction peek/detail directly.
+- Transaction search: free-text search across transactions/records following the `GET /api/transactions?search=` semantics owned by `api/openapi.yaml`; entered by typing a leading ASCII apostrophe (Space on an empty input inserts the apostrophe; later spaces stay part of the query); result rows show date, class, title/memo, and amount; selecting a result navigates to the URL-addressable transaction detail.
 - App actions: trigger backup, reload exchange rates, toggle density, open settings.
 
 ## Theme-Agnostic Presentation Rules

@@ -41,6 +41,7 @@
   - Accounts tree supports prefix-addressed account rename/move for leaves and groups, with subtree FQN rewrites through the restructure API.
   - Account group pages show descendant balance-account subtotals and combined prefix registers across balance and flow accounts, with transaction peeks and links from account trees and overview balance groups.
   - Global command palette opens with `Cmd/Ctrl+K`, supports routed-page and account/group navigation by typed name, launches transaction entry tabs, and starts database backup or exchange-rate loading runs.
+  - Global command palette supports Alfred-style transaction search with leading-apostrophe mode and URL-addressable transaction detail navigation.
   - Categories and Tags pages show searchable FQN trees with hidden controls, move/rename, and create/edit/delete side-panel workflows; Categories also show intent badges.
   - Category and Tag leaf rows carry deleteability-driven delete actions with named confirmation; group rows do not offer delete.
   - Members page shows a searchable flat member list with create/rename/delete side-panel workflows and hover/focus-revealed Edit/Delete row actions; ineligible deletes are proactively disabled from the API deleteability signal.
