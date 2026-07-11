@@ -3,6 +3,9 @@ import? "~/.justfile"
 set shell := ["bash", "-euo", "pipefail", "-c"]
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
+default_codex_model := "gpt-5.5"
+default_codex_reasoning_effort := "high"
+
 [private]
 @default:
     just --list
@@ -323,7 +326,7 @@ review-loop goal branch_or_commit="" base_ref="" max_iterations="" claude_review
     max_iterations={{ quote(max_iterations) }}
     claude_review_percent={{ quote(claude_review_percent) }}
 
-    set --
+    set -- --codex-model {{ quote(default_codex_model) }} --codex-reasoning-effort {{ quote(default_codex_reasoning_effort) }}
     if [ -n "$base_ref" ]; then
         set -- "$@" --base "$base_ref"
     fi
@@ -360,7 +363,7 @@ codex-goal plan_file="":
         [ -n "$plan_file" ] || { echo "no plan selected" >&2; exit 1; }
     fi
 
-    command codex --dangerously-bypass-approvals-and-sandbox "/goal implement ${plan_file}. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
+    command codex -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + default_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "/goal implement ${plan_file}. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
 
 # Run a Codex operator against a sequential fleet plan.
 [group('agents')]
@@ -435,11 +438,11 @@ codex-kata-plan:
     [ -n "$selected" ] || { echo "no kata issue selected" >&2; exit 1; }
 
     issue="${selected%%$'\t'*}"
-    command codex exec --dangerously-bypass-approvals-and-sandbox "\$kata-plan-worktree #${issue}"
+    command codex exec -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + default_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "\$kata-plan-worktree #${issue}"
 
 # Rebase the current branch through Codex.
 [group('agents')]
 rebase:
-    command codex exec --dangerously-bypass-approvals-and-sandbox {{ quote("$rebase") }}
+    command codex exec -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + default_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox {{ quote("$rebase") }}
 
 # Agent-only manual smoke commands should be added temporarily when a concrete uncovered risk remains outside the testscript end-to-end suite.
