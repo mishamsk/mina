@@ -266,6 +266,16 @@ const createAccount = async (
   return (await response.json()) as AccountFixture;
 };
 
+const deleteTransaction = async (
+  page: Page,
+  transaction: TransactionFixture,
+): Promise<void> => {
+  const response = await page.request.delete(
+    `/api/transactions/${transaction.transaction_id}`,
+  );
+  expect(response.ok()).toBe(true);
+};
+
 const comparableRecords = (records: readonly JournalRecordFixture[]) =>
   records
     .map((record) => ({
@@ -320,6 +330,115 @@ const amountChipsFitCell = async (row: Locator): Promise<boolean> =>
         )
       );
     });
+
+const mixedAmountChipGeometry = async (row: Locator) =>
+  row.evaluate((rowElement) => {
+    const rectFor = (element: Element | undefined | null) => {
+      const rect = element?.getBoundingClientRect();
+      return rect
+        ? {
+            bottom: rect.bottom,
+            height: rect.height,
+            left: rect.left,
+            right: rect.right,
+            top: rect.top,
+            width: rect.width,
+          }
+        : undefined;
+    };
+    const isCollapsed = (element: Element | undefined | null) => {
+      if (!element) {
+        return true;
+      }
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return (
+        style.display === "none" ||
+        style.visibility === "collapse" ||
+        rect.width < 1
+      );
+    };
+    const intersects = (
+      left: NonNullable<ReturnType<typeof rectFor>>,
+      right: NonNullable<ReturnType<typeof rectFor>>,
+    ) =>
+      left.left < right.right - 0.5 &&
+      left.right > right.left + 0.5 &&
+      left.top < right.bottom - 0.5 &&
+      left.bottom > right.top + 0.5;
+    const containedBy = (
+      inner: NonNullable<ReturnType<typeof rectFor>>,
+      outer: NonNullable<ReturnType<typeof rectFor>>,
+    ) =>
+      inner.left >= outer.left - 0.5 &&
+      inner.right <= outer.right + 0.5 &&
+      inner.top >= outer.top - 0.5 &&
+      inner.bottom <= outer.bottom + 0.5;
+    const textLineCenters = (element: HTMLElement) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const centers = Array.from(range.getClientRects())
+        .filter((rect) => rect.width > 0 && rect.height > 0)
+        .map((rect) => (rect.top + rect.bottom) / 2);
+      range.detach();
+      return centers;
+    };
+
+    const cells = rowElement.querySelectorAll("td");
+    const memberCell = cells[6];
+    const amountCell = cells[7];
+    const amountCellRect = rectFor(amountCell);
+    const memberCellRect = rectFor(memberCell);
+    const chip = amountCell?.querySelector<HTMLElement>(
+      "[data-testid='amount-chip']",
+    );
+    const chipRect = rectFor(chip);
+    const childRects = Array.from(chip?.children ?? [])
+      .filter((child): child is HTMLElement => child instanceof HTMLElement)
+      .map(rectFor)
+      .filter(
+        (rect): rect is NonNullable<ReturnType<typeof rectFor>> =>
+          rect !== undefined && rect.width > 0 && rect.height > 0,
+      );
+    const lineCenters = chip ? textLineCenters(chip) : [];
+    const memberCollapsed = isCollapsed(memberCell);
+    const scrollContainer = rowElement.closest<HTMLElement>(
+      "[data-testid='transactions-table-scroll']",
+    );
+    const memberOverlaps =
+      !memberCollapsed && memberCellRect
+        ? childRects.some((rect) => intersects(rect, memberCellRect))
+        : false;
+
+    return {
+      amountCellWidth: amountCellRect?.width ?? 0,
+      amountChipFitsCell:
+        Boolean(amountCellRect && chipRect) &&
+        containedBy(
+          chipRect as NonNullable<ReturnType<typeof rectFor>>,
+          amountCellRect as NonNullable<ReturnType<typeof rectFor>>,
+        ),
+      amountChildrenFitCell:
+        Boolean(amountCellRect) &&
+        childRects.length > 0 &&
+        childRects.every((rect) =>
+          containedBy(
+            rect,
+            amountCellRect as NonNullable<ReturnType<typeof rectFor>>,
+          ),
+        ),
+      chipText: chip?.innerText.replace(/\s+/g, " ").trim() ?? "",
+      containerWidth: scrollContainer?.clientWidth ?? 0,
+      memberCollapsed,
+      memberOverlaps,
+      singleLine:
+        lineCenters.length > 0 &&
+        Math.max(...lineCenters) - Math.min(...lineCenters) <= 1,
+      tableHasHorizontalOverflow: scrollContainer
+        ? scrollContainer.scrollWidth > scrollContainer.clientWidth + 1
+        : true,
+    };
+  });
 
 const chipShadowFitsClippingAncestors = async (
   chipContent: Locator,
@@ -669,9 +788,10 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
   const tagsPicker = page.getByRole("combobox", { name: "Tags" });
-  await tagsPicker.fill("HiddenMatch");
+  await fillAndExpectValue(tagsPicker, "HiddenMatch");
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
     "No matches",
+    { timeout: 10000 },
   );
   await page.getByText("Include hidden", { exact: true }).click();
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
@@ -1663,6 +1783,131 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   await expect(page).toHaveURL(/[?&]transaction=\d+(?:&|$)/);
 });
 
+test("mixed amount chips stay inside the amount column where member first appears", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const incomeSourceAccount = findByFqn(accounts, "income:AcmePayroll");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const incomeCategory = findByFqn(categories, "Income:Salary");
+  const member = await createMember(page, `Overlap ${unique}`);
+  const incomeDestinationAccount = await createAccount(
+    page,
+    `e2e:overlap:${unique}:income-destination`,
+    "balance",
+    "USD",
+  );
+  const memo = `E2E mixed amount overlap ${unique}`;
+
+  let mixedTransaction: TransactionFixture | undefined;
+  try {
+    const mixedResponse = await page.request.post("/api/transactions", {
+      data: {
+        initiated_date: "2026-05-31",
+        records: [
+          {
+            account_id: fundingAccount.account_id,
+            amount: "-5.00",
+            category_id: category.category_id,
+            currency: "USD",
+            member_id: member.member_id,
+            memo,
+            posting_status: "posted",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+          },
+          {
+            account_id: merchantAccount.account_id,
+            amount: "5.00",
+            category_id: category.category_id,
+            currency: "USD",
+            member_id: member.member_id,
+            memo,
+            posting_status: "posted",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+          },
+          {
+            account_id: incomeDestinationAccount.account_id,
+            amount: "100.00",
+            category_id: incomeCategory.category_id,
+            currency: "USD",
+            member_id: member.member_id,
+            memo,
+            posting_status: "posted",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+          },
+          {
+            account_id: incomeSourceAccount.account_id,
+            amount: "-100.00",
+            category_id: incomeCategory.category_id,
+            currency: "USD",
+            member_id: member.member_id,
+            memo,
+            posting_status: "posted",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+          },
+        ],
+      },
+    });
+    expect(mixedResponse.ok()).toBe(true);
+    mixedTransaction = (await mixedResponse.json()) as TransactionFixture;
+
+    await page.setViewportSize({ width: 1445, height: 720 });
+    await page.goto(
+      `/transactions?q=${encodeURIComponent(memo)}&page=1&pageSize=50`,
+    );
+    await expect(page.getByText("Description")).toBeVisible();
+
+    const mixedRow = page.getByRole("row").filter({ hasText: memo }).first();
+    await expect(mixedRow).toBeVisible();
+
+    const widthOutsideTable = await page
+      .getByTestId("transactions-table-scroll")
+      .evaluate((container) => window.innerWidth - container.clientWidth);
+    const viewportWidthForContainer = (containerWidth: number) =>
+      Math.round(widthOutsideTable + containerWidth);
+    const memberRevealSamples = [
+      { containerWidth: 1119, memberCollapsed: true, name: "below" },
+      { containerWidth: 1120, memberCollapsed: true, name: "at" },
+      { containerWidth: 1122, memberCollapsed: false, name: "above" },
+    ];
+
+    for (const sample of memberRevealSamples) {
+      await page.setViewportSize({
+        height: 720,
+        width: viewportWidthForContainer(sample.containerWidth),
+      });
+      const state = await mixedAmountChipGeometry(mixedRow);
+
+      expect(
+        Math.abs(state.containerWidth - sample.containerWidth),
+        `${sample.name} member breakpoint table width`,
+      ).toBeLessThanOrEqual(1);
+      expect(state.tableHasHorizontalOverflow, sample.name).toBe(false);
+      expect(state.amountChipFitsCell, sample.name).toBe(true);
+      expect(state.amountChildrenFitCell, sample.name).toBe(true);
+      expect(state.memberOverlaps, sample.name).toBe(false);
+      expect(state.singleLine, sample.name).toBe(true);
+      expect(state.chipText, sample.name).toBe("-5.00 / +100.00 $");
+      expect(state.memberCollapsed, sample.name).toBe(sample.memberCollapsed);
+    }
+  } finally {
+    if (mixedTransaction) {
+      await deleteTransaction(page, mixedTransaction);
+    }
+  }
+});
+
 test("transactions contain long amount chips and align the pagination footer", async ({
   page,
 }, testInfo) => {
@@ -2364,7 +2609,10 @@ test("transaction detail panel shows full records and supports deep links", asyn
     .click();
   await expect(panel).toBeVisible();
 
-  await alternateDetailRow.focus();
+  await alternateDetailRow.evaluate((row) => {
+    row.scrollIntoView({ block: "center", inline: "nearest" });
+    (row as HTMLElement).focus();
+  });
   await expect(alternateDetailRow).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(
@@ -2983,6 +3231,18 @@ const chooseOptionByKeyboard = async (
   await expect.poll(async () => picker.inputValue()).toContain(optionValue);
 };
 
+const fillAndExpectValue = async (
+  field: Locator,
+  value: string,
+): Promise<void> => {
+  await expect
+    .poll(async () => {
+      await field.fill(value);
+      return field.inputValue();
+    })
+    .toBe(value);
+};
+
 const journalRecord = (page: Page, index: number): Locator =>
   page.locator(`[aria-label="Journal record ${index}"]`);
 
@@ -3167,6 +3427,27 @@ test("entry panel creates each shorthand transaction type", async ({
     ) %
       39) +
     10;
+  const saveAndExpectEntryCount = async (
+    endpoint: string,
+    count: number,
+  ): Promise<void> => {
+    const saveButton = page.getByRole("button", {
+      name: "Save and add another",
+    });
+    await expect(saveButton).toBeEnabled();
+    const saveResponsePromise = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === endpoint && response.request().method() === "POST"
+      );
+    });
+    await saveButton.click();
+    const saveResponse = await saveResponsePromise;
+    expect(saveResponse.ok()).toBe(true);
+    await expect(
+      page.getByText(`Entries this session: ${count}`),
+    ).toBeVisible();
+  };
 
   await page.goto("/transactions?page=1&pageSize=10");
   await page
@@ -3174,86 +3455,104 @@ test("entry panel creates each shorthand transaction type", async ({
     .getByRole("button", { name: "New transaction" })
     .click();
   await expect(page.getByRole("heading", { name: "New spend" })).toBeVisible();
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
 
-  await page.getByLabel("Date").fill("2026-05-30");
-  await page.getByLabel("Amount").fill(`31.${cents}`);
+  const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await spendPanel.getByLabel("Date").fill("2026-05-30");
+  await fillAndExpectValue(spendPanel.getByLabel("Amount"), `31.${cents}`);
   await chooseOptionByKeyboard(
     page,
     "Funding account",
     "Wallet",
     "cash:Wallet",
+    { scope: spendPanel },
   );
-  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books");
+  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books", {
+    scope: spendPanel,
+  });
   await chooseOptionByKeyboard(
     page,
     "Category",
     "Books",
     "Entertainment:Books",
+    { scope: spendPanel },
   );
-  await page.getByLabel("Memo").fill("E2E tab spend");
-  await page.getByRole("button", { name: "Save and add another" }).click();
-  await expect(page.getByText("Entries this session: 1")).toBeVisible();
+  await spendPanel.getByLabel("Memo").fill("E2E tab spend");
+  await saveAndExpectEntryCount("/api/transactions/spend", 1);
 
   await page.getByRole("tab", { name: "Income" }).click();
   await expect(page.getByRole("heading", { name: "New income" })).toBeVisible();
-  await page.getByLabel("Date").fill("2026-05-30");
-  await page.getByLabel("Amount").fill(`41.${cents}`);
+  const incomePanel = entryPanel.getByRole("tabpanel", { name: "Income" });
+  await incomePanel.getByLabel("Date").fill("2026-05-30");
+  await fillAndExpectValue(incomePanel.getByLabel("Amount"), `41.${cents}`);
   await chooseOptionByKeyboard(
     page,
     "Destination account",
     "Chase:Joint",
     "checking:Chase:Joint",
+    { scope: incomePanel },
   );
   await chooseOptionByKeyboard(
     page,
     "Source",
     "AcmePayroll",
     "income:AcmePayroll",
+    { scope: incomePanel },
   );
-  await chooseOptionByKeyboard(page, "Category", "Salary", "Income:Salary");
-  await page.getByLabel("Memo").fill("E2E tab income");
-  await page.getByRole("button", { name: "Save and add another" }).click();
-  await expect(page.getByText("Entries this session: 2")).toBeVisible();
+  await chooseOptionByKeyboard(page, "Category", "Salary", "Income:Salary", {
+    scope: incomePanel,
+  });
+  await incomePanel.getByLabel("Memo").fill("E2E tab income");
+  await saveAndExpectEntryCount("/api/transactions/income", 2);
 
   await page.getByRole("tab", { name: "Refund" }).click();
   await expect(page.getByRole("heading", { name: "New refund" })).toBeVisible();
-  await page.getByLabel("Date").fill("2026-05-30");
-  await page.getByLabel("Amount").fill(`12.${cents}`);
+  const refundPanel = entryPanel.getByRole("tabpanel", { name: "Refund" });
+  await refundPanel.getByLabel("Date").fill("2026-05-30");
+  await fillAndExpectValue(refundPanel.getByLabel("Amount"), `12.${cents}`);
   await chooseOptionByKeyboard(
     page,
     "Destination account",
     "Chase:Joint",
     "checking:Chase:Joint",
+    { scope: refundPanel },
   );
-  await chooseOptionByKeyboard(page, "Merchant", "Target", "merchant:Target");
-  await chooseOptionByKeyboard(page, "Category", "Retail", "Refunds:Retail");
-  await page.getByLabel("Memo").fill("E2E tab refund");
-  await page.getByRole("button", { name: "Save and add another" }).click();
-  await expect(page.getByText("Entries this session: 3")).toBeVisible();
+  await chooseOptionByKeyboard(page, "Merchant", "Target", "merchant:Target", {
+    scope: refundPanel,
+  });
+  await chooseOptionByKeyboard(page, "Category", "Retail", "Refunds:Retail", {
+    scope: refundPanel,
+  });
+  await refundPanel.getByLabel("Memo").fill("E2E tab refund");
+  await saveAndExpectEntryCount("/api/transactions/refund", 3);
 
   await page.getByRole("tab", { name: "Transfer" }).click();
   await expect(
     page.getByRole("heading", { name: "New transfer" }),
   ).toBeVisible();
-  await page.getByLabel("Date").fill("2026-05-30");
-  await page.getByLabel("Amount").fill(`22.${cents}`);
+  const transferPanel = entryPanel.getByRole("tabpanel", { name: "Transfer" });
+  await transferPanel.getByLabel("Date").fill("2026-05-30");
+  await fillAndExpectValue(transferPanel.getByLabel("Amount"), `22.${cents}`);
   await chooseOptionByKeyboard(
     page,
     "From account",
     "Chase:Joint",
     "checking:Chase:Joint",
+    { scope: transferPanel },
   );
   await chooseOptionByKeyboard(
     page,
     "To account",
     "Ally:Emergency",
     "savings:Ally:Emergency",
+    { scope: transferPanel },
   );
   // Truncated text forces a real search instead of selecting an exact searchLabel match.
-  await chooseOptionByKeyboard(page, "Category", "ransfer", "Transfer");
-  await page.getByLabel("Memo").fill("E2E tab transfer");
-  await page.getByRole("button", { name: "Save and add another" }).click();
-  await expect(page.getByText("Entries this session: 4")).toBeVisible();
+  await chooseOptionByKeyboard(page, "Category", "ransfer", "Transfer", {
+    scope: transferPanel,
+  });
+  await transferPanel.getByLabel("Memo").fill("E2E tab transfer");
+  await saveAndExpectEntryCount("/api/transactions/transfer", 4);
 });
 
 test("advanced journal entry gates balance, persists drafts, and saves records", async ({
@@ -3384,22 +3683,28 @@ test("spend entry escalates to matching journal records", async ({
     .getByRole("button", { name: "New transaction" })
     .click();
 
-  await page.getByLabel("Date").fill("2026-05-31");
-  await page.getByLabel("Amount").fill(amount);
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await spendPanel.getByLabel("Date").fill("2026-05-31");
+  await fillAndExpectValue(spendPanel.getByLabel("Amount"), amount);
   await chooseOptionByKeyboard(
     page,
     "Funding account",
     "Wallet",
     "cash:Wallet",
+    { scope: spendPanel },
   );
-  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books");
+  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books", {
+    scope: spendPanel,
+  });
   await chooseOptionByKeyboard(
     page,
     "Category",
     "Books",
     "Entertainment:Books",
+    { scope: spendPanel },
   );
-  await page.getByLabel("Memo").fill(memo);
+  await spendPanel.getByLabel("Memo").fill(memo);
   await page.getByRole("button", { name: "Edit as journal" }).click();
 
   await expect(
@@ -3453,12 +3758,14 @@ test("spend entry escalates to matching journal records", async ({
   );
 
   await page.getByRole("tab", { name: "Income" }).click();
-  await page.getByLabel("Amount").fill("7.25");
+  const incomePanel = entryPanel.getByRole("tabpanel", { name: "Income" });
+  await fillAndExpectValue(incomePanel.getByLabel("Amount"), "7.25");
   await chooseOptionByKeyboard(
     page,
     "Destination account",
     "Wallet",
     "cash:Wallet",
+    { scope: incomePanel },
   );
   await page.getByRole("button", { name: "Edit as journal" }).click();
   await expect(

@@ -249,11 +249,11 @@
   }
 
   .transactions-table .transactions-description-column {
-    width: 26%;
+    width: 24%;
   }
 
   .transactions-table .transactions-category-column {
-    width: 13%;
+    width: 12%;
   }
 
   .transactions-table .transactions-tags-column {
@@ -265,7 +265,7 @@
   }
 
   .transactions-table .transactions-amount-column {
-    width: 13%;
+    width: 16%;
   }
 
   .transactions-table .transactions-actions-column {

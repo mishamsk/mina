@@ -97,7 +97,11 @@ const chooseOptionByKeyboard = async (
   optionValue: string,
 ) => {
   const picker = page.getByRole("combobox", { name: label });
+  await picker.click();
+  await expect(picker).toBeFocused();
+  await picker.fill("");
   await picker.fill(searchText);
+  await expect(picker).toHaveValue(searchText);
   const optionListId = await picker.getAttribute("aria-controls");
   expect(optionListId).not.toBeNull();
   const optionList = page.locator(`#${optionListId}`);
