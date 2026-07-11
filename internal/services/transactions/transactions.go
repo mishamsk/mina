@@ -293,7 +293,7 @@ type TagReferenceValidator interface {
 
 // MemberReferenceValidator resolves active household-member references for transaction validation.
 type MemberReferenceValidator interface {
-	ValidateActiveReferences(context.Context, []int64) (map[int64]members.Reference, error)
+	ValidateActiveReferences(context.Context, []int64, members.ReferenceOptions) (map[int64]members.Reference, error)
 }
 
 // AmountUSDDeriver derives signed USD amounts for generated journal records.
@@ -656,7 +656,7 @@ func (s *Service) validateTransactionListFilterReferences(ctx context.Context, o
 		}
 		return err
 	}
-	if _, err := s.members.ValidateActiveReferences(ctx, opts.MemberIDs); err != nil {
+	if _, err := s.members.ValidateActiveReferences(ctx, opts.MemberIDs, members.ReferenceOptions{AllowHidden: true}); err != nil {
 		if errors.Is(err, services.ErrInvalidReference) {
 			return invalidTransactionFilterReferenceError()
 		}
@@ -1097,7 +1097,7 @@ func (s *Service) semanticDictionaries(ctx context.Context, records []JournalRec
 	if err != nil {
 		return semanticDictionaries{}, err
 	}
-	if _, err := s.members.ValidateActiveReferences(ctx, memberIDs); err != nil {
+	if _, err := s.members.ValidateActiveReferences(ctx, memberIDs, members.ReferenceOptions{AllowHidden: true}); err != nil {
 		if errors.Is(err, services.ErrInvalidReference) {
 			return semanticDictionaries{}, invalidTransactionReferenceError()
 		}
@@ -1347,7 +1347,7 @@ func (s *Service) validateRecordSearchFilterReferences(ctx context.Context, opts
 		}
 		return err
 	}
-	if _, err := s.members.ValidateActiveReferences(ctx, optionalID(opts.MemberID)); err != nil {
+	if _, err := s.members.ValidateActiveReferences(ctx, optionalID(opts.MemberID), members.ReferenceOptions{AllowHidden: true}); err != nil {
 		if errors.Is(err, services.ErrInvalidReference) {
 			return invalidRecordSearchFilterReferenceError()
 		}

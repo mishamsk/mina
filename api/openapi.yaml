@@ -580,6 +580,12 @@ paths:
       operationId: listMembers
       summary: List household members.
       parameters:
+        - name: include_hidden
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
         - name: include_tombstoned
           in: query
           required: false
@@ -711,6 +717,35 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+  /api/members/{member_id}/hidden:
+    parameters:
+      - name: member_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+          minimum: 1
+    put:
+      operationId: updateMemberHidden
+      summary: Update household member hidden state.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberHiddenRequest"
+      responses:
+        "200":
+          description: Member hidden state updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/accounts:
     get:
       operationId: listAccounts
@@ -3981,6 +4016,7 @@ components:
       required:
         - member_id
         - name
+        - is_hidden
         - created_at
         - updated_at
       properties:
@@ -3989,6 +4025,8 @@ components:
           format: int64
         name:
           type: string
+        is_hidden:
+          type: boolean
         deletable:
           type: boolean
           description: Populated in listMembers responses. True when the active member has no active dependent resources and can be tombstone-deleted.
@@ -4692,3 +4730,11 @@ components:
       properties:
         name:
           type: string
+    UpdateMemberHiddenRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - is_hidden
+      properties:
+        is_hidden:
+          type: boolean

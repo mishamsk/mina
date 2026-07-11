@@ -239,6 +239,7 @@ func (s *strictServer) UpdateCategory(ctx context.Context, request openapi.Updat
 func (s *strictServer) ListMembers(ctx context.Context, request openapi.ListMembersRequestObject) (openapi.ListMembersResponseObject, error) {
 	params := request.Params
 	memberList, err := s.deps.Members.List(ctx, members.ListOptions{
+		IncludeHidden:     boolParam(params.IncludeHidden),
 		IncludeTombstoned: boolParam(params.IncludeTombstoned),
 		List: listOptionsFromParams(
 			params.Sort,
@@ -291,6 +292,16 @@ func (s *strictServer) UpdateMember(ctx context.Context, request openapi.UpdateM
 	}
 
 	return openapi.UpdateMember200JSONResponse(memberAPIResponse(member)), nil
+}
+
+func (s *strictServer) UpdateMemberHidden(ctx context.Context, request openapi.UpdateMemberHiddenRequestObject) (openapi.UpdateMemberHiddenResponseObject, error) {
+	isHidden := request.Body.IsHidden
+	member, err := s.deps.Members.UpdateHidden(ctx, request.MemberId, &isHidden)
+	if err != nil {
+		return nil, err
+	}
+
+	return openapi.UpdateMemberHidden200JSONResponse(memberAPIResponse(member)), nil
 }
 
 func (s *strictServer) ListTags(ctx context.Context, request openapi.ListTagsRequestObject) (openapi.ListTagsResponseObject, error) {
@@ -524,6 +535,7 @@ func memberAPIResponse(member members.Member) openapi.Member {
 	return openapi.Member{
 		MemberId:     member.ID,
 		Name:         member.Name,
+		IsHidden:     member.IsHidden,
 		Deletable:    member.Deletable,
 		CreatedAt:    member.CreatedAt.UTC(),
 		UpdatedAt:    member.UpdatedAt.UTC(),

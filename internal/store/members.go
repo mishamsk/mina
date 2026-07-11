@@ -37,9 +37,9 @@ func (s *MemberStore) Create(ctx context.Context, input members.CreateInput) (me
 
 		row := tx.QueryRowContext(
 			ctx,
-			`INSERT INTO `+s.db.accountingName("member")+` (name)
-VALUES (?)
-RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
+			`INSERT INTO `+s.db.accountingName("member")+` (name, is_hidden)
+VALUES (?, FALSE)
+RETURNING member_id, name, is_hidden, created_at, updated_at, tombstoned_at`,
 			input.Name,
 		)
 		member, err = scanMember(row)
@@ -61,7 +61,7 @@ RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
 
 // Get returns a member by ID.
 func (s *MemberStore) Get(ctx context.Context, id int64, includeTombstoned bool) (members.Member, error) {
-	query := `SELECT member_id, name, created_at, updated_at, tombstoned_at
+	query := `SELECT member_id, name, is_hidden, created_at, updated_at, tombstoned_at
 FROM ` + s.db.accountingName("member") + `
 WHERE member_id = ?`
 	args := []any{id}
@@ -88,12 +88,15 @@ WHERE 1 = 1`
 	if !opts.IncludeTombstoned {
 		filterQuery += " AND tombstoned_at IS NULL"
 	}
+	if !opts.IncludeHidden {
+		filterQuery += " AND is_hidden = 0"
+	}
 	totalCount, err := countMatchingRows(ctx, s.db.query(), "SELECT COUNT(*) "+filterQuery, args, "members", opts.List.IncludeTotalCount)
 	if err != nil {
 		return services.PaginatedList[members.Member]{}, err
 	}
 
-	query := `SELECT member_id, name, created_at, updated_at, tombstoned_at
+	query := `SELECT member_id, name, is_hidden, created_at, updated_at, tombstoned_at
 ` + filterQuery
 	query, args = appendServiceListOrderAndPage(query, args, opts.List, memberSortColumns, services.SortKeyName, "member_id")
 
@@ -126,6 +129,28 @@ WHERE 1 = 1`
 	}, nil
 }
 
+// UpdateHidden updates a member's hidden state.
+func (s *MemberStore) UpdateHidden(ctx context.Context, id int64, isHidden bool) (members.Member, error) {
+	row := s.db.query().QueryRowContext(
+		ctx,
+		`UPDATE `+s.db.accountingName("member")+`
+SET is_hidden = ?, updated_at = CURRENT_TIMESTAMP
+WHERE member_id = ? AND tombstoned_at IS NULL
+RETURNING member_id, name, is_hidden, created_at, updated_at, tombstoned_at`,
+		isHidden,
+		id,
+	)
+	member, err := scanMember(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return members.Member{}, services.ErrNotFound
+	}
+	if err != nil {
+		return members.Member{}, fmt.Errorf("update member hidden state: %w", err)
+	}
+
+	return member, nil
+}
+
 // UpdateName updates a member's name.
 func (s *MemberStore) UpdateName(ctx context.Context, id int64, name string) (members.Member, error) {
 	var member members.Member
@@ -143,7 +168,7 @@ func (s *MemberStore) UpdateName(ctx context.Context, id int64, name string) (me
 			`UPDATE `+s.db.accountingName("member")+`
 SET name = ?, updated_at = CURRENT_TIMESTAMP
 WHERE member_id = ? AND tombstoned_at IS NULL
-RETURNING member_id, name, created_at, updated_at, tombstoned_at`,
+RETURNING member_id, name, is_hidden, created_at, updated_at, tombstoned_at`,
 			name,
 			id,
 		)
@@ -207,6 +232,7 @@ func scanMember(scanner memberScanner) (members.Member, error) {
 	if err := scanner.Scan(
 		&member.ID,
 		&member.Name,
+		&member.IsHidden,
 		&createdAt,
 		&updatedAt,
 		&tombstonedAt,

@@ -7,6 +7,8 @@
 ## Implicit Contracts
 
 - Service instances own process-local, write-through member reference caches for active-reference validation.
+- Hidden members are excluded from default lists but remain retrievable by ID for historical references.
+- Hidden active members are valid write references only when callers explicitly allow hidden references.
 - List results own the optional deleteability capability; active-resource usage is the eligibility rule.
 
 ## Boundaries

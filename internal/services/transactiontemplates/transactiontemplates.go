@@ -100,7 +100,7 @@ type TagReferenceValidator interface {
 
 // MemberReferenceValidator resolves active household-member references for template validation.
 type MemberReferenceValidator interface {
-	ValidateActiveReferences(context.Context, []int64) (map[int64]members.Reference, error)
+	ValidateActiveReferences(context.Context, []int64, members.ReferenceOptions) (map[int64]members.Reference, error)
 }
 
 // ReferenceSerializer serializes dependent writes with dictionary deletes.
@@ -436,7 +436,7 @@ func (s *Service) validateTemplateReferences(ctx context.Context, records []Temp
 		}
 		return err
 	}
-	if _, err := s.members.ValidateActiveReferences(ctx, memberIDs); err != nil {
+	if _, err := s.members.ValidateActiveReferences(ctx, memberIDs, members.ReferenceOptions{AllowHidden: true}); err != nil {
 		if errors.Is(err, services.ErrInvalidReference) {
 			return invalidReferenceError()
 		}

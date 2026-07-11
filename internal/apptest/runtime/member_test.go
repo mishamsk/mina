@@ -155,6 +155,72 @@ func TestMemberListReportsDeleteability(t *testing.T) {
 	assertMemberDeletable(t, listed.JSON200.Members, tombstonedMember.MemberId, false)
 }
 
+func TestMemberHiddenStateBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := client.Scenario().TransactionRefs()
+	historicalTransaction := client.Scenario().BalancedTransaction(refs)
+
+	hidden, err := client.REST().UpdateMemberHiddenWithResponse(context.Background(), refs.MemberID, httpclient.UpdateMemberHiddenRequest{IsHidden: true})
+	if err != nil {
+		t.Fatalf("hide member request: %v", err)
+	}
+	if hidden.StatusCode() != http.StatusOK {
+		t.Fatalf("hide member status = %d, want %d; body %s", hidden.StatusCode(), http.StatusOK, hidden.Body)
+	}
+	if !hidden.JSON200.IsHidden {
+		t.Fatal("hidden member is_hidden = false, want true")
+	}
+
+	defaultList, err := client.REST().ListMembersWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("default member list request: %v", err)
+	}
+	if defaultList.StatusCode() != http.StatusOK {
+		t.Fatalf("default member list status = %d, want %d; body %s", defaultList.StatusCode(), http.StatusOK, defaultList.Body)
+	}
+	assertMemberIDs(t, defaultList.JSON200.Members, nil)
+
+	includeHidden := true
+	withHidden, err := client.REST().ListMembersWithResponse(context.Background(), &httpclient.ListMembersParams{IncludeHidden: &includeHidden})
+	if err != nil {
+		t.Fatalf("include hidden member list request: %v", err)
+	}
+	if withHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("include hidden member list status = %d, want %d; body %s", withHidden.StatusCode(), http.StatusOK, withHidden.Body)
+	}
+	assertMemberIDs(t, withHidden.JSON200.Members, []int64{refs.MemberID})
+	if !withHidden.JSON200.Members[0].IsHidden {
+		t.Fatal("include hidden member is_hidden = false, want true")
+	}
+
+	read, err := client.REST().GetMemberWithResponse(context.Background(), refs.MemberID, nil)
+	if err != nil {
+		t.Fatalf("get hidden member request: %v", err)
+	}
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("get hidden member status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	if !read.JSON200.IsHidden {
+		t.Fatal("get hidden member is_hidden = false, want true")
+	}
+
+	historicalRead, err := client.REST().GetTransactionWithResponse(context.Background(), historicalTransaction.TransactionId)
+	if err != nil {
+		t.Fatalf("get historical transaction request: %v", err)
+	}
+	if historicalRead.StatusCode() != http.StatusOK {
+		t.Fatalf("get historical transaction status = %d, want %d; body %s", historicalRead.StatusCode(), http.StatusOK, historicalRead.Body)
+	}
+	if historicalRead.JSON200.Records[0].MemberId == nil || *historicalRead.JSON200.Records[0].MemberId != refs.MemberID {
+		t.Fatalf("historical transaction member_id = %v, want %d", historicalRead.JSON200.Records[0].MemberId, refs.MemberID)
+	}
+
+	newTransaction := client.Scenario().BalancedTransaction(refs)
+	if newTransaction.TransactionId == 0 {
+		t.Fatal("new transaction with hidden member id = 0, want persisted transaction")
+	}
+}
+
 func TestMemberRejectsDuplicateActiveName(t *testing.T) {
 	client := newSharedClient(t)
 
@@ -252,6 +318,14 @@ func TestMemberValidationErrors(t *testing.T) {
 	}
 	if badQuery.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("bad query status = %d, want %d; body %s", badQuery.StatusCode(), http.StatusBadRequest, badQuery.Body)
+	}
+
+	badHiddenQuery, err := client.REST().ListMembersWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_hidden=maybe"))
+	if err != nil {
+		t.Fatalf("bad hidden query request: %v", err)
+	}
+	if badHiddenQuery.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("bad hidden query status = %d, want %d; body %s", badHiddenQuery.StatusCode(), http.StatusBadRequest, badHiddenQuery.Body)
 	}
 
 	emptyQuery, err := client.REST().ListMembersWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_tombstoned="))

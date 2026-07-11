@@ -28,14 +28,6 @@ func TestSharedListQueryRejectsUnsupportedFiltersAndSorts(t *testing.T) {
 		t.Fatalf("unsupported sort status = %d, want %d; body %s", unsupportedSort.StatusCode(), http.StatusBadRequest, unsupportedSort.Body)
 	}
 
-	unsupportedHidden, err := client.REST().ListMembersWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("include_hidden=true"))
-	if err != nil {
-		t.Fatalf("unsupported hidden request: %v", err)
-	}
-	if unsupportedHidden.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("unsupported hidden status = %d, want %d; body %s", unsupportedHidden.StatusCode(), http.StatusBadRequest, unsupportedHidden.Body)
-	}
-
 	badLimit, err := client.REST().ListCategoriesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("limit=0"))
 	if err != nil {
 		t.Fatalf("bad limit request: %v", err)

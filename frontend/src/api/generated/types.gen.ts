@@ -545,6 +545,7 @@ export type HealthResponse = {
 export type Member = {
     member_id: number;
     name: string;
+    is_hidden: boolean;
     /**
      * Populated in listMembers responses. True when the active member has no active dependent resources and can be tombstone-deleted.
      */
@@ -808,6 +809,10 @@ export type UpdateTagRequest = {
 
 export type UpdateMemberRequest = {
     name: string;
+};
+
+export type UpdateMemberHiddenRequest = {
+    is_hidden: boolean;
 };
 
 export type SeedDemoData = {
@@ -1574,6 +1579,7 @@ export type ListMembersData = {
     body?: never;
     path?: never;
     query?: {
+        include_hidden?: boolean;
         include_tombstoned?: boolean;
         sort?: 'name' | 'created_at' | 'updated_at';
         sort_dir?: 'asc' | 'desc';
@@ -1732,6 +1738,37 @@ export type UpdateMemberResponses = {
 };
 
 export type UpdateMemberResponse = UpdateMemberResponses[keyof UpdateMemberResponses];
+
+export type UpdateMemberHiddenData = {
+    body: UpdateMemberHiddenRequest;
+    path: {
+        member_id: number;
+    };
+    query?: never;
+    url: '/api/members/{member_id}/hidden';
+};
+
+export type UpdateMemberHiddenErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+};
+
+export type UpdateMemberHiddenError = UpdateMemberHiddenErrors[keyof UpdateMemberHiddenErrors];
+
+export type UpdateMemberHiddenResponses = {
+    /**
+     * Member hidden state updated.
+     */
+    200: Member;
+};
+
+export type UpdateMemberHiddenResponse = UpdateMemberHiddenResponses[keyof UpdateMemberHiddenResponses];
 
 export type ListAccountsData = {
     body?: never;

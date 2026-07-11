@@ -141,6 +141,8 @@ COMMENT ON COLUMN tag.level IS 'Zero-based tag depth derived from fqn.';
 CREATE TABLE member (
     member_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
     name TEXT NOT NULL,
+    -- Excludes active rows from default lists while keeping them selectable by explicit query.
+    is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     tombstoned_at TIMESTAMP,

@@ -1343,6 +1343,7 @@ type Member struct {
 
 	// Deletable Populated in listMembers responses. True when the active member has no active dependent resources and can be tombstone-deleted.
 	Deletable    *bool      `json:"deletable,omitempty"`
+	IsHidden     bool       `json:"is_hidden"`
 	MemberId     int64      `json:"member_id"`
 	Name         string     `json:"name"`
 	TombstonedAt *time.Time `json:"tombstoned_at,omitempty"`
@@ -1686,6 +1687,11 @@ type UpdateExchangeRateRequest struct {
 	Rate string `json:"rate"`
 }
 
+// UpdateMemberHiddenRequest defines model for UpdateMemberHiddenRequest.
+type UpdateMemberHiddenRequest struct {
+	IsHidden bool `json:"is_hidden"`
+}
+
 // UpdateMemberRequest defines model for UpdateMemberRequest.
 type UpdateMemberRequest struct {
 	Name string `json:"name"`
@@ -1870,6 +1876,7 @@ type GetExchangeRateParams struct {
 
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
+	IncludeHidden     *bool                     `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 	IncludeTombstoned *bool                     `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 	Sort              *ListMembersParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
 	SortDir           *ListMembersParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
@@ -2083,6 +2090,9 @@ type CreateMemberJSONRequestBody = CreateMemberRequest
 
 // UpdateMemberJSONRequestBody defines body for UpdateMember for application/json ContentType.
 type UpdateMemberJSONRequestBody = UpdateMemberRequest
+
+// UpdateMemberHiddenJSONRequestBody defines body for UpdateMemberHidden for application/json ContentType.
+type UpdateMemberHiddenJSONRequestBody = UpdateMemberHiddenRequest
 
 // BulkReassignJournalRecordAccountJSONRequestBody defines body for BulkReassignJournalRecordAccount for application/json ContentType.
 type BulkReassignJournalRecordAccountJSONRequestBody = BulkReassignRecordsAccountRequest
@@ -2365,6 +2375,11 @@ type ClientInterface interface {
 	UpdateMemberWithBody(ctx context.Context, memberId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateMember(ctx context.Context, memberId int64, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateMemberHiddenWithBody request with any body
+	UpdateMemberHiddenWithBody(ctx context.Context, memberId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateMemberHidden(ctx context.Context, memberId int64, body UpdateMemberHiddenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SearchJournalRecords request
 	SearchJournalRecords(ctx context.Context, params *SearchJournalRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3171,6 +3186,30 @@ func (c *Client) UpdateMemberWithBody(ctx context.Context, memberId int64, conte
 
 func (c *Client) UpdateMember(ctx context.Context, memberId int64, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateMemberRequest(c.Server, memberId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateMemberHiddenWithBody(ctx context.Context, memberId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMemberHiddenRequestWithBody(c.Server, memberId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateMemberHidden(ctx context.Context, memberId int64, body UpdateMemberHiddenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMemberHiddenRequest(c.Server, memberId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6020,6 +6059,18 @@ func NewListMembersRequest(server string, params *ListMembersParams) (*http.Requ
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.IncludeHidden != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_hidden", *params.IncludeHidden, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.IncludeTombstoned != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_tombstoned", *params.IncludeTombstoned, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
@@ -6267,6 +6318,53 @@ func NewUpdateMemberRequestWithBody(server string, memberId int64, contentType s
 	}
 
 	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUpdateMemberHiddenRequest calls the generic UpdateMemberHidden builder with application/json body
+func NewUpdateMemberHiddenRequest(server string, memberId int64, body UpdateMemberHiddenJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateMemberHiddenRequestWithBody(server, memberId, "application/json", bodyReader)
+}
+
+// NewUpdateMemberHiddenRequestWithBody generates requests for UpdateMemberHidden with any type of body
+func NewUpdateMemberHiddenRequestWithBody(server string, memberId int64, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "member_id", memberId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: "int64"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/members/%s/hidden", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -8906,6 +9004,11 @@ type ClientWithResponsesInterface interface {
 
 	UpdateMemberWithResponse(ctx context.Context, memberId int64, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemberResponse, error)
 
+	// UpdateMemberHiddenWithBodyWithResponse request with any body
+	UpdateMemberHiddenWithBodyWithResponse(ctx context.Context, memberId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemberHiddenResponse, error)
+
+	UpdateMemberHiddenWithResponse(ctx context.Context, memberId int64, body UpdateMemberHiddenJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemberHiddenResponse, error)
+
 	// SearchJournalRecordsWithResponse request
 	SearchJournalRecordsWithResponse(ctx context.Context, params *SearchJournalRecordsParams, reqEditors ...RequestEditorFn) (*SearchJournalRecordsResponse, error)
 
@@ -10373,6 +10476,38 @@ func (r UpdateMemberResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateMemberHiddenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Member
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateMemberHiddenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateMemberHiddenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateMemberHiddenResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12179,6 +12314,23 @@ func (c *ClientWithResponses) UpdateMemberWithResponse(ctx context.Context, memb
 		return nil, err
 	}
 	return ParseUpdateMemberResponse(rsp)
+}
+
+// UpdateMemberHiddenWithBodyWithResponse request with arbitrary body returning *UpdateMemberHiddenResponse
+func (c *ClientWithResponses) UpdateMemberHiddenWithBodyWithResponse(ctx context.Context, memberId int64, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemberHiddenResponse, error) {
+	rsp, err := c.UpdateMemberHiddenWithBody(ctx, memberId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateMemberHiddenResponse(rsp)
+}
+
+func (c *ClientWithResponses) UpdateMemberHiddenWithResponse(ctx context.Context, memberId int64, body UpdateMemberHiddenJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemberHiddenResponse, error) {
+	rsp, err := c.UpdateMemberHidden(ctx, memberId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateMemberHiddenResponse(rsp)
 }
 
 // SearchJournalRecordsWithResponse request returning *SearchJournalRecordsResponse
@@ -14311,6 +14463,46 @@ func ParseUpdateMemberResponse(rsp *http.Response) (*UpdateMemberResponse, error
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateMemberHiddenResponse parses an HTTP response from a UpdateMemberHiddenWithResponse call
+func ParseUpdateMemberHiddenResponse(rsp *http.Response) (*UpdateMemberHiddenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateMemberHiddenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Member
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 

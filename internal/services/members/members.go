@@ -14,6 +14,7 @@ import (
 type Member struct {
 	ID           int64
 	Name         string
+	IsHidden     bool
 	Deletable    *bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
@@ -32,13 +33,21 @@ type UpdateInput struct {
 
 // ListOptions controls member list visibility.
 type ListOptions struct {
+	IncludeHidden     bool
 	IncludeTombstoned bool
 	List              services.ListOptions
 }
 
+// ReferenceOptions controls member reference validation.
+type ReferenceOptions struct {
+	// AllowHidden permits hidden active members as valid write references.
+	AllowHidden bool
+}
+
 // Reference is the household member data needed to validate write references.
 type Reference struct {
-	ID int64
+	ID       int64
+	IsHidden bool
 }
 
 // ActiveUsage reports active resources that reference a household member.
@@ -59,6 +68,7 @@ type Repository interface {
 	Get(context.Context, int64, bool) (Member, error)
 	List(context.Context, ListOptions) (services.PaginatedList[Member], error)
 	UpdateName(context.Context, int64, string) (Member, error)
+	UpdateHidden(context.Context, int64, bool) (Member, error)
 	ActiveUsage(context.Context, []int64) (map[int64]ActiveUsage, error)
 	Tombstone(context.Context, int64) error
 }
@@ -103,8 +113,10 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Member, error)
 
 // ValidateActiveReferences returns active household member references keyed by ID.
 //
-// Missing, tombstoned, and non-positive IDs return services.ErrInvalidReference.
-func (s *Service) ValidateActiveReferences(ctx context.Context, ids []int64) (map[int64]Reference, error) {
+// Hidden active members are rejected unless opts.AllowHidden is true.
+// Missing, tombstoned, hidden-disallowed, and non-positive IDs return
+// services.ErrInvalidReference.
+func (s *Service) ValidateActiveReferences(ctx context.Context, ids []int64, opts ReferenceOptions) (map[int64]Reference, error) {
 	uniqueIDs := deduplicateIDs(ids)
 	if len(uniqueIDs) == 0 {
 		return map[int64]Reference{}, nil
@@ -118,7 +130,7 @@ func (s *Service) ValidateActiveReferences(ctx context.Context, ids []int64) (ma
 	refs := make(map[int64]Reference, len(uniqueIDs))
 	for _, id := range uniqueIDs {
 		state, ok := states[id]
-		if !ok || !state.active {
+		if !ok || !state.active || (!opts.AllowHidden && state.reference.IsHidden) {
 			return nil, services.ErrInvalidReference
 		}
 		refs[id] = state.reference
@@ -128,13 +140,44 @@ func (s *Service) ValidateActiveReferences(ctx context.Context, ids []int64) (ma
 }
 
 // ValidateActiveReference returns one active household member reference.
-func (s *Service) ValidateActiveReference(ctx context.Context, id int64) (Reference, error) {
-	refs, err := s.ValidateActiveReferences(ctx, []int64{id})
+//
+// Hidden active members are rejected unless opts.AllowHidden is true.
+func (s *Service) ValidateActiveReference(ctx context.Context, id int64, opts ReferenceOptions) (Reference, error) {
+	refs, err := s.ValidateActiveReferences(ctx, []int64{id}, opts)
 	if err != nil {
 		return Reference{}, err
 	}
 
 	return refs[id], nil
+}
+
+// UpdateHidden validates and updates a household member hidden state.
+func (s *Service) UpdateHidden(ctx context.Context, id int64, isHidden *bool) (Member, error) {
+	if id <= 0 {
+		return Member{}, services.InvalidRequest("member_id must be positive")
+	}
+	if isHidden == nil {
+		return Member{}, services.InvalidRequest("is_hidden is required")
+	}
+
+	var member Member
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		updated, err := s.repo.UpdateHidden(ctx, id, *isHidden)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("member not found")
+		}
+		if err != nil {
+			return err
+		}
+
+		s.cacheActiveReference(updated)
+		member = updated
+		return nil
+	}); err != nil {
+		return Member{}, err
+	}
+
+	return member, nil
 }
 
 // InvalidateReferenceCache forces the next reference validation to reload references.
@@ -291,7 +334,8 @@ func (s *Service) cacheActiveReference(member Member) {
 func memberReferenceStateFromMember(member Member) memberReferenceState {
 	return memberReferenceState{
 		reference: Reference{
-			ID: member.ID,
+			ID:       member.ID,
+			IsHidden: member.IsHidden,
 		},
 		active: member.TombstonedAt == nil,
 	}
