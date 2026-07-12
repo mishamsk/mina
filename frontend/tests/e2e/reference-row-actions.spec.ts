@@ -3,6 +3,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 interface RowActionTarget {
   readonly actionCount: number;
   readonly buttonActionLabels: readonly string[];
+  readonly compact?: boolean;
   readonly create: (page: Page, fqn: string) => Promise<void>;
   readonly foldedActionLabels: readonly string[];
   readonly path: string;
@@ -84,7 +85,46 @@ const expectActionColumnInsetMatchesTable = async (rowActions: Locator) => {
   expect(insets.trailing).toBeCloseTo(insets.leading, 4);
 };
 
-test("reference row actions fold only when their action cell cannot fit them", async ({
+const expectCompactActionClusterHugsFrame = async (rowActions: Locator) => {
+  const geometry = await rowActions.evaluate((element) => {
+    const frame = document.querySelector(
+      "[data-testid='reference-table-frame']",
+    );
+    const actionCell = element.closest("td");
+    const actionCellStyles = actionCell
+      ? window.getComputedStyle(actionCell)
+      : undefined;
+    const visibleControls = Array.from(
+      element.querySelectorAll<HTMLElement>(
+        ".row-actions-buttons :is(.row-actions-button, .row-actions-toggle), .row-actions-overflow",
+      ),
+    ).filter((control) => {
+      const styles = window.getComputedStyle(control);
+      const rect = control.getBoundingClientRect();
+      return styles.display !== "none" && rect.width > 0 && rect.height > 0;
+    });
+    const clusterRight = visibleControls.reduce(
+      (right, control) =>
+        Math.max(right, control.getBoundingClientRect().right),
+      Number.NEGATIVE_INFINITY,
+    );
+
+    return {
+      clusterRight:
+        clusterRight === Number.NEGATIVE_INFINITY ? undefined : clusterRight,
+      expectedRight:
+        (frame?.getBoundingClientRect().right ?? 0) -
+        Number.parseFloat(actionCellStyles?.paddingRight ?? "0"),
+    };
+  });
+
+  expect(geometry.clusterRight).toBeDefined();
+  expect(
+    Math.abs((geometry.clusterRight ?? 0) - geometry.expectedRight),
+  ).toBeLessThanOrEqual(3);
+};
+
+test("reference row actions fold only when their action cell cannot fit them, including compact tags", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -125,6 +165,7 @@ test("reference row actions fold only when their action cell cannot fit them", a
     {
       actionCount: 4,
       buttonActionLabels: ["Edit tag", "Move or rename", "Delete tag"],
+      compact: true,
       create: createTag,
       foldedActionLabels: [
         "Hide tag",
@@ -172,6 +213,9 @@ test("reference row actions fold only when their action cell cannot fit them", a
       expect(fit.availableWidth).toBeGreaterThanOrEqual(fit.fullClusterWidth);
       expect(fit.buttonsFolded).toBe(false);
       expect(fit.overflowVisible).toBe(false);
+      if (target.compact) {
+        await expectCompactActionClusterHugsFrame(rowActions);
+      }
     }
   }
 
@@ -205,6 +249,9 @@ test("reference row actions fold only when their action cell cannot fit them", a
     }
     await expect(overflow).toBeVisible();
     await expectActionColumnInsetMatchesTable(rowActions);
+    if (target.compact) {
+      await expectCompactActionClusterHugsFrame(rowActions);
+    }
 
     await overflow.focus();
     await page.keyboard.press("Enter");

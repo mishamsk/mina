@@ -153,37 +153,43 @@ const MembersList = ({
   };
 
   if (loading && !members) {
-    return <MembersListSkeleton />;
+    return (
+      <div className="w-full max-w-[48rem]">
+        <MembersListSkeleton />
+      </div>
+    );
   }
 
   if (errorMessage) {
     return (
-      <div
-        className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
-        role="alert"
-      >
-        <p className="text-destructive font-semibold">
-          Members could not be loaded.
-        </p>
-        <details className="text-muted-foreground mt-3 text-sm">
-          <summary className="text-foreground cursor-pointer">
-            API error
-          </summary>
-          <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
-            {errorMessage}
-          </pre>
-        </details>
-        <Button
-          type="button"
-          variant="outline"
-          className="mt-4"
-          onClick={() => {
-            void refreshMembersPage();
-          }}
+      <div className="w-full max-w-[48rem]">
+        <div
+          className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
+          role="alert"
         >
-          <Reload aria-hidden="true" />
-          Retry
-        </Button>
+          <p className="text-destructive font-semibold">
+            Members could not be loaded.
+          </p>
+          <details className="text-muted-foreground mt-3 text-sm">
+            <summary className="text-foreground cursor-pointer">
+              API error
+            </summary>
+            <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
+              {errorMessage}
+            </pre>
+          </details>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4"
+            onClick={() => {
+              void refreshMembersPage();
+            }}
+          >
+            <Reload aria-hidden="true" />
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }
@@ -191,7 +197,7 @@ const MembersList = ({
   if (!members || rows.length === 0) {
     const hasMembers = (members?.length ?? 0) > 0;
     return (
-      <div className="bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]">
+      <div className="bg-card flex w-full max-w-[48rem] flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]">
         <div className="space-y-1">
           <p className="font-heading text-base font-semibold uppercase">
             No members
@@ -208,7 +214,7 @@ const MembersList = ({
 
   return (
     <div
-      className="bg-card flex h-full min-h-0 flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+      className="bg-card flex h-full min-h-0 w-full max-w-[48rem] flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
       data-testid="reference-table-frame"
     >
       <div

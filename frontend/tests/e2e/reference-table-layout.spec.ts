@@ -3,12 +3,63 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 const longRowCount = 32;
 
 interface ReferenceTableTarget {
+  readonly compactMaxWidth?: number;
   readonly frameTestId: string;
+  readonly layout: "compact" | "wide";
   readonly path: string;
   readonly rowTestId: string;
   readonly rowText: string;
   readonly shortNeedle: string;
 }
+
+const expectReferenceFrameLayout = async (
+  frame: Locator,
+  layout: ReferenceTableTarget["layout"],
+  compactMaxWidth?: number,
+): Promise<void> => {
+  const geometry = await frame.evaluate((element) => {
+    const main = document.querySelector("main");
+    const actionHeader = element.querySelector("thead th:last-child");
+    const mainRect = main?.getBoundingClientRect();
+    const mainStyles = main ? window.getComputedStyle(main) : undefined;
+    const frameRect = element.getBoundingClientRect();
+
+    return {
+      actionHeaderRight: actionHeader?.getBoundingClientRect().right,
+      contentLeft:
+        (mainRect?.left ?? 0) +
+        Number.parseFloat(mainStyles?.paddingLeft ?? "0"),
+      contentRight:
+        (mainRect?.right ?? 0) -
+        Number.parseFloat(mainStyles?.paddingRight ?? "0"),
+      frameLeft: frameRect.left,
+      frameRight: frameRect.right,
+      frameWidth: frameRect.width,
+    };
+  });
+
+  expect(
+    Math.abs(geometry.frameLeft - geometry.contentLeft),
+  ).toBeLessThanOrEqual(2);
+  expect(geometry.actionHeaderRight).toBeDefined();
+  expect(
+    geometry.frameRight - (geometry.actionHeaderRight ?? geometry.frameLeft),
+  ).toBeLessThanOrEqual(3);
+
+  if (layout === "compact") {
+    expect(compactMaxWidth).toBeDefined();
+    expect(geometry.frameWidth).toBeLessThanOrEqual((compactMaxWidth ?? 0) + 2);
+    expect(geometry.frameWidth).toBeGreaterThanOrEqual(
+      (compactMaxWidth ?? 0) - 2,
+    );
+    expect(geometry.frameRight).toBeLessThan(geometry.contentRight);
+    return;
+  }
+
+  expect(
+    Math.abs(geometry.frameRight - geometry.contentRight),
+  ).toBeLessThanOrEqual(2);
+};
 
 const createAccount = async (page: Page, fqn: string): Promise<void> => {
   const response = await page.request.post("/api/accounts", {
@@ -168,6 +219,7 @@ test("reference tables keep their framed viewport inset and scroll internally", 
   const tables: readonly ReferenceTableTarget[] = [
     {
       frameTestId: "accounts-table-frame",
+      layout: "wide",
       path: "/accounts",
       rowTestId: "accounts-tree-row",
       rowText: "Row00",
@@ -175,20 +227,25 @@ test("reference tables keep their framed viewport inset and scroll internally", 
     },
     {
       frameTestId: "reference-table-frame",
+      layout: "wide",
       path: "/categories",
       rowTestId: "categories-tree-row",
       rowText: "Row00",
       shortNeedle: `${categoriesPrefix}:Row00`,
     },
     {
+      compactMaxWidth: 896,
       frameTestId: "reference-table-frame",
+      layout: "compact",
       path: "/tags",
       rowTestId: "tags-tree-row",
       rowText: "Row00",
       shortNeedle: `${tagsPrefix}:Row00`,
     },
     {
+      compactMaxWidth: 768,
       frameTestId: "reference-table-frame",
+      layout: "compact",
       path: "/members",
       rowTestId: "members-list-row",
       rowText: "Row00",
@@ -217,6 +274,11 @@ test("reference tables keep their framed viewport inset and scroll internally", 
           ? "accounts-table-scroll"
           : "reference-table-scroll",
       ),
+    );
+    await expectReferenceFrameLayout(
+      page.getByTestId(table.frameTestId),
+      table.layout,
+      table.compactMaxWidth,
     );
   }
 

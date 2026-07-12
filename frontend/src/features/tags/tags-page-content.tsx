@@ -263,6 +263,7 @@ export const TagsPageContent = ({
       ) : null}
       <div className="min-h-0 flex-1">
         <ReferenceTree
+          compact
           emptyDescription="The tag tree will show tag paths and hidden state once tags exist."
           emptyFilteredDescription="No tags match the current search and filters. The tree shows tag paths and hidden state."
           emptyTitle="No tags"

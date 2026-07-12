@@ -112,10 +112,15 @@ const HiddenRowIndicator = ({ label }: { readonly label: string }) => (
   </Tooltip>
 );
 
-const referenceTreeSkeletonGridClass = (hasBadgeColumn: boolean) =>
+const referenceTreeSkeletonGridClass = (
+  hasBadgeColumn: boolean,
+  compact: boolean,
+) =>
   hasBadgeColumn
     ? "grid grid-cols-[58%_24%_18%] sm:grid-cols-[62%_20%_18%]"
-    : "grid grid-cols-[76%_24%] sm:grid-cols-[82%_18%]";
+    : compact
+      ? "grid grid-cols-[minmax(0,1fr)_clamp(5.5rem,17%,9.25rem)]"
+      : "grid grid-cols-[76%_24%] sm:grid-cols-[82%_18%]";
 
 const referenceTreeSkeletonColumnClasses = (hasBadgeColumn: boolean) =>
   hasBadgeColumn
@@ -128,8 +133,10 @@ const referenceTreeClickableRowClassName =
   "focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
 
 const ReferenceTreeSkeleton = ({
+  compact,
   hasBadgeColumn,
 }: {
+  readonly compact: boolean;
   readonly hasBadgeColumn: boolean;
 }) => (
   <div
@@ -138,7 +145,7 @@ const ReferenceTreeSkeleton = ({
   >
     <div
       className={cn(
-        referenceTreeSkeletonGridClass(hasBadgeColumn),
+        referenceTreeSkeletonGridClass(hasBadgeColumn, compact),
         "bg-[var(--table-header)] py-2",
       )}
     >
@@ -154,7 +161,7 @@ const ReferenceTreeSkeleton = ({
       <div
         key={index}
         className={cn(
-          referenceTreeSkeletonGridClass(hasBadgeColumn),
+          referenceTreeSkeletonGridClass(hasBadgeColumn, compact),
           "py-3",
           index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
         )}
@@ -172,18 +179,23 @@ const ReferenceTreeSkeleton = ({
 );
 
 const badgeColumnWidthClass = "w-[24%] px-3 py-2 sm:w-[20%]";
-const nameColumnWidthClass = (hasBadgeColumn: boolean) =>
+const nameColumnWidthClass = (hasBadgeColumn: boolean, compact: boolean) =>
   hasBadgeColumn
     ? "w-[58%] px-3 py-2 sm:w-[62%]"
-    : "w-[76%] px-3 py-2 sm:w-[82%]";
+    : compact
+      ? "px-3 py-2"
+      : "w-[76%] px-3 py-2 sm:w-[82%]";
 
-const actionsColumnWidthClass = (hasBadgeColumn: boolean) =>
+const actionsColumnWidthClass = (hasBadgeColumn: boolean, compact: boolean) =>
   hasBadgeColumn
     ? "w-[18%] px-3 py-2 text-center"
-    : "w-[24%] px-3 py-2 text-center sm:w-[18%]";
+    : compact
+      ? "w-[clamp(5.5rem,17%,9.25rem)] px-3 py-2 text-right"
+      : "w-[24%] px-3 py-2 text-center sm:w-[18%]";
 
 interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   readonly badgeHeader?: string;
+  readonly compact?: boolean;
   readonly emptyAction?: ReactNode;
   readonly emptyDescription: string;
   readonly emptyFilteredDescription: string;
@@ -229,6 +241,7 @@ export const ReferenceTree = <
   TGroup extends ReferenceGroup,
 >({
   badgeHeader,
+  compact = false,
   emptyAction,
   emptyDescription,
   emptyFilteredDescription,
@@ -257,35 +270,44 @@ export const ReferenceTree = <
   );
 
   if (loading && !leaves) {
-    return <ReferenceTreeSkeleton hasBadgeColumn={hasBadgeColumn} />;
+    return (
+      <div className={compact ? "w-full max-w-[56rem]" : undefined}>
+        <ReferenceTreeSkeleton
+          compact={compact}
+          hasBadgeColumn={hasBadgeColumn}
+        />
+      </div>
+    );
   }
 
   if (errorMessage) {
     return (
-      <div
-        className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
-        role="alert"
-      >
-        <p className="text-destructive font-semibold">{loadErrorTitle}</p>
-        <details className="text-muted-foreground mt-3 text-sm">
-          <summary className="text-foreground cursor-pointer">
-            API error
-          </summary>
-          <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
-            {errorMessage}
-          </pre>
-        </details>
-        {onRetry ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4"
-            onClick={onRetry}
-          >
-            <Reload aria-hidden="true" />
-            Retry
-          </Button>
-        ) : null}
+      <div className={compact ? "w-full max-w-[56rem]" : undefined}>
+        <div
+          className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
+          role="alert"
+        >
+          <p className="text-destructive font-semibold">{loadErrorTitle}</p>
+          <details className="text-muted-foreground mt-3 text-sm">
+            <summary className="text-foreground cursor-pointer">
+              API error
+            </summary>
+            <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
+              {errorMessage}
+            </pre>
+          </details>
+          {onRetry ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4"
+              onClick={onRetry}
+            >
+              <Reload aria-hidden="true" />
+              Retry
+            </Button>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -293,7 +315,12 @@ export const ReferenceTree = <
   if (!leaves || rows.length === 0) {
     const hasLeaves = (leaves?.length ?? 0) > 0;
     return (
-      <div className="bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]">
+      <div
+        className={cn(
+          "bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]",
+          compact && "w-full max-w-[56rem]",
+        )}
+      >
         <div className="space-y-1">
           <p className="font-heading text-base font-semibold uppercase">
             {emptyTitle}
@@ -309,7 +336,10 @@ export const ReferenceTree = <
 
   return (
     <div
-      className="bg-card flex h-full min-h-0 flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+      className={cn(
+        "bg-card flex h-full min-h-0 flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
+        compact && "w-full max-w-[56rem]",
+      )}
       data-testid="reference-table-frame"
     >
       <div
@@ -320,7 +350,10 @@ export const ReferenceTree = <
         <table className="reference-table w-full table-fixed border-collapse text-sm">
           <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-left text-xs font-semibold uppercase">
-              <th scope="col" className={nameColumnWidthClass(hasBadgeColumn)}>
+              <th
+                scope="col"
+                className={nameColumnWidthClass(hasBadgeColumn, compact)}
+              >
                 Name
               </th>
               {hasBadgeColumn ? (
@@ -330,7 +363,7 @@ export const ReferenceTree = <
               ) : null}
               <th
                 scope="col"
-                className={actionsColumnWidthClass(hasBadgeColumn)}
+                className={actionsColumnWidthClass(hasBadgeColumn, compact)}
               />
             </tr>
           </thead>
@@ -410,12 +443,13 @@ export const ReferenceTree = <
                   {hasBadgeColumn ? (
                     <td className="min-w-0 px-3 py-2">{renderBadge?.(row)}</td>
                   ) : null}
-                  <td className="px-3 py-2 text-center">
-                    <RowActions
-                      actions={actions}
-                      foldable
-                      className="justify-center"
-                    />
+                  <td
+                    className={cn(
+                      "px-3 py-2",
+                      compact && !hasBadgeColumn ? "text-right" : "text-center",
+                    )}
+                  >
+                    <RowActions actions={actions} foldable />
                   </td>
                 </tr>
               );
