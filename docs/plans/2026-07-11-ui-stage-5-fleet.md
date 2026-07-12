@@ -87,7 +87,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [x] Task 17: `gwrc` — Account credit-limit UX: empty-state add button and credit-card indicator icon (after Tasks 12–14 settle the accounts tree name column and row semantics; doc amendment: indicator placement in webui-design) — branch `gwrc-credit-limit-ux`
 - [x] Task 18: `dcjx` — Add member hide and unhide controls after API support (blocked by t828, Task 3; after Task 15 so controls integrate with compact Member RowActions) — branch `dcjx-member-hide-controls`
 - [x] Task 19: `5z54` — Allow changing account type in the account edit UI (blocked by dgkf, Task 4; small frontend form change) — branch `5z54-account-type-edit-ui`
-- [ ] Task 20: `9985` — Stale deleteability: account delete stays blocked after its last transaction is deleted (frontend invalidation bug plus categories/tags/members staleness audit; after the reference-table tasks so the audit covers their final delete surfaces) — branch `9985-deleteability-invalidation`
+- [x] Task 20: `9985` — Stale deleteability: account delete stays blocked after its last transaction is deleted (frontend invalidation bug plus categories/tags/members staleness audit; after the reference-table tasks so the audit covers their final delete surfaces) — branch `9985-deleteability-invalidation`
 - [ ] Task 21: `0wet` — Category picker cache never refetches after invalidation while mounted + `6kcn` — Guard register-page snapshots against writes from fetches started before bulk invalidation (grouped frontend store cache-guard fixes, same invalidation-correctness area as Task 20) — branch `0wet-cache-guards`
 
 ### Recurring UX direction change
