@@ -5,6 +5,8 @@ CREATE TABLE tag (
 	fqn TEXT NOT NULL,
 	-- Excludes active rows from default lists while keeping them selectable by explicit query.
 	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+	-- Marks active rows for prominent UI/account-picker placement without changing accounting semantics.
+	is_featured BOOLEAN NOT NULL DEFAULT FALSE,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	tombstoned_at TIMESTAMP,
@@ -21,6 +23,7 @@ CREATE TABLE tag (
 
 COMMENT ON COLUMN tag.fqn IS 'Colon-separated hierarchical tag path, e.g. Trips:Vacation.';
 COMMENT ON COLUMN tag.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
+COMMENT ON COLUMN tag.is_featured IS 'Marks active rows for prominent UI/account-picker placement without changing accounting semantics.';
 COMMENT ON COLUMN tag.parent_fqn IS 'Parent tag path derived from fqn, or NULL for root tags.';
 COMMENT ON COLUMN tag.name IS 'Leaf tag name derived from fqn.';
 COMMENT ON COLUMN tag.level IS 'Zero-based tag depth derived from fqn.';

@@ -7,6 +7,8 @@ CREATE TABLE category (
 	economic_intent category_economic_intent NOT NULL,
 	-- Excludes active rows from default lists while keeping them selectable by explicit query.
 	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
+	-- Marks active rows for prominent UI/account-picker placement without changing accounting semantics.
+	is_featured BOOLEAN NOT NULL DEFAULT FALSE,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	tombstoned_at TIMESTAMP,
@@ -24,6 +26,7 @@ CREATE TABLE category (
 COMMENT ON COLUMN category.fqn IS 'Colon-separated hierarchical category path, e.g. Food:Restaurants.';
 COMMENT ON COLUMN category.economic_intent IS 'Explicit economic meaning used for transaction classification.';
 COMMENT ON COLUMN category.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
+COMMENT ON COLUMN category.is_featured IS 'Marks active rows for prominent UI/account-picker placement without changing accounting semantics.';
 COMMENT ON COLUMN category.parent_fqn IS 'Parent category path derived from fqn, or NULL for root categories.';
 COMMENT ON COLUMN category.name IS 'Leaf category name derived from fqn.';
 COMMENT ON COLUMN category.level IS 'Zero-based category depth derived from fqn.';
