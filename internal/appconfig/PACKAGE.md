@@ -8,7 +8,7 @@
 ## Implicit Contracts
 
 - Precedence is defaults < config file < environment < overrides.
-- The local config file is `$XDG_CONFIG_PATH/mina/config.toml` when `XDG_CONFIG_PATH` is set.
+- The local config file is `$XDG_CONFIG_HOME/mina/config.toml` when `XDG_CONFIG_HOME` is set.
 - Explicit config file paths override default config path discovery.
 - `DefaultConfig` does not inspect the filesystem or environment.
 - `Load` resolves Mina's app cache directory as `mina` under `XDG_CACHE_HOME` when set, otherwise under `os.UserCacheDir()`, unless `Overrides.CacheDir` is set.

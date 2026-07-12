@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	configDirEnv  = "XDG_CONFIG_PATH"
+	configHomeEnv = "XDG_CONFIG_HOME"
 	cacheDirEnv   = "XDG_CACHE_HOME"
 	configRelPath = "mina/config.toml"
 )
@@ -28,7 +28,7 @@ const (
 )
 
 // ConfigFileHelp documents the local config file path used by the loader.
-const ConfigFileHelp = "$XDG_CONFIG_PATH/mina/config.toml"
+const ConfigFileHelp = "$XDG_CONFIG_HOME/mina/config.toml"
 
 // Config contains source-loaded process settings.
 type Config struct {
@@ -371,12 +371,12 @@ func configFilePath(opts LoadOptions) string {
 		return opts.ConfigFilePath
 	}
 
-	configDir := os.Getenv(configDirEnv)
-	if configDir == "" {
+	configHome := os.Getenv(configHomeEnv)
+	if configHome == "" {
 		return ""
 	}
 
-	return filepath.Join(configDir, configRelPath)
+	return filepath.Join(configHome, configRelPath)
 }
 
 func loadEnvConfig() (fileConfig, error) {

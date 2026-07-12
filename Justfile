@@ -103,6 +103,16 @@ frontend-dev backend_url="http://127.0.0.1:8080":
 [group('frontend')]
 frontend-check: frontend-openapi-check frontend-fmt-check frontend-lint frontend-typecheck
 
+# Check Docker builder versions against development tool declarations.
+[group('docker')]
+docker-version-check:
+    scripts/check-docker-versions.sh
+
+# Run the real Docker image and Compose lifecycle test.
+[group('docker')]
+test-docker:
+    scripts/docker-service-test.sh
+
 # Regenerate frontend REST client code.
 [group('codegen')]
 [working-directory: 'frontend']

@@ -1,0 +1,6 @@
+startup_validation = "shallow"
+
+[backups.file]
+directory = "/backups"
+retention_count = 14
+schedule_utc = "0 3 * * *"

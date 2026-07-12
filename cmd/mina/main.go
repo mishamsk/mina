@@ -80,7 +80,7 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 		&configFilePath,
 		"config-file",
 		"",
-		"config file path (default: $XDG_CONFIG_PATH/mina/config.toml)",
+		"config file path (default: "+appconfig.ConfigFileHelp+")",
 	)
 
 	root.AddCommand(newVersionCommand(stdout))

@@ -5,6 +5,8 @@ exec mina serve --db $WORK/rest.db --yes --host 127.0.0.1 --port $PORT &server&
 httpget http://127.0.0.1:$PORT/api/health
 stdout '"status":"ok"'
 stdout '"schema_version":[1-9][0-9]*'
+httpget http://127.0.0.1:$PORT/api/openapi.json
+stdout '"openapi":"3.0.3"'
 httpget -accept text/html http://127.0.0.1:$PORT/
 stdout '<div id="root"></div>'
 httpget http://127.0.0.1:$PORT/status

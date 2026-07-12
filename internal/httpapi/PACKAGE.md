@@ -12,8 +12,7 @@
 - Request middleware supplies request IDs, real IP handling, panic recovery, local API timeout enforcement, and optional access logs.
 - Generated strict-server operation methods are the HTTP adapter implementation surface.
 - Generated OpenAPI route registration is the only source of REST route path/method declarations.
-- `/api/openapi.json` is an adapter-owned discovery endpoint serving the embedded generated spec.
-  API tools should use `/api/openapi.json`; no interactive documentation endpoint is served.
+- `/api/openapi.json` is the adapter-owned OpenAPI discovery endpoint serving the embedded generated spec; no interactive documentation endpoint is served.
 - Generated request binding owns transport parsing for OpenAPI-declared path parameters, query parameter types/cardinality, and JSON body decoding.
 - OpenAPI request validation owns transport-schema validation, including declared query values, JSON schema validation, unknown JSON fields, and required non-null JSON fields.
 - Unknown query parameter names are rejected by an adapter guard derived from the matched OpenAPI operation because the upstream validator ignores undeclared query names.

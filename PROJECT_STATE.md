@@ -21,8 +21,10 @@
   - Paginated journal-record search with account-FQN prefix register filtering, plus account-record search by account ID.
   - Bulk journal-record category, tag, account, and status updates.
   - Background operation status, run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
-  - OpenAPI discovery through `GET /openapi.json`.
+  - OpenAPI discovery through `GET /api/openapi.json`.
 - Implemented runtime/demo behavior:
+  - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, and localhost-only publishing by default.
+  - `just test-docker` runs a real Docker lifecycle check covering Compose health, demo-data retention across recreation/restart/image replacement, backups, database validation, and cleanup.
   - Runtime opens one app for the process lifetime and composes REST and embedded web UI handlers.
   - Runtime runs non-blocking startup and recurring operations in `serve`, with public operation status and manual trigger APIs.
   - Exchange-rate startup loading uses a Frankfurter USD NDJSON cache file by default; scheduled and manual REST-triggered loading use targeted Frankfurter API requests.

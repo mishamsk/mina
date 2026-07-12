@@ -1,11 +1,12 @@
 # Testing
 
-Mina has exactly three app test classes. All exercise Mina at a high-level app
+Mina has exactly four app test classes. All exercise Mina at a high-level app
 boundary:
 
 - `app-tests`: normal in-process app tests in `internal/apptest/runtime`.
 - `e2e-tests`: testscript-driven launched-process tests in `cmd/mina/testdata/script`, driven by `cmd/mina/cli_smoke_test.go`.
 - `frontend-e2e-tests`: Playwright-driven embedded UI checks in `frontend/tests/e2e`.
+- `docker-lifecycle-tests`: Docker Compose deployment checks in `scripts/docker-service-test.sh`, driven by `just test-docker`.
 - No unit tests and no other app test locations.
 - No test code under `internal/tools/**`; validate tool changes with manual smoke checks, `just pre-commit`, and review.
 
@@ -182,3 +183,24 @@ Do not use `frontend-e2e-tests` for:
 
 Frontend e2e tests prove browser, binary, embedded assets, and listener wiring.
 They must not duplicate REST scenario coverage.
+
+## Docker-Lifecycle-Tests
+
+`docker-lifecycle-tests` run only through `just test-docker` and are not run by default.
+
+Use them as a small smoke suite for Docker deployment behavior only:
+
+- Real Docker image builds or supplied images.
+- Compose service startup, restart, recreation, and replacement.
+- Bind-mounted config/backups and named database/cache volumes.
+- Real network listener wiring through published ports.
+- Database and backup file persistence across supported container lifecycle actions.
+
+Do not use `docker-lifecycle-tests` for:
+
+- REST endpoint, domain validation, provider edge-case, or app scenario coverage
+  that can be tested as `app-tests`.
+- Exhaustive migration, downgrade, or deployment-platform matrices.
+
+Docker lifecycle tests prove image and Compose deployment wiring. App behavior
+coverage belongs in `app-tests`.

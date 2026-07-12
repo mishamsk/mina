@@ -2,6 +2,7 @@
 exec mina help serve
 stdout 'Serve the REST API'
 stdout '--config-file'
+stdout 'XDG_CONFIG_HOME/mina/config.toml'
 stdout '--host'
 stdout 'config: serve.host; env: MINA_HOST'
 stdout 'env: MINA_YES'
@@ -11,7 +12,7 @@ stdout 'env: MINA_QUIET'
 # The local config file supplies app settings; command-only settings come from command-owned env.
 mkdir cfg/mina
 cp config.toml cfg/mina/config.toml
-env XDG_CONFIG_PATH=$WORK/cfg MINA_YES=true
+env XDG_CONFIG_HOME=$WORK/cfg MINA_YES=true
 exec mina migrate
 exists cfg-serve.db
 

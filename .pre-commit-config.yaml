@@ -22,6 +22,12 @@ repos:
         args: [--markdown-linebreak-ext=md]
   - repo: local
     hooks:
+      - id: mina-docker-version-check
+        name: mina Docker version check
+        entry: just docker-version-check
+        language: system
+        pass_filenames: false
+        files: ^(docker/Dockerfile|mise\.toml|frontend/package\.json|scripts/check-docker-versions\.sh)$
       - id: mina-fmt-check
         name: mina fmt check
         entry: just fmt-check

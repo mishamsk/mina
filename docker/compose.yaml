@@ -1,0 +1,87 @@
+services:
+  volume-init:
+    image: ${MINA_IMAGE:-ghcr.io/mishamsk/mina:latest}
+    user: "0:0"
+    command: ["volume-init"]
+    restart: "no"
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MINA_UID: ${MINA_UID:-1000}
+      MINA_GID: ${MINA_GID:-1000}
+    volumes:
+      - type: volume
+        source: mina-data
+        target: /data
+        volume:
+          nocopy: true
+      - type: volume
+        source: mina-cache
+        target: /cache
+        volume:
+          nocopy: true
+
+  mina:
+    image: ${MINA_IMAGE:-ghcr.io/mishamsk/mina:latest}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    user: "${MINA_UID:-1000}:${MINA_GID:-1000}"
+    depends_on:
+      volume-init:
+        condition: service_completed_successfully
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - XDG_CONFIG_HOME=/config
+      - XDG_CACHE_HOME=/cache
+      - MINA_DB=/data/mina.duckdb
+      - MINA_BACKUP_FILE_SCHEDULE_UTC
+      - MINA_HOST=0.0.0.0
+      - MINA_PORT=8080
+      - MINA_YES=true
+    ports:
+      - "${MINA_BIND_ADDRESS:-127.0.0.1}:${MINA_HOST_PORT:-8080}:8080"
+    volumes:
+      - type: bind
+        source: "${MINA_CONFIG_DIR:-./config}"
+        target: /config/mina
+        bind:
+          create_host_path: false
+      - type: volume
+        source: mina-data
+        target: /data
+        volume:
+          nocopy: true
+      - type: volume
+        source: mina-cache
+        target: /cache
+        volume:
+          nocopy: true
+      - type: bind
+        source: "${MINA_BACKUP_DIR:-./backups}"
+        target: /backups
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD", "mina-healthcheck", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  mina-data:
+  mina-cache:
