@@ -190,6 +190,7 @@ export const TagsPageContent = ({
             void toggleTagHidden(row.leaf as Tag, opener);
           },
           pressed: row.leaf.is_hidden,
+          slot: "hidden",
         },
         ...moveAction(row),
         {
@@ -219,6 +220,7 @@ export const TagsPageContent = ({
             void toggleGroupHidden(row.group as GroupState, opener);
           },
           pressed: row.group.is_hidden,
+          slot: "hidden",
         },
         ...moveAction(row),
       ];
@@ -281,6 +283,7 @@ export const TagsPageContent = ({
               void navigate(`/tags/${row.leaf.tag_id}`);
             }
           }}
+          indicatorSlots={["featured", "hidden"]}
           renderActions={renderActions}
           rowActivationLabel={(row) => `Open tag ${row.fqn}`}
           rowTestId="tags-tree-row"

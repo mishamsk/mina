@@ -196,6 +196,7 @@ export const CategoriesPageContent = ({
             void toggleCategoryHidden(row.leaf as Category);
           },
           pressed: row.leaf.is_hidden,
+          slot: "hidden",
         },
         ...moveAction(row),
         {
@@ -225,6 +226,7 @@ export const CategoriesPageContent = ({
             void toggleGroupHidden(row.group as GroupState);
           },
           pressed: row.group.is_hidden,
+          slot: "hidden",
         },
         ...moveAction(row),
       ];
@@ -285,6 +287,7 @@ export const CategoriesPageContent = ({
               void navigate(`/categories/${row.leaf.category_id}`);
             }
           }}
+          indicatorSlots={["featured", "hidden"]}
           renderActions={renderActions}
           renderBadge={renderCategoryBadge}
           rowActivationLabel={(row) => `Open category ${row.fqn}`}

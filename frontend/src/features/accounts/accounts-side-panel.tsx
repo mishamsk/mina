@@ -795,7 +795,6 @@ const AccountsSidePanelContent = ({
                   aria-disabled={
                     account.deletable !== true ? "true" : undefined
                   }
-                  className="aria-disabled:bg-card aria-disabled:text-muted-foreground aria-disabled:border-muted-foreground aria-disabled:hover:bg-card aria-disabled:cursor-not-allowed aria-disabled:shadow-none aria-disabled:hover:shadow-none aria-disabled:active:translate-x-0 aria-disabled:active:translate-y-0"
                   onClick={() => {
                     if (account.deletable !== true) {
                       return;

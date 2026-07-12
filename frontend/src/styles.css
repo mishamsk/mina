@@ -451,7 +451,11 @@
     :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="1"]
       .row-actions-buttons
-      :is(.row-actions-button, .row-actions-toggle) {
+      :is(
+        .row-actions-button,
+        .row-actions-toggle,
+        .row-actions-indicator-slot
+      ) {
       display: none !important;
     }
 
@@ -466,7 +470,11 @@
     :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="2"]
       .row-actions-buttons
-      :is(.row-actions-button, .row-actions-toggle) {
+      :is(
+        .row-actions-button,
+        .row-actions-toggle,
+        .row-actions-indicator-slot
+      ) {
       display: none !important;
     }
 
@@ -481,7 +489,11 @@
     :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="3"]
       .row-actions-buttons
-      :is(.row-actions-button, .row-actions-toggle) {
+      :is(
+        .row-actions-button,
+        .row-actions-toggle,
+        .row-actions-indicator-slot
+      ) {
       display: none !important;
     }
 
@@ -496,7 +508,11 @@
     :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="4"]
       .row-actions-buttons
-      :is(.row-actions-button, .row-actions-toggle) {
+      :is(
+        .row-actions-button,
+        .row-actions-toggle,
+        .row-actions-indicator-slot
+      ) {
       display: none !important;
     }
 
@@ -511,7 +527,11 @@
     :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="5"]
       .row-actions-buttons
-      :is(.row-actions-button, .row-actions-toggle) {
+      :is(
+        .row-actions-button,
+        .row-actions-toggle,
+        .row-actions-indicator-slot
+      ) {
       display: none !important;
     }
 
@@ -526,7 +546,11 @@
     :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="6"]
       .row-actions-buttons
-      :is(.row-actions-button, .row-actions-toggle) {
+      :is(
+        .row-actions-button,
+        .row-actions-toggle,
+        .row-actions-indicator-slot
+      ) {
       display: none !important;
     }
 

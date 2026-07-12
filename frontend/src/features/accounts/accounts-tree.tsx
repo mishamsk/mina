@@ -535,6 +535,7 @@ export const AccountsTree = ({
                         void toggleGroupHidden(group);
                       },
                       pressed: group.is_hidden,
+                      slot: "hidden",
                     }
                   : undefined;
                 const rowActions: RowAction[] = account
@@ -560,6 +561,7 @@ export const AccountsTree = ({
                           void toggleAccountHidden(account);
                         },
                         pressed: account.is_hidden,
+                        slot: "hidden",
                       },
                       {
                         icon: account.is_featured ? (
@@ -585,6 +587,7 @@ export const AccountsTree = ({
                           void toggleAccountFeatured(account);
                         },
                         pressed: account.is_featured,
+                        slot: "featured",
                       },
                       ...(onRestructurePath
                         ? [
@@ -732,7 +735,7 @@ export const AccountsTree = ({
                       <RowActions
                         foldable
                         actions={rowActions}
-                        className="justify-center"
+                        indicatorSlots={["featured", "hidden"]}
                       />
                     </td>
                   </tr>

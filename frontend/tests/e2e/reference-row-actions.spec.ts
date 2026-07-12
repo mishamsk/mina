@@ -145,7 +145,7 @@ test("reference row actions fold only when their action cell cannot fit them, in
       toggleCount: 2,
     },
     {
-      actionCount: 4,
+      actionCount: 5,
       buttonActionLabels: [
         "Edit category",
         "Move or rename",
@@ -163,7 +163,7 @@ test("reference row actions fold only when their action cell cannot fit them, in
       toggleCount: 1,
     },
     {
-      actionCount: 4,
+      actionCount: 5,
       buttonActionLabels: ["Edit tag", "Move or rename", "Delete tag"],
       compact: true,
       create: createTag,
@@ -395,4 +395,69 @@ test("Accounts rows fold independently when their action counts differ", async (
     await expect(action).toBeVisible();
     await expect(action).toHaveCSS("opacity", "1");
   }
+});
+
+test("disabled row delete stays still and does not invoke its action", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const fqn = `zzE2EDisabledDelete:${unique}`;
+  let deleteRequests = 0;
+
+  await createAccount(page, fqn);
+  await page.route("**/api/accounts?*", async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      accounts: Record<string, unknown>[];
+    };
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        accounts: body.accounts.map((account) =>
+          account.fqn === fqn ? { ...account, deletable: false } : account,
+        ),
+      },
+    });
+  });
+  await page.route("**/api/accounts/*", async (route) => {
+    if (route.request().method() === "DELETE") {
+      deleteRequests += 1;
+    }
+    await route.continue();
+  });
+
+  await page.goto(`/accounts?q=${encodeURIComponent(fqn)}`);
+  const row = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: fqn })
+    .first();
+  const deleteButton = row.getByRole("button", { name: "Delete account" });
+  await expect(row).toBeVisible();
+  await expect(deleteButton).toHaveAttribute("aria-disabled", "true");
+  await expect(deleteButton).toHaveCSS("cursor", "not-allowed");
+
+  await deleteButton.focus();
+  await expect(deleteButton).toBeFocused();
+  const before = await deleteButton.boundingBox();
+  expect(before).not.toBeNull();
+
+  await deleteButton.hover();
+  await page.mouse.down();
+  const pressed = await deleteButton.boundingBox();
+  await page.mouse.up();
+  const after = await deleteButton.boundingBox();
+  expect(pressed).not.toBeNull();
+  expect(after).not.toBeNull();
+  expect(pressed?.x).toBeCloseTo(before?.x ?? 0, 4);
+  expect(pressed?.y).toBeCloseTo(before?.y ?? 0, 4);
+  expect(after?.x).toBeCloseTo(before?.x ?? 0, 4);
+  expect(after?.y).toBeCloseTo(before?.y ?? 0, 4);
+
+  await deleteButton.click({ force: true });
+  await expect(deleteButton).toBeFocused();
+  expect(deleteRequests).toBe(0);
+  await expect(
+    page.getByRole("alertdialog", { name: "Delete account" }),
+  ).toHaveCount(0);
 });

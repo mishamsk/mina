@@ -196,6 +196,17 @@ const expectBlankActionHeaderWithMatchedInset = async (
   ).toBeLessThanOrEqual(1);
 };
 
+const expectSameHorizontalSlot = async (
+  first: Locator,
+  second: Locator,
+): Promise<void> => {
+  const firstBox = await first.boundingBox();
+  const secondBox = await second.boundingBox();
+  expect(firstBox).not.toBeNull();
+  expect(secondBox).not.toBeNull();
+  expect(firstBox?.x).toBeCloseTo(secondBox?.x ?? 0, 4);
+};
+
 test("reference tables keep their framed viewport inset and scroll internally", async ({
   page,
 }, testInfo) => {
@@ -305,4 +316,75 @@ test("reference tables keep their framed viewport inset and scroll internally", 
       ),
     );
   }
+});
+
+test("reference-table indicator slots keep hidden eyes aligned and stars unclipped", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const accountParent = `E2ESlotsAccounts:${unique}`;
+  const accountLeaf = `${accountParent}:Leaf`;
+  const categoryPrefix = `E2ESlotsCategories:${unique}`;
+  const categoryFirst = `${categoryPrefix}:First`;
+  const categorySecond = `${categoryPrefix}:Second`;
+  const tagPrefix = `E2ESlotsTags:${unique}`;
+  const tagFirst = `${tagPrefix}:First`;
+  const tagSecond = `${tagPrefix}:Second`;
+
+  await createAccount(page, accountLeaf);
+  await createCategory(page, categoryFirst);
+  await createCategory(page, categorySecond);
+  await createTag(page, tagFirst);
+  await createTag(page, tagSecond);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await page.goto(`/accounts?q=${encodeURIComponent(accountParent)}`);
+  const accountLeafRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: accountLeaf })
+    .first();
+  const accountGroupRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: accountParent })
+    .filter({ hasNotText: "Leaf" })
+    .first();
+  const accountStar = accountLeafRow.getByRole("button", {
+    name: "Feature account",
+  });
+  await expect(accountLeafRow).toBeVisible();
+  await expect(accountGroupRow).toBeVisible();
+  const starBox = await accountStar.locator("svg").boundingBox();
+  const hiddenAccountBox = await accountLeafRow
+    .getByRole("button", { name: "Hide account" })
+    .boundingBox();
+  expect(starBox).not.toBeNull();
+  expect(hiddenAccountBox).not.toBeNull();
+  expect(starBox?.x).toBeLessThan(hiddenAccountBox?.x ?? 0);
+  expect(starBox?.height).toBeGreaterThanOrEqual(24);
+  await expectSameHorizontalSlot(
+    accountLeafRow.getByRole("button", { name: "Hide account" }),
+    accountGroupRow.getByRole("button", { name: "Hide group" }),
+  );
+
+  await page.goto(`/categories?q=${encodeURIComponent(categoryPrefix)}`);
+  const categoryRows = page.getByTestId("categories-tree-row");
+  await expectSameHorizontalSlot(
+    categoryRows
+      .filter({ hasText: categoryFirst })
+      .getByRole("button", { name: "Hide category" }),
+    categoryRows
+      .filter({ hasText: categorySecond })
+      .getByRole("button", { name: "Hide category" }),
+  );
+
+  await page.goto(`/tags?q=${encodeURIComponent(tagPrefix)}`);
+  const tagRows = page.getByTestId("tags-tree-row");
+  await expectSameHorizontalSlot(
+    tagRows
+      .filter({ hasText: tagFirst })
+      .getByRole("button", { name: "Hide tag" }),
+    tagRows
+      .filter({ hasText: tagSecond })
+      .getByRole("button", { name: "Hide tag" }),
+  );
 });

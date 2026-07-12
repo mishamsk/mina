@@ -1,7 +1,11 @@
 import { EyeOff, Reload } from "pixelarticons/react";
 import { type ReactNode, useMemo } from "react";
 
-import { type RowAction, RowActions } from "@/components/row-actions";
+import {
+  type RowAction,
+  type RowActionIndicatorSlot,
+  RowActions,
+} from "@/components/row-actions";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -203,6 +207,7 @@ interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   readonly errorMessage?: string;
   readonly groups: readonly TGroup[] | undefined;
   readonly includeHidden: boolean;
+  readonly indicatorSlots?: readonly RowActionIndicatorSlot[];
   readonly leaves: readonly TLeaf[] | undefined;
   readonly loading: boolean;
   readonly loadErrorTitle: string;
@@ -249,6 +254,7 @@ export const ReferenceTree = <
   errorMessage,
   groups,
   includeHidden,
+  indicatorSlots,
   leaves,
   loading,
   loadErrorTitle,
@@ -449,7 +455,11 @@ export const ReferenceTree = <
                       compact && !hasBadgeColumn ? "text-right" : "text-center",
                     )}
                   >
-                    <RowActions actions={actions} foldable />
+                    <RowActions
+                      actions={actions}
+                      foldable
+                      indicatorSlots={indicatorSlots}
+                    />
                   </td>
                 </tr>
               );

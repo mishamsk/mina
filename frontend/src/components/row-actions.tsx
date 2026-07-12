@@ -24,14 +24,17 @@ export interface RowActionToggle {
   readonly label: string;
   readonly onToggle: (opener: HTMLElement) => void;
   readonly pressed: boolean;
+  readonly slot?: RowActionIndicatorSlot;
 }
 
 export type RowAction = RowActionButton | RowActionToggle;
+export type RowActionIndicatorSlot = "featured" | "hidden";
 
 interface RowActionsProps {
   readonly actions?: readonly RowAction[];
   readonly className?: string;
   readonly foldable?: boolean;
+  readonly indicatorSlots?: readonly RowActionIndicatorSlot[];
   readonly onOverflowOpenChange?: (open: boolean) => void;
 }
 
@@ -40,19 +43,13 @@ const actionButtonClassName =
   "hover:bg-muted hover:shadow-[var(--shadow-chip)] " +
   "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none";
 
-const disabledActionButtonClassName =
-  "text-muted-foreground border-muted-foreground hover:bg-card hover:shadow-none " +
-  "active:translate-x-0 active:translate-y-0";
-
 const toggleButtonClassName =
-  "row-actions-toggle inline-grid size-7 place-items-center border-0 bg-transparent p-0 " +
+  "row-actions-toggle inline-grid size-7 place-items-center overflow-visible border-0 bg-transparent p-0 leading-none " +
   "text-muted-foreground shadow-none hover:text-foreground " +
   "focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2 " +
-  "aria-pressed:text-foreground";
+  "aria-pressed:text-foreground [&_svg]:size-6 [&_svg]:shrink-0";
 
-const disabledOverflowActionClassName =
-  "cursor-not-allowed text-muted-foreground hover:bg-transparent " +
-  "hover:text-muted-foreground active:!translate-x-0 active:!translate-y-0";
+const indicatorSlotClassName = "row-actions-indicator-slot size-7 shrink-0";
 
 const isButtonAction = (action: RowAction): action is RowActionButton =>
   action.kind !== "toggle";
@@ -77,10 +74,40 @@ export const RowActions = ({
   actions = [],
   className,
   foldable = false,
+  indicatorSlots,
   onOverflowOpenChange,
 }: RowActionsProps) => {
   const [overflowOpen, setOverflowOpen] = useState(false);
-  const actionClusterCount = actions.length;
+  const slottedActions = new Map<RowActionIndicatorSlot, RowActionToggle>();
+  for (const action of actions) {
+    if (
+      action.kind === "toggle" &&
+      action.slot &&
+      !slottedActions.has(action.slot)
+    ) {
+      slottedActions.set(action.slot, action);
+    }
+  }
+  const selectedIndicatorActions = new Set<RowAction>(slottedActions.values());
+  const nonIndicatorActions = actions.filter(
+    (action) => !selectedIndicatorActions.has(action),
+  );
+  const orderedActions = indicatorSlots
+    ? [
+        ...nonIndicatorActions,
+        ...indicatorSlots.flatMap((slot) => {
+          const action = slottedActions.get(slot);
+          return action ? [action] : [];
+        }),
+      ]
+    : actions;
+  const primaryActions = indicatorSlots
+    ? [
+        ...nonIndicatorActions,
+        ...indicatorSlots.map((slot) => slottedActions.get(slot)),
+      ]
+    : orderedActions;
+  const actionClusterCount = primaryActions.length;
   const overflowOpenRef = useRef(false);
   const onOverflowOpenChangeRef = useRef(onOverflowOpenChange);
   const overflowMenuRef = useRef<HTMLDivElement | null>(null);
@@ -130,53 +157,62 @@ export const RowActions = ({
       data-row-actions-count={actionClusterCount}
     >
       <div className="row-actions-buttons inline-flex items-center justify-end gap-1">
-        {actions.map((action) => (
-          <Tooltip
-            key={action.label}
-            label={
-              isButtonAction(action) && action.disabled
-                ? (action.disabledReason ?? action.label)
-                : action.label
-            }
-            asChild
-          >
-            {isButtonAction(action) ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                className={cn(
-                  actionButtonClassName,
-                  action.disabled && disabledActionButtonClassName,
-                )}
-                aria-disabled={action.disabled ? "true" : undefined}
-                aria-label={action.label}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  selectAction(action, event.currentTarget);
-                }}
-              >
-                {action.icon}
-              </Button>
-            ) : (
-              <button
-                type="button"
-                className={toggleButtonClassName}
-                aria-label={action.label}
-                aria-pressed={action.pressed}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  action.onToggle(event.currentTarget);
-                }}
-              >
-                {action.icon}
-              </button>
-            )}
-          </Tooltip>
-        ))}
+        {primaryActions.map((action, index) => {
+          if (!action) {
+            return (
+              <span
+                key={indicatorSlots?.[index]}
+                aria-hidden="true"
+                className={indicatorSlotClassName}
+              />
+            );
+          }
+
+          return (
+            <Tooltip
+              key={action.label}
+              label={
+                isButtonAction(action) && action.disabled
+                  ? (action.disabledReason ?? action.label)
+                  : action.label
+              }
+              asChild
+            >
+              {isButtonAction(action) ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  className={cn(actionButtonClassName)}
+                  aria-disabled={action.disabled ? "true" : undefined}
+                  aria-label={action.label}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectAction(action, event.currentTarget);
+                  }}
+                >
+                  {action.icon}
+                </Button>
+              ) : (
+                <button
+                  type="button"
+                  className={toggleButtonClassName}
+                  aria-label={action.label}
+                  aria-pressed={action.pressed}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    action.onToggle(event.currentTarget);
+                  }}
+                >
+                  {action.icon}
+                </button>
+              )}
+            </Tooltip>
+          );
+        })}
       </div>
 
-      {foldable && actions.length > 0 ? (
+      {foldable && orderedActions.length > 0 ? (
         <Popover modal open={overflowOpen} onOpenChange={setNextOverflowOpen}>
           <Tooltip label="More row actions" asChild>
             <PopoverTrigger asChild>
@@ -230,7 +266,7 @@ export const RowActions = ({
             }}
           >
             <div ref={overflowMenuRef} className="flex flex-col gap-1">
-              {actions.map((action) => {
+              {orderedActions.map((action) => {
                 const disabled = isButtonAction(action) && action.disabled;
                 const button = (
                   <Button
@@ -238,10 +274,7 @@ export const RowActions = ({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className={cn(
-                      "justify-start",
-                      disabled && disabledOverflowActionClassName,
-                    )}
+                    className="justify-start"
                     aria-disabled={disabled ? "true" : undefined}
                     aria-pressed={
                       isButtonAction(action) ? undefined : action.pressed
