@@ -186,6 +186,11 @@ export const RowActions = ({
                   className={cn(actionButtonClassName)}
                   aria-disabled={action.disabled ? "true" : undefined}
                   aria-label={action.label}
+                  onMouseDown={(event) => {
+                    if (action.disabled) {
+                      event.preventDefault();
+                    }
+                  }}
                   onClick={(event) => {
                     event.stopPropagation();
                     selectAction(action, event.currentTarget);

@@ -7,6 +7,7 @@ import type { Member } from "@/api";
 import { createSelectors } from "./selectors";
 
 export interface MembersPageSnapshot {
+  readonly includeHidden: boolean;
   readonly loadedAt: string;
   readonly members: readonly Member[];
 }

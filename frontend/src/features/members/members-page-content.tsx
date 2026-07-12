@@ -1,10 +1,14 @@
-import { MagicEdit, Reload, Trash } from "pixelarticons/react";
+import { Eye, EyeOff, MagicEdit, Reload, Trash } from "pixelarticons/react";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 
-import { deleteLedgerMemberById, type Member } from "@/api";
+import {
+  deleteLedgerMemberById,
+  type Member,
+  updateLedgerMemberHidden,
+} from "@/api";
 import { type RowAction, RowActions } from "@/components/row-actions";
-import { focusWithoutTooltip } from "@/components/tooltip";
+import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -19,12 +23,15 @@ import {
 export const readMembersSearchState = (
   searchParams: URLSearchParams,
 ): {
+  readonly includeHidden: boolean;
   readonly search: string;
 } => ({
+  includeHidden: searchParams.get("hidden") === "true",
   search: searchParams.get("q") ?? "",
 });
 
 interface MembersPageContentProps {
+  readonly includeHidden: boolean;
   readonly membersPage: {
     readonly errorMessage: string | undefined;
     readonly loading: boolean;
@@ -50,12 +57,24 @@ const memberListClickableRowClassName =
   "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] " +
   "focus-within:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
 
+const HiddenRowIndicator = () => (
+  <Tooltip
+    focusable={false}
+    label="Hidden item"
+    className="text-foreground inline-flex shrink-0"
+  >
+    <span aria-label="Hidden item" className="inline-flex">
+      <EyeOff aria-hidden="true" className="size-4" />
+    </span>
+  </Tooltip>
+);
+
 const MembersListSkeleton = () => (
   <div
     className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
     aria-hidden="true"
   >
-    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] bg-[var(--table-header)] py-2">
+    <div className="grid grid-cols-[minmax(0,1fr)_clamp(5.5rem,17%,9.25rem)] bg-[var(--table-header)] py-2">
       <div className="px-3">
         <Skeleton className="h-5" />
       </div>
@@ -65,7 +84,7 @@ const MembersListSkeleton = () => (
       <div
         key={index}
         className={cn(
-          "grid grid-cols-[minmax(0,1fr)_5.5rem] py-3",
+          "grid grid-cols-[minmax(0,1fr)_clamp(5.5rem,17%,9.25rem)] py-3",
           index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
         )}
       >
@@ -80,6 +99,7 @@ const MembersListSkeleton = () => (
 
 const MembersList = ({
   errorMessage,
+  includeHidden,
   loading,
   members,
   onEditMember,
@@ -88,6 +108,7 @@ const MembersList = ({
   search,
 }: {
   readonly errorMessage?: string;
+  readonly includeHidden: boolean;
   readonly loading: boolean;
   readonly members: readonly Member[] | undefined;
   readonly onEditMember: (member: Member, opener: HTMLElement) => void;
@@ -133,7 +154,7 @@ const MembersList = ({
     setDeleteErrorMessage(undefined);
     const result = await deleteLedgerMemberById(deleteTarget.member.member_id);
     if (result.data !== undefined || !result.error) {
-      await refreshMembersAfterMutation();
+      await refreshMembersAfterMutation({ includeHidden });
       onMemberDeleted(deleteTarget.member.member_id);
       onNotice("Member deleted.");
       setDeleting(false);
@@ -150,6 +171,40 @@ const MembersList = ({
     setDeleteErrorMessage(
       memberAPIErrorMessage(result.error, "Member could not be deleted."),
     );
+  };
+
+  const restoreToggleFocus = (opener: HTMLElement) => {
+    window.requestAnimationFrame(() => {
+      if (opener.isConnected) {
+        focusWithoutTooltip(opener, { preventScroll: true });
+        return;
+      }
+      const searchField = document.getElementById("members-search");
+      if (searchField instanceof HTMLElement && searchField.isConnected) {
+        focusWithoutTooltip(searchField, { preventScroll: true });
+      }
+    });
+  };
+
+  const toggleMemberHidden = async (member: Member, opener: HTMLElement) => {
+    const result = await updateLedgerMemberHidden(member.member_id, {
+      is_hidden: !member.is_hidden,
+    });
+    if (!result.data) {
+      onNotice(
+        memberAPIErrorMessage(
+          result.error,
+          "Member hidden state was not saved.",
+        ),
+      );
+      return;
+    }
+    const refreshed = await refreshMembersAfterMutation({ includeHidden });
+    if (!refreshed) {
+      return;
+    }
+    restoreToggleFocus(opener);
+    onNotice(result.data.is_hidden ? "Member hidden." : "Member unhidden.");
   };
 
   if (loading && !members) {
@@ -183,7 +238,7 @@ const MembersList = ({
             variant="outline"
             className="mt-4"
             onClick={() => {
-              void refreshMembersPage();
+              void refreshMembersPage(includeHidden);
             }}
           >
             <Reload aria-hidden="true" />
@@ -228,7 +283,10 @@ const MembersList = ({
               <th scope="col" className="px-3 py-2">
                 Name
               </th>
-              <th scope="col" className="w-[5.5rem] px-3 py-2 text-center" />
+              <th
+                scope="col"
+                className="w-[clamp(5.5rem,17%,9.25rem)] px-3 py-2 text-center"
+              />
             </tr>
           </thead>
           <tbody>
@@ -263,11 +321,14 @@ const MembersList = ({
                 }}
               >
                 <td className="min-w-0 px-3 py-2">
-                  <span className="font-mono font-semibold break-words">
-                    {member.name}
-                  </span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="font-mono font-semibold break-words">
+                      {member.name}
+                    </span>
+                    {member.is_hidden ? <HiddenRowIndicator /> : null}
+                  </div>
                 </td>
-                <td className="w-[5.5rem] px-3 py-2 align-middle">
+                <td className="w-[clamp(5.5rem,17%,9.25rem)] px-3 py-2 align-middle">
                   <RowActions
                     foldable
                     actions={
@@ -278,6 +339,22 @@ const MembersList = ({
                           onSelect: (opener) => {
                             onEditMember(member, opener);
                           },
+                        },
+                        {
+                          icon: member.is_hidden ? (
+                            <EyeOff aria-hidden="true" />
+                          ) : (
+                            <Eye aria-hidden="true" />
+                          ),
+                          kind: "toggle",
+                          label: member.is_hidden
+                            ? "Unhide member"
+                            : "Hide member",
+                          onToggle: (opener) => {
+                            void toggleMemberHidden(member, opener);
+                          },
+                          pressed: member.is_hidden,
+                          slot: "hidden",
                         },
                         {
                           disabled: member.deletable !== true,
@@ -292,6 +369,7 @@ const MembersList = ({
                       ] satisfies readonly RowAction[]
                     }
                     className="justify-center"
+                    indicatorSlots={["featured", "hidden"]}
                   />
                 </td>
               </tr>
@@ -328,13 +406,18 @@ const MembersList = ({
 };
 
 export const MembersPageContent = ({
+  includeHidden,
   membersPage,
   onEditMember,
   onMemberDeleted,
   onNotice,
   search,
 }: MembersPageContentProps) => {
-  const refreshErrorMessage = membersPage.snapshot
+  const currentSnapshot =
+    membersPage.snapshot?.includeHidden === includeHidden
+      ? membersPage.snapshot
+      : undefined;
+  const refreshErrorMessage = currentSnapshot
     ? membersPage.errorMessage
     : undefined;
 
@@ -357,7 +440,7 @@ export const MembersPageContent = ({
             type="button"
             variant="outline"
             onClick={() => {
-              void refreshMembersPage();
+              void refreshMembersPage(includeHidden);
             }}
           >
             Retry
@@ -366,11 +449,10 @@ export const MembersPageContent = ({
       ) : null}
       <div className="min-h-0 flex-1">
         <MembersList
-          errorMessage={
-            membersPage.snapshot ? undefined : membersPage.errorMessage
-          }
+          errorMessage={currentSnapshot ? undefined : membersPage.errorMessage}
+          includeHidden={includeHidden}
           loading={membersPage.loading}
-          members={membersPage.snapshot?.members}
+          members={currentSnapshot?.members}
           onEditMember={onEditMember}
           onMemberDeleted={onMemberDeleted}
           onNotice={onNotice}

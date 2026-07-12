@@ -23,7 +23,7 @@ const parsePositiveInteger = (
 export const MemberPage = () => {
   const navigate = useNavigate();
   const { memberId: memberIdParam } = useParams();
-  const membersPage = useMembersResource();
+  const membersPage = useMembersResource(true);
   const memberId = parsePositiveInteger(memberIdParam);
   const member = membersPage.snapshot?.members.find(
     (candidate) => candidate.member_id === memberId,
@@ -67,7 +67,7 @@ export const MemberPage = () => {
           message={membersPage.errorMessage}
           title="Member could not be loaded."
           onRetry={() => {
-            void refreshMembersPage();
+            void refreshMembersPage(true);
           }}
         />
       ) : null}

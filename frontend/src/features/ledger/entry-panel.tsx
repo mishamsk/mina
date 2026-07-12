@@ -420,6 +420,7 @@ const entityOption = (
 });
 
 const memberOption = (member: Member): EntityOption => ({
+  hidden: member.is_hidden,
   id: member.member_id,
   label: member.name,
   searchLabel: member.name,
@@ -1408,7 +1409,8 @@ const lookupCurrencies = (
 const visibleAccount = (account: Account): boolean =>
   !account.is_hidden && !account.tombstoned_at;
 
-const visibleMember = (member: Member): boolean => !member.tombstoned_at;
+const visibleMember = (member: Member): boolean =>
+  !member.is_hidden && !member.tombstoned_at;
 
 const visibleTag = (tag: Tag): boolean => !tag.is_hidden && !tag.tombstoned_at;
 
@@ -1711,7 +1713,12 @@ export const EntryPanel = ({
         (!category.is_hidden ||
           selectedEntityIds.categoryIds.has(category.category_id)),
     );
-    const members = (lookups?.members ?? []).filter(visibleMember);
+    const members = (lookups?.members ?? []).filter(
+      (member) =>
+        !member.tombstoned_at &&
+        (visibleMember(member) ||
+          selectedEntityIds.memberIds.has(member.member_id)),
+    );
     const tags = (lookups?.tags ?? []).filter(
       (tag) =>
         !tag.tombstoned_at &&

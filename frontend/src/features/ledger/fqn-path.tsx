@@ -32,10 +32,13 @@ export const FqnPath = ({
       : segments.length > 1
         ? `${segments[0]}:`
         : "";
+  const hasCollapsedAncestors = collapseAncestors && segments.length > 2;
   const pathContent = (
     <>
+      {hasCollapsedAncestors ? <span className="sr-only">{value}</span> : null}
       {ancestors ? (
         <span
+          aria-hidden={hasCollapsedAncestors || undefined}
           className={cn(
             "text-muted-foreground max-w-full min-w-0 truncate",
             ancestorClassName,
@@ -45,6 +48,7 @@ export const FqnPath = ({
         </span>
       ) : null}
       <span
+        aria-hidden={hasCollapsedAncestors || undefined}
         className={cn(
           "text-foreground max-w-full min-w-0 truncate font-medium",
           leafClassName,

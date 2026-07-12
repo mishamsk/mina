@@ -98,6 +98,7 @@ const tagOption = (tag: Tag): EntityOption => ({
 });
 
 const memberOption = (member: Member): EntityOption => ({
+  hidden: member.is_hidden,
   id: member.member_id,
   label: member.name,
   searchLabel: member.name,
@@ -459,8 +460,19 @@ export const TransactionFilterControls = ({
     [filters.tagIds, includeHidden.tag, lookups?.tags],
   );
   const memberOptions = useMemo(
-    () => lookups?.members.filter(activeRecord).map(memberOption) ?? [],
-    [lookups?.members],
+    () =>
+      lookups?.members
+        .filter(activeRecord)
+        .filter((member) =>
+          selectedOrVisible(
+            member.member_id,
+            filters.memberIds,
+            member.is_hidden,
+            includeHidden.member ?? false,
+          ),
+        )
+        .map(memberOption) ?? [],
+    [filters.memberIds, includeHidden.member, lookups?.members],
   );
   const accountsById = useMemo(
     () => mapById(lookups?.accounts, (account) => account.account_id),
@@ -512,7 +524,7 @@ export const TransactionFilterControls = ({
         value: filters.categoryIds,
       },
       member: {
-        hiddenToggle: false,
+        hiddenToggle: true,
         label: "Members",
         options: memberOptions,
         setValue: (ids: readonly number[]) => {
@@ -865,6 +877,7 @@ export const TransactionFilterControls = ({
                 return (
                   <FilterChip
                     key={`member-${memberId}`}
+                    hidden={member?.is_hidden}
                     label={
                       member ? `Member ${member.name}` : `Member #${memberId}`
                     }

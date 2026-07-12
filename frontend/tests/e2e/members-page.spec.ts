@@ -84,7 +84,7 @@ test("members page renders sorted demo members and URL search", async ({
   await expect(membersNavLink).toHaveAttribute("aria-current", "page");
   await expect(
     page.getByRole("button", { name: "Include hidden" }),
-  ).toHaveCount(0);
+  ).toBeVisible();
 
   const rows = page.getByTestId("members-list-row");
   await expect(rows.nth(0)).toContainText("Avery");
@@ -109,6 +109,124 @@ test("members page renders sorted demo members and URL search", async ({
   await expect(page.getByTestId("members-list-row").first()).toContainText(
     spacedName,
   );
+});
+
+test("member hide controls round-trip through the editor and entry picker", async ({
+  page,
+}, testInfo) => {
+  const name = `E2E Hidden Member ${testInfo.project.name}${Date.now()}`;
+  const member = await createMember(page, name);
+
+  await page.goto(`/members?q=${encodeURIComponent(name)}`);
+  const row = page
+    .getByTestId("members-list-row")
+    .filter({ hasText: name })
+    .first();
+  await expect(row).toBeVisible({ timeout: 10_000 });
+
+  const hideResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/members/${member.member_id}/hidden` &&
+      response.request().method() === "PUT"
+    );
+  });
+  await activateRowAction(page, row, "Hide member");
+  expect((await hideResponse).status()).toBe(200);
+  await expect(page.getByText("Member hidden.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(row).toHaveCount(0, { timeout: 10_000 });
+
+  const includeHiddenResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/members" &&
+      url.searchParams.get("include_hidden") === "true"
+    );
+  });
+  await page.getByRole("button", { name: "Include hidden" }).click();
+  await includeHiddenResponse;
+  await expect(page).toHaveURL(/hidden=true/);
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await expect(row.getByLabel("Hidden item")).toBeVisible();
+  await expect(
+    row.getByRole("button", { name: "Unhide member" }),
+  ).toBeVisible();
+
+  const unhideResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/members/${member.member_id}/hidden` &&
+      response.request().method() === "PUT"
+    );
+  });
+  await row.getByRole("button", { name: "Unhide member" }).click();
+  expect((await unhideResponse).status()).toBe(200);
+  await expect(page.getByText("Member unhidden.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(row.getByRole("button", { name: "Hide member" })).toBeVisible({
+    timeout: 10_000,
+  });
+
+  await row.getByRole("button", { name: "Edit member" }).click();
+  const panel = page.getByRole("dialog", { name: "Edit member" });
+  const hiddenCheckbox = panel.getByLabel("Hidden");
+  await expect(hiddenCheckbox).toHaveAttribute("data-state", "unchecked");
+  await hiddenCheckbox.click();
+  const editorHideResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/members/${member.member_id}/hidden` &&
+      response.request().method() === "PUT"
+    );
+  });
+  await panel.getByRole("button", { name: "Save" }).click();
+  expect((await editorHideResponse).status()).toBe(200);
+  await expect(page.getByText("Member updated.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(row.getByLabel("Hidden item")).toBeVisible({ timeout: 10_000 });
+
+  await page.goto("/transactions");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const memberPicker = page.getByRole("combobox", { name: "Member" });
+  await expect(memberPicker).toBeVisible();
+  await memberPicker.fill(name);
+  await expect(page.locator("#spend-member-options")).toContainText(
+    "No matches",
+  );
+
+  await page.goto(`/members?hidden=true&q=${encodeURIComponent(name)}`);
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  const editorUnhideResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/members/${member.member_id}/hidden` &&
+      response.request().method() === "PUT"
+    );
+  });
+  await row.getByRole("button", { name: "Unhide member" }).click();
+  expect((await editorUnhideResponse).status()).toBe(200);
+  await expect(page.getByText("Member unhidden.")).toBeVisible({
+    timeout: 10_000,
+  });
+
+  await page.goto("/transactions");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const refreshedMemberPicker = page.getByRole("combobox", {
+    name: "Member",
+  });
+  await expect(refreshedMemberPicker).toBeVisible();
+  await refreshedMemberPicker.fill(name.slice(0, -1));
+  await expect(page.locator("#spend-member-options")).toContainText(name);
 });
 
 test("members side panel creates renames and deletes members with conflict feedback", async ({

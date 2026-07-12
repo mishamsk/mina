@@ -13,11 +13,13 @@ import {
 } from "@/store";
 
 let membersPageLoadGeneration = 0;
+let membersPageLoadIncludeHidden: boolean | undefined;
 const membersPageRefreshRetryDelayMs = 200;
 const membersPageRefreshAttempts = 8;
 
-const nextMembersPageLoadGeneration = (): number => {
+const nextMembersPageLoadGeneration = (includeHidden: boolean): number => {
   membersPageLoadGeneration += 1;
+  membersPageLoadIncludeHidden = includeHidden;
   setMembersPageLoading();
   return membersPageLoadGeneration;
 };
@@ -31,9 +33,10 @@ const waitForMembersPageRetry = (): Promise<void> =>
   });
 
 const fetchMembersPageWithRetries = async (
+  includeHidden: boolean,
   shouldContinue: () => boolean,
 ): Promise<Awaited<ReturnType<typeof fetchMembersPage>>> => {
-  let result = await fetchMembersPage();
+  let result = await fetchMembersPage(includeHidden);
   for (
     let attempt = 1;
     attempt < membersPageRefreshAttempts && !result.data;
@@ -43,19 +46,23 @@ const fetchMembersPageWithRetries = async (
       return result;
     }
     await waitForMembersPageRetry();
-    result = await fetchMembersPage();
+    result = await fetchMembersPage(includeHidden);
   }
   return result;
 };
 
 const loadMembersPage = async (
   generation: number,
+  includeHidden: boolean,
   shouldCommit: () => boolean = () => true,
 ): Promise<boolean> => {
   const isCurrentLoad = () => isCurrentMembersPageLoad(generation);
   const commitCurrent = () => shouldCommit() && isCurrentLoad();
 
-  const result = await fetchMembersPageWithRetries(commitCurrent);
+  const result = await fetchMembersPageWithRetries(
+    includeHidden,
+    commitCurrent,
+  );
   if (!commitCurrent()) {
     if (isCurrentLoad()) {
       clearMembersPageLoading();
@@ -69,27 +76,34 @@ const loadMembersPage = async (
   }
 
   setMembersPage({
+    includeHidden,
     members: result.data.members,
   });
   return true;
 };
 
-export const refreshMembersPage = async (): Promise<boolean> => {
-  return loadMembersPage(nextMembersPageLoadGeneration());
+export const refreshMembersPage = async (
+  includeHidden = false,
+): Promise<boolean> => {
+  return loadMembersPage(
+    nextMembersPageLoadGeneration(includeHidden),
+    includeHidden,
+  );
 };
 
 export const refreshMembersAfterMutation = async (options?: {
+  readonly includeHidden?: boolean;
   readonly invalidateTransactions?: boolean;
 }): Promise<boolean> => {
   if (options?.invalidateTransactions) {
     invalidateTransactionPages();
   }
-  const membersRefreshed = await refreshMembersPage();
+  const membersRefreshed = await refreshMembersPage(options?.includeHidden);
   await refreshLedgerLookups();
   return membersRefreshed;
 };
 
-export const useMembersResource = () => {
+export const useMembersResource = (includeHidden = false) => {
   const membersPage = useMembersPageView();
   const mountedRef = useRef(false);
 
@@ -102,14 +116,23 @@ export const useMembersResource = () => {
 
   useEffect(() => {
     const snapshot = getMembersSnapshot();
-    if (snapshot.snapshot || snapshot.loading || snapshot.errorMessage) {
+    if (
+      snapshot.snapshot?.includeHidden === includeHidden ||
+      (membersPageLoadIncludeHidden === includeHidden &&
+        (snapshot.loading || snapshot.errorMessage))
+    ) {
       return;
     }
 
-    const generation = nextMembersPageLoadGeneration();
+    const generation = nextMembersPageLoadGeneration(includeHidden);
 
-    void loadMembersPage(generation, () => mountedRef.current);
-  }, [membersPage.errorMessage, membersPage.loading, membersPage.snapshot]);
+    void loadMembersPage(generation, includeHidden, () => mountedRef.current);
+  }, [
+    includeHidden,
+    membersPage.errorMessage,
+    membersPage.loading,
+    membersPage.snapshot,
+  ]);
 
   return membersPage;
 };

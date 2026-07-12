@@ -209,7 +209,7 @@ const HiddenRowIndicator = ({ label }: { readonly label: string }) => (
 );
 
 const accountsTreeSkeletonGridClass =
-  "grid grid-cols-[44%_32%_24%] sm:grid-cols-[36%_14%_30%_20%] md:grid-cols-[36%_14%_12%_20%_18%]";
+  "grid grid-cols-[44%_32%_24%] sm:grid-cols-[36%_14%_30%_20%] md:grid-cols-[30%_14%_12%_20%_24%]";
 
 const accountTreeSkeletonColumnClasses = [
   "px-3",
@@ -486,7 +486,7 @@ export const AccountsTree = ({
               <tr className="font-heading text-left text-xs font-semibold uppercase">
                 <th
                   scope="col"
-                  className="w-[44%] px-3 py-2 sm:w-[36%] md:w-[36%]"
+                  className="w-[44%] px-3 py-2 sm:w-[36%] md:w-[30%]"
                 >
                   Name
                 </th>
@@ -510,7 +510,7 @@ export const AccountsTree = ({
                 </th>
                 <th
                   scope="col"
-                  className="w-[24%] px-3 py-2 text-center sm:w-[20%] md:w-[18%]"
+                  className="w-[24%] px-3 py-2 text-center sm:w-[20%] md:w-[24%]"
                 />
               </tr>
             </thead>

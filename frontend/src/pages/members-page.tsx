@@ -22,18 +22,22 @@ interface Notice {
 
 export const MembersPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const membersPage = useMembersResource();
+  const { includeHidden, search } = readMembersSearchState(searchParams);
+  const membersPage = useMembersResource(includeHidden);
   const [panelMode, setPanelMode] = useState<"create" | "edit" | undefined>();
   const [selectedMemberId, setSelectedMemberId] = useState<
     number | undefined
   >();
+  const [openedMember, setOpenedMember] = useState<Member | undefined>();
   const [notice, setNotice] = useState<Notice | undefined>();
   const createMemberButtonRef = useRef<HTMLButtonElement | null>(null);
   const panelOpenerRef = useRef<HTMLElement | null>(null);
-  const { search } = readMembersSearchState(searchParams);
-  const selectedMember = membersPage.snapshot?.members.find(
+  const snapshotMember = membersPage.snapshot?.members.find(
     (member) => member.member_id === selectedMemberId,
   );
+  const selectedMember =
+    snapshotMember ??
+    (openedMember?.member_id === selectedMemberId ? openedMember : undefined);
 
   const showNotice = (message: string) => {
     setNotice((current) => ({
@@ -56,18 +60,21 @@ export const MembersPage = () => {
   const openCreatePanel = (opener: HTMLElement) => {
     panelOpenerRef.current = opener;
     setSelectedMemberId(undefined);
+    setOpenedMember(undefined);
     setPanelMode("create");
   };
 
   const openEditPanel = (member: Member, opener: HTMLElement) => {
     panelOpenerRef.current = opener;
     setSelectedMemberId(member.member_id);
+    setOpenedMember(member);
     setPanelMode("edit");
   };
 
   const closePanel = () => {
     setPanelMode(undefined);
     setSelectedMemberId(undefined);
+    setOpenedMember(undefined);
     restorePanelOpenerFocus();
   };
 
@@ -106,18 +113,21 @@ export const MembersPage = () => {
         }
         toolbar={
           <ReferenceToolbar
-            includeHidden={false}
+            includeHidden={includeHidden}
             search={search}
             searchInputId="members-search"
             searchPlaceholder="Member name"
             setSearchParams={setSearchParams}
-            showIncludeHiddenToggle={false}
+            toggleLabel="Include hidden"
+            toggleOffTooltip="Include hidden members"
+            toggleOnTooltip="Hide hidden members"
           />
         }
       />
 
       <div className="min-h-0 flex-1">
         <MembersPageContent
+          includeHidden={includeHidden}
           membersPage={membersPage}
           onEditMember={openEditPanel}
           onMemberDeleted={closeDeletedMemberEditor}
@@ -135,6 +145,7 @@ export const MembersPage = () => {
         }}
       />
       <MembersSidePanel
+        includeHidden={includeHidden}
         member={selectedMember}
         mode={panelMode ?? "create"}
         onClose={closePanel}

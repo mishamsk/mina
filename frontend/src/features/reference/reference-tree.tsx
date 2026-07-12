@@ -121,7 +121,7 @@ const referenceTreeSkeletonGridClass = (
   compact: boolean,
 ) =>
   hasBadgeColumn
-    ? "grid grid-cols-[58%_24%_18%] sm:grid-cols-[62%_20%_18%]"
+    ? "grid grid-cols-[52%_24%_24%] sm:grid-cols-[minmax(0,1fr)_20%_11.25rem]"
     : compact
       ? "grid grid-cols-[minmax(0,1fr)_clamp(5.5rem,17%,9.25rem)]"
       : "grid grid-cols-[76%_24%] sm:grid-cols-[82%_18%]";
@@ -185,14 +185,14 @@ const ReferenceTreeSkeleton = ({
 const badgeColumnWidthClass = "w-[24%] px-3 py-2 sm:w-[20%]";
 const nameColumnWidthClass = (hasBadgeColumn: boolean, compact: boolean) =>
   hasBadgeColumn
-    ? "w-[58%] px-3 py-2 sm:w-[62%]"
+    ? "px-3 py-2"
     : compact
       ? "px-3 py-2"
       : "w-[76%] px-3 py-2 sm:w-[82%]";
 
 const actionsColumnWidthClass = (hasBadgeColumn: boolean, compact: boolean) =>
   hasBadgeColumn
-    ? "w-[18%] px-3 py-2 text-center"
+    ? "w-[24%] px-3 py-2 text-center sm:w-[11.25rem]"
     : compact
       ? "w-[clamp(5.5rem,17%,9.25rem)] px-3 py-2 text-right"
       : "w-[24%] px-3 py-2 text-center sm:w-[18%]";

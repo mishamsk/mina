@@ -13,12 +13,14 @@ import {
   deleteLedgerMemberById,
   type Member,
   updateLedgerMember,
+  updateLedgerMemberHidden,
   type UpdateMemberRequest,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import { memberAPIErrorMessage } from "./member-api-error-message";
 import { refreshMembersAfterMutation } from "./use-members-resource";
@@ -27,11 +29,13 @@ type MemberFormField = "general" | "name";
 type MemberFormErrors = Partial<Record<MemberFormField, string>>;
 
 interface MemberFormState {
+  readonly isHidden: boolean;
   readonly name: string;
 }
 
 interface MembersSidePanelProps {
   readonly member: Member | undefined;
+  readonly includeHidden: boolean;
   readonly mode: "create" | "edit";
   readonly onClose: () => void;
   readonly onNotice: (message: string) => void;
@@ -39,12 +43,14 @@ interface MembersSidePanelProps {
 }
 
 const blankForm = (): MemberFormState => ({
+  isHidden: false,
   name: "",
 });
 
 const formFromMember = (member: Member | undefined): MemberFormState =>
   member
     ? {
+        isHidden: member.is_hidden,
         name: member.name,
       }
     : blankForm();
@@ -99,6 +105,7 @@ const Field = ({
 
 const MembersSidePanelContent = ({
   member,
+  includeHidden,
   mode,
   onClose,
   onNotice,
@@ -199,46 +206,141 @@ const MembersSidePanelContent = ({
     }
 
     const normalizedName = form.name.trim();
-    setSaving(true);
-    const result =
-      mode === "create"
-        ? await createLedgerMember({
-            name: normalizedName,
-          } satisfies CreateMemberRequest)
-        : member
-          ? await updateLedgerMember(member.member_id, {
-              name: normalizedName,
-            } satisfies UpdateMemberRequest)
-          : undefined;
-    if (!result) {
-      if (!panelSessionActiveRef.current) {
-        return;
-      }
-      setSaving(false);
+    const nameChanged = mode === "edit" && member?.name !== normalizedName;
+    const hiddenChanged =
+      mode === "edit" && member?.is_hidden !== form.isHidden;
+    if (mode === "edit" && member && !nameChanged && !hiddenChanged) {
+      onClose();
       return;
     }
-
-    if (result.data) {
+    setSaving(true);
+    if (mode === "create") {
+      const result = await createLedgerMember({
+        name: normalizedName,
+      } satisfies CreateMemberRequest);
+      if (!result.data) {
+        if (!panelSessionActiveRef.current) {
+          return;
+        }
+        setSaving(false);
+        const message = memberAPIErrorMessage(
+          result.error,
+          "Member could not be saved.",
+        );
+        setFieldErrors((current) => ({
+          ...current,
+          ...fieldErrorsFromAPI(message),
+        }));
+        return;
+      }
+      if (form.isHidden) {
+        const hiddenResult = await updateLedgerMemberHidden(
+          result.data.member_id,
+          {
+            is_hidden: true,
+          },
+        );
+        if (!hiddenResult.data) {
+          await refreshMembersAfterMutation({
+            includeHidden,
+          });
+          if (!panelSessionActiveRef.current) {
+            return;
+          }
+          setSaving(false);
+          const message = memberAPIErrorMessage(
+            hiddenResult.error,
+            "Member was created, but hidden state could not be saved.",
+          );
+          setFieldErrors((current) => ({
+            ...current,
+            ...fieldErrorsFromAPI(message),
+          }));
+          return;
+        }
+      }
       await refreshMembersAfterMutation({
-        invalidateTransactions: mode === "edit",
+        includeHidden,
       });
       if (!panelSessionActiveRef.current) {
         return;
       }
       onClose();
-      onNotice(mode === "create" ? "Member created." : "Member updated.");
+      onNotice("Member created.");
       return;
     }
 
-    setSaving(false);
-    const message = memberAPIErrorMessage(
-      result.error,
-      "Member could not be saved.",
-    );
-    setFieldErrors((current) => ({
-      ...current,
-      ...fieldErrorsFromAPI(message),
-    }));
+    if (!member) {
+      if (panelSessionActiveRef.current) {
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (nameChanged) {
+      const result = await updateLedgerMember(member.member_id, {
+        name: normalizedName,
+      } satisfies UpdateMemberRequest);
+      if (!result.data) {
+        if (!panelSessionActiveRef.current) {
+          return;
+        }
+        setSaving(false);
+        const message = memberAPIErrorMessage(
+          result.error,
+          "Member could not be saved.",
+        );
+        setFieldErrors((current) => ({
+          ...current,
+          ...fieldErrorsFromAPI(message),
+        }));
+        return;
+      }
+    }
+
+    if (hiddenChanged) {
+      const result = await updateLedgerMemberHidden(member.member_id, {
+        is_hidden: form.isHidden,
+      });
+      if (!result.data) {
+        if (nameChanged) {
+          await refreshMembersAfterMutation({
+            includeHidden,
+            invalidateTransactions: true,
+          });
+        }
+        if (!panelSessionActiveRef.current) {
+          return;
+        }
+        setSaving(false);
+        const message = memberAPIErrorMessage(
+          result.error,
+          "Member hidden state could not be saved.",
+        );
+        setFieldErrors((current) => ({
+          ...current,
+          ...fieldErrorsFromAPI(message),
+        }));
+        return;
+      }
+    }
+
+    const closesAfterRefresh = hiddenChanged && form.isHidden && !includeHidden;
+
+    await refreshMembersAfterMutation({
+      includeHidden,
+      invalidateTransactions: nameChanged,
+    });
+    if (closesAfterRefresh) {
+      onClose();
+      onNotice("Member updated.");
+      return;
+    }
+    if (!panelSessionActiveRef.current) {
+      return;
+    }
+    onClose();
+    onNotice("Member updated.");
   };
 
   const deleteMember = async () => {
@@ -252,7 +354,7 @@ const MembersSidePanelContent = ({
       return;
     }
     if (result.data !== undefined || !result.error) {
-      await refreshMembersAfterMutation();
+      await refreshMembersAfterMutation({ includeHidden });
       onClose();
       onNotice("Member deleted.");
       return;
@@ -320,6 +422,17 @@ const MembersSidePanelContent = ({
             />
             <FieldError message={fieldErrors.name} />
           </Field>
+
+          <label className="flex h-9 items-center gap-2 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]">
+            <Checkbox
+              checked={form.isHidden}
+              aria-label="Hidden"
+              onCheckedChange={(checked) => {
+                updateForm({ isHidden: checked === true });
+              }}
+            />
+            Hidden
+          </label>
 
           {fieldErrors.general ? (
             <p
@@ -399,6 +512,7 @@ export const MembersSidePanel = (props: MembersSidePanelProps) => {
   return (
     <MembersSidePanelContent
       key={`${props.mode}:${props.member?.member_id ?? "new"}`}
+      includeHidden={props.includeHidden}
       member={props.member}
       mode={props.mode}
       onClose={props.onClose}

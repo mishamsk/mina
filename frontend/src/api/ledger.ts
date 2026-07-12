@@ -22,6 +22,7 @@ import type {
   Transaction,
   UpdateAccountRequest,
   UpdateCategoryRequest,
+  UpdateMemberHiddenRequest,
   UpdateMemberRequest,
   UpdateTagRequest,
   UpdateTransactionRequest,
@@ -72,6 +73,7 @@ import {
   updateAccount as updateGeneratedAccount,
   updateCategory as updateGeneratedCategory,
   updateMember as updateGeneratedMember,
+  updateMemberHidden as updateGeneratedMemberHidden,
   updateTag as updateGeneratedTag,
 } from "./generated";
 
@@ -487,9 +489,10 @@ export const fetchTagsPage = async () => {
   return { groups, tags };
 };
 
-const listMembersPageForManagement = (offset: number) =>
+const listMembersPageForManagement = (offset: number, includeHidden: boolean) =>
   listMembers({
     query: {
+      include_hidden: includeHidden,
       limit: lookupLimit,
       offset,
       sort: "name",
@@ -497,8 +500,8 @@ const listMembersPageForManagement = (offset: number) =>
     },
   });
 
-const listAllMembersForManagement = async () => {
-  const firstPage = await listMembersPageForManagement(0);
+const listAllMembersForManagement = async (includeHidden: boolean) => {
+  const firstPage = await listMembersPageForManagement(0, includeHidden);
   if (
     !firstPage.data ||
     firstPage.data.members.length >= firstPage.data.total_count
@@ -512,7 +515,7 @@ const listAllMembersForManagement = async () => {
     offset < firstPage.data.total_count;
     offset += lookupLimit
   ) {
-    const page = await listMembersPageForManagement(offset);
+    const page = await listMembersPageForManagement(offset, includeHidden);
     if (!page.data) {
       return page;
     }
@@ -528,7 +531,8 @@ const listAllMembersForManagement = async () => {
   };
 };
 
-export const fetchMembersPage = () => listAllMembersForManagement();
+export const fetchMembersPage = (includeHidden = false) =>
+  listAllMembersForManagement(includeHidden);
 
 const listExpectedRecurringOccurrencesPage = (offset: number) =>
   listRecurringOccurrences({
@@ -826,6 +830,17 @@ export const updateLedgerMember = (
   body: UpdateMemberRequest,
 ) =>
   updateGeneratedMember({
+    body,
+    path: {
+      member_id: memberId,
+    },
+  });
+
+export const updateLedgerMemberHidden = (
+  memberId: number,
+  body: UpdateMemberHiddenRequest,
+) =>
+  updateGeneratedMemberHidden({
     body,
     path: {
       member_id: memberId,
