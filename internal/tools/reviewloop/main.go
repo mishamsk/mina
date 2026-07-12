@@ -925,9 +925,19 @@ func selectReviewersForPath(selected *reviewerSelectionState, path string) {
 
 func isReviewExcludedPath(path string) bool {
 	return isGeneratedOpenAPIOutput(path) ||
+		isPublicProjectDocPath(path) ||
 		isDocsAgentPath(path) ||
 		isPlanPath(path) ||
 		isCodexPath(path)
+}
+
+func isPublicProjectDocPath(path string) bool {
+	switch path {
+	case "README.md", "CONTRIBUTING.md", "LICENSE.md":
+		return true
+	default:
+		return false
+	}
 }
 
 func isDocsAgentPath(path string) bool {
