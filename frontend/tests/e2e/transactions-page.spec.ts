@@ -887,6 +887,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await page.goto("/transactions?page=2&pageSize=10");
   await expect(page.getByText("Description")).toBeVisible();
 
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
   const tagsPicker = page.getByRole("combobox", { name: "Tags" });
@@ -1036,7 +1037,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
     tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
   });
 
-  await page.getByRole("button", { name: "Clear all" }).click();
+  await page.getByRole("button", { name: "Close filters" }).click();
   await expectTransactionFilterUrl(page, { pageSize: "25" });
   await expect(page.getByText("Tag Groceries")).toBeHidden();
   await expect(page.getByText("Amount 10-20")).toBeHidden();
@@ -1070,6 +1071,7 @@ test("transactions posting-status filter can reveal expected recurring lines", a
       .filter({ hasText: fixture.merchantFqn.split(":").at(-1) ?? "Merchant" }),
   ).toHaveCount(0);
 
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { name: "Posting status" }).click();
   await expect(page.getByText("Expected", { exact: true })).toBeVisible();
@@ -1226,6 +1228,7 @@ test("transactions class toolbar filter owns class URL state", async ({
   await page.goForward();
   await expect(classFilter).toHaveText("Spend");
 
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await expect(
     page.getByRole("button", { exact: true, name: "Transaction class" }),
@@ -1252,6 +1255,14 @@ test("transactions class toolbar filter owns class URL state", async ({
   await expect(
     page.getByRole("row").filter({ hasText: incomeMemo }),
   ).toBeVisible();
+
+  await classFilter.click();
+  await page.getByRole("option", { exact: true, name: "Income" }).click();
+  await expectTransactionFilterUrl(page, {
+    classes: ["income"],
+    pageSize: "50",
+    q: unique,
+  });
 });
 
 test("transactions filter toolbar keeps a stable inline trigger geometry", async ({
@@ -1261,34 +1272,44 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
-  const toolbar = page
-    .getByRole("heading", { name: "Transactions" })
-    .locator("xpath=ancestor::header");
-  const addFilterButton = page.getByRole("button", { name: "Add filter" });
+  const toolbarRow = page.getByTestId("transaction-browser-toolbar-row");
+  const filterToggle = page.getByRole("button", { name: "Open filters" });
   const dateJumpInput = page.getByLabel("Go to day");
   const previousDayButton = page.getByRole("button", {
     name: "Previous day",
   });
   const nextDayButton = page.getByRole("button", { name: "Next day" });
-  const initialTriggerBox = await addFilterButton.boundingBox();
-  const initialToolbarBox = await toolbar.boundingBox();
+  const initialTriggerBox = await filterToggle.boundingBox();
+  const initialToolbarRowBox = await toolbarRow.boundingBox();
   const dateJumpInputBox = await dateJumpInput.boundingBox();
   const previousDayButtonBox = await previousDayButton.boundingBox();
   const nextDayButtonBox = await nextDayButton.boundingBox();
   expect(initialTriggerBox).not.toBeNull();
-  expect(initialToolbarBox).not.toBeNull();
+  expect(initialToolbarRowBox).not.toBeNull();
   expect(dateJumpInputBox).not.toBeNull();
   expect(previousDayButtonBox).not.toBeNull();
   expect(nextDayButtonBox).not.toBeNull();
   expect(initialTriggerBox?.width).toBe(36);
   expect(initialTriggerBox?.height).toBe(36);
-  expect(previousDayButtonBox?.width).toBeGreaterThan(36);
+  expect(previousDayButtonBox?.width).toBe(36);
   expect(previousDayButtonBox?.height).toBe(36);
-  expect(nextDayButtonBox?.width).toBeGreaterThan(36);
+  expect(nextDayButtonBox?.width).toBe(36);
   expect(nextDayButtonBox?.height).toBe(36);
   expect(previousDayButtonBox?.y).toBe(dateJumpInputBox?.y);
   expect(nextDayButtonBox?.y).toBe(dateJumpInputBox?.y);
 
+  await filterToggle.focus();
+  await page.keyboard.press("Enter");
+  const closeFilterButton = page.getByRole("button", {
+    name: "Close filters",
+  });
+  const openedTriggerBox = await closeFilterButton.boundingBox();
+  const openedToolbarRowBox = await toolbarRow.boundingBox();
+  expect(openedTriggerBox).not.toBeNull();
+  expect(openedToolbarRowBox).not.toBeNull();
+  expect(openedTriggerBox).toEqual(initialTriggerBox);
+  expect(openedToolbarRowBox?.height).toBe(initialToolbarRowBox?.height);
+  const addFilterButton = page.getByRole("button", { name: "Add filter" });
   await addFilterButton.focus();
   await page.keyboard.press("Enter");
   const postingStatusButton = page.getByRole("button", {
@@ -1309,25 +1330,23 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   const statusChip = page.getByText("Status Pending", { exact: true });
   await expect(statusChip).toBeVisible();
   await page.keyboard.press("Escape");
-  const triggerWithChipBox = await addFilterButton.boundingBox();
+  const triggerWithChipBox = await closeFilterButton.boundingBox();
   const chipBox = await statusChip.boundingBox();
-  const toolbarWithChipBox = await toolbar.boundingBox();
+  const toolbarWithChipBox = await toolbarRow.boundingBox();
+  const filterBarBox = await page
+    .getByTestId("transaction-browser-filter-bar")
+    .boundingBox();
   expect(triggerWithChipBox).not.toBeNull();
   expect(chipBox).not.toBeNull();
   expect(toolbarWithChipBox).not.toBeNull();
+  expect(filterBarBox).not.toBeNull();
   expect(triggerWithChipBox?.x).toBe(initialTriggerBox?.x);
   expect(triggerWithChipBox?.y).toBe(initialTriggerBox?.y);
-  expect(toolbarWithChipBox?.height).toBe(initialToolbarBox?.height);
-  expect(chipBox?.x ?? 0).toBeGreaterThan(
-    (triggerWithChipBox?.x ?? 0) + (triggerWithChipBox?.width ?? 0),
+  expect(toolbarWithChipBox?.height).toBe(initialToolbarRowBox?.height);
+  expect(chipBox?.y ?? 0).toBeGreaterThan(filterBarBox?.y ?? 0);
+  expect((chipBox?.y ?? 0) + (chipBox?.height ?? 0)).toBeLessThan(
+    (filterBarBox?.y ?? 0) + (filterBarBox?.height ?? 0),
   );
-  expect(
-    Math.abs(
-      (chipBox?.y ?? 0) +
-        (chipBox?.height ?? 0) / 2 -
-        ((triggerWithChipBox?.y ?? 0) + (triggerWithChipBox?.height ?? 0) / 2),
-    ),
-  ).toBeLessThan(1);
 
   const removeStatusButton = page.getByRole("button", {
     name: "Remove Status Pending",
@@ -1335,13 +1354,54 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   await removeStatusButton.focus();
   await page.keyboard.press("Enter");
   await expect(statusChip).toBeHidden();
-  const finalTriggerBox = await addFilterButton.boundingBox();
-  const finalToolbarBox = await toolbar.boundingBox();
+  const finalTriggerBox = await closeFilterButton.boundingBox();
+  const finalToolbarBox = await toolbarRow.boundingBox();
   expect(finalTriggerBox).not.toBeNull();
   expect(finalToolbarBox).not.toBeNull();
   expect(finalTriggerBox?.x).toBe(initialTriggerBox?.x);
   expect(finalTriggerBox?.y).toBe(initialTriggerBox?.y);
-  expect(finalToolbarBox?.height).toBe(initialToolbarBox?.height);
+  expect(finalToolbarBox?.height).toBe(initialToolbarRowBox?.height);
+});
+
+test("filter X dismiss clears chips while retaining standing search and class filters", async ({
+  page,
+}) => {
+  const categories = await listFixtures<CategoryFixture>(
+    page,
+    "/api/categories",
+    "categories",
+  );
+  const category = findByFqn(categories, "Entertainment:Books");
+  const search = "E2E X dismiss standing controls";
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}&class=spend&category=${category.category_id}`,
+  );
+
+  await expect(
+    page.getByTestId("transaction-browser-filter-bar"),
+  ).toBeVisible();
+  await expect(page.getByText(`Category ${category.name}`)).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue(
+    search,
+  );
+  await expect(page.getByLabel("Class")).toHaveText("Spend");
+
+  await page.getByRole("button", { name: "Close filters" }).click();
+
+  await expect(page.getByTestId("transaction-browser-filter-bar")).toBeHidden();
+  await expectTransactionFilterUrl(page, {
+    classes: ["spend"],
+    pageSize: "50",
+    q: search,
+  });
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue(
+    search,
+  );
+  await expect(page.getByLabel("Class")).toHaveText("Spend");
+  await expect(
+    page.getByRole("button", { name: "Open filters" }),
+  ).toBeVisible();
 });
 
 test("transaction entity chips add filters in place", async ({
@@ -1423,6 +1483,12 @@ test("transaction entity chips add filters in place", async ({
     pageSize: "50",
     q: searchQuery,
   });
+  await expect(
+    page.getByTestId("transaction-browser-filter-bar"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Close filters" }),
+  ).toBeVisible();
   await expect(page.getByText(`Member ${member.name}`)).toBeVisible();
   await page
     .getByRole("button", { name: `Remove Member ${member.name}` })
@@ -2909,6 +2975,7 @@ test("toolbar filter trigger opens after transaction detail closes", async ({
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
 
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(popover).toBeVisible();
@@ -2961,9 +3028,12 @@ test("Escape closes filter popover before transaction detail panel", async ({
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
 
+  const filterToggle = page.getByRole("button", { name: "Open filters" });
+  await filterToggle.focus();
+  await expect(filterToggle).toBeFocused();
+  await page.keyboard.press("Enter");
   const addFilterButton = page.getByRole("button", { name: "Add filter" });
   await addFilterButton.focus();
-  await expect(addFilterButton).toBeFocused();
   await page.keyboard.press("Enter");
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(popover).toBeVisible();

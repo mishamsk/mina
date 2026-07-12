@@ -211,6 +211,7 @@ test("tags row actions hide groups and move renamed paths into transaction filte
 
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
   const tagPicker = page.getByRole("combobox", { name: "Tags" });
@@ -302,6 +303,7 @@ test("tags row actions hide groups and move renamed paths into transaction filte
 
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
   const refreshedTagPicker = page.getByRole("combobox", { name: "Tags" });

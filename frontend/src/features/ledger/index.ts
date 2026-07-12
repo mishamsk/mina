@@ -31,7 +31,10 @@ export {
   TransactionDetailLoadingContent,
   TransactionDetailPanel,
 } from "./transaction-detail-panel";
-export { TransactionFilterControls } from "./transaction-filter-controls";
+export {
+  hasActiveTransactionFilterChips,
+  TransactionFilterControls,
+} from "./transaction-filter-controls";
 export {
   defaultTransactionPage,
   defaultTransactionPageSize,

@@ -174,6 +174,14 @@ test("category drill-down direct navigation, view-all, refresh, not-found, and d
   await expect(page.getByText("Expense")).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
 
+  await page.getByRole("button", { name: "Open filters" }).click();
+  await expect(
+    page.getByTestId("transaction-browser-filter-bar"),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add filter" })).toBeVisible();
+  await page.getByRole("button", { name: "Close filters" }).click();
+  await expect(page.getByTestId("transaction-browser-filter-bar")).toBeHidden();
+
   const toggle = page.getByLabel("This level only");
   await toggle.click();
   await expect(page).toHaveURL(/scope=exact/);

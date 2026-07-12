@@ -162,7 +162,10 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Moving between pages keeps the current rows visible until the next page arrives — no skeleton flash or flicker for uncached pages (skeletons are for first load only).
 - The browser fills the available viewport height: the table body flexes and the pagination footer sits at a small, consistent inset from the viewport bottom, matching the sidebar's bottom-control inset so the two bottom edges align.
 - Shareable state: filters, search text, sort, and list position live in the URL (per `docs/frontend-architecture.md`). Detail pages are URL-addressable. Sidebar navigation returns to a page's last-used state.
-- Filter bar pattern: a free-text search input plus an "Add filter" menu producing removable typed filter chips. Filter dimensions: account, category, tag, member, amount range, date range (initiated/pending/posted), posting status, reconciliation status.
+- Filter bar pattern: a Filter toggle in the toolbar row opens a dedicated full-width filter bar directly beneath it; the "Add filter" menu and the accumulated removable typed filter chips live in that bar and never inflate the toolbar row. Filter dimensions: account, category, tag, member, amount range, date range (initiated/pending/posted), posting status, reconciliation status.
+- While the filter bar is open, the Filter toggle renders as an X (close) icon button; activating it dismisses the bar and clears every chip-backed filter dimension. Standing toolbar controls — search and the class dropdown — are unaffected by the X and clear only through their own affordances.
+- The filter bar opens automatically when a view loads with, or gains, chip-backed filters (deep links, chip activation).
+- Day-step controls are square icon buttons with chevrons only, flanking the go-to-day date input.
 - Transaction class is a primary classification: it filters from a standing toolbar dropdown beside search and date jump, not from the Add-filter menu; the dropdown owns the URL-backed class state.
 
 ### Inline editing — the uniformity rule
@@ -209,7 +212,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Purpose: scan, search, slice, and edit all activity; home of batched entry.
 - One list: classified transaction lines from the shared browser — no separate records mode. Rows expand inline to the records subtable with per-record editing.
 - Scope: all-time, paginated, newest first (initiated date descending) by default. A date-jump control navigates to any point in history. The page remembers its last position (anchor, filters) and restores it on return.
-- Toolbar: search, filter chips, date jump.
+- Toolbar: search, go-to-day with icon-only day-step buttons, class dropdown, and the Filter toggle; typed filter chips accumulate in the filter bar beneath the toolbar row.
 - Inline quick fixes per the uniformity rule; bulk selection and the bulk action bar per Bulk operations.
 - Transaction detail (URL-addressable, side panel over the list): class badge, counterparty title, display amount, initiated date, full record table, metadata (source, created), actions: Edit, Duplicate, Delete, Split. The detail view shows everything the summary line truncates or hides: complete tag sets, full memos, and all per-record values.
 

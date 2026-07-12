@@ -12,6 +12,7 @@ import {
   EntryPanel,
   type EntryPanelLaunch,
   type EntryPanelSaveContext,
+  hasActiveTransactionFilterChips,
   readTransactionFiltersFromSearchParams,
   refreshTransactionPageAfterSave,
   TransactionBrowser,
@@ -23,6 +24,7 @@ import {
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
 import {
+  emptyTransactionFilters,
   transactionClasses,
   type TransactionFilters,
 } from "@/models/transaction-filters";
@@ -129,6 +131,13 @@ export const TransactionsPage = () => {
     },
     [filters, setTransactionFilters],
   );
+  const clearFilterChips = useCallback(() => {
+    setTransactionFilters({
+      ...emptyTransactionFilters,
+      classes: filters.classes,
+      search: filters.search,
+    });
+  }, [filters.classes, filters.search, setTransactionFilters]);
   const addEntityFilter = useCallback(
     (kind: "category" | "member" | "tag", id: number) => {
       browser.cancelDateJump();
@@ -228,8 +237,13 @@ export const TransactionsPage = () => {
                 onOpenChange={setFilterPopoverOpen}
               />
             }
+            hasActiveFilterChips={hasActiveTransactionFilterChips(filters)}
             filters={filters}
             idPrefix="transactions"
+            onClearFilterChips={clearFilterChips}
+            onFilterBarClose={() => {
+              setFilterPopoverOpen(false);
+            }}
             onDateJumpNext={browser.jumpToNextDate}
             onDateJumpPrevious={browser.jumpToPreviousDate}
             onDateJumpValueChange={browser.changeDateJumpValue}

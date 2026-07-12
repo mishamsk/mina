@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/tooltip";
 import type { TransactionFilters } from "@/models/transaction-filters";
 import {
-  emptyTransactionFilters,
   transactionFilterDecimalPattern,
   transactionPostingStatuses,
 } from "@/models/transaction-filters";
@@ -33,18 +32,19 @@ import { postingStatusLabel } from "./format";
 type EntityDimension = "account" | "category" | "tag" | "member";
 type RangeDimension =
   "amount" | "amountUsd" | "initiated" | "pending" | "posted";
-type FilterDimension = EntityDimension | "status" | RangeDimension;
+export type TransactionFilterDimension =
+  EntityDimension | "status" | RangeDimension;
 
 interface TransactionFilterControlsProps {
   readonly filters: TransactionFilters;
-  readonly hiddenDimensions?: readonly FilterDimension[];
+  readonly hiddenDimensions?: readonly TransactionFilterDimension[];
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onChange: (filters: TransactionFilters) => void;
   readonly onOpenChange?: (open: boolean) => void;
 }
 
 interface DimensionDefinition {
-  readonly id: FilterDimension;
+  readonly id: TransactionFilterDimension;
   readonly label: string;
 }
 
@@ -135,7 +135,7 @@ const rangeLabel = (
 
 const filterCount = (
   filters: TransactionFilters,
-  hiddenDimensions: ReadonlySet<FilterDimension>,
+  hiddenDimensions: ReadonlySet<TransactionFilterDimension>,
 ): number =>
   (hiddenDimensions.has("account") ? 0 : filters.accountIds.length) +
   (hiddenDimensions.has("category") ? 0 : filters.categoryIds.length) +
@@ -159,6 +159,11 @@ const filterCount = (
       ? undefined
       : rangeLabel("Posted", filters.postedFrom, filters.postedTo),
   ].filter(Boolean).length;
+
+export const hasActiveTransactionFilterChips = (
+  filters: TransactionFilters,
+  hiddenDimensions: readonly TransactionFilterDimension[] = [],
+): boolean => filterCount(filters, new Set(hiddenDimensions)) > 0;
 
 interface FilterChipProps {
   readonly hidden?: boolean;
@@ -357,15 +362,18 @@ export const TransactionFilterControls = ({
   const addFilterTriggerRef = useRef<HTMLButtonElement>(null);
   const restoreAddFilterTriggerFocusRef = useRef(false);
   const [open, setOpen] = useState(false);
-  const [selectedDimension, setSelectedDimension] = useState<FilterDimension>();
+  const [selectedDimension, setSelectedDimension] =
+    useState<TransactionFilterDimension>();
   const [includeHidden, setIncludeHidden] = useState<
     Partial<Record<EntityDimension, boolean>>
   >({});
   const [entityPickerOpen, setEntityPickerOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
-  const restoreDimensionRef = useRef<FilterDimension | undefined>(undefined);
+  const restoreDimensionRef = useRef<TransactionFilterDimension | undefined>(
+    undefined,
+  );
   const hiddenDimensionSet = useMemo(
-    () => new Set<FilterDimension>(hiddenDimensions),
+    () => new Set<TransactionFilterDimension>(hiddenDimensions),
     [hiddenDimensions],
   );
   const visibleDimensions = useMemo(
@@ -476,7 +484,9 @@ export const TransactionFilterControls = ({
     onChange(nextFilters);
   };
 
-  const selectDimension = (dimension: FilterDimension | undefined) => {
+  const selectDimension = (
+    dimension: TransactionFilterDimension | undefined,
+  ) => {
     setEntityPickerOpen(false);
     setSelectedDimension(dimension);
   };
@@ -694,7 +704,10 @@ export const TransactionFilterControls = ({
   )?.label;
 
   return (
-    <div className="flex min-w-9 flex-1 flex-wrap items-center gap-2">
+    <div
+      className="flex min-w-0 flex-wrap items-center gap-2"
+      aria-label="Transaction filters"
+    >
       <Popover
         open={open}
         onOpenChange={(nextOpen) => {
@@ -980,21 +993,6 @@ export const TransactionFilterControls = ({
                 });
               }}
             />
-          ) : null}
-          {activeFilterCount > 1 ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              onClick={() => {
-                updateFilters({
-                  ...emptyTransactionFilters,
-                  search: filters.search,
-                });
-              }}
-            >
-              Clear all
-            </Button>
           ) : null}
         </div>
       ) : null}

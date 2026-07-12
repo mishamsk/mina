@@ -255,6 +255,7 @@ test("categories row actions hide groups and move renamed paths into transaction
 
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Category" }).click();
   const categoryPicker = page.getByRole("combobox", { name: "Categories" });
@@ -346,6 +347,7 @@ test("categories row actions hide groups and move renamed paths into transaction
 
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Category" }).click();
   const refreshedCategoryPicker = page.getByRole("combobox", {

@@ -10,6 +10,7 @@ import {
   defaultTransactionPage,
   defaultTransactionPageSize,
   FqnPath,
+  hasActiveTransactionFilterChips,
   readTransactionFiltersFromSearchParams,
   TransactionBrowser,
   TransactionBrowserToolbar,
@@ -19,6 +20,7 @@ import {
   writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
 import {
+  emptyTransactionFilters,
   transactionClasses,
   type TransactionFilters,
 } from "@/models/transaction-filters";
@@ -369,6 +371,13 @@ export const ReferenceDrilldownPage = ({
     },
     [pageFilters, setTransactionFilters],
   );
+  const clearFilterChips = useCallback(() => {
+    setTransactionFilters({
+      ...emptyTransactionFilters,
+      classes: pageFilters.classes,
+      search: pageFilters.search,
+    });
+  }, [pageFilters.classes, pageFilters.search, setTransactionFilters]);
 
   const hiddenFilterDimensions = useMemo(
     () => [filterKind] as const,
@@ -446,8 +455,10 @@ export const ReferenceDrilldownPage = ({
             onChange={setTransactionFilters}
           />
         }
+        hasActiveFilterChips={hasActiveTransactionFilterChips(pageFilters)}
         filters={pageFilters}
         idPrefix="reference-transactions"
+        onClearFilterChips={clearFilterChips}
         onDateJumpNext={browser.jumpToNextDate}
         onDateJumpPrevious={browser.jumpToPreviousDate}
         onDateJumpValueChange={browser.changeDateJumpValue}

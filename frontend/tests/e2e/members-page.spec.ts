@@ -123,6 +123,7 @@ test("members side panel creates renames and deletes members with conflict feedb
 
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Member" }).click();
   const memberPicker = page.getByRole("combobox", { name: "Members" });
@@ -181,6 +182,7 @@ test("members side panel creates renames and deletes members with conflict feedb
 
   await page.goto("/transactions");
   await expect(page.getByText("Description")).toBeVisible();
+  await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Member" }).click();
   const refreshedMemberPicker = page.getByRole("combobox", {
