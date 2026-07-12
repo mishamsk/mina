@@ -27,6 +27,13 @@ import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AmountText } from "@/features/ledger";
 
@@ -663,21 +670,24 @@ const AccountsSidePanelContent = ({
                   <AccountTypeBadge accountType={form.accountType} />
                 </div>
               ) : (
-                <select
-                  id="account-type"
-                  className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                <Select
                   value={form.accountType}
-                  onChange={(event) => {
+                  onValueChange={(value) => {
                     updateForm({
-                      accountType: event.target.value as AccountType,
+                      accountType: value as AccountType,
                     });
                     setFieldError("type", undefined);
                   }}
                 >
-                  <option value="balance">Balance</option>
-                  <option value="flow">Flow</option>
-                  <option value="system">System</option>
-                </select>
+                  <SelectTrigger id="account-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="balance">Balance</SelectItem>
+                    <SelectItem value="flow">Flow</SelectItem>
+                    <SelectItem value="system">System</SelectItem>
+                  </SelectContent>
+                </Select>
               )}
               <FieldError message={fieldErrors.type} />
             </Field>

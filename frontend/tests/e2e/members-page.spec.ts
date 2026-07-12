@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 interface MemberFixture {
   readonly member_id: number;
@@ -44,6 +44,20 @@ const findByFqn = <T extends { readonly fqn: string }>(
   const fixture = fixtures.find((item) => item.fqn === fqn);
   expect(fixture, `${fqn} fixture`).toBeDefined();
   return fixture as T;
+};
+
+const activateRowAction = async (
+  page: Page,
+  row: Locator,
+  actionName: string,
+) => {
+  const action = row.getByRole("button", { name: actionName });
+  await row.focus();
+  await expect(row).toBeFocused();
+  await page.keyboard.press("Tab");
+  await action.focus();
+  await expect(action).toBeFocused();
+  await page.keyboard.press("Enter");
 };
 
 test("members page renders sorted demo members and URL search", async ({
@@ -384,17 +398,19 @@ test("member row delete closes the matching open editor and leaves it open on Es
   await row.click();
   const panel = page.getByRole("dialog", { name: "Edit member" });
   await expect(panel).toBeVisible();
+  await expect(panel).toBeFocused();
 
-  const deleteAction = row.getByRole("button", { name: "Delete member" });
-  await row.hover();
-  await deleteAction.click();
+  await activateRowAction(page, row, "Delete member");
   const dialog = page.getByRole("alertdialog", { name: "Delete member" });
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(panel).toBeVisible();
+  await expect(
+    row.getByRole("button", { name: "Delete member" }),
+  ).toBeFocused();
 
-  await deleteAction.click();
+  await activateRowAction(page, row, "Delete member");
   const deleteResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (

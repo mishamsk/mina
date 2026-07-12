@@ -256,7 +256,8 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
       .filter({ hasText: hiddenAccount.fqn }),
   ).toHaveCount(0);
 
-  await page.getByLabel("Type").selectOption("flow");
+  await page.getByLabel("Type").click();
+  await page.getByRole("option", { exact: true, name: "Flow" }).click();
   await expect(page).toHaveURL(/\/accounts\?type=flow$/);
   await expect(
     page.getByTestId("accounts-tree-row").filter({ hasText: "TraderJoes" }),
@@ -269,7 +270,8 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
   await expect(page).toHaveURL(/type=flow&q=credit_card%3AChase%3ASapphire/);
   await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0);
 
-  await page.getByLabel("Type").selectOption("all");
+  await page.getByLabel("Type").click();
+  await page.getByRole("option", { exact: true, name: "All types" }).click();
   await expect(page).toHaveURL(/q=credit_card%3AChase%3ASapphire/);
   await expect(
     page.getByTestId("accounts-tree-row").filter({ hasText: "Sapphire" }),
@@ -559,7 +561,8 @@ test("account page renders header and paginated running-balance register", async
       url.searchParams.get("offset") === "0"
     );
   });
-  await page.getByLabel("Rows").selectOption("25");
+  await page.getByLabel("Rows").click();
+  await page.getByRole("option", { exact: true, name: "25" }).click();
   await pageSizeResponse;
   await expectAccountRegisterUrl(page, 1, 25);
   await expect(page).not.toHaveURL(/[?&]record=/);
@@ -1383,7 +1386,8 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   await createPanel.getByLabel("FQN").fill(fqn);
   await createPanel.getByLabel("FQN").blur();
   await expect(createPanel.getByText("FQN is required.")).toHaveCount(0);
-  await createPanel.getByLabel("Type").selectOption("balance");
+  await createPanel.getByLabel("Type").click();
+  await page.getByRole("option", { exact: true, name: "Balance" }).click();
   await createPanel.getByLabel("Currency").fill("USD");
   const createAccountRequest = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -1565,7 +1569,8 @@ test("accounts form clears API field errors after editing the field", async ({
   await expect(createPanel).toBeVisible();
 
   await fqnInput.fill(duplicateFqn);
-  await createPanel.getByLabel("Type").selectOption("balance");
+  await createPanel.getByLabel("Type").click();
+  await page.getByRole("option", { exact: true, name: "Balance" }).click();
   await createPanel.getByLabel("Currency").fill("USD");
   const duplicateCreate = page.waitForResponse((response) => {
     const url = new URL(response.url());

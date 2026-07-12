@@ -22,6 +22,13 @@ import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { IntentBadge, intentLabel } from "./intent-badge";
 import { refreshCategoriesAfterMutation } from "./use-categories-resource";
@@ -53,6 +60,7 @@ const economicIntents: readonly CategoryEconomicIntent[] = [
   "adjustment",
   "fx_gain_loss",
 ];
+const emptyIntentValue = "mina-empty-intent";
 
 const intentEffects = {
   adjustment: "Excluded from ordinary totals; used for adjustment views.",
@@ -371,31 +379,40 @@ const CategoriesSidePanelContent = ({
                 <IntentBadge economicIntent={selectedIntent} />
               </div>
             ) : (
-              <select
-                id="category-intent"
-                className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+              <Select
                 value={form.economicIntent}
-                onBlur={() => {
-                  setFieldError(
-                    "intent",
-                    validateFormField(form, mode, "intent"),
-                  );
-                }}
-                onChange={(event) => {
+                onValueChange={(value) => {
                   updateForm({
-                    economicIntent: event.target
-                      .value as CategoryEconomicIntent,
+                    economicIntent:
+                      value === emptyIntentValue
+                        ? ""
+                        : (value as CategoryEconomicIntent),
                   });
                   setFieldError("intent", undefined);
                 }}
               >
-                <option value="">Select intent</option>
-                {economicIntents.map((intent) => (
-                  <option key={intent} value={intent}>
-                    {intentLabel(intent)}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  id="category-intent"
+                  onBlur={() => {
+                    setFieldError(
+                      "intent",
+                      validateFormField(form, mode, "intent"),
+                    );
+                  }}
+                >
+                  <SelectValue placeholder="Select intent" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={emptyIntentValue}>
+                    Select intent
+                  </SelectItem>
+                  {economicIntents.map((intent) => (
+                    <SelectItem key={intent} value={intent}>
+                      {intentLabel(intent)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
             <FieldError message={fieldErrors.intent} />
             {selectedIntent ? (

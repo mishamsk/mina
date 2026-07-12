@@ -5,6 +5,13 @@ import type { SetURLSearchParams } from "react-router";
 import type { Account, AccountType } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { AccountsPageSnapshot } from "@/store";
 
 import type { AccountTypeFilter } from "./accounts-tree";
@@ -126,19 +133,22 @@ export const AccountsToolbar = ({
         >
           Type
         </label>
-        <select
-          id="accounts-type"
-          className="bg-card text-foreground h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+        <Select
           value={typeFilter}
-          onChange={(event) => {
-            setTypeFilter(event.target.value as AccountTypeFilter);
+          onValueChange={(value) => {
+            setTypeFilter(value as AccountTypeFilter);
           }}
         >
-          <option value="all">All types</option>
-          <option value="balance">Balance</option>
-          <option value="flow">Flow</option>
-          <option value="system">System</option>
-        </select>
+          <SelectTrigger id="accounts-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All types</SelectItem>
+            <SelectItem value="balance">Balance</SelectItem>
+            <SelectItem value="flow">Flow</SelectItem>
+            <SelectItem value="system">System</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Tooltip

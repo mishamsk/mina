@@ -21,6 +21,13 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
@@ -901,20 +908,23 @@ export const TransactionBrowser = ({
           <label htmlFor="transactions-page-size" className="font-medium">
             Rows
           </label>
-          <select
-            id="transactions-page-size"
-            className="bg-card h-8 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-            value={pageSize}
-            onChange={(event) => {
-              onPageSizeChange(Number(event.target.value));
+          <Select
+            value={String(pageSize)}
+            onValueChange={(value) => {
+              onPageSizeChange(Number(value));
             }}
           >
-            {pageSizeOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="transactions-page-size" size="compact">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {pageSizeOptions.map((option) => (
+                <SelectItem key={option} value={String(option)}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex items-center gap-3">
           {loading ? (

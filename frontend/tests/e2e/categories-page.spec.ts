@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 interface CategoryFixture {
   readonly category_id: number;
@@ -17,6 +17,10 @@ interface CategoryFixture {
 interface AccountFixture {
   readonly account_id: number;
   readonly fqn: string;
+}
+
+interface TransactionFixture {
+  readonly transaction_id: number;
 }
 
 const listFixtures = async <T>(
@@ -39,6 +43,20 @@ const findByFqn = <T extends { readonly fqn: string }>(
   const fixture = fixtures.find((item) => item.fqn === fqn);
   expect(fixture, `${fqn} fixture`).toBeDefined();
   return fixture as T;
+};
+
+const activateRowAction = async (
+  page: Page,
+  row: Locator,
+  actionName: string,
+) => {
+  const action = row.getByRole("button", { name: actionName });
+  await row.focus();
+  await expect(row).toBeFocused();
+  await page.keyboard.press("Tab");
+  await action.focus();
+  await expect(action).toBeFocused();
+  await page.keyboard.press("Enter");
 };
 
 const createCategory = async (
@@ -81,16 +99,19 @@ test("category row delete closes the matching open editor", async ({
   await row.click();
   const panel = page.getByRole("dialog", { name: "Edit category" });
   await expect(panel).toBeVisible();
+  await expect(panel).toBeFocused();
 
-  await row.hover();
-  await row.getByRole("button", { name: "Delete category" }).click();
+  await activateRowAction(page, row, "Delete category");
   const dialog = page.getByRole("alertdialog", { name: "Delete category" });
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(panel).toBeVisible();
+  await expect(
+    row.getByRole("button", { name: "Delete category" }),
+  ).toBeFocused();
 
-  await row.getByRole("button", { name: "Delete category" }).click();
+  await activateRowAction(page, row, "Delete category");
   const deleteResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -493,13 +514,15 @@ test("categories side panel creates edits and deletes categories with conflict f
 }) => {
   const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const fqn = `E2EPanel:${unique}:Income`;
+  const staleFqn = `E2EStaleDelete:${unique}`;
 
   await page.goto("/categories");
   await page.getByRole("button", { name: "New category" }).click();
   const createPanel = page.getByRole("dialog", { name: "Create category" });
   await expect(createPanel).toBeVisible();
   await createPanel.getByLabel("FQN").fill(fqn);
-  await createPanel.getByLabel("Intent").selectOption("income");
+  await createPanel.getByLabel("Intent").click();
+  await page.getByRole("option", { exact: true, name: "Income" }).click();
   await expect(createPanel).toContainText("Counts toward income totals.");
   const createResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -513,6 +536,7 @@ test("categories side panel creates edits and deletes categories with conflict f
   await expect(page.getByText("Category created.")).toBeVisible({
     timeout: 10_000,
   });
+  await expect(createPanel).toBeHidden();
 
   await page.getByLabel("Search").fill(fqn);
   const createdRow = page
@@ -583,14 +607,61 @@ test("categories side panel creates edits and deletes categories with conflict f
   await expect(groceriesRow).toBeVisible({ timeout: 10_000 });
   await groceriesRow.click();
   const groceriesPanel = page.getByRole("dialog", { name: "Edit category" });
-  await groceriesPanel.getByRole("button", { name: "Delete" }).click();
+  const groceriesDelete = groceriesPanel.getByRole("button", {
+    name: "Delete",
+  });
+  await expect(groceriesDelete).toHaveAttribute("aria-disabled", "true");
+  await groceriesDelete.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Category has active dependent records.",
+  );
+  await groceriesPanel
+    .getByRole("button", { name: "Close category panel" })
+    .click();
+
+  const [staleCategory, accounts] = await Promise.all([
+    createCategory(page, { fqn: staleFqn }),
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  await page.goto(`/categories?q=${encodeURIComponent(staleFqn)}`);
+  const staleRow = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: staleFqn })
+    .first();
+  await expect(staleRow).toBeVisible({ timeout: 10_000 });
+  await staleRow.click();
+  const stalePanel = page.getByRole("dialog", { name: "Edit category" });
+  const staleDelete = stalePanel.getByRole("button", { name: "Delete" });
+  await expect(staleDelete).not.toHaveAttribute("aria-disabled", "true");
+
+  const transactionResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "12.34",
+        category_id: staleCategory.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-05-31",
+        memo: `E2E category stale delete ${unique}`,
+      },
+    },
+  );
+  expect(transactionResponse.ok()).toBe(true);
+  const staleTransaction =
+    (await transactionResponse.json()) as TransactionFixture;
+
+  await staleDelete.click();
   const conflictDialog = page.getByRole("alertdialog", {
     name: "Delete category",
   });
   const conflictResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
-      url.pathname.startsWith("/api/categories/") &&
+      url.pathname === `/api/categories/${staleCategory.category_id}` &&
       response.request().method() === "DELETE"
     );
   });
@@ -599,4 +670,13 @@ test("categories side panel creates edits and deletes categories with conflict f
   await expect(conflictDialog.getByRole("alert")).toContainText(
     /active|depend|reference|could not/i,
   );
+
+  const transactionDeleteResponse = await page.request.delete(
+    `/api/transactions/${staleTransaction.transaction_id}`,
+  );
+  expect(transactionDeleteResponse.ok()).toBe(true);
+  const categoryDeleteResponse = await page.request.delete(
+    `/api/categories/${staleCategory.category_id}`,
+  );
+  expect(categoryDeleteResponse.ok()).toBe(true);
 });

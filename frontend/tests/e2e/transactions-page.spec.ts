@@ -1003,7 +1003,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
       })
     );
   });
-  await page.getByLabel("Rows").selectOption("25");
+  await page.getByLabel("Rows").click();
+  await page.getByRole("option", { exact: true, name: "25" }).click();
   await pageSizeRequest;
 
   const dateJumpRequest = page.waitForRequest((request) => {
@@ -1173,7 +1174,14 @@ test("transactions class toolbar filter owns class URL state", async ({
       })
     );
   });
-  await classFilter.selectOption("spend");
+  await classFilter.click();
+  const classListbox = page.getByRole("listbox");
+  await expect(classListbox).toBeVisible();
+  await expect(classListbox).toHaveClass(/border-\[var\(--border-ink\)\]/);
+  await expect(
+    classListbox.getByRole("option", { exact: true, name: "Spend" }),
+  ).toBeVisible();
+  await page.getByRole("option", { exact: true, name: "Spend" }).click();
   await spendRequest;
   await expectTransactionFilterUrl(page, {
     classes: ["spend"],
@@ -1187,7 +1195,8 @@ test("transactions class toolbar filter owns class URL state", async ({
     page.getByRole("row").filter({ hasText: incomeMemo }),
   ).toBeHidden();
 
-  await classFilter.selectOption("all");
+  await classFilter.click();
+  await page.getByRole("option", { exact: true, name: "All classes" }).click();
   await expectTransactionFilterUrl(page, { pageSize: "50", q: unique });
   await expect(
     page.getByRole("row").filter({ hasText: spendMemo }),
@@ -1199,7 +1208,7 @@ test("transactions class toolbar filter owns class URL state", async ({
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}&class=income`,
   );
-  await expect(classFilter).toHaveValue("income");
+  await expect(classFilter).toHaveText("Income");
   await expect(
     page.getByRole("row").filter({ hasText: incomeMemo }),
   ).toBeVisible();
@@ -1207,14 +1216,15 @@ test("transactions class toolbar filter owns class URL state", async ({
     page.getByRole("row").filter({ hasText: spendMemo }),
   ).toBeHidden();
   await page.reload();
-  await expect(classFilter).toHaveValue("income");
+  await expect(classFilter).toHaveText("Income");
 
-  await classFilter.selectOption("spend");
-  await expect(classFilter).toHaveValue("spend");
+  await classFilter.click();
+  await page.getByRole("option", { exact: true, name: "Spend" }).click();
+  await expect(classFilter).toHaveText("Spend");
   await page.goBack();
-  await expect(classFilter).toHaveValue("income");
+  await expect(classFilter).toHaveText("Income");
   await page.goForward();
-  await expect(classFilter).toHaveValue("spend");
+  await expect(classFilter).toHaveText("Spend");
 
   await page.getByRole("button", { name: "Add filter" }).click();
   await expect(
@@ -1235,7 +1245,7 @@ test("transactions class toolbar filter owns class URL state", async ({
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}&class=spend&class=income`,
   );
   await multiClassRequest;
-  await expect(classFilter).toHaveValue("spend");
+  await expect(classFilter).toHaveText("Spend");
   await expect(
     page.getByRole("row").filter({ hasText: spendMemo }),
   ).toBeVisible();
@@ -4063,6 +4073,9 @@ const expectAdvancedRecordUsableAtDockedWidth = async (
     const controls = Array.from(
       recordElement.querySelectorAll<HTMLElement>("input, select, textarea"),
     ).filter((element) => {
+      if (element.closest('[aria-hidden="true"]')) {
+        return false;
+      }
       const box = element.getBoundingClientRect();
       const style = window.getComputedStyle(element);
       return (

@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 interface TagFixture {
   readonly fqn: string;
@@ -15,6 +15,10 @@ interface AccountFixture {
 interface CategoryFixture {
   readonly category_id: number;
   readonly fqn: string;
+}
+
+interface TransactionFixture {
+  readonly transaction_id: number;
 }
 
 const listFixtures = async <T>(
@@ -37,6 +41,20 @@ const findByFqn = <T extends { readonly fqn: string }>(
   const fixture = fixtures.find((item) => item.fqn === fqn);
   expect(fixture, `${fqn} fixture`).toBeDefined();
   return fixture as T;
+};
+
+const activateRowAction = async (
+  page: Page,
+  row: Locator,
+  actionName: string,
+) => {
+  const action = row.getByRole("button", { name: actionName });
+  await row.focus();
+  await expect(row).toBeFocused();
+  await page.keyboard.press("Tab");
+  await action.focus();
+  await expect(action).toBeFocused();
+  await page.keyboard.press("Enter");
 };
 
 const createTag = async (
@@ -76,9 +94,9 @@ test("tag row delete closes the matching open editor", async ({
   await row.click();
   const panel = page.getByRole("dialog", { name: "Edit tag" });
   await expect(panel).toBeVisible();
+  await expect(panel).toBeFocused();
 
-  await row.hover();
-  await row.getByRole("button", { name: "Delete tag" }).click();
+  await activateRowAction(page, row, "Delete tag");
   const dialog = page.getByRole("alertdialog", { name: "Delete tag" });
   const deleteResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -450,6 +468,7 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
 }) => {
   const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const fqn = `E2EPanel:${unique}:Leaf`;
+  const staleFqn = `E2EStaleDelete:${unique}`;
 
   await page.goto("/tags");
   await page.getByRole("button", { name: "New tag" }).click();
@@ -467,6 +486,7 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
   await expect(page.getByText("Tag created.")).toBeVisible({
     timeout: 10_000,
   });
+  await expect(createPanel).toBeHidden();
 
   await page.getByLabel("Search").fill(fqn);
   const createdRow = page
@@ -534,14 +554,60 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
   await expect(cashRow).toBeVisible({ timeout: 10_000 });
   await cashRow.click();
   const cashPanel = page.getByRole("dialog", { name: "Edit tag" });
-  await cashPanel.getByRole("button", { name: "Delete" }).click();
+  const cashDelete = cashPanel.getByRole("button", { name: "Delete" });
+  await expect(cashDelete).toHaveAttribute("aria-disabled", "true");
+  await cashDelete.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Tag has active dependent records.",
+  );
+  await cashPanel.getByRole("button", { name: "Close tag panel" }).click();
+
+  const [staleTag, accounts, categories] = await Promise.all([
+    createTag(page, { fqn: staleFqn }),
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  await page.goto(`/tags?q=${encodeURIComponent(staleFqn)}`);
+  const staleRow = page
+    .getByTestId("tags-tree-row")
+    .filter({ hasText: staleFqn })
+    .first();
+  await expect(staleRow).toBeVisible({ timeout: 10_000 });
+  await staleRow.click();
+  const stalePanel = page.getByRole("dialog", { name: "Edit tag" });
+  const staleDelete = stalePanel.getByRole("button", { name: "Delete" });
+  await expect(staleDelete).not.toHaveAttribute("aria-disabled", "true");
+
+  const transactionResponse = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "12.34",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-05-31",
+        memo: `E2E tag stale delete ${unique}`,
+        tag_ids: [staleTag.tag_id],
+      },
+    },
+  );
+  expect(transactionResponse.ok()).toBe(true);
+  const staleTransaction =
+    (await transactionResponse.json()) as TransactionFixture;
+
+  await staleDelete.click();
   const conflictDialog = page.getByRole("alertdialog", {
     name: "Delete tag",
   });
   const conflictResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
-      url.pathname.startsWith("/api/tags/") &&
+      url.pathname === `/api/tags/${staleTag.tag_id}` &&
       response.request().method() === "DELETE"
     );
   });
@@ -550,4 +616,13 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
   await expect(conflictDialog.getByRole("alert")).toContainText(
     /active|depend|reference|could not/i,
   );
+
+  const transactionDeleteResponse = await page.request.delete(
+    `/api/transactions/${staleTransaction.transaction_id}`,
+  );
+  expect(transactionDeleteResponse.ok()).toBe(true);
+  const tagDeleteResponse = await page.request.delete(
+    `/api/tags/${staleTag.tag_id}`,
+  );
+  expect(tagDeleteResponse.ok()).toBe(true);
 });

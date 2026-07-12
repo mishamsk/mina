@@ -33,6 +33,13 @@ import {
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type {
   AdvancedTransactionEntryDraft,
   JournalRecordRowDraft,
@@ -2593,30 +2600,38 @@ export const EntryPanel = ({
                             >
                               Record {rowIndex + 1} posting status
                             </label>
-                            <select
-                              id={`advanced-record-${rowIndex}-status`}
-                              className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+                            <Select
                               value={row.postingStatus}
-                              onChange={(event) => {
+                              onValueChange={(value) => {
                                 updateAdvancedRow(rowIndex, {
-                                  postingStatus: event.target
-                                    .value as JournalRecordDraftPostingStatus,
+                                  postingStatus:
+                                    value as JournalRecordDraftPostingStatus,
                                 });
                               }}
                             >
-                              {allowExpectedPostingStatus ||
-                              row.postingStatus === "expected" ? (
-                                <option
-                                  value="expected"
-                                  disabled={!allowExpectedPostingStatus}
-                                >
-                                  Expected
-                                </option>
-                              ) : null}
-                              <option value="posted">Posted</option>
-                              <option value="pending">Pending</option>
-                              <option value="cancelled">Cancelled</option>
-                            </select>
+                              <SelectTrigger
+                                id={`advanced-record-${rowIndex}-status`}
+                                className="w-full"
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allowExpectedPostingStatus ||
+                                row.postingStatus === "expected" ? (
+                                  <SelectItem
+                                    value="expected"
+                                    disabled={!allowExpectedPostingStatus}
+                                  >
+                                    Expected
+                                  </SelectItem>
+                                ) : null}
+                                <SelectItem value="posted">Posted</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="cancelled">
+                                  Cancelled
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
                             <FieldError
                               message={advancedFieldError(
                                 advancedFieldErrors,

@@ -3,6 +3,13 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   transactionClasses,
   type TransactionFilters,
 } from "@/models/transaction-filters";
@@ -110,21 +117,24 @@ export const TransactionBrowserToolbar = ({
       >
         Class
       </label>
-      <select
-        id={`${idPrefix}-class`}
-        className="bg-card text-foreground h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+      <Select
         value={filters.classes[0] ?? "all"}
-        onChange={(event) => {
-          onTransactionClassChange(event.target.value);
+        onValueChange={(value) => {
+          onTransactionClassChange(value);
         }}
       >
-        <option value="all">All classes</option>
-        {transactionClasses.map((transactionClass) => (
-          <option key={transactionClass} value={transactionClass}>
-            {transactionClassLabel(transactionClass)}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger id={`${idPrefix}-class`}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All classes</SelectItem>
+          {transactionClasses.map((transactionClass) => (
+            <SelectItem key={transactionClass} value={transactionClass}>
+              {transactionClassLabel(transactionClass)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
     {extraControls}
     <div className="mt-5 flex min-w-9 flex-1">{filterControls}</div>
