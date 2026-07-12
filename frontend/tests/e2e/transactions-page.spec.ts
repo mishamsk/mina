@@ -276,7 +276,7 @@ const createMember = async (
 const createAccount = async (
   page: Page,
   fqn: string,
-  accountType: "balance" | "flow",
+  accountType: "balance" | "flow" | "system",
   currency?: string,
   isFeatured?: boolean,
 ): Promise<AccountFixture> => {
@@ -408,6 +408,17 @@ const hideCategory = async (
     {
       data: { is_hidden: true },
     },
+  );
+  expect(response.ok()).toBe(true);
+};
+
+const hideAccount = async (
+  page: Page,
+  account: AccountFixture,
+): Promise<void> => {
+  const response = await page.request.patch(
+    `/api/accounts/${account.account_id}`,
+    { data: { is_hidden: true } },
   );
   expect(response.ok()).toBe(true);
 };
@@ -5063,7 +5074,7 @@ test("advanced journal account picker follows selected category intent", async (
   });
 
   const accountPicker = firstRecord.getByRole("combobox", { name: "Account" });
-  await accountPicker.fill("merchant:Books");
+  await accountPicker.fill("merchant:Book");
   await expect(
     page.locator("#advanced-record-0-account-options"),
   ).toContainText("No matches");
@@ -5078,6 +5089,117 @@ test("advanced journal account picker follows selected category intent", async (
   await categoryPicker.fill("");
   await accountPicker.fill("merchant:Books");
   await expect(accountPicker).toHaveValue("merchant:Books");
+});
+
+test("advanced journal account picker keeps suggestions filtered but resolves exact hidden FQNs", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const visibleSystemFqn = `e2e:advanced:${unique}:VisibleFeeSystem`;
+  const hiddenSystemFqn = `e2e:advanced:${unique}:HiddenFeeSystem`;
+  const feeCategoryFqn = `E2E:Advanced:${unique}:Fee`;
+  const visibleSystem = await createAccount(page, visibleSystemFqn, "system");
+  const hiddenSystem = await createAccount(page, hiddenSystemFqn, "system");
+  await hideAccount(page, hiddenSystem);
+  await createCategory(page, feeCategoryFqn, "fee");
+
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const memo = `E2E advanced account parity ${unique}`;
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await page.getByRole("tab", { name: "Advanced" }).click();
+
+  const firstRecord = journalRecord(page, 1);
+  const secondRecord = journalRecord(page, 2);
+  const firstAccountPicker = firstRecord.getByRole("combobox", {
+    name: "Account",
+  });
+
+  await firstAccountPicker.fill("VisibleFeeSystem");
+  await expect(
+    page
+      .locator("#advanced-record-0-account-options")
+      .getByText(visibleSystem.fqn),
+  ).toBeVisible();
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    feeCategoryFqn,
+    feeCategoryFqn,
+    { scope: firstRecord },
+  );
+  await chooseOptionByKeyboard(page, "Account", "Wallet", fundingAccount.fqn, {
+    scope: firstRecord,
+  });
+  await firstRecord.getByLabel("Amount").fill("-10.00");
+
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    feeCategoryFqn,
+    feeCategoryFqn,
+    { scope: secondRecord },
+  );
+  await chooseOptionByKeyboard(
+    page,
+    "Account",
+    "VisibleFeeSystem",
+    visibleSystem.fqn,
+    { scope: secondRecord },
+  );
+  await secondRecord.getByLabel("Amount").fill("10.00");
+
+  await page.getByRole("button", { name: "Add record" }).click();
+  const thirdRecord = journalRecord(page, 3);
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    feeCategoryFqn,
+    feeCategoryFqn,
+    { scope: thirdRecord },
+  );
+  await chooseOptionByKeyboard(page, "Account", "Wallet", fundingAccount.fqn, {
+    scope: thirdRecord,
+  });
+  await thirdRecord.getByLabel("Amount").fill("-20.00");
+
+  await page.getByRole("button", { name: "Add record" }).click();
+  const fourthRecord = journalRecord(page, 4);
+  const hiddenAccountPicker = fourthRecord.getByRole("combobox", {
+    name: "Account",
+  });
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    feeCategoryFqn,
+    feeCategoryFqn,
+    { scope: fourthRecord },
+  );
+  await hiddenAccountPicker.fill("HiddenFeeSystem");
+  await expect(
+    page.locator("#advanced-record-3-account-options"),
+  ).toContainText("No matches");
+  await hiddenAccountPicker.fill(hiddenSystemFqn);
+  await expect(hiddenAccountPicker).toHaveValue(hiddenSystemFqn);
+  await fourthRecord.getByLabel("Amount").fill("20.00");
+  await fourthRecord.getByLabel("Memo").fill(memo);
+
+  await expect(
+    page.getByRole("button", { name: "Save and add another" }),
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Save and add another" }).click();
+  await expect(page.getByText("Entries this session: 1")).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
 });
 
 test("command palette new spend supersedes an active edit launch", async ({

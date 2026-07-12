@@ -1693,6 +1693,13 @@ export const EntryPanel = ({
       ),
     [lookups, selectedEntityIds],
   );
+  const exactMatchAccountOptions = useMemo(
+    () =>
+      (lookups?.accounts ?? [])
+        .filter((account) => !account.tombstoned_at)
+        .map((account) => entityOption(account, account.account_id)),
+    [lookups],
+  );
 
   const options = useMemo(() => {
     const categories = [
@@ -2448,6 +2455,7 @@ export const EntryPanel = ({
                         >
                           <EntityPicker
                             key={`${lookupRevision}:advanced:${row.draftId}:account:${row.categoryId ?? ""}`}
+                            exactMatchOptions={exactMatchAccountOptions}
                             id={`advanced-record-${rowIndex}-account`}
                             label={`Record ${rowIndex + 1} account`}
                             labelClassName="sr-only"

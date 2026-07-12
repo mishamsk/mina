@@ -15,6 +15,7 @@ export interface EntityOption {
 interface EntityPickerProps {
   readonly clearOnSelect?: boolean;
   readonly disabled?: boolean;
+  readonly exactMatchOptions?: readonly EntityOption[];
   readonly id: string;
   readonly label: string;
   readonly labelClassName?: string;
@@ -31,6 +32,7 @@ const matchesQuery = (option: EntityOption, query: string): boolean =>
 export const EntityPicker = ({
   clearOnSelect = false,
   disabled = false,
+  exactMatchOptions = [],
   id,
   label,
   labelClassName,
@@ -96,7 +98,7 @@ export const EntityPicker = ({
         }}
         onChange={(event) => {
           const nextQuery = event.target.value;
-          const exactOption = options.find(
+          const exactOption = [...options, ...exactMatchOptions].find(
             (option) => option.searchLabel === nextQuery,
           );
           if (exactOption) {
