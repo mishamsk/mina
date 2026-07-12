@@ -12,9 +12,11 @@ import {
   AmountText,
   ApproximateUsdAmount,
   buildLookupMaps,
+  defaultTransactionPageSize,
   FqnPath,
   refreshLedgerLookups,
   sumDecimalStrings,
+  transactionPageSizeOptions,
 } from "@/features/ledger";
 
 import { AccountPeekPanel } from "./account-peek-panel";
@@ -29,8 +31,8 @@ import {
   useAccountsResource,
 } from "./use-accounts-resource";
 
-const pageSizes = [10, 25, 50] as const;
-const defaultPageSize = 10;
+const pageSizes = transactionPageSizeOptions;
+const defaultPageSize = defaultTransactionPageSize;
 
 const parsePositiveInteger = (
   value: string | undefined,

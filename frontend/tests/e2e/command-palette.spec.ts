@@ -202,7 +202,7 @@ test("command palette transaction search renders results and opens off-page deta
     tag,
   });
 
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   await expect(page.getByText("Description")).toBeVisible();
 
   await openPalette(page);

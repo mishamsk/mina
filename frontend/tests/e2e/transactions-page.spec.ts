@@ -186,7 +186,7 @@ const expectTransactionFilterUrl = async (
       initiatedFrom: expected.initiatedFrom ?? null,
       initiatedTo: expected.initiatedTo ?? null,
       page: expected.page ?? "1",
-      pageSize: expected.pageSize ?? "10",
+      pageSize: expected.pageSize ?? "50",
       q: expected.q ?? null,
       categories: [...(expected.categories ?? [])].sort(
         (left, right) => left - right,
@@ -696,7 +696,42 @@ test("transactions page renders demo transaction lines and expands records", asy
 });
 
 test("transactions page uses server pagination controls", async ({ page }) => {
+  const defaultPageRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("limit") === "50" &&
+      url.searchParams.get("offset") === "0"
+    );
+  });
+  await page.goto("/transactions");
+  await defaultPageRequest;
+  await expect(page.getByLabel("Rows")).toContainText("50");
+  await page.getByLabel("Rows").click();
+  await expect(
+    page.getByRole("option", { exact: true, name: "25" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("option", { exact: true, name: "50" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("option", { exact: true, name: "100" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const legacyPageSizeRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("limit") === "50" &&
+      url.searchParams.get("offset") === "0"
+    );
+  });
   await page.goto("/transactions?page=1&pageSize=10");
+  await legacyPageSizeRequest;
+  await expect(page.getByLabel("Rows")).toContainText("50");
+
+  await page.goto("/transactions?page=1&pageSize=25");
 
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
   await expect(
@@ -727,7 +762,7 @@ test("transactions page uses server pagination controls", async ({ page }) => {
   const nextPageRequestStarted = new Promise<void>((resolve) => {
     void page.route("**/api/transactions**", async (route) => {
       const url = new URL(route.request().url());
-      if (url.searchParams.get("offset") === "10") {
+      if (url.searchParams.get("offset") === "25") {
         resolve();
         await new Promise<void>((release) => {
           releaseNextPageResponse = release;
@@ -799,7 +834,7 @@ test("transactions page search filters server-side and deep-links", async ({
   });
   expect(spendResponse.ok()).toBe(true);
 
-  await page.goto("/transactions?page=2&pageSize=10");
+  await page.goto("/transactions?page=2&pageSize=25");
   await expect(page.getByText("Description")).toBeVisible();
 
   const searchRequest = page.waitForRequest((request) => {
@@ -811,11 +846,11 @@ test("transactions page search filters server-side and deep-links", async ({
   });
   await page.getByRole("searchbox", { name: "Search" }).fill(unique);
   const requestUrl = new URL((await searchRequest).url());
-  expect(requestUrl.searchParams.get("limit")).toBe("10");
+  expect(requestUrl.searchParams.get("limit")).toBe("25");
   expect(requestUrl.searchParams.get("offset")).toBe("0");
   expect(requestUrl.searchParams.get("search")).toBe(unique);
 
-  await expectTransactionsPageUrl(page, 1, 10, { q: unique });
+  await expectTransactionsPageUrl(page, 1, 25, { q: unique });
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
 
   const deepLinkRequest = page.waitForRequest((request) => {
@@ -884,7 +919,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
   });
   expect(alternateSpend.ok()).toBe(true);
 
-  await page.goto("/transactions?page=2&pageSize=10");
+  await page.goto("/transactions?page=2&pageSize=25");
   await expect(page.getByText("Description")).toBeVisible();
 
   await page.getByRole("button", { name: "Open filters" }).click();
@@ -940,7 +975,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
         amountMin: "10",
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
-        limit: "10",
+        limit: "25",
         statuses: ["pending"],
         tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
@@ -956,6 +991,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
     amountMin: "10",
     initiatedFrom: "2026-05-01",
     initiatedTo: "2026-05-31",
+    pageSize: "25",
     statuses: ["pending"],
     tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
   });
@@ -972,14 +1008,14 @@ test("transactions page add-filter menu drives server filters and chips", async 
         amountMin: "10",
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
-        limit: "10",
+        limit: "25",
         statuses: ["pending"],
         tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
   });
   await page.goto(
-    `/transactions?page=1&pageSize=10&tag=${visibleTagOne.tag_id}` +
+    `/transactions?page=1&pageSize=25&tag=${visibleTagOne.tag_id}` +
       `&tag=${visibleTagTwo.tag_id}&status=pending&amountMin=10` +
       `&amountMax=20&initiatedFrom=2026-05-01&initiatedTo=2026-05-31`,
   );
@@ -998,14 +1034,14 @@ test("transactions page add-filter menu drives server filters and chips", async 
         amountMin: "10",
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
-        limit: "25",
+        limit: "50",
         statuses: ["pending"],
         tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
     );
   });
   await page.getByLabel("Rows").click();
-  await page.getByRole("option", { exact: true, name: "25" }).click();
+  await page.getByRole("option", { exact: true, name: "50" }).click();
   await pageSizeRequest;
 
   const dateJumpRequest = page.waitForRequest((request) => {
@@ -1018,7 +1054,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
         anchorDate: "2026-05-31",
         initiatedFrom: "2026-05-01",
         initiatedTo: "2026-05-31",
-        limit: "25",
+        limit: "50",
         statuses: ["pending"],
         tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
       })
@@ -1033,12 +1069,12 @@ test("transactions page add-filter menu drives server filters and chips", async 
     amountMin: "10",
     initiatedFrom: "2026-05-01",
     initiatedTo: "2026-05-31",
-    pageSize: "25",
+    pageSize: "50",
     tags: [visibleTagOne.tag_id, visibleTagTwo.tag_id],
   });
 
   await page.getByRole("button", { name: "Close filters" }).click();
-  await expectTransactionFilterUrl(page, { pageSize: "25" });
+  await expectTransactionFilterUrl(page, { pageSize: "50" });
   await expect(page.getByText("Tag Groceries")).toBeHidden();
   await expect(page.getByText("Amount 10-20")).toBeHidden();
 });
@@ -1408,10 +1444,12 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
     return;
   }
 
+  await searchInput.focus();
   await searchInput.press("Tab");
   await expect(previousDayButton).toBeFocused();
   await tabTo(dateJumpInput);
-  await tabTo(nextDayButton);
+  await nextDayButton.focus();
+  await expect(nextDayButton).toBeFocused();
   await tabTo(todayButton);
   await tabTo(classFilter);
   await tabTo(filterToggle);
@@ -1661,7 +1699,7 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   const jumpDate = initialPage.transactions[10]!.initiated_date!;
   const olderThanEverything = "2020-01-01";
 
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   const firstTransactionRow = page.locator("tbody > tr[aria-expanded]").first();
   await expect(firstTransactionRow).toBeVisible();
   const normalizedFirstTransactionRowText = async () =>
@@ -1713,10 +1751,10 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   const dateJumpBody = (await (
     await dateJumpResponse
   ).json()) as TransactionListFixture;
-  const landedPage = Math.floor(dateJumpBody.offset / 10) + 1;
-  expect(dateJumpBody.total_count).toBeGreaterThan(landedPage * 10);
+  const landedPage = Math.floor(dateJumpBody.offset / 25) + 1;
+  expect(dateJumpBody.total_count).toBeGreaterThan(landedPage * 25);
   const landedTransaction = dateJumpBody.transactions[0]!;
-  await expectTransactionsPageUrl(page, landedPage, 10);
+  await expectTransactionsPageUrl(page, landedPage, 25);
   await expect(
     page.getByText(new RegExp(`Page ${landedPage} of \\d+`)),
   ).toBeVisible();
@@ -1731,7 +1769,7 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
       const url = new URL(requestUrl);
       return (
         url.searchParams.get("anchor_date") === null &&
-        url.searchParams.get("limit") === "10" &&
+        url.searchParams.get("limit") === "25" &&
         url.searchParams.get("offset") === String(dateJumpBody.offset)
       );
     }),
@@ -1739,7 +1777,7 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   await expect(page.getByLabel("Go to day")).toHaveValue(jumpDate);
 
   await page.getByRole("button", { exact: true, name: "Next" }).click();
-  await expectTransactionsPageUrl(page, landedPage + 1, 10);
+  await expectTransactionsPageUrl(page, landedPage + 1, 25);
   await expect(
     page.getByText(new RegExp(`Page ${landedPage + 1} of \\d+`)),
   ).toBeVisible();
@@ -1755,8 +1793,8 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   const oldDateJumpBody = (await (
     await oldDateJumpResponse
   ).json()) as TransactionListFixture;
-  const oldAnchorPage = Math.floor(oldDateJumpBody.offset / 10) + 1;
-  await expectTransactionsPageUrl(page, oldAnchorPage, 10);
+  const oldAnchorPage = Math.floor(oldDateJumpBody.offset / 25) + 1;
+  await expectTransactionsPageUrl(page, oldAnchorPage, 25);
   await expect(
     page.getByText(new RegExp(`Page ${oldAnchorPage} of \\d+`)),
   ).toBeVisible();
@@ -1769,7 +1807,7 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   const yesterday = shiftLocalDate(today, -1);
   const tomorrow = shiftLocalDate(today, 1);
 
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   const dateJump = page.getByLabel("Go to day");
   const previousDayButton = page.getByRole("button", {
     name: "Previous day",
@@ -1799,9 +1837,9 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   const previousPage = (await (
     await previousResponse
   ).json()) as TransactionListFixture;
-  const previousLandedPage = Math.floor(previousPage.offset / 10) + 1;
+  const previousLandedPage = Math.floor(previousPage.offset / 25) + 1;
   await expect(dateJump).toHaveValue(previousDate);
-  await expectTransactionsPageUrl(page, previousLandedPage, 10);
+  await expectTransactionsPageUrl(page, previousLandedPage, 25);
   await expect(
     page.getByText(previousPage.transactions[0]!.display_title).first(),
   ).toBeVisible();
@@ -1821,11 +1859,11 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   await expect(dateJump).toHaveValue(anchorDate);
   await expectTransactionsPageUrl(
     page,
-    Math.floor(nextPage.offset / 10) + 1,
-    10,
+    Math.floor(nextPage.offset / 25) + 1,
+    25,
   );
 
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   await expect(dateJump).toHaveValue("");
   const noAnchorResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -1842,8 +1880,8 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   await expect(dateJump).toHaveValue(yesterday);
   await expectTransactionsPageUrl(
     page,
-    Math.floor(noAnchorPage.offset / 10) + 1,
-    10,
+    Math.floor(noAnchorPage.offset / 25) + 1,
+    25,
   );
 
   const todayResponse = page.waitForResponse((response) => {
@@ -3101,7 +3139,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(entryPanel).toBeHidden();
 
   await page.goto(
-    `/transactions?page=2&pageSize=10&transaction=${transaction.transaction_id}`,
+    `/transactions?page=2&pageSize=25&transaction=${transaction.transaction_id}`,
   );
   const deepLinkPanel = page.getByRole("dialog", {
     name: transaction.display_title,
@@ -3113,7 +3151,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
 
   await page.keyboard.press("Escape");
   await expect(deepLinkPanel).toBeHidden();
-  await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=10$/);
+  await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=25$/);
 });
 
 test("toolbar filter trigger opens after transaction detail closes", async ({
@@ -4402,7 +4440,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
     10;
   const amount = `98.${cents}`;
 
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   await expect(
     page.getByRole("heading", { exact: true, name: "Transactions" }),
   ).toBeVisible();
@@ -4522,7 +4560,7 @@ test("entry panel creates each shorthand transaction type", async ({
     ).toBeVisible();
   };
 
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   await page
     .locator("header")
     .getByRole("button", { name: "New transaction" })
@@ -4642,7 +4680,7 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
   const unique = `${slug}${Date.now()}`;
   const memo = `E2E advanced journal ${unique}`;
 
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   await page
     .locator("header")
     .getByRole("button", { name: "New transaction" })
@@ -4856,7 +4894,7 @@ test("spend entry escalates to matching journal records", async ({
   const merchantAccount = findByFqn(accounts, "merchant:Books");
   const category = findByFqn(categories, "Entertainment:Books");
 
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   await page
     .locator("header")
     .getByRole("button", { name: "New transaction" })
@@ -4962,7 +5000,7 @@ test("spend entry escalates to matching journal records", async ({
 test("advanced journal account picker follows selected category intent", async ({
   page,
 }) => {
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   await page
     .locator("header")
     .getByRole("button", { name: "New transaction" })

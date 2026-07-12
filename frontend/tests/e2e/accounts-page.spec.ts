@@ -298,6 +298,101 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
   await expect(hiddenRow.getByLabel("Hidden account")).toBeVisible();
 });
 
+test("accounts tree gives Name column available width before truncating FQNs", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName}${Date.now()}`;
+  const shortFqn = `bank:Chase${unique}:fees`;
+  const deepFqn = [
+    "bank",
+    `institution${unique}`,
+    "checking",
+    "household",
+    "recurring",
+    "fees",
+  ].join(":");
+  await Promise.all([
+    createAccount(page, { fqn: shortFqn }),
+    createAccount(page, { fqn: deepFqn }),
+  ]);
+
+  await page.setViewportSize({ width: 1920, height: 900 });
+  await page.goto("/accounts");
+  const shortPath = page
+    .getByTestId("accounts-tree-fqn")
+    .filter({ hasText: shortFqn });
+  await expect(shortPath).toHaveText(shortFqn);
+  await expect
+    .poll(() =>
+      shortPath.evaluate((element) =>
+        [...element.querySelectorAll<HTMLElement>("span")].every(
+          (span) => span.scrollWidth <= span.clientWidth + 1,
+        ),
+      ),
+    )
+    .toBe(true);
+
+  await page.setViewportSize({ width: 1200, height: 900 });
+  const deepPath = page
+    .getByTestId("accounts-tree-fqn")
+    .filter({ hasText: deepFqn });
+  await expect(deepPath).toHaveText(deepFqn);
+  await expect
+    .poll(() =>
+      deepPath.evaluate((element) => {
+        const ancestors = element.querySelector<HTMLElement>(
+          ".text-muted-foreground",
+        );
+        return (
+          ancestors !== null && ancestors.scrollWidth > ancestors.clientWidth
+        );
+      }),
+    )
+    .toBe(true);
+});
+
+test("register amount cells stay single-line through the collapse ladder", async ({
+  page,
+}) => {
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const joint = findByFqn(accounts, "checking:Chase:Joint");
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 620, height: 900 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto(`/accounts/${joint.account_id}?page=1&pageSize=50`);
+    const amountCells = page.locator(
+      ".account-register-amount-column [data-testid='amount-text'], .account-register-running-column [data-testid='amount-text']",
+    );
+    await expect(amountCells.first()).toBeVisible();
+    await expect
+      .poll(() =>
+        amountCells.evaluateAll((elements) =>
+          elements.every((element) => {
+            const styles = window.getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            const lineHeight = Number.parseFloat(styles.lineHeight);
+            const fontSize = Number.parseFloat(styles.fontSize);
+            return (
+              styles.whiteSpace === "nowrap" &&
+              rect.height <=
+                (Number.isFinite(lineHeight) ? lineHeight : fontSize * 1.4) *
+                  1.35
+            );
+          }),
+        ),
+      )
+      .toBe(true);
+  }
+});
+
 test("account page renders header and paginated running-balance register", async ({
   browserName,
   page,
@@ -330,7 +425,7 @@ test("account page renders header and paginated running-balance register", async
   );
   expect(creditLimitResponse.ok()).toBe(true);
 
-  for (let index = 1; index <= 12; index += 1) {
+  for (let index = 1; index <= 27; index += 1) {
     const response = await page.request.post("/api/transactions/spend", {
       data: {
         amount: `${10 + index}.00`,
@@ -350,7 +445,7 @@ test("account page renders header and paginated running-balance register", async
     `**/api/accounts/${account.account_id}/records**`,
     async (route) => {
       const url = new URL(route.request().url());
-      if (url.searchParams.get("offset") === "10") {
+      if (url.searchParams.get("offset") === "25") {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
       await route.continue();
@@ -371,7 +466,7 @@ test("account page renders header and paginated running-balance register", async
     return (
       url.pathname === `/api/accounts/${account.account_id}/records` &&
       url.searchParams.get("include_running_balance") === "true" &&
-      url.searchParams.get("limit") === "10" &&
+      url.searchParams.get("limit") === "25" &&
       url.searchParams.get("offset") === "0"
     );
   });
@@ -383,7 +478,7 @@ test("account page renders header and paginated running-balance register", async
     );
   });
 
-  await page.goto(`/accounts/${account.account_id}?page=1&pageSize=10`);
+  await page.goto(`/accounts/${account.account_id}?page=1&pageSize=25`);
   await recordsRequest;
   const balancesBody = (await (await headerBalanceResponse).json()) as {
     readonly balances: readonly BalanceFixture[];
@@ -401,7 +496,7 @@ test("account page renders header and paginated running-balance register", async
     ),
     "first transaction",
   );
-  expect(recordsBody.total_count).toBe(12);
+  expect(recordsBody.total_count).toBe(27);
   expect(
     Date.parse(firstRecord.pending_date),
     "records are chronological",
@@ -545,7 +640,7 @@ test("account page renders header and paginated running-balance register", async
   ).toBeVisible();
 
   await page.goto(
-    `/accounts/${account.account_id}?page=1&pageSize=10&record=${firstRecord.record_id}`,
+    `/accounts/${account.account_id}?page=1&pageSize=25&record=${firstRecord.record_id}`,
   );
   const deepLinkedPeekPanel = page.getByTestId("account-peek-panel");
   await expect(deepLinkedPeekPanel).toBeVisible();
@@ -557,19 +652,19 @@ test("account page renders header and paginated running-balance register", async
     return (
       url.pathname === `/api/accounts/${account.account_id}/records` &&
       url.searchParams.get("include_running_balance") === "true" &&
-      url.searchParams.get("limit") === "25" &&
+      url.searchParams.get("limit") === "50" &&
       url.searchParams.get("offset") === "0"
     );
   });
   await page.getByLabel("Rows").click();
-  await page.getByRole("option", { exact: true, name: "25" }).click();
+  await page.getByRole("option", { exact: true, name: "50" }).click();
   await pageSizeResponse;
-  await expectAccountRegisterUrl(page, 1, 25);
+  await expectAccountRegisterUrl(page, 1, 50);
   await expect(page).not.toHaveURL(/[?&]record=/);
   await expect(deepLinkedPeekPanel).toBeHidden();
 
   await page.goto(
-    `/accounts/${account.account_id}?page=1&pageSize=10&record=${firstRecord.record_id}`,
+    `/accounts/${account.account_id}?page=1&pageSize=25&record=${firstRecord.record_id}`,
   );
   await expect(deepLinkedPeekPanel).toBeVisible();
   await deepLinkedPeekPanel
@@ -582,12 +677,12 @@ test("account page renders header and paginated running-balance register", async
     return (
       url.pathname === `/api/accounts/${account.account_id}/records` &&
       url.searchParams.get("include_running_balance") === "true" &&
-      url.searchParams.get("limit") === "10" &&
-      url.searchParams.get("offset") === "10"
+      url.searchParams.get("limit") === "25" &&
+      url.searchParams.get("offset") === "25"
     );
   });
   await page.goto(
-    `/accounts/${account.account_id}?page=1&pageSize=10&record=${firstRecord.record_id}`,
+    `/accounts/${account.account_id}?page=1&pageSize=25&record=${firstRecord.record_id}`,
   );
   await expect(deepLinkedPeekPanel).toBeVisible();
   await page.getByRole("button", { name: "Next" }).evaluate((element) => {
@@ -598,7 +693,7 @@ test("account page renders header and paginated running-balance register", async
   await expect(page.getByTestId("account-register-page-busy")).toBeVisible();
   await expect(firstRow).toBeVisible();
   await secondPageResponse;
-  await expectAccountRegisterUrl(page, 2, 10);
+  await expectAccountRegisterUrl(page, 2, 25);
   await expect(page).not.toHaveURL(/[?&]record=/);
   await expect(
     page.getByTestId("account-register-pagination-footer"),
@@ -606,10 +701,10 @@ test("account page renders header and paginated running-balance register", async
   await expect(
     page
       .getByTestId("account-register-row")
-      .filter({ hasText: `E2E account register ${unique} 11` }),
+      .filter({ hasText: `E2E account register ${unique} 26` }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Previous" }).click();
-  await expectAccountRegisterUrl(page, 1, 10);
+  await expectAccountRegisterUrl(page, 1, 25);
 
   await page.goto(`/accounts/${hiddenAccount.account_id}`);
   await expect(page.getByRole("heading", { name: "Hidden" })).toBeVisible();
@@ -687,14 +782,7 @@ test("account group page renders subtotals and combined prefix register", async 
     createAccount(page, { fqn: `${prefix}:GroupBalance${unique}` }),
     createAccount(page, { accountType: "flow", fqn: `${prefix}:Fees` }),
   ]);
-  const fundingAccounts = [
-    wallet,
-    wallet,
-    wallet,
-    wallet,
-    wallet,
-    wallet,
-  ] as const;
+  const fundingAccounts = Array.from({ length: 13 }, () => wallet);
   const groupRecords = fundingAccounts.flatMap((fundingAccount, index) => {
     const transactionIndex = index + 1;
     const amount = `${10 + transactionIndex}.00`;
@@ -744,13 +832,13 @@ test("account group page renders subtotals and combined prefix register", async 
   });
   expect(siblingResponse.ok()).toBe(true);
 
-  const groupUrl = `/accounts/group?prefix=${encodeURIComponent(prefix)}&page=1&pageSize=10`;
+  const groupUrl = `/accounts/group?prefix=${encodeURIComponent(prefix)}&page=1&pageSize=25`;
   const recordsRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
       url.pathname === "/api/records" &&
       url.searchParams.get("account_fqn_prefix") === prefix &&
-      url.searchParams.get("limit") === "10" &&
+      url.searchParams.get("limit") === "25" &&
       url.searchParams.get("offset") === "0" &&
       !url.searchParams.has("include_running_balance") &&
       !url.searchParams.has("account_id")
@@ -771,7 +859,7 @@ test("account group page renders subtotals and combined prefix register", async 
     readonly records: readonly JournalRecordFixture[];
     readonly total_count: number;
   };
-  expect(recordsBody.total_count).toBe(12);
+  expect(recordsBody.total_count).toBe(26);
   const walletRecord = requireDefined(
     recordsBody.records.find(
       (record) => record.account_id === wallet.account_id,
@@ -855,7 +943,7 @@ test("account group page renders subtotals and combined prefix register", async 
   await expect(secondRow).toBeFocused();
 
   await page.goto(
-    `/accounts/group?prefix=${encodeURIComponent(prefix)}&page=1&pageSize=10&record=${firstRecord.record_id}`,
+    `/accounts/group?prefix=${encodeURIComponent(prefix)}&page=1&pageSize=25&record=${firstRecord.record_id}`,
   );
   await expect(peekPanel).toBeVisible();
   await expect(
@@ -869,13 +957,13 @@ test("account group page renders subtotals and combined prefix register", async 
     return (
       url.pathname === "/api/records" &&
       url.searchParams.get("account_fqn_prefix") === prefix &&
-      url.searchParams.get("limit") === "10" &&
-      url.searchParams.get("offset") === "10"
+      url.searchParams.get("limit") === "25" &&
+      url.searchParams.get("offset") === "25"
     );
   });
   await page.getByRole("button", { name: "Next" }).click();
   await secondPageResponse;
-  await expectAccountRegisterUrl(page, 2, 10);
+  await expectAccountRegisterUrl(page, 2, 25);
   await expect(page).not.toHaveURL(/[?&]record=/);
   await expect(
     page.getByTestId("account-register-pagination-footer"),

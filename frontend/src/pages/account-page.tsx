@@ -15,10 +15,15 @@ import {
   useAccountRegisterResource,
 } from "@/features/accounts";
 import { PageHeader } from "@/features/app-shell";
-import { buildLookupMaps, refreshLedgerLookups } from "@/features/ledger";
+import {
+  buildLookupMaps,
+  defaultTransactionPageSize,
+  refreshLedgerLookups,
+  transactionPageSizeOptions,
+} from "@/features/ledger";
 
-const pageSizes = [10, 25, 50] as const;
-const defaultPageSize = 10;
+const pageSizes = transactionPageSizeOptions;
+const defaultPageSize = defaultTransactionPageSize;
 
 const parsePositiveInteger = (
   value: string | undefined,

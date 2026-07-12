@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 interface FqnPathProps {
   readonly ancestorClassName?: string;
   readonly className?: string;
+  readonly collapseAncestors?: boolean;
   readonly focusable?: boolean;
   readonly leafClassName?: string;
   readonly onActivate?: () => void;
@@ -14,6 +15,7 @@ interface FqnPathProps {
 export const FqnPath = ({
   ancestorClassName,
   className,
+  collapseAncestors = true,
   focusable = true,
   leafClassName,
   onActivate,
@@ -24,7 +26,9 @@ export const FqnPath = ({
   const leaf = segments.at(-1) ?? value;
   const ancestors =
     segments.length > 2
-      ? `${segments[0]}:…:`
+      ? collapseAncestors
+        ? `${segments[0]}:…:`
+        : `${segments.slice(0, -1).join(":")}:`
       : segments.length > 1
         ? `${segments[0]}:`
         : "";

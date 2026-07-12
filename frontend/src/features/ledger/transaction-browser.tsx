@@ -51,6 +51,7 @@ import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
+import { transactionPageSizeOptions } from "./transaction-page-position";
 
 interface TransactionBrowserProps {
   readonly dateJumpAnchor?: {
@@ -80,8 +81,6 @@ interface TransactionBrowserProps {
   readonly totalCount: number | undefined;
   readonly transactions: readonly Transaction[] | undefined;
 }
-
-const pageSizeOptions = [10, 25, 50] as const;
 
 const recordDisplayAmount = (record: JournalRecord): DisplayAmount => ({
   amount: record.amount,
@@ -999,7 +998,7 @@ export const TransactionBrowser = ({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {pageSizeOptions.map((option) => (
+              {transactionPageSizeOptions.map((option) => (
                 <SelectItem key={option} value={String(option)}>
                   {option}
                 </SelectItem>

@@ -152,9 +152,9 @@ test("legacy ui deep links redirect to root routes preserving query", async ({
   await expect(page).toHaveURL(/\/status$/);
   await expect(page.getByRole("heading", { name: "Status" })).toBeVisible();
 
-  await page.goto("/ui/transactions?page=2&pageSize=10");
+  await page.goto("/ui/transactions?page=2&pageSize=25");
 
-  await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=10$/);
+  await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=25$/);
   await expect(page.getByText("Page 2")).toBeVisible();
 });
 
@@ -267,7 +267,7 @@ test("featured balance strip follows account metadata and transaction saves", as
   );
   const category = await createCategory(page, `E2E:Featured:${unique}`);
 
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=25");
   await expect(
     page.getByRole("heading", { exact: true, name: "Transactions" }),
   ).toBeVisible();

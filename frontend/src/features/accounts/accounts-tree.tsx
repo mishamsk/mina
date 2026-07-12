@@ -496,7 +496,10 @@ export const AccountsTree = ({
           <table className="accounts-table w-full table-fixed border-collapse text-sm">
             <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
               <tr className="font-heading text-left text-xs font-semibold uppercase">
-                <th scope="col" className="w-[44%] px-3 py-2 sm:w-[36%]">
+                <th
+                  scope="col"
+                  className="w-[44%] px-3 py-2 sm:w-[36%] md:w-[36%]"
+                >
                   Name
                 </th>
                 <th
@@ -683,7 +686,16 @@ export const AccountsTree = ({
                                 event.stopPropagation();
                               }}
                             >
-                              <FqnPath value={row.fqn} focusable={false} />
+                              <span
+                                data-testid="accounts-tree-fqn"
+                                className="min-w-0"
+                              >
+                                <FqnPath
+                                  collapseAncestors={false}
+                                  focusable={false}
+                                  value={row.fqn}
+                                />
+                              </span>
                             </Link>
                             {rowHidden ? (
                               <HiddenRowIndicator label="Hidden account" />
@@ -706,7 +718,16 @@ export const AccountsTree = ({
                               to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
                               className="focus-visible:outline-ring flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
                             >
-                              <FqnPath value={row.fqn} focusable={false} />
+                              <span
+                                data-testid="accounts-tree-fqn"
+                                className="min-w-0"
+                              >
+                                <FqnPath
+                                  collapseAncestors={false}
+                                  focusable={false}
+                                  value={row.fqn}
+                                />
+                              </span>
                             </Link>
                             {rowHidden ? (
                               <HiddenRowIndicator label="Hidden account group" />

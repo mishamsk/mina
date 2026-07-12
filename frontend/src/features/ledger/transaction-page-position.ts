@@ -8,8 +8,9 @@ import {
 } from "@/models/transaction-filters";
 
 export const defaultTransactionPage = 1;
-export const defaultTransactionPageSize = 10;
-export const transactionPageSizes = new Set([10, 25, 50]);
+export const defaultTransactionPageSize = 50;
+export const transactionPageSizeOptions = [25, 50, 100] as const;
+export const transactionPageSizes = new Set<number>(transactionPageSizeOptions);
 
 const filterParamNames = [
   "account",

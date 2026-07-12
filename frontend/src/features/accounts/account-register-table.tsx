@@ -458,7 +458,7 @@ export const AccountRegisterTable = ({
                       </div>
                     ) : null}
                   </td>
-                  <td className="account-register-amount-column px-3 py-2 text-right">
+                  <td className="account-register-amount-column px-3 py-2 text-right whitespace-nowrap">
                     {amount ? (
                       <AmountText
                         amount={amount}
@@ -472,7 +472,7 @@ export const AccountRegisterTable = ({
                     ) : null}
                   </td>
                   {showRunningBalance ? (
-                    <td className="account-register-running-column px-3 py-2 text-right">
+                    <td className="account-register-running-column px-3 py-2 text-right whitespace-nowrap">
                       {runningBalance ? (
                         <AmountText
                           amount={runningBalance}

@@ -573,11 +573,11 @@
   }
 
   .account-register-table .account-register-amount-column {
-    width: 10%;
+    width: 8.5rem;
   }
 
   .account-register-table .account-register-running-column {
-    width: 10%;
+    width: 8.5rem;
   }
 
   .account-register-table--with-account .account-register-date-column {
@@ -655,7 +655,7 @@
 
     .account-register-table .account-register-amount-column,
     .account-register-table .account-register-running-column {
-      width: 13%;
+      width: 8.5rem;
     }
   }
 
@@ -693,7 +693,7 @@
 
     .account-register-table .account-register-amount-column,
     .account-register-table .account-register-running-column {
-      width: 15%;
+      width: 8.5rem;
     }
   }
 
@@ -716,7 +716,7 @@
 
     .account-register-table .account-register-amount-column,
     .account-register-table .account-register-running-column {
-      width: 16%;
+      width: 8.5rem;
     }
   }
 
@@ -750,7 +750,7 @@
 
     .account-register-table .account-register-amount-column,
     .account-register-table .account-register-running-column {
-      width: 24%;
+      width: 8.5rem;
     }
   }
 

@@ -408,7 +408,7 @@ test("category drill-down rolls visible descendants, excludes hidden descendants
     page.getByRole("link", { name: "View all transactions" }),
   ).toHaveAttribute(
     "href",
-    "/transactions?category=900001&category=900002&page=1&pageSize=10",
+    "/transactions?category=900001&category=900002&page=1&pageSize=50",
   );
 
   const toggle = page.getByLabel("This level only");
@@ -595,7 +595,7 @@ test("tag drill-down rolls visible descendants, excludes hidden descendants, and
     page.getByRole("link", { name: "View all transactions" }),
   ).toHaveAttribute(
     "href",
-    "/transactions?tag=900101&tag=900102&page=1&pageSize=10",
+    "/transactions?tag=900101&tag=900102&page=1&pageSize=50",
   );
 
   const toggle = page.getByLabel("This level only");

@@ -43,6 +43,7 @@ export {
   readTransactionPageFromSearchParams,
   transactionOffsetFromPage,
   transactionPageFromOffset,
+  transactionPageSizeOptions,
   transactionPageSizes,
   writeTransactionFiltersToSearchParams,
 } from "./transaction-page-position";
