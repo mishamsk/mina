@@ -93,7 +93,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 ### Recurring UX direction change
 
 - [x] Task 22: `b1m2` — Show recurring occurrences inline in Transactions by default; confirm/dismiss as row actions (requires Task 6 demo seeds and the Task 10 toolbar, since the expected-rows filter direction inverts inside the redesigned filter bar; doc amendments: docs/recurring-transactions-semantics.md clarification and webui-design section 8 replacement) — branch `b1m2-inline-recurring-occurrences`
-- [ ] Task 23: `bnvy` — Recurring page becomes definitions management (design + implement) (blocked by b1m2, Task 22; doc amendment: webui-design definitions-management screen definition) — branch `bnvy-recurring-definitions-page`
+- [x] Task 23: `bnvy` — Recurring page becomes definitions management (design + implement) (blocked by b1m2, Task 22; doc amendment: webui-design definitions-management screen definition) — branch `bnvy-recurring-definitions-page`
 
 ### Editing suite (deferred from prior fleets)
 
