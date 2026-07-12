@@ -410,6 +410,11 @@ export const TransactionsPage = () => {
               addEntityFilter("tag", tagId);
             }}
             onRestoreFocus={browser.detail.restoreDetailFocus}
+            onUpdateRecord={browser.updateRecord}
+            onUpdateTransactionAmount={browser.updateTransactionAmount}
+            onUpdateTransactionRecordReferences={
+              browser.updateTransactionRecordReferences
+            }
             transaction={browser.detail.transaction}
           />
         ) : null}

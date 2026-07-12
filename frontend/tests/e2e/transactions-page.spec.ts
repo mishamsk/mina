@@ -3539,7 +3539,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   }
   await expect
     .poll(() =>
-      panel
+      journalRecords
         .getByRole("button", { name: `Filter by ${firstCreatedTag.name}` })
         .first()
         .evaluate((element) => {
@@ -3612,6 +3612,146 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await page.keyboard.press("Escape");
   await expect(deepLinkPanel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=25$/);
+});
+
+test("transaction detail panel reuses inline editors and keeps expected occurrences read-only", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  await page.setViewportSize({ width: 1920, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const initialCategory = findByFqn(categories, "Entertainment:Books");
+  const [nextCategory, initialTag, member] = await Promise.all([
+    createCategory(
+      page,
+      `E2E:DetailEditing:${unique}:UpdatedCategory`,
+      "expense",
+    ),
+    createTag(page, `E2E:DetailEditing:${unique}:InitialTag`),
+    createMember(page, `Detail editor ${unique}`),
+  ]);
+  const memo = `E2E detail editing ${unique}`;
+  const updatedMemo = `E2E detail editing updated ${unique}`;
+  const createResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-10",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-17.43000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          member_id: member.member_id,
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [initialTag.tag_id],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "17.43000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          member_id: member.member_id,
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [initialTag.tag_id],
+        },
+      ],
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionDetailFixture;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&transaction=${transaction.transaction_id}`,
+  );
+  const panel = page.getByRole("dialog", { name: transaction.display_title });
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(panel).toBeVisible();
+  await expect(row).toBeVisible();
+
+  const categoryCell = panel.getByTestId("transaction-detail-category-cell");
+  await categoryCell.focus();
+  await categoryCell.press("F2");
+  const categoryEditor = panel.getByTestId(
+    "transaction-detail-category-editor",
+  );
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(nextCategory.fqn);
+  await expect(categoryCell).toContainText(nextCategory.fqn);
+  await expect(row).toContainText(nextCategory.name);
+
+  const amountCell = panel.getByTestId(
+    `transaction-detail-${transaction.transaction_id}-amount-cell`,
+  );
+  await amountCell.hover();
+  await amountCell.getByRole("button", { name: "Edit row value" }).click();
+  const amountEditor = panel.getByTestId(
+    `transaction-detail-${transaction.transaction_id}-amount-editor`,
+  );
+  await amountEditor.getByLabel("Amount").fill("29.87");
+  await amountEditor.getByRole("button", { name: "Save" }).click();
+  await expect(amountCell).toContainText("-29.87 $");
+  await expect(row).toContainText("-29.87 $");
+
+  const memoCell = panel.getByTestId("record-memo-cell").first();
+  await memoCell.hover();
+  await memoCell.getByRole("button", { name: "Edit memo" }).click();
+  const memoEditor = panel.getByTestId("record-memo-editor").first();
+  await memoEditor.getByLabel("Memo").fill(updatedMemo);
+  await memoEditor.getByLabel("Memo").press("Enter");
+  await expect(memoCell).toContainText(updatedMemo);
+  const savedResponse = await page.request.get(
+    `/api/transactions/${transaction.transaction_id}`,
+  );
+  expect(savedResponse.ok(), await savedResponse.text()).toBe(true);
+  const saved = (await savedResponse.json()) as TransactionDetailFixture;
+  expect(saved.records[0]?.memo).toBe(updatedMemo);
+
+  const expected = await createExpectedRecurringFixture(page, unique);
+  await page.goto("/transactions?page=1&pageSize=50");
+  const expectedRow = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("img", { name: "Expected" }) })
+    .filter({
+      hasText: expected.merchantFqn.split(":").at(-1) ?? "Merchant",
+    })
+    .first();
+  await expect(expectedRow).toBeVisible();
+  await expectedRow
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+  const expectedPanel = page.getByTestId("transaction-detail-panel");
+  await expect(expectedPanel).toBeVisible();
+  await expect(
+    expectedPanel.getByRole("button", { name: "Edit Category" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedPanel.getByRole("button", { name: "Edit Tags" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedPanel.getByRole("button", { name: "Edit Member" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedPanel.getByRole("button", { name: "Edit row value" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedPanel.getByRole("button", { name: "Edit memo" }),
+  ).toHaveCount(0);
+
+  await deleteTransaction(page, transaction);
 });
 
 test("toolbar filter trigger opens after transaction detail closes", async ({
@@ -3931,7 +4071,7 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
     name: transaction.display_title,
   });
   await expect(detailPanel).toBeVisible();
-  await detailPanel.getByRole("button", { name: "Edit" }).click();
+  await detailPanel.getByRole("button", { exact: true, name: "Edit" }).click();
 
   const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
   await expect(
@@ -4073,7 +4213,10 @@ test("transaction detail edit opens non-fitting transactions in the journal edit
     .first()
     .getByRole("button", { name: "Open transaction detail" })
     .click();
-  await page.getByRole("dialog").getByRole("button", { name: "Edit" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { exact: true, name: "Edit" })
+    .click();
 
   await expect(
     page.getByRole("heading", { name: "Edit journal" }),
@@ -4139,7 +4282,10 @@ test("shorthand edit escalation saves as a replacement", async ({
     .first()
     .getByRole("button", { name: "Open transaction detail" })
     .click();
-  await page.getByRole("dialog").getByRole("button", { name: "Edit" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { exact: true, name: "Edit" })
+    .click();
   const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
   const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
   await spendPanel.getByLabel("Amount").fill("19.91");
@@ -4236,7 +4382,9 @@ test("transaction detail duplicate prefills a new entry", async ({
   const detailPanel = page.getByRole("dialog", {
     name: transaction.display_title,
   });
-  await expect(detailPanel.getByRole("button", { name: "Edit" })).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { exact: true, name: "Edit" }),
+  ).toBeVisible();
   await expect(
     detailPanel.getByRole("button", { name: "Duplicate" }),
   ).toBeVisible();
@@ -5324,7 +5472,7 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
     name: transaction.display_title,
   });
   await expect(detailPanel).toBeVisible();
-  await detailPanel.getByRole("button", { name: "Edit" }).click();
+  await detailPanel.getByRole("button", { exact: true, name: "Edit" }).click();
 
   const discardDialog = page.getByRole("alertdialog", {
     name: "Discard entry draft",
@@ -5636,7 +5784,10 @@ test("command palette new spend supersedes an active edit launch", async ({
     .first()
     .getByRole("button", { name: "Open transaction detail" })
     .click();
-  await page.getByRole("dialog").getByRole("button", { name: "Edit" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { exact: true, name: "Edit" })
+    .click();
 
   const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
   await expect(

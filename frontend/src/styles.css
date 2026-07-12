@@ -776,27 +776,31 @@
   }
 
   .transaction-detail-records-table .detail-records-account-column {
-    width: 22%;
+    width: 18%;
   }
 
   .transaction-detail-records-table .detail-records-amount-column {
-    width: 14%;
+    width: 12%;
   }
 
   .transaction-detail-records-table .detail-records-category-column {
-    width: 16%;
+    width: 14%;
   }
 
   .transaction-detail-records-table .detail-records-tags-column {
-    width: 16%;
+    width: 14%;
   }
 
   .transaction-detail-records-table .detail-records-member-column {
-    width: 11%;
+    width: 10%;
   }
 
   .transaction-detail-records-table .detail-records-status-column {
-    width: 11%;
+    width: 10%;
+  }
+
+  .transaction-detail-records-table .detail-records-dates-column {
+    width: 12%;
   }
 
   .transaction-detail-records-table .detail-records-memo-column {

@@ -242,6 +242,10 @@ export const useTransactionBrowserPage = ({
           result.data,
           transaction,
         );
+        await detail.refreshSelectedTransactionDetail(
+          transaction.transaction_id,
+          result.data,
+        );
         return;
       }
 
@@ -250,8 +254,9 @@ export const useTransactionBrowserPage = ({
         transaction.transaction_id,
         transaction,
       );
+      await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
     },
-    [params],
+    [detail, params],
   );
 
   const updateTransactionRecordReferences = useCallback(
@@ -300,21 +305,28 @@ export const useTransactionBrowserPage = ({
         if (!result.data) {
           throw new Error(apiErrorMessage(result.error));
         }
-        return refreshTransactionPageAfterSave(
+        const rowRemainsVisible = await refreshTransactionPageAfterSave(
           params,
           transaction.transaction_id,
           result.data,
           transaction,
         );
+        await detail.refreshSelectedTransactionDetail(
+          transaction.transaction_id,
+          result.data,
+        );
+        return rowRemainsVisible;
       }
 
-      return refreshTransactionPageAfterSave(
+      const rowRemainsVisible = await refreshTransactionPageAfterSave(
         params,
         transaction.transaction_id,
         transaction,
       );
+      await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
+      return rowRemainsVisible;
     },
-    [params],
+    [detail, params],
   );
 
   const updateTransactionAmount = useCallback(
@@ -341,8 +353,12 @@ export const useTransactionBrowserPage = ({
         result.data,
         transaction,
       );
+      await detail.refreshSelectedTransactionDetail(
+        transaction.transaction_id,
+        result.data,
+      );
     },
-    [params],
+    [detail, params],
   );
 
   const setPage = useCallback(

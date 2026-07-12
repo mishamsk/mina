@@ -1,4 +1,5 @@
 import { Pencil } from "pixelarticons/react";
+import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 
 import type { JournalRecord, Transaction } from "@/api";
@@ -35,7 +36,7 @@ interface RecordDetailCellsProps {
   ) => Promise<void>;
   readonly record: JournalRecord;
   readonly transaction: Transaction;
-  readonly value: string;
+  readonly value: ReactNode;
 }
 
 const inputDateValue = (value: string | null | undefined): string =>

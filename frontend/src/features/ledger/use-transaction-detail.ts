@@ -105,6 +105,40 @@ export const useTransactionDetail = ({
     });
   }, [setSearchParams]);
 
+  const refreshSelectedTransactionDetail = useCallback(
+    async (transactionId: number, nextTransaction?: Transaction) => {
+      if (selectedTransactionId !== transactionId) {
+        return;
+      }
+
+      if (nextTransaction) {
+        setFetchedDetail({
+          errorMessage: undefined,
+          transaction: nextTransaction,
+          transactionId,
+        });
+        return;
+      }
+
+      const result = await fetchTransactionById(transactionId);
+      if (result.data) {
+        setFetchedDetail({
+          errorMessage: undefined,
+          transaction: result.data,
+          transactionId,
+        });
+        return;
+      }
+
+      setFetchedDetail({
+        errorMessage: apiErrorMessage(result.error),
+        transaction: undefined,
+        transactionId,
+      });
+    },
+    [selectedTransactionId],
+  );
+
   const restoreDetailFocus = useCallback(() => {
     const fallback = document.querySelector<HTMLElement>(
       restoreFallbackSelector,
@@ -189,6 +223,7 @@ export const useTransactionDetail = ({
     errorMessage,
     loading,
     openTransactionDetail,
+    refreshSelectedTransactionDetail,
     restoreDetailFocus,
     selectedTransactionId,
     transaction,

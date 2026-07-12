@@ -566,6 +566,11 @@ export const ReferenceDrilldownPage = ({
             addEntityFilter("tag", tagId);
           }}
           onRestoreFocus={restoreTransactionDetailFocus}
+          onUpdateRecord={browser.updateRecord}
+          onUpdateTransactionAmount={browser.updateTransactionAmount}
+          onUpdateTransactionRecordReferences={
+            browser.updateTransactionRecordReferences
+          }
           transaction={browser.detail.transaction}
         />
       ) : null}
