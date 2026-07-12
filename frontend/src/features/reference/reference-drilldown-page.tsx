@@ -532,6 +532,10 @@ export const ReferenceDrilldownPage = ({
             browser.setPage(Math.max(defaultTransactionPage, browser.page - 1));
           }}
           onUpdateRecord={browser.updateRecord}
+          onUpdateTransactionRecordReferences={
+            browser.updateTransactionRecordReferences
+          }
+          onUpdateTransactionAmount={browser.updateTransactionAmount}
           page={browser.page}
           pageSize={browser.pageSize}
           totalCount={browser.totalCount}

@@ -12,6 +12,8 @@ import {
   type TransactionPageParams,
   updateJournalRecordCategory,
   updateJournalRecordPostingStatus,
+  updateJournalRecordsCategory,
+  updateJournalRecordsTags,
   updateJournalRecordTags,
 } from "@/api";
 import type { TransactionFilters } from "@/models/transaction-filters";
@@ -229,7 +231,7 @@ export const useTransactionBrowserPage = ({
       } else {
         const result = await replaceLedgerTransaction(
           transaction.transaction_id,
-          recordUpdateBody(transaction, record.record_id, update),
+          recordUpdateBody(transaction, [record.record_id], update),
         );
         if (!result.data) {
           throw new Error(apiErrorMessage(result.error));
@@ -246,6 +248,97 @@ export const useTransactionBrowserPage = ({
       await refreshTransactionPageAfterSave(
         params,
         transaction.transaction_id,
+        transaction,
+      );
+    },
+    [params],
+  );
+
+  const updateTransactionRecordReferences = useCallback(
+    async (
+      transaction: Transaction,
+      records: readonly JournalRecord[],
+      update: Extract<
+        RecordUpdate,
+        { readonly kind: "category" | "member" | "tags" }
+      >,
+    ) => {
+      const recordIds = records.map((record) => record.record_id);
+      if (recordIds.length === 0) {
+        return true;
+      }
+
+      if (update.kind === "category") {
+        const result = await updateJournalRecordsCategory(
+          recordIds,
+          update.categoryId,
+        );
+        if (result.error) {
+          throw new Error(apiErrorMessage(result.error));
+        }
+      } else if (update.kind === "tags") {
+        const currentTagIds = records[0]?.tag_ids ?? [];
+        if (
+          currentTagIds.length === update.tagIds.length &&
+          currentTagIds.every((tagId) => update.tagIds.includes(tagId))
+        ) {
+          return true;
+        }
+        const result = await updateJournalRecordsTags(
+          recordIds,
+          currentTagIds,
+          update.tagIds,
+        );
+        if (result.error) {
+          throw new Error(apiErrorMessage(result.error));
+        }
+      } else {
+        const result = await replaceLedgerTransaction(
+          transaction.transaction_id,
+          recordUpdateBody(transaction, recordIds, update),
+        );
+        if (!result.data) {
+          throw new Error(apiErrorMessage(result.error));
+        }
+        return refreshTransactionPageAfterSave(
+          params,
+          transaction.transaction_id,
+          result.data,
+          transaction,
+        );
+      }
+
+      return refreshTransactionPageAfterSave(
+        params,
+        transaction.transaction_id,
+        transaction,
+      );
+    },
+    [params],
+  );
+
+  const updateTransactionAmount = useCallback(
+    async (
+      transaction: Transaction,
+      records: readonly [JournalRecord, JournalRecord],
+      amount: string,
+    ) => {
+      const result = await replaceLedgerTransaction(
+        transaction.transaction_id,
+        recordUpdateBody(
+          transaction,
+          records.map((record) => record.record_id),
+          { amount, kind: "amount" },
+        ),
+      );
+      if (!result.data) {
+        throw new Error(apiErrorMessage(result.error));
+      }
+
+      await refreshTransactionPageAfterSave(
+        params,
+        transaction.transaction_id,
+        result.data,
         transaction,
       );
     },
@@ -337,5 +430,7 @@ export const useTransactionBrowserPage = ({
     totalCount,
     transactions,
     updateRecord,
+    updateTransactionAmount,
+    updateTransactionRecordReferences,
   };
 };

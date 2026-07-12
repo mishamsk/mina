@@ -23,20 +23,28 @@ export type RecordUpdate =
       readonly postingStatus: "cancelled" | "pending" | "posted";
     };
 
-type RecordReplacementUpdate = Extract<
-  RecordUpdate,
-  | { readonly kind: "dates" }
-  | { readonly kind: "member" }
-  | { readonly kind: "memo" }
->;
+type RecordReplacementUpdate =
+  | Extract<
+      RecordUpdate,
+      | { readonly kind: "dates" }
+      | { readonly kind: "member" }
+      | { readonly kind: "memo" }
+    >
+  | { readonly amount: string; readonly kind: "amount" };
+
+const amountWithRecordSign = (record: JournalRecord, amount: string): string =>
+  `${record.amount.startsWith("-") ? "-" : ""}${amount}`;
 
 const updateRecord = (
   record: JournalRecord,
   update?: RecordReplacementUpdate,
 ): UpdateTransactionRequest["records"][number] => ({
   account_id: record.account_id,
-  amount: record.amount,
-  amount_usd: record.amount_usd,
+  amount:
+    update?.kind === "amount"
+      ? amountWithRecordSign(record, update.amount)
+      : record.amount,
+  ...(update?.kind === "amount" ? {} : { amount_usd: record.amount_usd }),
   category_id: record.category_id,
   currency: record.currency,
   external_id: record.external_id,
@@ -56,7 +64,7 @@ const updateRecord = (
 
 export const recordUpdateBody = (
   transaction: Transaction,
-  recordId: number,
+  recordIds: readonly number[],
   update: RecordReplacementUpdate,
 ): UpdateTransactionRequest => ({
   initiated_date:
@@ -64,7 +72,7 @@ export const recordUpdateBody = (
   records: transaction.records
     .filter((record) => !record.tombstoned_at)
     .map((record) =>
-      record.record_id === recordId
+      recordIds.includes(record.record_id)
         ? updateRecord(record, update)
         : updateRecord(record),
     ),

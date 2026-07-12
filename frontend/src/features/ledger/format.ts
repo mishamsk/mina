@@ -150,11 +150,45 @@ export const formatDecimalAmount = (
 export const displayAmountKey = (displayAmount: DisplayAmount): string =>
   `${displayAmount.currency}:${displayAmount.amount}`;
 
-const activeRecords = (transaction: Transaction): readonly JournalRecord[] => {
+export const activeTransactionRecords = (
+  transaction: Transaction,
+): readonly JournalRecord[] => {
   const records = transaction.records.filter(
     (record) => record.posting_status !== "cancelled",
   );
   return records.length > 0 ? records : transaction.records;
+};
+
+export const simpleTransactionAmountRecords = (
+  transaction: Transaction,
+): readonly [JournalRecord, JournalRecord] | undefined => {
+  if (
+    transaction.transaction_class !== "spend" &&
+    transaction.transaction_class !== "income" &&
+    transaction.transaction_class !== "refund" &&
+    transaction.transaction_class !== "transfer"
+  ) {
+    return undefined;
+  }
+
+  const records = activeTransactionRecords(transaction);
+  if (records.length !== 2 || records[0]?.currency !== records[1]?.currency) {
+    return undefined;
+  }
+
+  const first = records[0]!;
+  const second = records[1]!;
+  const firstAmount = decimalUnits(first.amount);
+  const secondAmount = decimalUnits(second.amount);
+  if (
+    firstAmount === 0n ||
+    secondAmount === 0n ||
+    firstAmount !== -secondAmount
+  ) {
+    return undefined;
+  }
+
+  return [first, second];
 };
 
 const recordAmountIsPositive = (record: JournalRecord): boolean =>
@@ -195,7 +229,7 @@ const compareTagsByName = (left: Tag, right: Tag): number =>
   left.name.localeCompare(right.name) || left.fqn.localeCompare(right.fqn);
 
 export const lineMemo = (transaction: Transaction): string | undefined => {
-  const memos = activeRecords(transaction)
+  const memos = activeTransactionRecords(transaction)
     .map((record) => record.memo?.trim())
     .filter((memo): memo is string => Boolean(memo));
   if (memos.length === 0) {
@@ -213,7 +247,7 @@ export const lineCategory = (
   maps: LookupMaps,
 ): Category | "mixed" | undefined => {
   const categoryId = uniformValue(
-    activeRecords(transaction).map((record) => record.category_id),
+    activeTransactionRecords(transaction).map((record) => record.category_id),
   );
   if (categoryId === "mixed") {
     return "mixed";
@@ -229,7 +263,7 @@ export const lineTags = (
   maps: LookupMaps,
 ): readonly Tag[] | "mixed" => {
   const tagIds = uniformValue(
-    activeRecords(transaction).map((record) =>
+    activeTransactionRecords(transaction).map((record) =>
       [...record.tag_ids].sort(compareNumbers),
     ),
     (left, right) =>
@@ -252,7 +286,7 @@ export const lineMember = (
   maps: LookupMaps,
 ): Member | "mixed" | undefined => {
   const memberId = uniformValue(
-    activeRecords(transaction)
+    activeTransactionRecords(transaction)
       .map((record) => record.member_id)
       .filter((memberId): memberId is number => memberId != null),
   );
@@ -269,7 +303,9 @@ export const linePostingStatus = (
   transaction: Transaction,
 ): PostingStatus | "mixed" => {
   const status = uniformValue(
-    activeRecords(transaction).map((record) => record.posting_status),
+    activeTransactionRecords(transaction).map(
+      (record) => record.posting_status,
+    ),
   );
   return status ?? "posted";
 };

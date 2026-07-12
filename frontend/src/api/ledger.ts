@@ -934,16 +934,27 @@ export const replaceLedgerTransaction = (
 export const updateJournalRecordCategory = (
   recordId: number,
   categoryId: number,
+) => updateJournalRecordsCategory([recordId], categoryId);
+
+export const updateJournalRecordsCategory = (
+  recordIds: readonly number[],
+  categoryId: number,
 ) =>
   bulkCategorizeJournalRecords({
     body: {
       category_id: categoryId,
-      record_ids: [recordId],
+      record_ids: [...recordIds],
     },
   });
 
 export const updateJournalRecordTags = (
   recordId: number,
+  currentTagIds: readonly number[],
+  nextTagIds: readonly number[],
+) => updateJournalRecordsTags([recordId], currentTagIds, nextTagIds);
+
+export const updateJournalRecordsTags = (
+  recordIds: readonly number[],
   currentTagIds: readonly number[],
   nextTagIds: readonly number[],
 ) => {
@@ -956,7 +967,7 @@ export const updateJournalRecordTags = (
     body: {
       ...(addTagIds.length > 0 ? { add_tag_ids: addTagIds } : {}),
       ...(removeTagIds.length > 0 ? { remove_tag_ids: removeTagIds } : {}),
-      record_ids: [recordId],
+      record_ids: [...recordIds],
     },
   });
 };

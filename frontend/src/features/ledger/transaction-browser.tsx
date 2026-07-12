@@ -41,6 +41,7 @@ import { localTimestampDateValue, localTodayISODate } from "@/utils/date";
 
 import { AmountText, MixedAmounts } from "./amount-text";
 import {
+  activeTransactionRecords,
   buildLookupMaps,
   displayAmountKey,
   formatInitiatedDate,
@@ -52,14 +53,19 @@ import {
   linePostingStatus,
   lineTags,
   type LookupMaps,
+  simpleTransactionAmountRecords,
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { RecordDetailCells } from "./record-detail-cells";
 import type { RecordUpdate } from "./record-editing";
-import { RecordReferenceCells } from "./record-reference-cells";
+import {
+  RecordReferenceCells,
+  type RecordReferenceUpdate,
+} from "./record-reference-cells";
 import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
+import { TransactionAmountCell } from "./transaction-amount-cell";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
 import { transactionPageSizeOptions } from "./transaction-page-position";
 
@@ -95,6 +101,16 @@ interface TransactionBrowserProps {
     transaction: Transaction,
     record: JournalRecord,
     update: RecordUpdate,
+  ) => Promise<void>;
+  readonly onUpdateTransactionRecordReferences: (
+    transaction: Transaction,
+    records: readonly JournalRecord[],
+    update: RecordReferenceUpdate,
+  ) => Promise<boolean>;
+  readonly onUpdateTransactionAmount: (
+    transaction: Transaction,
+    records: readonly [JournalRecord, JournalRecord],
+    amount: string,
   ) => Promise<void>;
   readonly onDeleteConfirmationOpenChange?: (open: boolean) => void;
   readonly onRowActionsOverflowOpenChange?: (open: boolean) => void;
@@ -377,7 +393,8 @@ const MixedSentinel = ({ label = "Mixed" }: { readonly label?: string }) => (
 const interactiveTargetSelector =
   "a, button, input, select, textarea, summary, [role='button'], " +
   "[contenteditable='true'], " +
-  "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
+  "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])" +
+  ":not([data-row-expand-passthrough='true'])";
 
 const isInteractiveTarget = (
   target: EventTarget | null,
@@ -617,6 +634,8 @@ export const TransactionBrowser = ({
   onPageSizeChange,
   onPreviousPage,
   onUpdateRecord,
+  onUpdateTransactionRecordReferences,
+  onUpdateTransactionAmount,
   onDeleteConfirmationOpenChange,
   onRowActionsOverflowOpenChange,
   page,
@@ -951,6 +970,9 @@ export const TransactionBrowser = ({
               const category = lineCategory(transaction, maps);
               const tags = lineTags(transaction, maps);
               const member = lineMember(transaction, maps);
+              const activeRecords = activeTransactionRecords(transaction);
+              const simpleAmountRecords =
+                simpleTransactionAmountRecords(transaction);
               const postingStatus = linePostingStatus(transaction);
               const amounts = lineDisplayAmounts(transaction, maps);
               const amountDeemphasized =
@@ -964,6 +986,30 @@ export const TransactionBrowser = ({
               const expectedOccurrence =
                 postingStatus === "expected" &&
                 transaction.recurring_occurrence_id !== null;
+              const canEditReferences =
+                postingStatus !== "expected" &&
+                postingStatus !== "cancelled" &&
+                activeRecords.length > 0;
+              const categoryEditable =
+                canEditReferences && category !== "mixed";
+              const tagsEditable = canEditReferences && tags !== "mixed";
+              const memberEditable =
+                canEditReferences &&
+                new Set(activeRecords.map((record) => record.member_id))
+                  .size === 1;
+              const amountEditable =
+                postingStatus !== "expected" &&
+                postingStatus !== "cancelled" &&
+                simpleAmountRecords !== undefined &&
+                amounts.length === 1;
+              const rowReferenceSave = (
+                update: RecordReferenceUpdate,
+              ): Promise<boolean> =>
+                onUpdateTransactionRecordReferences(
+                  transaction,
+                  activeRecords,
+                  update,
+                );
               const occurrenceActionBusy =
                 confirmingOccurrenceId !== undefined || dismissing;
               const toggleExpanded = () => {
@@ -1126,6 +1172,30 @@ export const TransactionBrowser = ({
                     <td className="transactions-category-column px-3 py-2">
                       {category === "mixed" ? (
                         <MixedSentinel />
+                      ) : categoryEditable ? (
+                        <RecordReferenceCells
+                          field="category"
+                          maps={maps}
+                          record={activeRecords[0]!}
+                          testIdPrefix={`transaction-${transaction.transaction_id}`}
+                          transaction={transaction}
+                          value={
+                            category ? (
+                              <FqnPath
+                                value={category.fqn}
+                                variant="leaf-chip"
+                                onActivate={
+                                  onFilterCategory
+                                    ? () => {
+                                        onFilterCategory(category.category_id);
+                                      }
+                                    : undefined
+                                }
+                              />
+                            ) : null
+                          }
+                          onSave={(_, __, update) => rowReferenceSave(update)}
+                        />
                       ) : category ? (
                         <FqnPath
                           value={category.fqn}
@@ -1144,6 +1214,21 @@ export const TransactionBrowser = ({
                       <div className="min-w-0 overflow-visible pb-0.5">
                         {tags === "mixed" ? (
                           <MixedSentinel />
+                        ) : tagsEditable ? (
+                          <RecordReferenceCells
+                            field="tags"
+                            maps={maps}
+                            record={activeRecords[0]!}
+                            testIdPrefix={`transaction-${transaction.transaction_id}`}
+                            transaction={transaction}
+                            value={
+                              <TagChipsLine
+                                tags={tags}
+                                onFilterTag={onFilterTag}
+                              />
+                            }
+                            onSave={(_, __, update) => rowReferenceSave(update)}
+                          />
                         ) : (
                           <TagChipsLine tags={tags} onFilterTag={onFilterTag} />
                         )}
@@ -1153,6 +1238,29 @@ export const TransactionBrowser = ({
                       <div className="overflow-visible pb-0.5">
                         {member === "mixed" ? (
                           <MixedSentinel />
+                        ) : memberEditable ? (
+                          <RecordReferenceCells
+                            field="member"
+                            maps={maps}
+                            record={activeRecords[0]!}
+                            testIdPrefix={`transaction-${transaction.transaction_id}`}
+                            transaction={transaction}
+                            value={
+                              member ? (
+                                <MemberChip
+                                  name={member.name}
+                                  onActivate={
+                                    onFilterMember
+                                      ? () => {
+                                          onFilterMember(member.member_id);
+                                        }
+                                      : undefined
+                                  }
+                                />
+                              ) : null
+                            }
+                            onSave={(_, __, update) => rowReferenceSave(update)}
+                          />
                         ) : member ? (
                           <MemberChip
                             name={member.name}
@@ -1169,7 +1277,28 @@ export const TransactionBrowser = ({
                     </td>
                     <td className="transactions-amount-column px-3 py-2 text-right align-middle">
                       <div className="flex min-w-0 flex-row flex-nowrap items-center justify-end gap-1 overflow-visible">
-                        {transaction.transaction_class === "mixed" ? (
+                        {amountEditable ? (
+                          <TransactionAmountCell
+                            records={simpleAmountRecords}
+                            testIdPrefix={`transaction-${transaction.transaction_id}`}
+                            transaction={transaction}
+                            onSave={onUpdateTransactionAmount}
+                          >
+                            <AmountText
+                              amount={amounts[0]!}
+                              chip
+                              className={cn(
+                                "max-w-full",
+                                amountDeemphasized &&
+                                  "text-muted-foreground bg-card",
+                              )}
+                              positiveSign={
+                                transaction.transaction_class !== "transfer"
+                              }
+                              tone="neutral"
+                            />
+                          </TransactionAmountCell>
+                        ) : transaction.transaction_class === "mixed" ? (
                           <MixedAmounts amounts={amounts} />
                         ) : (
                           amounts.map((amount) => (

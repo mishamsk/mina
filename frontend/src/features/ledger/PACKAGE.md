@@ -7,7 +7,8 @@
 ## Implicit Contracts
 
 - Transaction class, display titles, primary amounts, and record amounts come from REST responses.
-- Transaction-row lifted record values follow the uniformity rule in `docs/webui-design.md`; member display ignores unattributed records.
+- Transaction-row inline editing follows the uniformity rule owned by `docs/webui-design.md`.
+- Transaction-row lifted member display ignores unattributed records.
 - Transaction detail panel renders a transaction snapshot passed by the owning page.
 - Transaction detail panel owns the tombstone confirmation UI and delegates delete execution to the owning page.
 - `useTransactionBrowserPage` composes shared browser snapshots, page-granular date jumps with a transient row anchor, transaction detail, row tombstones, pagination, and notices; pages supply their URL filter semantics.
@@ -17,7 +18,7 @@
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.
 - Lookup-backed pickers use bounded REST lists and exclude hidden entities upstream.
 - Expanded-record editors own only their per-cell transient state; successful saves delegate to the browser page for API-owned validation and the standard transaction-mutation refresh fan-out.
-- Category, tags, and posting status use their narrow record bulk APIs for a single record; member, memo, and dates use atomic transaction replacement built from the displayed transaction shape.
+- Category, tags, and posting status use their narrow record bulk APIs; member, memo, dates, and simple row amounts use atomic transaction replacement built from the displayed transaction shape.
 - Structural record fields remain non-inline; transaction pages with an entry panel expose a direct escalation action to the full journal editor.
 - Entry supports the spend, income, refund, and transfer shorthand endpoints.
 - Saved-transaction Edit/Split saves are full replacements owned by the entry panel; page routes own the post-save refresh fan-out and notices.
@@ -35,4 +36,4 @@
 
 ## Testing Notes
 
-- Frontend e2e tests cover transaction expansion, detail deep links, pagination, multi-type entry, per-tab drafts, sticky entry fields, and picker keyboard submission.
+- Frontend e2e tests cover transaction expansion, row and record inline editing, detail deep links, pagination, multi-type entry, per-tab drafts, sticky entry fields, and picker keyboard submission.

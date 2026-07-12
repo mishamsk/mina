@@ -339,6 +339,10 @@ export const TransactionsPage = () => {
               );
             }}
             onUpdateRecord={browser.updateRecord}
+            onUpdateTransactionRecordReferences={
+              browser.updateTransactionRecordReferences
+            }
+            onUpdateTransactionAmount={browser.updateTransactionAmount}
             onDeleteConfirmationOpenChange={setQuickDeleteDialogOpen}
             onRowActionsOverflowOpenChange={setRowActionsOverflowOpen}
             page={browser.page}

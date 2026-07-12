@@ -12,7 +12,7 @@ import {
   EntityPicker,
 } from "./entity-picker";
 import type { LookupMaps } from "./format";
-import type { RecordReferenceUpdate, RecordUpdate } from "./record-editing";
+import type { RecordReferenceUpdate } from "./record-editing";
 
 export type { RecordReferenceUpdate } from "./record-editing";
 
@@ -24,9 +24,10 @@ interface RecordReferenceCellsProps {
   readonly onSave: (
     transaction: Transaction,
     record: JournalRecord,
-    update: RecordUpdate,
-  ) => Promise<void>;
+    update: RecordReferenceUpdate,
+  ) => Promise<boolean | void>;
   readonly record: JournalRecord;
+  readonly testIdPrefix?: string;
   readonly transaction: Transaction;
   readonly value: ReactNode;
 }
@@ -225,6 +226,7 @@ export const RecordReferenceCells = ({
   maps,
   onSave,
   record,
+  testIdPrefix = "record",
   transaction,
   value,
 }: RecordReferenceCellsProps) => {
@@ -252,9 +254,11 @@ export const RecordReferenceCells = ({
     setSaving(true);
     setErrorMessage(undefined);
     try {
-      await onSave(transaction, record, update);
+      const rowRemainsVisible = await onSave(transaction, record, update);
       setEditing(false);
-      restoreDisplayFocus();
+      if (rowRemainsVisible !== false) {
+        restoreDisplayFocus();
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",
@@ -269,8 +273,8 @@ export const RecordReferenceCells = ({
       <div
         ref={displayCellRef}
         tabIndex={0}
-        className="group flex min-h-6 min-w-0 items-start gap-1"
-        data-testid={`record-${field}-cell`}
+        className="group relative flex min-h-6 min-w-0 items-start"
+        data-testid={`${testIdPrefix}-${field}-cell`}
         onKeyDown={(event) => {
           if (event.key === "F2") {
             event.preventDefault();
@@ -284,7 +288,7 @@ export const RecordReferenceCells = ({
             type="button"
             variant="ghost"
             size="icon-xs"
-            className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+            className="pointer-events-none absolute top-0 right-0 opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
             aria-label={`Edit ${fieldLabel[field]}`}
             onClick={() => {
               setEditing(true);
@@ -300,7 +304,7 @@ export const RecordReferenceCells = ({
   return (
     <div
       className="flex min-w-0 flex-col gap-2"
-      data-testid={`record-${field}-editor`}
+      data-testid={`${testIdPrefix}-${field}-editor`}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !event.defaultPrevented) {
           event.preventDefault();
