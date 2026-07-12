@@ -1,6 +1,6 @@
 import { Plus } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useSearchParams } from "react-router";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 
 import type { Transaction } from "@/api";
 import { PageHelp } from "@/components/page-help";
@@ -36,16 +36,26 @@ import {
   useTransactionEntryPanelView,
 } from "@/store";
 
+interface TransactionsPageLocationState {
+  readonly editTransactionAsJournal?: Transaction;
+}
+
 export const TransactionsPage = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const routeState = location.state as TransactionsPageLocationState | null;
+  const routeJournalLaunch = routeState?.editTransactionAsJournal;
   const [searchParams, setSearchParams] = useSearchParams();
   const entryPanel = useTransactionEntryPanelView();
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
   const [quickDeleteDialogOpen, setQuickDeleteDialogOpen] = useState(false);
   const [rowActionsOverflowOpen, setRowActionsOverflowOpen] = useState(false);
-  const [entryLaunch, setEntryLaunch] = useState<
-    EntryPanelLaunch | undefined
-  >();
+  const [entryLaunch, setEntryLaunch] = useState<EntryPanelLaunch | undefined>(
+    () =>
+      routeJournalLaunch
+        ? { transaction: routeJournalLaunch, type: "split" }
+        : undefined,
+  );
   const filters = useMemo(
     () => readTransactionFiltersFromSearchParams(searchParams),
     [searchParams],
@@ -55,6 +65,7 @@ export const TransactionsPage = () => {
     searchParams,
     setSearchParams,
   });
+  const entryPanelOpen = entryPanel.open || entryLaunch !== undefined;
   const effectiveEntryLaunch = entryPanel.initialTab ? undefined : entryLaunch;
 
   useEffect(() => {
@@ -96,6 +107,17 @@ export const TransactionsPage = () => {
     },
     [browser],
   );
+
+  useEffect(() => {
+    if (!routeJournalLaunch) {
+      return;
+    }
+
+    void navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: null,
+    });
+  }, [location.pathname, location.search, navigate, routeJournalLaunch]);
 
   const setSearchFilter = useCallback(
     (normalizedSearch: string) => {
@@ -185,7 +207,7 @@ export const TransactionsPage = () => {
       const targetElement = target instanceof HTMLElement ? target : undefined;
       if (
         browser.detail.selectedTransactionId ||
-        entryPanel.open ||
+        entryPanelOpen ||
         filterPopoverOpen ||
         getCommandPaletteSnapshot().open ||
         quickDeleteDialogOpen ||
@@ -210,7 +232,7 @@ export const TransactionsPage = () => {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [
-    entryPanel.open,
+    entryPanelOpen,
     browser.detail.selectedTransactionId,
     filterPopoverOpen,
     openEntryPanel,
@@ -272,7 +294,7 @@ export const TransactionsPage = () => {
       <div
         className={cn(
           "grid min-h-0 min-w-0 flex-1 gap-6",
-          entryPanel.open && "lg:grid-cols-[minmax(0,1fr)_360px]",
+          entryPanelOpen && "lg:grid-cols-[minmax(0,1fr)_360px]",
         )}
       >
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
@@ -309,12 +331,14 @@ export const TransactionsPage = () => {
               browser.setPage(browser.page + 1);
             }}
             onOpenTransaction={browser.detail.openTransactionDetail}
+            onEditTransactionAsJournal={splitTransaction}
             onPageSizeChange={browser.setPageSize}
             onPreviousPage={() => {
               browser.setPage(
                 Math.max(defaultTransactionPage, browser.page - 1),
               );
             }}
+            onUpdateRecord={browser.updateRecord}
             onDeleteConfirmationOpenChange={setQuickDeleteDialogOpen}
             onRowActionsOverflowOpenChange={setRowActionsOverflowOpen}
             page={browser.page}
@@ -335,7 +359,7 @@ export const TransactionsPage = () => {
           initialTab={entryPanel.initialTab}
           launch={effectiveEntryLaunch}
           lookups={browser.lookups.snapshot}
-          open={entryPanel.open}
+          open={entryPanelOpen}
           onClose={() => {
             setEntryLaunch(undefined);
             closeTransactionEntryPanel();

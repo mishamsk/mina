@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Close,
   Open,
+  Pencil,
   Plus,
   Trash,
   WarningDiamond,
@@ -11,6 +12,7 @@ import {
 import {
   type FocusEvent,
   Fragment,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -35,7 +37,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
-import { localTodayISODate } from "@/utils/date";
+import { localTimestampDateValue, localTodayISODate } from "@/utils/date";
 
 import { AmountText, MixedAmounts } from "./amount-text";
 import {
@@ -54,6 +56,9 @@ import {
 import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
+import { RecordDetailCells } from "./record-detail-cells";
+import type { RecordUpdate } from "./record-editing";
+import { RecordReferenceCells } from "./record-reference-cells";
 import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
 import { transactionPageSizeOptions } from "./transaction-page-position";
@@ -83,8 +88,14 @@ interface TransactionBrowserProps {
     transaction: Transaction,
     opener?: HTMLElement,
   ) => void;
+  readonly onEditTransactionAsJournal?: (transaction: Transaction) => void;
   readonly onPageSizeChange: (pageSize: number) => void;
   readonly onPreviousPage: () => void;
+  readonly onUpdateRecord: (
+    transaction: Transaction,
+    record: JournalRecord,
+    update: RecordUpdate,
+  ) => Promise<void>;
   readonly onDeleteConfirmationOpenChange?: (open: boolean) => void;
   readonly onRowActionsOverflowOpenChange?: (open: boolean) => void;
   readonly page: number;
@@ -363,10 +374,6 @@ const MixedSentinel = ({ label = "Mixed" }: { readonly label?: string }) => (
   </span>
 );
 
-const RecordStatus = ({ record }: { readonly record: JournalRecord }) => (
-  <span>{record.posting_status === "posted" ? "" : record.posting_status}</span>
-);
-
 const interactiveTargetSelector =
   "a, button, input, select, textarea, summary, [role='button'], " +
   "[contenteditable='true'], " +
@@ -386,10 +393,16 @@ const isInteractiveTarget = (
 
 const RecordsTable = ({
   maps,
+  onEditTransactionAsJournal,
+  onUpdateRecord,
   records,
+  transaction,
 }: {
   readonly maps: LookupMaps;
+  readonly onEditTransactionAsJournal?: (transaction: Transaction) => void;
+  readonly onUpdateRecord: TransactionBrowserProps["onUpdateRecord"];
   readonly records: readonly JournalRecord[];
+  readonly transaction: Transaction;
 }) => (
   <div
     className="bg-muted box-border w-full max-w-full overflow-x-auto p-3"
@@ -398,13 +411,14 @@ const RecordsTable = ({
     <table className="w-full table-fixed border-collapse text-sm">
       <thead>
         <tr className="font-heading text-foreground border-b border-[var(--border-ink)] bg-[var(--table-header)] text-left text-xs font-semibold uppercase">
-          <th className="w-[20%] px-2 py-2">Account</th>
-          <th className="w-[14%] px-2 py-2 text-right">Amount</th>
-          <th className="w-[16%] px-2 py-2">Category</th>
-          <th className="w-[14%] px-2 py-2">Tags</th>
+          <th className="w-[18%] px-2 py-2">Account</th>
+          <th className="w-[13%] px-2 py-2 text-right">Amount</th>
+          <th className="w-[15%] px-2 py-2">Category</th>
+          <th className="w-[13%] px-2 py-2">Tags</th>
           <th className="w-[8%] px-2 py-2">Member</th>
-          <th className="w-[10%] px-2 py-2">Status</th>
-          <th className="w-[18%] px-2 py-2">Memo</th>
+          <th className="w-[9%] px-2 py-2">Status</th>
+          <th className="w-[12%] px-2 py-2">Dates</th>
+          <th className="w-[12%] px-2 py-2">Memo</th>
         </tr>
       </thead>
       <tbody>
@@ -414,9 +428,9 @@ const RecordsTable = ({
           const member = record.member_id
             ? maps.membersById.get(record.member_id)
             : undefined;
-          const tagLabels = record.tag_ids
-            .map((tagId) => maps.tagsById.get(tagId)?.name)
-            .filter((value): value is string => Boolean(value));
+          const tags = record.tag_ids
+            .map((tagId) => maps.tagsById.get(tagId))
+            .filter((value): value is Tag => Boolean(value));
 
           return (
             <tr
@@ -428,30 +442,159 @@ const RecordsTable = ({
               )}
             >
               <td className="px-2 py-2">
-                {account ? <FqnPath value={account.fqn} /> : "Unknown account"}
+                <StructuralRecordCell
+                  label="account"
+                  onEdit={
+                    onEditTransactionAsJournal
+                      ? () => onEditTransactionAsJournal(transaction)
+                      : undefined
+                  }
+                >
+                  {account ? (
+                    <FqnPath value={account.fqn} />
+                  ) : (
+                    "Unknown account"
+                  )}
+                </StructuralRecordCell>
               </td>
               <td className="px-2 py-2 text-right">
-                <AmountText
-                  amount={recordDisplayAmount(record)}
-                  tone="neutral"
+                <StructuralRecordCell
+                  label="amount"
+                  onEdit={
+                    onEditTransactionAsJournal
+                      ? () => onEditTransactionAsJournal(transaction)
+                      : undefined
+                  }
+                >
+                  <AmountText
+                    amount={recordDisplayAmount(record)}
+                    tone="neutral"
+                  />
+                </StructuralRecordCell>
+              </td>
+              <td className="px-2 py-2">
+                <RecordReferenceCells
+                  field="category"
+                  maps={maps}
+                  record={record}
+                  transaction={transaction}
+                  value={
+                    category ? (
+                      <FqnPath value={category.fqn} focusable={false} />
+                    ) : (
+                      "Uncategorized"
+                    )
+                  }
+                  onSave={onUpdateRecord}
                 />
               </td>
               <td className="px-2 py-2">
-                {category ? <FqnPath value={category.fqn} /> : "Uncategorized"}
+                <RecordReferenceCells
+                  field="tags"
+                  maps={maps}
+                  record={record}
+                  transaction={transaction}
+                  value={
+                    tags.length > 0 ? (
+                      <span className="flex max-w-full min-w-0 flex-col gap-1">
+                        {tags.map((tag) => (
+                          <FqnPath
+                            key={tag.tag_id}
+                            value={tag.fqn}
+                            focusable={false}
+                          />
+                        ))}
+                      </span>
+                    ) : (
+                      ""
+                    )
+                  }
+                  onSave={onUpdateRecord}
+                />
               </td>
-              <td className="px-2 py-2">{tagLabels.join(", ")}</td>
-              <td className="px-2 py-2">{member?.name ?? ""}</td>
               <td className="px-2 py-2">
-                <RecordStatus record={record} />
+                <RecordReferenceCells
+                  field="member"
+                  maps={maps}
+                  record={record}
+                  transaction={transaction}
+                  value={member ? member.name : ""}
+                  onSave={onUpdateRecord}
+                />
+              </td>
+              <td className="px-2 py-2">
+                <RecordDetailCells
+                  field="postingStatus"
+                  record={record}
+                  transaction={transaction}
+                  value={
+                    record.posting_status === "posted"
+                      ? ""
+                      : record.posting_status
+                  }
+                  onSave={onUpdateRecord}
+                />
               </td>
               <td className="text-muted-foreground px-2 py-2 break-words whitespace-normal">
-                {record.memo}
+                <RecordDetailCells
+                  field="dates"
+                  record={record}
+                  transaction={transaction}
+                  value={`Initiated ${transaction.initiated_date}; pending ${localTimestampDateValue(record.pending_date)}; posted ${localTimestampDateValue(record.posted_date)}`}
+                  onSave={onUpdateRecord}
+                />
+              </td>
+              <td className="text-muted-foreground px-2 py-2 break-words whitespace-normal">
+                <RecordDetailCells
+                  field="memo"
+                  record={record}
+                  transaction={transaction}
+                  value={record.memo ?? ""}
+                  onSave={onUpdateRecord}
+                />
               </td>
             </tr>
           );
         })}
       </tbody>
     </table>
+  </div>
+);
+
+const StructuralRecordCell = ({
+  children,
+  label,
+  onEdit,
+}: {
+  readonly children: ReactNode;
+  readonly label: string;
+  readonly onEdit?: () => void;
+}) => (
+  <div
+    tabIndex={0}
+    className="group flex min-h-6 min-w-0 items-start gap-1"
+    onKeyDown={(event) => {
+      if (event.key === "F2" && onEdit) {
+        event.preventDefault();
+        onEdit();
+      }
+    }}
+  >
+    <span className="min-w-0 flex-1">{children}</span>
+    {onEdit ? (
+      <Tooltip label={`Edit ${label} in journal`} asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+          aria-label={`Edit ${label} in journal`}
+          onClick={onEdit}
+        >
+          <Pencil aria-hidden="true" />
+        </Button>
+      </Tooltip>
+    ) : null}
   </div>
 );
 
@@ -470,8 +613,10 @@ export const TransactionBrowser = ({
   onDismissRecurringOccurrence,
   onNextPage,
   onOpenTransaction,
+  onEditTransactionAsJournal,
   onPageSizeChange,
   onPreviousPage,
+  onUpdateRecord,
   onDeleteConfirmationOpenChange,
   onRowActionsOverflowOpenChange,
   page,
@@ -1127,6 +1272,11 @@ export const TransactionBrowser = ({
                         <RecordsTable
                           records={transaction.records}
                           maps={maps}
+                          transaction={transaction}
+                          onEditTransactionAsJournal={
+                            onEditTransactionAsJournal
+                          }
+                          onUpdateRecord={onUpdateRecord}
                         />
                       </td>
                     </tr>

@@ -721,6 +721,154 @@ test("transactions page renders demo transaction lines and expands records", asy
   expect(recordsFitTableContent).toBe(true);
 });
 
+test("expanded records edit per-record values and escalate structural changes", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const initialCategory = findByFqn(categories, "Entertainment:Books");
+  const nextCategory = await createCategory(
+    page,
+    `E2E:RecordEditing:${unique}:Updated`,
+    "expense",
+  );
+  const [initialTag, addedTag, member] = await Promise.all([
+    createTag(page, `E2E:RecordEditing:${unique}:Initial`),
+    createTag(page, `E2E:RecordEditing:${unique}:Added`),
+    createMember(page, `Record editor ${unique}`),
+  ]);
+  const memo = `E2E record editing ${unique}`;
+  const updatedMemo = `E2E record editing updated ${unique}`;
+  const createResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-10",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-17.43000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [initialTag.tag_id],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "17.43000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [initialTag.tag_id],
+        },
+      ],
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionDetailFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  const transactionRow = page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first();
+  await expect(transactionRow).toBeVisible();
+  await transactionRow.locator("td").nth(3).click();
+  await expect(transactionRow).toHaveAttribute("aria-expanded", "true");
+  const records = page.getByTestId("expanded-records");
+
+  const categoryCell = records.getByTestId("record-category-cell").first();
+  await categoryCell.focus();
+  await categoryCell.press("F2");
+  const categoryEditor = records.getByTestId("record-category-editor").first();
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(nextCategory.fqn);
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .press("Enter");
+  await expect(categoryCell).toContainText(nextCategory.fqn);
+  await expect(transactionRow.locator("td").nth(4)).toContainText("Mixed");
+
+  const tagCell = records.getByTestId("record-tags-cell").first();
+  await tagCell.getByRole("button", { name: "Edit Tags" }).click();
+  const tagEditor = records.getByTestId("record-tags-editor").first();
+  await tagEditor.getByRole("combobox", { name: "Tags" }).fill(addedTag.fqn);
+  await tagEditor.getByRole("combobox", { name: "Tags" }).press("Enter");
+  await tagEditor.getByRole("button", { name: "Save" }).click();
+  await expect(tagCell).toContainText(addedTag.name);
+
+  const memberCell = records.getByTestId("record-member-cell").first();
+  await memberCell.getByRole("button", { name: "Edit Member" }).click();
+  let memberEditor = records.getByTestId("record-member-editor").first();
+  await memberEditor
+    .getByRole("combobox", { name: "Member" })
+    .fill(member.name);
+  await memberEditor.getByRole("combobox", { name: "Member" }).press("Enter");
+  await expect(memberCell).toContainText(member.name);
+  await memberCell.getByRole("button", { name: "Edit Member" }).click();
+  memberEditor = records.getByTestId("record-member-editor").first();
+  await memberEditor.getByRole("combobox", { name: "Member" }).press("Escape");
+  await memberEditor.getByRole("button", { name: "Clear member" }).click();
+  await expect(memberCell).not.toContainText(member.name);
+
+  const memoCell = records.getByTestId("record-memo-cell").first();
+  await memoCell.getByRole("button", { name: "Edit memo" }).click();
+  const memoEditor = records.getByTestId("record-memo-editor").first();
+  await memoEditor.getByLabel("Memo").fill(updatedMemo);
+  await memoEditor.getByLabel("Memo").press("Enter");
+  await expect(memoCell).toContainText(updatedMemo);
+
+  const datesCell = records.getByTestId("record-dates-cell").first();
+  await datesCell.getByRole("button", { name: "Edit dates" }).click();
+  const datesEditor = records.getByTestId("record-dates-editor").first();
+  await datesEditor.getByLabel("Initiated").fill("2026-07-09");
+  await datesEditor.getByRole("button", { name: "Save" }).click();
+  await expect(datesCell).toContainText("Initiated 2026-07-09");
+
+  const statusCell = records.getByTestId("record-postingStatus-cell").first();
+  await statusCell.focus();
+  await statusCell.press("F2");
+  const statusEditor = records
+    .getByTestId("record-postingStatus-editor")
+    .first();
+  await statusEditor.getByRole("combobox", { name: "Posting status" }).click();
+  await page.getByRole("option", { name: "Cancelled" }).click();
+  await expect(statusEditor.getByRole("alert")).toContainText(/cancelled/i);
+  const unchangedResponse = await page.request.get(
+    `/api/transactions/${transaction.transaction_id}`,
+  );
+  expect(unchangedResponse.ok(), await unchangedResponse.text()).toBe(true);
+  const unchanged =
+    (await unchangedResponse.json()) as TransactionDetailFixture;
+  expect(unchanged.records.map((record) => record.posting_status)).toEqual([
+    "posted",
+    "posted",
+  ]);
+
+  await expect(records.getByTestId("record-account-editor")).toHaveCount(0);
+  await expect(records.getByTestId("record-amount-editor")).toHaveCount(0);
+  await records
+    .getByRole("button", { name: "Edit account in journal" })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Edit journal" }),
+  ).toBeVisible();
+  await deleteTransaction(page, transaction);
+});
+
 test("transactions page uses server pagination controls", async ({ page }) => {
   const defaultPageRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());

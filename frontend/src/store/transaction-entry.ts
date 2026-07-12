@@ -53,6 +53,7 @@ export const openTransactionEntryPanel = (
 export const closeTransactionEntryPanel = (): void => {
   useTransactionEntryPanelStore.setState(
     {
+      initialTab: undefined,
       open: false,
     },
     false,

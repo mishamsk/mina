@@ -6,11 +6,17 @@ import {
   confirmRecurringOccurrenceById,
   deleteTransactionById,
   dismissRecurringOccurrenceById,
+  type JournalRecord,
+  replaceLedgerTransaction,
   type Transaction,
   type TransactionPageParams,
+  updateJournalRecordCategory,
+  updateJournalRecordPostingStatus,
+  updateJournalRecordTags,
 } from "@/api";
 import type { TransactionFilters } from "@/models/transaction-filters";
 
+import { type RecordUpdate, recordUpdateBody } from "./record-editing";
 import {
   defaultTransactionPage,
   readTransactionPageFromSearchParams,
@@ -183,6 +189,69 @@ export const useTransactionBrowserPage = ({
     [detail, params, showNotice],
   );
 
+  const updateRecord = useCallback(
+    async (
+      transaction: Transaction,
+      record: JournalRecord,
+      update: RecordUpdate,
+    ) => {
+      if (update.kind === "category") {
+        const result = await updateJournalRecordCategory(
+          record.record_id,
+          update.categoryId,
+        );
+        if (result.error) {
+          throw new Error(apiErrorMessage(result.error));
+        }
+      } else if (update.kind === "tags") {
+        if (
+          record.tag_ids.length === update.tagIds.length &&
+          record.tag_ids.every((tagId) => update.tagIds.includes(tagId))
+        ) {
+          return;
+        }
+        const result = await updateJournalRecordTags(
+          record.record_id,
+          record.tag_ids,
+          update.tagIds,
+        );
+        if (result.error) {
+          throw new Error(apiErrorMessage(result.error));
+        }
+      } else if (update.kind === "postingStatus") {
+        const result = await updateJournalRecordPostingStatus(
+          record.record_id,
+          update.postingStatus,
+        );
+        if (result.error) {
+          throw new Error(apiErrorMessage(result.error));
+        }
+      } else {
+        const result = await replaceLedgerTransaction(
+          transaction.transaction_id,
+          recordUpdateBody(transaction, record.record_id, update),
+        );
+        if (!result.data) {
+          throw new Error(apiErrorMessage(result.error));
+        }
+        await refreshTransactionPageAfterSave(
+          params,
+          transaction.transaction_id,
+          result.data,
+          transaction,
+        );
+        return;
+      }
+
+      await refreshTransactionPageAfterSave(
+        params,
+        transaction.transaction_id,
+        transaction,
+      );
+    },
+    [params],
+  );
+
   const setPage = useCallback(
     (nextPage: number) => {
       cancelDateJump();
@@ -267,5 +336,6 @@ export const useTransactionBrowserPage = ({
     showNotice,
     totalCount,
     transactions,
+    updateRecord,
   };
 };

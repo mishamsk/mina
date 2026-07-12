@@ -13,6 +13,7 @@ export interface EntityOption {
 }
 
 interface EntityPickerProps {
+  readonly autoFocus?: boolean;
   readonly clearOnSelect?: boolean;
   readonly disabled?: boolean;
   readonly exactMatchOptions?: readonly EntityOption[];
@@ -30,6 +31,7 @@ const matchesQuery = (option: EntityOption, query: string): boolean =>
   option.searchLabel.toLowerCase().includes(query.trim().toLowerCase());
 
 export const EntityPicker = ({
+  autoFocus = false,
   clearOnSelect = false,
   disabled = false,
   exactMatchOptions = [],
@@ -82,6 +84,7 @@ export const EntityPicker = ({
       </label>
       <input
         id={id}
+        autoFocus={autoFocus}
         role="combobox"
         aria-controls={`${id}-options`}
         aria-expanded={open && !disabled}
@@ -219,6 +222,7 @@ export const EntityPicker = ({
 };
 
 interface EntityMultiPickerProps {
+  readonly autoFocus?: boolean;
   readonly id: string;
   readonly label: string;
   readonly labelClassName?: string;
@@ -230,6 +234,7 @@ interface EntityMultiPickerProps {
 }
 
 export const EntityMultiPicker = ({
+  autoFocus = false,
   id,
   label,
   labelClassName,
@@ -247,6 +252,7 @@ export const EntityMultiPicker = ({
   return (
     <div className="flex flex-col gap-2">
       <EntityPicker
+        autoFocus={autoFocus}
         clearOnSelect
         id={id}
         label={label}
@@ -262,7 +268,7 @@ export const EntityMultiPicker = ({
         }}
       />
       {selectedOptions.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
+        <div className="relative z-40 flex flex-wrap gap-1">
           {selectedOptions.map((option) => (
             <span
               key={option.id}

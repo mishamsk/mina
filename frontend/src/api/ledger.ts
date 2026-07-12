@@ -29,6 +29,9 @@ import type {
   UpdateTransactionRequest,
 } from "./generated";
 import {
+  bulkCategorizeJournalRecords,
+  bulkUpdateJournalRecordStatuses,
+  bulkUpdateJournalRecordTags,
   confirmRecurringOccurrence as confirmGeneratedRecurringOccurrence,
   createAccount as createGeneratedAccount,
   createCategory as createGeneratedCategory,
@@ -925,5 +928,46 @@ export const replaceLedgerTransaction = (
     body,
     path: {
       transaction_id: transactionId,
+    },
+  });
+
+export const updateJournalRecordCategory = (
+  recordId: number,
+  categoryId: number,
+) =>
+  bulkCategorizeJournalRecords({
+    body: {
+      category_id: categoryId,
+      record_ids: [recordId],
+    },
+  });
+
+export const updateJournalRecordTags = (
+  recordId: number,
+  currentTagIds: readonly number[],
+  nextTagIds: readonly number[],
+) => {
+  const current = new Set(currentTagIds);
+  const next = new Set(nextTagIds);
+  const addTagIds = nextTagIds.filter((tagId) => !current.has(tagId));
+  const removeTagIds = currentTagIds.filter((tagId) => !next.has(tagId));
+
+  return bulkUpdateJournalRecordTags({
+    body: {
+      ...(addTagIds.length > 0 ? { add_tag_ids: addTagIds } : {}),
+      ...(removeTagIds.length > 0 ? { remove_tag_ids: removeTagIds } : {}),
+      record_ids: [recordId],
+    },
+  });
+};
+
+export const updateJournalRecordPostingStatus = (
+  recordId: number,
+  postingStatus: "cancelled" | "pending" | "posted",
+) =>
+  bulkUpdateJournalRecordStatuses({
+    body: {
+      posting_status: postingStatus,
+      record_ids: [recordId],
     },
   });

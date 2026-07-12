@@ -522,10 +522,16 @@ export const ReferenceDrilldownPage = ({
             browser.setPage(browser.page + 1);
           }}
           onOpenTransaction={browser.detail.openTransactionDetail}
+          onEditTransactionAsJournal={(transaction) => {
+            void navigate("/transactions", {
+              state: { editTransactionAsJournal: transaction },
+            });
+          }}
           onPageSizeChange={browser.setPageSize}
           onPreviousPage={() => {
             browser.setPage(Math.max(defaultTransactionPage, browser.page - 1));
           }}
+          onUpdateRecord={browser.updateRecord}
           page={browser.page}
           pageSize={browser.pageSize}
           totalCount={browser.totalCount}
