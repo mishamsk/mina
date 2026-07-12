@@ -195,10 +195,7 @@ interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
   readonly loading: boolean;
   readonly loadErrorTitle: string;
   readonly onRetry?: () => void;
-  readonly onRowClick?: (
-    row: ReferenceTreeRow<TLeaf, TGroup>,
-    opener: HTMLElement,
-  ) => void;
+  readonly onRowClick?: (row: ReferenceTreeRow<TLeaf, TGroup>) => void;
   readonly rowActivationLabel?: (
     row: ReferenceTreeRow<TLeaf, TGroup>,
   ) => string;
@@ -353,7 +350,7 @@ export const ReferenceTree = <
                     clickable && referenceTreeClickableRowClassName,
                   )}
                   aria-description={
-                    clickable ? "Press Enter or Space to edit." : undefined
+                    clickable ? "Press Enter or Space to open." : undefined
                   }
                   aria-keyshortcuts={clickable ? "Enter Space" : undefined}
                   aria-label={
@@ -369,7 +366,7 @@ export const ReferenceTree = <
                     ) {
                       return;
                     }
-                    onRowClick(row, event.currentTarget);
+                    onRowClick(row);
                   }}
                   onKeyDown={(event) => {
                     if (!onRowClick || event.defaultPrevented) {
@@ -384,7 +381,7 @@ export const ReferenceTree = <
                       return;
                     }
                     event.preventDefault();
-                    onRowClick(row, event.currentTarget);
+                    onRowClick(row);
                   }}
                 >
                   <td className="min-w-0 px-3 py-2">

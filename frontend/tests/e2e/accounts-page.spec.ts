@@ -970,16 +970,15 @@ test("account group page renders subtotals and combined prefix register", async 
   ).toContainText("Page 2 of 2");
 
   await page.goto("/accounts");
-  const groupTreeLink = page
+  const groupTreeRow = page
     .getByTestId("accounts-tree-row")
     .filter({ hasText: unique })
-    .first()
-    .getByRole("link", { name: new RegExp(unique) });
-  await expect(groupTreeLink).toHaveAttribute(
-    "href",
-    `/accounts/group?prefix=${encodeURIComponent(prefix)}`,
+    .first();
+  await expect(groupTreeRow).toHaveAttribute(
+    "aria-label",
+    `Open account group ${prefix}`,
   );
-  await groupTreeLink.click();
+  await groupTreeRow.click();
   await expect(page).toHaveURL(
     new RegExp(`/accounts/group\\?prefix=${encodeURIComponent(prefix)}$`),
   );
@@ -997,7 +996,7 @@ test("account group page renders subtotals and combined prefix register", async 
   await expect(page).toHaveURL("/accounts/group?prefix=checking");
 });
 
-test("account entry links navigate to account register pages", async ({
+test("account tree rows and entry links navigate to account register pages", async ({
   page,
 }) => {
   const accounts = await listFixtures<AccountFixture>(
@@ -1013,13 +1012,12 @@ test("account entry links navigate to account register pages", async ({
     .getByTestId("accounts-tree-row")
     .filter({ hasText: "Joint" })
     .first();
-  const jointTreeLink = jointTreeRow.getByRole("link", { name: /Joint/ });
-  await expect(jointTreeLink).toHaveAttribute(
-    "href",
-    `/accounts/${joint.account_id}`,
+  await expect(jointTreeRow).toHaveAttribute(
+    "aria-label",
+    "Open account checking:Chase:Joint",
     { timeout: 10_000 },
   );
-  await jointTreeLink.click();
+  await jointTreeRow.click();
   await expect(page).toHaveURL(new RegExp(`/accounts/${joint.account_id}$`));
   await expect(page.getByRole("heading", { name: "Joint" })).toBeVisible();
 
@@ -1087,9 +1085,10 @@ test("accounts tree moves and renames account paths", async ({
         ),
     )
     .toEqual(["Name", "Type", "Currency", "Balance", ""]);
-  const sourceGroupRow = page.locator(
-    `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(sourcePrefix)}"])`,
-  );
+  const sourceGroupRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: sourcePrefix })
+    .first();
   await expect(sourceGroupRow).toBeVisible({ timeout: 10_000 });
   const sourceGroupMoveButton = sourceGroupRow.getByRole("button", {
     name: "Move or rename",
@@ -1125,9 +1124,10 @@ test("accounts tree moves and renames account paths", async ({
 
   await page.getByLabel("Search").fill(destinationPrefix);
   await expect(
-    page.locator(
-      `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(destinationPrefix)}"])`,
-    ),
+    page
+      .getByTestId("accounts-tree-row")
+      .filter({ hasText: destinationPrefix })
+      .first(),
   ).toBeVisible({ timeout: 10_000 });
   await expect(
     page.getByTestId("accounts-tree-row").filter({ hasText: "Checking" }),
@@ -1385,7 +1385,7 @@ test("accounts tree row quick actions hide feature and delete rows", async ({
   await expect(
     page.getByText("Account has active dependent records."),
   ).toBeVisible();
-  await blockedRow.click();
+  await blockedRow.getByRole("button", { name: "Edit account" }).click();
   const blockedEditPanel = page.getByRole("dialog", {
     name: "Edit account",
   });
@@ -1492,7 +1492,7 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   await expect(createdRow).toBeVisible({ timeout: 10_000 });
 
   await page.getByLabel("Include hidden").click();
-  await createdRow.click();
+  await createdRow.getByRole("button", { name: "Edit account" }).click();
   const editPanel = page.getByRole("dialog", { name: "Edit account" });
   await expect(editPanel).toBeVisible();
   await expect(editPanel.getByLabel("FQN")).toHaveValue(fqn);
@@ -1526,7 +1526,7 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
     .filter({ hasText: "Checking" })
     .first();
   await expect(creditLimitRow).toBeVisible();
-  await creditLimitRow.click();
+  await creditLimitRow.getByRole("button", { name: "Edit account" }).click();
   await expect(editPanel).toBeVisible();
   await editPanel.getByLabel("Amount").fill("23000.00");
   await editPanel.getByLabel("Effective").fill("2026-07-05");
@@ -1592,12 +1592,14 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
     .filter({ hasText: "Checking" })
     .first();
   await expect(deleteRow).toBeVisible();
-  await deleteRow.click();
+  await deleteRow.getByRole("button", { name: "Edit account" }).click();
   await expect(editPanel).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(editPanel).toBeHidden();
-  await expect(deleteRow).toBeFocused();
-  await deleteRow.click();
+  await expect(
+    deleteRow.getByRole("button", { name: "Edit account" }),
+  ).toBeFocused();
+  await deleteRow.getByRole("button", { name: "Edit account" }).click();
   await expect(editPanel).toBeVisible();
   await editPanel.getByRole("button", { name: "Delete" }).click();
   const accountDeleteDialog = page.getByRole("alertdialog", {

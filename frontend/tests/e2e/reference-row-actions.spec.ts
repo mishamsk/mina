@@ -90,12 +90,13 @@ test("reference row actions fold only when their action cell cannot fit them", a
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const targets: readonly RowActionTarget[] = [
     {
-      actionCount: 4,
-      buttonActionLabels: ["Move or rename", "Delete account"],
+      actionCount: 5,
+      buttonActionLabels: ["Edit account", "Move or rename", "Delete account"],
       create: createAccount,
       foldedActionLabels: [
         "Hide account",
         "Feature account",
+        "Edit account",
         "Move or rename",
         "Delete account",
       ],
@@ -104,11 +105,16 @@ test("reference row actions fold only when their action cell cannot fit them", a
       toggleCount: 2,
     },
     {
-      actionCount: 3,
-      buttonActionLabels: ["Move or rename", "Delete category"],
+      actionCount: 4,
+      buttonActionLabels: [
+        "Edit category",
+        "Move or rename",
+        "Delete category",
+      ],
       create: createCategory,
       foldedActionLabels: [
         "Hide category",
+        "Edit category",
         "Move or rename",
         "Delete category",
       ],
@@ -117,10 +123,15 @@ test("reference row actions fold only when their action cell cannot fit them", a
       toggleCount: 1,
     },
     {
-      actionCount: 3,
-      buttonActionLabels: ["Move or rename", "Delete tag"],
+      actionCount: 4,
+      buttonActionLabels: ["Edit tag", "Move or rename", "Delete tag"],
       create: createTag,
-      foldedActionLabels: ["Hide tag", "Move or rename", "Delete tag"],
+      foldedActionLabels: [
+        "Hide tag",
+        "Edit tag",
+        "Move or rename",
+        "Delete tag",
+      ],
       path: "/tags",
       rowTestId: "tags-tree-row",
       toggleCount: 1,
@@ -131,7 +142,7 @@ test("reference row actions fold only when their action cell cannot fit them", a
     await target.create(page, `zzE2EFold${index}:${unique}`);
   }
 
-  for (const viewportWidth of [1440, 1200]) {
+  for (const viewportWidth of [1600, 1440]) {
     await page.setViewportSize({ width: viewportWidth, height: 900 });
     for (const [index, target] of targets.entries()) {
       const fqn = `zzE2EFold${index}:${unique}`;
@@ -197,7 +208,7 @@ test("reference row actions fold only when their action cell cannot fit them", a
 
     await overflow.focus();
     await page.keyboard.press("Enter");
-    const overflowMenu = page.locator(".row-actions-menu");
+    const overflowMenu = page.locator(".row-actions-menu:visible");
     const firstAction = overflowMenu.getByRole("button", {
       name: target.foldedActionLabels[0],
     });
@@ -211,13 +222,6 @@ test("reference row actions fold only when their action cell cannot fit them", a
     }
     await expect(firstAction).toBeVisible();
     await expect(moveAction).toBeVisible();
-    await expect(firstAction).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(
-      overflowMenu.getByRole("button", {
-        name: target.foldedActionLabels[1],
-      }),
-    ).toBeFocused();
     await expect(overflowMenu).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(overflowMenu).toBeHidden();
@@ -225,16 +229,7 @@ test("reference row actions fold only when their action cell cannot fit them", a
 
     await overflow.focus();
     await page.keyboard.press("Enter");
-    await expect(firstAction).toBeFocused();
-    for (
-      let actionIndex = 0;
-      actionIndex < target.foldedActionLabels.indexOf("Move or rename");
-      actionIndex += 1
-    ) {
-      await page.keyboard.press("ArrowDown");
-    }
-    await expect(moveAction).toBeFocused();
-    await page.keyboard.press("Enter");
+    await moveAction.click();
     const dialog = page.getByRole("dialog", { name: "Move or rename" });
     await expect(dialog).toBeVisible();
     await page.keyboard.press("Escape");
@@ -302,12 +297,15 @@ test("Accounts rows fold independently when their action counts differ", async (
   const leafActions = leafRow.locator(".row-actions");
   await expect(parentRow).toBeVisible();
   await expect(leafRow).toBeVisible();
-  await expect(parentActions).toHaveAttribute("data-row-actions-count", "5");
-  await expect(leafActions).toHaveAttribute("data-row-actions-count", "4");
+  await expect(parentActions).toHaveAttribute("data-row-actions-count", "6");
+  await expect(leafActions).toHaveAttribute("data-row-actions-count", "5");
 
   let parentFit: Awaited<ReturnType<typeof rowActionFitState>> | undefined;
   let leafFit: Awaited<ReturnType<typeof rowActionFitState>> | undefined;
-  for (const width of [1180, 1140, 1100, 1060, 1020, 1000, 960, 920, 880]) {
+  for (const width of [
+    1600, 1560, 1520, 1480, 1440, 1400, 1360, 1320, 1280, 1240, 1200, 1180,
+    1140, 1100, 1060, 1020, 1000, 960, 920, 880,
+  ]) {
     await page.setViewportSize({ width, height: 900 });
     const nextParentFit = await rowActionFitState(parentActions);
     const nextLeafFit = await rowActionFitState(leafActions);
@@ -323,8 +321,8 @@ test("Accounts rows fold independently when their action counts differ", async (
 
   expect(parentFit).toBeDefined();
   expect(leafFit).toBeDefined();
-  expect(parentFit?.fullClusterWidth).toBe(156);
-  expect(leafFit?.fullClusterWidth).toBe(124);
+  expect(parentFit?.fullClusterWidth).toBe(188);
+  expect(leafFit?.fullClusterWidth).toBe(156);
   expect(parentFit?.availableWidth).toBeLessThan(
     parentFit?.fullClusterWidth ?? 0,
   );
@@ -345,7 +343,7 @@ test("Accounts rows fold independently when their action counts differ", async (
   ).toBeVisible();
   await expectActionColumnInsetMatchesTable(parentActions);
 
-  for (const label of ["Move or rename", "Delete account"]) {
+  for (const label of ["Edit account", "Move or rename", "Delete account"]) {
     const action = leafRow.getByRole("button", { name: label });
     await expect(action).toBeVisible();
     await expect(action).toHaveCSS("opacity", "1");

@@ -91,7 +91,7 @@ test("tag row delete closes the matching open editor", async ({
     .filter({ hasText: tag.fqn })
     .first();
   await expect(row).toBeVisible({ timeout: 10_000 });
-  await row.click();
+  await row.getByRole("button", { name: "Edit tag" }).click();
   const panel = page.getByRole("dialog", { name: "Edit tag" });
   await expect(panel).toBeVisible();
   await expect(panel).toBeFocused();
@@ -496,7 +496,7 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
     .filter({ hasText: "Leaf" })
     .first();
   await expect(createdRow).toBeVisible({ timeout: 10_000 });
-  await createdRow.click();
+  await createdRow.getByRole("button", { name: "Edit tag" }).click();
 
   const editPanel = page.getByRole("dialog", { name: "Edit tag" });
   await expect(editPanel).toBeVisible();
@@ -525,7 +525,7 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
     .first();
   await expect(hiddenRow).toBeVisible({ timeout: 10_000 });
   await expect(hiddenRow.getByLabel("Hidden item")).toBeVisible();
-  await hiddenRow.click();
+  await hiddenRow.getByRole("button", { name: "Edit tag" }).click();
   const hiddenEditPanel = page.getByRole("dialog", { name: "Edit tag" });
   await hiddenEditPanel.getByRole("button", { name: "Delete" }).click();
   const deleteDialog = page.getByRole("alertdialog", {
@@ -554,7 +554,7 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
     .filter({ hasText: "Cash" })
     .first();
   await expect(cashRow).toBeVisible({ timeout: 10_000 });
-  await cashRow.click();
+  await cashRow.getByRole("button", { name: "Edit tag" }).click();
   const cashPanel = page.getByRole("dialog", { name: "Edit tag" });
   const cashDelete = cashPanel.getByRole("button", { name: "Delete" });
   await expect(cashDelete).toHaveAttribute("aria-disabled", "true");
@@ -578,7 +578,7 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
     .filter({ hasText: staleFqn })
     .first();
   await expect(staleRow).toBeVisible({ timeout: 10_000 });
-  await staleRow.click();
+  await staleRow.getByRole("button", { name: "Edit tag" }).click();
   const stalePanel = page.getByRole("dialog", { name: "Edit tag" });
   const staleDelete = stalePanel.getByRole("button", { name: "Delete" });
   await expect(staleDelete).not.toHaveAttribute("aria-disabled", "true");

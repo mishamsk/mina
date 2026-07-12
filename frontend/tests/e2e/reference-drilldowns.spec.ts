@@ -1,4 +1,10 @@
-import { expect, type Page, type Route, test } from "@playwright/test";
+import {
+  expect,
+  type Locator,
+  type Page,
+  type Route,
+  test,
+} from "@playwright/test";
 
 interface AccountFixture {
   readonly account_id: number;
@@ -72,6 +78,22 @@ const createCategory = async (
   return (await response.json()) as CategoryFixture;
 };
 
+const createAccount = async (
+  page: Page,
+  fqn: string,
+): Promise<AccountFixture> => {
+  const response = await page.request.post("/api/accounts", {
+    data: {
+      account_type: "balance",
+      currency: "USD",
+      fqn,
+      is_hidden: false,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as AccountFixture;
+};
+
 const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
   const response = await page.request.post("/api/tags", {
     data: { fqn },
@@ -90,6 +112,73 @@ const createMember = async (
   expect(response.ok()).toBe(true);
   return (await response.json()) as MemberFixture;
 };
+
+const expectReferenceRowActivation = async (
+  page: Page,
+  {
+    destination,
+    row,
+    sourcePath,
+  }: {
+    readonly destination: RegExp | string;
+    readonly row: Locator;
+    readonly sourcePath: string;
+  },
+): Promise<void> => {
+  await page.goto(sourcePath);
+  await expect(row).toBeVisible();
+  await row.click();
+  await expect(page).toHaveURL(destination);
+
+  await page.goto(sourcePath);
+  await expect(row).toBeVisible();
+  await row.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(destination);
+
+  await page.goto(sourcePath);
+  await expect(row).toBeVisible();
+  await row.focus();
+  await page.keyboard.press("Space");
+  await expect(page).toHaveURL(destination);
+};
+
+test("reference rows activate their detail and register routes", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const accountPrefix = `E2ERowRoute:${unique}`;
+  const account = await createAccount(page, `${accountPrefix}:Leaf`);
+  const category = await createCategory(page, `E2ERowRoute:${unique}`);
+  const tag = await createTag(page, `E2ERowRoute:${unique}`);
+  const member = await createMember(page, `E2E Row Route ${unique}`);
+
+  await expectReferenceRowActivation(page, {
+    destination: new RegExp(`/accounts/${account.account_id}$`),
+    row: page.getByLabel(`Open account ${account.fqn}`),
+    sourcePath: `/accounts?q=${encodeURIComponent(account.fqn)}`,
+  });
+  await expectReferenceRowActivation(page, {
+    destination: `/accounts/group?prefix=${encodeURIComponent(accountPrefix)}`,
+    row: page.getByLabel(`Open account group ${accountPrefix}`),
+    sourcePath: `/accounts?q=${encodeURIComponent(account.fqn)}`,
+  });
+  await expectReferenceRowActivation(page, {
+    destination: new RegExp(`/categories/${category.category_id}$`),
+    row: page.getByLabel(`Open category ${category.fqn}`),
+    sourcePath: `/categories?q=${encodeURIComponent(category.fqn)}`,
+  });
+  await expectReferenceRowActivation(page, {
+    destination: new RegExp(`/tags/${tag.tag_id}$`),
+    row: page.getByLabel(`Open tag ${tag.fqn}`),
+    sourcePath: `/tags?q=${encodeURIComponent(tag.fqn)}`,
+  });
+  await expectReferenceRowActivation(page, {
+    destination: new RegExp(`/members/${member.member_id}$`),
+    row: page.getByLabel(`Open member ${member.name}`),
+    sourcePath: `/members?q=${encodeURIComponent(member.name)}`,
+  });
+});
 
 const createSpend = async (
   page: Page,

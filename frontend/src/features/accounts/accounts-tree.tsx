@@ -8,7 +8,7 @@ import {
   Trash,
 } from "pixelarticons/react";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { useNavigate } from "react-router";
 
 import type {
   Account,
@@ -57,7 +57,6 @@ interface AccountTreeRow {
   readonly account?: Account;
   readonly depth: number;
   readonly fqn: string;
-  readonly hasChildren: boolean;
 }
 
 type AccountDeleteTarget = {
@@ -129,24 +128,11 @@ export const accountTreeRows = (
     }
   }
 
-  const visibleParentFqns = new Set<string>();
-  for (const nodeFqn of visibleNodeFqns) {
-    const segments = nodeFqn.split(":");
-    for (
-      let segmentIndex = 1;
-      segmentIndex < segments.length;
-      segmentIndex += 1
-    ) {
-      visibleParentFqns.add(segments.slice(0, segmentIndex).join(":"));
-    }
-  }
-
   return [...visibleNodeFqns].sort(compareFqnPath).map((fqn) => {
     return {
       account: visibleAccountByFqn.get(fqn),
       depth: Math.max(0, fqn.split(":").length - 1),
       fqn,
-      hasChildren: visibleParentFqns.has(fqn),
     };
   });
 };
@@ -283,6 +269,7 @@ export const AccountsTree = ({
   search,
   typeFilter,
 }: AccountsTreeProps) => {
+  const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<
     AccountDeleteTarget | undefined
   >();
@@ -553,6 +540,13 @@ export const AccountsTree = ({
                 const rowActions: RowAction[] = account
                   ? [
                       {
+                        icon: <MagicEdit aria-hidden="true" />,
+                        label: "Edit account",
+                        onSelect: (opener: HTMLElement) => {
+                          onEditAccount?.(account, opener);
+                        },
+                      },
+                      {
                         icon: account.is_hidden ? (
                           <EyeOff aria-hidden="true" />
                         ) : (
@@ -640,25 +634,30 @@ export const AccountsTree = ({
                   <tr
                     key={row.fqn}
                     data-testid="accounts-tree-row"
-                    role={account ? "button" : undefined}
-                    tabIndex={account ? 0 : undefined}
+                    role="button"
+                    aria-description="Press Enter or Space to open."
+                    aria-keyshortcuts="Enter Space"
+                    aria-label={
+                      account
+                        ? `Open account ${row.fqn}`
+                        : `Open account group ${row.fqn}`
+                    }
+                    tabIndex={0}
                     className={cn(
                       index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
                       account ? "text-foreground" : "text-muted-foreground",
-                      account &&
-                        "cursor-pointer hover:bg-[var(--color-interactive-bright)]",
-                      !account &&
-                        "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
+                      "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
                     )}
-                    onClick={(event) => {
+                    onClick={() => {
                       if (account) {
-                        onEditAccount?.(account, event.currentTarget);
-                      }
-                    }}
-                    onKeyDown={(event) => {
-                      if (!account) {
+                        void navigate(`/accounts/${account.account_id}`);
                         return;
                       }
+                      void navigate(
+                        `/accounts/group?prefix=${encodeURIComponent(row.fqn)}`,
+                      );
+                    }}
+                    onKeyDown={(event) => {
                       if (
                         isInteractiveTarget(event.target, event.currentTarget)
                       ) {
@@ -666,7 +665,13 @@ export const AccountsTree = ({
                       }
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        onEditAccount?.(account, event.currentTarget);
+                        if (account) {
+                          void navigate(`/accounts/${account.account_id}`);
+                          return;
+                        }
+                        void navigate(
+                          `/accounts/group?prefix=${encodeURIComponent(row.fqn)}`,
+                        );
                       }
                     }}
                   >
@@ -677,56 +682,32 @@ export const AccountsTree = ({
                       >
                         {account ? (
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
-                            <Link
-                              to={`/accounts/${account.account_id}`}
-                              className="focus-visible:outline-ring inline-flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                              }}
+                            <span
+                              data-testid="accounts-tree-fqn"
+                              className="min-w-0"
                             >
-                              <span
-                                data-testid="accounts-tree-fqn"
-                                className="min-w-0"
-                              >
-                                <FqnPath
-                                  collapseAncestors={false}
-                                  focusable={false}
-                                  value={row.fqn}
-                                />
-                              </span>
-                            </Link>
+                              <FqnPath
+                                collapseAncestors={false}
+                                focusable={false}
+                                value={row.fqn}
+                              />
+                            </span>
                             {rowHidden ? (
                               <HiddenRowIndicator label="Hidden account" />
-                            ) : null}
-                            {row.hasChildren ? (
-                              <Link
-                                to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
-                                className="focus-visible:outline-ring border border-[var(--border-ink)] bg-[var(--band)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase shadow-[var(--shadow-chip)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                }}
-                              >
-                                Group
-                              </Link>
                             ) : null}
                           </div>
                         ) : (
                           <div className="flex min-w-0 items-center gap-2">
-                            <Link
-                              to={`/accounts/group?prefix=${encodeURIComponent(row.fqn)}`}
-                              className="focus-visible:outline-ring flex min-w-0 items-center gap-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                            <span
+                              data-testid="accounts-tree-fqn"
+                              className="min-w-0"
                             >
-                              <span
-                                data-testid="accounts-tree-fqn"
-                                className="min-w-0"
-                              >
-                                <FqnPath
-                                  collapseAncestors={false}
-                                  focusable={false}
-                                  value={row.fqn}
-                                />
-                              </span>
-                            </Link>
+                              <FqnPath
+                                collapseAncestors={false}
+                                focusable={false}
+                                value={row.fqn}
+                              />
+                            </span>
                             {rowHidden ? (
                               <HiddenRowIndicator label="Hidden account group" />
                             ) : null}

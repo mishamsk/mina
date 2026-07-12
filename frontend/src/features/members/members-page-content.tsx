@@ -1,5 +1,6 @@
 import { MagicEdit, Reload, Trash } from "pixelarticons/react";
 import { useCallback, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 
 import { deleteLedgerMemberById, type Member } from "@/api";
 import { type RowAction, RowActions } from "@/components/row-actions";
@@ -94,6 +95,7 @@ const MembersList = ({
   readonly onNotice: (message: string) => void;
   readonly search: string;
 }) => {
+  const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<
     MemberDeleteTarget | undefined
   >();
@@ -233,12 +235,12 @@ const MembersList = ({
                   index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
                   memberListClickableRowClassName,
                 )}
-                aria-description="Press Enter or Space to edit."
+                aria-description="Press Enter or Space to open."
                 aria-keyshortcuts="Enter Space"
-                aria-label={`Edit member ${member.name}`}
+                aria-label={`Open member ${member.name}`}
                 tabIndex={0}
-                onClick={(event) => {
-                  onEditMember(member, event.currentTarget);
+                onClick={() => {
+                  void navigate(`/members/${member.member_id}`);
                 }}
                 onKeyDown={(event) => {
                   if (
@@ -251,7 +253,7 @@ const MembersList = ({
                     return;
                   }
                   event.preventDefault();
-                  onEditMember(member, event.currentTarget);
+                  void navigate(`/members/${member.member_id}`);
                 }}
               >
                 <td className="min-w-0 px-3 py-2">

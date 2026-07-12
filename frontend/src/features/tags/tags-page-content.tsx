@@ -1,5 +1,6 @@
 import { Eye, EyeOff, MagicEdit, Trash } from "pixelarticons/react";
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router";
 
 import type { GroupState, Tag } from "@/api";
 import {
@@ -52,6 +53,7 @@ export const TagsPageContent = ({
   search,
   tagsPage,
 }: TagsPageContentProps) => {
+  const navigate = useNavigate();
   const focusFallbackRef = useRef<HTMLDivElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TagDeleteTarget>();
   const [deleteErrorMessage, setDeleteErrorMessage] = useState<
@@ -170,6 +172,13 @@ export const TagsPageContent = ({
     if (row.leaf) {
       return [
         {
+          icon: <MagicEdit aria-hidden="true" />,
+          label: "Edit tag",
+          onSelect: (opener: HTMLElement) => {
+            onEditTag(row.leaf as Tag, opener);
+          },
+        },
+        {
           icon: row.leaf.is_hidden ? (
             <EyeOff aria-hidden="true" />
           ) : (
@@ -266,13 +275,13 @@ export const TagsPageContent = ({
           onRetry={() => {
             void refreshTagsPage();
           }}
-          onRowClick={(row, opener) => {
+          onRowClick={(row) => {
             if (row.leaf) {
-              onEditTag(row.leaf, opener);
+              void navigate(`/tags/${row.leaf.tag_id}`);
             }
           }}
           renderActions={renderActions}
-          rowActivationLabel={(row) => `Edit tag ${row.fqn}`}
+          rowActivationLabel={(row) => `Open tag ${row.fqn}`}
           rowTestId="tags-tree-row"
           search={search}
         />

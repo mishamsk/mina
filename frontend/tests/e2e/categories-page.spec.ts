@@ -96,7 +96,7 @@ test("category row delete closes the matching open editor", async ({
     .filter({ hasText: category.fqn })
     .first();
   await expect(row).toBeVisible({ timeout: 10_000 });
-  await row.click();
+  await row.getByRole("button", { name: "Edit category" }).click();
   const panel = page.getByRole("dialog", { name: "Edit category" });
   await expect(panel).toBeVisible();
   await expect(panel).toBeFocused();
@@ -547,7 +547,7 @@ test("categories side panel creates edits and deletes categories with conflict f
     .first();
   await expect(createdRow).toBeVisible({ timeout: 10_000 });
   await expect(createdRow).toContainText("Income");
-  await createdRow.click();
+  await createdRow.getByRole("button", { name: "Edit category" }).click();
 
   const editPanel = page.getByRole("dialog", { name: "Edit category" });
   await expect(editPanel).toBeVisible();
@@ -578,7 +578,7 @@ test("categories side panel creates edits and deletes categories with conflict f
     .first();
   await expect(hiddenRow).toBeVisible({ timeout: 10_000 });
   await expect(hiddenRow.getByLabel("Hidden item")).toBeVisible();
-  await hiddenRow.click();
+  await hiddenRow.getByRole("button", { name: "Edit category" }).click();
   const hiddenEditPanel = page.getByRole("dialog", { name: "Edit category" });
   await hiddenEditPanel.getByRole("button", { name: "Delete" }).click();
   const deleteDialog = page.getByRole("alertdialog", {
@@ -607,7 +607,7 @@ test("categories side panel creates edits and deletes categories with conflict f
     .filter({ hasText: "Groceries" })
     .first();
   await expect(groceriesRow).toBeVisible({ timeout: 10_000 });
-  await groceriesRow.click();
+  await groceriesRow.getByRole("button", { name: "Edit category" }).click();
   const groceriesPanel = page.getByRole("dialog", { name: "Edit category" });
   const groceriesDelete = groceriesPanel.getByRole("button", {
     name: "Delete",
@@ -633,7 +633,7 @@ test("categories side panel creates edits and deletes categories with conflict f
     .filter({ hasText: staleFqn })
     .first();
   await expect(staleRow).toBeVisible({ timeout: 10_000 });
-  await staleRow.click();
+  await staleRow.getByRole("button", { name: "Edit category" }).click();
   const stalePanel = page.getByRole("dialog", { name: "Edit category" });
   const staleDelete = stalePanel.getByRole("button", { name: "Delete" });
   await expect(staleDelete).not.toHaveAttribute("aria-disabled", "true");

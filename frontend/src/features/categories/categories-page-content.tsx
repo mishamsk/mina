@@ -1,5 +1,6 @@
 import { Eye, EyeOff, MagicEdit, Trash } from "pixelarticons/react";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 
 import type { Category, GroupState } from "@/api";
 import {
@@ -63,6 +64,7 @@ export const CategoriesPageContent = ({
   onRestructurePath,
   search,
 }: CategoriesPageContentProps) => {
+  const navigate = useNavigate();
   const [deleteTarget, setDeleteTarget] = useState<
     CategoryDeleteTarget | undefined
   >();
@@ -176,6 +178,13 @@ export const CategoriesPageContent = ({
     if (row.leaf) {
       return [
         {
+          icon: <MagicEdit aria-hidden="true" />,
+          label: "Edit category",
+          onSelect: (opener: HTMLElement) => {
+            onEditCategory(row.leaf as Category, opener);
+          },
+        },
+        {
           icon: row.leaf.is_hidden ? (
             <EyeOff aria-hidden="true" />
           ) : (
@@ -271,14 +280,14 @@ export const CategoriesPageContent = ({
           onRetry={() => {
             void refreshCategoriesPage();
           }}
-          onRowClick={(row, opener) => {
+          onRowClick={(row) => {
             if (row.leaf) {
-              onEditCategory(row.leaf, opener);
+              void navigate(`/categories/${row.leaf.category_id}`);
             }
           }}
           renderActions={renderActions}
           renderBadge={renderCategoryBadge}
-          rowActivationLabel={(row) => `Edit category ${row.fqn}`}
+          rowActivationLabel={(row) => `Open category ${row.fqn}`}
           rowTestId="categories-tree-row"
           search={search}
         />

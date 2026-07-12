@@ -155,7 +155,7 @@ test("members side panel creates renames and deletes members with conflict feedb
     .filter({ hasText: originalName })
     .first();
   await expect(originalRow).toBeVisible({ timeout: 10_000 });
-  await originalRow.click();
+  await originalRow.getByRole("button", { name: "Edit member" }).click();
 
   const editPanel = page.getByRole("dialog", { name: "Edit member" });
   await expect(editPanel).toBeVisible();
@@ -203,7 +203,7 @@ test("members side panel creates renames and deletes members with conflict feedb
     .filter({ hasText: deleteName })
     .first();
   await expect(deleteRow).toBeVisible({ timeout: 10_000 });
-  await deleteRow.click();
+  await deleteRow.getByRole("button", { name: "Edit member" }).click();
   const deletePanel = page.getByRole("dialog", { name: "Edit member" });
   await deletePanel.getByRole("button", { name: "Delete" }).click();
   const deleteDialog = page.getByRole("alertdialog", {
@@ -232,7 +232,7 @@ test("members side panel creates renames and deletes members with conflict feedb
     .filter({ hasText: renamedName })
     .first();
   await expect(renamedRow).toBeVisible({ timeout: 10_000 });
-  await renamedRow.click();
+  await renamedRow.getByRole("button", { name: "Edit member" }).click();
   const renamedPanel = page.getByRole("dialog", { name: "Edit member" });
   await expect(
     renamedPanel.getByRole("button", { name: "Delete" }),
@@ -309,11 +309,13 @@ test("member row actions edit and delete without activating the row", async ({
   await page.keyboard.press("Enter");
   const editPanel = page.getByRole("dialog", { name: "Edit member" });
   await expect(editPanel).toBeVisible();
+  await expect(page).toHaveURL(`/members?q=${encodeURIComponent(name)}`);
   await editPanel.getByRole("button", { name: "Close member panel" }).click();
   await expect(editPanel).toBeHidden();
 
   await deleteAction.click();
   await expect(editPanel).toBeHidden();
+  await expect(page).toHaveURL(`/members?q=${encodeURIComponent(name)}`);
   const deleteDialog = page.getByRole("alertdialog", {
     name: "Delete member",
   });
@@ -395,7 +397,7 @@ test("member row delete closes the matching open editor and leaves it open on Es
     .filter({ hasText: member.name })
     .first();
   await expect(row).toBeVisible({ timeout: 10_000 });
-  await row.click();
+  await row.getByRole("button", { name: "Edit member" }).click();
   const panel = page.getByRole("dialog", { name: "Edit member" });
   await expect(panel).toBeVisible();
   await expect(panel).toBeFocused();
@@ -480,7 +482,7 @@ test("member delete affordances respect the API deleteability signal", async ({
     page.getByRole("alertdialog", { name: "Delete member" }),
   ).toBeHidden();
 
-  await blockedRow.click();
+  await blockedRow.getByRole("button", { name: "Edit member" }).click();
   const blockedPanel = page.getByRole("dialog", { name: "Edit member" });
   const blockedPanelDelete = blockedPanel.getByRole("button", {
     name: "Delete",
