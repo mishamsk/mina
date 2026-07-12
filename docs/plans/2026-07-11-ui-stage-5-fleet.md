@@ -80,7 +80,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 
 ### Reference tables
 
-- [ ] Task 13: `r4yb` — Row actions always visible; overflow dot menu on narrow; drop Actions header (base design change before all other reference-table work; doc amendment: supersedes the webui-design action-visibility/fold rule) — branch `r4yb-always-visible-row-actions`
+- [x] Task 13: `r4yb` — Row actions always visible; overflow dot menu on narrow; drop Actions header (base design change before all other reference-table work; doc amendment: supersedes the webui-design action-visibility/fold rule) — branch `r4yb-always-visible-row-actions`
 - [ ] Task 14: `6pdf` — Make reference-table rows open read-only detail (former blocker sw33 closed; after Task 13 so edit-as-trailing-action coordinates with always-visible RowActions per the issue comment) — branch `6pdf-row-opens-detail`
 - [ ] Task 15: `qkss` — Replace full-width one-column Members and Tags tables with compact layouts (former blocker sw33 closed; after Tasks 13–14 so the compact layout embeds the final RowActions and row-activation semantics) — branch `qkss-compact-members-tags`
 - [ ] Task 16: `jrqp` — Disabled row-action buttons need a real disabled affordance + `f9c5` — Reference-table indicator polish: filled star glyph and hidden-eye alignment (grouped small reference-table visual fixes after the layout work settles; f9c5 reserves the categories/tags star slot enabled by Task 5; conditional doc amendment: arcade button rules if jrqp changes them) — branch `jrqp-row-action-affordances`
