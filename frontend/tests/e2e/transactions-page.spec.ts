@@ -1363,6 +1363,88 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   expect(finalToolbarBox?.height).toBe(initialToolbarRowBox?.height);
 });
 
+test("transactions filter toolbar suppresses open-control tooltips and supports Tab traversal", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/transactions?page=1&pageSize=50");
+  const searchInput = page.getByRole("searchbox", { name: "Search" });
+  const previousDayButton = page.getByRole("button", {
+    name: "Previous day",
+  });
+  const dateJumpInput = page.getByLabel("Go to day");
+  const nextDayButton = page.getByRole("button", { name: "Next day" });
+  const todayButton = page.getByRole("button", { name: "Today" });
+  const classFilter = page.getByLabel("Class");
+  const filterToggle = page.getByRole("button", { name: "Open filters" });
+  const filterTooltip = page
+    .getByRole("tooltip")
+    .filter({ hasText: "Open filters" });
+  const tabTo = async (target: Locator) => {
+    await page.keyboard.press("Tab");
+    await expect(target).toBeFocused();
+  };
+
+  await filterToggle.hover();
+  await expect(filterTooltip).toBeVisible();
+  await page.mouse.move(0, 0);
+  await expect(filterTooltip).toBeHidden();
+
+  if (testInfo.project.name === "webkit") {
+    await filterToggle.click();
+    await expect(
+      page.getByTestId("transaction-browser-filter-bar"),
+    ).toBeVisible();
+    const addFilterButton = page.getByRole("button", { name: "Add filter" });
+    const addFilterTooltip = page
+      .getByRole("tooltip")
+      .filter({ hasText: "Add filter" });
+    await addFilterButton.hover();
+    await expect(addFilterTooltip).toBeVisible();
+    await addFilterButton.click();
+    await expect(page.locator('[data-slot="popover-content"]')).toBeVisible();
+    await addFilterButton.hover();
+    await page.waitForTimeout(200);
+    await expect(addFilterTooltip).toBeHidden();
+    return;
+  }
+
+  await searchInput.press("Tab");
+  await expect(previousDayButton).toBeFocused();
+  await tabTo(dateJumpInput);
+  await tabTo(nextDayButton);
+  await tabTo(todayButton);
+  await tabTo(classFilter);
+  await tabTo(filterToggle);
+  await page.keyboard.press("Enter");
+
+  const closeFilterButton = page.getByRole("button", {
+    name: "Close filters",
+  });
+  await expect(
+    page.getByTestId("transaction-browser-filter-bar"),
+  ).toBeVisible();
+  await closeFilterButton.hover();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Close filters" }),
+  ).toBeVisible();
+
+  await page.keyboard.press("Tab");
+  const addFilterButton = page.getByRole("button", { name: "Add filter" });
+  await expect(addFilterButton).toBeFocused();
+  const addFilterTooltip = page
+    .getByRole("tooltip")
+    .filter({ hasText: "Add filter" });
+  await addFilterButton.hover();
+  await expect(addFilterTooltip).toBeVisible();
+  await page.mouse.move(0, 0);
+  await expect(addFilterTooltip).toBeHidden();
+  await addFilterButton.click();
+  await expect(page.locator('[data-slot="popover-content"]')).toBeVisible();
+  await addFilterButton.hover();
+  await page.waitForTimeout(200);
+  await expect(addFilterTooltip).toBeHidden();
+});
+
 test("filter X dismiss clears chips while retaining standing search and class filters", async ({
   page,
 }) => {
@@ -1641,6 +1723,9 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   await expect(
     page.getByText(landedTransaction.display_title).first(),
   ).toBeVisible();
+  await expect(
+    page.locator(`[data-date-jump-anchor="${jumpDate}"]`),
+  ).toBeVisible();
   expect(
     transactionRequestUrls.filter((requestUrl) => {
       const url = new URL(requestUrl);
@@ -1700,6 +1785,7 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   });
   await dateJump.fill(anchorDate);
   await anchorResponse;
+  await expect(previousDayButton).toBeEnabled();
 
   const previousResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -1719,6 +1805,7 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   await expect(
     page.getByText(previousPage.transactions[0]!.display_title).first(),
   ).toBeVisible();
+  await expect(nextDayButton).toBeEnabled();
 
   const nextResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -1751,6 +1838,7 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   const noAnchorPage = (await (
     await noAnchorResponse
   ).json()) as TransactionListFixture;
+  await expect(nextDayButton).toBeEnabled();
   await expect(dateJump).toHaveValue(yesterday);
   await expectTransactionsPageUrl(
     page,
@@ -1768,6 +1856,7 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   await nextDayButton.focus();
   await page.keyboard.press("Enter");
   await todayResponse;
+  await expect(nextDayButton).toBeEnabled();
   await expect(dateJump).toHaveValue(today);
   await expect(nextDayButton).toBeEnabled();
 
@@ -1782,6 +1871,104 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
   await tomorrowResponse;
   await expect(dateJump).toHaveValue(tomorrow);
   await expect(nextDayButton).toBeEnabled();
+});
+
+test("transactions page repositions a same-page day jump, then keeps stepping and offers Today", async ({
+  page,
+}) => {
+  const mishaReviewDate = "2026-05-27";
+  const previousDate = shiftLocalDate(mishaReviewDate, -1);
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  const dateJump = page.getByLabel("Go to day");
+  const samePageJumpResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === mishaReviewDate
+    );
+  });
+
+  await dateJump.fill(mishaReviewDate);
+  const samePageJump = (await (
+    await samePageJumpResponse
+  ).json()) as TransactionListFixture;
+  expect(samePageJump.offset).toBe(0);
+  const samePageJumpAnchor = page.locator(
+    `[data-date-jump-anchor="${mishaReviewDate}"]`,
+  );
+  await expect(samePageJumpAnchor).toBeVisible();
+  const samePageJumpBounds = await page
+    .getByTestId("transactions-table-scroll")
+    .evaluate((container, anchorDate) => {
+      const row = container.querySelector(
+        `[data-date-jump-anchor="${anchorDate}"]`,
+      );
+      if (!row) {
+        return undefined;
+      }
+
+      const containerRect = container.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      return {
+        containerBottom: containerRect.bottom,
+        containerLeft: containerRect.left,
+        containerRight: containerRect.right,
+        containerTop: containerRect.top,
+        rowBottom: rowRect.bottom,
+        rowLeft: rowRect.left,
+        rowRight: rowRect.right,
+        rowTop: rowRect.top,
+      };
+    }, mishaReviewDate);
+  expect(samePageJumpBounds).toBeDefined();
+  expect(samePageJumpBounds!.rowTop).toBeGreaterThanOrEqual(
+    samePageJumpBounds!.containerTop - 1,
+  );
+  expect(samePageJumpBounds!.rowBottom).toBeLessThanOrEqual(
+    samePageJumpBounds!.containerBottom + 1,
+  );
+  expect(samePageJumpBounds!.rowLeft).toBeGreaterThanOrEqual(
+    samePageJumpBounds!.containerLeft - 1,
+  );
+  expect(samePageJumpBounds!.rowRight).toBeLessThanOrEqual(
+    samePageJumpBounds!.containerRight + 1,
+  );
+
+  const previousResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === previousDate
+    );
+  });
+  await page.getByRole("button", { name: "Previous day" }).click();
+  await previousResponse;
+  await expect(dateJump).toHaveValue(previousDate);
+
+  await expect(page.getByRole("button", { name: "Today" })).toBeVisible();
+
+  const today = formatLocalDate(new Date());
+  const todayResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === today
+    );
+  });
+  await page.getByRole("button", { name: "Today" }).click();
+  const todayPage = (await (
+    await todayResponse
+  ).json()) as TransactionListFixture;
+  await expect(dateJump).toHaveValue(today);
+  await expectTransactionsPageUrl(
+    page,
+    Math.floor(todayPage.offset / 50) + 1,
+    50,
+  );
+  await expect(
+    page.locator(`[data-date-jump-anchor="${today}"]`),
+  ).toBeVisible();
 });
 
 test("transactions page collapses low-priority columns instead of scrolling horizontally", async ({

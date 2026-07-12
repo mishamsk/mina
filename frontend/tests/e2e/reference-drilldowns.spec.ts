@@ -174,6 +174,19 @@ test("category drill-down direct navigation, view-all, refresh, not-found, and d
   await expect(page.getByText("Expense")).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
 
+  const dateJumpResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === "2025-01-02"
+    );
+  });
+  await page.getByLabel("Go to day").fill("2025-01-02");
+  await dateJumpResponse;
+  await expect(
+    page.locator('[data-date-jump-anchor="2025-01-02"]'),
+  ).toBeVisible();
+
   await page.getByRole("button", { name: "Open filters" }).click();
   await expect(
     page.getByTestId("transaction-browser-filter-bar"),

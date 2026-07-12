@@ -165,7 +165,8 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Filter bar pattern: a Filter toggle in the toolbar row opens a dedicated full-width filter bar directly beneath it; the "Add filter" menu and the accumulated removable typed filter chips live in that bar and never inflate the toolbar row. Filter dimensions: account, category, tag, member, amount range, date range (initiated/pending/posted), posting status, reconciliation status.
 - While the filter bar is open, the Filter toggle renders as an X (close) icon button; activating it dismisses the bar and clears every chip-backed filter dimension. Standing toolbar controls — search and the class dropdown — are unaffected by the X and clear only through their own affordances.
 - The filter bar opens automatically when a view loads with, or gains, chip-backed filters (deep links, chip activation).
-- Day-step controls are square icon buttons with chevrons only, flanking the go-to-day date input.
+- Day-step controls are square icon buttons with chevrons only, flanking the go-to-day date input, plus a Today shortcut that returns the view to the current day.
+- Jumping to a day lands the view on the page containing that day when possible; if the day has no transactions, it falls back to the first transaction at or before that day, clamping at list boundaries as needed, and brings the target row into view with a transient highlight. Day-stepping keeps working after any jump.
 - Transaction class is a primary classification: it filters from a standing toolbar dropdown beside search and date jump, not from the Add-filter menu; the dropdown owns the URL-backed class state.
 
 ### Inline editing — the uniformity rule

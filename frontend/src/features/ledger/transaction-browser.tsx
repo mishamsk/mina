@@ -53,6 +53,10 @@ import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
 
 interface TransactionBrowserProps {
+  readonly dateJumpAnchor?: {
+    readonly date: string;
+    readonly page: number;
+  };
   readonly errorMessage: string | undefined;
   readonly hasNextPage: boolean;
   readonly loading: boolean;
@@ -83,6 +87,14 @@ const recordDisplayAmount = (record: JournalRecord): DisplayAmount => ({
   amount: record.amount,
   currency: record.currency,
 });
+
+const dateJumpTargetTransaction = (
+  transactions: readonly Transaction[],
+  anchorDate: string,
+): Transaction | undefined =>
+  transactions.find(
+    (transaction) => transaction.initiated_date <= anchorDate,
+  ) ?? transactions.at(-1);
 
 const EmptyStateSprite = () => (
   <svg
@@ -434,6 +446,7 @@ const RecordsTable = ({
 );
 
 export const TransactionBrowser = ({
+  dateJumpAnchor,
   errorMessage,
   hasNextPage,
   loading,
@@ -466,8 +479,14 @@ export const TransactionBrowser = ({
     string | undefined
   >();
   const [deleting, setDeleting] = useState(false);
+  const [dateJumpHighlight, setDateJumpHighlight] = useState<{
+    readonly date: string;
+    readonly transactionId: number;
+  }>();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const deletedRowFocusIndexRef = useRef<number | undefined>(undefined);
+  const consumedDateJumpAnchorRef =
+    useRef<TransactionBrowserProps["dateJumpAnchor"]>(undefined);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
 
   useEffect(() => {
@@ -542,6 +561,58 @@ export const TransactionBrowser = ({
       focusWithoutTooltip(target, { preventScroll: true });
     });
   }, [deleteDialog, transactions]);
+
+  useEffect(() => {
+    if (!dateJumpAnchor) {
+      consumedDateJumpAnchorRef.current = undefined;
+      const timeout = window.setTimeout(() => {
+        setDateJumpHighlight(undefined);
+      });
+      return () => {
+        window.clearTimeout(timeout);
+      };
+    }
+
+    if (
+      consumedDateJumpAnchorRef.current === dateJumpAnchor ||
+      dateJumpAnchor.page !== page ||
+      !transactions
+    ) {
+      return;
+    }
+
+    const transaction = dateJumpTargetTransaction(
+      transactions,
+      dateJumpAnchor.date,
+    );
+    if (!transaction) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const row = rootRef.current?.querySelector<HTMLElement>(
+        `[data-transaction-id="${transaction.transaction_id}"]`,
+      );
+      if (!row) {
+        return;
+      }
+
+      consumedDateJumpAnchorRef.current = dateJumpAnchor;
+      row.scrollIntoView({ block: "center" });
+      setDateJumpHighlight({
+        date: dateJumpAnchor.date,
+        transactionId: transaction.transaction_id,
+      });
+    });
+    const timeout = window.setTimeout(() => {
+      setDateJumpHighlight(undefined);
+    }, 2_000);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [dateJumpAnchor, page, transactions]);
 
   if (loading && !transactions) {
     return <LoadingRows />;
@@ -677,9 +748,19 @@ export const TransactionBrowser = ({
                       transactionIndex % 2 === 0
                         ? "bg-card"
                         : "bg-[var(--band)]",
+                      dateJumpHighlight?.transactionId ===
+                        transaction.transaction_id &&
+                        "outline-2 outline-offset-[-2px] outline-[var(--ring)]",
                       lineInactive && "text-muted-foreground line-through",
                     )}
                     aria-expanded={expanded}
+                    data-date-jump-anchor={
+                      dateJumpHighlight?.transactionId ===
+                      transaction.transaction_id
+                        ? dateJumpHighlight.date
+                        : undefined
+                    }
+                    data-transaction-id={transaction.transaction_id}
                     data-transaction-row="true"
                     tabIndex={0}
                     onClick={(event) => {

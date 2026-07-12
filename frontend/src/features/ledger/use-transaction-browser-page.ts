@@ -54,10 +54,12 @@ export const useTransactionBrowserPage = ({
   );
   const {
     cancelDateJump,
+    dateJumpAnchor,
     dateJumpLoading,
     dateJumpValue,
     jumpToAdjacentDate,
     jumpToDate,
+    jumpToToday,
     setDateJumpValue,
   } = useTransactionDateJump({
     page,
@@ -168,6 +170,14 @@ export const useTransactionBrowserPage = ({
     [jumpToAdjacentDate],
   );
 
+  const jumpToCurrentDate = useCallback(
+    (trigger: HTMLButtonElement) => {
+      dateJumpFocusRestoreRef.current = trigger;
+      jumpToToday();
+    },
+    [jumpToToday],
+  );
+
   const changeDateJumpValue = useCallback(
     (value: string) => {
       setDateJumpValue(value);
@@ -179,6 +189,7 @@ export const useTransactionBrowserPage = ({
   return {
     cancelDateJump,
     changeDateJumpValue,
+    dateJumpAnchor,
     dateJumpLoading,
     dateJumpValue,
     deleteTransactionFromRow,
@@ -186,6 +197,7 @@ export const useTransactionBrowserPage = ({
     dismissNotice,
     errorMessage,
     jumpToNextDate,
+    jumpToCurrentDate,
     jumpToPreviousDate,
     loading,
     lookups,

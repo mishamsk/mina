@@ -718,7 +718,7 @@ export const TransactionFilterControls = ({
           }
         }}
       >
-        <AppTooltip asChild label="Add filter">
+        <AppTooltip asChild disabled={open} label="Add filter">
           <PopoverTrigger asChild>
             <Button
               ref={addFilterTriggerRef}

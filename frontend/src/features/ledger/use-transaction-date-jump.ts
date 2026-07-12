@@ -43,6 +43,11 @@ interface UseTransactionDateJumpOptions {
   readonly setSearchParams: SetURLSearchParams;
 }
 
+export interface TransactionDateJumpAnchor {
+  readonly date: string;
+  readonly page: number;
+}
+
 export const useTransactionDateJump = ({
   page,
   pageSize,
@@ -52,16 +57,19 @@ export const useTransactionDateJump = ({
 }: UseTransactionDateJumpOptions) => {
   const [dateJumpValue, setDateJumpValue] = useState("");
   const [dateJumpLoading, setDateJumpLoading] = useState(false);
+  const [dateJumpAnchor, setDateJumpAnchor] =
+    useState<TransactionDateJumpAnchor>();
   const activeDateJumpIdRef = useRef(0);
 
   const cancelDateJump = useCallback(() => {
     activeDateJumpIdRef.current += 1;
     setDateJumpLoading(false);
+    setDateJumpAnchor(undefined);
   }, []);
 
   const jumpToDate = useCallback(
     async (anchorDate: string) => {
-      if (!isoDatePattern.test(anchorDate) || dateJumpLoading) {
+      if (!isoDatePattern.test(anchorDate)) {
         return;
       }
 
@@ -88,6 +96,7 @@ export const useTransactionDateJump = ({
         }
 
         const landedPage = transactionPageFromOffset(result.offset, pageSize);
+        let applied = false;
         setSearchParams((current) => {
           const currentPage = readTransactionPageFromSearchParams(current);
           const currentFilterSignature = transactionFilterSignature(
@@ -105,8 +114,12 @@ export const useTransactionDateJump = ({
           const next = new URLSearchParams(current);
           next.set("page", String(landedPage));
           next.set("pageSize", String(pageSize));
+          applied = true;
           return next;
         });
+        if (applied) {
+          setDateJumpAnchor({ date: anchorDate, page: landedPage });
+        }
       } finally {
         if (activeDateJumpIdRef.current === jumpId) {
           setDateJumpLoading(false);
@@ -114,7 +127,6 @@ export const useTransactionDateJump = ({
       }
     },
     [
-      dateJumpLoading,
       page,
       pageSize,
       params.filters,
@@ -126,23 +138,27 @@ export const useTransactionDateJump = ({
 
   const jumpToAdjacentDate = useCallback(
     (days: -1 | 1) => {
-      if (dateJumpLoading) {
-        return;
-      }
-
       const nextDate = shiftLocalDate(dateJumpValue || todayLocalDate(), days);
       setDateJumpValue(nextDate);
       void jumpToDate(nextDate);
     },
-    [dateJumpLoading, dateJumpValue, jumpToDate],
+    [dateJumpValue, jumpToDate],
   );
+
+  const jumpToToday = useCallback(() => {
+    const today = todayLocalDate();
+    setDateJumpValue(today);
+    void jumpToDate(today);
+  }, [jumpToDate]);
 
   return {
     cancelDateJump,
+    dateJumpAnchor,
     dateJumpLoading,
     dateJumpValue,
     jumpToAdjacentDate,
     jumpToDate,
+    jumpToToday,
     setDateJumpValue,
   };
 };

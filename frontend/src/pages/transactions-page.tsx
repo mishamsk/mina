@@ -229,6 +229,7 @@ export const TransactionsPage = () => {
           <TransactionBrowserToolbar
             dateJumpLoading={browser.dateJumpLoading}
             dateJumpValue={browser.dateJumpValue}
+            onDateJumpToday={browser.jumpToCurrentDate}
             filterControls={
               <TransactionFilterControls
                 filters={filters}
@@ -260,6 +261,7 @@ export const TransactionsPage = () => {
       >
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <TransactionBrowser
+            dateJumpAnchor={browser.dateJumpAnchor}
             errorMessage={browser.errorMessage}
             hasNextPage={
               browser.transactions

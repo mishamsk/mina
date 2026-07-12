@@ -10,7 +10,7 @@
 - Transaction-row lifted record values follow the uniformity rule in `docs/webui-design.md`; member display ignores unattributed records.
 - Transaction detail panel renders a transaction snapshot passed by the owning page.
 - Transaction detail panel owns the tombstone confirmation UI and delegates delete execution to the owning page.
-- `useTransactionBrowserPage` composes shared browser snapshots, date jumps, transaction detail, row tombstones, pagination, and notices; pages supply their URL filter semantics.
+- `useTransactionBrowserPage` composes shared browser snapshots, page-granular date jumps with a transient row anchor, transaction detail, row tombstones, pagination, and notices; pages supply their URL filter semantics.
 - `TransactionBrowserToolbar` owns filter-bar visibility; pages retain URL-filter ownership and supply chip clearing that preserves standing search and class controls.
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.
 - Lookup-backed pickers use bounded REST lists and exclude hidden entities upstream.

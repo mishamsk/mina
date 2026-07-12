@@ -1,4 +1,10 @@
-import { ChevronLeft, ChevronRight, Close, Filter } from "pixelarticons/react";
+import {
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Close,
+  Filter,
+} from "pixelarticons/react";
 import { type ReactNode, useState } from "react";
 
 import { Tooltip as AppTooltip } from "@/components/tooltip";
@@ -30,6 +36,7 @@ interface TransactionBrowserToolbarProps {
   readonly onFilterBarClose?: () => void;
   readonly onDateJumpNext: (trigger: HTMLButtonElement) => void;
   readonly onDateJumpPrevious: (trigger: HTMLButtonElement) => void;
+  readonly onDateJumpToday: (trigger: HTMLButtonElement) => void;
   readonly onDateJumpValueChange: (value: string) => void;
   readonly onSearchChange: (value: string) => void;
   readonly onTransactionClassChange: (value: string) => void;
@@ -47,6 +54,7 @@ export const TransactionBrowserToolbar = ({
   onFilterBarClose,
   onDateJumpNext,
   onDateJumpPrevious,
+  onDateJumpToday,
   onDateJumpValueChange,
   onSearchChange,
   onTransactionClassChange,
@@ -127,6 +135,19 @@ export const TransactionBrowserToolbar = ({
                 <ChevronRight aria-hidden="true" />
               </Button>
             </AppTooltip>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              aria-label="Today"
+              disabled={dateJumpLoading}
+              onClick={(event) => {
+                onDateJumpToday(event.currentTarget);
+              }}
+            >
+              <Calendar data-icon="inline-start" aria-hidden="true" />
+              Today
+            </Button>
           </div>
         </div>
         <div className="flex flex-col gap-1">

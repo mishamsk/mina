@@ -12,6 +12,7 @@ interface TooltipProps {
   readonly asChild?: boolean;
   readonly children: ReactNode;
   readonly className?: string;
+  readonly disabled?: boolean;
   readonly focusable?: boolean;
   readonly label: string;
 }
@@ -47,6 +48,7 @@ export const Tooltip = ({
   asChild = false,
   children,
   className,
+  disabled = false,
   focusable = true,
   label,
 }: TooltipProps) => {
@@ -64,6 +66,11 @@ export const Tooltip = ({
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
+    if (disabled) {
+      setOpen(false);
+      return;
+    }
+
     if (nextOpen && suppressNextOpenRef.current) {
       suppressNextOpenRef.current = false;
       setOpen(false);
@@ -77,7 +84,7 @@ export const Tooltip = ({
   };
 
   return (
-    <TooltipRoot open={open} onOpenChange={handleOpenChange}>
+    <TooltipRoot open={disabled ? false : open} onOpenChange={handleOpenChange}>
       {asChild ? (
         <TooltipTrigger
           asChild

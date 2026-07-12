@@ -430,6 +430,7 @@ export const ReferenceDrilldownPage = ({
       <TransactionBrowserToolbar
         dateJumpLoading={browser.dateJumpLoading}
         dateJumpValue={browser.dateJumpValue}
+        onDateJumpToday={browser.jumpToCurrentDate}
         extraControls={
           showExactOnlyToggle ? (
             <label className="font-heading mt-5 inline-flex min-h-9 items-center gap-2 text-xs font-semibold text-[var(--frame-foreground)] uppercase">
@@ -471,6 +472,7 @@ export const ReferenceDrilldownPage = ({
         tabIndex={-1}
       >
         <TransactionBrowser
+          dateJumpAnchor={browser.dateJumpAnchor}
           errorMessage={browser.errorMessage}
           hasNextPage={
             browser.transactions
