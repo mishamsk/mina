@@ -2,20 +2,20 @@
 
 ## Purpose
 
-- Owns the recurring occurrence review page resource loading, mutation refresh coordination, and occurrence-specific presentation.
+- Owns recurring-definition management, definition lifecycle actions, and the balanced recurring-definition editor.
 
 ## Implicit Contracts
 
-- The review page loads only EXPECTED occurrences in scheduled-date ascending order.
-- Occurrence mutations refresh the review queue and invalidate ledger snapshots because confirm posts generated EXPECTED records and dismiss marks the occurrence dismissed while tombstoning the generated transaction.
-- Definition management stays outside this package.
+- The page lists active definitions in FQN order and refreshes its snapshot after every definition mutation.
+- Confirm-next additionally invalidates transaction, account, overview, and featured-balance snapshots because it posts a generated transaction.
+- The editor submits complete balanced record shapes only; it uses shared ledger lookups and intent-valid account choices but owns recurring schedule and pause-state controls.
 
 ## Boundaries
 
-- Owns: recurring review UI, occurrence action state, and mutation refresh fan-out.
-- Does not own: REST endpoint generation, recurring schedule semantics, transaction classification, or definition create/edit workflows.
+- Owns: definition table/editor UI, definition action state, and definition snapshot refresh coordination.
+- Does not own: REST endpoint generation, recurring schedule semantics, transaction classification, or ledger lookup persistence.
 
 ## Testing Notes
 
-- Frontend e2e tests cover route rendering, sidebar navigation, occurrence actions, empty state, and confirm error feedback.
-- Transaction-page e2e coverage verifies EXPECTED recurring lines remain hidden by default and appear through the explicit Expected posting-status filter.
+- Frontend e2e tests cover seeded definition rendering, create/replace, lifecycle actions, balanced-save gating, row-mapped API errors, cancellation, and confirm-next.
+- Transaction-page e2e coverage verifies EXPECTED recurring lines remain available inline.

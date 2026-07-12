@@ -704,6 +704,8 @@ export type RecurringDefinition = {
     name: string;
     level: number;
     next_due_date: string | null;
+    transaction_class: TransactionClass;
+    display_amounts: Array<DisplayAmount>;
     created_at: string;
     updated_at: string;
     tombstoned_at?: string | null;

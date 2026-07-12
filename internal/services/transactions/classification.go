@@ -22,6 +22,18 @@ func ValidateTransactionClassification(transaction Transaction) error {
 	return err
 }
 
+// LineDisplayAmountsForSemanticRecords derives the transaction class and
+// line-level display amounts from semantic records without requiring a
+// persisted transaction.
+func LineDisplayAmountsForSemanticRecords(records []SemanticRecord) (TransactionClass, []DisplayAmount, error) {
+	classified, err := classifySemanticRecords(records)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return classified.class, lineDisplayAmounts(classified), nil
+}
+
 // SemanticShapeError carries the economic intent whose semantic record shape is invalid.
 type SemanticShapeError struct {
 	Intent categories.CategoryEconomicIntent
@@ -357,6 +369,41 @@ func primaryAmounts(class TransactionClass, components []ClassificationComponent
 	default:
 		return []DisplayAmount{}, nil
 	}
+}
+
+func lineDisplayAmounts(classified transactionClassification) []DisplayAmount {
+	switch classified.class {
+	case TransactionClassTransfer, TransactionClassMixed:
+		return componentDisplayAmounts(classified.components)
+	case TransactionClassCurrencyExchange:
+		for _, component := range classified.components {
+			if component.Intent != categories.CategoryEconomicIntentExchange {
+				continue
+			}
+			for _, amount := range component.Amounts {
+				if amount.Amount.Sign() < 0 {
+					return []DisplayAmount{amount}
+				}
+			}
+			if len(component.Amounts) > 0 {
+				return []DisplayAmount{component.Amounts[0]}
+			}
+		}
+	}
+	if len(classified.primaryAmounts) > 0 {
+		return cloneDisplayAmounts(classified.primaryAmounts)
+	}
+
+	return componentDisplayAmounts(classified.components)
+}
+
+func componentDisplayAmounts(components []ClassificationComponent) []DisplayAmount {
+	amounts := []DisplayAmount{}
+	for _, component := range components {
+		amounts = append(amounts, component.Amounts...)
+	}
+
+	return cloneDisplayAmounts(amounts)
 }
 
 func transactionDisplayTitle(transaction Transaction, class TransactionClass) string {

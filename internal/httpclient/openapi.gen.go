@@ -1403,6 +1403,7 @@ type RecurringDefinition struct {
 	AnchorDate            openapi_types.Date          `json:"anchor_date"`
 	CreatedAt             time.Time                   `json:"created_at"`
 	DefinitionVersion     int64                       `json:"definition_version"`
+	DisplayAmounts        []DisplayAmount             `json:"display_amounts"`
 	Fqn                   string                      `json:"fqn"`
 	Level                 int                         `json:"level"`
 	Name                  string                      `json:"name"`
@@ -1414,9 +1415,10 @@ type RecurringDefinition struct {
 	ScheduleClass         RecurringScheduleClass      `json:"schedule_class"`
 
 	// ScheduleRule Versioned recurring schedule payload validated by the recurring service.
-	ScheduleRule RecurringScheduleRule `json:"schedule_rule"`
-	TombstonedAt *time.Time            `json:"tombstoned_at,omitempty"`
-	UpdatedAt    time.Time             `json:"updated_at"`
+	ScheduleRule     RecurringScheduleRule `json:"schedule_rule"`
+	TombstonedAt     *time.Time            `json:"tombstoned_at,omitempty"`
+	TransactionClass TransactionClass      `json:"transaction_class"`
+	UpdatedAt        time.Time             `json:"updated_at"`
 }
 
 // RecurringDefinitionDeferRequest defines model for RecurringDefinitionDeferRequest.

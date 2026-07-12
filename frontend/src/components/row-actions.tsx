@@ -19,6 +19,8 @@ export interface RowActionButton {
 }
 
 export interface RowActionToggle {
+  readonly disabled?: boolean;
+  readonly disabledReason?: string;
   readonly icon: ReactNode;
   readonly kind: "toggle";
   readonly label: string;
@@ -27,8 +29,14 @@ export interface RowActionToggle {
   readonly slot?: RowActionIndicatorSlot;
 }
 
-export type RowAction = RowActionButton | RowActionToggle;
+export interface RowActionPlaceholder {
+  readonly kind: "placeholder";
+}
+
+export type RowAction =
+  RowActionButton | RowActionPlaceholder | RowActionToggle;
 export type RowActionIndicatorSlot = "featured" | "hidden";
+type ActionableRowAction = RowActionButton | RowActionToggle;
 
 interface RowActionsProps {
   readonly actions?: readonly RowAction[];
@@ -51,15 +59,26 @@ const toggleButtonClassName =
 
 const indicatorSlotClassName = "row-actions-indicator-slot size-7 shrink-0";
 
-const isButtonAction = (action: RowAction): action is RowActionButton =>
-  action.kind !== "toggle";
+const isButtonAction = (
+  action: ActionableRowAction,
+): action is RowActionButton => action.kind !== "toggle";
+
+const isPlaceholderAction = (
+  action: RowAction,
+): action is RowActionPlaceholder => action.kind === "placeholder";
+
+const isActionable = (action: RowAction): action is ActionableRowAction =>
+  !isPlaceholderAction(action);
+
+const isActionDisabled = (action: ActionableRowAction): boolean =>
+  Boolean(action.disabled);
 
 const selectAction = (
-  action: RowAction,
+  action: ActionableRowAction,
   opener: HTMLElement,
   close?: () => void,
 ) => {
-  if (isButtonAction(action) && action.disabled) {
+  if (isActionDisabled(action)) {
     return;
   }
   if (isButtonAction(action)) {
@@ -90,9 +109,10 @@ export const RowActions = ({
   }
   const selectedIndicatorActions = new Set<RowAction>(slottedActions.values());
   const nonIndicatorActions = actions.filter(
-    (action) => !selectedIndicatorActions.has(action),
+    (action) =>
+      !isPlaceholderAction(action) && !selectedIndicatorActions.has(action),
   );
-  const orderedActions = indicatorSlots
+  const primaryActions = indicatorSlots
     ? [
         ...nonIndicatorActions,
         ...indicatorSlots.flatMap((slot) => {
@@ -101,13 +121,14 @@ export const RowActions = ({
         }),
       ]
     : actions;
-  const primaryActions = indicatorSlots
+  const alignedPrimaryActions = indicatorSlots
     ? [
         ...nonIndicatorActions,
         ...indicatorSlots.map((slot) => slottedActions.get(slot)),
       ]
-    : orderedActions;
-  const actionClusterCount = primaryActions.length;
+    : primaryActions;
+  const orderedActions = primaryActions.filter(isActionable);
+  const actionClusterCount = alignedPrimaryActions.length;
   const overflowOpenRef = useRef(false);
   const onOverflowOpenChangeRef = useRef(onOverflowOpenChange);
   const overflowMenuRef = useRef<HTMLDivElement | null>(null);
@@ -157,8 +178,8 @@ export const RowActions = ({
       data-row-actions-count={actionClusterCount}
     >
       <div className="row-actions-buttons inline-flex items-center justify-end gap-1">
-        {primaryActions.map((action, index) => {
-          if (!action) {
+        {alignedPrimaryActions.map((action, index) => {
+          if (!action || isPlaceholderAction(action)) {
             return (
               <span
                 key={indicatorSlots?.[index]}
@@ -172,7 +193,7 @@ export const RowActions = ({
             <Tooltip
               key={action.label}
               label={
-                isButtonAction(action) && action.disabled
+                isActionDisabled(action)
                   ? (action.disabledReason ?? action.label)
                   : action.label
               }
@@ -184,10 +205,10 @@ export const RowActions = ({
                   variant="outline"
                   size="icon-sm"
                   className={cn(actionButtonClassName)}
-                  aria-disabled={action.disabled ? "true" : undefined}
+                  aria-disabled={isActionDisabled(action) ? "true" : undefined}
                   aria-label={action.label}
                   onMouseDown={(event) => {
-                    if (action.disabled) {
+                    if (isActionDisabled(action)) {
                       event.preventDefault();
                     }
                   }}
@@ -201,11 +222,25 @@ export const RowActions = ({
               ) : (
                 <button
                   type="button"
-                  className={toggleButtonClassName}
+                  className={cn(
+                    toggleButtonClassName,
+                    isActionDisabled(action) &&
+                      "text-muted-foreground hover:text-muted-foreground cursor-not-allowed",
+                  )}
                   aria-label={action.label}
+                  aria-disabled={isActionDisabled(action) ? "true" : undefined}
                   aria-pressed={action.pressed}
+                  onMouseDown={(event) => {
+                    if (isActionDisabled(action)) {
+                      event.preventDefault();
+                    }
+                  }}
                   onClick={(event) => {
                     event.stopPropagation();
+                    if (isActionDisabled(action)) {
+                      event.preventDefault();
+                      return;
+                    }
                     action.onToggle(event.currentTarget);
                   }}
                 >
@@ -272,7 +307,7 @@ export const RowActions = ({
           >
             <div ref={overflowMenuRef} className="flex flex-col gap-1">
               {orderedActions.map((action) => {
-                const disabled = isButtonAction(action) && action.disabled;
+                const disabled = isActionDisabled(action);
                 const button = (
                   <Button
                     key={action.label}

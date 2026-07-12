@@ -278,7 +278,15 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Expected rows carry a distinct visual treatment inline; overdue occurrences (scheduled before today) additionally carry the warning-treatment missed marker per the theme.
 - The filter direction is hide-based: a standing control lets the user HIDE expected/recurring rows from the view; there is no opt-in Expected posting-status filter.
 - Confirm and Dismiss are row actions on expected rows, per the affordance-class rules: Confirm materializes the transaction immediately with the standard toast; Dismiss sits behind the standard named confirmation dialog. Both surface API errors per the standard feedback rules.
-- The `/recurring` page hosts recurring definitions management (create/edit/pause/resume/defer/cancel), not an occurrence review queue; its screen definition lives in this section's definitions-management rules once specified.
+- The `/recurring` page hosts recurring definitions management — the configuration surface for recurring transactions; occurrence review lives inline in Transactions per the rules above.
+
+Definitions management screen:
+
+- Content: one compact table of recurring definitions (shared table rules) — columns: definition (hierarchical FQN path rendering), schedule (human-readable rule summary, e.g. "Every 2 weeks" / "Monthly on the 15th" / "Last day of month"), status (active/paused badge), next (next scheduled date computed from the schedule), amount (definition display amount per the amount rules), and the trailing actions column.
+- Row activation opens the definition editor panel — a deliberate management-surface exception to the reference row-activation rule, because a definition has no read-only detail page; the editor is its detail.
+- Row actions per the affordance-class rules: Confirm next (button; materializes and posts the next occurrence immediately with the standard toast), Pause/Resume (persistent state toggle), Defer (button, interval schedules only, opens a dialog with the offset defaulting to one cadence interval and user-editable), Edit, and Cancel (destructive, behind the standard named confirmation; tombstones the definition, generated history untouched).
+- Editor (side panel, create + edit): FQN, schedule class and fields (interval every-N + unit, or date rule day-of-month/last-day), anchor date, paused state, and the definition's complete balanced record grid reusing the advanced journal editor pieces — per-currency balance meter, intent-valid account pickers, no partial shapes. Save creates or fully replaces the definition (version increments; records replaced atomically); API shape errors map onto the offending rows.
+- Empty state: a quiet "no recurring definitions" presentation with the New definition action.
 
 ### 9. Future screens — guidance only
 

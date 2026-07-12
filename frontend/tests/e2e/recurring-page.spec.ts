@@ -1,437 +1,296 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
-interface AccountFixture {
-  readonly account_id: number;
+interface DefinitionFixture {
+  readonly definition_version: number;
   readonly fqn: string;
-}
-
-interface CategoryFixture {
-  readonly category_id: number;
-  readonly fqn: string;
-}
-
-interface RecurringDefinitionFixture {
+  readonly next_due_date: string | null;
+  readonly paused_at: string | null;
   readonly recurring_definition_id: number;
-  readonly fqn: string;
 }
 
-interface RecurringOccurrenceFixture {
-  readonly generated_transaction_id: number | null;
-  readonly recurring_definition_fqn: string;
-  readonly recurring_occurrence_id: number;
-  readonly recurring_definition_id: number;
-  readonly scheduled_date: string;
-  readonly status: string;
-}
+const uniqueName = (projectName: string): string =>
+  `E2E:Recurring:${projectName.replace(/[^A-Za-z0-9]/g, "")}:${Date.now()}`;
 
-interface RecurringReviewFixture {
-  readonly due: RecurringDefinitionFixture;
-  readonly dueOccurrence: RecurringOccurrenceFixture;
-  readonly dueMerchant: AccountFixture;
-  readonly overdue: RecurringDefinitionFixture;
-  readonly overdueDate: string;
-  readonly overdueOccurrence: RecurringOccurrenceFixture;
-  readonly overdueMerchant: AccountFixture;
-  readonly slug: string;
-  readonly today: string;
-}
-
-const formatLocalDate = (date: Date): string =>
-  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
-    .map((part, index) =>
-      index === 0 ? String(part) : String(part).padStart(2, "0"),
-    )
-    .join("-");
-
-const uniqueSlug = (label: string, projectName: string): string =>
-  `${label}${projectName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-
-const createAccount = async (
-  page: Page,
-  fqn: string,
-  accountType: "balance" | "flow",
-  currency?: string,
-): Promise<AccountFixture> => {
-  const response = await page.request.post("/api/accounts", {
-    data: {
-      account_type: accountType,
-      currency,
-      fqn,
-    },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return (await response.json()) as AccountFixture;
-};
-
-const createCategory = async (
-  page: Page,
-  fqn: string,
-): Promise<CategoryFixture> => {
-  const response = await page.request.post("/api/categories", {
-    data: {
-      economic_intent: "expense",
-      fqn,
-    },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return (await response.json()) as CategoryFixture;
-};
-
-const createRecurringDefinition = async (
-  page: Page,
-  params: {
-    readonly amount: string;
-    readonly anchorDate: string;
-    readonly category: CategoryFixture;
-    readonly checking: AccountFixture;
-    readonly fqn: string;
-    readonly merchant: AccountFixture;
-    readonly memoPrefix: string;
-  },
-): Promise<RecurringDefinitionFixture> => {
-  const response = await page.request.post("/api/recurring-definitions", {
-    data: {
-      anchor_date: params.anchorDate,
-      fqn: params.fqn,
-      schedule_rule: {
-        every: 1,
-        kind: "interval",
-        unit: "YEAR",
-        version: 1,
-      },
-      records: [
-        {
-          account_id: params.checking.account_id,
-          amount: `-${params.amount}`,
-          category_id: params.category.category_id,
-          currency: "USD",
-          memo: `${params.memoPrefix} funding`,
-          tag_ids: [],
-        },
-        {
-          account_id: params.merchant.account_id,
-          amount: params.amount,
-          category_id: params.category.category_id,
-          currency: "USD",
-          memo: `${params.memoPrefix} merchant`,
-          tag_ids: [],
-        },
-      ],
-    },
-  });
-  expect(response.ok(), await response.text()).toBe(true);
-  return (await response.json()) as RecurringDefinitionFixture;
-};
-
-const waitForExpectedOccurrences = async (
-  page: Page,
-  definitions: readonly RecurringDefinitionFixture[],
-): Promise<ReadonlyMap<number, RecurringOccurrenceFixture>> => {
-  const expectedDefinitionIds = new Set(
-    definitions.map((definition) => definition.recurring_definition_id),
-  );
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const response = await page.request.get(
-      "/api/recurring-occurrences?limit=500&offset=0&sort=scheduled_date&sort_dir=asc&status=expected",
-    );
-    if (response.ok()) {
-      const body = (await response.json()) as {
-        readonly recurring_occurrences: readonly RecurringOccurrenceFixture[];
-      };
-      const seenDefinitionIds = new Set(
-        body.recurring_occurrences
-          .filter((occurrence) => occurrence.status === "expected")
-          .map((occurrence) => occurrence.recurring_definition_id),
-      );
-      if (
-        [...expectedDefinitionIds].every((definitionId) =>
-          seenDefinitionIds.has(definitionId),
-        )
-      ) {
-        return new Map(
-          body.recurring_occurrences
-            .filter((occurrence) =>
-              expectedDefinitionIds.has(occurrence.recurring_definition_id),
-            )
-            .map((occurrence) => [
-              occurrence.recurring_definition_id,
-              occurrence,
-            ]),
-        );
-      }
-    }
-    await page.waitForTimeout(150);
-  }
-
-  throw new Error("Expected recurring occurrences were not materialized.");
-};
-
-const dismissExpectedOccurrences = async (
-  page: Page,
-  definitions: readonly RecurringDefinitionFixture[],
-) => {
-  const expectedDefinitionIds = new Set(
-    definitions.map((definition) => definition.recurring_definition_id),
-  );
-  const response = await page.request.get(
-    "/api/recurring-occurrences?limit=500&offset=0&sort=scheduled_date&sort_dir=asc&status=expected",
-  );
-  expect(response.ok(), await response.text()).toBe(true);
-  const body = (await response.json()) as {
-    readonly recurring_occurrences: readonly RecurringOccurrenceFixture[];
-  };
-  for (const occurrence of body.recurring_occurrences) {
-    if (!expectedDefinitionIds.has(occurrence.recurring_definition_id)) {
-      continue;
-    }
-    const dismissResponse = await page.request.post(
-      `/api/recurring-occurrences/${occurrence.recurring_occurrence_id}/dismiss`,
-    );
-    expect(dismissResponse.ok(), await dismissResponse.text()).toBe(true);
-  }
-};
-
-const deleteGeneratedTransaction = async (
-  page: Page,
-  occurrence: RecurringOccurrenceFixture,
-) => {
-  expect(occurrence.generated_transaction_id).not.toBeNull();
-  const response = await page.request.delete(
-    `/api/transactions/${occurrence.generated_transaction_id}`,
-  );
-  expect(response.ok(), await response.text()).toBe(true);
-};
-
-const seedRecurringReviewFixture = async (
-  page: Page,
-  projectName: string,
-): Promise<RecurringReviewFixture> => {
-  const slug = uniqueSlug("RecurringReview", projectName);
-  const testRunDate = new Date();
-  const today = formatLocalDate(testRunDate);
-  const overdueDate = formatLocalDate(
-    new Date(
-      testRunDate.getFullYear(),
-      testRunDate.getMonth(),
-      testRunDate.getDate() - 1,
-    ),
-  );
-  const checking = await createAccount(
-    page,
-    `e2e:${slug}:Checking`,
-    "balance",
-    "USD",
-  );
-  const overdueMerchant = await createAccount(
-    page,
-    `e2e:${slug}:OverdueMerchant`,
-    "flow",
-  );
-  const dueMerchant = await createAccount(
-    page,
-    `e2e:${slug}:DueMerchant`,
-    "flow",
-  );
-  const category = await createCategory(page, `e2e:${slug}:Recurring`);
-  const overdue = await createRecurringDefinition(page, {
-    amount: "12.34000000",
-    anchorDate: overdueDate,
-    category,
-    checking,
-    fqn: `E2E:${slug}:Overdue`,
-    merchant: overdueMerchant,
-    memoPrefix: `${slug} overdue`,
-  });
-  const due = await createRecurringDefinition(page, {
-    amount: "56.78000000",
-    anchorDate: today,
-    category,
-    checking,
-    fqn: `E2E:${slug}:Due`,
-    merchant: dueMerchant,
-    memoPrefix: `${slug} due`,
-  });
-  const occurrencesByDefinitionId = await waitForExpectedOccurrences(page, [
-    overdue,
-    due,
-  ]);
-  const overdueOccurrence = occurrencesByDefinitionId.get(
-    overdue.recurring_definition_id,
-  );
-  const dueOccurrence = occurrencesByDefinitionId.get(
-    due.recurring_definition_id,
-  );
-  expect(overdueOccurrence).toBeDefined();
-  expect(dueOccurrence).toBeDefined();
-
-  return {
-    due,
-    dueOccurrence: dueOccurrence as RecurringOccurrenceFixture,
-    dueMerchant,
-    overdue,
-    overdueDate,
-    overdueOccurrence: overdueOccurrence as RecurringOccurrenceFixture,
-    overdueMerchant,
-    slug,
-    today,
-  };
-};
-
-const recurringOccurrenceRow = (
-  page: Page,
-  occurrence: RecurringOccurrenceFixture,
-) =>
+const definitionRow = (page: Page, definition: DefinitionFixture) =>
   page.locator(
-    `[data-recurring-occurrence-id="${occurrence.recurring_occurrence_id}"]`,
+    `[data-recurring-definition-id="${definition.recurring_definition_id}"]`,
   );
 
-const expectFixtureRows = async (
-  page: Page,
-  fixture: RecurringReviewFixture,
-) => {
-  const overdueRow = page
-    .getByTestId("recurring-review-row")
-    .and(recurringOccurrenceRow(page, fixture.overdueOccurrence));
-  const dueRow = page
-    .getByTestId("recurring-review-row")
-    .and(recurringOccurrenceRow(page, fixture.dueOccurrence));
-  await expect(overdueRow).toHaveCount(1);
-  await expect(dueRow).toHaveCount(1);
-
-  const fixtureRowIds = await page
-    .getByTestId("recurring-review-row")
-    .evaluateAll((rows) =>
-      rows.map((row) => row.getAttribute("data-recurring-occurrence-id")),
+const rowActionFitState = async (rowActions: Locator) =>
+  rowActions.evaluate((element) => {
+    const overflow = element.querySelector<HTMLElement>(
+      ".row-actions-overflow",
     );
-  const overdueIndex = fixtureRowIds.indexOf(
-    String(fixture.overdueOccurrence.recurring_occurrence_id),
-  );
-  const dueIndex = fixtureRowIds.indexOf(
-    String(fixture.dueOccurrence.recurring_occurrence_id),
-  );
-  expect(overdueIndex).toBeGreaterThanOrEqual(0);
-  expect(dueIndex).toBeGreaterThanOrEqual(0);
-  expect(
-    fixture.overdueOccurrence.scheduled_date <=
-      fixture.dueOccurrence.scheduled_date,
-  ).toBe(true);
-  expect(overdueIndex).toBeLessThan(dueIndex);
+    const primaryActions = Array.from(
+      element.querySelectorAll<HTMLElement>(
+        ".row-actions-buttons :is(.row-actions-button, .row-actions-toggle)",
+      ),
+    );
+    const availableWidth = element.getBoundingClientRect().width;
+    const actionCount = Number(element.dataset.rowActionsCount ?? "0");
+    const fullClusterWidth =
+      actionCount === 0 ? 0 : actionCount * 28 + (actionCount - 1) * 4;
 
-  return { dueRow, overdueRow };
-};
+    return {
+      availableWidth,
+      buttonsFolded: primaryActions.every(
+        (action) => window.getComputedStyle(action).display === "none",
+      ),
+      fullClusterWidth,
+      overflowVisible:
+        overflow !== null &&
+        window.getComputedStyle(overflow).display !== "none",
+    };
+  });
 
-test("recurring page renders seeded demo occurrences", async ({ page }) => {
+const definitionByFqn = async (
+  page: Page,
+  fqn: string,
+): Promise<DefinitionFixture> => {
   const response = await page.request.get(
-    "/api/recurring-occurrences?limit=500&offset=0&sort=scheduled_date&sort_dir=asc&status=expected",
+    "/api/recurring-definitions?limit=500&offset=0&sort=fqn&sort_dir=asc",
   );
   expect(response.ok(), await response.text()).toBe(true);
   const body = (await response.json()) as {
-    readonly recurring_occurrences: readonly RecurringOccurrenceFixture[];
+    readonly recurring_definitions: readonly DefinitionFixture[];
   };
-  const mortgageOccurrence = body.recurring_occurrences.find(
-    (occurrence) =>
-      occurrence.recurring_definition_fqn === "Household:Mortgage" &&
-      occurrence.status === "expected",
+  const definition = body.recurring_definitions.find(
+    (item) => item.fqn === fqn,
   );
-  expect(
-    mortgageOccurrence,
-    "Expected seeded Mortgage occurrence was not materialized.",
-  ).toBeDefined();
+  expect(definition, `${fqn} definition`).toBeDefined();
+  return definition as DefinitionFixture;
+};
 
-  await page.goto("/recurring");
+const selectDefinitionAction = async (
+  page: Page,
+  row: ReturnType<typeof definitionRow>,
+  label: string,
+) => {
+  const inlineAction = row.getByRole("button", { name: label });
+  if (await inlineAction.isVisible().catch(() => false)) {
+    await inlineAction.click();
+    return;
+  }
+  await row.getByRole("button", { name: "More row actions" }).click();
+  await page.getByRole("button", { name: label }).last().click();
+};
 
-  const rows = page.getByTestId("recurring-review-row");
-  const mortgageRow = rows.and(
-    recurringOccurrenceRow(page, mortgageOccurrence!),
-  );
-  await expect(mortgageRow).toHaveCount(1);
-  await expect(mortgageRow).toContainText("Mortgage");
-  await expect(mortgageRow.getByRole("img", { name: "Overdue" })).toBeVisible();
-});
+const completeEditor = async (page: Page, fqn: string) => {
+  await page.getByRole("button", { name: "New definition" }).click();
+  const editor = page.getByRole("complementary", {
+    name: "New recurring definition",
+  });
+  await expect(editor).toBeVisible();
+  await editor.getByLabel("Definition FQN").fill(fqn);
+  const records = editor.getByLabel("Definition records").locator("section");
+  const first = records.nth(0);
+  const second = records.nth(1);
+  await first.getByLabel("Account").fill("checking:Chase:Joint");
+  await first.getByLabel("Account").press("Enter");
+  await first.getByLabel("Amount").fill("-12.34");
+  await first.getByLabel("Category").fill("Entertainment:Books");
+  await first.getByLabel("Category").press("Enter");
+  await second.getByLabel("Account").fill("merchant:Books");
+  await second.getByLabel("Account").press("Enter");
+  await second.getByLabel("Amount").fill("12.34");
+  await second.getByLabel("Category").fill("Entertainment:Books");
+  await second.getByLabel("Category").press("Enter");
+  return editor;
+};
 
-test("recurring page reviews expected occurrences", async ({
+test("recurring definitions table renders seeded definitions and schedule details", async ({
   page,
-}, testInfo) => {
-  const fixture = await seedRecurringReviewFixture(page, testInfo.project.name);
-
+}) => {
   await page.goto("/recurring");
   await expect(page.getByRole("heading", { name: "Recurring" })).toBeVisible();
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Recurring" })).toBeVisible();
-
-  await page.goto("/overview");
-  await page
-    .getByLabel("Primary")
-    .getByRole("link", { name: "Recurring" })
-    .click();
-  await expect(page).toHaveURL(/\/recurring$/);
-
-  const { dueRow, overdueRow } = await expectFixtureRows(page, fixture);
-  await expect(overdueRow).toContainText("Overdue");
-  await expect(overdueRow.getByLabel("Overdue")).toBeVisible();
-  await expect(dueRow).toContainText("Due");
-  await expect(dueRow.getByLabel("Overdue")).toHaveCount(0);
-
-  await overdueRow.getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByText("Occurrence confirmed.")).toBeVisible();
-  await expect(overdueRow).toHaveCount(0);
-
-  await page.goto(
-    `/transactions?q=${encodeURIComponent(fixture.overdueMerchant.fqn.split(":").at(-1) ?? fixture.slug)}`,
-  );
-  await expect(page.locator("[data-transaction-row='true']")).toHaveCount(1);
-  await expect(
-    page.locator("[data-transaction-row='true']").first(),
-  ).toContainText("OverdueMerchant");
-  await deleteGeneratedTransaction(page, fixture.overdueOccurrence);
-
-  await page.goto("/recurring");
-  const remainingDueRow = page
-    .getByTestId("recurring-review-row")
-    .and(recurringOccurrenceRow(page, fixture.dueOccurrence));
-  await expect(remainingDueRow).toHaveCount(1);
-  await remainingDueRow.getByRole("button", { name: "Dismiss" }).click();
-  await expect(
-    page.getByRole("alertdialog", { name: "Dismiss occurrence" }),
-  ).toContainText(fixture.due.fqn);
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await expect(remainingDueRow).toHaveCount(1);
-
-  await remainingDueRow.getByRole("button", { name: "Dismiss" }).click();
-  await page.getByRole("button", { name: "Dismiss occurrence" }).click();
-  await expect(page.getByText("Occurrence dismissed.")).toBeVisible();
-  await expect(remainingDueRow).toHaveCount(0);
+  const table = page.getByTestId("recurring-definitions-table");
+  await expect(table).toBeVisible();
+  await expect(table.getByTestId("recurring-definition-row")).toHaveCount(4);
+  await expect(table).toContainText("Household:Mortgage");
+  await expect(table).toContainText("Every 1 month");
+  await expect(table).toContainText("Active");
+  await expect(table.getByRole("columnheader", { name: "Next" })).toBeVisible();
 });
 
-test("recurring page renders confirm API failures", async ({
+test("recurring definition row actions unfold at desktop width and fold when constrained", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/recurring");
+  const row = page
+    .getByTestId("recurring-definition-row")
+    .filter({ hasText: "Household:Mortgage" });
+  const rowActions = row.locator(".row-actions");
+  await expect(row).toBeVisible();
+  await expect(rowActions).toHaveAttribute("data-row-actions-count", "5");
+  for (const label of [
+    "Edit definition",
+    "Confirm next",
+    "Pause",
+    "Defer",
+    "Cancel definition",
+  ]) {
+    await expect(row.getByRole("button", { name: label })).toBeVisible();
+  }
+  await expect(
+    row.getByRole("button", { name: "More row actions" }),
+  ).toBeHidden();
+  let fit = await rowActionFitState(rowActions);
+  expect(fit.availableWidth).toBeGreaterThanOrEqual(fit.fullClusterWidth);
+  expect(fit.buttonsFolded).toBe(false);
+  expect(fit.overflowVisible).toBe(false);
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  fit = await rowActionFitState(rowActions);
+  expect(fit.availableWidth).toBeLessThan(fit.fullClusterWidth);
+  expect(fit.buttonsFolded).toBe(true);
+  expect(fit.overflowVisible).toBe(true);
+  const overflow = row.getByRole("button", { name: "More row actions" });
+  await expect(overflow).toBeVisible();
+  await overflow.click();
+  const overflowMenu = page.locator(".row-actions-menu:visible");
+  for (const label of [
+    "Edit definition",
+    "Confirm next",
+    "Pause",
+    "Defer",
+    "Cancel definition",
+  ]) {
+    await expect(
+      overflowMenu.getByRole("button", { name: label }),
+    ).toBeVisible();
+  }
+});
+
+test("recurring definitions create, edit, pause, defer, resume, and cancel", async ({
   page,
 }, testInfo) => {
-  const fixture = await seedRecurringReviewFixture(
+  await page.goto("/recurring");
+  const fqn = uniqueName(testInfo.project.name);
+  const editor = await completeEditor(page, fqn);
+  const save = editor.getByRole("button", { name: "Save definition" });
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(page.getByText("Definition created.")).toBeVisible();
+  let definition = await definitionByFqn(page, fqn);
+  const row = definitionRow(page, definition);
+  await expect(row).toContainText("Every 1 month");
+
+  const occurrencesResponse = await page.request.get(
+    `/api/recurring-occurrences?recurring_definition_id=${definition.recurring_definition_id}&limit=500&offset=0`,
+  );
+  expect(occurrencesResponse.ok(), await occurrencesResponse.text()).toBe(true);
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        `/api/recurring-occurrences?recurring_definition_id=${definition.recurring_definition_id}&limit=500&offset=0`,
+      );
+      const body = (await response.json()) as {
+        readonly recurring_occurrences: readonly unknown[];
+      };
+      return body.recurring_occurrences.length;
+    })
+    .toBeGreaterThan(0);
+
+  await row.click();
+  const editPanel = page.getByRole("complementary", {
+    name: "Edit recurring definition",
+  });
+  await editPanel.getByLabel("Every").fill("2");
+  await editPanel.getByRole("button", { name: "Save definition" }).click();
+  await expect(page.getByText("Definition updated.")).toBeVisible();
+  definition = await definitionByFqn(page, fqn);
+  expect(definition.definition_version).toBe(2);
+  await expect(definitionRow(page, definition)).toContainText("Every 2 months");
+
+  await selectDefinitionAction(page, definitionRow(page, definition), "Pause");
+  await expect(page.getByText("Definition paused.")).toBeVisible();
+  definition = await definitionByFqn(page, fqn);
+  expect(definition.paused_at).not.toBeNull();
+  await selectDefinitionAction(page, definitionRow(page, definition), "Resume");
+  await expect(page.getByText("Definition resumed.")).toBeVisible();
+  definition = await definitionByFqn(page, fqn);
+  expect(definition.paused_at).toBeNull();
+
+  const beforeDefer = definition.next_due_date;
+  await selectDefinitionAction(page, definitionRow(page, definition), "Defer");
+  await page.getByRole("button", { name: "Defer definition" }).click();
+  await expect(page.getByText("Next occurrence deferred.")).toBeVisible();
+  definition = await definitionByFqn(page, fqn);
+  expect(definition.next_due_date).not.toBe(beforeDefer);
+
+  await selectDefinitionAction(
     page,
-    `${testInfo.project.name}Failure`,
+    definitionRow(page, definition),
+    "Cancel definition",
   );
-  await page.route("**/api/recurring-occurrences/*/confirm", async (route) => {
+  await expect(
+    page.getByRole("alertdialog", { name: "Cancel recurring definition" }),
+  ).toContainText(fqn);
+  await page.getByRole("button", { name: "Cancel definition" }).last().click();
+  await expect(page.getByText("Definition cancelled.")).toBeVisible();
+  await expect(definitionRow(page, definition)).toHaveCount(0);
+});
+
+test("definition editor gates unbalanced saves, maps row errors, and confirms next", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/recurring");
+  const fqn = uniqueName(`${testInfo.project.name}Errors`);
+  const editor = await completeEditor(page, fqn);
+  const records = editor.getByLabel("Definition records").locator("section");
+  await records.nth(1).getByLabel("Amount").fill("10");
+  await editor.getByRole("button", { name: "Save definition" }).click();
+  await expect(
+    editor.getByText("Every currency must balance to zero."),
+  ).toBeVisible();
+  await records.nth(1).getByLabel("Amount").fill("12.34");
+  await page.route("**/api/recurring-definitions", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
     await route.fulfill({
-      contentType: "application/json",
-      status: 400,
       body: JSON.stringify({
         error: {
           code: "invalid_request",
-          message: "Injected confirm failure",
+          message: "records[0] account is invalid",
         },
       }),
+      contentType: "application/json",
+      status: 400,
     });
   });
-
-  await page.goto("/recurring");
-  const { overdueRow } = await expectFixtureRows(page, fixture);
-  await overdueRow.getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "Occurrence action failed.",
+  await editor.getByRole("button", { name: "Save definition" }).click();
+  await expect(
+    editor.locator("[role=alert]").filter({
+      hasText: "records[0] account is invalid",
+    }),
+  ).toBeVisible();
+  await page.unroute("**/api/recurring-definitions");
+  await editor.getByRole("button", { name: "Save definition" }).click();
+  await expect(page.getByText("Definition created.")).toBeVisible();
+  const definition = await definitionByFqn(page, fqn);
+  await selectDefinitionAction(
+    page,
+    definitionRow(page, definition),
+    "Confirm next",
   );
-  await expect(page.getByRole("alert")).toContainText(
-    "Injected confirm failure",
+  await expect(page.getByText("Next occurrence confirmed.")).toBeVisible();
+  const response = await page.request.get(
+    `/api/recurring-occurrences?recurring_definition_id=${definition.recurring_definition_id}&limit=500&offset=0`,
   );
-  await expect(overdueRow).toHaveCount(1);
-  await dismissExpectedOccurrences(page, [fixture.overdue, fixture.due]);
+  expect(response.ok(), await response.text()).toBe(true);
+  const body = (await response.json()) as {
+    readonly recurring_occurrences: readonly {
+      readonly generated_transaction_id: number | null;
+      readonly status: string;
+    }[];
+  };
+  const confirmed = body.recurring_occurrences.find(
+    (occurrence) => occurrence.status === "confirmed",
+  );
+  expect(confirmed).toBeDefined();
+  expect(confirmed?.generated_transaction_id).not.toBeNull();
+  const deleteResponse = await page.request.delete(
+    `/api/transactions/${confirmed?.generated_transaction_id}`,
+  );
+  expect(deleteResponse.ok(), await deleteResponse.text()).toBe(true);
 });

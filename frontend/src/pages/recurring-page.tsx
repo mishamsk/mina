@@ -1,11 +1,16 @@
+import { Plus } from "pixelarticons/react";
 import { useState } from "react";
 
+import type { RecurringDefinition } from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
 import {
+  DefinitionEditorPanel,
   RecurringPageContent,
-  useRecurringReviewResource,
+  refreshAfterRecurringDefinitionMutation,
+  useRecurringDefinitionsResource,
 } from "@/features/recurring";
 
 interface Notice {
@@ -13,9 +18,16 @@ interface Notice {
   readonly message: string;
 }
 
+interface EditorTarget {
+  readonly definition: RecurringDefinition | undefined;
+  readonly key: string | number;
+  readonly opener: HTMLElement | undefined;
+}
+
 export const RecurringPage = () => {
-  const recurringReview = useRecurringReviewResource();
+  const recurringDefinitions = useRecurringDefinitionsResource();
   const [notice, setNotice] = useState<Notice | undefined>();
+  const [editorTarget, setEditorTarget] = useState<EditorTarget>();
 
   const showNotice = (message: string) => {
     setNotice((current) => ({
@@ -33,19 +45,42 @@ export const RecurringPage = () => {
         title="Recurring"
         titleId="recurring-title"
         eyebrow="Ledger"
+        actions={
+          <Button
+            type="button"
+            onClick={(event) =>
+              setEditorTarget({
+                definition: undefined,
+                key: "new",
+                opener: event.currentTarget,
+              })
+            }
+          >
+            <Plus aria-hidden="true" />
+            New definition
+          </Button>
+        }
         help={
           <PageHelp label="Recurring help">
-            Expected recurring occurrences waiting for manual review.
+            Manage recurring transaction definitions. Expected occurrences
+            appear inline in Transactions.
           </PageHelp>
         }
       />
       <div className="min-h-0 flex-1">
         <RecurringPageContent
-          errorMessage={recurringReview.errorMessage}
-          loading={recurringReview.loading}
+          errorMessage={recurringDefinitions.errorMessage}
+          loading={recurringDefinitions.loading}
+          onEdit={(definition, opener) =>
+            setEditorTarget({
+              definition,
+              key: definition.recurring_definition_id,
+              opener,
+            })
+          }
           onNotice={showNotice}
-          refresh={recurringReview.refresh}
-          snapshot={recurringReview.snapshot}
+          refresh={recurringDefinitions.refresh}
+          snapshot={recurringDefinitions.snapshot}
         />
       </div>
       <Toast
@@ -57,6 +92,21 @@ export const RecurringPage = () => {
           setNotice(undefined);
         }}
       />
+      {editorTarget ? (
+        <DefinitionEditorPanel
+          key={editorTarget.key}
+          definition={editorTarget.definition}
+          onClose={() => setEditorTarget(undefined)}
+          onNotice={showNotice}
+          onSaved={() =>
+            refreshAfterRecurringDefinitionMutation(
+              recurringDefinitions.refresh,
+            )
+          }
+          open
+          returnFocusTo={editorTarget.opener}
+        />
+      ) : null}
     </section>
   );
 };

@@ -1,6 +1,10 @@
 export { AmountText, ApproximateUsdAmount, MixedAmounts } from "./amount-text";
 export { ClassBadge } from "./class-badge";
-export { EntityMultiPicker, EntityPicker } from "./entity-picker";
+export {
+  EntityMultiPicker,
+  type EntityOption,
+  EntityPicker,
+} from "./entity-picker";
 export {
   EntryPanel,
   type EntryPanelLaunch,
@@ -58,5 +62,6 @@ export {
   refreshLedgerLookups,
   refreshTransactionPage,
   refreshTransactionPageAfterSave,
+  useLedgerLookupsResource,
   useTransactionsResource,
 } from "./use-transactions-resource";

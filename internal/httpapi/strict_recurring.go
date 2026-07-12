@@ -266,6 +266,8 @@ func recurringDefinitionAPIResponse(definition recurring.Definition) openapi.Rec
 		Name:                  definition.Name,
 		Level:                 definition.Level,
 		NextDueDate:           nullableOpenAPIDate(definition.NextDueDate),
+		TransactionClass:      openapi.TransactionClass(definition.Class),
+		DisplayAmounts:        displayAmountAPIResponses(definition.DisplayAmounts),
 		CreatedAt:             definition.CreatedAt.UTC(),
 		UpdatedAt:             definition.UpdatedAt.UTC(),
 		TombstonedAt:          nullableTimestampTime(definition.TombstonedAt),

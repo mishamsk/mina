@@ -45,6 +45,8 @@ type Definition struct {
 	Name               string
 	Level              int
 	NextDueDate        *values.CivilDate
+	Class              transactions.TransactionClass
+	DisplayAmounts     []transactions.DisplayAmount
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	TombstonedAt       *time.Time
@@ -301,7 +303,12 @@ func (s *Service) Create(ctx context.Context, input WriteInput) (Definition, err
 		if err != nil {
 			return err
 		}
-		definition = withNextDueDate(created)
+		withDueDate := withNextDueDate(created)
+		withDisplay, err := s.withDisplayAmounts(ctx, withDueDate)
+		if err != nil {
+			return err
+		}
+		definition = withDisplay
 		return nil
 	}); err != nil {
 		return Definition{}, err
@@ -324,7 +331,12 @@ func (s *Service) Get(ctx context.Context, id int64) (Definition, error) {
 		return Definition{}, err
 	}
 
-	return withNextDueDate(definition), nil
+	withDisplay, err := s.withDisplayAmounts(ctx, withNextDueDate(definition))
+	if err != nil {
+		return Definition{}, err
+	}
+
+	return withDisplay, nil
 }
 
 // List returns active recurring definitions with nested active record shapes.
@@ -339,6 +351,9 @@ func (s *Service) List(ctx context.Context, opts services.ListOptions) (services
 	}
 	for index := range list.Items {
 		list.Items[index] = withNextDueDate(list.Items[index])
+	}
+	if err := s.withListDisplayAmounts(ctx, list.Items); err != nil {
+		return services.PaginatedList[Definition]{}, err
 	}
 
 	return list, nil
@@ -493,7 +508,12 @@ func (s *Service) Pause(ctx context.Context, definitionID int64) (Definition, er
 		return Definition{}, err
 	}
 
-	return withNextDueDate(definition), nil
+	withDisplay, err := s.withDisplayAmounts(ctx, withNextDueDate(definition))
+	if err != nil {
+		return Definition{}, err
+	}
+
+	return withDisplay, nil
 }
 
 // Resume clears pause state and prevents backlog across the paused window.
@@ -509,7 +529,11 @@ func (s *Service) Resume(ctx context.Context, definitionID int64, today values.C
 		return Definition{}, err
 	}
 	if definition.PausedAt == nil {
-		return withNextDueDate(definition), nil
+		withDisplay, err := s.withDisplayAmounts(ctx, withNextDueDate(definition))
+		if err != nil {
+			return Definition{}, err
+		}
+		return withDisplay, nil
 	}
 	newAnchor := definition.AnchorDate
 	skippedSlots := []values.CivilDate{}
@@ -530,7 +554,12 @@ func (s *Service) Resume(ctx context.Context, definitionID int64, today values.C
 		return Definition{}, err
 	}
 
-	return withNextDueDate(resumed), nil
+	withDisplay, err := s.withDisplayAmounts(ctx, withNextDueDate(resumed))
+	if err != nil {
+		return Definition{}, err
+	}
+
+	return withDisplay, nil
 }
 
 // Replace validates and atomically updates a recurring definition's schedule and active records.
@@ -568,7 +597,12 @@ func (s *Service) Replace(ctx context.Context, id int64, input WriteInput) (Defi
 		if err != nil {
 			return err
 		}
-		definition = withNextDueDate(replaced)
+		withDueDate := withNextDueDate(replaced)
+		withDisplay, err := s.withDisplayAmounts(ctx, withDueDate)
+		if err != nil {
+			return err
+		}
+		definition = withDisplay
 		return nil
 	}); err != nil {
 		return Definition{}, err
@@ -669,6 +703,63 @@ func (s *Service) generatedJournalRecords(ctx context.Context, definition Defini
 	}
 
 	return records, nil
+}
+
+func (s *Service) withDisplayAmounts(ctx context.Context, definition Definition) (Definition, error) {
+	definitions := []Definition{definition}
+	if err := s.withListDisplayAmounts(ctx, definitions); err != nil {
+		return Definition{}, err
+	}
+
+	return definitions[0], nil
+}
+
+func (s *Service) withListDisplayAmounts(ctx context.Context, definitions []Definition) error {
+	for index := range definitions {
+		class, amounts, err := s.definitionDisplayAmounts(ctx, definitions[index])
+		if err != nil {
+			return err
+		}
+		definitions[index].Class = class
+		definitions[index].DisplayAmounts = amounts
+	}
+
+	return nil
+}
+
+func (s *Service) definitionDisplayAmounts(ctx context.Context, definition Definition) (transactions.TransactionClass, []transactions.DisplayAmount, error) {
+	accountIDs := make([]int64, 0, len(definition.Records))
+	categoryIDs := make([]int64, 0, len(definition.Records))
+	for _, record := range definition.Records {
+		accountIDs = append(accountIDs, record.AccountID)
+		categoryIDs = append(categoryIDs, record.CategoryID)
+	}
+	accountRefs, err := s.accounts.ValidateActiveReferences(ctx, accountIDs, accounts.ReferenceOptions{AllowHidden: true})
+	if errors.Is(err, services.ErrInvalidReference) {
+		return "", nil, invalidReferenceError()
+	}
+	if err != nil {
+		return "", nil, err
+	}
+	categoryRefs, err := s.categories.ValidateActiveReferences(ctx, categoryIDs, categories.ReferenceOptions{AllowHidden: true})
+	if errors.Is(err, services.ErrInvalidReference) {
+		return "", nil, invalidReferenceError()
+	}
+	if err != nil {
+		return "", nil, err
+	}
+
+	records := make([]transactions.SemanticRecord, 0, len(definition.Records))
+	for _, record := range definition.Records {
+		records = append(records, transactions.SemanticRecord{
+			Currency:       record.Currency,
+			Amount:         record.Amount,
+			AccountType:    accountRefs[record.AccountID].AccountType,
+			EconomicIntent: categoryRefs[record.CategoryID].EconomicIntent,
+		})
+	}
+
+	return transactions.LineDisplayAmountsForSemanticRecords(records)
 }
 
 func (s *Service) skippedDateRuleSlots(ctx context.Context, definition Definition, today values.CivilDate) ([]values.CivilDate, error) {

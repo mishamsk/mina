@@ -155,6 +155,24 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
   return { lookups, page };
 };
 
+export const useLedgerLookupsResource = () => {
+  const lookups = useLedgerLookupsView();
+
+  useEffect(() => {
+    const snapshot = getTransactionsSnapshot();
+    if (snapshot.lookups || snapshot.lookupsLoading) {
+      return;
+    }
+    let active = true;
+    void loadLedgerLookups(() => active);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return lookups;
+};
+
 export const useCategoryPickerCategoriesResource = (
   intents: readonly CategoryEconomicIntent[],
   enabled: boolean,
