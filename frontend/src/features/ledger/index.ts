@@ -52,6 +52,7 @@ export { useTransactionBrowserPage } from "./use-transaction-browser-page";
 export { useTransactionDateJump } from "./use-transaction-date-jump";
 export { useTransactionDetail } from "./use-transaction-detail";
 export {
+  invalidateAccountRegistersForTransaction,
   invalidateReferencePagesAfterTransactionMutation,
   jumpToTransactionDatePage,
   refreshLedgerLookups,

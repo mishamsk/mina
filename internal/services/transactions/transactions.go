@@ -141,6 +141,7 @@ type RecordSearchOptions struct {
 	MemberID              *int64
 	TagID                 *int64
 	PostingStatus         *PostingStatus
+	IncludeExpected       bool
 	ReconciliationStatus  *ReconciliationStatus
 	AmountMin             *values.Decimal
 	AmountMax             *values.Decimal

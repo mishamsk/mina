@@ -2132,9 +2132,16 @@ paths:
         - name: posting_status
           in: query
           required: false
-          description: Filters records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
+          description: Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
           schema:
             $ref: "#/components/schemas/PostingStatus"
+        - name: include_expected
+          in: query
+          required: false
+          description: Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+          schema:
+            type: boolean
+            default: false
         - name: reconciliation_status
           in: query
           required: false
@@ -2274,9 +2281,16 @@ paths:
         - name: posting_status
           in: query
           required: false
-          description: Filters account register records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
+          description: Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
           schema:
             $ref: "#/components/schemas/PostingStatus"
+        - name: include_expected
+          in: query
+          required: false
+          description: Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+          schema:
+            type: boolean
+            default: false
         - name: reconciliation_status
           in: query
           required: false

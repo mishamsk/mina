@@ -119,12 +119,12 @@ export const accountRegisterPageKey = (
 ): string =>
   `${params.accountId}:${params.limit}:${params.offset}:${
     params.includeRunningBalance ? "running" : "plain"
-  }`;
+  }:${params.includeExpected ? "expected" : "posted-pending"}`;
 
 export const groupRegisterPageKey = (params: GroupRecordsPageParams): string =>
   `group:${encodeURIComponent(params.accountFqnPrefix)}:${params.limit}:${
     params.offset
-  }`;
+  }:${params.includeExpected ? "expected" : "posted-pending"}`;
 
 export const useAccountHeaderView = (accountId: number) =>
   useAccountsStore(

@@ -271,16 +271,14 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Status: backend health, database location/schema, background operations (exchange-rate loading, backups) with recent runs and manual trigger buttons.
 - Settings (UI preferences, persisted per frontend-architecture): table density, default landing screen, theme selection (when themes ship).
 
-### 8. Recurring review — Phase 2
+### 8. Recurring occurrences — Phase 2
 
-- Purpose: manual review of EXPECTED recurring occurrences — the only UI path to confirm or dismiss them; expected occurrences stay out of default transaction lists, registers, and aggregates.
-- A routed `/recurring` page in the primary sidebar section beneath Transactions. Listing follows the occurrence API's lazy catch-up materialization per `docs/recurring-transactions-semantics.md`; opening the page always reflects occurrences through today.
-- Content: one full-height table of EXPECTED occurrences sorted by scheduled date ascending; columns: scheduled date, definition name (hierarchical path rendering), transaction summary (per the transaction-summary-line rules, derived from the definition shape), amount (standard amount rules), and the trailing actions column.
-- Overdue occurrences (scheduled date before today) carry a warning-treatment marker per the theme; ascending sort naturally surfaces them first.
-- Row actions per the affordance-class rules: Confirm is a button-class action that materializes the transaction immediately with the standard toast; Dismiss is a button-class action behind the standard named confirmation dialog. Both surface API errors per the standard feedback rules.
-- Empty state: a quiet "no expected occurrences" presentation.
-- Transactions filter bar: the posting-status filter dimension includes Expected; expected lines render with the existing expected label/icon when explicitly filtered in and remain excluded from defaults otherwise.
-- Definition management (create/edit/pause/defer/cancel) is not part of this screen and remains future-screen scope.
+- Recurring occurrences — confirmed, overdue, and upcoming EXPECTED — render inline in the Transactions page (and register embeddings) by default. The UI explicitly requests expected occurrences even though API listings omit them by default; per `docs/recurring-transactions-semantics.md`, showing them never changes their exclusion from balances, aggregates, and reports.
+- Loading a transactions view runs the occurrence API's lazy catch-up materialization so the list always reflects occurrences through today.
+- Expected rows carry a distinct visual treatment inline; overdue occurrences (scheduled before today) additionally carry the warning-treatment missed marker per the theme.
+- The filter direction is hide-based: a standing control lets the user HIDE expected/recurring rows from the view; there is no opt-in Expected posting-status filter.
+- Confirm and Dismiss are row actions on expected rows, per the affordance-class rules: Confirm materializes the transaction immediately with the standard toast; Dismiss sits behind the standard named confirmation dialog. Both surface API errors per the standard feedback rules.
+- The `/recurring` page hosts recurring definitions management (create/edit/pause/resume/defer/cancel), not an occurrence review queue; its screen definition lives in this section's definitions-management rules once specified.
 
 ### 9. Future screens — guidance only
 

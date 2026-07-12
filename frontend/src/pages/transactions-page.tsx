@@ -131,13 +131,28 @@ export const TransactionsPage = () => {
     },
     [filters, setTransactionFilters],
   );
+  const setHideExpected = useCallback(
+    (hideExpected: boolean) => {
+      setTransactionFilters({
+        ...filters,
+        hideExpected,
+      });
+    },
+    [filters, setTransactionFilters],
+  );
   const clearFilterChips = useCallback(() => {
     setTransactionFilters({
       ...emptyTransactionFilters,
       classes: filters.classes,
+      hideExpected: filters.hideExpected,
       search: filters.search,
     });
-  }, [filters.classes, filters.search, setTransactionFilters]);
+  }, [
+    filters.classes,
+    filters.hideExpected,
+    filters.search,
+    setTransactionFilters,
+  ]);
   const addEntityFilter = useCallback(
     (kind: "category" | "member" | "tag", id: number) => {
       browser.cancelDateJump();
@@ -248,6 +263,7 @@ export const TransactionsPage = () => {
             onDateJumpNext={browser.jumpToNextDate}
             onDateJumpPrevious={browser.jumpToPreviousDate}
             onDateJumpValueChange={browser.changeDateJumpValue}
+            onHideExpectedChange={setHideExpected}
             onSearchChange={setSearchFilter}
             onTransactionClassChange={setTransactionClassFilter}
           />
@@ -272,6 +288,9 @@ export const TransactionsPage = () => {
             }
             loading={browser.loading}
             lookups={browser.lookups.snapshot}
+            onConfirmRecurringOccurrence={
+              browser.confirmRecurringOccurrenceFromRow
+            }
             onFilterCategory={(categoryId) => {
               addEntityFilter("category", categoryId);
             }}
@@ -283,6 +302,9 @@ export const TransactionsPage = () => {
             }}
             onNewTransaction={openEntryPanel}
             onDeleteTransaction={browser.deleteTransactionFromRow}
+            onDismissRecurringOccurrence={
+              browser.dismissRecurringOccurrenceFromRow
+            }
             onNextPage={() => {
               browser.setPage(browser.page + 1);
             }}

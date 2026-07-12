@@ -3,7 +3,9 @@ import type { SetURLSearchParams } from "react-router";
 
 import {
   apiErrorMessage,
+  confirmRecurringOccurrenceById,
   deleteTransactionById,
+  dismissRecurringOccurrenceById,
   type Transaction,
   type TransactionPageParams,
 } from "@/api";
@@ -128,6 +130,59 @@ export const useTransactionBrowserPage = ({
     [detail, params, showNotice],
   );
 
+  const confirmRecurringOccurrenceFromRow = useCallback(
+    async (transaction: Transaction) => {
+      if (transaction.recurring_occurrence_id === null) {
+        throw new Error("This transaction is not a recurring occurrence.");
+      }
+
+      const result = await confirmRecurringOccurrenceById({
+        recurring_occurrence_id: transaction.recurring_occurrence_id,
+      });
+      if (result.error) {
+        throw new Error(
+          apiErrorMessage(result.error, "Occurrence could not be confirmed."),
+        );
+      }
+
+      await refreshTransactionPageAfterSave(
+        params,
+        transaction.transaction_id,
+        transaction,
+      );
+      showNotice("Occurrence confirmed.");
+    },
+    [params, showNotice],
+  );
+
+  const dismissRecurringOccurrenceFromRow = useCallback(
+    async (transaction: Transaction) => {
+      if (transaction.recurring_occurrence_id === null) {
+        throw new Error("This transaction is not a recurring occurrence.");
+      }
+
+      const result = await dismissRecurringOccurrenceById({
+        recurring_occurrence_id: transaction.recurring_occurrence_id,
+      });
+      if (result.error) {
+        throw new Error(
+          apiErrorMessage(result.error, "Occurrence could not be dismissed."),
+        );
+      }
+
+      if (detail.selectedTransactionId === transaction.transaction_id) {
+        detail.closeTransactionDetail();
+      }
+      await refreshTransactionPageAfterSave(
+        params,
+        transaction.transaction_id,
+        transaction,
+      );
+      showNotice("Occurrence dismissed.");
+    },
+    [detail, params, showNotice],
+  );
+
   const setPage = useCallback(
     (nextPage: number) => {
       cancelDateJump();
@@ -189,10 +244,12 @@ export const useTransactionBrowserPage = ({
   return {
     cancelDateJump,
     changeDateJumpValue,
+    confirmRecurringOccurrenceFromRow,
     dateJumpAnchor,
     dateJumpLoading,
     dateJumpValue,
     deleteTransactionFromRow,
+    dismissRecurringOccurrenceFromRow,
     detail,
     dismissNotice,
     errorMessage,

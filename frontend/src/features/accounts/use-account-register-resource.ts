@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import {
   type AccountRecordsPageParams,
@@ -11,6 +11,7 @@ import {
   type GroupRecordsPageParams,
   type JournalRecord,
   type Transaction,
+  triggerRecurringOccurrenceCatchup,
 } from "@/api";
 import {
   accountRegisterPageKey,
@@ -235,6 +236,7 @@ const useRegisterPageResource = <Params>({
   setRegisterPageLoading,
 }: RegisterResourceOptions<Params>) => {
   const lookups = useLedgerLookupsView();
+  const catchupPromiseRef = useRef<Promise<unknown> | undefined>(undefined);
   const records = register.displayedSnapshot?.records ?? emptyRecords;
   const transactionIds = useMemo(
     () => records.map((record) => record.transaction_id),
@@ -267,23 +269,29 @@ const useRegisterPageResource = <Params>({
     let active = true;
     const generation = setRegisterPageLoading(params);
 
-    void fetchRegisterPage(params).then((result) => {
-      if (!active) {
-        return;
-      }
+    catchupPromiseRef.current ??= triggerRecurringOccurrenceCatchup().catch(
+      () => undefined,
+    );
 
-      if (result.data) {
-        setRegisterPage(
-          params,
-          result.data.total_count,
-          result.data.records,
-          generation,
-        );
-        return;
-      }
+    void catchupPromiseRef.current
+      .then(() => fetchRegisterPage(params))
+      .then((result) => {
+        if (!active) {
+          return;
+        }
 
-      setRegisterPageError(params, apiErrorMessage(result.error), generation);
-    });
+        if (result.data) {
+          setRegisterPage(
+            params,
+            result.data.total_count,
+            result.data.records,
+            generation,
+          );
+          return;
+        }
+
+        setRegisterPageError(params, apiErrorMessage(result.error), generation);
+      });
 
     return () => {
       active = false;

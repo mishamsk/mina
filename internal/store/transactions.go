@@ -793,7 +793,7 @@ JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
 JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id`
 	whereQuery := `WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	args := []any{}
-	if opts.PostingStatus == nil {
+	if opts.PostingStatus == nil && !opts.IncludeExpected {
 		whereQuery += " AND jr.posting_status <> CAST(? AS " + s.db.accountingName("posting_status") + ")"
 		args = append(args, enumValue(transactions.PostingStatusExpected))
 	}
@@ -818,8 +818,13 @@ JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
 		args = append(args, *opts.TagID)
 	}
 	if opts.PostingStatus != nil {
-		whereQuery += " AND jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ")"
-		args = append(args, enumValue(*opts.PostingStatus))
+		if opts.IncludeExpected && *opts.PostingStatus != transactions.PostingStatusExpected {
+			whereQuery += " AND (jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ") OR jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + "))"
+			args = append(args, enumValue(*opts.PostingStatus), enumValue(transactions.PostingStatusExpected))
+		} else {
+			whereQuery += " AND jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ")"
+			args = append(args, enumValue(*opts.PostingStatus))
+		}
 	}
 	if opts.ReconciliationStatus != nil {
 		whereQuery += " AND jr.reconciliation_status = CAST(? AS " + s.db.accountingName("reconciliation_status") + ")"

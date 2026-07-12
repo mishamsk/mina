@@ -2,6 +2,7 @@ import {
   defaultTransactionPostingStatuses,
   normalizeTransactionFilters,
   type TransactionFilters,
+  transactionPostingStatuses,
 } from "@/models/transaction-filters";
 
 import type {
@@ -85,6 +86,7 @@ export interface TransactionPageParams {
 }
 
 export interface AccountRecordsPageParams {
+  readonly includeExpected: boolean;
   readonly includeRunningBalance: boolean;
   readonly limit: number;
   readonly offset: number;
@@ -92,6 +94,7 @@ export interface AccountRecordsPageParams {
 
 export interface GroupRecordsPageParams {
   readonly accountFqnPrefix: string;
+  readonly includeExpected: boolean;
   readonly limit: number;
   readonly offset: number;
 }
@@ -157,7 +160,9 @@ const transactionFilterQuery = (
   const postingStatuses =
     normalized.statuses.length > 0
       ? normalized.statuses
-      : defaultTransactionPostingStatuses;
+      : filters === undefined || normalized.hideExpected
+        ? transactionPostingStatuses
+        : defaultTransactionPostingStatuses;
   return {
     ...(normalized.accountIds.length > 0
       ? { account_id: [...normalized.accountIds] }
@@ -216,6 +221,14 @@ export const fetchTransactionPage = (params: TransactionPageParams) =>
     },
   });
 
+export const triggerRecurringOccurrenceCatchup = () =>
+  listRecurringOccurrences({
+    query: {
+      limit: 1,
+      offset: 0,
+    },
+  });
+
 export const fetchTransactionById = (transactionId: number) =>
   getTransaction({
     path: {
@@ -232,6 +245,7 @@ export const fetchAccountRecordsPage = (
       account_id: accountId,
     },
     query: {
+      include_expected: params.includeExpected,
       include_running_balance: params.includeRunningBalance,
       limit: params.limit,
       offset: params.offset,
@@ -242,6 +256,7 @@ export const fetchGroupRecordsPage = (params: GroupRecordsPageParams) =>
   searchJournalRecords({
     query: {
       account_fqn_prefix: params.accountFqnPrefix,
+      include_expected: params.includeExpected,
       limit: params.limit,
       offset: params.offset,
     },

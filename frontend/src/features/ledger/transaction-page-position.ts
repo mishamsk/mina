@@ -20,6 +20,7 @@ const filterParamNames = [
   "amountUsdMin",
   "category",
   "class",
+  "hideExpected",
   "initiatedFrom",
   "initiatedTo",
   "member",
@@ -143,6 +144,7 @@ export const readTransactionFiltersFromSearchParams = (
       "class",
       transactionClasses,
     ),
+    hideExpected: searchParams.get("hideExpected") === "true",
     initiatedFrom: readPatternParam(
       searchParams,
       "initiatedFrom",
@@ -192,6 +194,9 @@ export const writeTransactionFiltersToSearchParams = (
   }
   for (const transactionClass of normalized.classes) {
     next.append("class", transactionClass);
+  }
+  if (normalized.hideExpected) {
+    next.set("hideExpected", "true");
   }
 
   const setIfPresent = (name: string, value: string | undefined) => {

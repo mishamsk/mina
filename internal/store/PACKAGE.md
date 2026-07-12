@@ -41,7 +41,8 @@
 - Recurring defer and date-rule resume write occurrence audit rows with definition schedule state in one store transaction.
 - Dictionary usage queries report active dependency facts only; services decide whether those facts block deletes.
 - Category FQN restructure rewrites active `budget.category_fqn` paths in the same store transaction as the category rewrite.
-- Transaction list and record search exclude expected records by default; explicit `posting_status=expected` filters include them.
+- Transaction lists exclude expected records by default; explicit `posting_status=expected` filters include them.
+- Record searches exclude expected records by default; explicit `posting_status=expected` filters or `include_expected=true` include them.
 - Account balance aggregation reads active transactions and journal records only, includes pending records in current balances, excludes cancelled and expected records, and casts aggregate sums to `DECIMAL(18,8)` in SQL.
 - Account-record running balances are computed over full active account history, exclude cancelled and expected record amounts, and cast aggregate sums to `DECIMAL(18,8)` in SQL.
 - Active uniqueness is enforced by DuckDB expression indexes that index only non-tombstoned rows; account/category/tag/template creates map index violations after service path checks, while member and exchange-rate writes pre-check uniqueness for stable conflict messages.

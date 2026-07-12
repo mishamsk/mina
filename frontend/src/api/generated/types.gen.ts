@@ -3159,9 +3159,13 @@ export type SearchJournalRecordsData = {
         tag_id?: number;
         member_id?: number;
         /**
-         * Filters records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
+         * Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
          */
         posting_status?: PostingStatus;
+        /**
+         * Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+         */
+        include_expected?: boolean;
         reconciliation_status?: ReconciliationStatus;
         /**
          * JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -3220,9 +3224,13 @@ export type SearchAccountJournalRecordsData = {
         tag_id?: number;
         member_id?: number;
         /**
-         * Filters account register records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
+         * Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
          */
         posting_status?: PostingStatus;
+        /**
+         * Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+         */
+        include_expected?: boolean;
         reconciliation_status?: ReconciliationStatus;
         /**
          * JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.

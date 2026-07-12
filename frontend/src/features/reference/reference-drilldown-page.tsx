@@ -371,13 +371,28 @@ export const ReferenceDrilldownPage = ({
     },
     [pageFilters, setTransactionFilters],
   );
+  const setHideExpected = useCallback(
+    (hideExpected: boolean) => {
+      setTransactionFilters({
+        ...pageFilters,
+        hideExpected,
+      });
+    },
+    [pageFilters, setTransactionFilters],
+  );
   const clearFilterChips = useCallback(() => {
     setTransactionFilters({
       ...emptyTransactionFilters,
       classes: pageFilters.classes,
+      hideExpected: pageFilters.hideExpected,
       search: pageFilters.search,
     });
-  }, [pageFilters.classes, pageFilters.search, setTransactionFilters]);
+  }, [
+    pageFilters.classes,
+    pageFilters.hideExpected,
+    pageFilters.search,
+    setTransactionFilters,
+  ]);
 
   const hiddenFilterDimensions = useMemo(
     () => [filterKind] as const,
@@ -463,6 +478,7 @@ export const ReferenceDrilldownPage = ({
         onDateJumpNext={browser.jumpToNextDate}
         onDateJumpPrevious={browser.jumpToPreviousDate}
         onDateJumpValueChange={browser.changeDateJumpValue}
+        onHideExpectedChange={setHideExpected}
         onSearchChange={setSearchFilter}
         onTransactionClassChange={setTransactionClassFilter}
       />
@@ -483,6 +499,9 @@ export const ReferenceDrilldownPage = ({
           }
           loading={browser.loading}
           lookups={browser.lookups.snapshot}
+          onConfirmRecurringOccurrence={
+            browser.confirmRecurringOccurrenceFromRow
+          }
           onFilterCategory={(categoryId) => {
             addEntityFilter("category", categoryId);
           }}
@@ -496,6 +515,9 @@ export const ReferenceDrilldownPage = ({
             void navigate("/transactions");
           }}
           onDeleteTransaction={browser.deleteTransactionFromRow}
+          onDismissRecurringOccurrence={
+            browser.dismissRecurringOccurrenceFromRow
+          }
           onNextPage={() => {
             browser.setPage(browser.page + 1);
           }}

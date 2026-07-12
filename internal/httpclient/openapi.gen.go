@@ -1799,8 +1799,11 @@ type SearchAccountJournalRecordsParams struct {
 	TagId      *int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
 	MemberId   *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
-	// PostingStatus Filters account register records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
-	PostingStatus        *PostingStatus        `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	// PostingStatus Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
+	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+
+	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+	IncludeExpected      *bool                 `form:"include_expected,omitempty" json:"include_expected,omitempty"`
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -1915,8 +1918,11 @@ type SearchJournalRecordsParams struct {
 	TagId            *int64  `form:"tag_id,omitempty" json:"tag_id,omitempty"`
 	MemberId         *int64  `form:"member_id,omitempty" json:"member_id,omitempty"`
 
-	// PostingStatus Filters records by posting status. Expected records are excluded by default and returned only when this filter is explicitly `expected`.
-	PostingStatus        *PostingStatus        `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	// PostingStatus Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
+	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+
+	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
+	IncludeExpected      *bool                 `form:"include_expected,omitempty" json:"include_expected,omitempty"`
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -4734,6 +4740,18 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		}
 
+		if params.IncludeExpected != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_expected", *params.IncludeExpected, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.ReconciliationStatus != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "reconciliation_status", *params.ReconciliationStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -6488,6 +6506,18 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 		if params.PostingStatus != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "posting_status", *params.PostingStatus, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.IncludeExpected != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "include_expected", *params.IncludeExpected, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

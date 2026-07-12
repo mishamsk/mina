@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import {
   apiErrorMessage,
@@ -8,6 +8,7 @@ import {
   fetchTransactionPage,
   type Transaction,
   type TransactionPageParams,
+  triggerRecurringOccurrenceCatchup,
 } from "@/api";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
 import { refreshOverview } from "@/features/overview";
@@ -94,6 +95,7 @@ const loadLedgerLookups = async (
 export const useTransactionsResource = (params: TransactionPageParams) => {
   const page = useTransactionPageView(params);
   const lookups = useLedgerLookupsView();
+  const catchupPromiseRef = useRef<Promise<unknown> | undefined>(undefined);
 
   useEffect(() => {
     const snapshot = getTransactionsSnapshot();
@@ -106,23 +108,30 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
     let active = true;
     setTransactionPageLoading(params);
 
-    void fetchTransactionPage(params).then((result) => {
-      if (!active) {
-        return;
-      }
+    catchupPromiseRef.current ??= triggerRecurringOccurrenceCatchup().catch(
+      () => undefined,
+    );
 
-      if (result.data) {
-        setTransactionPage(
-          effectivePageParams(params, result.data.offset),
-          result.data.total_count,
-          result.data.transactions,
-          params,
-        );
-        return;
-      }
+    void catchupPromiseRef.current
+      .then(() => fetchTransactionPage(params))
+      .then((result) => {
+        if (!active) {
+          clearTransactionPageLoading(params);
+          return;
+        }
 
-      setTransactionPageError(params, apiErrorMessage(result.error));
-    });
+        if (result.data) {
+          setTransactionPage(
+            effectivePageParams(params, result.data.offset),
+            result.data.total_count,
+            result.data.transactions,
+            params,
+          );
+          return;
+        }
+
+        setTransactionPageError(params, apiErrorMessage(result.error));
+      });
 
     return () => {
       active = false;

@@ -19,6 +19,7 @@
 - Runtime may trigger backfill after non-canceled exchange-rate load attempts; backfill never overwrites non-`NULL` values.
 - Composition may subscribe to create/replace currency-usage changes to invalidate dependent planning caches.
 - Running balances are only available on account-scoped record searches.
+- Record searches include expected records only when explicitly filtered to expected or requested with `include_expected`; running balances still exclude expected amounts.
 
 ## Boundaries
 

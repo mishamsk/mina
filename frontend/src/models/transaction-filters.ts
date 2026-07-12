@@ -1,13 +1,13 @@
 import type { PostingStatus, TransactionClass } from "@/api/generated";
 
 export const transactionPostingStatuses = [
-  "expected",
   "pending",
   "posted",
   "cancelled",
 ] as const satisfies readonly PostingStatus[];
 
 export const defaultTransactionPostingStatuses = [
+  "expected",
   "pending",
   "posted",
   "cancelled",
@@ -34,6 +34,7 @@ export interface TransactionFilters {
   readonly amountUsdMin?: string;
   readonly categoryIds: readonly number[];
   readonly classes: readonly TransactionClass[];
+  readonly hideExpected: boolean;
   readonly initiatedFrom?: string;
   readonly initiatedTo?: string;
   readonly memberIds: readonly number[];
@@ -50,6 +51,7 @@ export const emptyTransactionFilters: TransactionFilters = {
   accountIds: [],
   categoryIds: [],
   classes: [],
+  hideExpected: false,
   memberIds: [],
   statuses: [],
   tagIds: [],
@@ -85,6 +87,7 @@ export const normalizeTransactionFilters = (
   amountUsdMin: trimmedValue(filters.amountUsdMin),
   categoryIds: uniqueSortedNumbers(filters.categoryIds ?? []),
   classes: uniqueAllowedValues(filters.classes ?? [], transactionClasses),
+  hideExpected: filters.hideExpected === true,
   initiatedFrom: trimmedValue(filters.initiatedFrom),
   initiatedTo: trimmedValue(filters.initiatedTo),
   memberIds: uniqueSortedNumbers(filters.memberIds ?? []),
@@ -111,6 +114,7 @@ export const transactionFilterSignature = (
     `member=${normalized.memberIds.join(",")}`,
     `status=${normalized.statuses.join(",")}`,
     `class=${normalized.classes.join(",")}`,
+    `hideExpected=${normalized.hideExpected}`,
     `amountMin=${normalized.amountMin ?? ""}`,
     `amountMax=${normalized.amountMax ?? ""}`,
     `amountUsdMin=${normalized.amountUsdMin ?? ""}`,

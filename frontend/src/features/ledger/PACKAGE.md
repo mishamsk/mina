@@ -11,7 +11,9 @@
 - Transaction detail panel renders a transaction snapshot passed by the owning page.
 - Transaction detail panel owns the tombstone confirmation UI and delegates delete execution to the owning page.
 - `useTransactionBrowserPage` composes shared browser snapshots, page-granular date jumps with a transient row anchor, transaction detail, row tombstones, pagination, and notices; pages supply their URL filter semantics.
-- `TransactionBrowserToolbar` owns filter-bar visibility; pages retain URL-filter ownership and supply chip clearing that preserves standing search and class controls.
+- `TransactionBrowserToolbar` owns filter-bar visibility; pages retain URL-filter ownership and supply chip clearing that preserves standing search, class, and expected-occurrence controls.
+- Transaction browsing requests expected recurring transactions by default and triggers one occurrence catch-up read per browser mount.
+- Expected recurring rows replace normal transaction actions with confirm and named-dismiss occurrence actions; successful lifecycle actions use the standard transaction-mutation refresh fan-out.
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.
 - Lookup-backed pickers use bounded REST lists and exclude hidden entities upstream.
 - Entry supports the spend, income, refund, and transfer shorthand endpoints.

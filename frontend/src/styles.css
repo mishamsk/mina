@@ -593,6 +593,10 @@
     width: 8.5rem;
   }
 
+  .account-register-table .account-register-actions-column {
+    width: 5.5rem;
+  }
+
   .account-register-table--with-account .account-register-date-column {
     width: 10%;
   }
@@ -639,18 +643,22 @@
   }
 
   @container account-register-table (max-width: 1040px) {
-    .account-register-table .account-register-status-column {
+    .account-register-table:not(.account-register-table--has-expected)
+      .account-register-status-column {
       visibility: collapse;
       width: 0;
     }
 
-    .account-register-table :is(th, td).account-register-status-column {
+    .account-register-table:not(.account-register-table--has-expected)
+      :is(th, td).account-register-status-column {
       font-size: 0 !important;
       padding-right: 0 !important;
       padding-left: 0 !important;
     }
 
-    .account-register-table :is(th, td).account-register-status-column > * {
+    .account-register-table:not(.account-register-table--has-expected)
+      :is(th, td).account-register-status-column
+      > * {
       display: none !important;
     }
 

@@ -273,6 +273,27 @@ func TestExpectedTransactionsExcludedFromDefaultViewsAndAggregates(t *testing.T)
 	}
 	assertRecordIDs(t, expectedSearch.JSON200.Records, recordIDs(expected.JSON201.Records))
 
+	includeExpected := true
+	combinedSearch, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		IncludeExpected: &includeExpected,
+	})
+	requireNoTransportError(t, "combined record search", err)
+	if combinedSearch.StatusCode() != http.StatusOK {
+		t.Fatalf("combined record search status = %d, want %d; body %s", combinedSearch.StatusCode(), http.StatusOK, combinedSearch.Body)
+	}
+	assertRecordIDs(t, combinedSearch.JSON200.Records, append(recordIDs(expected.JSON201.Records), recordIDs(posted.JSON201.Records)...))
+
+	postedStatus := httpclient.PostingStatusPosted
+	postedPlusExpectedSearch, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		IncludeExpected: &includeExpected,
+		PostingStatus:   &postedStatus,
+	})
+	requireNoTransportError(t, "posted plus expected record search", err)
+	if postedPlusExpectedSearch.StatusCode() != http.StatusOK {
+		t.Fatalf("posted plus expected record search status = %d, want %d; body %s", postedPlusExpectedSearch.StatusCode(), http.StatusOK, postedPlusExpectedSearch.Body)
+	}
+	assertRecordIDs(t, postedPlusExpectedSearch.JSON200.Records, append(recordIDs(expected.JSON201.Records), recordIDs(posted.JSON201.Records)...))
+
 	includeRunningBalance := true
 	defaultRegister, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
 		IncludeRunningBalance: &includeRunningBalance,
@@ -294,6 +315,29 @@ func TestExpectedTransactionsExcludedFromDefaultViewsAndAggregates(t *testing.T)
 	}
 	assertRecordIDs(t, expectedRegister.JSON200.Records, []int64{expected.JSON201.Records[0].RecordId})
 	assertRecordRunningBalances(t, expectedRegister.JSON200.Records, []string{"0.00000000"})
+
+	combinedRegister, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		IncludeExpected:       &includeExpected,
+		IncludeRunningBalance: &includeRunningBalance,
+	})
+	requireNoTransportError(t, "combined account register", err)
+	if combinedRegister.StatusCode() != http.StatusOK {
+		t.Fatalf("combined account register status = %d, want %d; body %s", combinedRegister.StatusCode(), http.StatusOK, combinedRegister.Body)
+	}
+	assertRecordIDs(t, combinedRegister.JSON200.Records, []int64{expected.JSON201.Records[0].RecordId, posted.JSON201.Records[0].RecordId})
+	assertRecordRunningBalances(t, combinedRegister.JSON200.Records, []string{"0.00000000", "-12.34000000"})
+
+	postedPlusExpectedRegister, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		IncludeExpected:       &includeExpected,
+		IncludeRunningBalance: &includeRunningBalance,
+		PostingStatus:         &postedStatus,
+	})
+	requireNoTransportError(t, "posted plus expected account register", err)
+	if postedPlusExpectedRegister.StatusCode() != http.StatusOK {
+		t.Fatalf("posted plus expected account register status = %d, want %d; body %s", postedPlusExpectedRegister.StatusCode(), http.StatusOK, postedPlusExpectedRegister.Body)
+	}
+	assertRecordIDs(t, postedPlusExpectedRegister.JSON200.Records, []int64{expected.JSON201.Records[0].RecordId, posted.JSON201.Records[0].RecordId})
+	assertRecordRunningBalances(t, postedPlusExpectedRegister.JSON200.Records, []string{"0.00000000", "-12.34000000"})
 
 	accountIDs := []int64{refs.CheckingAccountId}
 	balances, err := client.REST().ListAccountBalancesWithResponse(context.Background(), &httpclient.ListAccountBalancesParams{AccountIds: &accountIDs})

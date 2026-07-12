@@ -72,6 +72,7 @@ interface RecurringDefinitionFixture {
 
 const defaultTransactionRequestStatuses = [
   "cancelled",
+  "expected",
   "pending",
   "posted",
 ] as const;
@@ -145,6 +146,7 @@ const expectTransactionFilterUrl = async (
     readonly classes?: readonly string[];
     readonly initiatedFrom?: string;
     readonly initiatedTo?: string;
+    readonly hideExpected?: boolean;
     readonly members?: readonly number[];
     readonly page?: string;
     readonly pageSize?: string;
@@ -161,6 +163,7 @@ const expectTransactionFilterUrl = async (
         amountMin: searchParams.get("amountMin"),
         initiatedFrom: searchParams.get("initiatedFrom"),
         initiatedTo: searchParams.get("initiatedTo"),
+        hideExpected: searchParams.get("hideExpected"),
         page: searchParams.get("page"),
         pageSize: searchParams.get("pageSize"),
         q: searchParams.get("q"),
@@ -185,6 +188,7 @@ const expectTransactionFilterUrl = async (
       amountMin: expected.amountMin ?? null,
       initiatedFrom: expected.initiatedFrom ?? null,
       initiatedTo: expected.initiatedTo ?? null,
+      hideExpected: expected.hideExpected ? "true" : null,
       page: expected.page ?? "1",
       pageSize: expected.pageSize ?? "50",
       q: expected.q ?? null,
@@ -274,12 +278,14 @@ const createAccount = async (
   fqn: string,
   accountType: "balance" | "flow",
   currency?: string,
+  isFeatured?: boolean,
 ): Promise<AccountFixture> => {
   const response = await page.request.post("/api/accounts", {
     data: {
       account_type: accountType,
       currency,
       fqn,
+      is_featured: isFeatured,
     },
   });
   expect(response.ok()).toBe(true);
@@ -289,17 +295,26 @@ const createAccount = async (
 const createExpectedRecurringFixture = async (
   page: Page,
   unique: string,
-): Promise<{ readonly merchantFqn: string; readonly memo: string }> => {
-  const anchorDate = formatLocalDate(new Date());
+  options: {
+    readonly anchorDate?: string;
+    readonly featured?: boolean;
+  } = {},
+): Promise<{
+  readonly checking: AccountFixture;
+  readonly merchantFqn: string;
+  readonly memo: string;
+}> => {
+  const anchorDate = options.anchorDate ?? formatLocalDate(new Date());
   const checking = await createAccount(
     page,
-    `e2e:ExpectedFilter:${unique}:Checking`,
+    `e2e:ExpectedFilter:${unique}:Checking${unique}`,
     "balance",
     "USD",
+    options.featured,
   );
   const merchant = await createAccount(
     page,
-    `e2e:ExpectedFilter:${unique}:Merchant`,
+    `e2e:ExpectedFilter:${unique}:Merchant${unique}`,
     "flow",
   );
   const category = await createCategory(
@@ -348,7 +363,7 @@ const createExpectedRecurringFixture = async (
   );
   expect(materialized.ok(), await materialized.text()).toBe(true);
 
-  return { merchantFqn: merchant.fqn, memo };
+  return { checking, merchantFqn: merchant.fqn, memo };
 };
 
 const deleteTransaction = async (
@@ -617,7 +632,7 @@ const tagChipLineState = async (row: Locator) =>
 test("transactions page renders demo transaction lines and expands records", async ({
   page,
 }) => {
-  await page.goto("/transactions");
+  await page.goto("/transactions?hideExpected=true");
 
   await expect(
     page.getByRole("heading", { exact: true, name: "Transactions" }),
@@ -727,11 +742,11 @@ test("transactions page uses server pagination controls", async ({ page }) => {
       url.searchParams.get("offset") === "0"
     );
   });
-  await page.goto("/transactions?page=1&pageSize=10");
+  await page.goto("/transactions?page=1&pageSize=10&hideExpected=true");
   await legacyPageSizeRequest;
   await expect(page.getByLabel("Rows")).toContainText("50");
 
-  await page.goto("/transactions?page=1&pageSize=25");
+  await page.goto("/transactions?page=1&pageSize=25&hideExpected=true");
 
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
   await expect(
@@ -1079,12 +1094,20 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await expect(page.getByText("Amount 10-20")).toBeHidden();
 });
 
-test("transactions posting-status filter can reveal expected recurring lines", async ({
+test("transactions inline recurring occurrences support hide, confirm, dismiss, and registers", async ({
   page,
 }, testInfo) => {
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
-  const fixture = await createExpectedRecurringFixture(page, unique);
+  const overdueFixture = await createExpectedRecurringFixture(
+    page,
+    `${unique}Overdue`,
+    {
+      anchorDate: shiftLocalDate(formatLocalDate(new Date()), -1),
+      featured: true,
+    },
+  );
+  const dueFixture = await createExpectedRecurringFixture(page, `${unique}Due`);
   const search = unique;
 
   const defaultRequest = page.waitForRequest((request) => {
@@ -1099,51 +1122,93 @@ test("transactions posting-status filter can reveal expected recurring lines", a
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}`,
   );
   await defaultRequest;
-  await expect(page.getByRole("img", { name: "Expected" })).toHaveCount(0);
-  await expect(
-    page
-      .getByRole("row")
-      .filter({ hasText: "23.45 $" })
-      .filter({ hasText: fixture.merchantFqn.split(":").at(-1) ?? "Merchant" }),
-  ).toHaveCount(0);
+  const overdueRow = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("img", { name: "Expected" }) })
+    .filter({
+      hasText: overdueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
+    });
+  const dueRow = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("img", { name: "Expected" }) })
+    .filter({
+      hasText: dueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
+    });
+  await expect(overdueRow).toBeVisible();
+  await expect(dueRow).toBeVisible();
+  await expect(overdueRow.getByRole("img", { name: "Overdue" })).toBeVisible();
+  await expect(overdueRow.getByText("-23.45 $", { exact: true })).toHaveClass(
+    /text-muted-foreground/,
+  );
 
-  await page.getByRole("button", { name: "Open filters" }).click();
-  await page.getByRole("button", { name: "Add filter" }).click();
-  await page.getByRole("button", { name: "Posting status" }).click();
-  await expect(page.getByText("Expected", { exact: true })).toBeVisible();
-
-  const expectedRequest = page.waitForRequest((request) => {
+  const hideRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
       url.pathname === "/api/transactions" &&
       url.searchParams.get("search") === search &&
       transactionRequestHasFilters(url, {
         limit: "50",
-        statuses: ["expected"],
+        statuses: ["cancelled", "pending", "posted"],
       })
     );
   });
-  await page.getByText("Expected", { exact: true }).click();
-  await expectedRequest;
+  await page.getByRole("checkbox", { name: "Hide expected" }).click();
+  await hideRequest;
 
   await expectTransactionFilterUrl(page, {
     pageSize: "50",
     q: search,
-    statuses: ["expected"],
+    hideExpected: true,
   });
-  const expectedRow = page
-    .getByRole("row")
-    .filter({ has: page.getByRole("img", { name: "Expected" }) })
-    .filter({ hasText: "23.45 $" })
-    .filter({ hasText: fixture.merchantFqn.split(":").at(-1) ?? "Merchant" });
-  await expect(expectedRow).toBeVisible();
-  await expect(
-    expectedRow.getByRole("img", { name: "Expected" }),
-  ).toBeVisible();
+  await expect(overdueRow).toHaveCount(0);
+  await expect(dueRow).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Remove Status Expected" }).click();
+  await page.getByRole("checkbox", { name: "Hide expected" }).click();
   await expectTransactionFilterUrl(page, { pageSize: "50", q: search });
-  await expect(page.getByRole("img", { name: "Expected" })).toHaveCount(0);
+  await expect(overdueRow).toBeVisible();
+
+  await page.goto(`/accounts/${overdueFixture.checking.account_id}`);
+  const registerRow = page
+    .getByTestId("account-register-row")
+    .filter({ hasText: overdueFixture.memo });
+  await expect(registerRow).toBeVisible();
+  await expect(
+    registerRow.getByText("Expected", { exact: true }),
+  ).toBeVisible();
+  await expect(registerRow.getByRole("img", { name: "Overdue" })).toBeVisible();
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}`,
+  );
+  const featuredRow = page
+    .getByTestId("featured-balance-row")
+    .filter({ hasText: overdueFixture.checking.fqn.split(":").at(-1) ?? "" });
+  await expect(featuredRow).toContainText("0.00 $");
+  await overdueRow.getByRole("button", { name: "Confirm occurrence" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Occurrence confirmed." }),
+  ).toBeVisible();
+  await expect(overdueRow.getByRole("img", { name: "Expected" })).toHaveCount(
+    0,
+  );
+  await expect(featuredRow).toContainText("-23.45 $");
+
+  await dueRow.getByRole("button", { name: "Dismiss occurrence" }).click();
+  const dismissDialog = page.getByRole("alertdialog", {
+    name: "Dismiss occurrence",
+  });
+  await expect(dismissDialog).toContainText(
+    dueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
+  );
+  await dismissDialog
+    .getByRole("button", { name: "Dismiss occurrence" })
+    .click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Occurrence dismissed." }),
+  ).toBeVisible();
+  await expect(dueRow).toHaveCount(0);
+  await page.reload();
+  await expect(dueRow).toHaveCount(0);
 });
 
 test("transactions class toolbar filter owns class URL state", async ({
@@ -1305,7 +1370,7 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 760 });
-  await page.goto("/transactions?page=1&pageSize=50");
+  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
   await expect(page.getByText("Description")).toBeVisible();
 
   const toolbarRow = page.getByTestId("transaction-browser-toolbar-row");
@@ -1354,9 +1419,8 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
   await expect(postingStatusButton).toBeVisible();
   await postingStatusButton.focus();
   await page.keyboard.press("Enter");
-  const expectedCheckbox = page.getByRole("checkbox", { name: "Expected" });
-  await expect(expectedCheckbox).toBeFocused();
   const pendingCheckbox = page.getByRole("checkbox", { name: "Pending" });
+  await expect(pendingCheckbox).toBeFocused();
   await expect(pendingCheckbox).toBeVisible();
   await page.getByText("Pending", { exact: true }).click();
   await expect
@@ -1402,7 +1466,7 @@ test("transactions filter toolbar keeps a stable inline trigger geometry", async
 test("transactions filter toolbar suppresses open-control tooltips and supports Tab traversal", async ({
   page,
 }, testInfo) => {
-  await page.goto("/transactions?page=1&pageSize=50");
+  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
   const searchInput = page.getByRole("searchbox", { name: "Search" });
   const previousDayButton = page.getByRole("button", {
     name: "Previous day",
@@ -1411,6 +1475,9 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   const nextDayButton = page.getByRole("button", { name: "Next day" });
   const todayButton = page.getByRole("button", { name: "Today" });
   const classFilter = page.getByLabel("Class");
+  const hideExpectedToggle = page.getByRole("checkbox", {
+    name: "Hide expected",
+  });
   const filterToggle = page.getByRole("button", { name: "Open filters" });
   const filterTooltip = page
     .getByRole("tooltip")
@@ -1452,6 +1519,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await expect(nextDayButton).toBeFocused();
   await tabTo(todayButton);
   await tabTo(classFilter);
+  await tabTo(hideExpectedToggle);
   await tabTo(filterToggle);
   await page.keyboard.press("Enter");
 
@@ -2583,7 +2651,7 @@ test("transactions display currency symbols with code fallback", async ({
 });
 
 test("transactions page help and leaf category chips", async ({ page }) => {
-  await page.goto("/transactions?page=1&pageSize=50");
+  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
 
   await expect(
     page.getByText("Classified transaction lines with inline journal records."),

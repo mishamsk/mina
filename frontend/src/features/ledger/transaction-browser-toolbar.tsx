@@ -9,6 +9,7 @@ import { type ReactNode, useState } from "react";
 
 import { Tooltip as AppTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -38,6 +39,7 @@ interface TransactionBrowserToolbarProps {
   readonly onDateJumpPrevious: (trigger: HTMLButtonElement) => void;
   readonly onDateJumpToday: (trigger: HTMLButtonElement) => void;
   readonly onDateJumpValueChange: (value: string) => void;
+  readonly onHideExpectedChange: (hideExpected: boolean) => void;
   readonly onSearchChange: (value: string) => void;
   readonly onTransactionClassChange: (value: string) => void;
 }
@@ -56,6 +58,7 @@ export const TransactionBrowserToolbar = ({
   onDateJumpPrevious,
   onDateJumpToday,
   onDateJumpValueChange,
+  onHideExpectedChange,
   onSearchChange,
   onTransactionClassChange,
 }: TransactionBrowserToolbarProps) => {
@@ -176,6 +179,15 @@ export const TransactionBrowserToolbar = ({
             </SelectContent>
           </Select>
         </div>
+        <label className="font-heading mt-5 inline-flex min-h-9 items-center gap-2 text-xs font-semibold text-[var(--frame-foreground)] uppercase">
+          <Checkbox
+            checked={filters.hideExpected}
+            onCheckedChange={(checked) => {
+              onHideExpectedChange(checked === true);
+            }}
+          />
+          Hide expected
+        </label>
         {extraControls}
         <div className="flex h-9 items-end">
           <AppTooltip

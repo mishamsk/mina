@@ -1,9 +1,12 @@
 import {
+  Check,
   ChevronDown,
   ChevronRight,
+  Close,
   Open,
   Plus,
   Trash,
+  WarningDiamond,
 } from "pixelarticons/react";
 import {
   type FocusEvent,
@@ -32,11 +35,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
+import { localTodayISODate } from "@/utils/date";
 
 import { AmountText, MixedAmounts } from "./amount-text";
 import {
   buildLookupMaps,
   displayAmountKey,
+  formatInitiatedDate,
   formatInitiatedDateParts,
   lineCategory,
   lineDisplayAmounts,
@@ -62,11 +67,17 @@ interface TransactionBrowserProps {
   readonly hasNextPage: boolean;
   readonly loading: boolean;
   readonly lookups: LedgerLookupsSnapshot | undefined;
+  readonly onConfirmRecurringOccurrence: (
+    transaction: Transaction,
+  ) => Promise<void>;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
   readonly onNewTransaction: () => void;
   readonly onDeleteTransaction: (transaction: Transaction) => Promise<void>;
+  readonly onDismissRecurringOccurrence: (
+    transaction: Transaction,
+  ) => Promise<void>;
   readonly onNextPage: () => void;
   readonly onOpenTransaction: (
     transaction: Transaction,
@@ -450,11 +461,13 @@ export const TransactionBrowser = ({
   hasNextPage,
   loading,
   lookups,
+  onConfirmRecurringOccurrence,
   onFilterCategory,
   onFilterMember,
   onFilterTag,
   onNewTransaction,
   onDeleteTransaction,
+  onDismissRecurringOccurrence,
   onNextPage,
   onOpenTransaction,
   onPageSizeChange,
@@ -477,7 +490,21 @@ export const TransactionBrowser = ({
   const [deleteErrorMessage, setDeleteErrorMessage] = useState<
     string | undefined
   >();
+  const [dismissDialog, setDismissDialog] = useState<{
+    readonly opener: HTMLElement;
+    readonly rowIndex: number;
+    readonly transaction: Transaction;
+  }>();
+  const [dismissErrorMessage, setDismissErrorMessage] = useState<
+    string | undefined
+  >();
   const [deleting, setDeleting] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
+  const [confirmingOccurrenceId, setConfirmingOccurrenceId] = useState<
+    number | undefined
+  >();
+  const [occurrenceActionErrorMessage, setOccurrenceActionErrorMessage] =
+    useState<string | undefined>();
   const [dateJumpHighlight, setDateJumpHighlight] = useState<{
     readonly date: string;
     readonly transactionId: number;
@@ -487,16 +514,17 @@ export const TransactionBrowser = ({
   const consumedDateJumpAnchorRef =
     useRef<TransactionBrowserProps["dateJumpAnchor"]>(undefined);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
+  const today = localTodayISODate();
 
   useEffect(() => {
-    const open = Boolean(deleteDialog);
+    const open = Boolean(deleteDialog || dismissDialog);
     onDeleteConfirmationOpenChange?.(open);
     return () => {
       if (open) {
         onDeleteConfirmationOpenChange?.(false);
       }
     };
-  }, [deleteDialog, onDeleteConfirmationOpenChange]);
+  }, [deleteDialog, dismissDialog, onDeleteConfirmationOpenChange]);
 
   const closeDeleteConfirmation = () => {
     if (deleting) {
@@ -530,8 +558,68 @@ export const TransactionBrowser = ({
     }
   }, [deleteDialog, onDeleteTransaction]);
 
+  const closeDismissConfirmation = () => {
+    if (dismissing) {
+      return;
+    }
+    const opener = dismissDialog?.opener;
+    setDismissErrorMessage(undefined);
+    setDismissDialog(undefined);
+    window.requestAnimationFrame(() => {
+      focusWithoutTooltip(opener, { preventScroll: true });
+    });
+  };
+
+  const confirmOccurrence = useCallback(
+    async (transaction: Transaction, rowIndex: number) => {
+      if (transaction.recurring_occurrence_id === null) {
+        return;
+      }
+
+      setConfirmingOccurrenceId(transaction.recurring_occurrence_id);
+      setOccurrenceActionErrorMessage(undefined);
+      deletedRowFocusIndexRef.current = rowIndex;
+      try {
+        await onConfirmRecurringOccurrence(transaction);
+      } catch (error) {
+        deletedRowFocusIndexRef.current = undefined;
+        setOccurrenceActionErrorMessage(
+          error instanceof Error ? error.message : "The API request failed.",
+        );
+      } finally {
+        setConfirmingOccurrenceId(undefined);
+      }
+    },
+    [onConfirmRecurringOccurrence],
+  );
+
+  const confirmDismiss = useCallback(async () => {
+    if (!dismissDialog) {
+      return;
+    }
+
+    setDismissing(true);
+    setDismissErrorMessage(undefined);
+    deletedRowFocusIndexRef.current = dismissDialog.rowIndex;
+    try {
+      await onDismissRecurringOccurrence(dismissDialog.transaction);
+      setDismissDialog(undefined);
+    } catch (error) {
+      deletedRowFocusIndexRef.current = undefined;
+      setDismissErrorMessage(
+        error instanceof Error ? error.message : "The API request failed.",
+      );
+    } finally {
+      setDismissing(false);
+    }
+  }, [dismissDialog, onDismissRecurringOccurrence]);
+
   useLayoutEffect(() => {
-    if (deleteDialog || deletedRowFocusIndexRef.current === undefined) {
+    if (
+      deleteDialog ||
+      dismissDialog ||
+      deletedRowFocusIndexRef.current === undefined
+    ) {
       return;
     }
 
@@ -559,7 +647,7 @@ export const TransactionBrowser = ({
 
       focusWithoutTooltip(target, { preventScroll: true });
     });
-  }, [deleteDialog, transactions]);
+  }, [deleteDialog, dismissDialog, transactions]);
 
   useEffect(() => {
     if (!dateJumpAnchor) {
@@ -725,6 +813,14 @@ export const TransactionBrowser = ({
                 postingStatus === "pending" ||
                 postingStatus === "cancelled";
               const lineInactive = postingStatus === "cancelled";
+              const overdueExpected =
+                postingStatus === "expected" &&
+                transaction.initiated_date < today;
+              const expectedOccurrence =
+                postingStatus === "expected" &&
+                transaction.recurring_occurrence_id !== null;
+              const occurrenceActionBusy =
+                confirmingOccurrenceId !== undefined || dismissing;
               const toggleExpanded = () => {
                 setExpandedTransactionIds((current) => {
                   const next = new Set(current);
@@ -801,11 +897,31 @@ export const TransactionBrowser = ({
                       </div>
                     </td>
                     <td className="transactions-status-column px-1 py-2">
-                      {postingStatus === "mixed" ? (
-                        <MixedSentinel />
-                      ) : (
-                        <StatusIcon status={postingStatus} />
-                      )}
+                      <div className="flex items-center gap-1">
+                        {overdueExpected ? (
+                          <Tooltip
+                            label="Overdue occurrence"
+                            className="inline-flex size-6 shrink-0"
+                          >
+                            <span
+                              aria-label="Overdue"
+                              className="inline-flex size-6 items-center justify-center border border-[var(--border-ink)] bg-[var(--color-class-adjustment-bright)] text-[var(--color-class-adjustment-ink)] shadow-[var(--shadow-chip)]"
+                              data-testid="recurring-overdue-marker"
+                              role="img"
+                            >
+                              <WarningDiamond
+                                aria-hidden="true"
+                                className="size-4"
+                              />
+                            </span>
+                          </Tooltip>
+                        ) : null}
+                        {postingStatus === "mixed" ? (
+                          <MixedSentinel />
+                        ) : (
+                          <StatusIcon status={postingStatus} />
+                        )}
+                      </div>
                     </td>
                     <td className="transactions-description-column px-3 py-2">
                       <div
@@ -936,27 +1052,72 @@ export const TransactionBrowser = ({
                       <RowActions
                         foldable
                         onOverflowOpenChange={onRowActionsOverflowOpenChange}
-                        actions={[
-                          {
-                            icon: <Open aria-hidden="true" />,
-                            label: "Open transaction detail",
-                            onSelect: (opener) => {
-                              onOpenTransaction(transaction, opener);
-                            },
-                          },
-                          {
-                            icon: <Trash aria-hidden="true" />,
-                            label: "Delete transaction",
-                            onSelect: (opener) => {
-                              setDeleteErrorMessage(undefined);
-                              setDeleteDialog({
-                                opener,
-                                rowIndex: transactionIndex,
-                                transaction,
-                              });
-                            },
-                          },
-                        ]}
+                        actions={
+                          expectedOccurrence
+                            ? [
+                                {
+                                  icon: <Open aria-hidden="true" />,
+                                  label: "Open transaction detail",
+                                  onSelect: (opener) => {
+                                    onOpenTransaction(transaction, opener);
+                                  },
+                                },
+                                {
+                                  disabled: occurrenceActionBusy,
+                                  disabledReason: occurrenceActionBusy
+                                    ? "Occurrence action in progress."
+                                    : undefined,
+                                  icon: <Check aria-hidden="true" />,
+                                  label: occurrenceActionBusy
+                                    ? "Confirming"
+                                    : "Confirm occurrence",
+                                  onSelect: () => {
+                                    void confirmOccurrence(
+                                      transaction,
+                                      transactionIndex,
+                                    );
+                                  },
+                                },
+                                {
+                                  disabled: occurrenceActionBusy,
+                                  disabledReason: occurrenceActionBusy
+                                    ? "Occurrence action in progress."
+                                    : undefined,
+                                  icon: <Close aria-hidden="true" />,
+                                  label: "Dismiss occurrence",
+                                  onSelect: (opener) => {
+                                    setOccurrenceActionErrorMessage(undefined);
+                                    setDismissErrorMessage(undefined);
+                                    setDismissDialog({
+                                      opener,
+                                      rowIndex: transactionIndex,
+                                      transaction,
+                                    });
+                                  },
+                                },
+                              ]
+                            : [
+                                {
+                                  icon: <Open aria-hidden="true" />,
+                                  label: "Open transaction detail",
+                                  onSelect: (opener) => {
+                                    onOpenTransaction(transaction, opener);
+                                  },
+                                },
+                                {
+                                  icon: <Trash aria-hidden="true" />,
+                                  label: "Delete transaction",
+                                  onSelect: (opener) => {
+                                    setDeleteErrorMessage(undefined);
+                                    setDeleteDialog({
+                                      opener,
+                                      rowIndex: transactionIndex,
+                                      transaction,
+                                    });
+                                  },
+                                },
+                              ]
+                        }
                       />
                     </td>
                   </tr>
@@ -976,6 +1137,19 @@ export const TransactionBrowser = ({
           </tbody>
         </table>
       </div>
+      {occurrenceActionErrorMessage ? (
+        <div
+          className="border-destructive bg-card border-2 p-3 text-sm shadow-[var(--shadow-pixel)]"
+          role="alert"
+        >
+          <p className="text-destructive font-semibold">
+            Occurrence could not be confirmed.
+          </p>
+          <p className="text-muted-foreground mt-1">
+            {occurrenceActionErrorMessage}
+          </p>
+        </div>
+      ) : null}
 
       <div
         className="bg-card flex shrink-0 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:flex-row sm:items-center sm:justify-between"
@@ -1062,6 +1236,32 @@ export const TransactionBrowser = ({
             transaction={deleteDialog.transaction}
           />
         ) : null}
+      </ConfirmationDialog>
+      <ConfirmationDialog
+        confirmIcon={<Close aria-hidden="true" />}
+        confirmLabel="Dismiss occurrence"
+        errorMessage={dismissErrorMessage}
+        onConfirm={() => {
+          void confirmDismiss();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDismissConfirmation();
+          }
+        }}
+        open={Boolean(dismissDialog)}
+        pending={dismissing}
+        pendingLabel="Dismissing"
+        title="Dismiss occurrence"
+      >
+        <p>
+          {dismissDialog
+            ? `${dismissDialog.transaction.display_title} scheduled ${formatInitiatedDate(
+                dismissDialog.transaction.initiated_date,
+              )}`
+            : ""}
+        </p>
+        <p>This skips only this scheduled occurrence.</p>
       </ConfirmationDialog>
     </div>
   );

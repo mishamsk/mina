@@ -39,7 +39,10 @@ from these semantics.
 ## Occurrence Lifecycle
 
 - Occurrences **auto-materialize when due**, unposted, with a distinct status
-  that excludes them from default transaction views and reports.
+  that excludes them from balances, aggregates, reports, and default API
+  transaction listings. Whether a view shows expected occurrences is a
+  presentation choice owned by the web UI design doc; showing them never
+  changes their aggregate exclusion.
 - Materialization is a catch-up computation triggered by occurrence-facing
   reads and lifecycle actions; there is no background scheduler. Any workflow
   that consumes the occurrence queue — including future automated ingestion
