@@ -291,7 +291,9 @@ const AccountsSidePanelContent = ({
   const panelSessionActiveRef = useRef(true);
   const accountDeleteButtonRef = useRef<HTMLButtonElement | null>(null);
   const creditLimitAddButtonRef = useRef<HTMLButtonElement | null>(null);
+  const creditLimitAmountInputRef = useRef<HTMLInputElement | null>(null);
   const creditLimitDeleteOpenerRef = useRef<HTMLElement | null>(null);
+  const creditLimitRevealButtonRef = useRef<HTMLButtonElement | null>(null);
   const historyErrorRef = useRef<HTMLParagraphElement | null>(null);
   const [form, setForm] = useState<AccountFormState>(() =>
     mode === "create" ? blankForm() : formFromAccount(account),
@@ -307,6 +309,8 @@ const AccountsSidePanelContent = ({
     amount: "",
     effectiveDate: "",
   });
+  const [creditLimitEditorRevealed, setCreditLimitEditorRevealed] =
+    useState(false);
   const [addingCreditLimit, setAddingCreditLimit] = useState(false);
   const [deletingCreditLimitId, setDeletingCreditLimitId] = useState<
     number | undefined
@@ -327,7 +331,7 @@ const AccountsSidePanelContent = ({
   const loadHistory = useCallback(async () => {
     if (!account || account.account_type !== "balance") {
       setHistory([]);
-      return;
+      return [];
     }
 
     setHistoryLoading(true);
@@ -336,7 +340,7 @@ const AccountsSidePanelContent = ({
     setHistoryLoading(false);
     if (result.data) {
       setHistory(result.data.credit_limit_history);
-      return;
+      return result.data.credit_limit_history;
     }
     setHistoryError(
       apiErrorMessage(
@@ -344,6 +348,7 @@ const AccountsSidePanelContent = ({
         "Credit-limit history could not be loaded.",
       ),
     );
+    return undefined;
   }, [account]);
 
   useEffect(() => {
@@ -360,6 +365,15 @@ const AccountsSidePanelContent = ({
       panelRef.current?.focus({ preventScroll: true });
     });
   }, [mode, account?.account_id]);
+
+  useEffect(() => {
+    if (!creditLimitEditorRevealed) {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      creditLimitAmountInputRef.current?.focus({ preventScroll: true });
+    });
+  }, [creditLimitEditorRevealed]);
 
   const closeAccountDelete = useCallback(() => {
     if (!deletingAccount) {
@@ -559,13 +573,21 @@ const AccountsSidePanelContent = ({
     setDeletingCreditLimitId(undefined);
     if (result.data !== undefined || !result.error) {
       setCreditLimitDeleteEntry(undefined);
-      await Promise.all([loadHistory(), refreshAccountsAfterMutation()]);
+      const [nextHistory] = await Promise.all([
+        loadHistory(),
+        refreshAccountsAfterMutation(),
+      ]);
       if (!panelSessionActiveRef.current) {
         return;
       }
+      if (nextHistory?.length === 0) {
+        setCreditLimitEditorRevealed(false);
+      }
       onNotice("Credit limit deleted.");
       window.requestAnimationFrame(() => {
-        creditLimitAddButtonRef.current?.focus({ preventScroll: true });
+        const focusTarget =
+          creditLimitAddButtonRef.current ?? creditLimitRevealButtonRef.current;
+        focusTarget?.focus({ preventScroll: true });
       });
       return;
     }
@@ -605,7 +627,34 @@ const AccountsSidePanelContent = ({
   const title = mode === "create" ? "Create account" : "Edit account";
   const showCreditLimits =
     mode === "edit" && account?.account_type === "balance";
+  const hasLoadedEmptyCreditLimitHistory =
+    !historyLoading && !historyError && history.length === 0;
   const creditLimitCurrency = account?.currency ?? form.currency;
+  const creditLimitHistoryList = historyLoading ? (
+    <div className="space-y-2" aria-hidden="true">
+      <Skeleton className="h-10" />
+      <Skeleton className="h-10" />
+    </div>
+  ) : historyError ? (
+    <p
+      ref={historyErrorRef}
+      role="alert"
+      tabIndex={-1}
+      className="text-destructive text-sm"
+    >
+      {historyError}
+    </p>
+  ) : (
+    <CreditLimitRows
+      currency={creditLimitCurrency}
+      deletingId={deletingCreditLimitId}
+      history={history}
+      onDeleteClick={(entry, opener) => {
+        creditLimitDeleteOpenerRef.current = opener;
+        setCreditLimitDeleteEntry(entry);
+      }}
+    />
+  );
 
   return (
     <aside
@@ -825,93 +874,92 @@ const AccountsSidePanelContent = ({
             >
               Credit-limit history
             </h3>
-            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_10rem_auto]">
-              <Field htmlFor="credit-limit-amount" label="Amount">
-                <input
-                  id="credit-limit-amount"
-                  inputMode="decimal"
-                  className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                  placeholder="20000.00"
-                  value={creditDraft.amount}
-                  onBlur={() => {
-                    setFieldError(
-                      "creditLimit",
-                      validateCreditLimitField(creditDraft, "creditLimit"),
-                    );
+            {hasLoadedEmptyCreditLimitHistory && !creditLimitEditorRevealed ? (
+              <>
+                <Button
+                  ref={creditLimitRevealButtonRef}
+                  type="button"
+                  variant="secondary"
+                  className="mt-3"
+                  onClick={() => {
+                    setCreditLimitEditorRevealed(true);
                   }}
-                  onChange={(event) => {
-                    setCreditDraft((current) => ({
-                      ...current,
-                      amount: event.target.value,
-                    }));
-                    setFieldError("creditLimit", undefined);
-                  }}
-                />
-                <FieldError message={fieldErrors.creditLimit} />
-              </Field>
-              <Field htmlFor="credit-limit-date" label="Effective">
-                <input
-                  id="credit-limit-date"
-                  type="date"
-                  className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                  value={creditDraft.effectiveDate}
-                  onBlur={() => {
-                    setFieldError(
-                      "effectiveDate",
-                      validateCreditLimitField(creditDraft, "effectiveDate"),
-                    );
-                  }}
-                  onChange={(event) => {
-                    setCreditDraft((current) => ({
-                      ...current,
-                      effectiveDate: event.target.value,
-                    }));
-                    setFieldError("effectiveDate", undefined);
-                  }}
-                />
-                <FieldError message={fieldErrors.effectiveDate} />
-              </Field>
-              <Button
-                ref={creditLimitAddButtonRef}
-                type="button"
-                className="self-start sm:mt-6"
-                disabled={addingCreditLimit}
-                onClick={() => {
-                  void addCreditLimit();
-                }}
-              >
-                <Plus aria-hidden="true" />
-                Add
-              </Button>
-            </div>
-
-            <div className="mt-4">
-              {historyLoading ? (
-                <div className="space-y-2" aria-hidden="true">
-                  <Skeleton className="h-10" />
-                  <Skeleton className="h-10" />
-                </div>
-              ) : historyError ? (
-                <p
-                  ref={historyErrorRef}
-                  role="alert"
-                  tabIndex={-1}
-                  className="text-destructive text-sm"
                 >
-                  {historyError}
-                </p>
-              ) : (
-                <CreditLimitRows
-                  currency={creditLimitCurrency}
-                  deletingId={deletingCreditLimitId}
-                  history={history}
-                  onDeleteClick={(entry, opener) => {
-                    creditLimitDeleteOpenerRef.current = opener;
-                    setCreditLimitDeleteEntry(entry);
-                  }}
-                />
-              )}
-            </div>
+                  <Plus aria-hidden="true" />
+                  Add credit limit
+                </Button>
+              </>
+            ) : historyLoading || historyError ? (
+              <div className="mt-4">{creditLimitHistoryList}</div>
+            ) : (
+              <>
+                <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_10rem_auto]">
+                  <Field htmlFor="credit-limit-amount" label="Amount">
+                    <input
+                      ref={creditLimitAmountInputRef}
+                      id="credit-limit-amount"
+                      inputMode="decimal"
+                      className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                      placeholder="20000.00"
+                      value={creditDraft.amount}
+                      onBlur={() => {
+                        setFieldError(
+                          "creditLimit",
+                          validateCreditLimitField(creditDraft, "creditLimit"),
+                        );
+                      }}
+                      onChange={(event) => {
+                        setCreditDraft((current) => ({
+                          ...current,
+                          amount: event.target.value,
+                        }));
+                        setFieldError("creditLimit", undefined);
+                      }}
+                    />
+                    <FieldError message={fieldErrors.creditLimit} />
+                  </Field>
+                  <Field htmlFor="credit-limit-date" label="Effective">
+                    <input
+                      id="credit-limit-date"
+                      type="date"
+                      className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                      value={creditDraft.effectiveDate}
+                      onBlur={() => {
+                        setFieldError(
+                          "effectiveDate",
+                          validateCreditLimitField(
+                            creditDraft,
+                            "effectiveDate",
+                          ),
+                        );
+                      }}
+                      onChange={(event) => {
+                        setCreditDraft((current) => ({
+                          ...current,
+                          effectiveDate: event.target.value,
+                        }));
+                        setFieldError("effectiveDate", undefined);
+                      }}
+                    />
+                    <FieldError message={fieldErrors.effectiveDate} />
+                  </Field>
+                  <Button
+                    ref={creditLimitAddButtonRef}
+                    type="button"
+                    className="self-start sm:mt-6"
+                    disabled={addingCreditLimit}
+                    onClick={() => {
+                      void addCreditLimit();
+                    }}
+                  >
+                    <Plus aria-hidden="true" />
+                    Add
+                  </Button>
+                </div>
+
+                <div className="mt-4">{creditLimitHistoryList}</div>
+              </>
+            )}
           </section>
         ) : null}
       </div>

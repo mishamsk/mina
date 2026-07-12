@@ -251,7 +251,8 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Row actions (trailing column, per the affordance-class rule): move/rename and delete as button-class actions — delete disabled with an explanatory tooltip when the node cannot be deleted; hide/unhide and featured (star) as persistent flat toggle icons. Leaf and group rows carry the actions that apply to them.
 - Toolbar: search, type filter, include-hidden toggle. Create/edit in a side panel: FQN, type, currency, external id/system, hidden.
 - Restructuring: rename a node or move it to a new parent from the tree; the whole subtree follows with an FQN prefix rewrite.
-- Credit-limit history for card accounts is managed from the account's edit panel or page header.
+- Credit-limit history for card accounts is managed from the account's edit panel or page header. Until an account has its first credit-limit entry, the section renders as a single "Add credit limit" button; activating it reveals the full credit-limit editor.
+- Accounts with credit-limit history show a small credit-card icon immediately right of the account name — in the name area, never the actions column — in the chart of accounts and on the account page header. The icon is a pure indicator (no press or hover affordance).
 
 ### 6. Reference data: Categories, Tags, Members, Templates — Phase 2
 

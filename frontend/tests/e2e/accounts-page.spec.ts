@@ -19,6 +19,7 @@ interface TagFixture {
 
 interface BalanceFixture {
   readonly account_id: number;
+  readonly credit_limit?: string;
   readonly currency: string;
   readonly current_balance: string;
   readonly current_balance_usd: string;
@@ -219,7 +220,12 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
   const jointBalance = balances.find(
     (balance) => balance.account_id === joint.account_id,
   );
+  const sapphire = findByFqn(accounts, "credit_card:Chase:Sapphire");
+  const sapphireBalance = balances.find(
+    (balance) => balance.account_id === sapphire.account_id,
+  );
   expect(jointBalance).toBeDefined();
+  expect(sapphireBalance?.credit_limit).toBeDefined();
 
   await expect(page.getByRole("heading", { name: "Accounts" })).toBeVisible();
   const accountsNavLink = page
@@ -242,6 +248,7 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
   await expect(jointRow).toContainText(
     formatUsdMarkerAmount(jointBalance?.current_balance ?? "0"),
   );
+  await expect(jointRow.getByTestId("credit-limit-indicator")).toHaveCount(0);
 
   const traderJoesRow = page
     .getByTestId("accounts-tree-row")
@@ -273,9 +280,14 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
   await page.getByLabel("Type").click();
   await page.getByRole("option", { exact: true, name: "All types" }).click();
   await expect(page).toHaveURL(/q=credit_card%3AChase%3ASapphire/);
+  const sapphireRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "Sapphire" });
+  await expect(sapphireRow).toBeVisible();
+  await expect(sapphireRow.getByTestId("credit-limit-indicator")).toBeVisible();
   await expect(
-    page.getByTestId("accounts-tree-row").filter({ hasText: "Sapphire" }),
-  ).toBeVisible();
+    sapphireRow.getByRole("button", { exact: true, name: "Has credit limit" }),
+  ).toHaveCount(0);
   await expect(
     page.getByTestId("accounts-tree-row").filter({ hasText: "BlueCash" }),
   ).toHaveCount(0);
@@ -525,6 +537,16 @@ test("account page renders header and paginated running-balance register", async
   await expect(
     page.locator("li").filter({ hasText: "5,000.00 $" }).getByText("May 1"),
   ).toBeVisible();
+  const accountHeader = page.getByTestId("account-header");
+  await expect(
+    accountHeader.getByTestId("credit-limit-indicator"),
+  ).toBeVisible();
+  await expect(
+    accountHeader.getByRole("button", {
+      exact: true,
+      name: "Has credit limit",
+    }),
+  ).toHaveCount(0);
 
   const firstRow = page
     .getByTestId("account-register-row")
@@ -1528,6 +1550,15 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   await expect(creditLimitRow).toBeVisible();
   await creditLimitRow.getByRole("button", { name: "Edit account" }).click();
   await expect(editPanel).toBeVisible();
+  const addCreditLimitRevealButton = editPanel.getByRole("button", {
+    name: "Add credit limit",
+  });
+  await expect(addCreditLimitRevealButton).toBeVisible();
+  await expect(editPanel.getByLabel("Amount")).toHaveCount(0);
+  await addCreditLimitRevealButton.focus();
+  await expect(addCreditLimitRevealButton).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(editPanel.getByLabel("Amount")).toBeFocused();
   await editPanel.getByLabel("Amount").fill("23000.00");
   await editPanel.getByLabel("Effective").fill("2026-07-05");
   const creditLimitCreate = page.waitForResponse((response) => {
@@ -1544,6 +1575,10 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   });
   await expect(editPanel.getByText("2026-07-05")).toBeVisible();
   await expect(editPanel.getByText("23,000.00 $")).toBeVisible();
+  await expect(
+    editPanel.getByRole("button", { name: "Add credit limit" }),
+  ).toHaveCount(0);
+  await expect(editPanel.getByLabel("Amount")).toBeVisible();
 
   await editPanel
     .getByRole("listitem")

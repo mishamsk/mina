@@ -7,6 +7,7 @@ import { AmountText, FqnPath } from "@/features/ledger";
 import { formatLocalCivilDate } from "@/utils/date";
 
 import { AccountTypeBadge } from "./account-type-badge";
+import { CreditLimitIndicator } from "./credit-limit-indicator";
 
 interface AccountHeaderProps {
   readonly account: {
@@ -50,7 +51,10 @@ export const AccountHeader = ({
   const latestCreditLimit = creditLimitHistory[0];
 
   return (
-    <div className="bg-card border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]">
+    <div
+      className="bg-card border-2 border-[var(--border-ink)] p-4 shadow-[var(--shadow-pixel)]"
+      data-testid="account-header"
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -58,6 +62,7 @@ export const AccountHeader = ({
               value={account.fqn}
               className="text-lg font-semibold sm:text-xl"
             />
+            {creditLimitHistory.length > 0 ? <CreditLimitIndicator /> : null}
             <AccountTypeBadge accountType={account.account_type} />
             {account.currency ? (
               <Badge variant="outline" className="bg-[var(--band)]">

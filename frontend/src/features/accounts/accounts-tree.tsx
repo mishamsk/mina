@@ -33,6 +33,7 @@ import { AmountText, FqnPath } from "@/features/ledger";
 import { cn } from "@/lib/utils";
 
 import { AccountTypeBadge } from "./account-type-badge";
+import { CreditLimitIndicator } from "./credit-limit-indicator";
 import { refreshAccountsAfterMutation } from "./use-accounts-resource";
 
 export type AccountTypeFilter = AccountType | "all";
@@ -519,6 +520,9 @@ export const AccountsTree = ({
                 const rowBalances = account
                   ? (accountBalancesById.get(account.account_id) ?? [])
                   : [];
+                const hasCreditLimit = rowBalances.some(
+                  (balance) => balance.credit_limit !== undefined,
+                );
                 const group = groupByFqn.get(row.fqn);
                 const rowHidden =
                   account?.is_hidden ?? group?.is_hidden ?? false;
@@ -695,6 +699,7 @@ export const AccountsTree = ({
                                 value={row.fqn}
                               />
                             </span>
+                            {hasCreditLimit ? <CreditLimitIndicator /> : null}
                             {rowHidden ? (
                               <HiddenRowIndicator label="Hidden account" />
                             ) : null}
