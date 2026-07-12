@@ -16,12 +16,14 @@ interface CategoriesState {
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
   readonly snapshot: CategoriesPageSnapshot | undefined;
+  readonly stale: boolean;
 }
 
 const initialCategoriesState: CategoriesState = {
   errorMessage: undefined,
   loading: false,
   snapshot: undefined,
+  stale: false,
 };
 
 const categoriesStore = create<CategoriesState>()(
@@ -36,6 +38,7 @@ export const useCategoriesPageView = () =>
       errorMessage: state.errorMessage,
       loading: state.loading,
       snapshot: state.snapshot,
+      stale: state.stale,
     })),
   );
 
@@ -74,6 +77,7 @@ export const setCategoriesPage = (
         ...snapshot,
         loadedAt: new Date().toISOString(),
       },
+      stale: false,
     },
     false,
     "CategoriesStore/setCategoriesPage",
@@ -88,5 +92,17 @@ export const setCategoriesPageError = (errorMessage: string): void => {
     },
     false,
     "CategoriesStore/setCategoriesPageError",
+  );
+};
+
+export const invalidateCategoriesPage = (): void => {
+  useCategoriesStore.setState(
+    {
+      errorMessage: undefined,
+      loading: false,
+      stale: true,
+    },
+    false,
+    "CategoriesStore/invalidateCategoriesPage",
   );
 };

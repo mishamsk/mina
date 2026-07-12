@@ -17,6 +17,7 @@
 - Entry supports the spend, income, refund, and transfer shorthand endpoints.
 - Saved-transaction Edit/Split saves are full replacements owned by the entry panel; page routes own the post-save refresh fan-out and notices.
 - Saved-transaction Duplicate reuses entry-panel prefill mapping but stays on the create path.
+- Successful transaction mutations trigger shared invalidation for account, category, tag, and member page snapshots so REST-provided `deletable` flags refetch without a reload.
 - Transaction-entry drafts are per tab and store UI form values only.
 - The active entry tab is a persisted UI preference.
 - Transfer fee rows are not expressible through the transfer shorthand endpoint.
@@ -24,8 +25,8 @@
 ## Boundaries
 
 - Owns: ledger display atoms, transaction browser, transaction detail panel rendering, record tables, tombstone confirmation UI, bounded lookup pickers, and entry-panel UI mapping.
-- Does not own: REST endpoint generation, accounting validation, durable accounting persistence, route URL state, missing-detail fetches, transaction delete calls, or page snapshot refreshes.
-- Page routes own URL filter semantics, URL-addressed detail state, page-specific detail actions, and REST mutation refresh rules beyond shared row tombstones.
+- Does not own: REST endpoint generation, accounting validation, durable accounting persistence, route URL state, missing-detail fetches, transaction delete calls, or page snapshot refreshes beyond shared transaction-mutation invalidation.
+- Page routes own URL filter semantics, URL-addressed detail state, page-specific detail actions, and REST mutation refresh rules beyond shared transaction-mutation invalidation and row tombstones.
 
 ## Testing Notes
 

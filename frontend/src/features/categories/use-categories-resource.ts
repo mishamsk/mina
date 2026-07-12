@@ -115,7 +115,11 @@ export const useCategoriesResource = () => {
 
   useEffect(() => {
     const snapshot = getCategoriesSnapshot();
-    if (snapshot.snapshot || snapshot.loading || snapshot.errorMessage) {
+    if (
+      (snapshot.snapshot && !snapshot.stale) ||
+      snapshot.loading ||
+      snapshot.errorMessage
+    ) {
       return;
     }
 
@@ -126,6 +130,7 @@ export const useCategoriesResource = () => {
     categoriesPage.errorMessage,
     categoriesPage.loading,
     categoriesPage.snapshot,
+    categoriesPage.stale,
   ]);
 
   return categoriesPage;

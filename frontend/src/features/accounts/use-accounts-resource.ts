@@ -139,14 +139,23 @@ export const useAccountsResource = () => {
 
   useEffect(() => {
     const snapshot = getAccountsSnapshot();
-    if (snapshot.snapshot || snapshot.loading || snapshot.errorMessage) {
+    if (
+      (snapshot.snapshot && !snapshot.stale) ||
+      snapshot.loading ||
+      snapshot.errorMessage
+    ) {
       return;
     }
 
     const generation = nextAccountsPageLoadGeneration();
 
     void loadAccountsPage(generation, () => mountedRef.current);
-  }, [accountsPage.errorMessage, accountsPage.loading, accountsPage.snapshot]);
+  }, [
+    accountsPage.errorMessage,
+    accountsPage.loading,
+    accountsPage.snapshot,
+    accountsPage.stale,
+  ]);
 
   return accountsPage;
 };

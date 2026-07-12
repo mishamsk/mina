@@ -113,14 +113,23 @@ export const useTagsResource = () => {
 
   useEffect(() => {
     const snapshot = getTagsSnapshot();
-    if (snapshot.snapshot || snapshot.loading || snapshot.errorMessage) {
+    if (
+      (snapshot.snapshot && !snapshot.stale) ||
+      snapshot.loading ||
+      snapshot.errorMessage
+    ) {
       return;
     }
 
     const generation = nextTagsPageLoadGeneration();
 
     void loadTagsPage(generation, () => mountedRef.current);
-  }, [tagsPage.errorMessage, tagsPage.loading, tagsPage.snapshot]);
+  }, [
+    tagsPage.errorMessage,
+    tagsPage.loading,
+    tagsPage.snapshot,
+    tagsPage.stale,
+  ]);
 
   return tagsPage;
 };

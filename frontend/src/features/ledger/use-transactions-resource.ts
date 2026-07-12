@@ -17,8 +17,12 @@ import {
   getTransactionsSnapshot,
   invalidateAccountHeader,
   invalidateAccountRegisterPages,
+  invalidateAccountsPage,
   invalidateAccountTransactionCache,
+  invalidateCategoriesPage,
   invalidateGroupRegisterPages,
+  invalidateMembersPage,
+  invalidateTagsPage,
   invalidateTransactionPages,
   normalizedCategoryPickerIntents,
   setCategoryPickerCategories,
@@ -216,6 +220,13 @@ export const refreshLedgerLookups = async (): Promise<void> => {
   await loadLedgerLookups();
 };
 
+export const invalidateReferencePagesAfterTransactionMutation = (): void => {
+  invalidateAccountsPage();
+  invalidateCategoriesPage();
+  invalidateTagsPage();
+  invalidateMembersPage();
+};
+
 export const invalidateAccountRegistersForTransaction = (
   transaction: Transaction,
   previousTransaction?: Transaction,
@@ -241,6 +252,7 @@ export const refreshTransactionPageAfterSave = async (
   transaction?: Transaction,
   previousTransaction?: Transaction,
 ): Promise<boolean> => {
+  invalidateReferencePagesAfterTransactionMutation();
   if (transaction) {
     invalidateAccountRegistersForTransaction(transaction, previousTransaction);
   }

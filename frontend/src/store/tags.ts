@@ -16,12 +16,14 @@ interface TagsState {
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
   readonly snapshot: TagsPageSnapshot | undefined;
+  readonly stale: boolean;
 }
 
 const initialTagsState: TagsState = {
   errorMessage: undefined,
   loading: false,
   snapshot: undefined,
+  stale: false,
 };
 
 const tagsStore = create<TagsState>()(
@@ -36,6 +38,7 @@ export const useTagsPageView = () =>
       errorMessage: state.errorMessage,
       loading: state.loading,
       snapshot: state.snapshot,
+      stale: state.stale,
     })),
   );
 
@@ -73,6 +76,7 @@ export const setTagsPage = (
         ...snapshot,
         loadedAt: new Date().toISOString(),
       },
+      stale: false,
     },
     false,
     "TagsStore/setTagsPage",
@@ -87,5 +91,17 @@ export const setTagsPageError = (errorMessage: string): void => {
     },
     false,
     "TagsStore/setTagsPageError",
+  );
+};
+
+export const invalidateTagsPage = (): void => {
+  useTagsStore.setState(
+    {
+      errorMessage: undefined,
+      loading: false,
+      stale: true,
+    },
+    false,
+    "TagsStore/invalidateTagsPage",
   );
 };

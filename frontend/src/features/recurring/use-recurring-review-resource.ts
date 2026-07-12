@@ -8,6 +8,7 @@ import {
   type Transaction,
 } from "@/api";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
+import { invalidateReferencePagesAfterTransactionMutation } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
 import {
   invalidateAccountHeaders,
@@ -122,6 +123,7 @@ const loadRecurringReviewPage = async (
 export const refreshRecurringAfterOccurrenceMutation = async (
   refreshReviewPage: () => Promise<boolean>,
 ): Promise<boolean> => {
+  invalidateReferencePagesAfterTransactionMutation();
   invalidateTransactionPages();
   invalidateAccountHeaders();
   invalidateAllAccountRegisterPages();

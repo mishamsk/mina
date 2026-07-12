@@ -14,6 +14,7 @@ export {
   invalidateAccountHeader,
   invalidateAccountHeaders,
   invalidateAccountRegisterPages,
+  invalidateAccountsPage,
   invalidateAccountTransactionCache,
   invalidateAllAccountRegisterPages,
   invalidateAllAccountTransactionCache,
@@ -55,6 +56,7 @@ export {
   type CategoriesPageSnapshot,
   clearCategoriesPageLoading,
   getCategoriesSnapshot,
+  invalidateCategoriesPage,
   setCategoriesPage,
   setCategoriesPageError,
   setCategoriesPageLoading,
@@ -74,6 +76,7 @@ export {
 export {
   clearMembersPageLoading,
   getMembersSnapshot,
+  invalidateMembersPage,
   type MembersPageSnapshot,
   setMembersPage,
   setMembersPageError,
@@ -99,6 +102,7 @@ export {
 export {
   clearTagsPageLoading,
   getTagsSnapshot,
+  invalidateTagsPage,
   setTagsPage,
   setTagsPageError,
   setTagsPageLoading,

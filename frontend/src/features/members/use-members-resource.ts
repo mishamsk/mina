@@ -117,7 +117,7 @@ export const useMembersResource = (includeHidden = false) => {
   useEffect(() => {
     const snapshot = getMembersSnapshot();
     if (
-      snapshot.snapshot?.includeHidden === includeHidden ||
+      (snapshot.snapshot?.includeHidden === includeHidden && !snapshot.stale) ||
       (membersPageLoadIncludeHidden === includeHidden &&
         (snapshot.loading || snapshot.errorMessage))
     ) {
@@ -132,6 +132,7 @@ export const useMembersResource = (includeHidden = false) => {
     membersPage.errorMessage,
     membersPage.loading,
     membersPage.snapshot,
+    membersPage.stale,
   ]);
 
   return membersPage;

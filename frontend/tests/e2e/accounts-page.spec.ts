@@ -100,6 +100,20 @@ const createTag = async (page: Page, fqn: string): Promise<TagFixture> => {
   return (await response.json()) as TagFixture;
 };
 
+const createCategory = async (
+  page: Page,
+  fqn: string,
+): Promise<CategoryFixture> => {
+  const response = await page.request.post("/api/categories", {
+    data: {
+      economic_intent: "expense",
+      fqn,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as CategoryFixture;
+};
+
 const findByFqn = <T extends { readonly fqn: string }>(
   fixtures: readonly T[],
   fqn: string,
@@ -112,6 +126,28 @@ const findByFqn = <T extends { readonly fqn: string }>(
 const requireDefined = <T>(value: T | undefined, label: string): T => {
   expect(value, label).toBeDefined();
   return value as T;
+};
+
+const quickDeleteTransactionFromRow = async (
+  page: Page,
+  row: Locator,
+): Promise<void> => {
+  await row.getByRole("button", { name: "Delete transaction" }).click();
+  const dialog = page.getByRole("alertdialog", {
+    name: "Delete transaction",
+  });
+  await expect(dialog).toBeVisible();
+  const deletion = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.startsWith("/api/transactions/") &&
+      response.request().method() === "DELETE",
+  );
+  await dialog.getByRole("button", { name: "Delete transaction" }).click();
+  expect((await deletion).status()).toBe(204);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction deleted." }),
+  ).toBeVisible();
+  await expect(row).toBeHidden();
 };
 
 const formatDecimalAmount = (value: string): string => {
@@ -308,6 +344,164 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     .first();
   await expect(hiddenRow).toBeVisible();
   await expect(hiddenRow.getByLabel("Hidden account")).toBeVisible();
+});
+
+test("transaction quick-delete refreshes reference deleteability without a reload", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const accounts = await listFixtures<AccountFixture>(
+    page,
+    "/api/accounts",
+    "accounts",
+  );
+  const feesAccount = findByFqn(accounts, "bank:Chase:fees");
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+
+  await page.goto("/accounts");
+  await page.getByLabel("Search").fill(feesAccount.fqn);
+  const feesRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: feesAccount.fqn })
+    .first();
+  const feesRowDelete = feesRow.getByRole("button", {
+    name: "Delete account",
+  });
+  await expect(feesRow).toBeVisible();
+  await expect(feesRowDelete).toHaveAttribute("aria-disabled", "true");
+
+  await page
+    .getByLabel("Primary")
+    .getByRole("link", { exact: true, name: "Transactions" })
+    .click();
+  await expect(page).toHaveURL(/\/transactions(?:\?|$)/);
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Transactions" }),
+  ).toBeVisible();
+  await page
+    .getByRole("searchbox", { name: "Search" })
+    .fill("Wire transfer with fee");
+  const feesTransactionRows = page.locator("tbody > tr[aria-expanded]");
+  await expect(feesTransactionRows).toHaveCount(1);
+  await quickDeleteTransactionFromRow(page, feesTransactionRows.first());
+
+  await page
+    .getByLabel("Primary")
+    .getByRole("link", { exact: true, name: "Accounts" })
+    .click();
+  await expect(page).toHaveURL(/\/accounts(?:\?|$)/);
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Accounts" }),
+  ).toBeVisible();
+  await page.getByLabel("Search").fill(feesAccount.fqn);
+  await expect(feesRow).toBeVisible();
+  await expect(feesRowDelete).not.toHaveAttribute("aria-disabled", "true");
+  await feesRowDelete.click();
+  const accountDeleteDialog = page.getByRole("alertdialog", {
+    name: "Delete account",
+  });
+  await expect(accountDeleteDialog).toBeVisible();
+  await accountDeleteDialog.getByRole("button", { name: "Cancel" }).click();
+
+  await feesRow.getByRole("button", { name: "Edit account" }).click();
+  const accountPanel = page.getByRole("dialog", { name: "Edit account" });
+  const accountPanelDelete = accountPanel.getByRole("button", {
+    name: "Delete",
+  });
+  await expect(accountPanelDelete).not.toHaveAttribute("aria-disabled", "true");
+  await accountPanelDelete.click();
+  const accountDeletion = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${feesAccount.account_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await accountDeleteDialog
+    .getByRole("button", { name: "Delete account" })
+    .click();
+  expect((await accountDeletion).status()).toBe(204);
+  await expect(feesRow).toHaveCount(0);
+
+  const category = await createCategory(page, `E2E:Deleteability:${unique}`);
+  const categoryMemo = `E2E deleteability category ${unique}`;
+  const categoryTransaction = await page.request.post(
+    "/api/transactions/spend",
+    {
+      data: {
+        amount: "14.56",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-07-03",
+        memo: categoryMemo,
+      },
+    },
+  );
+  expect(categoryTransaction.ok()).toBe(true);
+
+  await page
+    .getByLabel("Primary")
+    .getByRole("link", { exact: true, name: "Categories" })
+    .click();
+  await expect(page).toHaveURL(/\/categories(?:\?|$)/);
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Categories" }),
+  ).toBeVisible();
+  await page.getByLabel("Search").fill(category.fqn);
+  const categoryRow = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn })
+    .first();
+  const categoryDelete = categoryRow.getByRole("button", {
+    name: "Delete category",
+  });
+  await expect(categoryRow).toBeVisible();
+  await expect(categoryDelete).toHaveAttribute("aria-disabled", "true");
+
+  await page
+    .getByLabel("Primary")
+    .getByRole("link", { exact: true, name: "Transactions" })
+    .click();
+  await expect(page).toHaveURL(/\/transactions(?:\?|$)/);
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Transactions" }),
+  ).toBeVisible();
+  await page.getByRole("searchbox", { name: "Search" }).fill(categoryMemo);
+  const categoryTransactionRows = page.locator("tbody > tr[aria-expanded]");
+  await expect(categoryTransactionRows).toHaveCount(1);
+  await quickDeleteTransactionFromRow(page, categoryTransactionRows.first());
+
+  await page
+    .getByLabel("Primary")
+    .getByRole("link", { exact: true, name: "Categories" })
+    .click();
+  await expect(page).toHaveURL(/\/categories(?:\?|$)/);
+  await expect(
+    page.getByRole("heading", { exact: true, name: "Categories" }),
+  ).toBeVisible();
+  await page.getByLabel("Search").fill(category.fqn);
+  await expect(categoryRow).toBeVisible();
+  await expect(categoryDelete).not.toHaveAttribute("aria-disabled", "true");
+  await categoryDelete.click();
+  const categoryDeleteDialog = page.getByRole("alertdialog", {
+    name: "Delete category",
+  });
+  const categoryDeletion = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/categories/${category.category_id}` &&
+      response.request().method() === "DELETE"
+    );
+  });
+  await categoryDeleteDialog
+    .getByRole("button", { name: "Delete category" })
+    .click();
+  expect((await categoryDeletion).status()).toBe(204);
+  await expect(categoryRow).toHaveCount(0);
 });
 
 test("accounts tree gives Name column available width before truncating FQNs", async ({

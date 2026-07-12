@@ -66,6 +66,7 @@ interface AccountsState {
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
   readonly snapshot: AccountsPageSnapshot | undefined;
+  readonly stale: boolean;
   readonly transactionCacheGeneration: number;
   readonly transactionCache: Readonly<
     Record<number, AccountTransactionSnapshot>
@@ -86,6 +87,7 @@ const initialAccountsState: AccountsState = {
   errorMessage: undefined,
   loading: false,
   snapshot: undefined,
+  stale: false,
   transactionCacheGeneration: 1,
   transactionCache: {},
   transactionCacheErrors: {},
@@ -104,6 +106,7 @@ export const useAccountsPageView = () =>
       errorMessage: state.errorMessage,
       loading: state.loading,
       snapshot: state.snapshot,
+      stale: state.stale,
     })),
   );
 
@@ -217,6 +220,7 @@ export const setAccountsPage = (
         ...snapshot,
         loadedAt: new Date().toISOString(),
       },
+      stale: false,
     },
     false,
     "AccountsStore/setAccountsPage",
@@ -231,6 +235,18 @@ export const setAccountsPageError = (errorMessage: string): void => {
     },
     false,
     "AccountsStore/setAccountsPageError",
+  );
+};
+
+export const invalidateAccountsPage = (): void => {
+  useAccountsStore.setState(
+    {
+      errorMessage: undefined,
+      loading: false,
+      stale: true,
+    },
+    false,
+    "AccountsStore/invalidateAccountsPage",
   );
 };
 

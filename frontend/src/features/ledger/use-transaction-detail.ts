@@ -13,6 +13,7 @@ import { refreshOverview } from "@/features/overview";
 
 import {
   invalidateAccountRegistersForTransaction,
+  invalidateReferencePagesAfterTransactionMutation,
   refreshTransactionPage,
 } from "./use-transactions-resource";
 
@@ -126,6 +127,7 @@ export const useTransactionDetail = ({
       }
 
       setSuppressedDetailFetchId(nextTransaction.transaction_id);
+      invalidateReferencePagesAfterTransactionMutation();
       invalidateAccountRegistersForTransaction(nextTransaction);
       closeTransactionDetail();
       onNotice("Transaction deleted.");

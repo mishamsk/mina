@@ -16,12 +16,14 @@ interface MembersState {
   readonly errorMessage: string | undefined;
   readonly loading: boolean;
   readonly snapshot: MembersPageSnapshot | undefined;
+  readonly stale: boolean;
 }
 
 const initialMembersState: MembersState = {
   errorMessage: undefined,
   loading: false,
   snapshot: undefined,
+  stale: false,
 };
 
 const membersStore = create<MembersState>()(
@@ -36,6 +38,7 @@ export const useMembersPageView = () =>
       errorMessage: state.errorMessage,
       loading: state.loading,
       snapshot: state.snapshot,
+      stale: state.stale,
     })),
   );
 
@@ -74,6 +77,7 @@ export const setMembersPage = (
         ...snapshot,
         loadedAt: new Date().toISOString(),
       },
+      stale: false,
     },
     false,
     "MembersStore/setMembersPage",
@@ -88,5 +92,17 @@ export const setMembersPageError = (errorMessage: string): void => {
     },
     false,
     "MembersStore/setMembersPageError",
+  );
+};
+
+export const invalidateMembersPage = (): void => {
+  useMembersStore.setState(
+    {
+      errorMessage: undefined,
+      loading: false,
+      stale: true,
+    },
+    false,
+    "MembersStore/invalidateMembersPage",
   );
 };
