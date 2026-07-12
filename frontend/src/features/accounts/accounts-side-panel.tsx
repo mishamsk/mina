@@ -37,7 +37,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { AmountText } from "@/features/ledger";
 
-import { AccountTypeBadge } from "./account-type-badge";
 import { refreshAccountsAfterMutation } from "./use-accounts-resource";
 
 type AccountFormField =
@@ -78,6 +77,8 @@ interface AccountsSidePanelProps {
 
 const validCurrencyPattern = /^([A-Z]{3}|C::.+)$/;
 const nonNegativeDecimalPattern = /^\d+(\.\d{1,8})?$/;
+const floatingOverlaySelector =
+  "[role='alertdialog'], [role='listbox'], [data-slot='select-content'][data-state='open']";
 const blankForm = (): AccountFormState => ({
   accountType: "balance",
   currency: "USD",
@@ -403,7 +404,7 @@ const AccountsSidePanelContent = ({
         if (event.defaultPrevented) {
           return;
         }
-        if (document.querySelector("[role='alertdialog']")) {
+        if (document.querySelector(floatingOverlaySelector)) {
           return;
         }
         event.preventDefault();
@@ -470,6 +471,11 @@ const AccountsSidePanelContent = ({
       return;
     }
 
+    const accountTypeChanged =
+      mode === "edit" &&
+      account !== undefined &&
+      form.accountType !== account.account_type;
+
     setSaving(true);
     const result =
       mode === "create"
@@ -484,6 +490,7 @@ const AccountsSidePanelContent = ({
           } satisfies CreateAccountRequest)
         : account
           ? await updateLedgerAccount(account.account_id, {
+              ...(accountTypeChanged ? { account_type: form.accountType } : {}),
               external_id: normalizeNullableString(form.externalId),
               external_system: normalizeNullableString(form.externalSystem),
               is_featured: form.isFeatured,
@@ -499,7 +506,10 @@ const AccountsSidePanelContent = ({
     }
 
     if (result.data) {
-      await refreshAccountsAfterMutation({ account: result.data });
+      await refreshAccountsAfterMutation({
+        account: result.data,
+        bulk: accountTypeChanged,
+      });
       if (!panelSessionActiveRef.current) {
         return;
       }
@@ -544,9 +554,20 @@ const AccountsSidePanelContent = ({
 
     if (result.data) {
       setCreditDraft({ amount: "", effectiveDate: "" });
-      await Promise.all([loadHistory(), refreshAccountsAfterMutation()]);
+      const [nextHistory] = await Promise.all([
+        loadHistory(),
+        refreshAccountsAfterMutation(),
+      ]);
       if (!panelSessionActiveRef.current) {
         return;
+      }
+      if (nextHistory && nextHistory.length > 0) {
+        setForm((current) =>
+          current.accountType === "balance"
+            ? current
+            : { ...current, accountType: "balance" },
+        );
+        setFieldError("type", undefined);
       }
       onNotice("Credit limit added.");
       return;
@@ -714,30 +735,24 @@ const AccountsSidePanelContent = ({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field htmlFor="account-type" label="Type">
-              {mode === "edit" ? (
-                <div className="flex h-9 items-center">
-                  <AccountTypeBadge accountType={form.accountType} />
-                </div>
-              ) : (
-                <Select
-                  value={form.accountType}
-                  onValueChange={(value) => {
-                    updateForm({
-                      accountType: value as AccountType,
-                    });
-                    setFieldError("type", undefined);
-                  }}
-                >
-                  <SelectTrigger id="account-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="balance">Balance</SelectItem>
-                    <SelectItem value="flow">Flow</SelectItem>
-                    <SelectItem value="system">System</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
+              <Select
+                value={form.accountType}
+                onValueChange={(value) => {
+                  updateForm({
+                    accountType: value as AccountType,
+                  });
+                  setFieldError("type", undefined);
+                }}
+              >
+                <SelectTrigger id="account-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="balance">Balance</SelectItem>
+                  <SelectItem value="flow">Flow</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
               <FieldError message={fieldErrors.type} />
             </Field>
 

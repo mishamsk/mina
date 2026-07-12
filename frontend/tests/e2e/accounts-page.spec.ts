@@ -1703,3 +1703,100 @@ test("accounts form clears API field errors after editing the field", async ({
     createPanel.getByText("active account fqn already exists"),
   ).toHaveCount(0);
 });
+
+test("account edit changes type and retains values after a rejected type change", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const editableFqn = `e2e:accounts:${unique}:EditableType`;
+  const [editableAccount, accounts] = await Promise.all([
+    createAccount(page, { fqn: editableFqn }),
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+  ]);
+  const blockedAccount = findByFqn(accounts, "merchant:TraderJoes");
+  const blockedFqn = blockedAccount.fqn;
+
+  await page.goto(`/accounts?q=${encodeURIComponent(editableFqn)}`);
+  const editableRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "EditableType" })
+    .first();
+  await expect(editableRow).toBeVisible({ timeout: 10_000 });
+  await editableRow.getByRole("button", { name: "Edit account" }).click();
+  const editablePanel = page.getByRole("dialog", { name: "Edit account" });
+  await editablePanel.getByLabel("Type").click();
+  await page.getByRole("option", { exact: true, name: "Flow" }).click();
+  const typeChangeRequest = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${editableAccount.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  await editablePanel.getByRole("button", { name: "Save" }).click();
+  const typeChangeResponse = await typeChangeRequest;
+  expect(typeChangeResponse.status()).toBe(200);
+  expect(typeChangeResponse.request().postDataJSON()).toMatchObject({
+    account_type: "flow",
+  });
+  await expect(page.getByText("Account updated.")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(editableRow).toContainText("Flow");
+
+  await page.goto(`/accounts/${editableAccount.account_id}`);
+  await expect(page.getByTestId("account-header")).toContainText("Flow");
+
+  await page.goto(`/accounts?q=${encodeURIComponent(blockedFqn)}`);
+  const blockedRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "TraderJoes" })
+    .first();
+  await expect(blockedRow).toBeVisible({ timeout: 10_000 });
+  await blockedRow.getByRole("button", { name: "Edit account" }).click();
+  const blockedPanel = page.getByRole("dialog", { name: "Edit account" });
+  await blockedPanel.getByLabel("External system").fill("e2e-system");
+  await blockedPanel.getByLabel("External ID").fill("e2e-id");
+  await blockedPanel.getByLabel("Hidden").click();
+  await blockedPanel.getByLabel("Featured").click();
+  await blockedPanel.getByLabel("Type").click();
+  await page.getByRole("option", { exact: true, name: "Balance" }).click();
+  const rejectedTypeChange = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${blockedAccount.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  await blockedPanel.getByRole("button", { name: "Save" }).click();
+  expect((await rejectedTypeChange).status()).toBe(409);
+  await expect(blockedPanel).toBeVisible();
+  const typeField = blockedPanel.getByLabel("Type").locator("..");
+  await expect(
+    typeField.getByText(
+      "account type change would invalidate existing transaction records",
+    ),
+  ).toBeVisible();
+  await expect(blockedPanel.getByRole("alert")).toHaveCount(0);
+  await expect(blockedPanel.getByLabel("FQN")).toHaveValue(blockedFqn);
+  await expect(blockedPanel.getByLabel("Type")).toContainText("Balance");
+  await expect(blockedPanel.getByLabel("External system")).toHaveValue(
+    "e2e-system",
+  );
+  await expect(blockedPanel.getByLabel("External ID")).toHaveValue("e2e-id");
+  await expect(blockedPanel.getByLabel("Hidden")).toHaveAttribute(
+    "data-state",
+    "checked",
+  );
+  await expect(blockedPanel.getByLabel("Featured")).toHaveAttribute(
+    "data-state",
+    "checked",
+  );
+
+  await blockedPanel
+    .getByRole("button", { name: "Close account panel" })
+    .click();
+  await blockedRow.getByRole("button", { name: "Edit account" }).click();
+  await expect(blockedPanel.getByLabel("Type")).toContainText("Flow");
+});
