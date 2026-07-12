@@ -74,7 +74,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 
 ### Transactions toolbar and table display
 
-- [ ] Task 10: `d8z6` — Transactions toolbar redesign: dedicated full-width filter bar, X dismiss, icon day-nav + `bqc9` — Decide Clear-all semantics for standing toolbar filters (class vs search) (bqc9 is explicitly folded into d8z6 per its comment; requires Tasks 7 and 9; doc amendment: webui-design toolbar section) — branch `d8z6-toolbar-redesign`
+- [x] Task 10: `d8z6` — Transactions toolbar redesign: dedicated full-width filter bar, X dismiss, icon day-nav + `bqc9` — Decide Clear-all semantics for standing toolbar filters (class vs search) (bqc9 is explicitly folded into d8z6 per its comment; requires Tasks 7 and 9; doc amendment: webui-design toolbar section) — branch `d8z6-toolbar-redesign`
 - [ ] Task 11: `1c5v` — Go To Day does not apply the selected date and day-stepping breaks after use + `8ara` — Transactions filter toolbar polish: wrap re-centering, alignment coupling, tooltip nit (grouped toolbar behavior/e2e work after the Task 10 redesign; d8z6 supersedes most of 8ara — only the surviving items (tooltip, e2e gaps) are in scope, so e2e lands against the final toolbar) — branch `1c5v-day-jump-fix`
 - [ ] Task 12: `80qv` — Standardize table page sizes: default 25; transactions 25/50/100 default 50 + `a4py` — Chart of accounts: Name column truncates FQN segments despite available width + `s4wf` — Register amount columns wrap the currency marker onto a second line (grouped small table-display fixes, ~1 commit each, disjoint files) — branch `80qv-table-display-standards`
 
