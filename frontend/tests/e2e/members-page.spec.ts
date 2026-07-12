@@ -294,11 +294,9 @@ test("member row actions edit and delete without activating the row", async ({
   await expect(row).toBeVisible({ timeout: 10_000 });
 
   await page.mouse.move(0, 0);
-  await row.focus();
   await expect(editAction).toHaveCSS("opacity", "1");
   await expect(deleteAction).toHaveCSS("opacity", "1");
 
-  await row.hover();
   await expect(editAction).toBeVisible();
   await expect(deleteAction).toBeVisible();
   await editAction.hover();

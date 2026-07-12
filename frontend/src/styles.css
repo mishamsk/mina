@@ -217,17 +217,6 @@
     container: transaction-detail-records / inline-size;
   }
 
-  .row-actions-button {
-    opacity: 0;
-  }
-
-  .row-actions-button:focus-visible,
-  .row-actions-button[aria-expanded="true"],
-  tr:hover .row-actions-button,
-  tr:focus-within .row-actions-button {
-    opacity: 1;
-  }
-
   .row-actions .row-actions-overflow {
     display: none !important;
   }
@@ -453,20 +442,20 @@
   }
 
   /*
-   * Fold reference-table action buttons only when the actions-cell container
-   * is narrower than its full 28px-control cluster (including 4px gaps).
-   * Keep this count mapping here with RowActions so future reference tables
-   * inherit fit-based folding without a page-specific breakpoint.
+   * Fold dictionary and recurring-table action buttons only when the
+   * actions-cell container is narrower than its full 28px-control cluster
+   * (including 4px gaps). Transactions retain their own column-priority
+   * collapse rule above.
    */
   @container row-actions (width < 28px) {
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="1"]
       .row-actions-buttons
-      .row-actions-button {
+      :is(.row-actions-button, .row-actions-toggle) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="1"]
       .row-actions-overflow {
       display: inline-flex !important;
@@ -474,14 +463,14 @@
   }
 
   @container row-actions (width < 60px) {
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="2"]
       .row-actions-buttons
-      .row-actions-button {
+      :is(.row-actions-button, .row-actions-toggle) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="2"]
       .row-actions-overflow {
       display: inline-flex !important;
@@ -489,14 +478,14 @@
   }
 
   @container row-actions (width < 92px) {
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="3"]
       .row-actions-buttons
-      .row-actions-button {
+      :is(.row-actions-button, .row-actions-toggle) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="3"]
       .row-actions-overflow {
       display: inline-flex !important;
@@ -504,14 +493,14 @@
   }
 
   @container row-actions (width < 124px) {
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="4"]
       .row-actions-buttons
-      .row-actions-button {
+      :is(.row-actions-button, .row-actions-toggle) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="4"]
       .row-actions-overflow {
       display: inline-flex !important;
@@ -519,14 +508,14 @@
   }
 
   @container row-actions (width < 156px) {
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="5"]
       .row-actions-buttons
-      .row-actions-button {
+      :is(.row-actions-button, .row-actions-toggle) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="5"]
       .row-actions-overflow {
       display: inline-flex !important;
@@ -534,14 +523,14 @@
   }
 
   @container row-actions (width < 188px) {
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="6"]
       .row-actions-buttons
-      .row-actions-button {
+      :is(.row-actions-button, .row-actions-toggle) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table)
+    :is(.accounts-table, .reference-table, .recurring-review-table)
       .row-actions--foldable[data-row-actions-count="6"]
       .row-actions-overflow {
       display: inline-flex !important;

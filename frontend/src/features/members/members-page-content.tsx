@@ -220,9 +220,7 @@ const MembersList = ({
               <th scope="col" className="px-3 py-2">
                 Name
               </th>
-              <th scope="col" className="w-[5.5rem] px-1 py-2 text-center">
-                Actions
-              </th>
+              <th scope="col" className="w-[5.5rem] px-3 py-2 text-center" />
             </tr>
           </thead>
           <tbody>
@@ -261,7 +259,7 @@ const MembersList = ({
                     {member.name}
                   </span>
                 </td>
-                <td className="w-[5.5rem] px-1 py-2 align-middle">
+                <td className="w-[5.5rem] px-3 py-2 align-middle">
                   <RowActions
                     foldable
                     actions={

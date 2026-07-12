@@ -2666,25 +2666,14 @@ test("transactions page help and leaf category chips", async ({ page }) => {
   await page.mouse.move(0, 0);
   await expect(page.getByRole("tooltip")).toBeHidden();
 
-  const openDetailButton = simpleSpendRow
-    .locator("td")
-    .nth(8)
-    .getByRole("button", { name: "Open transaction detail" });
-  const deleteButton = simpleSpendRow
-    .locator("td")
-    .nth(8)
-    .getByRole("button", { name: "Delete transaction" });
-  await expect
-    .poll(() =>
-      openDetailButton.evaluate((button) => getComputedStyle(button).opacity),
-    )
-    .toBe("0");
-  await expect
-    .poll(() =>
-      deleteButton.evaluate((button) => getComputedStyle(button).opacity),
-    )
-    .toBe("0");
-  await simpleSpendRow.hover();
+  const openDetailButton = simpleSpendRow.getByRole("button", {
+    name: "Open transaction detail",
+  });
+  const deleteButton = simpleSpendRow.getByRole("button", {
+    name: "Delete transaction",
+  });
+  await expect(openDetailButton).toBeVisible();
+  await expect(deleteButton).toBeVisible();
   await expect
     .poll(() =>
       openDetailButton.evaluate((button) => getComputedStyle(button).opacity),
@@ -2696,31 +2685,24 @@ test("transactions page help and leaf category chips", async ({ page }) => {
     )
     .toBe("1");
   await page.mouse.move(0, 0);
-  await openDetailButton.focus();
-  await expect(openDetailButton).toBeFocused();
-  await expect
-    .poll(() =>
-      openDetailButton.evaluate((button) => getComputedStyle(button).opacity),
-    )
-    .toBe("1");
+  await openDetailButton.hover();
   const openDetailTooltip = page
     .getByRole("tooltip")
     .filter({ hasText: "Open transaction detail" });
   await expect(openDetailTooltip).toBeVisible();
+  await page.mouse.move(0, 0);
+  await expect(openDetailTooltip).toBeHidden();
+  await openDetailButton.focus();
+  await expect(openDetailTooltip).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(openDetailTooltip).toBeHidden();
-  await deleteButton.focus();
-  await expect(deleteButton).toBeFocused();
-  await expect
-    .poll(() =>
-      deleteButton.evaluate((button) => getComputedStyle(button).opacity),
-    )
-    .toBe("1");
+  await expect(openDetailButton).toBeFocused();
+  await deleteButton.hover();
   const deleteTooltip = page
     .getByRole("tooltip")
     .filter({ hasText: "Delete transaction" });
   await expect(deleteTooltip).toBeVisible();
-  await page.keyboard.press("Escape");
+  await page.mouse.move(0, 0);
   await expect(deleteTooltip).toBeHidden();
 });
 

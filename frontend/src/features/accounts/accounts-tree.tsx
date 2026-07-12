@@ -522,10 +522,8 @@ export const AccountsTree = ({
                 </th>
                 <th
                   scope="col"
-                  className="w-[24%] px-1 py-2 text-center sm:w-[20%] sm:px-3 md:w-[18%]"
-                >
-                  Actions
-                </th>
+                  className="w-[24%] px-3 py-2 text-center sm:w-[20%] md:w-[18%]"
+                />
               </tr>
             </thead>
             <tbody>
@@ -749,7 +747,7 @@ export const AccountsTree = ({
                         <BalanceAmounts balances={rowBalances} />
                       ) : null}
                     </td>
-                    <td className="px-1 py-2 align-middle sm:px-3">
+                    <td className="px-3 py-2 align-middle">
                       <RowActions
                         foldable
                         actions={rowActions}

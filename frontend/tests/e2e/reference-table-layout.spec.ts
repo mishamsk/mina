@@ -116,6 +116,35 @@ const expectShortTableToKeepInsetWithoutOverflow = async (
   await expectFrameAlignedWithSidebarInset(frame);
 };
 
+const expectBlankActionHeaderWithMatchedInset = async (
+  scroller: Locator,
+): Promise<void> => {
+  const geometry = await scroller.evaluate((element) => {
+    const headers = element.querySelectorAll("thead th");
+    const firstHeader = headers.item(0);
+    const actionHeader = headers.item(headers.length - 1);
+    const firstHeaderStyles = firstHeader
+      ? window.getComputedStyle(firstHeader)
+      : undefined;
+    const actionHeaderStyles = actionHeader
+      ? window.getComputedStyle(actionHeader)
+      : undefined;
+
+    return {
+      actionHeaderText: actionHeader?.textContent?.trim(),
+      leadingPadding: Number.parseFloat(firstHeaderStyles?.paddingLeft ?? "0"),
+      trailingPadding: Number.parseFloat(
+        actionHeaderStyles?.paddingRight ?? "0",
+      ),
+    };
+  });
+
+  expect(geometry.actionHeaderText).toBe("");
+  expect(
+    Math.abs(geometry.trailingPadding - geometry.leadingPadding),
+  ).toBeLessThanOrEqual(1);
+};
+
 test("reference tables keep their framed viewport inset and scroll internally", async ({
   page,
 }, testInfo) => {
@@ -182,6 +211,13 @@ test("reference tables keep their framed viewport inset and scroll internally", 
           : "reference-table-scroll",
       ),
     );
+    await expectBlankActionHeaderWithMatchedInset(
+      page.getByTestId(
+        table.frameTestId === "accounts-table-frame"
+          ? "accounts-table-scroll"
+          : "reference-table-scroll",
+      ),
+    );
   }
 
   await page.setViewportSize({ width: 1200, height: 900 });
@@ -193,6 +229,13 @@ test("reference tables keep their framed viewport inset and scroll internally", 
     ).toBeVisible();
     await expectShortTableToKeepInsetWithoutOverflow(
       page.getByTestId(table.frameTestId),
+      page.getByTestId(
+        table.frameTestId === "accounts-table-frame"
+          ? "accounts-table-scroll"
+          : "reference-table-scroll",
+      ),
+    );
+    await expectBlankActionHeaderWithMatchedInset(
       page.getByTestId(
         table.frameTestId === "accounts-table-frame"
           ? "accounts-table-scroll"

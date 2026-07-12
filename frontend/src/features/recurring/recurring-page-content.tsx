@@ -285,7 +285,7 @@ export const RecurringPageContent = ({
           tabIndex={-1}
         >
           <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full table-fixed border-collapse text-sm">
+            <table className="recurring-review-table w-full table-fixed border-collapse text-sm">
               <thead className="text-foreground sticky top-0 z-10 bg-[var(--table-header)]">
                 <tr className="font-heading text-left text-xs font-semibold uppercase">
                   <th scope="col" className="w-[8rem] px-3 py-2">
@@ -300,9 +300,7 @@ export const RecurringPageContent = ({
                   <th scope="col" className="w-[22%] px-3 py-2 text-right">
                     Amount
                   </th>
-                  <th scope="col" className="w-[7rem] px-1 py-2 text-center">
-                    Actions
-                  </th>
+                  <th scope="col" className="w-[7rem] px-3 py-2 text-center" />
                 </tr>
               </thead>
               <tbody>
@@ -409,7 +407,7 @@ export const RecurringPageContent = ({
                           )}
                         </div>
                       </td>
-                      <td className="w-[7rem] px-1 py-2 align-middle">
+                      <td className="w-[7rem] px-3 py-2 align-middle">
                         <RowActions
                           foldable
                           actions={

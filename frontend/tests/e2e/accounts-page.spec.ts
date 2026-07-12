@@ -1086,7 +1086,7 @@ test("accounts tree moves and renames account paths", async ({
             .map((header) => header.textContent?.trim() ?? ""),
         ),
     )
-    .toEqual(["Name", "Type", "Currency", "Balance", "Actions"]);
+    .toEqual(["Name", "Type", "Currency", "Balance", ""]);
   const sourceGroupRow = page.locator(
     `[data-testid="accounts-tree-row"]:has(a[href="/accounts/group?prefix=${encodeURIComponent(sourcePrefix)}"])`,
   );
@@ -1094,14 +1094,6 @@ test("accounts tree moves and renames account paths", async ({
   const sourceGroupMoveButton = sourceGroupRow.getByRole("button", {
     name: "Move or rename",
   });
-  await expect
-    .poll(() =>
-      sourceGroupMoveButton.evaluate(
-        (button) => getComputedStyle(button).opacity,
-      ),
-    )
-    .toBe("0");
-  await sourceGroupRow.hover();
   await expect
     .poll(() =>
       sourceGroupMoveButton.evaluate(
@@ -1232,14 +1224,9 @@ test("accounts tree restructure handles conflicts and cancel focus", async ({
     .poll(() =>
       cancelOpenButton.evaluate((button) => getComputedStyle(button).opacity),
     )
-    .toBe("0");
+    .toBe("1");
   await cancelOpenButton.focus();
   await expect(cancelOpenButton).toBeFocused();
-  await expect
-    .poll(() =>
-      cancelOpenButton.evaluate((button) => getComputedStyle(button).opacity),
-    )
-    .toBe("1");
   await cancelOpenButton.click();
   const escapeDialog = page.getByRole("dialog", { name: "Move or rename" });
   await expect(escapeDialog).toBeVisible();

@@ -58,14 +58,18 @@ const isButtonAction = (action: RowAction): action is RowActionButton =>
   action.kind !== "toggle";
 
 const selectAction = (
-  action: RowActionButton,
+  action: RowAction,
   opener: HTMLElement,
   close?: () => void,
 ) => {
-  if (action.disabled) {
+  if (isButtonAction(action) && action.disabled) {
     return;
   }
-  action.onSelect(opener);
+  if (isButtonAction(action)) {
+    action.onSelect(opener);
+  } else {
+    action.onToggle(opener);
+  }
   close?.();
 };
 
@@ -76,10 +80,10 @@ export const RowActions = ({
   onOverflowOpenChange,
 }: RowActionsProps) => {
   const [overflowOpen, setOverflowOpen] = useState(false);
-  const overflowActions = actions.filter(isButtonAction);
   const actionClusterCount = actions.length;
   const overflowOpenRef = useRef(false);
   const onOverflowOpenChangeRef = useRef(onOverflowOpenChange);
+  const overflowMenuRef = useRef<HTMLDivElement | null>(null);
   const overflowTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -99,6 +103,21 @@ export const RowActions = ({
     overflowOpenRef.current = open;
     setOverflowOpen(open);
     onOverflowOpenChange?.(open);
+  };
+
+  const overflowActionButtons = () =>
+    Array.from(
+      overflowMenuRef.current?.querySelectorAll<HTMLButtonElement>(
+        "button:not([aria-disabled='true'])",
+      ) ?? [],
+    );
+
+  const focusFirstOverflowAction = () => {
+    const firstEnabledAction = overflowActionButtons()[0];
+    const firstAction =
+      firstEnabledAction ??
+      overflowMenuRef.current?.querySelector<HTMLButtonElement>("button");
+    firstAction?.focus();
   };
 
   return (
@@ -157,8 +176,8 @@ export const RowActions = ({
         ))}
       </div>
 
-      {foldable && overflowActions.length > 0 ? (
-        <Popover open={overflowOpen} onOpenChange={setNextOverflowOpen}>
+      {foldable && actions.length > 0 ? (
+        <Popover modal open={overflowOpen} onOpenChange={setNextOverflowOpen}>
           <Tooltip label="More row actions" asChild>
             <PopoverTrigger asChild>
               <Button
@@ -181,13 +200,38 @@ export const RowActions = ({
           <PopoverContent
             align="end"
             className="row-actions-menu w-56 p-1"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              requestAnimationFrame(() => {
+                if (overflowOpenRef.current) {
+                  focusFirstOverflowAction();
+                }
+              });
+            }}
             onClick={(event) => {
               event.stopPropagation();
             }}
+            onKeyDownCapture={(event) => {
+              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+                return;
+              }
+              const buttons = overflowActionButtons();
+              const currentIndex = buttons.indexOf(
+                event.target as HTMLButtonElement,
+              );
+              if (currentIndex < 0) {
+                return;
+              }
+              event.preventDefault();
+              const offset = event.key === "ArrowDown" ? 1 : -1;
+              const nextIndex =
+                (currentIndex + offset + buttons.length) % buttons.length;
+              buttons[nextIndex]?.focus();
+            }}
           >
-            <div className="flex flex-col gap-1">
-              {overflowActions.map((action) => {
-                const disabled = action.disabled;
+            <div ref={overflowMenuRef} className="flex flex-col gap-1">
+              {actions.map((action) => {
+                const disabled = isButtonAction(action) && action.disabled;
                 const button = (
                   <Button
                     key={action.label}
@@ -199,6 +243,9 @@ export const RowActions = ({
                       disabled && disabledOverflowActionClassName,
                     )}
                     aria-disabled={disabled ? "true" : undefined}
+                    aria-pressed={
+                      isButtonAction(action) ? undefined : action.pressed
+                    }
                     onClick={(event) => {
                       if (disabled) {
                         event.preventDefault();

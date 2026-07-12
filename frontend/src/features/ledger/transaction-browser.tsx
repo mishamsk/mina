@@ -702,9 +702,7 @@ export const TransactionBrowser = ({
               <th className="transactions-amount-column px-3 py-2 text-right">
                 Amount
               </th>
-              <th className="transactions-actions-column px-2 py-2 text-right">
-                <span className="sr-only">Actions</span>
-              </th>
+              <th className="transactions-actions-column px-3 py-2 text-right" />
             </tr>
           </thead>
           <tbody>
@@ -934,7 +932,7 @@ export const TransactionBrowser = ({
                         )}
                       </div>
                     </td>
-                    <td className="transactions-actions-column px-2 py-2 text-right align-middle">
+                    <td className="transactions-actions-column px-3 py-2 text-right align-middle">
                       <RowActions
                         foldable
                         onOverflowOpenChange={onRowActionsOverflowOpenChange}

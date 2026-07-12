@@ -119,8 +119,8 @@ const referenceTreeSkeletonGridClass = (hasBadgeColumn: boolean) =>
 
 const referenceTreeSkeletonColumnClasses = (hasBadgeColumn: boolean) =>
   hasBadgeColumn
-    ? (["px-3", "px-3", "px-1 sm:px-3"] as const)
-    : (["px-3", "px-1 sm:px-3"] as const);
+    ? (["px-3", "px-3", "px-3"] as const)
+    : (["px-3", "px-3"] as const);
 
 const referenceTreeClickableRowClassName =
   "cursor-pointer " +
@@ -179,11 +179,10 @@ const nameColumnWidthClass = (hasBadgeColumn: boolean) =>
 
 const actionsColumnWidthClass = (hasBadgeColumn: boolean) =>
   hasBadgeColumn
-    ? "w-[18%] px-1 py-2 text-center sm:px-3"
-    : "w-[24%] px-1 py-2 text-center sm:w-[18%] sm:px-3";
+    ? "w-[18%] px-3 py-2 text-center"
+    : "w-[24%] px-3 py-2 text-center sm:w-[18%]";
 
 interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
-  readonly actionsLabel?: string;
   readonly badgeHeader?: string;
   readonly emptyAction?: ReactNode;
   readonly emptyDescription: string;
@@ -232,7 +231,6 @@ export const ReferenceTree = <
   TLeaf extends ReferenceLeaf,
   TGroup extends ReferenceGroup,
 >({
-  actionsLabel = "Actions",
   badgeHeader,
   emptyAction,
   emptyDescription,
@@ -336,9 +334,7 @@ export const ReferenceTree = <
               <th
                 scope="col"
                 className={actionsColumnWidthClass(hasBadgeColumn)}
-              >
-                {actionsLabel}
-              </th>
+              />
             </tr>
           </thead>
           <tbody>
@@ -417,7 +413,7 @@ export const ReferenceTree = <
                   {hasBadgeColumn ? (
                     <td className="min-w-0 px-3 py-2">{renderBadge?.(row)}</td>
                   ) : null}
-                  <td className="px-1 py-2 text-center sm:px-3">
+                  <td className="px-3 py-2 text-center">
                     <RowActions
                       actions={actions}
                       foldable

@@ -4,6 +4,7 @@ interface RowActionTarget {
   readonly actionCount: number;
   readonly buttonActionLabels: readonly string[];
   readonly create: (page: Page, fqn: string) => Promise<void>;
+  readonly foldedActionLabels: readonly string[];
   readonly path: string;
   readonly rowTestId: string;
   readonly toggleCount: number;
@@ -40,17 +41,17 @@ const rowActionFitState = async (rowActions: Locator) =>
     const overflow = element.querySelector<HTMLElement>(
       ".row-actions-overflow",
     );
-    const buttonActions = Array.from(
+    const primaryActions = Array.from(
       element.querySelectorAll<HTMLElement>(
-        ".row-actions-buttons .row-actions-button",
+        ".row-actions-buttons :is(.row-actions-button, .row-actions-toggle)",
       ),
     );
     const availableWidth = element.getBoundingClientRect().width;
     const actionCount = Number(element.dataset.rowActionsCount ?? "0");
     const fullClusterWidth =
       actionCount === 0 ? 0 : actionCount * 28 + (actionCount - 1) * 4;
-    const buttonsFolded = buttonActions.every(
-      (button) => window.getComputedStyle(button).display === "none",
+    const buttonsFolded = primaryActions.every(
+      (action) => window.getComputedStyle(action).display === "none",
     );
     const overflowVisible =
       overflow !== null && window.getComputedStyle(overflow).display !== "none";
@@ -63,33 +64,24 @@ const rowActionFitState = async (rowActions: Locator) =>
     };
   });
 
-const expectFoldedClusterCentered = async (rowActions: Locator) => {
-  const geometry = await rowActions.evaluate((element) => {
-    const cell = element.closest("td");
-    const controls = Array.from(
-      element.querySelectorAll<HTMLElement>(
-        ".row-actions-toggle, .row-actions-overflow",
-      ),
-    ).filter((control) => {
-      const styles = window.getComputedStyle(control);
-      return styles.display !== "none" && control.getBoundingClientRect().width;
-    });
-    const controlRects = controls.map((control) =>
-      control.getBoundingClientRect(),
-    );
-    const cellRect = cell?.getBoundingClientRect();
-    const clusterLeft = Math.min(...controlRects.map((rect) => rect.left));
-    const clusterRight = Math.max(...controlRects.map((rect) => rect.right));
+const expectActionColumnInsetMatchesTable = async (rowActions: Locator) => {
+  const insets = await rowActions.evaluate((element) => {
+    const actionCell = element.closest("td");
+    const firstCell = actionCell?.parentElement?.querySelector("td");
+    const actionCellStyles = actionCell
+      ? window.getComputedStyle(actionCell)
+      : undefined;
+    const firstCellStyles = firstCell
+      ? window.getComputedStyle(firstCell)
+      : undefined;
 
     return {
-      cellCenter: cellRect ? (cellRect.left + cellRect.right) / 2 : 0,
-      clusterCenter: (clusterLeft + clusterRight) / 2,
+      leading: Number.parseFloat(firstCellStyles?.paddingLeft ?? "0"),
+      trailing: Number.parseFloat(actionCellStyles?.paddingRight ?? "0"),
     };
   });
 
-  expect(
-    Math.abs(geometry.clusterCenter - geometry.cellCenter),
-  ).toBeLessThanOrEqual(2);
+  expect(insets.trailing).toBeCloseTo(insets.leading, 4);
 };
 
 test("reference row actions fold only when their action cell cannot fit them", async ({
@@ -101,6 +93,12 @@ test("reference row actions fold only when their action cell cannot fit them", a
       actionCount: 4,
       buttonActionLabels: ["Move or rename", "Delete account"],
       create: createAccount,
+      foldedActionLabels: [
+        "Hide account",
+        "Feature account",
+        "Move or rename",
+        "Delete account",
+      ],
       path: "/accounts",
       rowTestId: "accounts-tree-row",
       toggleCount: 2,
@@ -109,6 +107,11 @@ test("reference row actions fold only when their action cell cannot fit them", a
       actionCount: 3,
       buttonActionLabels: ["Move or rename", "Delete category"],
       create: createCategory,
+      foldedActionLabels: [
+        "Hide category",
+        "Move or rename",
+        "Delete category",
+      ],
       path: "/categories",
       rowTestId: "categories-tree-row",
       toggleCount: 1,
@@ -117,6 +120,7 @@ test("reference row actions fold only when their action cell cannot fit them", a
       actionCount: 3,
       buttonActionLabels: ["Move or rename", "Delete tag"],
       create: createTag,
+      foldedActionLabels: ["Hide tag", "Move or rename", "Delete tag"],
       path: "/tags",
       rowTestId: "tags-tree-row",
       toggleCount: 1,
@@ -143,12 +147,6 @@ test("reference row actions fold only when their action cell cannot fit them", a
         "data-row-actions-count",
         target.actionCount.toString(),
       );
-
-      if (viewportWidth === 1440) {
-        await row.hover();
-      } else {
-        await row.focus();
-      }
 
       for (const label of target.buttonActionLabels) {
         const action = row.getByRole("button", { name: label });
@@ -178,8 +176,6 @@ test("reference row actions fold only when their action cell cannot fit them", a
     const rowActions = row.locator(".row-actions");
     const overflow = row.getByRole("button", { name: "More row actions" });
     await expect(row).toBeVisible();
-    await row.focus();
-
     const fit = await rowActionFitState(rowActions);
     expect(fit.availableWidth).toBeLessThan(fit.fullClusterWidth);
     expect(fit.buttonsFolded).toBe(true);
@@ -194,19 +190,50 @@ test("reference row actions fold only when their action cell cannot fit them", a
     ) {
       await expect(
         row.locator(".row-actions-toggle").nth(toggleIndex),
-      ).toBeVisible();
+      ).toBeHidden();
     }
     await expect(overflow).toBeVisible();
-    await expectFoldedClusterCentered(rowActions);
+    await expectActionColumnInsetMatchesTable(rowActions);
 
     await overflow.focus();
     await page.keyboard.press("Enter");
     const overflowMenu = page.locator(".row-actions-menu");
+    const firstAction = overflowMenu.getByRole("button", {
+      name: target.foldedActionLabels[0],
+    });
     const moveAction = overflowMenu.getByRole("button", {
       name: "Move or rename",
     });
+    for (const label of target.foldedActionLabels) {
+      await expect(
+        overflowMenu.getByRole("button", { name: label }),
+      ).toBeVisible();
+    }
+    await expect(firstAction).toBeVisible();
     await expect(moveAction).toBeVisible();
-    await moveAction.focus();
+    await expect(firstAction).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      overflowMenu.getByRole("button", {
+        name: target.foldedActionLabels[1],
+      }),
+    ).toBeFocused();
+    await expect(overflowMenu).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(overflowMenu).toBeHidden();
+    await expect(overflow).toBeFocused();
+
+    await overflow.focus();
+    await page.keyboard.press("Enter");
+    await expect(firstAction).toBeFocused();
+    for (
+      let actionIndex = 0;
+      actionIndex < target.foldedActionLabels.indexOf("Move or rename");
+      actionIndex += 1
+    ) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await expect(moveAction).toBeFocused();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Move or rename" });
     await expect(dialog).toBeVisible();
@@ -310,15 +337,14 @@ test("Accounts rows fold independently when their action counts differ", async (
   expect(leafFit?.overflowVisible).toBe(false);
 
   await expect(parentRow.locator(".row-actions-toggle")).toHaveCount(3);
-  await expect(parentRow.locator(".row-actions-toggle").first()).toBeVisible();
-  await expect(parentRow.locator(".row-actions-toggle").nth(1)).toBeVisible();
-  await expect(parentRow.locator(".row-actions-toggle").nth(2)).toBeVisible();
+  await expect(parentRow.locator(".row-actions-toggle").first()).toBeHidden();
+  await expect(parentRow.locator(".row-actions-toggle").nth(1)).toBeHidden();
+  await expect(parentRow.locator(".row-actions-toggle").nth(2)).toBeHidden();
   await expect(
     parentRow.getByRole("button", { name: "More row actions" }),
   ).toBeVisible();
-  await expectFoldedClusterCentered(parentActions);
+  await expectActionColumnInsetMatchesTable(parentActions);
 
-  await leafRow.hover();
   for (const label of ["Move or rename", "Delete account"]) {
     const action = leafRow.getByRole("button", { name: label });
     await expect(action).toBeVisible();
