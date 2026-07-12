@@ -195,6 +195,7 @@ export const useCategoryPickerCategoriesView = (
   const intentKey = categoryPickerIntentKey(intents);
   return useTransactionsStore(
     useShallow((state) => ({
+      epoch: state.categoryPickerCategoryEpoch,
       errorMessage: state.categoryPickerCategoryErrors[intentKey],
       loading: state.categoryPickerCategoryLoading[intentKey] ?? false,
       snapshot: state.categoryPickerCategories[intentKey],

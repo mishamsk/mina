@@ -682,3 +682,32 @@ test("categories side panel creates edits and deletes categories with conflict f
   );
   expect(categoryDeleteResponse.ok()).toBe(true);
 });
+
+test("category creation refreshes the entry category picker after navigation", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const name = `PickerExpense${unique}`;
+  const fqn = `E2EPickerRefresh:${unique}:${name}`;
+
+  await page.goto("/categories");
+  await page.getByRole("button", { name: "New category" }).click();
+  const createPanel = page.getByRole("dialog", { name: "Create category" });
+  await createPanel.getByLabel("FQN").fill(fqn);
+  await createPanel.getByLabel("Intent").click();
+  await page.getByRole("option", { exact: true, name: "Expense" }).click();
+  await createPanel.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByText("Category created.")).toBeVisible({
+    timeout: 10_000,
+  });
+
+  await page.goto("/transactions");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const categoryPicker = page.getByRole("combobox", { name: "Category" });
+  await categoryPicker.fill(fqn);
+  await expect(categoryPicker).toHaveValue(fqn);
+});

@@ -50,6 +50,7 @@ export interface AccountTransactionSnapshot {
 
 interface AccountsState {
   readonly accountHeaderErrors: Readonly<Record<number, string>>;
+  readonly accountHeaderGeneration: number;
   readonly accountHeaderLoading: Readonly<Record<number, boolean>>;
   readonly accountHeaders: Readonly<Record<number, AccountHeaderSnapshot>>;
   readonly registerLastLoadedPageKeyByAccountId: Readonly<
@@ -58,6 +59,7 @@ interface AccountsState {
   readonly registerLastLoadedPageKeyByGroupPrefix: Readonly<
     Record<string, string>
   >;
+  readonly registerPageGeneration: number;
   readonly registerLoadingPageKey: string | undefined;
   readonly registerPageErrors: Readonly<Record<string, string>>;
   readonly registerPages: Readonly<
@@ -77,10 +79,12 @@ interface AccountsState {
 
 const initialAccountsState: AccountsState = {
   accountHeaderErrors: {},
+  accountHeaderGeneration: 1,
   accountHeaderLoading: {},
   accountHeaders: {},
   registerLastLoadedPageKeyByAccountId: {},
   registerLastLoadedPageKeyByGroupPrefix: {},
+  registerPageGeneration: 1,
   registerLoadingPageKey: undefined,
   registerPageErrors: {},
   registerPages: {},
@@ -126,6 +130,7 @@ export const useAccountHeaderView = (accountId: number) =>
   useAccountsStore(
     useShallow((state) => ({
       errorMessage: state.accountHeaderErrors[accountId],
+      generation: state.accountHeaderGeneration,
       loading: state.accountHeaderLoading[accountId] ?? false,
       snapshot: state.accountHeaders[accountId],
     })),
@@ -147,6 +152,7 @@ export const useAccountRegisterPageView = (
       return {
         displayedSnapshot: snapshot ?? fallbackSnapshot,
         errorMessage: state.registerPageErrors[key],
+        generation: state.registerPageGeneration,
         loading: state.registerLoadingPageKey === key,
         snapshot,
       };
@@ -170,6 +176,7 @@ export const useGroupRegisterPageView = (params: GroupRecordsPageParams) => {
       return {
         displayedSnapshot: snapshot ?? fallbackSnapshot,
         errorMessage: state.registerPageErrors[key],
+        generation: state.registerPageGeneration,
         loading: state.registerLoadingPageKey === key,
         snapshot,
       };
@@ -250,7 +257,8 @@ export const invalidateAccountsPage = (): void => {
   );
 };
 
-export const setAccountHeaderLoading = (accountId: number): void => {
+export const setAccountHeaderLoading = (accountId: number): number => {
+  const generation = useAccountsStore.getState().accountHeaderGeneration;
   useAccountsStore.setState(
     (state) => {
       const accountHeaderErrors = { ...state.accountHeaderErrors };
@@ -266,16 +274,25 @@ export const setAccountHeaderLoading = (accountId: number): void => {
     false,
     "AccountsStore/setAccountHeaderLoading",
   );
+  return generation;
 };
 
-export const clearAccountHeaderLoading = (accountId: number): void => {
+export const clearAccountHeaderLoading = (
+  accountId: number,
+  generation: number,
+): void => {
   useAccountsStore.setState(
-    (state) => ({
-      accountHeaderLoading: {
-        ...state.accountHeaderLoading,
-        [accountId]: false,
-      },
-    }),
+    (state) => {
+      if (state.accountHeaderGeneration !== generation) {
+        return state;
+      }
+      return {
+        accountHeaderLoading: {
+          ...state.accountHeaderLoading,
+          [accountId]: false,
+        },
+      };
+    },
     false,
     "AccountsStore/clearAccountHeaderLoading",
   );
@@ -284,9 +301,13 @@ export const clearAccountHeaderLoading = (accountId: number): void => {
 export const setAccountHeader = (
   accountId: number,
   snapshot: Omit<AccountHeaderSnapshot, "loadedAt">,
+  generation: number,
 ): void => {
   useAccountsStore.setState(
     (state) => {
+      if (state.accountHeaderGeneration !== generation) {
+        return state;
+      }
       const accountHeaderErrors = { ...state.accountHeaderErrors };
       delete accountHeaderErrors[accountId];
       return {
@@ -312,18 +333,24 @@ export const setAccountHeader = (
 export const setAccountHeaderError = (
   accountId: number,
   errorMessage: string,
+  generation: number,
 ): void => {
   useAccountsStore.setState(
-    (state) => ({
-      accountHeaderErrors: {
-        ...state.accountHeaderErrors,
-        [accountId]: errorMessage,
-      },
-      accountHeaderLoading: {
-        ...state.accountHeaderLoading,
-        [accountId]: false,
-      },
-    }),
+    (state) => {
+      if (state.accountHeaderGeneration !== generation) {
+        return state;
+      }
+      return {
+        accountHeaderErrors: {
+          ...state.accountHeaderErrors,
+          [accountId]: errorMessage,
+        },
+        accountHeaderLoading: {
+          ...state.accountHeaderLoading,
+          [accountId]: false,
+        },
+      };
+    },
     false,
     "AccountsStore/setAccountHeaderError",
   );
@@ -331,10 +358,11 @@ export const setAccountHeaderError = (
 
 export const invalidateAccountHeaders = (): void => {
   useAccountsStore.setState(
-    {
+    (state) => ({
       accountHeaderErrors: {},
+      accountHeaderGeneration: state.accountHeaderGeneration + 1,
       accountHeaders: {},
-    },
+    }),
     false,
     "AccountsStore/invalidateAccountHeaders",
   );
@@ -349,6 +377,7 @@ export const invalidateAccountHeader = (accountId: number): void => {
       delete accountHeaders[accountId];
       return {
         accountHeaderErrors,
+        accountHeaderGeneration: state.accountHeaderGeneration + 1,
         accountHeaders,
       };
     },
@@ -417,7 +446,8 @@ export const removeAccountsPageAccount = (accountId: number): void => {
 
 export const setAccountRegisterPageLoading = (
   params: AccountRecordsPageParams & { readonly accountId: number },
-): void => {
+): number => {
+  const generation = useAccountsStore.getState().registerPageGeneration;
   const key = accountRegisterPageKey(params);
   useAccountsStore.setState(
     (state) => {
@@ -431,11 +461,13 @@ export const setAccountRegisterPageLoading = (
     false,
     "AccountsStore/setAccountRegisterPageLoading",
   );
+  return generation;
 };
 
 export const setGroupRegisterPageLoading = (
   params: GroupRecordsPageParams,
-): void => {
+): number => {
+  const generation = useAccountsStore.getState().registerPageGeneration;
   const key = groupRegisterPageKey(params);
   useAccountsStore.setState(
     (state) => {
@@ -449,19 +481,26 @@ export const setGroupRegisterPageLoading = (
     false,
     "AccountsStore/setGroupRegisterPageLoading",
   );
+  return generation;
 };
 
 export const clearAccountRegisterPageLoading = (
   params: AccountRecordsPageParams & { readonly accountId: number },
+  generation: number,
 ): void => {
   const key = accountRegisterPageKey(params);
   useAccountsStore.setState(
-    (state) => ({
-      registerLoadingPageKey:
-        state.registerLoadingPageKey === key
-          ? undefined
-          : state.registerLoadingPageKey,
-    }),
+    (state) => {
+      if (state.registerPageGeneration !== generation) {
+        return state;
+      }
+      return {
+        registerLoadingPageKey:
+          state.registerLoadingPageKey === key
+            ? undefined
+            : state.registerLoadingPageKey,
+      };
+    },
     false,
     "AccountsStore/clearAccountRegisterPageLoading",
   );
@@ -469,15 +508,21 @@ export const clearAccountRegisterPageLoading = (
 
 export const clearGroupRegisterPageLoading = (
   params: GroupRecordsPageParams,
+  generation: number,
 ): void => {
   const key = groupRegisterPageKey(params);
   useAccountsStore.setState(
-    (state) => ({
-      registerLoadingPageKey:
-        state.registerLoadingPageKey === key
-          ? undefined
-          : state.registerLoadingPageKey,
-    }),
+    (state) => {
+      if (state.registerPageGeneration !== generation) {
+        return state;
+      }
+      return {
+        registerLoadingPageKey:
+          state.registerLoadingPageKey === key
+            ? undefined
+            : state.registerLoadingPageKey,
+      };
+    },
     false,
     "AccountsStore/clearGroupRegisterPageLoading",
   );
@@ -487,10 +532,14 @@ export const setAccountRegisterPage = (
   params: AccountRecordsPageParams & { readonly accountId: number },
   totalCount: number | undefined,
   records: readonly JournalRecord[],
+  generation: number,
 ): void => {
   const key = accountRegisterPageKey(params);
   useAccountsStore.setState(
     (state) => {
+      if (state.registerPageGeneration !== generation) {
+        return state;
+      }
       const registerPageErrors = { ...state.registerPageErrors };
       delete registerPageErrors[key];
       return {
@@ -523,10 +572,14 @@ export const setGroupRegisterPage = (
   params: GroupRecordsPageParams,
   totalCount: number | undefined,
   records: readonly JournalRecord[],
+  generation: number,
 ): void => {
   const key = groupRegisterPageKey(params);
   useAccountsStore.setState(
     (state) => {
+      if (state.registerPageGeneration !== generation) {
+        return state;
+      }
       const registerPageErrors = { ...state.registerPageErrors };
       delete registerPageErrors[key];
       return {
@@ -558,19 +611,25 @@ export const setGroupRegisterPage = (
 export const setAccountRegisterPageError = (
   params: AccountRecordsPageParams & { readonly accountId: number },
   errorMessage: string,
+  generation: number,
 ): void => {
   const key = accountRegisterPageKey(params);
   useAccountsStore.setState(
-    (state) => ({
-      registerLoadingPageKey:
-        state.registerLoadingPageKey === key
-          ? undefined
-          : state.registerLoadingPageKey,
-      registerPageErrors: {
-        ...state.registerPageErrors,
-        [key]: errorMessage,
-      },
-    }),
+    (state) => {
+      if (state.registerPageGeneration !== generation) {
+        return state;
+      }
+      return {
+        registerLoadingPageKey:
+          state.registerLoadingPageKey === key
+            ? undefined
+            : state.registerLoadingPageKey,
+        registerPageErrors: {
+          ...state.registerPageErrors,
+          [key]: errorMessage,
+        },
+      };
+    },
     false,
     "AccountsStore/setAccountRegisterPageError",
   );
@@ -579,19 +638,25 @@ export const setAccountRegisterPageError = (
 export const setGroupRegisterPageError = (
   params: GroupRecordsPageParams,
   errorMessage: string,
+  generation: number,
 ): void => {
   const key = groupRegisterPageKey(params);
   useAccountsStore.setState(
-    (state) => ({
-      registerLoadingPageKey:
-        state.registerLoadingPageKey === key
-          ? undefined
-          : state.registerLoadingPageKey,
-      registerPageErrors: {
-        ...state.registerPageErrors,
-        [key]: errorMessage,
-      },
-    }),
+    (state) => {
+      if (state.registerPageGeneration !== generation) {
+        return state;
+      }
+      return {
+        registerLoadingPageKey:
+          state.registerLoadingPageKey === key
+            ? undefined
+            : state.registerLoadingPageKey,
+        registerPageErrors: {
+          ...state.registerPageErrors,
+          [key]: errorMessage,
+        },
+      };
+    },
     false,
     "AccountsStore/setGroupRegisterPageError",
   );
@@ -617,6 +682,7 @@ export const invalidateAccountRegisterPages = (accountId: number): void => {
 
       return {
         registerLastLoadedPageKeyByAccountId,
+        registerPageGeneration: state.registerPageGeneration + 1,
         registerLoadingPageKey: state.registerLoadingPageKey?.startsWith(
           `${accountId}:`,
         )
@@ -647,6 +713,7 @@ export const invalidateGroupRegisterPages = (): void => {
 
       return {
         registerLastLoadedPageKeyByGroupPrefix: {},
+        registerPageGeneration: state.registerPageGeneration + 1,
         registerLoadingPageKey: state.registerLoadingPageKey?.startsWith(
           "group:",
         )
@@ -663,13 +730,14 @@ export const invalidateGroupRegisterPages = (): void => {
 
 export const invalidateAllAccountRegisterPages = (): void => {
   useAccountsStore.setState(
-    {
+    (state) => ({
       registerLastLoadedPageKeyByAccountId: {},
       registerLastLoadedPageKeyByGroupPrefix: {},
+      registerPageGeneration: state.registerPageGeneration + 1,
       registerLoadingPageKey: undefined,
       registerPageErrors: {},
       registerPages: {},
-    },
+    }),
     false,
     "AccountsStore/invalidateAllAccountRegisterPages",
   );

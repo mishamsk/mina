@@ -8,6 +8,7 @@
 
 - The Accounts page uses one bounded accounts fetch joined with account balances and filters that snapshot client-side.
 - Mutations refresh Accounts, featured balances, Overview, and ledger lookups so account pickers see current account state.
+- Account register and header snapshots discard fetch writes that predate invalidation; mounted consumers refetch after invalidation.
 - Account deletion controls consume the API `deletable` signal verbatim; eligibility rules remain backend-owned.
 
 ## Boundaries

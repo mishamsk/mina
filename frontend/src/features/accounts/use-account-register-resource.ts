@@ -59,6 +59,7 @@ type RegisterPageSnapshot =
 interface RegisterPageView {
   readonly displayedSnapshot: RegisterPageSnapshot | undefined;
   readonly errorMessage: string | undefined;
+  readonly generation: number;
   readonly loading: boolean;
   readonly snapshot: RegisterPageSnapshot | undefined;
 }
@@ -68,7 +69,10 @@ type RegisterFetchResult =
   | Awaited<ReturnType<typeof fetchGroupRecordsPage>>;
 
 interface RegisterResourceOptions<Params> {
-  readonly clearRegisterPageLoading: (params: Params) => void;
+  readonly clearRegisterPageLoading: (
+    params: Params,
+    generation: number,
+  ) => void;
   readonly fetchRegisterPage: (params: Params) => Promise<RegisterFetchResult>;
   readonly params: Params;
   readonly register: RegisterPageView;
@@ -77,9 +81,14 @@ interface RegisterResourceOptions<Params> {
     params: Params,
     totalCount: number | undefined,
     records: readonly JournalRecord[],
+    generation: number,
   ) => void;
-  readonly setRegisterPageError: (params: Params, errorMessage: string) => void;
-  readonly setRegisterPageLoading: (params: Params) => void;
+  readonly setRegisterPageError: (
+    params: Params,
+    errorMessage: string,
+    generation: number,
+  ) => void;
+  readonly setRegisterPageLoading: (params: Params) => number;
 }
 
 const loadLedgerLookups = async (
@@ -120,7 +129,7 @@ const loadLedgerLookups = async (
 export const refreshAccountRegisterPage = async (
   params: AccountRegisterParams,
 ): Promise<void> => {
-  setAccountRegisterPageLoading(params);
+  const generation = setAccountRegisterPageLoading(params);
 
   const result = await fetchAccountRecordsPage(params.accountId, params);
   if (result.data) {
@@ -128,25 +137,35 @@ export const refreshAccountRegisterPage = async (
       params,
       result.data.total_count,
       result.data.records,
+      generation,
     );
     return;
   }
 
-  setAccountRegisterPageError(params, apiErrorMessage(result.error));
+  setAccountRegisterPageError(
+    params,
+    apiErrorMessage(result.error),
+    generation,
+  );
 };
 
 export const refreshGroupRegisterPage = async (
   params: GroupRegisterParams,
 ): Promise<void> => {
-  setGroupRegisterPageLoading(params);
+  const generation = setGroupRegisterPageLoading(params);
 
   const result = await fetchGroupRecordsPage(params);
   if (result.data) {
-    setGroupRegisterPage(params, result.data.total_count, result.data.records);
+    setGroupRegisterPage(
+      params,
+      result.data.total_count,
+      result.data.records,
+      generation,
+    );
     return;
   }
 
-  setGroupRegisterPageError(params, apiErrorMessage(result.error));
+  setGroupRegisterPageError(params, apiErrorMessage(result.error), generation);
 };
 
 const ensureTransactions = async (
@@ -246,7 +265,7 @@ const useRegisterPageResource = <Params>({
     }
 
     let active = true;
-    setRegisterPageLoading(params);
+    const generation = setRegisterPageLoading(params);
 
     void fetchRegisterPage(params).then((result) => {
       if (!active) {
@@ -254,22 +273,29 @@ const useRegisterPageResource = <Params>({
       }
 
       if (result.data) {
-        setRegisterPage(params, result.data.total_count, result.data.records);
+        setRegisterPage(
+          params,
+          result.data.total_count,
+          result.data.records,
+          generation,
+        );
         return;
       }
 
-      setRegisterPageError(params, apiErrorMessage(result.error));
+      setRegisterPageError(params, apiErrorMessage(result.error), generation);
     });
 
     return () => {
       active = false;
-      clearRegisterPageLoading(params);
+      clearRegisterPageLoading(params, generation);
     };
   }, [
     clearRegisterPageLoading,
     fetchRegisterPage,
     params,
+    register.generation,
     registerPageKey,
+    register.snapshot,
     setRegisterPage,
     setRegisterPageError,
     setRegisterPageLoading,
@@ -332,7 +358,7 @@ export const useAccountRegisterResource = (params: AccountRegisterParams) => {
     }
 
     let active = true;
-    setAccountHeaderLoading(params.accountId);
+    const generation = setAccountHeaderLoading(params.accountId);
 
     void fetchAccountHeader(params.accountId).then((result) => {
       if (!active) {
@@ -344,12 +370,16 @@ export const useAccountRegisterResource = (params: AccountRegisterParams) => {
         result.balances.data &&
         result.creditLimitHistory.data
       ) {
-        setAccountHeader(params.accountId, {
-          account: result.account.data,
-          balances: result.balances.data.balances,
-          creditLimitHistory:
-            result.creditLimitHistory.data.credit_limit_history,
-        });
+        setAccountHeader(
+          params.accountId,
+          {
+            account: result.account.data,
+            balances: result.balances.data.balances,
+            creditLimitHistory:
+              result.creditLimitHistory.data.credit_limit_history,
+          },
+          generation,
+        );
         return;
       }
 
@@ -360,14 +390,15 @@ export const useAccountRegisterResource = (params: AccountRegisterParams) => {
             result.balances.error ??
             result.creditLimitHistory.error,
         ),
+        generation,
       );
     });
 
     return () => {
       active = false;
-      clearAccountHeaderLoading(params.accountId);
+      clearAccountHeaderLoading(params.accountId, generation);
     };
-  }, [header.snapshot, params.accountId]);
+  }, [header.generation, header.snapshot, params.accountId]);
 
   return {
     header,

@@ -190,7 +190,7 @@ export const useCategoryPickerCategoriesResource = (
         requestEpoch,
       );
     });
-  }, [enabled, intentKey, normalizedIntents, retryToken]);
+  }, [categories.epoch, enabled, intentKey, normalizedIntents, retryToken]);
 
   return categories;
 };

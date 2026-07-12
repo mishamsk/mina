@@ -1380,6 +1380,56 @@ test("accounts tree moves and renames account paths", async ({
   ).toBeVisible({ timeout: 10_000 });
 });
 
+test("account restructure invalidates a cached register before revisit", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const sourceFqn = `e2e:register-invalidation:${unique}:Old`;
+  const destinationFqn = `e2e:register-invalidation:${unique}:New`;
+  const account = await createAccount(page, { fqn: sourceFqn });
+  const initialRecordsResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname ===
+      `/api/accounts/${account.account_id}/records`,
+  );
+  await page.goto(`/accounts/${account.account_id}`);
+  await initialRecordsResponse;
+
+  await page.goto("/accounts");
+  await page.getByLabel("Search").fill(sourceFqn);
+  const sourceRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "Old" })
+    .first();
+  await expect(sourceRow).toBeVisible({ timeout: 10_000 });
+  await sourceRow.getByRole("button", { name: "Move or rename" }).click();
+  const restructureDialog = page.getByRole("dialog", {
+    name: "Move or rename",
+  });
+  await restructureDialog.getByLabel("To").fill(destinationFqn);
+  const restructureResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/accounts/restructure" &&
+      response.request().method() === "POST"
+    );
+  });
+  await restructureDialog.getByRole("button", { name: "Move" }).click();
+  expect((await restructureResponse).status()).toBe(200);
+
+  const freshRecordsResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${account.account_id}/records` &&
+      response.request().method() === "GET"
+    );
+  });
+  await page.goto(`/accounts/${account.account_id}`);
+  await freshRecordsResponse;
+  await expect(page.getByRole("heading", { name: "New" })).toBeVisible();
+});
+
 test("accounts tree restructure handles conflicts and cancel focus", async ({
   browserName,
   page,
