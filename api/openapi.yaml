@@ -48,6 +48,43 @@ paths:
                 $ref: "#/components/schemas/BackgroundOperationListResponse"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/background-operations/{operation_id}/runs:
+    parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: listBackgroundOperationRuns
+      summary: List runs for one registered background operation.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Newest-first operation run page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationRunListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /api/background-operations/exchange-rate-loading/status:
     get:
       operationId: getExchangeRateLoadingStatus
@@ -62,6 +99,34 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
   /api/background-operations/exchange-rate-loading/runs:
+    get:
+      operationId: listExchangeRateLoadingRuns
+      summary: List exchange-rate loading runs.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Newest-first operation run page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationRunListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
     post:
       operationId: startExchangeRateLoadingRun
       summary: Start an exchange-rate loading run.
@@ -113,6 +178,34 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
   /api/background-operations/database-backup/runs:
+    get:
+      operationId: listDatabaseBackupRuns
+      summary: List database backup runs.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Newest-first operation run page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperationRunListResponse"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
     post:
       operationId: startDatabaseBackupRun
       summary: Start a database backup run.
@@ -4038,6 +4131,22 @@ components:
         error:
           type: string
           nullable: true
+    OperationRunListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - runs
+        - total_count
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/OperationRunResponse"
+        total_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Count of operation runs before limit and offset are applied.
     HealthResponse:
       type: object
       additionalProperties: false

@@ -17,6 +17,48 @@ import (
 )
 
 func TestBackgroundOperationExpectedBehavior(t *testing.T) {
+	t.Run("run listing is newest-first, paged, and limited to registered operations", func(t *testing.T) {
+		client := newSharedClient(t, apptest.WithExchangeRateLoading(false))
+		runIDs := make([]int64, 0, 3)
+		for range 3 {
+			started, err := client.REST().StartExchangeRateLoadingRunWithResponse(context.Background())
+			requireClientResponse(t, "start exchange-rate loading run", err, started.StatusCode(), http.StatusAccepted, started.Body)
+			client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
+			runIDs = append(runIDs, started.JSON202.OperationRunId)
+		}
+
+		limit := 1
+		firstPage, err := client.REST().ListBackgroundOperationRunsWithResponse(
+			context.Background(),
+			"exchange-rate-loading",
+			&httpclient.ListBackgroundOperationRunsParams{Limit: &limit},
+		)
+		requireClientResponse(t, "list newest operation run", err, firstPage.StatusCode(), http.StatusOK, firstPage.Body)
+		if firstPage.JSON200.TotalCount != 3 || len(firstPage.JSON200.Runs) != 1 {
+			t.Fatalf("first run page = %+v, want one run from total three", firstPage.JSON200)
+		}
+		if firstPage.JSON200.Runs[0].OperationRunId != runIDs[2] {
+			t.Fatalf("newest run id = %d, want %d", firstPage.JSON200.Runs[0].OperationRunId, runIDs[2])
+		}
+
+		offset := 1
+		secondPage, err := client.REST().ListBackgroundOperationRunsWithResponse(
+			context.Background(),
+			"exchange-rate-loading",
+			&httpclient.ListBackgroundOperationRunsParams{Limit: &limit, Offset: &offset},
+		)
+		requireClientResponse(t, "list second operation run", err, secondPage.StatusCode(), http.StatusOK, secondPage.Body)
+		if secondPage.JSON200.TotalCount != 3 || len(secondPage.JSON200.Runs) != 1 {
+			t.Fatalf("second run page = %+v, want one run from total three", secondPage.JSON200)
+		}
+		if secondPage.JSON200.Runs[0].OperationRunId != runIDs[1] {
+			t.Fatalf("second newest run id = %d, want %d", secondPage.JSON200.Runs[0].OperationRunId, runIDs[1])
+		}
+
+		unknown, err := client.REST().ListBackgroundOperationRunsWithResponse(context.Background(), "unknown-operation", nil)
+		requireClientResponse(t, "list unknown operation runs", err, unknown.StatusCode(), http.StatusNotFound, unknown.Body)
+	})
+
 	t.Run("status exposes process state fields", func(t *testing.T) {
 		client := newSharedClient(t, apptest.WithExchangeRateLoading(true), apptest.WithExchangeRateLoadScheduleUTC("5 18 * * *"))
 

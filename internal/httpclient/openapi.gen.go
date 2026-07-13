@@ -1366,6 +1366,14 @@ type MemberListResponse struct {
 // NonExpectedPostingStatus defines model for NonExpectedPostingStatus.
 type NonExpectedPostingStatus string
 
+// OperationRunListResponse defines model for OperationRunListResponse.
+type OperationRunListResponse struct {
+	Runs []OperationRunResponse `json:"runs"`
+
+	// TotalCount Count of operation runs before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
+}
+
 // OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
 type OperationRunReferenceResponse struct {
 	OperationId    OperationRunReferenceResponseOperationId `json:"operation_id"`
@@ -1833,6 +1841,24 @@ type SearchAccountJournalRecordsParams struct {
 	Offset                *int  `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListDatabaseBackupRunsParams defines parameters for ListDatabaseBackupRuns.
+type ListDatabaseBackupRunsParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListExchangeRateLoadingRunsParams defines parameters for ListExchangeRateLoadingRuns.
+type ListExchangeRateLoadingRunsParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListBackgroundOperationRunsParams defines parameters for ListBackgroundOperationRuns.
+type ListBackgroundOperationRunsParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
 	IncludeHidden     *bool                        `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
@@ -2298,6 +2324,9 @@ type ClientInterface interface {
 	// ListBackgroundOperations request
 	ListBackgroundOperations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListDatabaseBackupRuns request
+	ListDatabaseBackupRuns(ctx context.Context, params *ListDatabaseBackupRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// StartDatabaseBackupRun request
 	StartDatabaseBackupRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2307,6 +2336,9 @@ type ClientInterface interface {
 	// GetDatabaseBackupStatus request
 	GetDatabaseBackupStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListExchangeRateLoadingRuns request
+	ListExchangeRateLoadingRuns(ctx context.Context, params *ListExchangeRateLoadingRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// StartExchangeRateLoadingRun request
 	StartExchangeRateLoadingRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2315,6 +2347,9 @@ type ClientInterface interface {
 
 	// GetExchangeRateLoadingStatus request
 	GetExchangeRateLoadingStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListBackgroundOperationRuns request
+	ListBackgroundOperationRuns(ctx context.Context, operationId string, params *ListBackgroundOperationRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListCategories request
 	ListCategories(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2795,6 +2830,18 @@ func (c *Client) ListBackgroundOperations(ctx context.Context, reqEditors ...Req
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListDatabaseBackupRuns(ctx context.Context, params *ListDatabaseBackupRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListDatabaseBackupRunsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) StartDatabaseBackupRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStartDatabaseBackupRunRequest(c.Server)
 	if err != nil {
@@ -2831,6 +2878,18 @@ func (c *Client) GetDatabaseBackupStatus(ctx context.Context, reqEditors ...Requ
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListExchangeRateLoadingRuns(ctx context.Context, params *ListExchangeRateLoadingRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListExchangeRateLoadingRunsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) StartExchangeRateLoadingRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStartExchangeRateLoadingRunRequest(c.Server)
 	if err != nil {
@@ -2857,6 +2916,18 @@ func (c *Client) GetExchangeRateLoadingRun(ctx context.Context, operationRunId i
 
 func (c *Client) GetExchangeRateLoadingStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetExchangeRateLoadingStatusRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListBackgroundOperationRuns(ctx context.Context, operationId string, params *ListBackgroundOperationRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListBackgroundOperationRunsRequest(c.Server, operationId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5002,6 +5073,72 @@ func NewListBackgroundOperationsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewListDatabaseBackupRunsRequest generates requests for ListDatabaseBackupRuns
+func NewListDatabaseBackupRunsRequest(server string, params *ListDatabaseBackupRunsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/background-operations/database-backup/runs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewStartDatabaseBackupRunRequest generates requests for StartDatabaseBackupRun
 func NewStartDatabaseBackupRunRequest(server string) (*http.Request, error) {
 	var err error
@@ -5090,6 +5227,72 @@ func NewGetDatabaseBackupStatusRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewListExchangeRateLoadingRunsRequest generates requests for ListExchangeRateLoadingRuns
+func NewListExchangeRateLoadingRunsRequest(server string, params *ListExchangeRateLoadingRunsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/background-operations/exchange-rate-loading/runs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewStartExchangeRateLoadingRunRequest generates requests for StartExchangeRateLoadingRun
 func NewStartExchangeRateLoadingRunRequest(server string) (*http.Request, error) {
 	var err error
@@ -5168,6 +5371,79 @@ func NewGetExchangeRateLoadingStatusRequest(server string) (*http.Request, error
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListBackgroundOperationRunsRequest generates requests for ListBackgroundOperationRuns
+func NewListBackgroundOperationRunsRequest(server string, operationId string, params *ListBackgroundOperationRunsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "operation_id", operationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/background-operations/%s/runs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -8974,6 +9250,9 @@ type ClientWithResponsesInterface interface {
 	// ListBackgroundOperationsWithResponse request
 	ListBackgroundOperationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBackgroundOperationsResponse, error)
 
+	// ListDatabaseBackupRunsWithResponse request
+	ListDatabaseBackupRunsWithResponse(ctx context.Context, params *ListDatabaseBackupRunsParams, reqEditors ...RequestEditorFn) (*ListDatabaseBackupRunsResponse, error)
+
 	// StartDatabaseBackupRunWithResponse request
 	StartDatabaseBackupRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartDatabaseBackupRunResponse, error)
 
@@ -8983,6 +9262,9 @@ type ClientWithResponsesInterface interface {
 	// GetDatabaseBackupStatusWithResponse request
 	GetDatabaseBackupStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDatabaseBackupStatusResponse, error)
 
+	// ListExchangeRateLoadingRunsWithResponse request
+	ListExchangeRateLoadingRunsWithResponse(ctx context.Context, params *ListExchangeRateLoadingRunsParams, reqEditors ...RequestEditorFn) (*ListExchangeRateLoadingRunsResponse, error)
+
 	// StartExchangeRateLoadingRunWithResponse request
 	StartExchangeRateLoadingRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartExchangeRateLoadingRunResponse, error)
 
@@ -8991,6 +9273,9 @@ type ClientWithResponsesInterface interface {
 
 	// GetExchangeRateLoadingStatusWithResponse request
 	GetExchangeRateLoadingStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetExchangeRateLoadingStatusResponse, error)
+
+	// ListBackgroundOperationRunsWithResponse request
+	ListBackgroundOperationRunsWithResponse(ctx context.Context, operationId string, params *ListBackgroundOperationRunsParams, reqEditors ...RequestEditorFn) (*ListBackgroundOperationRunsResponse, error)
 
 	// ListCategoriesWithResponse request
 	ListCategoriesWithResponse(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*ListCategoriesResponse, error)
@@ -9692,6 +9977,38 @@ func (r ListBackgroundOperationsResponse) ContentType() string {
 	return ""
 }
 
+type ListDatabaseBackupRunsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OperationRunListResponse
+	JSON400      *InvalidRequest
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r ListDatabaseBackupRunsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListDatabaseBackupRunsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListDatabaseBackupRunsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type StartDatabaseBackupRunResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9788,6 +10105,38 @@ func (r GetDatabaseBackupStatusResponse) ContentType() string {
 	return ""
 }
 
+type ListExchangeRateLoadingRunsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OperationRunListResponse
+	JSON400      *InvalidRequest
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r ListExchangeRateLoadingRunsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListExchangeRateLoadingRunsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListExchangeRateLoadingRunsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type StartExchangeRateLoadingRunResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9877,6 +10226,39 @@ func (r GetExchangeRateLoadingStatusResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetExchangeRateLoadingStatusResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListBackgroundOperationRunsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OperationRunListResponse
+	JSON400      *InvalidRequest
+	JSON404      *NotFound
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r ListBackgroundOperationRunsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListBackgroundOperationRunsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListBackgroundOperationRunsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12077,6 +12459,15 @@ func (c *ClientWithResponses) ListBackgroundOperationsWithResponse(ctx context.C
 	return ParseListBackgroundOperationsResponse(rsp)
 }
 
+// ListDatabaseBackupRunsWithResponse request returning *ListDatabaseBackupRunsResponse
+func (c *ClientWithResponses) ListDatabaseBackupRunsWithResponse(ctx context.Context, params *ListDatabaseBackupRunsParams, reqEditors ...RequestEditorFn) (*ListDatabaseBackupRunsResponse, error) {
+	rsp, err := c.ListDatabaseBackupRuns(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListDatabaseBackupRunsResponse(rsp)
+}
+
 // StartDatabaseBackupRunWithResponse request returning *StartDatabaseBackupRunResponse
 func (c *ClientWithResponses) StartDatabaseBackupRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartDatabaseBackupRunResponse, error) {
 	rsp, err := c.StartDatabaseBackupRun(ctx, reqEditors...)
@@ -12104,6 +12495,15 @@ func (c *ClientWithResponses) GetDatabaseBackupStatusWithResponse(ctx context.Co
 	return ParseGetDatabaseBackupStatusResponse(rsp)
 }
 
+// ListExchangeRateLoadingRunsWithResponse request returning *ListExchangeRateLoadingRunsResponse
+func (c *ClientWithResponses) ListExchangeRateLoadingRunsWithResponse(ctx context.Context, params *ListExchangeRateLoadingRunsParams, reqEditors ...RequestEditorFn) (*ListExchangeRateLoadingRunsResponse, error) {
+	rsp, err := c.ListExchangeRateLoadingRuns(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListExchangeRateLoadingRunsResponse(rsp)
+}
+
 // StartExchangeRateLoadingRunWithResponse request returning *StartExchangeRateLoadingRunResponse
 func (c *ClientWithResponses) StartExchangeRateLoadingRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartExchangeRateLoadingRunResponse, error) {
 	rsp, err := c.StartExchangeRateLoadingRun(ctx, reqEditors...)
@@ -12129,6 +12529,15 @@ func (c *ClientWithResponses) GetExchangeRateLoadingStatusWithResponse(ctx conte
 		return nil, err
 	}
 	return ParseGetExchangeRateLoadingStatusResponse(rsp)
+}
+
+// ListBackgroundOperationRunsWithResponse request returning *ListBackgroundOperationRunsResponse
+func (c *ClientWithResponses) ListBackgroundOperationRunsWithResponse(ctx context.Context, operationId string, params *ListBackgroundOperationRunsParams, reqEditors ...RequestEditorFn) (*ListBackgroundOperationRunsResponse, error) {
+	rsp, err := c.ListBackgroundOperationRuns(ctx, operationId, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListBackgroundOperationRunsResponse(rsp)
 }
 
 // ListCategoriesWithResponse request returning *ListCategoriesResponse
@@ -13506,6 +13915,46 @@ func ParseListBackgroundOperationsResponse(rsp *http.Response) (*ListBackgroundO
 	return response, nil
 }
 
+// ParseListDatabaseBackupRunsResponse parses an HTTP response from a ListDatabaseBackupRunsWithResponse call
+func ParseListDatabaseBackupRunsResponse(rsp *http.Response) (*ListDatabaseBackupRunsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListDatabaseBackupRunsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperationRunListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseStartDatabaseBackupRunResponse parses an HTTP response from a StartDatabaseBackupRunWithResponse call
 func ParseStartDatabaseBackupRunResponse(rsp *http.Response) (*StartDatabaseBackupRunResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -13626,6 +14075,46 @@ func ParseGetDatabaseBackupStatusResponse(rsp *http.Response) (*GetDatabaseBacku
 	return response, nil
 }
 
+// ParseListExchangeRateLoadingRunsResponse parses an HTTP response from a ListExchangeRateLoadingRunsWithResponse call
+func ParseListExchangeRateLoadingRunsResponse(rsp *http.Response) (*ListExchangeRateLoadingRunsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListExchangeRateLoadingRunsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperationRunListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseStartExchangeRateLoadingRunResponse parses an HTTP response from a StartExchangeRateLoadingRunWithResponse call
 func ParseStartExchangeRateLoadingRunResponse(rsp *http.Response) (*StartExchangeRateLoadingRunResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -13726,6 +14215,53 @@ func ParseGetExchangeRateLoadingStatusResponse(rsp *http.Response) (*GetExchange
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListBackgroundOperationRunsResponse parses an HTTP response from a ListBackgroundOperationRunsWithResponse call
+func ParseListBackgroundOperationRunsResponse(rsp *http.Response) (*ListBackgroundOperationRunsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListBackgroundOperationRunsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OperationRunListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest MethodNotAllowed

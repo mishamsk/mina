@@ -542,6 +542,14 @@ export type OperationRunResponse = {
     error?: string | null;
 };
 
+export type OperationRunListResponse = {
+    runs: Array<OperationRunResponse>;
+    /**
+     * Count of operation runs before limit and offset are applied.
+     */
+    total_count: number;
+};
+
 export type HealthResponse = {
     status: 'ok';
     schema_version: number;
@@ -913,6 +921,44 @@ export type ListBackgroundOperationsResponses = {
 
 export type ListBackgroundOperationsResponse = ListBackgroundOperationsResponses[keyof ListBackgroundOperationsResponses];
 
+export type ListBackgroundOperationRunsData = {
+    body?: never;
+    path: {
+        operation_id: string;
+    };
+    query?: {
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/background-operations/{operation_id}/runs';
+};
+
+export type ListBackgroundOperationRunsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The requested resource was not found.
+     */
+    404: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type ListBackgroundOperationRunsError = ListBackgroundOperationRunsErrors[keyof ListBackgroundOperationRunsErrors];
+
+export type ListBackgroundOperationRunsResponses = {
+    /**
+     * Newest-first operation run page.
+     */
+    200: OperationRunListResponse;
+};
+
+export type ListBackgroundOperationRunsResponse = ListBackgroundOperationRunsResponses[keyof ListBackgroundOperationRunsResponses];
+
 export type GetExchangeRateLoadingStatusData = {
     body?: never;
     path?: never;
@@ -937,6 +983,38 @@ export type GetExchangeRateLoadingStatusResponses = {
 };
 
 export type GetExchangeRateLoadingStatusResponse = GetExchangeRateLoadingStatusResponses[keyof GetExchangeRateLoadingStatusResponses];
+
+export type ListExchangeRateLoadingRunsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/background-operations/exchange-rate-loading/runs';
+};
+
+export type ListExchangeRateLoadingRunsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type ListExchangeRateLoadingRunsError = ListExchangeRateLoadingRunsErrors[keyof ListExchangeRateLoadingRunsErrors];
+
+export type ListExchangeRateLoadingRunsResponses = {
+    /**
+     * Newest-first operation run page.
+     */
+    200: OperationRunListResponse;
+};
+
+export type ListExchangeRateLoadingRunsResponse = ListExchangeRateLoadingRunsResponses[keyof ListExchangeRateLoadingRunsResponses];
 
 export type StartExchangeRateLoadingRunData = {
     body?: never;
@@ -1022,6 +1100,38 @@ export type GetDatabaseBackupStatusResponses = {
 };
 
 export type GetDatabaseBackupStatusResponse = GetDatabaseBackupStatusResponses[keyof GetDatabaseBackupStatusResponses];
+
+export type ListDatabaseBackupRunsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        offset?: number;
+    };
+    url: '/api/background-operations/database-backup/runs';
+};
+
+export type ListDatabaseBackupRunsErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type ListDatabaseBackupRunsError = ListDatabaseBackupRunsErrors[keyof ListDatabaseBackupRunsErrors];
+
+export type ListDatabaseBackupRunsResponses = {
+    /**
+     * Newest-first operation run page.
+     */
+    200: OperationRunListResponse;
+};
+
+export type ListDatabaseBackupRunsResponse = ListDatabaseBackupRunsResponses[keyof ListDatabaseBackupRunsResponses];
 
 export type StartDatabaseBackupRunData = {
     body?: never;

@@ -269,6 +269,8 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 ### 7. Status & Settings — Phase 2
 
 - Status: backend health, database location/schema, background operations (exchange-rate loading, backups) with recent runs and manual trigger buttons.
+- Operation navigation: a generic selector over all registered background operations (from the operations listing API) drills into a generic runs table for the selected operation — paged, newest first; columns: started, finished/duration, outcome status, trigger. Selecting a run opens its detail.
+- The selector and runs table are one generic surface across all operation types, mirroring the backend operation registry; only the run-detail payload rendering is a per-operation-type component (exchange-rate loading, database backup, and future registered types), with a plain generic fallback for types without a dedicated renderer.
 - Settings (UI preferences, persisted per frontend-architecture): table density, default landing screen, theme selection (when themes ship).
 
 ### 8. Recurring occurrences — Phase 2

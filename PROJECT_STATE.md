@@ -20,8 +20,11 @@
   - Transaction semantic shape validation with derived transaction class, summary titles, component summaries, and display amounts in REST responses.
   - Paginated journal-record search with account-FQN prefix register filtering, plus account-record search by account ID.
   - Bulk journal-record category, tag, account, and status updates.
-  - Background operation status, run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
+  - Background operation status, newest-first paged run listings and lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
   - OpenAPI discovery through `GET /api/openapi.json`.
+
+>>>>>>> 8f0d08b7 (Squash merge branch 'bzav-status-operation-navigation')
+
 - Implemented runtime/demo behavior:
   - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, and localhost-only publishing by default.
   - `just test-docker` runs a real Docker lifecycle check covering Compose health, demo-data retention across recreation/restart/image replacement, backups, database validation, and cleanup.
@@ -43,6 +46,7 @@
   - Accounts page shows the chart of accounts as a searchable/filterable FQN tree with trailing row quick actions for hide/unhide, featured, move/rename, and delete, account create/edit, credit-limit history management, and URL-addressable account registers with running balances, transaction peeks, and balance-surface links.
   - Accounts tree supports prefix-addressed account rename/move for leaves and groups, with subtree FQN rewrites through the restructure API.
   - Account group pages show descendant balance-account subtotals and combined prefix registers across balance and flow accounts, with transaction peeks and links from account trees and overview balance groups.
+  - Status lists registered background operations with URL-backed paged run histories, manual operation triggers, current operation status, and per-operation run details; it keeps backend health and local UI-state controls.
   - Global command palette opens with `Cmd/Ctrl+K`, supports routed-page and account/group navigation by typed name, launches transaction entry tabs, and starts database backup or exchange-rate loading runs.
   - Global command palette supports Alfred-style transaction search with leading-apostrophe mode and URL-addressable transaction detail navigation.
   - Categories and Tags pages show searchable FQN trees with hidden controls, move/rename, and create/edit/delete side-panel workflows; Categories also show intent badges.

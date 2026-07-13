@@ -144,6 +144,65 @@ test("status page reports backend health", async ({ page }) => {
   ).toBeHidden();
 });
 
+test("status page navigates registered operation runs", async ({ page }) => {
+  const firstRunResponse = await page.request.post(
+    "/api/background-operations/exchange-rate-loading/runs",
+  );
+  expect(firstRunResponse.status()).toBe(202);
+  const firstRun = (await firstRunResponse.json()) as {
+    readonly operation_run_id: number;
+  };
+  const secondRunResponse = await page.request.post(
+    "/api/background-operations/exchange-rate-loading/runs",
+  );
+  expect(secondRunResponse.status()).toBe(202);
+  const secondRun = (await secondRunResponse.json()) as {
+    readonly operation_run_id: number;
+  };
+
+  await page.goto("/status");
+
+  const operationSelect = page.getByRole("combobox", { name: "Operation" });
+  await operationSelect.click();
+  await expect(
+    page.getByTestId("select-option-exchange-rate-loading"),
+  ).toBeVisible();
+  await expect(page.getByTestId("select-option-database-backup")).toBeVisible();
+  await page.getByTestId("select-option-database-backup").click();
+  await expect(page).toHaveURL(/operation=database-backup/);
+
+  await operationSelect.click();
+  await page.getByTestId("select-option-exchange-rate-loading").click();
+
+  await expect(page).toHaveURL(/operation=exchange-rate-loading/);
+  await expect(page).toHaveURL(/runsPage=1/);
+  await expect(page).toHaveURL(/runsPageSize=25/);
+
+  const runsTable = page.getByTestId("operation-runs-table");
+  const runRows = runsTable.locator("tbody tr");
+  await expect.poll(async () => await runRows.count()).toBeGreaterThan(1);
+  await expect(runRows.first()).toContainText(
+    String(secondRun.operation_run_id),
+  );
+  await expect(runRows.nth(1)).toContainText(String(firstRun.operation_run_id));
+
+  await runRows.first().click();
+  const detail = page.getByTestId("operation-run-detail");
+  await expect(detail).toBeVisible();
+  await expect(detail).toContainText("Exchange-rate loading");
+  await expect(detail).toContainText("Rate load and USD backfill");
+
+  await page.goto(
+    "/status?operation=exchange-rate-loading&runsPage=1&runsPageSize=50",
+  );
+  await expect(
+    page.getByRole("combobox", { name: "Rows per page" }),
+  ).toContainText("50");
+  await expect(page).toHaveURL(
+    /operation=exchange-rate-loading&runsPage=1&runsPageSize=50/,
+  );
+});
+
 test("legacy ui deep links redirect to root routes preserving query", async ({
   page,
 }) => {

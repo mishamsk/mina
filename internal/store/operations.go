@@ -64,6 +64,66 @@ func (r *operationRunRepository) GetRun(ctx context.Context, runID int64) (opera
 	return operationRunFromRow(row), nil
 }
 
+func (r *operationRunRepository) ListRuns(
+	ctx context.Context,
+	operationID operationruns.OperationID,
+	opts operationruns.ListRunsOptions,
+) (services.PaginatedList[operationruns.OperationRun], error) {
+	var totalCount int64
+	if err := r.db.query().QueryRowContext(
+		ctx,
+		`SELECT COUNT(*)
+FROM `+operationRunTable()+`
+WHERE app_id = ? AND operation_id = ?`,
+		r.appID,
+		operationID,
+	).Scan(&totalCount); err != nil {
+		return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("count operation runs: %w", err)
+	}
+
+	query := `SELECT operation_run_id, operation_id, status, started_at, completed_at, error
+FROM ` + operationRunTable() + `
+WHERE app_id = ? AND operation_id = ?
+ORDER BY started_at DESC, operation_run_id DESC`
+	args := []any{r.appID, operationID}
+	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
+
+	rows, err := r.db.query().QueryContext(ctx, query, args...)
+	if err != nil {
+		return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("list operation runs: %w", err)
+	}
+
+	runs := []operationruns.OperationRun{}
+	for rows.Next() {
+		row := operationRunRow{}
+		if err := rows.Scan(
+			&row.RunID,
+			&row.OperationID,
+			&row.Status,
+			&row.StartedAt,
+			&row.CompletedAt,
+			&row.Error,
+		); err != nil {
+			return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("scan operation run: %w", err)
+		}
+		runs = append(runs, operationRunFromRow(row))
+	}
+	if err := rows.Err(); err != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("iterate operation runs: %w; close operation run rows: %w", err, closeErr)
+		}
+		return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("iterate operation runs: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("close operation run rows: %w", err)
+	}
+
+	return services.PaginatedList[operationruns.OperationRun]{
+		Items:      runs,
+		TotalCount: totalCount,
+	}, nil
+}
+
 func (r *operationRunRepository) FinishRun(ctx context.Context, run operationruns.OperationRun) error {
 	if run.CompletedAt == nil {
 		return fmt.Errorf("operation run %d is missing completed_at", run.ID)

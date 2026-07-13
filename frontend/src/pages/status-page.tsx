@@ -15,6 +15,7 @@ import { Checkbox } from "../components/ui/checkbox";
 import { Separator } from "../components/ui/separator";
 import { Skeleton } from "../components/ui/skeleton";
 import { PageHeader } from "../features/app-shell";
+import { StatusOperations } from "../features/status";
 import { setStatusPageShowDetails, useStatusPageView } from "../store";
 
 interface HealthState {
@@ -223,6 +224,8 @@ export const StatusPage = () => {
           </CardContent>
         </Card>
       ) : null}
+
+      <StatusOperations refreshRevision={refreshRevision} />
     </section>
   );
 };

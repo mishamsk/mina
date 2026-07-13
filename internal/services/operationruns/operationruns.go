@@ -93,8 +93,15 @@ type Config struct {
 type Repository interface {
 	CreateRun(context.Context, OperationRun) (OperationRun, error)
 	GetRun(context.Context, int64) (OperationRun, error)
+	ListRuns(context.Context, OperationID, ListRunsOptions) (services.PaginatedList[OperationRun], error)
 	FinishRun(context.Context, OperationRun) error
 	RunStats(context.Context, OperationID) (int64, *OperationRun, bool, error)
+}
+
+// ListRunsOptions controls operation-run page position.
+type ListRunsOptions struct {
+	Limit  *int
+	Offset int
 }
 
 // Trigger starts a registered operation through the background boundary.
@@ -132,14 +139,32 @@ func (s *Service) SetTrigger(trigger Trigger) {
 
 // List returns registered operations.
 func (s *Service) List(context.Context) ([]OperationSummary, error) {
-	return []OperationSummary{
-		{
-			ID: ExchangeRateLoadingOperationID,
-		},
-		{
-			ID: DatabaseBackupOperationID,
-		},
-	}, nil
+	operations := s.registeredOperations()
+	summaries := make([]OperationSummary, 0, len(operations))
+	for _, operationID := range operations {
+		summaries = append(summaries, OperationSummary{ID: operationID})
+	}
+
+	return summaries, nil
+}
+
+// ListRuns returns one newest-first page of runs for a registered operation.
+func (s *Service) ListRuns(
+	ctx context.Context,
+	operationID OperationID,
+	opts ListRunsOptions,
+) (services.PaginatedList[OperationRun], error) {
+	if !s.registeredOperation(operationID) {
+		return services.PaginatedList[OperationRun]{}, services.NotFound("background operation not found")
+	}
+	if opts.Limit != nil && *opts.Limit <= 0 {
+		return services.PaginatedList[OperationRun]{}, services.InvalidRequest("limit must be positive")
+	}
+	if opts.Offset < 0 {
+		return services.PaginatedList[OperationRun]{}, services.InvalidRequest("offset must be non-negative")
+	}
+
+	return s.repo.ListRuns(ctx, operationID, opts)
 }
 
 // ExchangeRateLoadingStatus returns exchange-rate loading operation status.
@@ -230,6 +255,23 @@ func (s *Service) getRun(ctx context.Context, operationID OperationID, runID int
 	}
 
 	return run, nil
+}
+
+func (s *Service) registeredOperation(operationID OperationID) bool {
+	for _, registeredOperationID := range s.registeredOperations() {
+		if operationID == registeredOperationID {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *Service) registeredOperations() []OperationID {
+	return []OperationID{
+		ExchangeRateLoadingOperationID,
+		DatabaseBackupOperationID,
+	}
 }
 
 // RecordRunStart records one running operation attempt.
