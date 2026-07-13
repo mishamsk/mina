@@ -77,6 +77,27 @@ const createTag = async (
   return (await response.json()) as TagFixture;
 };
 
+const waitForTagLookup = (page: Page) =>
+  page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "GET" && url.pathname === "/api/tags"
+    );
+  });
+
+const fillAndExpectValue = async (
+  field: Locator,
+  value: string,
+): Promise<void> => {
+  await expect(field).toBeEditable();
+  await expect
+    .poll(async () => {
+      await field.fill(value);
+      return field.inputValue();
+    })
+    .toBe(value);
+};
+
 test("tag row delete closes the matching open editor", async ({
   browserName,
   page,
@@ -209,13 +230,15 @@ test("tags row actions hide groups and move renamed paths into transaction filte
     createTag(page, { fqn: `${moveSource}:Beta` }),
   ]);
 
+  const tagLookup = waitForTagLookup(page);
   await page.goto("/transactions");
+  expect((await tagLookup).ok()).toBe(true);
   await expect(page.getByText("Description")).toBeVisible();
   await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
   const tagPicker = page.getByRole("combobox", { name: "Tags" });
-  await tagPicker.fill(moveSource);
+  await fillAndExpectValue(tagPicker, moveSource);
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
     `${moveSource}:Alpha`,
   );
@@ -307,11 +330,11 @@ test("tags row actions hide groups and move renamed paths into transaction filte
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
   const refreshedTagPicker = page.getByRole("combobox", { name: "Tags" });
-  await refreshedTagPicker.fill(moveDestination);
+  await fillAndExpectValue(refreshedTagPicker, moveDestination);
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
     `${moveDestination}:Alpha`,
   );
-  await refreshedTagPicker.fill(moveSource);
+  await fillAndExpectValue(refreshedTagPicker, moveSource);
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
     "No matches",
   );

@@ -2267,68 +2267,73 @@ export const EntryPanel = ({
     };
 
     setSaving(true);
-    const result =
-      activeShorthandTab === "spend"
-        ? await createSpend({
-            ...common,
-            counterparty_account_id: activeTabDraft.merchantAccountId ?? -1,
-            funding_account_id: activeTabDraft.fundingAccountId ?? -1,
-          } satisfies CreateSpendTransactionRequest)
-        : activeShorthandTab === "income"
-          ? await createIncome({
+    try {
+      const result =
+        activeShorthandTab === "spend"
+          ? await createSpend({
               ...common,
-              destination_account_id: activeTabDraft.destinationAccountId ?? -1,
-              source_account_id: activeTabDraft.sourceAccountId ?? -1,
-            } satisfies CreateIncomeTransactionRequest)
-          : activeShorthandTab === "refund"
-            ? await createRefund({
-                ...common,
-                counterparty_account_id: activeTabDraft.merchantAccountId ?? -1,
-                destination_account_id:
-                  activeTabDraft.destinationAccountId ?? -1,
-              } satisfies CreateRefundTransactionRequest)
-            : await createTransfer({
+              counterparty_account_id: activeTabDraft.merchantAccountId ?? -1,
+              funding_account_id: activeTabDraft.fundingAccountId ?? -1,
+            } satisfies CreateSpendTransactionRequest)
+          : activeShorthandTab === "income"
+            ? await createIncome({
                 ...common,
                 destination_account_id:
                   activeTabDraft.destinationAccountId ?? -1,
                 source_account_id: activeTabDraft.sourceAccountId ?? -1,
-              } satisfies CreateTransferTransactionRequest);
-    setSaving(false);
+              } satisfies CreateIncomeTransactionRequest)
+            : activeShorthandTab === "refund"
+              ? await createRefund({
+                  ...common,
+                  counterparty_account_id:
+                    activeTabDraft.merchantAccountId ?? -1,
+                  destination_account_id:
+                    activeTabDraft.destinationAccountId ?? -1,
+                } satisfies CreateRefundTransactionRequest)
+              : await createTransfer({
+                  ...common,
+                  destination_account_id:
+                    activeTabDraft.destinationAccountId ?? -1,
+                  source_account_id: activeTabDraft.sourceAccountId ?? -1,
+                } satisfies CreateTransferTransactionRequest);
 
-    if (result.data) {
-      const nextTabDraft = stickyNextTabDraft(
-        activeShorthandTab,
-        activeTabDraft,
-        currency,
+      if (result.data) {
+        const nextTabDraft = stickyNextTabDraft(
+          activeShorthandTab,
+          activeTabDraft,
+          currency,
+        );
+        const nextDraft = {
+          ...draft,
+          tabs: {
+            ...draft.tabs,
+            [activeShorthandTab]: nextTabDraft,
+          },
+        };
+        setDraft(nextDraft);
+        setFieldErrors({});
+        setGeneralError(undefined);
+        setSessionCount((count) => count + 1);
+        if (draftPersistence === "launch") {
+          setDraftPersistence("ordinary");
+        }
+        if (draftPersistence === "ordinary" || draftPersistence === "launch") {
+          await writeTransactionEntryDraft(draftForStorage(nextDraft));
+        }
+        await onSaved(result.data, { operation: "created" });
+        return;
+      }
+
+      const message = apiErrorMessage(
+        result.error,
+        "Transaction could not be saved.",
       );
-      const nextDraft = {
-        ...draft,
-        tabs: {
-          ...draft.tabs,
-          [activeShorthandTab]: nextTabDraft,
-        },
-      };
-      setDraft(nextDraft);
-      setFieldErrors({});
-      setGeneralError(undefined);
-      setSessionCount((count) => count + 1);
-      if (draftPersistence === "launch") {
-        setDraftPersistence("ordinary");
-      }
-      if (draftPersistence === "ordinary" || draftPersistence === "launch") {
-        await writeTransactionEntryDraft(draftForStorage(nextDraft));
-      }
-      await onSaved(result.data, { operation: "created" });
-      return;
+      const apiFieldErrors = fieldErrorsFromAPI(message);
+      setFieldErrors(apiFieldErrors);
+      setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);
+    } finally {
+      setSaving(false);
     }
-
-    const message = apiErrorMessage(
-      result.error,
-      "Transaction could not be saved.",
-    );
-    const apiFieldErrors = fieldErrorsFromAPI(message);
-    setFieldErrors(apiFieldErrors);
-    setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);
   }, [
     activeTab,
     activeShorthandTab,

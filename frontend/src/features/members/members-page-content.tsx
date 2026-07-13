@@ -7,6 +7,10 @@ import {
   type Member,
   updateLedgerMemberHidden,
 } from "@/api";
+import {
+  referenceTableFrameClassName,
+  referenceTableFrameTestId,
+} from "@/components/reference-table-frame";
 import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -269,8 +273,8 @@ const MembersList = ({
 
   return (
     <div
-      className="bg-card flex h-full min-h-0 w-full max-w-[48rem] flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
-      data-testid="reference-table-frame"
+      className={`${referenceTableFrameClassName} w-full max-w-[48rem]`}
+      data-testid={referenceTableFrameTestId}
     >
       <div
         className="reference-table-scroll min-h-0 flex-1 overflow-auto"

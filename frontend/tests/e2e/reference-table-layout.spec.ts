@@ -4,12 +4,15 @@ const longRowCount = 32;
 
 interface ReferenceTableTarget {
   readonly compactMaxWidth?: number;
+  readonly createFixture: (page: Page, name: string) => Promise<void>;
+  readonly fixtureName: (unique: string, suffix: string) => string;
   readonly frameTestId: string;
   readonly layout: "compact" | "wide";
+  readonly name: string;
   readonly path: string;
   readonly rowTestId: string;
   readonly rowText: string;
-  readonly shortNeedle: string;
+  readonly scrollerTestId: string;
 }
 
 const expectReferenceFrameLayout = async (
@@ -207,116 +210,94 @@ const expectSameHorizontalSlot = async (
   expect(firstBox?.x).toBeCloseTo(secondBox?.x ?? 0, 4);
 };
 
-test("reference tables keep their framed viewport inset and scroll internally", async ({
-  page,
-}, testInfo) => {
-  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
-  const accountsPrefix = `E2EScrollAccounts:${unique}`;
-  const categoriesPrefix = `E2EScrollCategories:${unique}`;
-  const tagsPrefix = `E2EScrollTags:${unique}`;
-  const membersPrefix = `E2E Scroll Members ${unique}`;
-  const rowSuffixes = Array.from(
-    { length: longRowCount },
-    (_, index) => `Row${String(index).padStart(2, "0")}`,
-  );
+const referenceTableTargets: readonly ReferenceTableTarget[] = [
+  {
+    createFixture: createAccount,
+    fixtureName: (unique, suffix) => `E2EScrollAccounts:${unique}:${suffix}`,
+    frameTestId: "accounts-table-frame",
+    layout: "wide",
+    name: "accounts",
+    path: "/accounts",
+    rowTestId: "accounts-tree-row",
+    rowText: "Row00",
+    scrollerTestId: "accounts-table-scroll",
+  },
+  {
+    createFixture: createCategory,
+    fixtureName: (unique, suffix) => `E2EScrollCategories:${unique}:${suffix}`,
+    frameTestId: "reference-table-frame",
+    layout: "wide",
+    name: "categories",
+    path: "/categories",
+    rowTestId: "categories-tree-row",
+    rowText: "Row00",
+    scrollerTestId: "reference-table-scroll",
+  },
+  {
+    compactMaxWidth: 896,
+    createFixture: createTag,
+    fixtureName: (unique, suffix) => `E2EScrollTags:${unique}:${suffix}`,
+    frameTestId: "reference-table-frame",
+    layout: "compact",
+    name: "tags",
+    path: "/tags",
+    rowTestId: "tags-tree-row",
+    rowText: "Row00",
+    scrollerTestId: "reference-table-scroll",
+  },
+  {
+    compactMaxWidth: 768,
+    createFixture: createMember,
+    fixtureName: (unique, suffix) =>
+      `ZZZ E2E Scroll Members ${unique} ${suffix}`,
+    frameTestId: "reference-table-frame",
+    layout: "compact",
+    name: "members",
+    path: "/members",
+    rowTestId: "members-list-row",
+    rowText: "Row00",
+    scrollerTestId: "reference-table-scroll",
+  },
+];
 
-  for (const suffix of rowSuffixes) {
-    await createAccount(page, `${accountsPrefix}:${suffix}`);
-    await createCategory(page, `${categoriesPrefix}:${suffix}`);
-    await createTag(page, `${tagsPrefix}:${suffix}`);
-    await createMember(page, `${membersPrefix} ${suffix}`);
-  }
+for (const table of referenceTableTargets) {
+  test(`reference ${table.name} table keeps its framed viewport inset and scrolls internally`, async ({
+    page,
+  }, testInfo) => {
+    const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+    const rowSuffixes = Array.from(
+      { length: longRowCount },
+      (_, index) => `Row${String(index).padStart(2, "0")}`,
+    );
 
-  const tables: readonly ReferenceTableTarget[] = [
-    {
-      frameTestId: "accounts-table-frame",
-      layout: "wide",
-      path: "/accounts",
-      rowTestId: "accounts-tree-row",
-      rowText: "Row00",
-      shortNeedle: `${accountsPrefix}:Row00`,
-    },
-    {
-      frameTestId: "reference-table-frame",
-      layout: "wide",
-      path: "/categories",
-      rowTestId: "categories-tree-row",
-      rowText: "Row00",
-      shortNeedle: `${categoriesPrefix}:Row00`,
-    },
-    {
-      compactMaxWidth: 896,
-      frameTestId: "reference-table-frame",
-      layout: "compact",
-      path: "/tags",
-      rowTestId: "tags-tree-row",
-      rowText: "Row00",
-      shortNeedle: `${tagsPrefix}:Row00`,
-    },
-    {
-      compactMaxWidth: 768,
-      frameTestId: "reference-table-frame",
-      layout: "compact",
-      path: "/members",
-      rowTestId: "members-list-row",
-      rowText: "Row00",
-      shortNeedle: `${membersPrefix} Row00`,
-    },
-  ];
+    for (const suffix of rowSuffixes) {
+      await table.createFixture(page, table.fixtureName(unique, suffix));
+    }
 
-  await page.setViewportSize({ width: 1440, height: 900 });
-  for (const table of tables) {
-    await page.goto(table.path);
+    const frame = page.getByTestId(table.frameTestId);
+    const scroller = page.getByTestId(table.scrollerTestId);
     const rows = page.getByTestId(table.rowTestId);
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(table.path);
     await expect(rows.filter({ hasText: table.rowText }).first()).toBeVisible();
     await expect.poll(() => rows.count()).toBeGreaterThan(longRowCount - 1);
-    await expectLongTableToScrollInternally(
-      page,
-      page.getByTestId(table.frameTestId),
-      page.getByTestId(
-        table.frameTestId === "accounts-table-frame"
-          ? "accounts-table-scroll"
-          : "reference-table-scroll",
-      ),
-    );
-    await expectBlankActionHeaderWithMatchedInset(
-      page.getByTestId(
-        table.frameTestId === "accounts-table-frame"
-          ? "accounts-table-scroll"
-          : "reference-table-scroll",
-      ),
-    );
+    await expectLongTableToScrollInternally(page, frame, scroller);
+    await expectBlankActionHeaderWithMatchedInset(scroller);
     await expectReferenceFrameLayout(
-      page.getByTestId(table.frameTestId),
+      frame,
       table.layout,
       table.compactMaxWidth,
     );
-  }
 
-  await page.setViewportSize({ width: 1200, height: 900 });
-  for (const table of tables) {
+    await page.setViewportSize({ width: 1200, height: 900 });
     await page.goto(table.path);
-    await page.getByLabel("Search").fill(table.shortNeedle);
-    await expect(
-      page.getByTestId(table.rowTestId).filter({ hasText: table.rowText }),
-    ).toBeVisible();
-    await expectShortTableToKeepInsetWithoutOverflow(
-      page.getByTestId(table.frameTestId),
-      page.getByTestId(
-        table.frameTestId === "accounts-table-frame"
-          ? "accounts-table-scroll"
-          : "reference-table-scroll",
-      ),
-    );
-    await expectBlankActionHeaderWithMatchedInset(
-      page.getByTestId(
-        table.frameTestId === "accounts-table-frame"
-          ? "accounts-table-scroll"
-          : "reference-table-scroll",
-      ),
-    );
-  }
-});
+    await page.getByLabel("Search").fill(table.fixtureName(unique, "Row00"));
+    await expect(rows.filter({ hasText: table.rowText })).toBeVisible();
+    await expectShortTableToKeepInsetWithoutOverflow(frame, scroller);
+    await expectBlankActionHeaderWithMatchedInset(scroller);
+  });
+}
 
 test("reference-table indicator slots keep hidden eyes aligned and stars unclipped", async ({
   page,

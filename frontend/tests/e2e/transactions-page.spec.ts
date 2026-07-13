@@ -104,6 +104,21 @@ const listFixtures = async <T>(
   return body[collectionKey] ?? [];
 };
 
+const waitForLedgerLookups = async (page: Page): Promise<void> => {
+  const responses = await Promise.all(
+    ["/api/accounts", "/api/categories", "/api/tags", "/api/members"].map(
+      (path) =>
+        page.waitForResponse((response) => {
+          const url = new URL(response.url());
+          return response.request().method() === "GET" && url.pathname === path;
+        }),
+    ),
+  );
+  for (const response of responses) {
+    expect(response.ok(), `${response.url()} lookup response`).toBe(true);
+  }
+};
+
 const findByFqn = <T extends { readonly fqn: string }>(
   fixtures: readonly T[],
   fqn: string,
@@ -1343,7 +1358,9 @@ test("transactions page add-filter menu drives server filters and chips", async 
   });
   expect(alternateSpend.ok()).toBe(true);
 
+  const ledgerLookups = waitForLedgerLookups(page);
   await page.goto("/transactions?page=2&pageSize=25");
+  await ledgerLookups;
   await expect(page.getByText("Description")).toBeVisible();
 
   await page.getByRole("button", { name: "Open filters" }).click();
@@ -1359,11 +1376,11 @@ test("transactions page add-filter menu drives server filters and chips", async 
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
     "HiddenMatch",
   );
-  await tagsPicker.fill(visibleTagOne.fqn);
+  await fillAndExpectValue(tagsPicker, visibleTagOne.fqn);
   await expect(
     page.getByRole("button", { name: "Remove Groceries" }),
   ).toBeVisible();
-  await tagsPicker.fill(visibleTagTwo.fqn);
+  await fillAndExpectValue(tagsPicker, visibleTagTwo.fqn);
   await expect(
     page.getByRole("button", { name: "Remove Errands" }),
   ).toBeVisible();
@@ -1379,10 +1396,8 @@ test("transactions page add-filter menu drives server filters and chips", async 
   });
   const amountMinInput = amountDialog.getByRole("textbox", { name: "Min" });
   const amountMaxInput = amountDialog.getByRole("textbox", { name: "Max" });
-  await amountMinInput.fill("10");
-  await expect(amountMinInput).toHaveValue("10");
-  await amountMaxInput.fill("20");
-  await expect(amountMaxInput).toHaveValue("20");
+  await fillAndExpectValue(amountMinInput, "10");
+  await fillAndExpectValue(amountMaxInput, "20");
   await expect(page.getByText("Amount 10-20")).toBeVisible();
 
   await page.getByRole("button", { name: "Back" }).click();
@@ -3561,10 +3576,8 @@ test("transaction detail panel shows full records and supports deep links", asyn
     .click();
   await expect(panel).toBeVisible();
 
-  await alternateDetailRow.evaluate((row) => {
-    row.scrollIntoView({ block: "center", inline: "nearest" });
-    (row as HTMLElement).focus();
-  });
+  await alternateDetailRow.scrollIntoViewIfNeeded();
+  await alternateDetailRow.focus();
   await expect(alternateDetailRow).toBeFocused();
   await alternateDetailRow.press("Enter");
   await expect(page).toHaveURL(
@@ -4396,7 +4409,9 @@ test("transaction detail duplicate prefills a new entry", async ({
   expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
   const transaction = (await spendResponse.json()) as TransactionFixture;
 
+  const ledgerLookups = waitForLedgerLookups(page);
   await page.goto("/transactions?page=1&pageSize=50");
+  await ledgerLookups;
   await expect(page.getByText("Description")).toBeVisible();
   await page
     .getByRole("row")
@@ -5045,8 +5060,7 @@ const chooseOptionByKeyboard = async (
   const picker = pickerScope.getByRole("combobox", { name: label });
   await picker.click();
   await expect(picker).toBeFocused();
-  await picker.fill("");
-  await picker.fill(searchText);
+  await fillAndExpectValue(picker, searchText);
   if ((await picker.inputValue()) === optionValue) {
     await expect(picker).toHaveAttribute("aria-expanded", "false");
     return;
@@ -5054,22 +5068,21 @@ const chooseOptionByKeyboard = async (
   const optionListId = await picker.getAttribute("aria-controls");
   expect(optionListId).not.toBeNull();
   const optionList = page.locator(`#${optionListId}`);
-  const optionByValue = optionList
+  const option = optionList
     .getByRole("option")
-    .filter({ hasText: optionValue });
-  await expect
-    .poll(async () => await optionByValue.count(), { timeout: 10000 })
-    .toBeGreaterThan(0);
-  const option = optionByValue.first();
+    .filter({ hasText: optionValue })
+    .first();
   await expect(option).toBeVisible({ timeout: 10000 });
   const optionId = await option.evaluate((element) => element.id);
-  if (arrowDownPresses === 0) {
+  for (let press = 0; press < arrowDownPresses; press += 1) {
     await picker.press("ArrowDown");
-    await picker.press("ArrowUp");
-  } else {
-    for (let press = 0; press < arrowDownPresses; press += 1) {
-      await picker.press("ArrowDown");
+  }
+  const optionCount = await optionList.getByRole("option").count();
+  for (let attempt = 0; attempt <= optionCount; attempt += 1) {
+    if ((await picker.getAttribute("aria-activedescendant")) === optionId) {
+      break;
     }
+    await picker.press("ArrowDown");
   }
   await expect(picker).toHaveAttribute("aria-activedescendant", optionId);
   await picker.press("Enter");
@@ -5081,6 +5094,7 @@ const fillAndExpectValue = async (
   field: Locator,
   value: string,
 ): Promise<void> => {
+  await expect(field).toBeEditable();
   await expect
     .poll(async () => {
       await field.fill(value);
@@ -5342,9 +5356,12 @@ test("entry panel creates each shorthand transaction type", async ({
     await expect(
       page.getByText(`Entries this session: ${count}`),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Saving" })).toHaveCount(0);
   };
 
+  const ledgerLookups = waitForLedgerLookups(page);
   await page.goto("/transactions?page=1&pageSize=25");
+  await ledgerLookups;
   await page
     .locator("header")
     .getByRole("button", { name: "New transaction" })
@@ -5608,9 +5625,9 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
 
   const firstRecord = journalRecord(page, 1);
   const secondRecord = journalRecord(page, 2);
-  await firstRecord.getByLabel("Amount").fill("-88.10");
-  await firstRecord.getByLabel("Memo").fill(advancedMemo);
-  await secondRecord.getByLabel("Amount").fill("88.10");
+  await fillAndExpectValue(firstRecord.getByLabel("Amount"), "-88.10");
+  await fillAndExpectValue(firstRecord.getByLabel("Memo"), advancedMemo);
+  await fillAndExpectValue(secondRecord.getByLabel("Amount"), "88.10");
 
   await page.getByRole("tab", { name: "Spend" }).click();
   const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
@@ -5716,7 +5733,7 @@ test("launching another saved-transaction action protects an in-flight edit", as
   await expect(
     entryPanel.getByRole("heading", { name: "Edit spend" }),
   ).toBeVisible();
-  await editPanel.getByLabel("Memo").fill(changedMemo);
+  await fillAndExpectValue(editPanel.getByLabel("Memo"), changedMemo);
 
   const nextRow = page.getByRole("row").filter({ hasText: nextMemo }).first();
   await expect(nextRow).toBeVisible();
@@ -5912,7 +5929,9 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const memo = `E2E advanced account parity ${unique}`;
 
+  const ledgerLookups = waitForLedgerLookups(page);
   await page.goto("/transactions?page=1&pageSize=25");
+  await ledgerLookups;
   await page
     .locator("header")
     .getByRole("button", { name: "New transaction" })
@@ -5925,7 +5944,7 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
     name: "Account",
   });
 
-  await firstAccountPicker.fill("VisibleFeeSystem");
+  await fillAndExpectValue(firstAccountPicker, "VisibleFeeSystem");
   await expect(
     page
       .locator("#advanced-record-0-account-options")

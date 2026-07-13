@@ -56,6 +56,19 @@ const listFixtures = async <T>(
   return body[collectionKey] ?? [];
 };
 
+const fillAndExpectValue = async (
+  field: Locator,
+  value: string,
+): Promise<void> => {
+  await expect(field).toBeEditable();
+  await expect
+    .poll(async () => {
+      await field.fill(value);
+      return field.inputValue();
+    })
+    .toBe(value);
+};
+
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -1407,7 +1420,7 @@ test("account restructure invalidates a cached register before revisit", async (
   const restructureDialog = page.getByRole("dialog", {
     name: "Move or rename",
   });
-  await restructureDialog.getByLabel("To").fill(destinationFqn);
+  await fillAndExpectValue(restructureDialog.getByLabel("To"), destinationFqn);
   const restructureResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -1418,6 +1431,25 @@ test("account restructure invalidates a cached register before revisit", async (
   await restructureDialog.getByRole("button", { name: "Move" }).click();
   expect((await restructureResponse).status()).toBe(200);
 
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        `/api/accounts/${account.account_id}`,
+      );
+      if (!response.ok()) {
+        return undefined;
+      }
+      return ((await response.json()) as AccountFixture).fqn;
+    })
+    .toBe(destinationFqn);
+
+  const freshAccountResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${account.account_id}` &&
+      response.request().method() === "GET"
+    );
+  });
   const freshRecordsResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -1426,7 +1458,8 @@ test("account restructure invalidates a cached register before revisit", async (
     );
   });
   await page.goto(`/accounts/${account.account_id}`);
-  await freshRecordsResponse;
+  expect((await freshAccountResponse).ok()).toBe(true);
+  expect((await freshRecordsResponse).ok()).toBe(true);
   await expect(page.getByRole("heading", { name: "New" })).toBeVisible();
 });
 

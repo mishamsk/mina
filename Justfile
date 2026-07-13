@@ -311,7 +311,8 @@ test-integration: frontend-build
 # Run frontend browser end-to-end tests against the embedded UI.
 [group('dev-tooling')]
 [working-directory: 'frontend']
-test-frontend-e2e: build
+[positional-arguments]
+test-frontend-e2e *playwright_args: build
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -356,7 +357,10 @@ test-frontend-e2e: build
     done
 
     mise exec -- pnpm exec playwright install chromium webkit
-    mise exec -- pnpm exec playwright test
+    if [[ $# -eq 1 && $1 == "" ]]; then
+        set --
+    fi
+    mise exec -- pnpm exec playwright test "$@"
 
 # Run a manual local REST responsiveness benchmark with default script settings.
 [group('dev-tooling')]

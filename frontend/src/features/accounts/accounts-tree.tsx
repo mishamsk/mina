@@ -25,6 +25,7 @@ import {
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
+import { referenceTableFrameClassName } from "@/components/reference-table-frame";
 import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
@@ -472,7 +473,7 @@ export const AccountsTree = ({
   return (
     <>
       <div
-        className="bg-card flex h-full min-h-0 flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+        className={referenceTableFrameClassName}
         data-testid="accounts-table-frame"
       >
         <div

@@ -2,6 +2,10 @@ import { EyeOff, Reload } from "pixelarticons/react";
 import { type ReactNode, useMemo } from "react";
 
 import {
+  referenceTableFrameClassName,
+  referenceTableFrameTestId,
+} from "@/components/reference-table-frame";
+import {
   type RowAction,
   type RowActionIndicatorSlot,
   RowActions,
@@ -343,10 +347,10 @@ export const ReferenceTree = <
   return (
     <div
       className={cn(
-        "bg-card flex h-full min-h-0 flex-col overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
+        referenceTableFrameClassName,
         compact && "w-full max-w-[56rem]",
       )}
-      data-testid="reference-table-frame"
+      data-testid={referenceTableFrameTestId}
     >
       <div
         className="reference-table-scroll min-h-0 flex-1 overflow-auto"

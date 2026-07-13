@@ -24,6 +24,29 @@ const createMember = async (
   return (await response.json()) as MemberFixture;
 };
 
+const waitForMemberLookup = (page: Page) =>
+  page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "GET" &&
+      url.pathname === "/api/members" &&
+      url.searchParams.get("sort") === "name"
+    );
+  });
+
+const fillAndExpectValue = async (
+  field: Locator,
+  value: string,
+): Promise<void> => {
+  await expect(field).toBeEditable();
+  await expect
+    .poll(async () => {
+      await field.fill(value);
+      return field.inputValue();
+    })
+    .toBe(value);
+};
+
 const listFixtures = async <T>(
   page: Page,
   path: string,
@@ -87,9 +110,16 @@ test("members page renders sorted demo members and URL search", async ({
   ).toBeVisible();
 
   const rows = page.getByTestId("members-list-row");
-  await expect(rows.nth(0)).toContainText("Avery");
-  await expect(rows.nth(1)).toContainText("Morgan");
-  await expect(rows.nth(2)).toContainText("Riley");
+  await expect(rows.filter({ hasText: "Avery" })).toContainText("Avery");
+  await expect(rows.filter({ hasText: "Morgan" })).toContainText("Morgan");
+  await expect(rows.filter({ hasText: "Riley" })).toContainText("Riley");
+  const rowTexts = await rows.allInnerTexts();
+  const averyIndex = rowTexts.findIndex((text) => text.includes("Avery"));
+  const morganIndex = rowTexts.findIndex((text) => text.includes("Morgan"));
+  const rileyIndex = rowTexts.findIndex((text) => text.includes("Riley"));
+  expect(averyIndex).toBeGreaterThanOrEqual(0);
+  expect(morganIndex).toBeGreaterThan(averyIndex);
+  expect(rileyIndex).toBeGreaterThan(morganIndex);
 
   const searchInput = page.getByLabel("Search");
   await searchInput.fill("Morgan");
@@ -196,7 +226,7 @@ test("member hide controls round-trip through the editor and entry picker", asyn
     .click();
   const memberPicker = page.getByRole("combobox", { name: "Member" });
   await expect(memberPicker).toBeVisible();
-  await memberPicker.fill(name);
+  await fillAndExpectValue(memberPicker, name);
   await expect(page.locator("#spend-member-options")).toContainText(
     "No matches",
   );
@@ -239,7 +269,9 @@ test("members side panel creates renames and deletes members with conflict feedb
   const deleteName = `E2E Delete ${unique}`;
   const originalMember = await createMember(page, originalName);
 
+  const memberLookup = waitForMemberLookup(page);
   await page.goto("/transactions");
+  expect((await memberLookup).ok()).toBe(true);
   await expect(page.getByText("Description")).toBeVisible();
   await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
@@ -254,7 +286,10 @@ test("members side panel creates renames and deletes members with conflict feedb
   await page.getByRole("button", { name: "New member" }).click();
   const createPanel = page.getByRole("dialog", { name: "Create member" });
   await expect(createPanel).toBeVisible();
-  await createPanel.getByLabel("Name").fill(deleteName);
+  await fillAndExpectValue(createPanel.getByLabel("Name"), deleteName);
+  await expect(
+    createPanel.getByRole("button", { name: "Create" }),
+  ).toBeEnabled();
   const createResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -277,7 +312,7 @@ test("members side panel creates renames and deletes members with conflict feedb
 
   const editPanel = page.getByRole("dialog", { name: "Edit member" });
   await expect(editPanel).toBeVisible();
-  await editPanel.getByLabel("Name").fill(renamedName);
+  await fillAndExpectValue(editPanel.getByLabel("Name"), renamedName);
   const updateResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
