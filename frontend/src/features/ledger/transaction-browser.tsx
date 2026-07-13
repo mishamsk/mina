@@ -26,6 +26,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ import type { LedgerLookupsSnapshot } from "@/store";
 import { localTimestampDateValue, localTodayISODate } from "@/utils/date";
 
 import { AmountText, MixedAmounts } from "./amount-text";
+import { BulkActionBar } from "./bulk-action-bar";
 import {
   activeTransactionRecords,
   buildLookupMaps,
@@ -112,10 +114,15 @@ interface TransactionBrowserProps {
     records: readonly [JournalRecord, JournalRecord],
     amount: string,
   ) => Promise<void>;
+  readonly onUpdateTransactionsBulkReferences?: (
+    transactions: readonly Transaction[],
+    update: RecordReferenceUpdate,
+  ) => Promise<void>;
   readonly onDeleteConfirmationOpenChange?: (open: boolean) => void;
   readonly onRowActionsOverflowOpenChange?: (open: boolean) => void;
   readonly page: number;
   readonly pageSize: number;
+  readonly selectionScope?: string;
   readonly totalCount: number | undefined;
   readonly transactions: readonly Transaction[] | undefined;
 }
@@ -636,10 +643,12 @@ export const TransactionBrowser = ({
   onUpdateRecord,
   onUpdateTransactionRecordReferences,
   onUpdateTransactionAmount,
+  onUpdateTransactionsBulkReferences,
   onDeleteConfirmationOpenChange,
   onRowActionsOverflowOpenChange,
   page,
   pageSize,
+  selectionScope,
   totalCount,
   transactions,
 }: TransactionBrowserProps) => {
@@ -679,6 +688,95 @@ export const TransactionBrowser = ({
     useRef<TransactionBrowserProps["dateJumpAnchor"]>(undefined);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const today = localTodayISODate();
+  const [selection, setSelection] = useState<{
+    readonly scope: string;
+    readonly transactionIds: ReadonlySet<number>;
+  }>();
+  const currentSelectionScope =
+    selectionScope ??
+    `${page}:${(transactions ?? []).map((transaction) => transaction.transaction_id).join(",")}`;
+  const emptySelection = useMemo(() => new Set<number>(), []);
+  const selectedTransactionIds =
+    selection?.scope === currentSelectionScope
+      ? selection.transactionIds
+      : emptySelection;
+
+  const selectableTransactions = useMemo(
+    () =>
+      (transactions ?? []).filter(
+        (transaction) => linePostingStatus(transaction) !== "expected",
+      ),
+    [transactions],
+  );
+  const selectedCount = selectedTransactionIds.size;
+  const selectedTransactions = useMemo(
+    () =>
+      (transactions ?? []).filter((transaction) =>
+        selectedTransactionIds.has(transaction.transaction_id),
+      ),
+    [selectedTransactionIds, transactions],
+  );
+  const allSelectableTransactionsSelected =
+    selectableTransactions.length > 0 &&
+    selectableTransactions.every((transaction) =>
+      selectedTransactionIds.has(transaction.transaction_id),
+    );
+  const headerSelectionState = allSelectableTransactionsSelected
+    ? true
+    : selectedCount > 0
+      ? "indeterminate"
+      : false;
+  const toggleSelection = useCallback(
+    (transactionId: number) => {
+      setSelection((current) => {
+        const currentIds =
+          current?.scope === currentSelectionScope
+            ? current.transactionIds
+            : new Set<number>();
+        const next = new Set(currentIds);
+        if (next.has(transactionId)) {
+          next.delete(transactionId);
+        } else {
+          next.add(transactionId);
+        }
+        return { scope: currentSelectionScope, transactionIds: next };
+      });
+    },
+    [currentSelectionScope],
+  );
+  const togglePageSelection = useCallback(() => {
+    setSelection((current) => {
+      const currentIds =
+        current?.scope === currentSelectionScope
+          ? current.transactionIds
+          : new Set<number>();
+      const transactionIds = selectableTransactions.every((transaction) =>
+        currentIds.has(transaction.transaction_id),
+      )
+        ? new Set<number>()
+        : new Set(
+            selectableTransactions.map(
+              (transaction) => transaction.transaction_id,
+            ),
+          );
+      return { scope: currentSelectionScope, transactionIds };
+    });
+  }, [currentSelectionScope, selectableTransactions]);
+
+  useEffect(() => {
+    if (selectedCount === 0) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        setSelection(undefined);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [selectedCount]);
 
   useEffect(() => {
     const open = Boolean(deleteDialog || dismissDialog);
@@ -924,6 +1022,7 @@ export const TransactionBrowser = ({
       >
         <table className="transactions-table w-full table-fixed border-collapse text-sm">
           <colgroup>
+            <col className="transactions-selection-column" />
             <col className="transactions-class-column" />
             <col className="transactions-date-column" />
             <col className="transactions-status-column" />
@@ -936,6 +1035,14 @@ export const TransactionBrowser = ({
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-foreground border-b-2 border-[var(--border-ink)] text-left text-xs font-semibold uppercase">
+              <th className="transactions-selection-column px-3 py-2">
+                <Checkbox
+                  aria-label="Select page transactions"
+                  checked={headerSelectionState}
+                  disabled={selectableTransactions.length === 0}
+                  onCheckedChange={togglePageSelection}
+                />
+              </th>
               <th className="transactions-class-column px-3 py-2">
                 <span className="sr-only min-[1920px]:not-sr-only">Class</span>
               </th>
@@ -986,6 +1093,7 @@ export const TransactionBrowser = ({
               const expectedOccurrence =
                 postingStatus === "expected" &&
                 transaction.recurring_occurrence_id !== null;
+              const selectable = postingStatus !== "expected";
               const canEditReferences =
                 postingStatus !== "expected" &&
                 postingStatus !== "cancelled" &&
@@ -1073,9 +1181,27 @@ export const TransactionBrowser = ({
                       }
 
                       event.preventDefault();
-                      toggleExpanded();
+                      if (selectable) {
+                        toggleSelection(transaction.transaction_id);
+                      }
                     }}
                   >
+                    <td className="transactions-selection-column px-3 py-2">
+                      {selectable ? (
+                        <Checkbox
+                          aria-label={`Select ${title}`}
+                          checked={selectedTransactionIds.has(
+                            transaction.transaction_id,
+                          )}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                          onCheckedChange={() => {
+                            toggleSelection(transaction.transaction_id);
+                          }}
+                        />
+                      ) : null}
+                    </td>
                     <td className="transactions-class-column px-3 py-2">
                       <ClassIcon
                         transactionClass={transaction.transaction_class}
@@ -1397,7 +1523,7 @@ export const TransactionBrowser = ({
                   </tr>
                   {expanded ? (
                     <tr className="border-b border-[var(--border-ink)]">
-                      <td colSpan={9} className="max-w-0 overflow-hidden p-0">
+                      <td colSpan={10} className="max-w-0 overflow-hidden p-0">
                         <RecordsTable
                           records={transaction.records}
                           maps={maps}
@@ -1416,6 +1542,36 @@ export const TransactionBrowser = ({
           </tbody>
         </table>
       </div>
+      {selectedCount > 0 ? (
+        <BulkActionBar
+          maps={maps}
+          selectedCount={selectedCount}
+          onCategorize={async (categoryId) => {
+            await onUpdateTransactionsBulkReferences?.(selectedTransactions, {
+              categoryId,
+              kind: "category",
+            });
+            setSelection(undefined);
+          }}
+          onClear={() => {
+            setSelection(undefined);
+          }}
+          onMember={async (memberId) => {
+            await onUpdateTransactionsBulkReferences?.(selectedTransactions, {
+              kind: "member",
+              memberId,
+            });
+            setSelection(undefined);
+          }}
+          onTags={async (tagIds) => {
+            await onUpdateTransactionsBulkReferences?.(selectedTransactions, {
+              kind: "tags",
+              tagIds,
+            });
+            setSelection(undefined);
+          }}
+        />
+      ) : null}
       {occurrenceActionErrorMessage ? (
         <div
           className="border-destructive bg-card border-2 p-3 text-sm shadow-[var(--shadow-pixel)]"

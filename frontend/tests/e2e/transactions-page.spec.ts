@@ -426,7 +426,7 @@ const hideAccount = async (
 const amountChipsFitCell = async (row: Locator): Promise<boolean> =>
   row
     .locator("td")
-    .nth(7)
+    .nth(8)
     .evaluate((cell) => {
       const cellRect = cell.getBoundingClientRect();
       const chips = Array.from(
@@ -496,8 +496,8 @@ const mixedAmountChipGeometry = async (row: Locator) =>
     };
 
     const cells = rowElement.querySelectorAll("td");
-    const memberCell = cells[6];
-    const amountCell = cells[7];
+    const memberCell = cells[7];
+    const amountCell = cells[8];
     const amountCellRect = rectFor(amountCell);
     const memberCellRect = rectFor(memberCell);
     const chip = amountCell?.querySelector<HTMLElement>(
@@ -599,7 +599,7 @@ const chipShadowFitsClippingAncestors = async (
 const tagChipLineState = async (row: Locator) =>
   row
     .locator("td")
-    .nth(5)
+    .nth(6)
     .evaluate((cell) => {
       const list = cell.querySelector<HTMLElement>(
         "[data-testid='transaction-tag-chips-list']",
@@ -688,7 +688,7 @@ test("transactions page renders demo transaction lines and expands records", asy
     .evaluate((element) => getComputedStyle(element).backgroundColor);
   expect(firstRowBackgroundBefore).not.toBe(secondRowBackgroundBefore);
 
-  await transferRow.locator("td").nth(3).click();
+  await transferRow.locator("td").nth(4).click();
   await expect(transferRow).toHaveAttribute("aria-expanded", "true");
   await expect(
     page.getByRole("columnheader", { exact: true, name: "Memo" }),
@@ -784,7 +784,7 @@ test("expanded records edit per-record values and escalate structural changes", 
     .filter({ hasText: memo })
     .first();
   await expect(transactionRow).toBeVisible();
-  await transactionRow.locator("td").nth(3).click();
+  await transactionRow.locator("td").nth(4).click();
   await expect(transactionRow).toHaveAttribute("aria-expanded", "true");
   const records = page.getByTestId("expanded-records");
 
@@ -796,7 +796,7 @@ test("expanded records edit per-record values and escalate structural changes", 
     .getByRole("combobox", { name: "Category" })
     .fill(nextCategory.fqn);
   await expect(categoryCell).toContainText(nextCategory.fqn);
-  await expect(transactionRow.locator("td").nth(4)).toContainText("Mixed");
+  await expect(transactionRow.locator("td").nth(5)).toContainText("Mixed");
 
   const tagCell = records.getByTestId("record-tags-cell").first();
   await tagCell.hover();
@@ -814,7 +814,6 @@ test("expanded records edit per-record values and escalate structural changes", 
   await memberEditor
     .getByRole("combobox", { name: "Member" })
     .fill(member.name);
-  await memberEditor.getByRole("combobox", { name: "Member" }).press("Enter");
   await expect(memberCell).toContainText(member.name);
   await memberCell.hover();
   await memberCell.getByRole("button", { name: "Edit Member" }).click();
@@ -960,7 +959,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   await categoryEditor
     .getByRole("combobox", { name: "Category" })
     .fill(nextCategory.fqn);
-  await row.locator("td").nth(3).click();
+  await row.locator("td").nth(4).click();
   const expandedRecords = page.getByTestId("expanded-records");
   await expect(
     expandedRecords.getByText(nextCategory.fqn, { exact: true }),
@@ -1167,16 +1166,16 @@ test("transactions page uses server pagination controls", async ({ page }) => {
       .locator("tbody > tr[aria-expanded]")
       .first()
       .locator("td")
-      .nth(3)
+      .nth(4)
       .innerText()
   ).split("\n")[0];
   const firstPageFirstDate = await page
     .locator("tbody > tr[aria-expanded]")
     .first()
     .locator("td")
-    .nth(1)
+    .nth(2)
     .innerText();
-  expect(firstPageFirstDate).toContain("May");
+  expect(firstPageFirstDate).toMatch(/^[A-Z][a-z]{2} \d{1,2}\n\d{4}$/);
 
   const amountColumnBefore = await page
     .getByRole("columnheader", { name: "Amount" })
@@ -2525,14 +2524,14 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           rect.width < 1
         );
       };
-      const amountCell = cells?.[7];
+      const amountCell = cells?.[8];
       const amountRect = rectFor(amountCell);
-      const actionsCell = cells?.[8];
+      const actionsCell = cells?.[9];
       const actionsRect = rectFor(actionsCell);
       const containerRect = container.getBoundingClientRect();
-      const memberRect = rectFor(cells?.[6]);
+      const memberRect = rectFor(cells?.[7]);
       const memberContentRects = Array.from(
-        cells?.[6]?.querySelectorAll("*") ?? [],
+        cells?.[7]?.querySelectorAll("*") ?? [],
       )
         .map((element) => element.getBoundingClientRect())
         .filter((rect) => rect.width > 0 && rect.height > 0);
@@ -2566,7 +2565,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
         return rects;
       };
       const amountChips = rows.flatMap((visibleRow) => {
-        const cell = visibleRow.querySelectorAll("td")[7];
+        const cell = visibleRow.querySelectorAll("td")[8];
         if (!cell || isCollapsed(cell)) {
           return [];
         }
@@ -2598,11 +2597,11 @@ test("transactions page collapses low-priority columns instead of scrolling hori
         };
       });
       const visibleAmountCells = rows
-        .map((visibleRow) => visibleRow.querySelectorAll("td")[7])
+        .map((visibleRow) => visibleRow.querySelectorAll("td")[8])
         .filter((cell): cell is HTMLTableCellElement => !isCollapsed(cell));
       const contentOverlappingAmount = amountRect
         ? Array.from(cells ?? [])
-            .slice(0, 7)
+            .slice(0, 8)
             .filter((cell) => !isCollapsed(cell))
             .flatMap((cell) => [
               cell,
@@ -2631,8 +2630,8 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           getComputedStyle(
             actionsCell?.querySelector(".row-actions-overflow") ?? container,
           ).display !== "none",
-        categoryCollapsed: isCollapsed(cells?.[4]),
-        categoryHeaderCollapsed: isCollapsed(headerCells[4]),
+        categoryCollapsed: isCollapsed(cells?.[5]),
+        categoryHeaderCollapsed: isCollapsed(headerCells[5]),
         containerWidth: container.getBoundingClientRect().width,
         hasHorizontalOverflow:
           container.scrollWidth > container.clientWidth + 1,
@@ -2656,9 +2655,9 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           cell.innerText.replace(/\s+/g, " ").trim(),
         ),
         amountText: amountCell?.innerText.replace(/\s+/g, " ").trim(),
-        memberCollapsed: isCollapsed(cells?.[6]),
+        memberCollapsed: isCollapsed(cells?.[7]),
         memberFullyVisible:
-          isCollapsed(cells?.[6]) ||
+          isCollapsed(cells?.[7]) ||
           (Boolean(memberRect) &&
             memberContentRects.every(
               (rect) =>
@@ -2666,11 +2665,11 @@ test("transactions page collapses low-priority columns instead of scrolling hori
                 rect.right <= (memberRect?.right ?? 0) + 0.5 &&
                 (!amountRect || rect.right <= amountRect.left + 0.5),
             )),
-        memberHeaderCollapsed: isCollapsed(headerCells[6]),
-        statusCollapsed: isCollapsed(cells?.[2]),
-        statusHeaderCollapsed: isCollapsed(headerCells[2]),
-        tagsCollapsed: isCollapsed(cells?.[5]),
-        tagsHeaderCollapsed: isCollapsed(headerCells[5]),
+        memberHeaderCollapsed: isCollapsed(headerCells[7]),
+        statusCollapsed: isCollapsed(cells?.[3]),
+        statusHeaderCollapsed: isCollapsed(headerCells[3]),
+        tagsCollapsed: isCollapsed(cells?.[6]),
+        tagsHeaderCollapsed: isCollapsed(headerCells[6]),
         visibleContentOverlapsAmount: contentOverlappingAmount,
       };
     });
@@ -2990,20 +2989,20 @@ test("transactions contain long amount chips and align the pagination footer", a
     await page.setViewportSize({ width, height: 720 });
     const longAmountRow = page.getByRole("row").filter({ hasText: memo });
     await expect(longAmountRow).toBeVisible();
-    await expect(longAmountRow.locator("td").nth(7)).toContainText(
+    await expect(longAmountRow.locator("td").nth(8)).toContainText(
       "-9,999,999,999.99 $",
     );
     const mixedLongAmountRow = page
       .getByRole("row")
       .filter({ hasText: mixedMemo });
     await expect(mixedLongAmountRow).toBeVisible();
-    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText(
+    await expect(mixedLongAmountRow.locator("td").nth(8)).toContainText(
       "-9,999,999,999.99",
     );
-    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText(
+    await expect(mixedLongAmountRow.locator("td").nth(8)).toContainText(
       "+8,888,888,888.88",
     );
-    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText("$");
+    await expect(mixedLongAmountRow.locator("td").nth(8)).toContainText("$");
 
     await expect(amountChipsFitCell(longAmountRow)).resolves.toBe(true);
     await expect(amountChipsFitCell(mixedLongAmountRow)).resolves.toBe(true);
@@ -3053,10 +3052,10 @@ test("transactions display currency symbols with code fallback", async ({
       .filter({ hasText: "BlueCash → Target" })
       .first()
       .locator("td")
-      .nth(7),
+      .nth(8),
   ).toContainText("-43.98 $");
   await expect(
-    page.getByRole("row").filter({ hasText: memo }).locator("td").nth(7),
+    page.getByRole("row").filter({ hasText: memo }).locator("td").nth(8),
   ).toContainText("-3.21 XDR");
 });
 
@@ -3078,12 +3077,12 @@ test("transactions page help and leaf category chips", async ({ page }) => {
     .filter({ hasText: "BlueCash → Target" })
     .first();
   await expect(simpleSpendRow).toBeVisible();
-  await expect(simpleSpendRow.locator("td").nth(6)).not.toContainText("Mixed");
-  await expect(simpleSpendRow.locator("td").nth(7)).toContainText(/-43\.98 \$/);
+  await expect(simpleSpendRow.locator("td").nth(7)).not.toContainText("Mixed");
+  await expect(simpleSpendRow.locator("td").nth(8)).toContainText(/-43\.98 \$/);
   await expect(
     simpleSpendRow
       .locator("td")
-      .nth(3)
+      .nth(4)
       .getByRole("button", { name: "Open transaction detail" }),
   ).toHaveCount(0);
 
@@ -3093,9 +3092,9 @@ test("transactions page help and leaf category chips", async ({ page }) => {
     .first();
   await expect(mixedRow).toBeVisible();
   await expect(
-    mixedRow.locator("td").nth(4).getByText("Mixed", { exact: true }),
+    mixedRow.locator("td").nth(5).getByText("Mixed", { exact: true }),
   ).toBeVisible();
-  await expect(mixedRow.locator("td").nth(7)).toContainText(
+  await expect(mixedRow.locator("td").nth(8)).toContainText(
     "-5.00 / +100.00 $",
   );
   const rowHeights = await page
@@ -3131,13 +3130,10 @@ test("transactions page help and leaf category chips", async ({ page }) => {
   await expect(spendTooltip).toBeHidden();
 
   const booksCategory = page
-    .locator("tbody tr")
-    .filter({ hasText: "Books" })
-    .first()
-    .locator("td")
-    .nth(4);
-  await expect(booksCategory.getByText("Books", { exact: true })).toBeVisible();
-  await booksCategory.getByText("Books", { exact: true }).hover();
+    .getByRole("button", { name: "Filter by Books" })
+    .first();
+  await expect(booksCategory).toBeVisible();
+  await booksCategory.hover();
   await expect(
     page.getByRole("tooltip").filter({ hasText: "Entertainment:Books" }),
   ).toBeVisible();
@@ -3293,7 +3289,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
   expect(fitTagState.hiddenLabels).toEqual([]);
   expect(fitTagState.visibleRowCount).toBeLessThanOrEqual(2);
   await expect(
-    fitTagRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
+    fitTagRow.locator("td").nth(6).getByTestId("transaction-tags-overflow"),
   ).toHaveCount(0);
 
   const overflowTagRow = page
@@ -3302,11 +3298,11 @@ test("transactions line composition uses compact dates and single-line leaf tags
     .first();
   await expect(overflowTagRow).toBeVisible();
 
-  const dateCell = overflowTagRow.locator("td").nth(1);
+  const dateCell = overflowTagRow.locator("td").nth(2);
   await expect(dateCell.locator("div").nth(0)).toHaveText("May 31");
   await expect(dateCell.locator("div").nth(1)).toHaveText("2026");
 
-  const statusCell = overflowTagRow.locator("td").nth(2);
+  const statusCell = overflowTagRow.locator("td").nth(3);
   await expect(statusCell).toHaveText("");
 
   const overflowTagState = await tagChipLineState(overflowTagRow);
@@ -3316,17 +3312,17 @@ test("transactions line composition uses compact dates and single-line leaf tags
 
   const visibleOverflowTag = overflowTagRow
     .locator("td")
-    .nth(5)
+    .nth(6)
     .getByText(createdOverflowTags[0]?.name ?? "", { exact: true });
   await expect(visibleOverflowTag).toBeVisible();
   const overflowChip = overflowTagRow
     .locator("td")
-    .nth(5)
+    .nth(6)
     .getByTestId("transaction-tags-overflow");
   await expect(overflowChip).toBeVisible();
   const renderedOverflowTagLabels = await overflowTagRow
     .locator("td")
-    .nth(5)
+    .nth(6)
     .getByTestId("transaction-tag-chips-list")
     .evaluate((list) =>
       Array.from(list.children)
@@ -3346,7 +3342,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
 
   const memberChip = overflowTagRow
     .locator("td")
-    .nth(6)
+    .nth(7)
     .getByText(memberName.slice(0, 2), { exact: true });
   await expect(memberChip).toBeVisible();
   expect(await chipShadowFitsClippingAncestors(memberChip)).toBe(true);
@@ -3364,7 +3360,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
   expect(noMemoTagState.visibleRowCount).toBe(2);
   const noMemoTitleCenterOffset = await noMemoRow
     .locator("td")
-    .nth(3)
+    .nth(4)
     .evaluate((descriptionCell) => {
       const title = descriptionCell.querySelector<HTMLElement>(
         "[data-testid='transaction-line-title']",
@@ -3482,7 +3478,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(detailRow).toBeVisible();
   await expect(alternateDetailRow).toBeVisible();
   await expect(
-    detailRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
+    detailRow.locator("td").nth(6).getByTestId("transaction-tags-overflow"),
   ).toBeVisible();
 
   await page
@@ -3551,11 +3547,11 @@ test("transaction detail panel shows full records and supports deep links", asyn
     )
     .toBe("visible");
 
-  await alternateDetailRow.locator("td").nth(3).click();
+  await alternateDetailRow.locator("td").nth(4).click();
   await expect(panel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
   await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "true");
-  await alternateDetailRow.locator("td").nth(3).click();
+  await alternateDetailRow.locator("td").nth(4).click();
   await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "false");
 
   await detailRow
@@ -3925,7 +3921,7 @@ test("focused transaction row opens detail with Enter and restores focus on Esca
   await expect(detailRow).toBeFocused();
 
   await page.keyboard.press("Space");
-  await expect(detailRow).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByTestId("bulk-action-bar")).toContainText("1 selected");
 });
 
 test("transaction detail delete confirms, tombstones, and refreshes the row", async ({
@@ -4740,7 +4736,7 @@ test("transactions resolve hidden referenced tags but exclude them from pickers"
   const hiddenTagRow = page.getByRole("row").filter({ hasText: memo }).first();
   await expect(hiddenTagRow).toBeVisible();
   await expect(
-    hiddenTagRow.locator("td").nth(5).getByText("QuietTag", { exact: true }),
+    hiddenTagRow.locator("td").nth(6).getByText("QuietTag", { exact: true }),
   ).toBeVisible();
 
   await page
@@ -4843,6 +4839,165 @@ test("entry category picker requests spend intents and excludes hidden categorie
   await expect(page.locator("#spend-category-options")).toContainText(
     "No matches",
   );
+});
+
+test("bulk selection updates uniform transactions and skips mixed records", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const initialCategory = findByFqn(categories, "Entertainment:Books");
+  const [targetCategory, tag, member] = await Promise.all([
+    createCategory(page, `E2E:Bulk:${unique}:Category`, "expense"),
+    createTag(page, `E2E:Bulk:${unique}:Tag`),
+    createMember(page, `Bulk member ${unique}`),
+  ]);
+  const uniformMemo = `E2E bulk uniform ${unique}`;
+  const mixedMemo = `E2E bulk mixed ${unique}`;
+  const uniformResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-12",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-11.00000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo: uniformMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "11.00000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo: uniformMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(uniformResponse.ok(), await uniformResponse.text()).toBe(true);
+  const uniform = (await uniformResponse.json()) as TransactionDetailFixture;
+  const mixedResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-12",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-7.00000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "7.00000000",
+          category_id: targetCategory.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(mixedResponse.ok(), await mixedResponse.text()).toBe(true);
+  const expectedFixture = await createExpectedRecurringFixture(page, unique);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  const uniformRow = page
+    .getByRole("row")
+    .filter({ hasText: uniformMemo })
+    .first();
+  const mixedRow = page.getByRole("row").filter({ hasText: mixedMemo }).first();
+  const expectedRow = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("img", { name: "Expected" }) })
+    .filter({
+      hasText: expectedFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
+    });
+  await expect(uniformRow).toBeVisible();
+  await expect(mixedRow).toBeVisible();
+  await expect(expectedRow).toBeVisible();
+  await expect(expectedRow.getByRole("checkbox")).toHaveCount(0);
+
+  await uniformRow.focus();
+  await page.keyboard.press("Space");
+  const bulkActionBar = page.getByTestId("bulk-action-bar");
+  await expect(bulkActionBar).toContainText("1 selected");
+  await mixedRow.getByRole("checkbox", { name: /^Select / }).click();
+  await expect(bulkActionBar).toContainText("2 selected");
+
+  await bulkActionBar.getByRole("button", { name: "Categorize" }).click();
+  const categoryPicker = page.getByTestId("bulk-action-picker");
+  await categoryPicker
+    .getByRole("combobox", { name: "Category" })
+    .fill(targetCategory.fqn);
+  await categoryPicker
+    .getByRole("combobox", { name: "Category" })
+    .press("Enter");
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "1 updated, 1 skipped: mixed records." }),
+  ).toBeVisible();
+  await expect(uniformRow).toContainText(targetCategory.name);
+  await expect(mixedRow).toContainText("Mixed");
+  await expect(bulkActionBar).toHaveCount(0);
+
+  await uniformRow.getByRole("checkbox", { name: /^Select / }).click();
+  await bulkActionBar.getByRole("button", { name: "Tag" }).click();
+  const tagPicker = page.getByTestId("bulk-action-picker");
+  await tagPicker.getByRole("combobox", { name: "Tags to add" }).fill(tag.fqn);
+  await tagPicker.getByRole("combobox", { name: "Tags to add" }).press("Enter");
+  await tagPicker.getByRole("button", { name: "Add tags" }).click();
+  await expect(uniformRow).toContainText(tag.name);
+
+  await uniformRow.getByRole("checkbox", { name: /^Select / }).click();
+  await bulkActionBar.getByRole("button", { name: "Member" }).click();
+  const memberPicker = page.getByTestId("bulk-action-picker");
+  await memberPicker
+    .getByRole("combobox", { name: "Member" })
+    .fill(member.name);
+  await memberPicker.getByRole("combobox", { name: "Member" }).press("Enter");
+  await expect(bulkActionBar).toHaveCount(0);
+  const updatedResponse = await page.request.get(
+    `/api/transactions/${uniform.transaction_id}`,
+  );
+  expect(updatedResponse.ok(), await updatedResponse.text()).toBe(true);
+  const updated = (await updatedResponse.json()) as TransactionDetailFixture;
+  expect(updated.records.map((record) => record.member_id)).toEqual([
+    member.member_id,
+    member.member_id,
+  ]);
+
+  await uniformRow.getByRole("checkbox", { name: /^Select / }).click();
+  await expect(bulkActionBar).toBeVisible();
+  await bulkActionBar.getByRole("button", { name: "Clear selection" }).click();
+  await expect(bulkActionBar).toHaveCount(0);
 });
 
 const chooseOptionByKeyboard = async (

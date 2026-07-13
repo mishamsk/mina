@@ -343,10 +343,14 @@ export const TransactionsPage = () => {
               browser.updateTransactionRecordReferences
             }
             onUpdateTransactionAmount={browser.updateTransactionAmount}
+            onUpdateTransactionsBulkReferences={
+              browser.updateTransactionsBulkReferences
+            }
             onDeleteConfirmationOpenChange={setQuickDeleteDialogOpen}
             onRowActionsOverflowOpenChange={setRowActionsOverflowOpen}
             page={browser.page}
             pageSize={browser.pageSize}
+            selectionScope={location.search}
             totalCount={browser.totalCount}
             transactions={browser.transactions}
           />

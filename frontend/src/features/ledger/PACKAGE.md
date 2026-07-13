@@ -8,6 +8,7 @@
 
 - Transaction class, display titles, primary amounts, and record amounts come from REST responses.
 - Transaction-row and detail-panel transaction-level inline editing follow the uniformity rule owned by `docs/webui-design.md`.
+- The shared browser keeps bulk selection page-local; expected rows are not selectable, and `BulkActionBar` applies category, add-tags, and member changes only to transactions uniform for that field while reporting skipped mixed records.
 - Transaction-row lifted member display ignores unattributed records.
 - Transaction detail panel renders a transaction snapshot passed by the owning page; expected occurrences stay read-only, and successful edits use the same refresh fan-out as the browser.
 - Transaction detail panel owns the tombstone confirmation UI and delegates delete execution to the owning page.
@@ -24,6 +25,7 @@
 - Saved-transaction Edit/Split saves are full replacements owned by the entry panel; page routes own the post-save refresh fan-out and notices.
 - Saved-transaction Duplicate reuses entry-panel prefill mapping but stays on the create path.
 - Successful transaction mutations trigger shared invalidation for account, category, tag, and member page snapshots so REST-provided `deletable` flags refetch without a reload.
+- Successful bulk mutations use the same transaction, balance, overview, register, detail, and reference-page refresh fan-out as other transaction edits.
 - Transaction-entry drafts are per tab and store UI form values only.
 - The active entry tab is a persisted UI preference.
 - Transfer fee rows are not expressible through the transfer shorthand endpoint.
@@ -36,4 +38,4 @@
 
 ## Testing Notes
 
-- Frontend e2e tests cover transaction expansion, row, expanded-record, and detail-panel inline editing, detail deep links, pagination, multi-type entry, per-tab drafts, sticky entry fields, and picker keyboard submission.
+- Frontend e2e tests cover transaction expansion, inline and bulk editing, detail deep links, pagination, multi-type entry, per-tab drafts, sticky entry fields, and picker keyboard submission.

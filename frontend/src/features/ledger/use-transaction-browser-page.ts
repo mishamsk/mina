@@ -18,6 +18,7 @@ import {
 } from "@/api";
 import type { TransactionFilters } from "@/models/transaction-filters";
 
+import { activeTransactionRecords } from "./format";
 import { type RecordUpdate, recordUpdateBody } from "./record-editing";
 import {
   defaultTransactionPage,
@@ -27,6 +28,7 @@ import {
 import { useTransactionDateJump } from "./use-transaction-date-jump";
 import { useTransactionDetail } from "./use-transaction-detail";
 import {
+  refreshTransactionPageAfterBulkSave,
   refreshTransactionPageAfterSave,
   useTransactionsResource,
 } from "./use-transactions-resource";
@@ -44,6 +46,37 @@ interface UseTransactionBrowserPageOptions {
   readonly searchParams: URLSearchParams;
   readonly setSearchParams: SetURLSearchParams;
 }
+
+const sameTagIds = (left: readonly number[], right: readonly number[]) =>
+  left.length === right.length &&
+  left.every((tagId, index) => tagId === right[index]);
+
+const sortedTagIds = (tagIds: readonly number[]): readonly number[] =>
+  [...tagIds].sort((left, right) => left - right);
+
+const isUniformBulkField = (
+  transaction: Transaction,
+  field: "category" | "member" | "tags",
+): boolean => {
+  const records = activeTransactionRecords(transaction);
+  if (records.length === 0) {
+    return false;
+  }
+
+  if (field === "category") {
+    return new Set(records.map((record) => record.category_id)).size === 1;
+  }
+  if (field === "member") {
+    return (
+      new Set(records.map((record) => record.member_id ?? null)).size === 1
+    );
+  }
+
+  const firstTagIds = sortedTagIds(records[0]!.tag_ids);
+  return records.every((record) =>
+    sameTagIds(sortedTagIds(record.tag_ids), firstTagIds),
+  );
+};
 
 export const useTransactionBrowserPage = ({
   filters,
@@ -361,6 +394,107 @@ export const useTransactionBrowserPage = ({
     [detail, params],
   );
 
+  const updateTransactionsBulkReferences = useCallback(
+    async (
+      transactions: readonly Transaction[],
+      update: Extract<
+        RecordUpdate,
+        { readonly kind: "category" | "member" | "tags" }
+      >,
+    ) => {
+      const qualifyingTransactions = transactions.filter((transaction) =>
+        isUniformBulkField(transaction, update.kind),
+      );
+      const skippedCount = transactions.length - qualifyingTransactions.length;
+
+      if (update.kind === "category") {
+        const recordIds = qualifyingTransactions.flatMap((transaction) =>
+          activeTransactionRecords(transaction).map(
+            (record) => record.record_id,
+          ),
+        );
+        if (recordIds.length > 0) {
+          const result = await updateJournalRecordsCategory(
+            recordIds,
+            update.categoryId,
+          );
+          if (result.error) {
+            throw new Error(apiErrorMessage(result.error));
+          }
+        }
+      } else if (update.kind === "tags") {
+        const groups = new Map<
+          string,
+          { readonly currentTagIds: readonly number[]; recordIds: number[] }
+        >();
+        for (const transaction of qualifyingTransactions) {
+          const records = activeTransactionRecords(transaction);
+          const currentTagIds = sortedTagIds(records[0]!.tag_ids);
+          const key = currentTagIds.join(",");
+          const group = groups.get(key) ?? {
+            currentTagIds,
+            recordIds: [],
+          };
+          group.recordIds.push(...records.map((record) => record.record_id));
+          groups.set(key, group);
+        }
+        for (const group of groups.values()) {
+          const nextTagIds = Array.from(
+            new Set([...group.currentTagIds, ...update.tagIds]),
+          );
+          if (sameTagIds(group.currentTagIds, sortedTagIds(nextTagIds))) {
+            continue;
+          }
+          const result = await updateJournalRecordsTags(
+            group.recordIds,
+            group.currentTagIds,
+            nextTagIds,
+          );
+          if (result.error) {
+            throw new Error(apiErrorMessage(result.error));
+          }
+        }
+      } else {
+        await Promise.all(
+          qualifyingTransactions.map(async (transaction) => {
+            const result = await replaceLedgerTransaction(
+              transaction.transaction_id,
+              recordUpdateBody(
+                transaction,
+                activeTransactionRecords(transaction).map(
+                  (record) => record.record_id,
+                ),
+                update,
+              ),
+            );
+            if (!result.data) {
+              throw new Error(apiErrorMessage(result.error));
+            }
+          }),
+        );
+      }
+
+      if (qualifyingTransactions.length > 0) {
+        await refreshTransactionPageAfterBulkSave(
+          params,
+          qualifyingTransactions,
+        );
+        await Promise.all(
+          qualifyingTransactions.map((transaction) =>
+            detail.refreshSelectedTransactionDetail(transaction.transaction_id),
+          ),
+        );
+      }
+
+      showNotice(
+        `${qualifyingTransactions.length} updated, ${skippedCount} skipped${
+          skippedCount > 0 ? ": mixed records" : ""
+        }.`,
+      );
+    },
+    [detail, params, showNotice],
+  );
+
   const setPage = useCallback(
     (nextPage: number) => {
       cancelDateJump();
@@ -447,6 +581,7 @@ export const useTransactionBrowserPage = ({
     transactions,
     updateRecord,
     updateTransactionAmount,
+    updateTransactionsBulkReferences,
     updateTransactionRecordReferences,
   };
 };

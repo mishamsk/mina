@@ -1,4 +1,5 @@
 export { AmountText, ApproximateUsdAmount, MixedAmounts } from "./amount-text";
+export { BulkActionBar } from "./bulk-action-bar";
 export { ClassBadge } from "./class-badge";
 export {
   EntityMultiPicker,
@@ -61,6 +62,7 @@ export {
   jumpToTransactionDatePage,
   refreshLedgerLookups,
   refreshTransactionPage,
+  refreshTransactionPageAfterBulkSave,
   refreshTransactionPageAfterSave,
   useLedgerLookupsResource,
   useTransactionsResource,

@@ -294,6 +294,22 @@ export const refreshTransactionPageAfterSave = async (
   );
 };
 
+export const refreshTransactionPageAfterBulkSave = async (
+  params: TransactionPageParams,
+  transactions: readonly Transaction[],
+): Promise<void> => {
+  invalidateReferencePagesAfterTransactionMutation();
+  for (const transaction of transactions) {
+    invalidateAccountRegistersForTransaction(transaction);
+  }
+
+  await Promise.all([
+    refreshTransactionPage(params),
+    refreshFeaturedBalances(),
+    refreshOverview(),
+  ]);
+};
+
 export const jumpToTransactionDatePage = async (
   params: TransactionPageParams & { readonly anchorDate: string },
   isActive: () => boolean = () => true,

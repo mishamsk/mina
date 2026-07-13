@@ -32,7 +32,7 @@ interface RecordReferenceCellsProps {
   readonly value: ReactNode;
 }
 
-const categoryOptions = (
+export const categoryReferenceOptions = (
   maps: LookupMaps,
   selectedCategoryId: number,
   includeHidden: boolean,
@@ -52,7 +52,7 @@ const categoryOptions = (
       searchLabel: category.fqn,
     }));
 
-const tagOptions = (
+export const tagReferenceOptions = (
   maps: LookupMaps,
   selectedTagIds: readonly number[],
   includeHidden: boolean,
@@ -72,7 +72,7 @@ const tagOptions = (
       searchLabel: tag.fqn,
     }));
 
-const memberOptions = (
+export const memberReferenceOptions = (
   maps: LookupMaps,
   selectedMemberId: number | null | undefined,
 ): readonly EntityOption[] =>
@@ -125,7 +125,11 @@ const CategoryReferenceEditor = ({
         autoFocus
         id={`record-${record.record_id}-category`}
         label="Category"
-        options={categoryOptions(maps, record.category_id, includeHidden)}
+        options={categoryReferenceOptions(
+          maps,
+          record.category_id,
+          includeHidden,
+        )}
         value={record.category_id}
         onChange={(categoryId) => {
           if (categoryId !== undefined) {
@@ -162,7 +166,7 @@ const TagsReferenceEditor = ({
         autoFocus
         id={`record-${record.record_id}-tags`}
         label="Tags"
-        options={tagOptions(maps, record.tag_ids, includeHidden)}
+        options={tagReferenceOptions(maps, record.tag_ids, includeHidden)}
         value={tagIds}
         onChange={setTagIds}
       />
@@ -196,7 +200,7 @@ const MemberReferenceEditor = ({
       autoFocus
       id={`record-${record.record_id}-member`}
       label="Member"
-      options={memberOptions(maps, record.member_id)}
+      options={memberReferenceOptions(maps, record.member_id)}
       value={record.member_id ?? undefined}
       onChange={(memberId) => {
         if (memberId !== undefined) {

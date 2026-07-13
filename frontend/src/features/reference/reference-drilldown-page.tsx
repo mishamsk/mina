@@ -536,6 +536,9 @@ export const ReferenceDrilldownPage = ({
             browser.updateTransactionRecordReferences
           }
           onUpdateTransactionAmount={browser.updateTransactionAmount}
+          onUpdateTransactionsBulkReferences={
+            browser.updateTransactionsBulkReferences
+          }
           page={browser.page}
           pageSize={browser.pageSize}
           totalCount={browser.totalCount}
