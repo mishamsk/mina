@@ -1,4 +1,11 @@
-import { Close, Copy, MagicEdit, Scissors, Trash } from "pixelarticons/react";
+import {
+  Check,
+  Close,
+  Copy,
+  MagicEdit,
+  Scissors,
+  Trash,
+} from "pixelarticons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
@@ -46,7 +53,9 @@ interface TransactionDetailPanelProps {
   readonly loading: boolean;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
+  readonly onConfirmOccurrence?: (transaction: Transaction) => Promise<void>;
   readonly onDelete: (transaction: Transaction) => Promise<void>;
+  readonly onDismissOccurrence?: (transaction: Transaction) => Promise<void>;
   readonly onDuplicate?: (transaction: Transaction) => void;
   readonly onEdit?: (transaction: Transaction) => void;
   readonly onSplit?: (transaction: Transaction) => void;
@@ -724,7 +733,9 @@ export const TransactionDetailPanel = ({
   loading,
   lookups,
   onClose,
+  onConfirmOccurrence,
   onDelete,
+  onDismissOccurrence,
   onDuplicate,
   onEdit,
   onSplit,
@@ -739,20 +750,39 @@ export const TransactionDetailPanel = ({
 }: TransactionDetailPanelProps) => {
   const panelRef = useRef<HTMLElement | null>(null);
   const deleteButtonRef = useRef<HTMLButtonElement | null>(null);
+  const dismissButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreFocusOnCloseRef = useRef(true);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmDismissOpen, setConfirmDismissOpen] = useState(false);
   const [deleteErrorMessage, setDeleteErrorMessage] = useState<
     string | undefined
   >();
+  const [dismissErrorMessage, setDismissErrorMessage] = useState<
+    string | undefined
+  >();
   const [deleting, setDeleting] = useState(false);
+  const [dismissing, setDismissing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [occurrenceActionError, setOccurrenceActionError] = useState<
+    | {
+        readonly message: string;
+        readonly transactionId: Transaction["transaction_id"];
+      }
+    | undefined
+  >();
+
+  const closePanel = useCallback(() => {
+    setOccurrenceActionError(undefined);
+    onClose();
+  }, [onClose]);
 
   useOutsidePointerClose({
-    enabled: !confirmDeleteOpen,
+    enabled: !confirmDeleteOpen && !confirmDismissOpen,
     floatingOverlaySelectors,
     onOutsideClose: () => {
       restoreFocusOnCloseRef.current = false;
-      onClose();
+      closePanel();
     },
     ref: panelRef,
   });
@@ -767,6 +797,17 @@ export const TransactionDetailPanel = ({
       deleteButtonRef.current?.focus({ preventScroll: true });
     });
   }, [deleting]);
+
+  const closeDismissConfirmation = useCallback(() => {
+    if (dismissing) {
+      return;
+    }
+    setDismissErrorMessage(undefined);
+    setConfirmDismissOpen(false);
+    window.requestAnimationFrame(() => {
+      dismissButtonRef.current?.focus({ preventScroll: true });
+    });
+  }, [dismissing]);
 
   useEffect(() => {
     window.requestAnimationFrame(() => {
@@ -803,7 +844,7 @@ export const TransactionDetailPanel = ({
 
         event.preventDefault();
         event.stopPropagation();
-        onClose();
+        closePanel();
         return;
       }
     };
@@ -812,7 +853,7 @@ export const TransactionDetailPanel = ({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [onClose]);
+  }, [closePanel]);
 
   const openDeleteConfirmation = () => {
     setDeleteErrorMessage(undefined);
@@ -835,6 +876,62 @@ export const TransactionDetailPanel = ({
       setDeleting(false);
     }
   };
+
+  const confirmOccurrence = async () => {
+    if (!transaction || !onConfirmOccurrence) {
+      return;
+    }
+
+    setConfirming(true);
+    setOccurrenceActionError(undefined);
+    try {
+      await onConfirmOccurrence(transaction);
+    } catch (error) {
+      setOccurrenceActionError({
+        message:
+          error instanceof Error ? error.message : "The API request failed.",
+        transactionId: transaction.transaction_id,
+      });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const confirmDismiss = async () => {
+    if (!transaction || !onDismissOccurrence) {
+      return;
+    }
+
+    setDismissing(true);
+    setDismissErrorMessage(undefined);
+    try {
+      await onDismissOccurrence(transaction);
+    } catch (error) {
+      setDismissErrorMessage(
+        error instanceof Error ? error.message : "The API request failed.",
+      );
+    } finally {
+      setDismissing(false);
+    }
+  };
+
+  const expectedOccurrence =
+    transaction !== undefined &&
+    linePostingStatus(transaction) === "expected" &&
+    transaction.recurring_occurrence_id !== null;
+  const expectedOccurrenceActionsAvailable =
+    expectedOccurrence &&
+    onConfirmOccurrence !== undefined &&
+    onDismissOccurrence !== undefined;
+  const occurrenceActionsDisabled = confirming || dismissing;
+  const occurrenceActionsDisabledReason = occurrenceActionsDisabled
+    ? "Occurrence action in progress."
+    : undefined;
+  const occurrenceActionErrorMessage =
+    occurrenceActionError !== undefined &&
+    occurrenceActionError.transactionId === transaction?.transaction_id
+      ? occurrenceActionError.message
+      : undefined;
 
   return (
     <aside
@@ -862,7 +959,7 @@ export const TransactionDetailPanel = ({
           variant="outline"
           size="icon-sm"
           aria-label="Close transaction detail"
-          onClick={onClose}
+          onClick={closePanel}
         >
           <Close aria-hidden="true" />
         </Button>
@@ -890,52 +987,110 @@ export const TransactionDetailPanel = ({
       </div>
       {transaction && !loading && !errorMessage ? (
         <div className="bg-card flex flex-wrap justify-end gap-2 border-t-2 border-[var(--border-ink)] p-4">
-          {onEdit ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                onEdit(transaction);
-              }}
-            >
-              <MagicEdit aria-hidden="true" />
-              Edit
-            </Button>
-          ) : null}
-          {onDuplicate ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                onDuplicate(transaction);
-              }}
-            >
-              <Copy aria-hidden="true" />
-              Duplicate
-            </Button>
-          ) : null}
-          {onSplit ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                onSplit(transaction);
-              }}
-            >
-              <Scissors aria-hidden="true" />
-              Split
-            </Button>
-          ) : null}
-          <Button
-            ref={deleteButtonRef}
-            type="button"
-            variant="destructive"
-            onClick={openDeleteConfirmation}
-          >
-            <Trash aria-hidden="true" />
-            Delete
-          </Button>
+          {expectedOccurrence ? (
+            expectedOccurrenceActionsAvailable ? (
+              <>
+                {occurrenceActionsDisabledReason ? (
+                  <Tooltip label={occurrenceActionsDisabledReason}>
+                    <Button type="button" disabled>
+                      <Check aria-hidden="true" />
+                      {confirming ? "Confirming" : "Confirm occurrence"}
+                    </Button>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      void confirmOccurrence();
+                    }}
+                  >
+                    <Check aria-hidden="true" />
+                    Confirm occurrence
+                  </Button>
+                )}
+                {occurrenceActionsDisabledReason ? (
+                  <Tooltip label={occurrenceActionsDisabledReason}>
+                    <Button
+                      ref={dismissButtonRef}
+                      type="button"
+                      variant="outline"
+                      disabled
+                    >
+                      <Close aria-hidden="true" />
+                      Dismiss occurrence
+                    </Button>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    ref={dismissButtonRef}
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setDismissErrorMessage(undefined);
+                      setConfirmDismissOpen(true);
+                    }}
+                  >
+                    <Close aria-hidden="true" />
+                    Dismiss occurrence
+                  </Button>
+                )}
+              </>
+            ) : null
+          ) : (
+            <>
+              {onEdit ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    onEdit(transaction);
+                  }}
+                >
+                  <MagicEdit aria-hidden="true" />
+                  Edit
+                </Button>
+              ) : null}
+              {onDuplicate ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    onDuplicate(transaction);
+                  }}
+                >
+                  <Copy aria-hidden="true" />
+                  Duplicate
+                </Button>
+              ) : null}
+              {onSplit ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    onSplit(transaction);
+                  }}
+                >
+                  <Scissors aria-hidden="true" />
+                  Split
+                </Button>
+              ) : null}
+              <Button
+                ref={deleteButtonRef}
+                type="button"
+                variant="destructive"
+                onClick={openDeleteConfirmation}
+              >
+                <Trash aria-hidden="true" />
+                Delete
+              </Button>
+            </>
+          )}
         </div>
+      ) : null}
+      {occurrenceActionErrorMessage ? (
+        <p className="text-destructive px-4 pb-4 text-sm" role="alert">
+          {occurrenceActionErrorMessage}
+        </p>
       ) : null}
       <ConfirmationDialog
         confirmIcon={<Trash aria-hidden="true" />}
@@ -957,6 +1112,27 @@ export const TransactionDetailPanel = ({
         {transaction ? (
           <TransactionDeleteDescription transaction={transaction} />
         ) : null}
+      </ConfirmationDialog>
+      <ConfirmationDialog
+        confirmIcon={<Close aria-hidden="true" />}
+        confirmLabel="Dismiss occurrence"
+        errorMessage={dismissErrorMessage}
+        open={confirmDismissOpen && transaction !== undefined}
+        pending={dismissing}
+        pendingLabel="Dismissing"
+        title="Dismiss occurrence"
+        onConfirm={() => {
+          void confirmDismiss();
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDismissConfirmation();
+          }
+        }}
+      >
+        <p>
+          This occurrence will be skipped. The recurring schedule will continue.
+        </p>
       </ConfirmationDialog>
     </aside>
   );

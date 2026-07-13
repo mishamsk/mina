@@ -204,6 +204,9 @@ test("command palette transaction search renders results and opens off-page deta
 
   await page.goto("/transactions?page=1&pageSize=25");
   await expect(page.getByText("Description")).toBeVisible();
+  await expect(
+    page.getByTestId("transactions-table-scroll").getByText(memo),
+  ).toHaveCount(0);
 
   await openPalette(page);
   const dialog = page.getByRole("dialog", { name: "Command Palette" });

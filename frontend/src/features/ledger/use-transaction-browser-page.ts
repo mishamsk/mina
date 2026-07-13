@@ -191,9 +191,10 @@ export const useTransactionBrowserPage = ({
         transaction.transaction_id,
         transaction,
       );
+      await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
       showNotice("Occurrence confirmed.");
     },
-    [params, showNotice],
+    [detail, params, showNotice],
   );
 
   const dismissRecurringOccurrenceFromRow = useCallback(

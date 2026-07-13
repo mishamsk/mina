@@ -27,6 +27,7 @@ export {
 export { FqnPath } from "./fqn-path";
 export { ClassIcon, StatusIcon } from "./line-icons";
 export { MemberChip } from "./member-chip";
+export { MixedSentinel } from "./mixed-sentinel";
 export { TagChip } from "./tag-chip";
 export { TransactionBrowser } from "./transaction-browser";
 export { TransactionBrowserToolbar } from "./transaction-browser-toolbar";

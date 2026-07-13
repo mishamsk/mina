@@ -38,6 +38,7 @@ import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AmountText,
+  buildLookupMaps,
   ClassIcon,
   displayAmountKey,
   formatInitiatedDate,
@@ -46,6 +47,7 @@ import {
   lineMemo,
   linePostingStatus,
   MixedAmounts,
+  MixedSentinel,
   postingStatusLabel,
   refreshLedgerLookups,
   StatusIcon,
@@ -123,7 +125,7 @@ const transactionResultLimit = 20;
 const transactionSearchDebounceMs = 180;
 const commandSkeletonRows = [0, 1, 2, 3] as const;
 const transactionResultGridClass =
-  "grid min-w-0 grid-cols-[3.75rem_1.5rem_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-2 px-2 sm:grid-cols-[4.5rem_1.75rem_1.75rem_minmax(0,1fr)_minmax(0,clamp(7rem,28vw,14rem))] sm:gap-3 sm:px-3";
+  "grid min-w-0 grid-cols-[3.75rem_1.5rem_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-2 px-2 sm:grid-cols-[4.5rem_1.75rem_2.5rem_minmax(0,1fr)_minmax(0,clamp(7rem,28vw,14rem))] sm:gap-3 sm:px-3";
 
 const domIdPart = (value: string): string => {
   const slug = value
@@ -296,20 +298,16 @@ const TransactionSearchResultsSkeleton = () => (
   </div>
 );
 
-const MixedSentinel = ({ label = "Mixed" }: { readonly label?: string }) => (
-  <span className="font-heading text-foreground bg-card inline-flex h-5 items-center border border-[var(--border-ink)] px-1.5 text-[11px] font-semibold uppercase shadow-[var(--shadow-chip)]">
-    {label}
-  </span>
-);
-
 const TransactionResultAmounts = ({
   deemphasized,
+  maps,
   transaction,
 }: {
   readonly deemphasized: boolean;
+  readonly maps: ReturnType<typeof buildLookupMaps>;
   readonly transaction: Transaction;
 }) => {
-  const amounts = lineDisplayAmounts(transaction);
+  const amounts = lineDisplayAmounts(transaction, maps);
   if (transaction.transaction_class === "mixed") {
     return (
       <span className={cn(deemphasized && "text-muted-foreground")}>
@@ -341,8 +339,9 @@ const TransactionResultAmounts = ({
 
 const transactionResultAmountLabel = (
   transaction: Transaction,
+  maps: ReturnType<typeof buildLookupMaps>,
 ): string | undefined => {
-  const amounts = lineDisplayAmounts(transaction);
+  const amounts = lineDisplayAmounts(transaction, maps);
   if (amounts.length === 0) {
     return undefined;
   }
@@ -364,8 +363,9 @@ const transactionResultOptionLabel = (
   transaction: Transaction,
   memo: string | undefined,
   postingStatus: ReturnType<typeof linePostingStatus>,
+  maps: ReturnType<typeof buildLookupMaps>,
 ): string => {
-  const amountLabel = transactionResultAmountLabel(transaction);
+  const amountLabel = transactionResultAmountLabel(transaction, maps);
   return [
     `Transaction ${formatInitiatedDate(transaction.initiated_date)}`,
     transaction.display_title,
@@ -383,6 +383,10 @@ export const CommandPalette = () => {
   const location = useLocation();
   const { open } = useCommandPaletteView();
   const lookups = useLedgerLookupsView();
+  const lookupMaps = useMemo(
+    () => buildLookupMaps(lookups.snapshot),
+    [lookups.snapshot],
+  );
   const lastTransactionsPageSearch = useLastTransactionsPageSearch();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -830,28 +834,41 @@ export const CommandPalette = () => {
         filters: { search: transactionQuery },
         limit: transactionResultLimit,
         offset: 0,
-      }).then((result) => {
-        if (transactionSearchRequestRef.current !== requestId) {
-          return;
-        }
+      })
+        .then((result) => {
+          if (transactionSearchRequestRef.current !== requestId) {
+            return;
+          }
 
-        if (result.data) {
+          if (result.data) {
+            setTransactionSearch({
+              errorMessage: undefined,
+              loading: false,
+              query: transactionQuery,
+              transactions: result.data.transactions,
+            });
+            return;
+          }
+
           setTransactionSearch({
-            errorMessage: undefined,
+            errorMessage: apiErrorMessage(result.error),
             loading: false,
             query: transactionQuery,
-            transactions: result.data.transactions,
+            transactions: [],
           });
-          return;
-        }
+        })
+        .catch(() => {
+          if (transactionSearchRequestRef.current !== requestId) {
+            return;
+          }
 
-        setTransactionSearch({
-          errorMessage: apiErrorMessage(result.error),
-          loading: false,
-          query: transactionQuery,
-          transactions: [],
+          setTransactionSearch({
+            errorMessage: "Unable to search transactions.",
+            loading: false,
+            query: transactionQuery,
+            transactions: [],
+          });
         });
-      });
     }, transactionSearchDebounceMs);
 
     return () => {
@@ -997,7 +1014,7 @@ export const CommandPalette = () => {
   };
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === " " && query === "") {
+    if (!event.nativeEvent.isComposing && event.key === " " && query === "") {
       event.preventDefault();
       setSearchState({
         activeIndex: 0,
@@ -1137,6 +1154,7 @@ export const CommandPalette = () => {
                           transaction,
                           memo,
                           postingStatus,
+                          lookupMaps,
                         );
                         return (
                           <button
@@ -1172,7 +1190,7 @@ export const CommandPalette = () => {
                               focusable={false}
                               transactionClass={transaction.transaction_class}
                             />
-                            <span className="hidden size-6 shrink-0 place-items-center sm:grid">
+                            <span className="hidden h-6 w-10 shrink-0 place-items-center sm:grid">
                               {postingStatus === "mixed" ? (
                                 <MixedSentinel />
                               ) : (
@@ -1221,6 +1239,7 @@ export const CommandPalette = () => {
                             <span className="flex min-w-0 flex-wrap justify-end gap-1 overflow-hidden">
                               <TransactionResultAmounts
                                 deemphasized={amountDeemphasized}
+                                maps={lookupMaps}
                                 transaction={transaction}
                               />
                             </span>

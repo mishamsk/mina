@@ -28,6 +28,7 @@ const dateInputClassName =
   "bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]";
 
 interface RecordDetailCellsProps {
+  readonly editable?: boolean;
   readonly field: DetailField;
   readonly onSave: (
     transaction: Transaction,
@@ -60,6 +61,7 @@ const nullableTimestampForDateInput = (
 };
 
 export const RecordDetailCells = ({
+  editable = true,
   field,
   onSave,
   record,
@@ -130,25 +132,27 @@ export const RecordDetailCells = ({
         className="group flex min-h-6 min-w-0 items-start gap-1"
         data-testid={`record-${field}-cell`}
         onKeyDown={(event) => {
-          if (event.key === "F2") {
+          if (editable && event.key === "F2") {
             event.preventDefault();
             setEditing(true);
           }
         }}
       >
         <span className="min-w-0 flex-1 break-words">{value}</span>
-        <Tooltip label={`Edit ${fieldLabel[field]}`} asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
-            aria-label={`Edit ${fieldLabel[field]}`}
-            onClick={() => setEditing(true)}
-          >
-            <Pencil aria-hidden="true" />
-          </Button>
-        </Tooltip>
+        {editable ? (
+          <Tooltip label={`Edit ${fieldLabel[field]}`} asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
+              aria-label={`Edit ${fieldLabel[field]}`}
+              onClick={() => setEditing(true)}
+            >
+              <Pencil aria-hidden="true" />
+            </Button>
+          </Tooltip>
+        ) : null}
       </div>
     );
   }

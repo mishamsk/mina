@@ -3746,6 +3746,36 @@ test("transaction detail panel reuses inline editors and keeps expected occurren
   await expect(
     expectedPanel.getByRole("button", { name: "Edit memo" }),
   ).toHaveCount(0);
+  await expect(
+    expectedPanel.getByRole("button", { exact: true, name: "Edit" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedPanel.getByRole("button", { name: "Duplicate" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedPanel.getByRole("button", { name: "Split" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedPanel.getByRole("button", { name: "Delete" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedPanel.getByRole("button", { name: "Confirm occurrence" }),
+  ).toBeVisible();
+  await expect(
+    expectedPanel.getByRole("button", { name: "Dismiss occurrence" }),
+  ).toBeVisible();
+
+  await expectedPanel
+    .getByRole("button", { name: "Close transaction detail" })
+    .click();
+  await expectedRow.click();
+  const expandedExpectedRecords = expectedRow.locator(
+    "xpath=following-sibling::tr[1]",
+  );
+  await expect(expandedExpectedRecords).toBeVisible();
+  await expect(
+    expandedExpectedRecords.getByRole("button", { name: /Edit / }),
+  ).toHaveCount(0);
 
   await deleteTransaction(page, transaction);
 });
@@ -5017,26 +5047,16 @@ const chooseOptionByKeyboard = async (
   await expect(picker).toBeFocused();
   await picker.fill("");
   await picker.fill(searchText);
+  if ((await picker.inputValue()) === optionValue) {
+    await expect(picker).toHaveAttribute("aria-expanded", "false");
+    return;
+  }
   const optionListId = await picker.getAttribute("aria-controls");
   expect(optionListId).not.toBeNull();
   const optionList = page.locator(`#${optionListId}`);
   const optionByValue = optionList
     .getByRole("option")
     .filter({ hasText: optionValue });
-  await expect
-    .poll(
-      async () => {
-        if ((await picker.inputValue()).includes(optionValue)) {
-          return "selected";
-        }
-        return (await optionByValue.count()) > 0 ? "listed" : "missing";
-      },
-      { timeout: 10000 },
-    )
-    .toMatch(/^(listed|selected)$/);
-  if ((await picker.inputValue()).includes(optionValue)) {
-    return;
-  }
   await expect
     .poll(async () => await optionByValue.count(), { timeout: 10000 })
     .toBeGreaterThan(0);
@@ -5054,6 +5074,7 @@ const chooseOptionByKeyboard = async (
   await expect(picker).toHaveAttribute("aria-activedescendant", optionId);
   await picker.press("Enter");
   await expect.poll(async () => picker.inputValue()).toContain(optionValue);
+  await expect(picker).toHaveAttribute("aria-expanded", "false");
 };
 
 const fillAndExpectValue = async (
@@ -5490,7 +5511,7 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
   await expect(firstRecord.getByLabel("Amount")).toHaveValue("-10.00");
   await expect(firstRecord.getByLabel("Memo")).toHaveValue(memo);
 
-  await page.getByLabel("Date").fill("2026-07-06");
+  await page.getByLabel("Date").fill("2026-05-31");
   await chooseOptionByKeyboard(page, "Account", "Wallet", "cash:Wallet", {
     scope: firstRecord,
   });
@@ -5538,6 +5559,7 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
   await saveButton.click();
 
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
+  await page.getByLabel("Search").fill(memo);
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
 });
 
@@ -5572,7 +5594,9 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
   expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
   const transaction = (await spendResponse.json()) as TransactionFixture;
 
-  await page.goto("/transactions?page=1&pageSize=50");
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
   await page
     .locator("header")
     .getByRole("button", { name: "New transaction" })
@@ -5639,6 +5663,80 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
     entryPanel.getByRole("heading", { name: "New spend" }),
   ).toBeVisible();
   await expect(spendPanel.getByLabel("Memo")).toHaveValue(keptMemo);
+});
+
+test("launching another saved-transaction action protects an in-flight edit", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const initialMemo = `E2E in-flight edit ${unique}`;
+  const nextMemo = `E2E next saved transaction ${unique}`;
+  const changedMemo = `E2E changed in-flight edit ${unique}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+
+  for (const memo of [initialMemo, nextMemo]) {
+    const response = await page.request.post("/api/transactions/spend", {
+      data: {
+        amount: "12.00",
+        category_id: category.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-07-08",
+        memo,
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+  }
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  await page
+    .getByRole("row")
+    .filter({ hasText: initialMemo })
+    .first()
+    .getByRole("button", { name: "Open transaction detail" })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { exact: true, name: "Edit" })
+    .click();
+
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const editPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await editPanel.getByLabel("Memo").fill(changedMemo);
+
+  const nextRow = page.getByRole("row").filter({ hasText: nextMemo }).first();
+  await expect(nextRow).toBeVisible();
+  await nextRow.focus();
+  await page.keyboard.press("Enter");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Duplicate" })
+    .click();
+
+  const discardDialog = page.getByRole("alertdialog", {
+    name: "Discard entry draft",
+  });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "Keep draft" }).click();
+  await expect(discardDialog).toBeHidden();
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await expect(editPanel.getByLabel("Memo")).toHaveValue(changedMemo);
 });
 
 test("spend entry escalates to matching journal records", async ({

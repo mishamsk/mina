@@ -7,13 +7,11 @@ import type { TransactionEntryType } from "@/models/ui-state";
 interface TransactionEntryPanelState {
   readonly initialTab: TransactionEntryType | undefined;
   readonly open: boolean;
-  readonly revision: number;
 }
 
 const initialTransactionEntryPanelState: TransactionEntryPanelState = {
   initialTab: undefined,
   open: false,
-  revision: 0,
 };
 
 const transactionEntryPanelStore = create<TransactionEntryPanelState>()(
@@ -29,7 +27,6 @@ export const useTransactionEntryPanelView = (): TransactionEntryPanelState =>
     useShallow((state) => ({
       initialTab: state.initialTab,
       open: state.open,
-      revision: state.revision,
     })),
   );
 
@@ -40,11 +37,10 @@ export const openTransactionEntryPanel = (
   initialTab?: TransactionEntryType,
 ): void => {
   useTransactionEntryPanelStore.setState(
-    (state) => ({
+    {
       initialTab,
       open: true,
-      revision: state.revision + 1,
-    }),
+    },
     false,
     "TransactionEntryPanelStore/openTransactionEntryPanel",
   );

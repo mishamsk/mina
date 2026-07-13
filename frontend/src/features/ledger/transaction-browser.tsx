@@ -60,6 +60,7 @@ import {
 import { FqnPath } from "./fqn-path";
 import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
+import { MixedSentinel } from "./mixed-sentinel";
 import { RecordDetailCells } from "./record-detail-cells";
 import type { RecordUpdate } from "./record-editing";
 import {
@@ -391,12 +392,6 @@ const TagChipsLine = ({
   );
 };
 
-const MixedSentinel = ({ label = "Mixed" }: { readonly label?: string }) => (
-  <span className="font-heading text-foreground bg-card inline-flex h-5 items-center border border-[var(--border-ink)] px-1.5 text-[11px] font-semibold uppercase shadow-[var(--shadow-chip)]">
-    {label}
-  </span>
-);
-
 const interactiveTargetSelector =
   "a, button, input, select, textarea, summary, [role='button'], " +
   "[contenteditable='true'], " +
@@ -447,6 +442,7 @@ const RecordsTable = ({
       </thead>
       <tbody>
         {records.map((record) => {
+          const expected = linePostingStatus(transaction) === "expected";
           const account = maps.accountsById.get(record.account_id);
           const category = maps.categoriesById.get(record.category_id);
           const member = record.member_id
@@ -469,7 +465,7 @@ const RecordsTable = ({
                 <StructuralRecordCell
                   label="account"
                   onEdit={
-                    onEditTransactionAsJournal
+                    !expected && onEditTransactionAsJournal
                       ? () => onEditTransactionAsJournal(transaction)
                       : undefined
                   }
@@ -485,7 +481,7 @@ const RecordsTable = ({
                 <StructuralRecordCell
                   label="amount"
                   onEdit={
-                    onEditTransactionAsJournal
+                    !expected && onEditTransactionAsJournal
                       ? () => onEditTransactionAsJournal(transaction)
                       : undefined
                   }
@@ -498,6 +494,7 @@ const RecordsTable = ({
               </td>
               <td className="px-2 py-2">
                 <RecordReferenceCells
+                  editable={!expected}
                   field="category"
                   maps={maps}
                   record={record}
@@ -514,6 +511,7 @@ const RecordsTable = ({
               </td>
               <td className="px-2 py-2">
                 <RecordReferenceCells
+                  editable={!expected}
                   field="tags"
                   maps={maps}
                   record={record}
@@ -538,6 +536,7 @@ const RecordsTable = ({
               </td>
               <td className="px-2 py-2">
                 <RecordReferenceCells
+                  editable={!expected}
                   field="member"
                   maps={maps}
                   record={record}
@@ -548,6 +547,7 @@ const RecordsTable = ({
               </td>
               <td className="px-2 py-2">
                 <RecordDetailCells
+                  editable={!expected}
                   field="postingStatus"
                   record={record}
                   transaction={transaction}
@@ -561,6 +561,7 @@ const RecordsTable = ({
               </td>
               <td className="text-muted-foreground px-2 py-2 break-words whitespace-normal">
                 <RecordDetailCells
+                  editable={!expected}
                   field="dates"
                   record={record}
                   transaction={transaction}
@@ -570,6 +571,7 @@ const RecordsTable = ({
               </td>
               <td className="text-muted-foreground px-2 py-2 break-words whitespace-normal">
                 <RecordDetailCells
+                  editable={!expected}
                   field="memo"
                   record={record}
                   transaction={transaction}

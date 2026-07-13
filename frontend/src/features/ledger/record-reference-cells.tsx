@@ -19,6 +19,7 @@ export type { RecordReferenceUpdate } from "./record-editing";
 type RecordReferenceField = RecordReferenceUpdate["kind"];
 
 interface RecordReferenceCellsProps {
+  readonly editable?: boolean;
   readonly field: RecordReferenceField;
   readonly maps: LookupMaps;
   readonly onSave: (
@@ -226,6 +227,7 @@ const MemberReferenceEditor = ({
 );
 
 export const RecordReferenceCells = ({
+  editable = true,
   field,
   maps,
   onSave,
@@ -280,27 +282,29 @@ export const RecordReferenceCells = ({
         className="group relative flex min-h-6 min-w-0 items-start"
         data-testid={`${testIdPrefix}-${field}-cell`}
         onKeyDown={(event) => {
-          if (event.key === "F2") {
+          if (editable && event.key === "F2") {
             event.preventDefault();
             setEditing(true);
           }
         }}
       >
         <span className="min-w-0 flex-1 break-words">{value}</span>
-        <Tooltip label={`Edit ${fieldLabel[field]}`} asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="pointer-events-none absolute top-0 right-0 opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
-            aria-label={`Edit ${fieldLabel[field]}`}
-            onClick={() => {
-              setEditing(true);
-            }}
-          >
-            <Pencil aria-hidden="true" />
-          </Button>
-        </Tooltip>
+        {editable ? (
+          <Tooltip label={`Edit ${fieldLabel[field]}`} asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="pointer-events-none absolute top-0 right-0 opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
+              aria-label={`Edit ${fieldLabel[field]}`}
+              onClick={() => {
+                setEditing(true);
+              }}
+            >
+              <Pencil aria-hidden="true" />
+            </Button>
+          </Tooltip>
+        ) : null}
       </div>
     );
   }

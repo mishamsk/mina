@@ -558,7 +558,9 @@ export const ReferenceDrilldownPage = ({
           loading={browser.detail.loading}
           lookups={browser.lookups.snapshot}
           onClose={browser.detail.closeTransactionDetail}
+          onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
           onDelete={browser.detail.deleteSelectedTransaction}
+          onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
           onFilterCategory={(categoryId) => {
             addEntityFilter("category", categoryId);
           }}

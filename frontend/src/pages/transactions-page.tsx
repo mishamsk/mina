@@ -363,7 +363,6 @@ export const TransactionsPage = () => {
           onDismiss={browser.dismissNotice}
         />
         <EntryPanel
-          key={entryPanel.revision}
           initialTab={entryPanel.initialTab}
           launch={effectiveEntryLaunch}
           lookups={browser.lookups.snapshot}
@@ -400,7 +399,9 @@ export const TransactionsPage = () => {
             loading={browser.detail.loading}
             lookups={browser.lookups.snapshot}
             onClose={browser.detail.closeTransactionDetail}
+            onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
             onDelete={browser.detail.deleteSelectedTransaction}
+            onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
             onDuplicate={duplicateTransaction}
             onEdit={editTransaction}
             onSplit={splitTransaction}
