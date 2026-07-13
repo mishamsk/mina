@@ -22,9 +22,6 @@
   - Bulk journal-record category, tag, account, and status updates.
   - Background operation status, newest-first paged run listings and lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
   - OpenAPI discovery through `GET /api/openapi.json`.
-
->>>>>>> 8f0d08b7 (Squash merge branch 'bzav-status-operation-navigation')
-
 - Implemented runtime/demo behavior:
   - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, and localhost-only publishing by default.
   - `just test-docker` runs a real Docker lifecycle check covering Compose health, demo-data retention across recreation/restart/image replacement, backups, database validation, and cleanup.
