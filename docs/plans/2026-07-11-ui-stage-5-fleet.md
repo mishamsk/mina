@@ -101,7 +101,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [x] Task 25: `4xb9` — Add per-record editing in expanded records view (foundational record-level editors with shared pickers; first of the editing suite) — branch `4xb9-record-editing`
 - [x] Task 26: `gtmn` — Add transaction-row inline editing per uniformity rule (reuses the Task 25 pickers and record bulk endpoints) — branch `gtmn-row-inline-editing`
 - [x] Task 27: `89d7` — Add editing to transaction detail panel (detail-panel editing surface on top of the Task 25–26 editing patterns) — branch `89d7-detail-panel-editing`
-- [ ] Task 28: `ds26` — Add bulk selection and floating action bar (last of the editing suite; shares the uniformity rule and bulk endpoints with Task 26) — branch `ds26-bulk-selection`
+- [x] Task 28: `ds26` — Add bulk selection and floating action bar (last of the editing suite; shares the uniformity rule and bulk endpoints with Task 26) — branch `ds26-bulk-selection`
 
 ### Status page, polish, and e2e hygiene
 
