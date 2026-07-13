@@ -107,7 +107,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 
 - [x] Task 29: `bzav` — Status page: operation navigation with generic runs table and per-type detail views (self-contained api+backend+frontend vertical; doc amendment: new webui-design screen section) — branch `bzav-status-operation-navigation`
 - [x] Task 30: `5hvz` — Saved-transaction edit polish: expected-occurrence dead-end, ns-timestamp display, e2e keyboard tweaks + `ybtb` — Palette transaction-search polish: off-page assertion, MixedSentinel reuse, exchange-amount maps (grouped review-residual polish; after Task 22 because b1m2 changes how expected occurrences surface and act) — branch `5hvz-edit-palette-polish`
-- [ ] Task 31: `eg7c` — Reference-table e2e hygiene: fixture sort-order fragility and monolithic geometry test + `hspf` — Flaky Chromium e2e: shorthand entry session-counter timing (grouped e2e-only hygiene last, after Tasks 13–15 rewrite the reference-table layouts the geometry spec asserts) — branch `eg7c-e2e-hygiene`
+- [x] Task 31: `eg7c` — Reference-table e2e hygiene: fixture sort-order fragility and monolithic geometry test + `hspf` — Flaky Chromium e2e: shorthand entry session-counter timing (grouped e2e-only hygiene last, after Tasks 13–15 rewrite the reference-table layouts the geometry spec asserts) — branch `eg7c-e2e-hygiene`
 
 ## Final Verification
 
