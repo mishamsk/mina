@@ -7,7 +7,7 @@
 ## Implicit Contracts
 
 - `operation`, `runsPage`, `runsPageSize`, and `run` are the URL-backed selection, pagination, and detail state for operation runs.
-- The operation registry owns operation-specific status/manual-start and detail renderers; the selector and runs table remain generic.
+- The `Record<BackgroundOperationId, OperationModule>` registry uses the generated operation-ID union and owns each concrete status, manual-start, typed-detail calls, and detail renderer; the selector, envelope runs table, and detail frame remain shared.
 
 ## Boundaries
 

@@ -17,37 +17,42 @@ import (
 )
 
 func TestBackgroundOperationExpectedBehavior(t *testing.T) {
-	t.Run("run listing is newest-first, paged, and limited to registered operations", func(t *testing.T) {
-		client := newSharedClient(t, apptest.WithExchangeRateLoading(false))
+	t.Run("run envelope listing is newest-first, paged, and supports typed operation filters", func(t *testing.T) {
+		client := newSharedClient(t, apptest.WithExchangeRateLoading(false), apptest.WithBackupFileDirectory(t.TempDir()))
 		runIDs := make([]int64, 0, 3)
-		for range 3 {
+		for range 2 {
 			started, err := client.REST().StartExchangeRateLoadingRunWithResponse(context.Background())
 			requireClientResponse(t, "start exchange-rate loading run", err, started.StatusCode(), http.StatusAccepted, started.Body)
 			client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
 			runIDs = append(runIDs, started.JSON202.OperationRunId)
 		}
+		backup, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
+		requireClientResponse(t, "start database backup run", err, backup.StatusCode(), http.StatusAccepted, backup.Body)
+		client.PollDatabaseBackupRun(backup.JSON202.OperationRunId)
+		runIDs = append(runIDs, backup.JSON202.OperationRunId)
 
 		limit := 1
-		firstPage, err := client.REST().ListBackgroundOperationRunsWithResponse(
+		firstPage, err := client.REST().ListBackgroundOperationRunEnvelopesWithResponse(
 			context.Background(),
-			"exchange-rate-loading",
-			&httpclient.ListBackgroundOperationRunsParams{Limit: &limit},
+			&httpclient.ListBackgroundOperationRunEnvelopesParams{Limit: &limit},
 		)
-		requireClientResponse(t, "list newest operation run", err, firstPage.StatusCode(), http.StatusOK, firstPage.Body)
+		requireClientResponse(t, "list newest run envelope", err, firstPage.StatusCode(), http.StatusOK, firstPage.Body)
 		if firstPage.JSON200.TotalCount != 3 || len(firstPage.JSON200.Runs) != 1 {
 			t.Fatalf("first run page = %+v, want one run from total three", firstPage.JSON200)
 		}
 		if firstPage.JSON200.Runs[0].OperationRunId != runIDs[2] {
 			t.Fatalf("newest run id = %d, want %d", firstPage.JSON200.Runs[0].OperationRunId, runIDs[2])
 		}
+		if firstPage.JSON200.Runs[0].Trigger != httpclient.BackgroundOperationRunTriggerBackgroundOperationRunTriggerManual {
+			t.Fatalf("trigger = %q, want manual", firstPage.JSON200.Runs[0].Trigger)
+		}
 
 		offset := 1
-		secondPage, err := client.REST().ListBackgroundOperationRunsWithResponse(
+		secondPage, err := client.REST().ListBackgroundOperationRunEnvelopesWithResponse(
 			context.Background(),
-			"exchange-rate-loading",
-			&httpclient.ListBackgroundOperationRunsParams{Limit: &limit, Offset: &offset},
+			&httpclient.ListBackgroundOperationRunEnvelopesParams{Limit: &limit, Offset: &offset},
 		)
-		requireClientResponse(t, "list second operation run", err, secondPage.StatusCode(), http.StatusOK, secondPage.Body)
+		requireClientResponse(t, "list second run envelope", err, secondPage.StatusCode(), http.StatusOK, secondPage.Body)
 		if secondPage.JSON200.TotalCount != 3 || len(secondPage.JSON200.Runs) != 1 {
 			t.Fatalf("second run page = %+v, want one run from total three", secondPage.JSON200)
 		}
@@ -55,8 +60,48 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			t.Fatalf("second newest run id = %d, want %d", secondPage.JSON200.Runs[0].OperationRunId, runIDs[1])
 		}
 
-		unknown, err := client.REST().ListBackgroundOperationRunsWithResponse(context.Background(), "unknown-operation", nil)
-		requireClientResponse(t, "list unknown operation runs", err, unknown.StatusCode(), http.StatusNotFound, unknown.Body)
+		operationID := httpclient.BackgroundOperationIdExchangeRateLoading
+		filtered, err := client.REST().ListBackgroundOperationRunEnvelopesWithResponse(
+			context.Background(),
+			&httpclient.ListBackgroundOperationRunEnvelopesParams{OperationId: &operationID},
+		)
+		requireClientResponse(t, "filter run envelopes", err, filtered.StatusCode(), http.StatusOK, filtered.Body)
+		if filtered.JSON200.TotalCount != 2 || len(filtered.JSON200.Runs) != 2 {
+			t.Fatalf("filtered run page = %+v, want two exchange-rate loading runs", filtered.JSON200)
+		}
+		for _, run := range filtered.JSON200.Runs {
+			if run.OperationId != operationID {
+				t.Fatalf("filtered run operation_id = %q, want %q", run.OperationId, operationID)
+			}
+		}
+
+		invalid, err := client.REST().ListBackgroundOperationRunEnvelopesWithResponse(
+			context.Background(),
+			&httpclient.ListBackgroundOperationRunEnvelopesParams{OperationId: func() *httpclient.BackgroundOperationId {
+				value := httpclient.BackgroundOperationId("unknown-operation")
+				return &value
+			}()},
+		)
+		requireClientResponse(t, "reject invalid operation filter", err, invalid.StatusCode(), http.StatusBadRequest, invalid.Body)
+
+		rawClient := client.REST().ClientInterface.(*httpclient.Client)
+		removedRequest, err := http.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			"http://mina.test/api/background-operations/exchange-rate-loading/runs",
+			nil,
+		)
+		if err != nil {
+			t.Fatalf("build removed-route request: %v", err)
+		}
+		removedResponse, err := rawClient.Client.Do(removedRequest)
+		if err != nil {
+			t.Fatalf("request removed route: %v", err)
+		}
+		defer func() { _ = removedResponse.Body.Close() }()
+		if removedResponse.StatusCode != http.StatusMethodNotAllowed && removedResponse.StatusCode != http.StatusNotFound {
+			t.Fatalf("removed route status = %d, want 404 or 405", removedResponse.StatusCode)
+		}
 	})
 
 	t.Run("status exposes process state fields", func(t *testing.T) {
@@ -108,8 +153,8 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		}
 
 		run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusSucceeded {
-			t.Fatalf("run status = %q, want succeeded; error = %v", run.Status, run.Error)
+		if string(run.Outcome) != "succeeded" {
+			t.Fatalf("run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 		status := client.ExchangeRateLoadingStatus()
 		if status.RunCount != 1 || status.CompletedRunRevision != 1 || status.LastSuccess == nil || !*status.LastSuccess {
@@ -141,7 +186,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			started.JSON202.OperationRunId,
 		)
 		requireClientResponse(t, "get running exchange-rate loading run", err, runResponse.StatusCode(), http.StatusOK, runResponse.Body)
-		if runResponse.JSON200.Status != httpclient.OperationRunResponseStatusRunning || runResponse.JSON200.CompletedAt != nil {
+		if string(runResponse.JSON200.Outcome) != "running" || runResponse.JSON200.CompletedAt != nil {
 			t.Fatalf("running run = %+v, want running with no completed_at", runResponse.JSON200)
 		}
 
@@ -155,14 +200,14 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		skipped, err := client.REST().StartExchangeRateLoadingRunWithResponse(context.Background())
 		requireClientResponse(t, "start concurrent exchange-rate loading run", err, skipped.StatusCode(), http.StatusAccepted, skipped.Body)
 		skippedRun := client.PollExchangeRateLoadingRun(skipped.JSON202.OperationRunId)
-		if skippedRun.Status != httpclient.OperationRunResponseStatusSkipped {
-			t.Fatalf("concurrent run status = %q, want skipped; error = %v", skippedRun.Status, skippedRun.Error)
+		if string(skippedRun.Outcome) != "skipped" {
+			t.Fatalf("concurrent run outcome = %q, want skipped; error = %v", skippedRun.Outcome, skippedRun.Error)
 		}
 
 		provider.Release()
 		run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusSucceeded {
-			t.Fatalf("released run status = %q, want succeeded; error = %v", run.Status, run.Error)
+		if string(run.Outcome) != "succeeded" {
+			t.Fatalf("released run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 	})
 
@@ -196,6 +241,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if status.LastSuccess == nil || !*status.LastSuccess {
 			t.Fatalf("startup status = %+v, want successful startup run", status)
 		}
+		requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdExchangeRateLoading, httpclient.BackgroundOperationRunTriggerBackgroundOperationRunTriggerStartup)
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-01")
 	})
 
@@ -562,6 +608,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if after.LastStartedAt == nil || after.LastStartedAt.Before(apptest.Timestamp("2026-04-02T18:00:00Z")) {
 			t.Fatalf("last_started_at = %v, want scheduled fake-clock time", after.LastStartedAt)
 		}
+		requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdExchangeRateLoading, httpclient.BackgroundOperationRunTriggerBackgroundOperationRunTriggerScheduled)
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-01")
 	})
 
@@ -605,7 +652,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			t.Fatalf("failure status = %+v, want visible failure", status)
 		}
 		run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusFailed || run.Error == nil || *run.Error != "provider unavailable" {
+		if string(run.Outcome) != "failed" || run.Error == nil || *run.Error != "provider unavailable" {
 			t.Fatalf("failure run = %+v, want failed run with provider error", run)
 		}
 
@@ -634,13 +681,33 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		started, err := client.REST().StartExchangeRateLoadingRunWithResponse(context.Background())
 		requireClientResponse(t, "start transient failing exchange-rate loading run", err, started.StatusCode(), http.StatusAccepted, started.Body)
 		run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusFailed {
-			t.Fatalf("transient failure run status = %q, want failed; error = %v", run.Status, run.Error)
+		if string(run.Outcome) != "failed" {
+			t.Fatalf("transient failure run outcome = %q, want failed; error = %v", run.Outcome, run.Error)
 		}
 		if run.Error == nil || *run.Error != "exchange-rate provider unavailable" {
 			t.Fatalf("transient failure run error = %v, want provider unavailable", run.Error)
 		}
 	})
+}
+
+func requireLatestRunEnvelopeTrigger(t *testing.T, client *apptest.Client, operationID httpclient.BackgroundOperationId, trigger httpclient.BackgroundOperationRunTrigger) {
+	t.Helper()
+
+	limit := 1
+	response, err := client.REST().ListBackgroundOperationRunEnvelopesWithResponse(
+		context.Background(),
+		&httpclient.ListBackgroundOperationRunEnvelopesParams{
+			Limit:       &limit,
+			OperationId: &operationID,
+		},
+	)
+	requireClientResponse(t, "list operation run envelopes", err, response.StatusCode(), http.StatusOK, response.Body)
+	if len(response.JSON200.Runs) != 1 {
+		t.Fatalf("run envelopes = %+v, want one latest run", response.JSON200)
+	}
+	if response.JSON200.Runs[0].Trigger != trigger {
+		t.Fatalf("trigger = %q, want %q", response.JSON200.Runs[0].Trigger, trigger)
+	}
 }
 
 func installFrankfurterCacheFixture(t *testing.T, cacheDir string) string {

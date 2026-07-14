@@ -67,18 +67,66 @@ func (e AccountType) Valid() bool {
 	}
 }
 
-// Defines values for BackgroundOperationSummaryOperationId.
+// Defines values for BackgroundOperationId.
 const (
-	BackgroundOperationSummaryOperationIdDatabaseBackup      BackgroundOperationSummaryOperationId = "database-backup"
-	BackgroundOperationSummaryOperationIdExchangeRateLoading BackgroundOperationSummaryOperationId = "exchange-rate-loading"
+	BackgroundOperationIdDatabaseBackup      BackgroundOperationId = "database-backup"
+	BackgroundOperationIdExchangeRateLoading BackgroundOperationId = "exchange-rate-loading"
 )
 
-// Valid indicates whether the value is a known member of the BackgroundOperationSummaryOperationId enum.
-func (e BackgroundOperationSummaryOperationId) Valid() bool {
+// Valid indicates whether the value is a known member of the BackgroundOperationId enum.
+func (e BackgroundOperationId) Valid() bool {
 	switch e {
-	case BackgroundOperationSummaryOperationIdDatabaseBackup:
+	case BackgroundOperationIdDatabaseBackup:
 		return true
-	case BackgroundOperationSummaryOperationIdExchangeRateLoading:
+	case BackgroundOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BackgroundOperationRunOutcome.
+const (
+	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeCanceled  BackgroundOperationRunOutcome = "canceled"
+	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeFailed    BackgroundOperationRunOutcome = "failed"
+	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeRunning   BackgroundOperationRunOutcome = "running"
+	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeSkipped   BackgroundOperationRunOutcome = "skipped"
+	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeSucceeded BackgroundOperationRunOutcome = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the BackgroundOperationRunOutcome enum.
+func (e BackgroundOperationRunOutcome) Valid() bool {
+	switch e {
+	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeCanceled:
+		return true
+	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeFailed:
+		return true
+	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeRunning:
+		return true
+	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeSkipped:
+		return true
+	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BackgroundOperationRunTrigger.
+const (
+	BackgroundOperationRunTriggerBackgroundOperationRunTriggerManual    BackgroundOperationRunTrigger = "manual"
+	BackgroundOperationRunTriggerBackgroundOperationRunTriggerScheduled BackgroundOperationRunTrigger = "scheduled"
+	BackgroundOperationRunTriggerBackgroundOperationRunTriggerStartup   BackgroundOperationRunTrigger = "startup"
+)
+
+// Valid indicates whether the value is a known member of the BackgroundOperationRunTrigger enum.
+func (e BackgroundOperationRunTrigger) Valid() bool {
+	switch e {
+	case BackgroundOperationRunTriggerBackgroundOperationRunTriggerManual:
+		return true
+	case BackgroundOperationRunTriggerBackgroundOperationRunTriggerScheduled:
+		return true
+	case BackgroundOperationRunTriggerBackgroundOperationRunTriggerStartup:
 		return true
 	default:
 		return false
@@ -121,6 +169,69 @@ func (e CategoryEconomicIntent) Valid() bool {
 	}
 }
 
+// Defines values for DatabaseBackupRunOperationId.
+const (
+	DatabaseBackupRunOperationIdDatabaseBackup DatabaseBackupRunOperationId = "database-backup"
+)
+
+// Valid indicates whether the value is a known member of the DatabaseBackupRunOperationId enum.
+func (e DatabaseBackupRunOperationId) Valid() bool {
+	switch e {
+	case DatabaseBackupRunOperationIdDatabaseBackup:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DatabaseBackupRunOutcome.
+const (
+	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeCanceled  DatabaseBackupRunOutcome = "canceled"
+	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeFailed    DatabaseBackupRunOutcome = "failed"
+	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeRunning   DatabaseBackupRunOutcome = "running"
+	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeSkipped   DatabaseBackupRunOutcome = "skipped"
+	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeSucceeded DatabaseBackupRunOutcome = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the DatabaseBackupRunOutcome enum.
+func (e DatabaseBackupRunOutcome) Valid() bool {
+	switch e {
+	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeCanceled:
+		return true
+	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeFailed:
+		return true
+	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeRunning:
+		return true
+	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeSkipped:
+		return true
+	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DatabaseBackupRunTrigger.
+const (
+	DatabaseBackupRunTriggerBackgroundOperationRunTriggerManual    DatabaseBackupRunTrigger = "manual"
+	DatabaseBackupRunTriggerBackgroundOperationRunTriggerScheduled DatabaseBackupRunTrigger = "scheduled"
+	DatabaseBackupRunTriggerBackgroundOperationRunTriggerStartup   DatabaseBackupRunTrigger = "startup"
+)
+
+// Valid indicates whether the value is a known member of the DatabaseBackupRunTrigger enum.
+func (e DatabaseBackupRunTrigger) Valid() bool {
+	switch e {
+	case DatabaseBackupRunTriggerBackgroundOperationRunTriggerManual:
+		return true
+	case DatabaseBackupRunTriggerBackgroundOperationRunTriggerScheduled:
+		return true
+	case DatabaseBackupRunTriggerBackgroundOperationRunTriggerStartup:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DatabaseBackupStatusResponseOperationId.
 const (
 	DatabaseBackupStatusResponseOperationIdDatabaseBackup DatabaseBackupStatusResponseOperationId = "database-backup"
@@ -148,6 +259,69 @@ func (e DatabaseBackupStatusResponseState) Valid() bool {
 	case DatabaseBackupStatusResponseStateIdle:
 		return true
 	case DatabaseBackupStatusResponseStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExchangeRateLoadingRunOperationId.
+const (
+	ExchangeRateLoadingRunOperationIdExchangeRateLoading ExchangeRateLoadingRunOperationId = "exchange-rate-loading"
+)
+
+// Valid indicates whether the value is a known member of the ExchangeRateLoadingRunOperationId enum.
+func (e ExchangeRateLoadingRunOperationId) Valid() bool {
+	switch e {
+	case ExchangeRateLoadingRunOperationIdExchangeRateLoading:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExchangeRateLoadingRunOutcome.
+const (
+	BackgroundOperationRunOutcomeCanceled  ExchangeRateLoadingRunOutcome = "canceled"
+	BackgroundOperationRunOutcomeFailed    ExchangeRateLoadingRunOutcome = "failed"
+	BackgroundOperationRunOutcomeRunning   ExchangeRateLoadingRunOutcome = "running"
+	BackgroundOperationRunOutcomeSkipped   ExchangeRateLoadingRunOutcome = "skipped"
+	BackgroundOperationRunOutcomeSucceeded ExchangeRateLoadingRunOutcome = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the ExchangeRateLoadingRunOutcome enum.
+func (e ExchangeRateLoadingRunOutcome) Valid() bool {
+	switch e {
+	case BackgroundOperationRunOutcomeCanceled:
+		return true
+	case BackgroundOperationRunOutcomeFailed:
+		return true
+	case BackgroundOperationRunOutcomeRunning:
+		return true
+	case BackgroundOperationRunOutcomeSkipped:
+		return true
+	case BackgroundOperationRunOutcomeSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExchangeRateLoadingRunTrigger.
+const (
+	BackgroundOperationRunTriggerManual    ExchangeRateLoadingRunTrigger = "manual"
+	BackgroundOperationRunTriggerScheduled ExchangeRateLoadingRunTrigger = "scheduled"
+	BackgroundOperationRunTriggerStartup   ExchangeRateLoadingRunTrigger = "startup"
+)
+
+// Valid indicates whether the value is a known member of the ExchangeRateLoadingRunTrigger enum.
+func (e ExchangeRateLoadingRunTrigger) Valid() bool {
+	switch e {
+	case BackgroundOperationRunTriggerManual:
+		return true
+	case BackgroundOperationRunTriggerScheduled:
+		return true
+	case BackgroundOperationRunTriggerStartup:
 		return true
 	default:
 		return false
@@ -240,61 +414,16 @@ func (e NonExpectedPostingStatus) Valid() bool {
 
 // Defines values for OperationRunReferenceResponseOperationId.
 const (
-	OperationRunReferenceResponseOperationIdDatabaseBackup      OperationRunReferenceResponseOperationId = "database-backup"
-	OperationRunReferenceResponseOperationIdExchangeRateLoading OperationRunReferenceResponseOperationId = "exchange-rate-loading"
+	DatabaseBackup      OperationRunReferenceResponseOperationId = "database-backup"
+	ExchangeRateLoading OperationRunReferenceResponseOperationId = "exchange-rate-loading"
 )
 
 // Valid indicates whether the value is a known member of the OperationRunReferenceResponseOperationId enum.
 func (e OperationRunReferenceResponseOperationId) Valid() bool {
 	switch e {
-	case OperationRunReferenceResponseOperationIdDatabaseBackup:
+	case DatabaseBackup:
 		return true
-	case OperationRunReferenceResponseOperationIdExchangeRateLoading:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for OperationRunResponseOperationId.
-const (
-	OperationRunResponseOperationIdDatabaseBackup      OperationRunResponseOperationId = "database-backup"
-	OperationRunResponseOperationIdExchangeRateLoading OperationRunResponseOperationId = "exchange-rate-loading"
-)
-
-// Valid indicates whether the value is a known member of the OperationRunResponseOperationId enum.
-func (e OperationRunResponseOperationId) Valid() bool {
-	switch e {
-	case OperationRunResponseOperationIdDatabaseBackup:
-		return true
-	case OperationRunResponseOperationIdExchangeRateLoading:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for OperationRunResponseStatus.
-const (
-	OperationRunResponseStatusCanceled  OperationRunResponseStatus = "canceled"
-	OperationRunResponseStatusFailed    OperationRunResponseStatus = "failed"
-	OperationRunResponseStatusRunning   OperationRunResponseStatus = "running"
-	OperationRunResponseStatusSkipped   OperationRunResponseStatus = "skipped"
-	OperationRunResponseStatusSucceeded OperationRunResponseStatus = "succeeded"
-)
-
-// Valid indicates whether the value is a known member of the OperationRunResponseStatus enum.
-func (e OperationRunResponseStatus) Valid() bool {
-	switch e {
-	case OperationRunResponseStatusCanceled:
-		return true
-	case OperationRunResponseStatusFailed:
-		return true
-	case OperationRunResponseStatusRunning:
-		return true
-	case OperationRunResponseStatusSkipped:
-		return true
-	case OperationRunResponseStatusSucceeded:
+	case ExchangeRateLoading:
 		return true
 	default:
 		return false
@@ -920,19 +1049,52 @@ type AccountListResponse struct {
 // AccountType defines model for AccountType.
 type AccountType string
 
+// BackgroundOperationId defines model for BackgroundOperationId.
+type BackgroundOperationId string
+
+// BackgroundOperationLinks defines model for BackgroundOperationLinks.
+type BackgroundOperationLinks struct {
+	Run      string `json:"run"`
+	Runs     string `json:"runs"`
+	StartRun string `json:"start_run"`
+	Status   string `json:"status"`
+}
+
 // BackgroundOperationListResponse defines model for BackgroundOperationListResponse.
 type BackgroundOperationListResponse struct {
 	Operations []BackgroundOperationSummary `json:"operations"`
 }
 
-// BackgroundOperationSummary defines model for BackgroundOperationSummary.
-type BackgroundOperationSummary struct {
-	OperationId BackgroundOperationSummaryOperationId `json:"operation_id"`
-	StatusUrl   string                                `json:"status_url"`
+// BackgroundOperationRun defines model for BackgroundOperationRun.
+type BackgroundOperationRun struct {
+	CompletedAt    *time.Time                    `json:"completed_at,omitempty"`
+	Error          *string                       `json:"error,omitempty"`
+	OperationId    BackgroundOperationId         `json:"operation_id"`
+	OperationRunId int64                         `json:"operation_run_id"`
+	Outcome        BackgroundOperationRunOutcome `json:"outcome"`
+	StartedAt      time.Time                     `json:"started_at"`
+	Trigger        BackgroundOperationRunTrigger `json:"trigger"`
 }
 
-// BackgroundOperationSummaryOperationId defines model for BackgroundOperationSummary.OperationId.
-type BackgroundOperationSummaryOperationId string
+// BackgroundOperationRunOutcome defines model for BackgroundOperationRun.Outcome.
+type BackgroundOperationRunOutcome string
+
+// BackgroundOperationRunTrigger defines model for BackgroundOperationRun.Trigger.
+type BackgroundOperationRunTrigger string
+
+// BackgroundOperationRunListResponse defines model for BackgroundOperationRunListResponse.
+type BackgroundOperationRunListResponse struct {
+	Runs []BackgroundOperationRun `json:"runs"`
+
+	// TotalCount Count of operation runs before limit and offset are applied.
+	TotalCount int64 `json:"total_count"`
+}
+
+// BackgroundOperationSummary defines model for BackgroundOperationSummary.
+type BackgroundOperationSummary struct {
+	Links       BackgroundOperationLinks `json:"links"`
+	OperationId BackgroundOperationId    `json:"operation_id"`
+}
 
 // BulkCategorizeRecordsRequest defines model for BulkCategorizeRecordsRequest.
 type BulkCategorizeRecordsRequest struct {
@@ -1184,6 +1346,26 @@ type CreditLimitHistoryListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
+// DatabaseBackupRun defines model for DatabaseBackupRun.
+type DatabaseBackupRun struct {
+	CompletedAt    *time.Time                   `json:"completed_at,omitempty"`
+	Error          *string                      `json:"error,omitempty"`
+	OperationId    DatabaseBackupRunOperationId `json:"operation_id"`
+	OperationRunId int64                        `json:"operation_run_id"`
+	Outcome        DatabaseBackupRunOutcome     `json:"outcome"`
+	StartedAt      time.Time                    `json:"started_at"`
+	Trigger        DatabaseBackupRunTrigger     `json:"trigger"`
+}
+
+// DatabaseBackupRunOperationId defines model for DatabaseBackupRun.OperationId.
+type DatabaseBackupRunOperationId string
+
+// DatabaseBackupRunOutcome defines model for DatabaseBackupRun.Outcome.
+type DatabaseBackupRunOutcome string
+
+// DatabaseBackupRunTrigger defines model for DatabaseBackupRun.Trigger.
+type DatabaseBackupRunTrigger string
+
 // DatabaseBackupStatusResponse defines model for DatabaseBackupStatusResponse.
 type DatabaseBackupStatusResponse struct {
 	CompletedRunRevision int64                                   `json:"completed_run_revision"`
@@ -1251,6 +1433,26 @@ type ExchangeRateListResponse struct {
 	// TotalCount Count of matching exchange rates before limit and offset are applied.
 	TotalCount int64 `json:"total_count"`
 }
+
+// ExchangeRateLoadingRun defines model for ExchangeRateLoadingRun.
+type ExchangeRateLoadingRun struct {
+	CompletedAt    *time.Time                        `json:"completed_at,omitempty"`
+	Error          *string                           `json:"error,omitempty"`
+	OperationId    ExchangeRateLoadingRunOperationId `json:"operation_id"`
+	OperationRunId int64                             `json:"operation_run_id"`
+	Outcome        ExchangeRateLoadingRunOutcome     `json:"outcome"`
+	StartedAt      time.Time                         `json:"started_at"`
+	Trigger        ExchangeRateLoadingRunTrigger     `json:"trigger"`
+}
+
+// ExchangeRateLoadingRunOperationId defines model for ExchangeRateLoadingRun.OperationId.
+type ExchangeRateLoadingRunOperationId string
+
+// ExchangeRateLoadingRunOutcome defines model for ExchangeRateLoadingRun.Outcome.
+type ExchangeRateLoadingRunOutcome string
+
+// ExchangeRateLoadingRunTrigger defines model for ExchangeRateLoadingRun.Trigger.
+type ExchangeRateLoadingRunTrigger string
 
 // ExchangeRateLoadingStatusResponse defines model for ExchangeRateLoadingStatusResponse.
 type ExchangeRateLoadingStatusResponse struct {
@@ -1366,14 +1568,6 @@ type MemberListResponse struct {
 // NonExpectedPostingStatus defines model for NonExpectedPostingStatus.
 type NonExpectedPostingStatus string
 
-// OperationRunListResponse defines model for OperationRunListResponse.
-type OperationRunListResponse struct {
-	Runs []OperationRunResponse `json:"runs"`
-
-	// TotalCount Count of operation runs before limit and offset are applied.
-	TotalCount int64 `json:"total_count"`
-}
-
 // OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
 type OperationRunReferenceResponse struct {
 	OperationId    OperationRunReferenceResponseOperationId `json:"operation_id"`
@@ -1383,22 +1577,6 @@ type OperationRunReferenceResponse struct {
 
 // OperationRunReferenceResponseOperationId defines model for OperationRunReferenceResponse.OperationId.
 type OperationRunReferenceResponseOperationId string
-
-// OperationRunResponse defines model for OperationRunResponse.
-type OperationRunResponse struct {
-	CompletedAt    *time.Time                      `json:"completed_at,omitempty"`
-	Error          *string                         `json:"error,omitempty"`
-	OperationId    OperationRunResponseOperationId `json:"operation_id"`
-	OperationRunId int64                           `json:"operation_run_id"`
-	StartedAt      time.Time                       `json:"started_at"`
-	Status         OperationRunResponseStatus      `json:"status"`
-}
-
-// OperationRunResponseOperationId defines model for OperationRunResponse.OperationId.
-type OperationRunResponseOperationId string
-
-// OperationRunResponseStatus defines model for OperationRunResponse.Status.
-type OperationRunResponseStatus string
 
 // PostingStatus defines model for PostingStatus.
 type PostingStatus string
@@ -1841,22 +2019,11 @@ type SearchAccountJournalRecordsParams struct {
 	Offset                *int  `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
-// ListDatabaseBackupRunsParams defines parameters for ListDatabaseBackupRuns.
-type ListDatabaseBackupRunsParams struct {
-	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
-}
-
-// ListExchangeRateLoadingRunsParams defines parameters for ListExchangeRateLoadingRuns.
-type ListExchangeRateLoadingRunsParams struct {
-	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
-}
-
-// ListBackgroundOperationRunsParams defines parameters for ListBackgroundOperationRuns.
-type ListBackgroundOperationRunsParams struct {
-	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+// ListBackgroundOperationRunEnvelopesParams defines parameters for ListBackgroundOperationRunEnvelopes.
+type ListBackgroundOperationRunEnvelopesParams struct {
+	OperationId *BackgroundOperationId `form:"operation_id,omitempty" json:"operation_id,omitempty"`
+	Limit       *int                   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset      *int                   `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListCategoriesParams defines parameters for ListCategories.
@@ -2324,9 +2491,6 @@ type ClientInterface interface {
 	// ListBackgroundOperations request
 	ListBackgroundOperations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListDatabaseBackupRuns request
-	ListDatabaseBackupRuns(ctx context.Context, params *ListDatabaseBackupRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// StartDatabaseBackupRun request
 	StartDatabaseBackupRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2335,9 +2499,6 @@ type ClientInterface interface {
 
 	// GetDatabaseBackupStatus request
 	GetDatabaseBackupStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListExchangeRateLoadingRuns request
-	ListExchangeRateLoadingRuns(ctx context.Context, params *ListExchangeRateLoadingRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// StartExchangeRateLoadingRun request
 	StartExchangeRateLoadingRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2348,8 +2509,8 @@ type ClientInterface interface {
 	// GetExchangeRateLoadingStatus request
 	GetExchangeRateLoadingStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListBackgroundOperationRuns request
-	ListBackgroundOperationRuns(ctx context.Context, operationId string, params *ListBackgroundOperationRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// ListBackgroundOperationRunEnvelopes request
+	ListBackgroundOperationRunEnvelopes(ctx context.Context, params *ListBackgroundOperationRunEnvelopesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListCategories request
 	ListCategories(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2830,18 +2991,6 @@ func (c *Client) ListBackgroundOperations(ctx context.Context, reqEditors ...Req
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListDatabaseBackupRuns(ctx context.Context, params *ListDatabaseBackupRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListDatabaseBackupRunsRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 func (c *Client) StartDatabaseBackupRun(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStartDatabaseBackupRunRequest(c.Server)
 	if err != nil {
@@ -2868,18 +3017,6 @@ func (c *Client) GetDatabaseBackupRun(ctx context.Context, operationRunId int64,
 
 func (c *Client) GetDatabaseBackupStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetDatabaseBackupStatusRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) ListExchangeRateLoadingRuns(ctx context.Context, params *ListExchangeRateLoadingRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListExchangeRateLoadingRunsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2926,8 +3063,8 @@ func (c *Client) GetExchangeRateLoadingStatus(ctx context.Context, reqEditors ..
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListBackgroundOperationRuns(ctx context.Context, operationId string, params *ListBackgroundOperationRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListBackgroundOperationRunsRequest(c.Server, operationId, params)
+func (c *Client) ListBackgroundOperationRunEnvelopes(ctx context.Context, params *ListBackgroundOperationRunEnvelopesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListBackgroundOperationRunEnvelopesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5073,72 +5210,6 @@ func NewListBackgroundOperationsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewListDatabaseBackupRunsRequest generates requests for ListDatabaseBackupRuns
-func NewListDatabaseBackupRunsRequest(server string, params *ListDatabaseBackupRunsParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/background-operations/database-backup/runs")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Offset != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewStartDatabaseBackupRunRequest generates requests for StartDatabaseBackupRun
 func NewStartDatabaseBackupRunRequest(server string) (*http.Request, error) {
 	var err error
@@ -5217,72 +5288,6 @@ func NewGetDatabaseBackupStatusRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewListExchangeRateLoadingRunsRequest generates requests for ListExchangeRateLoadingRuns
-func NewListExchangeRateLoadingRunsRequest(server string, params *ListExchangeRateLoadingRunsParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/background-operations/exchange-rate-loading/runs")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Offset != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5381,23 +5386,16 @@ func NewGetExchangeRateLoadingStatusRequest(server string) (*http.Request, error
 	return req, nil
 }
 
-// NewListBackgroundOperationRunsRequest generates requests for ListBackgroundOperationRuns
-func NewListBackgroundOperationRunsRequest(server string, operationId string, params *ListBackgroundOperationRunsParams) (*http.Request, error) {
+// NewListBackgroundOperationRunEnvelopesRequest generates requests for ListBackgroundOperationRunEnvelopes
+func NewListBackgroundOperationRunEnvelopesRequest(server string, params *ListBackgroundOperationRunEnvelopesParams) (*http.Request, error) {
 	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "operation_id", operationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/background-operations/%s/runs", pathParam0)
+	operationPath := fmt.Sprintf("/api/background-operations/runs")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -5415,6 +5413,18 @@ func NewListBackgroundOperationRunsRequest(server string, operationId string, pa
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
+
+		if params.OperationId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "operation_id", *params.OperationId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
 
 		if params.Limit != nil {
 
@@ -9250,9 +9260,6 @@ type ClientWithResponsesInterface interface {
 	// ListBackgroundOperationsWithResponse request
 	ListBackgroundOperationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBackgroundOperationsResponse, error)
 
-	// ListDatabaseBackupRunsWithResponse request
-	ListDatabaseBackupRunsWithResponse(ctx context.Context, params *ListDatabaseBackupRunsParams, reqEditors ...RequestEditorFn) (*ListDatabaseBackupRunsResponse, error)
-
 	// StartDatabaseBackupRunWithResponse request
 	StartDatabaseBackupRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartDatabaseBackupRunResponse, error)
 
@@ -9261,9 +9268,6 @@ type ClientWithResponsesInterface interface {
 
 	// GetDatabaseBackupStatusWithResponse request
 	GetDatabaseBackupStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDatabaseBackupStatusResponse, error)
-
-	// ListExchangeRateLoadingRunsWithResponse request
-	ListExchangeRateLoadingRunsWithResponse(ctx context.Context, params *ListExchangeRateLoadingRunsParams, reqEditors ...RequestEditorFn) (*ListExchangeRateLoadingRunsResponse, error)
 
 	// StartExchangeRateLoadingRunWithResponse request
 	StartExchangeRateLoadingRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartExchangeRateLoadingRunResponse, error)
@@ -9274,8 +9278,8 @@ type ClientWithResponsesInterface interface {
 	// GetExchangeRateLoadingStatusWithResponse request
 	GetExchangeRateLoadingStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetExchangeRateLoadingStatusResponse, error)
 
-	// ListBackgroundOperationRunsWithResponse request
-	ListBackgroundOperationRunsWithResponse(ctx context.Context, operationId string, params *ListBackgroundOperationRunsParams, reqEditors ...RequestEditorFn) (*ListBackgroundOperationRunsResponse, error)
+	// ListBackgroundOperationRunEnvelopesWithResponse request
+	ListBackgroundOperationRunEnvelopesWithResponse(ctx context.Context, params *ListBackgroundOperationRunEnvelopesParams, reqEditors ...RequestEditorFn) (*ListBackgroundOperationRunEnvelopesResponse, error)
 
 	// ListCategoriesWithResponse request
 	ListCategoriesWithResponse(ctx context.Context, params *ListCategoriesParams, reqEditors ...RequestEditorFn) (*ListCategoriesResponse, error)
@@ -9977,38 +9981,6 @@ func (r ListBackgroundOperationsResponse) ContentType() string {
 	return ""
 }
 
-type ListDatabaseBackupRunsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *OperationRunListResponse
-	JSON400      *InvalidRequest
-	JSON405      *MethodNotAllowed
-}
-
-// Status returns HTTPResponse.Status
-func (r ListDatabaseBackupRunsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListDatabaseBackupRunsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListDatabaseBackupRunsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type StartDatabaseBackupRunResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10044,7 +10016,7 @@ func (r StartDatabaseBackupRunResponse) ContentType() string {
 type GetDatabaseBackupRunResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *OperationRunResponse
+	JSON200      *DatabaseBackupRun
 	JSON400      *InvalidRequest
 	JSON404      *NotFound
 	JSON405      *MethodNotAllowed
@@ -10105,38 +10077,6 @@ func (r GetDatabaseBackupStatusResponse) ContentType() string {
 	return ""
 }
 
-type ListExchangeRateLoadingRunsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *OperationRunListResponse
-	JSON400      *InvalidRequest
-	JSON405      *MethodNotAllowed
-}
-
-// Status returns HTTPResponse.Status
-func (r ListExchangeRateLoadingRunsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListExchangeRateLoadingRunsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListExchangeRateLoadingRunsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type StartExchangeRateLoadingRunResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10171,7 +10111,7 @@ func (r StartExchangeRateLoadingRunResponse) ContentType() string {
 type GetExchangeRateLoadingRunResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *OperationRunResponse
+	JSON200      *ExchangeRateLoadingRun
 	JSON400      *InvalidRequest
 	JSON404      *NotFound
 	JSON405      *MethodNotAllowed
@@ -10232,17 +10172,16 @@ func (r GetExchangeRateLoadingStatusResponse) ContentType() string {
 	return ""
 }
 
-type ListBackgroundOperationRunsResponse struct {
+type ListBackgroundOperationRunEnvelopesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *OperationRunListResponse
+	JSON200      *BackgroundOperationRunListResponse
 	JSON400      *InvalidRequest
-	JSON404      *NotFound
 	JSON405      *MethodNotAllowed
 }
 
 // Status returns HTTPResponse.Status
-func (r ListBackgroundOperationRunsResponse) Status() string {
+func (r ListBackgroundOperationRunEnvelopesResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -10250,7 +10189,7 @@ func (r ListBackgroundOperationRunsResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r ListBackgroundOperationRunsResponse) StatusCode() int {
+func (r ListBackgroundOperationRunEnvelopesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -10258,7 +10197,7 @@ func (r ListBackgroundOperationRunsResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListBackgroundOperationRunsResponse) ContentType() string {
+func (r ListBackgroundOperationRunEnvelopesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12459,15 +12398,6 @@ func (c *ClientWithResponses) ListBackgroundOperationsWithResponse(ctx context.C
 	return ParseListBackgroundOperationsResponse(rsp)
 }
 
-// ListDatabaseBackupRunsWithResponse request returning *ListDatabaseBackupRunsResponse
-func (c *ClientWithResponses) ListDatabaseBackupRunsWithResponse(ctx context.Context, params *ListDatabaseBackupRunsParams, reqEditors ...RequestEditorFn) (*ListDatabaseBackupRunsResponse, error) {
-	rsp, err := c.ListDatabaseBackupRuns(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListDatabaseBackupRunsResponse(rsp)
-}
-
 // StartDatabaseBackupRunWithResponse request returning *StartDatabaseBackupRunResponse
 func (c *ClientWithResponses) StartDatabaseBackupRunWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*StartDatabaseBackupRunResponse, error) {
 	rsp, err := c.StartDatabaseBackupRun(ctx, reqEditors...)
@@ -12493,15 +12423,6 @@ func (c *ClientWithResponses) GetDatabaseBackupStatusWithResponse(ctx context.Co
 		return nil, err
 	}
 	return ParseGetDatabaseBackupStatusResponse(rsp)
-}
-
-// ListExchangeRateLoadingRunsWithResponse request returning *ListExchangeRateLoadingRunsResponse
-func (c *ClientWithResponses) ListExchangeRateLoadingRunsWithResponse(ctx context.Context, params *ListExchangeRateLoadingRunsParams, reqEditors ...RequestEditorFn) (*ListExchangeRateLoadingRunsResponse, error) {
-	rsp, err := c.ListExchangeRateLoadingRuns(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListExchangeRateLoadingRunsResponse(rsp)
 }
 
 // StartExchangeRateLoadingRunWithResponse request returning *StartExchangeRateLoadingRunResponse
@@ -12531,13 +12452,13 @@ func (c *ClientWithResponses) GetExchangeRateLoadingStatusWithResponse(ctx conte
 	return ParseGetExchangeRateLoadingStatusResponse(rsp)
 }
 
-// ListBackgroundOperationRunsWithResponse request returning *ListBackgroundOperationRunsResponse
-func (c *ClientWithResponses) ListBackgroundOperationRunsWithResponse(ctx context.Context, operationId string, params *ListBackgroundOperationRunsParams, reqEditors ...RequestEditorFn) (*ListBackgroundOperationRunsResponse, error) {
-	rsp, err := c.ListBackgroundOperationRuns(ctx, operationId, params, reqEditors...)
+// ListBackgroundOperationRunEnvelopesWithResponse request returning *ListBackgroundOperationRunEnvelopesResponse
+func (c *ClientWithResponses) ListBackgroundOperationRunEnvelopesWithResponse(ctx context.Context, params *ListBackgroundOperationRunEnvelopesParams, reqEditors ...RequestEditorFn) (*ListBackgroundOperationRunEnvelopesResponse, error) {
+	rsp, err := c.ListBackgroundOperationRunEnvelopes(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseListBackgroundOperationRunsResponse(rsp)
+	return ParseListBackgroundOperationRunEnvelopesResponse(rsp)
 }
 
 // ListCategoriesWithResponse request returning *ListCategoriesResponse
@@ -13915,46 +13836,6 @@ func ParseListBackgroundOperationsResponse(rsp *http.Response) (*ListBackgroundO
 	return response, nil
 }
 
-// ParseListDatabaseBackupRunsResponse parses an HTTP response from a ListDatabaseBackupRunsWithResponse call
-func ParseListDatabaseBackupRunsResponse(rsp *http.Response) (*ListDatabaseBackupRunsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListDatabaseBackupRunsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest OperationRunListResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest InvalidRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
-		var dest MethodNotAllowed
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON405 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseStartDatabaseBackupRunResponse parses an HTTP response from a StartDatabaseBackupRunWithResponse call
 func ParseStartDatabaseBackupRunResponse(rsp *http.Response) (*StartDatabaseBackupRunResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14010,7 +13891,7 @@ func ParseGetDatabaseBackupRunResponse(rsp *http.Response) (*GetDatabaseBackupRu
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest OperationRunResponse
+		var dest DatabaseBackupRun
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -14075,46 +13956,6 @@ func ParseGetDatabaseBackupStatusResponse(rsp *http.Response) (*GetDatabaseBacku
 	return response, nil
 }
 
-// ParseListExchangeRateLoadingRunsResponse parses an HTTP response from a ListExchangeRateLoadingRunsWithResponse call
-func ParseListExchangeRateLoadingRunsResponse(rsp *http.Response) (*ListExchangeRateLoadingRunsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListExchangeRateLoadingRunsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest OperationRunListResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest InvalidRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
-		var dest MethodNotAllowed
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON405 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseStartExchangeRateLoadingRunResponse parses an HTTP response from a StartExchangeRateLoadingRunWithResponse call
 func ParseStartExchangeRateLoadingRunResponse(rsp *http.Response) (*StartExchangeRateLoadingRunResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14163,7 +14004,7 @@ func ParseGetExchangeRateLoadingRunResponse(rsp *http.Response) (*GetExchangeRat
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest OperationRunResponse
+		var dest ExchangeRateLoadingRun
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -14228,22 +14069,22 @@ func ParseGetExchangeRateLoadingStatusResponse(rsp *http.Response) (*GetExchange
 	return response, nil
 }
 
-// ParseListBackgroundOperationRunsResponse parses an HTTP response from a ListBackgroundOperationRunsWithResponse call
-func ParseListBackgroundOperationRunsResponse(rsp *http.Response) (*ListBackgroundOperationRunsResponse, error) {
+// ParseListBackgroundOperationRunEnvelopesResponse parses an HTTP response from a ListBackgroundOperationRunEnvelopesWithResponse call
+func ParseListBackgroundOperationRunEnvelopesResponse(rsp *http.Response) (*ListBackgroundOperationRunEnvelopesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &ListBackgroundOperationRunsResponse{
+	response := &ListBackgroundOperationRunEnvelopesResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest OperationRunListResponse
+		var dest BackgroundOperationRunListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -14255,13 +14096,6 @@ func ParseListBackgroundOperationRunsResponse(rsp *http.Response) (*ListBackgrou
 			return nil, err
 		}
 		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest NotFound
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest MethodNotAllowed

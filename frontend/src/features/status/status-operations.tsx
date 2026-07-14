@@ -10,13 +10,10 @@ import { useSearchParams } from "react-router";
 
 import {
   apiErrorMessage,
-  getDatabaseBackupStatus,
-  getExchangeRateLoadingStatus,
-  listBackgroundOperationRuns,
+  type BackgroundOperationId,
+  type BackgroundOperationRun,
+  listBackgroundOperationRunEnvelopes,
   listBackgroundOperations,
-  type OperationRunResponse,
-  startDatabaseBackupRun,
-  startExchangeRateLoadingRun,
 } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,49 +26,44 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  type ConcreteOperationRun,
+  operationLabel,
+  operationModules,
+  type OperationStatusSummary,
+} from "@/features/status/operation-modules";
+import { RunDetailFrame } from "@/features/status/run-detail-frame";
 
 const operationPageSizes = [25, 50, 100] as const;
 const defaultOperationPageSize = operationPageSizes[0];
 
-interface OperationStatusSummary {
-  readonly enabled: boolean;
-  readonly runCount: number;
-  readonly schedule: string;
-  readonly state: string;
-}
-
-interface OperationDefinition {
-  readonly detail: (run: OperationRunResponse) => ReactNode;
-  readonly loadStatus: () => Promise<{
-    readonly error?: unknown;
-    readonly status?: OperationStatusSummary;
-  }>;
-  readonly start: () => Promise<{
-    readonly error?: unknown;
-    readonly runId?: number;
-  }>;
-  readonly title: string;
-}
-
 interface OperationListState {
   readonly errorMessage?: string;
   readonly loading: boolean;
-  readonly operationIds: readonly string[];
+  readonly operationIds: readonly BackgroundOperationId[];
 }
 
 interface RunListState {
   readonly errorMessage?: string;
   readonly loading: boolean;
-  readonly operationId?: string;
-  readonly runs: readonly OperationRunResponse[];
+  readonly operationId?: BackgroundOperationId;
+  readonly runs: readonly BackgroundOperationRun[];
   readonly totalCount?: number;
 }
 
 interface OperationStatusState {
   readonly errorMessage?: string;
   readonly loading: boolean;
-  readonly operationId?: string;
+  readonly operationId?: BackgroundOperationId;
   readonly status?: OperationStatusSummary;
+}
+
+interface RunDetailState {
+  readonly errorMessage?: string;
+  readonly loading: boolean;
+  readonly operationId?: BackgroundOperationId;
+  readonly run?: ConcreteOperationRun;
+  readonly runId?: number;
 }
 
 const initialOperationListState: OperationListState = {
@@ -88,131 +80,9 @@ const initialOperationStatusState: OperationStatusState = {
   loading: false,
 };
 
-const OperationDefinitionList = ({
-  children,
-}: {
-  readonly children: ReactNode;
-}) => <dl className="grid gap-3 text-sm sm:grid-cols-2">{children}</dl>;
-
-const OperationDefinitionField = ({
-  label,
-  value,
-}: {
-  readonly label: string;
-  readonly value: ReactNode;
-}) => (
-  <div className="border-l-2 border-[var(--hairline)] pl-3">
-    <dt className="text-muted-foreground font-heading text-xs uppercase">
-      {label}
-    </dt>
-    <dd className="mt-1 font-mono text-sm">{value}</dd>
-  </div>
-);
-
-const ExchangeRateLoadingRunDetail = ({
-  run,
-}: {
-  readonly run: OperationRunResponse;
-}) => (
-  <OperationDefinitionList>
-    <OperationDefinitionField label="Operation" value="Exchange-rate loading" />
-    <OperationDefinitionField label="Run ID" value={run.operation_run_id} />
-    <OperationDefinitionField label="Work" value="Rate load and USD backfill" />
-    <OperationDefinitionField
-      label="Result"
-      value={run.error ?? "No operation-specific message was recorded."}
-    />
-  </OperationDefinitionList>
-);
-
-const DatabaseBackupRunDetail = ({
-  run,
-}: {
-  readonly run: OperationRunResponse;
-}) => (
-  <OperationDefinitionList>
-    <OperationDefinitionField label="Operation" value="Database backup" />
-    <OperationDefinitionField label="Run ID" value={run.operation_run_id} />
-    <OperationDefinitionField label="Work" value="Local database backup" />
-    <OperationDefinitionField
-      label="Result"
-      value={run.error ?? "No operation-specific message was recorded."}
-    />
-  </OperationDefinitionList>
-);
-
-const GenericOperationRunDetail = ({
-  run,
-}: {
-  readonly run: OperationRunResponse;
-}) => (
-  <OperationDefinitionList>
-    <OperationDefinitionField label="Operation" value={run.operation_id} />
-    <OperationDefinitionField label="Run ID" value={run.operation_run_id} />
-    <OperationDefinitionField
-      label="Payload"
-      value="No operation-specific run renderer is registered."
-    />
-    <OperationDefinitionField
-      label="Result"
-      value={run.error ?? "No operation-specific message was recorded."}
-    />
-  </OperationDefinitionList>
-);
-
-const operationDefinitions: Readonly<Record<string, OperationDefinition>> = {
-  "exchange-rate-loading": {
-    detail: (run) => <ExchangeRateLoadingRunDetail run={run} />,
-    loadStatus: async () => {
-      const result = await getExchangeRateLoadingStatus();
-      if (!result.data) {
-        return { error: result.error };
-      }
-      return {
-        status: {
-          enabled: result.data.enabled,
-          runCount: result.data.run_count,
-          schedule: result.data.schedule_utc,
-          state: result.data.state,
-        },
-      };
-    },
-    start: async () => {
-      const result = await startExchangeRateLoadingRun();
-      return result.data
-        ? { runId: result.data.operation_run_id }
-        : { error: result.error };
-    },
-    title: "Exchange-rate loading",
-  },
-  "database-backup": {
-    detail: (run) => <DatabaseBackupRunDetail run={run} />,
-    loadStatus: async () => {
-      const result = await getDatabaseBackupStatus();
-      if (!result.data) {
-        return { error: result.error };
-      }
-      return {
-        status: {
-          enabled: result.data.enabled,
-          runCount: result.data.run_count,
-          schedule: result.data.schedule_utc,
-          state: result.data.state,
-        },
-      };
-    },
-    start: async () => {
-      const result = await startDatabaseBackupRun();
-      return result.data
-        ? { runId: result.data.operation_run_id }
-        : { error: result.error };
-    },
-    title: "Database backup",
-  },
+const initialRunDetailState: RunDetailState = {
+  loading: false,
 };
-
-const operationTitle = (operationId: string): string =>
-  operationDefinitions[operationId]?.title ?? operationId.replaceAll("-", " ");
 
 const parsePositiveInteger = (
   value: string | null,
@@ -242,7 +112,7 @@ const formatTimestamp = (value: string | undefined): string => {
   }).format(timestamp);
 };
 
-const formatFinished = (run: OperationRunResponse): string => {
+const formatFinished = (run: BackgroundOperationRun): string => {
   if (!run.completed_at) {
     return "Running";
   }
@@ -257,7 +127,7 @@ const formatFinished = (run: OperationRunResponse): string => {
 };
 
 const runStatusVariant = (
-  status: OperationRunResponse["status"],
+  status: BackgroundOperationRun["outcome"],
 ): "destructive" | "outline" | "secondary" => {
   switch (status) {
     case "failed":
@@ -293,6 +163,9 @@ export const StatusOperations = ({
   const [runs, setRuns] = useState<RunListState>(initialRunListState);
   const [operationStatus, setOperationStatus] = useState<OperationStatusState>(
     initialOperationStatusState,
+  );
+  const [runDetail, setRunDetail] = useState<RunDetailState>(
+    initialRunDetailState,
   );
   const [startingOperation, setStartingOperation] = useState(false);
   const [actionErrorMessage, setActionErrorMessage] = useState<string>();
@@ -337,9 +210,9 @@ export const StatusOperations = ({
   const requestedOperationId = searchParams.get("operation");
   const selectedOperationId = useMemo(() => {
     if (requestedOperationId) {
-      return operations.operationIds.includes(requestedOperationId)
-        ? requestedOperationId
-        : undefined;
+      return operations.operationIds.find(
+        (operationID) => operationID === requestedOperationId,
+      );
     }
     return operations.operationIds[0];
   }, [operations.operationIds, requestedOperationId]);
@@ -347,11 +220,13 @@ export const StatusOperations = ({
     requestedOperationId &&
     !operations.loading &&
     operations.operationIds.length > 0 &&
-    !operations.operationIds.includes(requestedOperationId)
+    !operations.operationIds.some(
+      (operationID) => operationID === requestedOperationId,
+    )
       ? requestedOperationId
       : undefined;
-  const selectedDefinition = selectedOperationId
-    ? operationDefinitions[selectedOperationId]
+  const selectedModule = selectedOperationId
+    ? operationModules[selectedOperationId]
     : undefined;
   const page = parsePositiveInteger(searchParams.get("runsPage"), 1);
   const requestedPageSize = parsePositiveInteger(
@@ -375,9 +250,12 @@ export const StatusOperations = ({
         errorMessage: undefined,
         loading: true,
       }));
-      const result = await listBackgroundOperationRuns({
-        path: { operation_id: selectedOperationId },
-        query: { limit: pageSize, offset: (page - 1) * pageSize },
+      const result = await listBackgroundOperationRunEnvelopes({
+        query: {
+          limit: pageSize,
+          offset: (page - 1) * pageSize,
+          operation_id: selectedOperationId,
+        },
       });
       if (!active) {
         return;
@@ -410,19 +288,12 @@ export const StatusOperations = ({
   useEffect(() => {
     let active = true;
     const loadOperationStatus = async () => {
-      if (!selectedOperationId) {
+      if (!selectedOperationId || !selectedModule) {
         setOperationStatus(initialOperationStatusState);
         return;
       }
-      if (!selectedDefinition) {
-        setOperationStatus({
-          loading: false,
-          operationId: selectedOperationId,
-        });
-        return;
-      }
       setOperationStatus({ loading: true, operationId: selectedOperationId });
-      const result = await selectedDefinition.loadStatus();
+      const result = await selectedModule.loadStatus();
       if (!active) {
         return;
       }
@@ -442,22 +313,68 @@ export const StatusOperations = ({
     return () => {
       active = false;
     };
-  }, [
-    refreshRevision,
-    resourceRevision,
-    selectedDefinition,
-    selectedOperationId,
-  ]);
+  }, [refreshRevision, resourceRevision, selectedModule, selectedOperationId]);
 
-  const selectedRunId = Number(searchParams.get("run"));
-  const selectedRun =
-    runs.operationId === selectedOperationId
-      ? runs.runs.find((run) => run.operation_run_id === selectedRunId)
+  const selectedRunID = Number(searchParams.get("run"));
+  useEffect(() => {
+    if (
+      !selectedModule ||
+      !Number.isSafeInteger(selectedRunID) ||
+      selectedRunID <= 0
+    ) {
+      return;
+    }
+    let active = true;
+    const loadRunDetail = async () => {
+      setRunDetail({
+        loading: true,
+        operationId: selectedOperationId,
+        runId: selectedRunID,
+      });
+      const result = await selectedModule.loadRun(selectedRunID);
+      if (!active) {
+        return;
+      }
+      setRunDetail(
+        result.run
+          ? {
+              loading: false,
+              operationId: selectedOperationId,
+              run: result.run,
+              runId: selectedRunID,
+            }
+          : {
+              errorMessage: apiErrorMessage(
+                result.error,
+                "Run detail could not be loaded.",
+              ),
+              loading: false,
+              operationId: selectedOperationId,
+              runId: selectedRunID,
+            },
+      );
+    };
+    void loadRunDetail();
+    return () => {
+      active = false;
+    };
+  }, [selectedModule, selectedOperationId, selectedRunID]);
+  const selectedRunDetailState =
+    runDetail.operationId === selectedOperationId &&
+    runDetail.runId === selectedRunID
+      ? runDetail
+      : initialRunDetailState;
+  const selectedRunDetail =
+    selectedRunDetailState.run &&
+    selectedRunDetailState.run.operation_id === selectedOperationId &&
+    selectedRunDetailState.run.operation_run_id === selectedRunID
+      ? selectedRunDetailState.run
       : undefined;
   const currentPageCount = pageCount(runs.totalCount, pageSize);
 
-  const setOperation = (operationId: string) => {
+  const setOperation = (operationId: BackgroundOperationId) => {
     setActionErrorMessage(undefined);
+    setRunDetail(initialRunDetailState);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set("operation", operationId);
@@ -469,6 +386,7 @@ export const StatusOperations = ({
   };
 
   const setPage = (nextPage: number) => {
+    setRunDetail(initialRunDetailState);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set("runsPage", String(nextPage));
@@ -479,6 +397,7 @@ export const StatusOperations = ({
   };
 
   const setPageSize = (nextPageSize: number) => {
+    setRunDetail(initialRunDetailState);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set("runsPage", "1");
@@ -488,7 +407,7 @@ export const StatusOperations = ({
     });
   };
 
-  const selectRun = (run: OperationRunResponse) => {
+  const selectRun = (run: BackgroundOperationRun) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set("run", String(run.operation_run_id));
@@ -497,12 +416,12 @@ export const StatusOperations = ({
   };
 
   const startSelectedOperation = async () => {
-    if (!selectedDefinition) {
+    if (!selectedModule) {
       return;
     }
     setActionErrorMessage(undefined);
     setStartingOperation(true);
-    const result = await selectedDefinition.start();
+    const result = await selectedModule.start();
     setStartingOperation(false);
     if (result.error) {
       setActionErrorMessage(
@@ -522,11 +441,6 @@ export const StatusOperations = ({
     }
   };
 
-  const renderRunDetail = (run: OperationRunResponse): ReactNode => {
-    const detail = operationDefinitions[run.operation_id]?.detail;
-    return detail ? detail(run) : <GenericOperationRunDetail run={run} />;
-  };
-
   return (
     <Card className="min-h-0" data-testid="status-operations">
       <CardHeader className="gap-4">
@@ -534,7 +448,7 @@ export const StatusOperations = ({
           <div>
             <CardTitle>Background operations</CardTitle>
           </div>
-          {selectedDefinition ? (
+          {selectedModule ? (
             <Button
               type="button"
               onClick={() => {
@@ -556,7 +470,9 @@ export const StatusOperations = ({
           </label>
           <Select
             value={selectedOperationId}
-            onValueChange={setOperation}
+            onValueChange={(operationID) =>
+              setOperation(operationID as BackgroundOperationId)
+            }
             disabled={
               operations.loading || operations.operationIds.length === 0
             }
@@ -567,7 +483,7 @@ export const StatusOperations = ({
             <SelectContent>
               {operations.operationIds.map((operationId) => (
                 <SelectItem key={operationId} value={operationId}>
-                  {operationTitle(operationId)}
+                  {operationLabel(operationId)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -637,12 +553,15 @@ export const StatusOperations = ({
             >
               <thead className="font-heading bg-[var(--color-class-transfer-bright)] text-xs uppercase">
                 <tr>
-                  <th className="w-[42%] px-3 py-2 md:w-[28%]">Started</th>
-                  <th className="hidden w-[36%] px-3 py-2 md:table-cell">
+                  <th className="w-[34%] px-3 py-2 md:w-[24%]">Started</th>
+                  <th className="hidden w-[30%] px-3 py-2 md:table-cell">
                     Finished / duration
                   </th>
-                  <th className="w-[34%] px-3 py-2 md:w-[20%]">Outcome</th>
-                  <th className="w-[24%] px-3 py-2 text-right md:w-[16%]">
+                  <th className="hidden w-[16%] px-3 py-2 md:table-cell">
+                    Trigger
+                  </th>
+                  <th className="w-[26%] px-3 py-2 md:w-[16%]">Outcome</th>
+                  <th className="w-[20%] px-3 py-2 text-right md:w-[14%]">
                     Run
                   </th>
                 </tr>
@@ -653,8 +572,7 @@ export const StatusOperations = ({
                 ) : null}
                 {runs.operationId === selectedOperationId
                   ? runs.runs.map((run, index) => {
-                      const selected =
-                        run.operation_run_id === selectedRun?.operation_run_id;
+                      const selected = run.operation_run_id === selectedRunID;
                       return (
                         <tr
                           key={run.operation_run_id}
@@ -679,9 +597,12 @@ export const StatusOperations = ({
                           <td className="hidden truncate px-3 py-3 font-mono md:table-cell">
                             {formatFinished(run)}
                           </td>
+                          <td className="hidden px-3 py-3 font-mono md:table-cell">
+                            {run.trigger}
+                          </td>
                           <td className="px-3 py-3">
-                            <Badge variant={runStatusVariant(run.status)}>
-                              {run.status}
+                            <Badge variant={runStatusVariant(run.outcome)}>
+                              {run.outcome}
                             </Badge>
                           </td>
                           <td className="px-3 py-3 text-right font-mono">
@@ -776,42 +697,23 @@ export const StatusOperations = ({
             </div>
           </CardContent>
 
-          {selectedRun ? (
+          {selectedRunDetailState.errorMessage ? (
             <CardContent className="pt-0">
-              <div
-                className="bg-muted border-2 border-[var(--border-ink)] p-4"
-                data-testid="operation-run-detail"
-              >
-                <div className="mb-4 flex items-center justify-between gap-3 border-b-2 border-[var(--hairline)] pb-3">
-                  <div>
-                    <p className="font-heading text-sm uppercase">Run detail</p>
-                    <p className="text-muted-foreground mt-1 font-mono text-sm">
-                      {operationTitle(selectedRun.operation_id)} · run{" "}
-                      {selectedRun.operation_run_id}
-                    </p>
-                  </div>
-                  <Badge variant={runStatusVariant(selectedRun.status)}>
-                    {selectedRun.status}
-                  </Badge>
-                </div>
-                <OperationDefinitionList>
-                  <OperationDefinitionField
-                    label="Started"
-                    value={formatTimestamp(selectedRun.started_at)}
-                  />
-                  <OperationDefinitionField
-                    label="Finished"
-                    value={formatFinished(selectedRun)}
-                  />
-                  <OperationDefinitionField
-                    label="Error"
-                    value={selectedRun.error ?? "None"}
-                  />
-                </OperationDefinitionList>
-                <div className="mt-5 border-t-2 border-[var(--hairline)] pt-4">
-                  {renderRunDetail(selectedRun)}
-                </div>
-              </div>
+              <StatusError message={selectedRunDetailState.errorMessage} />
+            </CardContent>
+          ) : null}
+          {selectedRunDetailState.loading ? (
+            <CardContent className="pt-0">
+              <Skeleton className="h-48 w-full" />
+            </CardContent>
+          ) : null}
+          {selectedRunDetail && selectedModule ? (
+            <CardContent className="pt-0">
+              <RunDetailFrame
+                label={operationLabel(selectedRunDetail.operation_id)}
+                moduleDetail={selectedModule.renderRunDetail(selectedRunDetail)}
+                run={selectedRunDetail}
+              />
             </CardContent>
           ) : null}
         </>
@@ -856,6 +758,7 @@ const StatusError = ({ message }: { readonly message: string }) => (
 
 const runSkeletonCellClasses = [
   "px-3 py-3",
+  "hidden px-3 py-3 md:table-cell",
   "hidden px-3 py-3 md:table-cell",
   "px-3 py-3",
   "px-3 py-3",

@@ -42,7 +42,7 @@ func (c *Client) PollExchangeRateLoadingStatusRevision(revision int64) *httpclie
 }
 
 // PollExchangeRateLoadingRun waits for a concrete operation run through the public REST API.
-func (c *Client) PollExchangeRateLoadingRun(runID int64) *httpclient.OperationRunResponse {
+func (c *Client) PollExchangeRateLoadingRun(runID int64) *httpclient.ExchangeRateLoadingRun {
 	c.t.Helper()
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -50,7 +50,7 @@ func (c *Client) PollExchangeRateLoadingRun(runID int64) *httpclient.OperationRu
 		response, err := c.REST().GetExchangeRateLoadingRunWithResponse(context.Background(), runID)
 		requireNoClientError(c, "get exchange-rate loading run", err)
 		requireStatus(c, "get exchange-rate loading run", response.StatusCode(), http.StatusOK, response.Body)
-		if response.JSON200.Status != httpclient.OperationRunResponseStatusRunning {
+		if string(response.JSON200.Outcome) != "running" {
 			return response.JSON200
 		}
 		if time.Now().After(deadline) {
@@ -94,7 +94,7 @@ func (c *Client) PollDatabaseBackupStatusRevision(revision int64) *httpclient.Da
 }
 
 // PollDatabaseBackupRun waits for a concrete operation run through the public REST API.
-func (c *Client) PollDatabaseBackupRun(runID int64) *httpclient.OperationRunResponse {
+func (c *Client) PollDatabaseBackupRun(runID int64) *httpclient.DatabaseBackupRun {
 	c.t.Helper()
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -102,7 +102,7 @@ func (c *Client) PollDatabaseBackupRun(runID int64) *httpclient.OperationRunResp
 		response, err := c.REST().GetDatabaseBackupRunWithResponse(context.Background(), runID)
 		requireNoClientError(c, "get database backup run", err)
 		requireStatus(c, "get database backup run", response.StatusCode(), http.StatusOK, response.Body)
-		if response.JSON200.Status != httpclient.OperationRunResponseStatusRunning {
+		if string(response.JSON200.Outcome) != "running" {
 			return response.JSON200
 		}
 		if time.Now().After(deadline) {

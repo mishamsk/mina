@@ -22,78 +22,35 @@ func (s *strictServer) ListBackgroundOperations(
 	}
 	for _, operation := range operations {
 		response.Operations = append(response.Operations, openapi.BackgroundOperationSummary{
-			OperationId: openapi.BackgroundOperationSummaryOperationId(operation.ID),
-			StatusUrl:   operationStatusURL(operation.ID),
+			OperationId: openapi.BackgroundOperationId(operation.ID),
+			Links:       operationLinks(operation.ID),
 		})
 	}
 
 	return openapi.ListBackgroundOperations200JSONResponse(response), nil
 }
 
-func (s *strictServer) ListBackgroundOperationRuns(
+func (s *strictServer) ListBackgroundOperationRunEnvelopes(
 	ctx context.Context,
-	request openapi.ListBackgroundOperationRunsRequestObject,
-) (openapi.ListBackgroundOperationRunsResponseObject, error) {
-	response, err := s.listOperationRuns(ctx, operationruns.OperationID(request.OperationId), request.Params.Limit, request.Params.Offset)
-	if err != nil {
-		return nil, err
+	request openapi.ListBackgroundOperationRunEnvelopesRequestObject,
+) (openapi.ListBackgroundOperationRunEnvelopesResponseObject, error) {
+	var operationID *operationruns.OperationID
+	if request.Params.OperationId != nil {
+		value := operationruns.OperationID(*request.Params.OperationId)
+		operationID = &value
 	}
-
-	return openapi.ListBackgroundOperationRuns200JSONResponse(response), nil
-}
-
-func (s *strictServer) ListExchangeRateLoadingRuns(
-	ctx context.Context,
-	request openapi.ListExchangeRateLoadingRunsRequestObject,
-) (openapi.ListExchangeRateLoadingRunsResponseObject, error) {
-	response, err := s.listOperationRuns(
-		ctx,
-		operationruns.ExchangeRateLoadingOperationID,
-		request.Params.Limit,
-		request.Params.Offset,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return openapi.ListExchangeRateLoadingRuns200JSONResponse(response), nil
-}
-
-func (s *strictServer) ListDatabaseBackupRuns(
-	ctx context.Context,
-	request openapi.ListDatabaseBackupRunsRequestObject,
-) (openapi.ListDatabaseBackupRunsResponseObject, error) {
-	response, err := s.listOperationRuns(
-		ctx,
-		operationruns.DatabaseBackupOperationID,
-		request.Params.Limit,
-		request.Params.Offset,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return openapi.ListDatabaseBackupRuns200JSONResponse(response), nil
-}
-
-func (s *strictServer) listOperationRuns(
-	ctx context.Context,
-	operationID operationruns.OperationID,
-	limit *int,
-	offset *int,
-) (openapi.OperationRunListResponse, error) {
-	runs, err := s.deps.Operations.ListRuns(ctx, operationID, operationruns.ListRunsOptions{
-		Limit:  limit,
-		Offset: offsetParam(offset),
+	runs, err := s.deps.Operations.ListRunEnvelopes(ctx, operationID, operationruns.ListRunsOptions{
+		Limit:  request.Params.Limit,
+		Offset: offsetParam(request.Params.Offset),
 	})
 	if err != nil {
-		return openapi.OperationRunListResponse{}, err
+		return nil, err
 	}
 
-	return openapi.OperationRunListResponse{
-		Runs:       operationRunAPIResponses(runs.Items),
+	return openapi.ListBackgroundOperationRunEnvelopes200JSONResponse(openapi.BackgroundOperationRunListResponse{
+		Runs:       backgroundOperationRunAPIResponses(runs.Items),
 		TotalCount: runs.TotalCount,
-	}, nil
+	}), nil
 }
 
 func (s *strictServer) GetExchangeRateLoadingStatus(
@@ -183,7 +140,7 @@ func (s *strictServer) GetExchangeRateLoadingRun(
 		return nil, err
 	}
 
-	return openapi.GetExchangeRateLoadingRun200JSONResponse(operationRunAPIResponse(run)), nil
+	return openapi.GetExchangeRateLoadingRun200JSONResponse(exchangeRateLoadingRunAPIResponse(run)), nil
 }
 
 func (s *strictServer) GetDatabaseBackupRun(
@@ -195,31 +152,52 @@ func (s *strictServer) GetDatabaseBackupRun(
 		return nil, err
 	}
 
-	return openapi.GetDatabaseBackupRun200JSONResponse(operationRunAPIResponse(run)), nil
+	return openapi.GetDatabaseBackupRun200JSONResponse(databaseBackupRunAPIResponse(run)), nil
 }
 
-func operationRunAPIResponse(run operationruns.OperationRun) openapi.OperationRunResponse {
-	return openapi.OperationRunResponse{
+func backgroundOperationRunAPIResponse(run operationruns.RunEnvelope) openapi.BackgroundOperationRun {
+	return openapi.BackgroundOperationRun{
 		OperationRunId: run.ID,
-		OperationId:    openapi.OperationRunResponseOperationId(run.OperationID),
-		Status:         operationRunStatus(run.Status),
+		OperationId:    openapi.BackgroundOperationId(run.OperationID),
+		Outcome:        openapi.BackgroundOperationRunOutcome(run.Status),
+		Trigger:        openapi.BackgroundOperationRunTrigger(run.Trigger),
 		StartedAt:      run.StartedAt,
 		CompletedAt:    run.CompletedAt,
 		Error:          run.Error,
 	}
 }
 
-func operationRunAPIResponses(runs []operationruns.OperationRun) []openapi.OperationRunResponse {
-	responses := make([]openapi.OperationRunResponse, 0, len(runs))
+func backgroundOperationRunAPIResponses(runs []operationruns.RunEnvelope) []openapi.BackgroundOperationRun {
+	responses := make([]openapi.BackgroundOperationRun, 0, len(runs))
 	for _, run := range runs {
-		responses = append(responses, operationRunAPIResponse(run))
+		responses = append(responses, backgroundOperationRunAPIResponse(run))
 	}
 
 	return responses
 }
 
-func operationRunStatus(status operationruns.RunStatus) openapi.OperationRunResponseStatus {
-	return openapi.OperationRunResponseStatus(status)
+func exchangeRateLoadingRunAPIResponse(run operationruns.ExchangeRateLoadingRun) openapi.ExchangeRateLoadingRun {
+	return openapi.ExchangeRateLoadingRun{
+		OperationRunId: run.ID,
+		OperationId:    openapi.ExchangeRateLoadingRunOperationId(run.OperationID),
+		Outcome:        openapi.ExchangeRateLoadingRunOutcome(run.Status),
+		Trigger:        openapi.ExchangeRateLoadingRunTrigger(run.Trigger),
+		StartedAt:      run.StartedAt,
+		CompletedAt:    run.CompletedAt,
+		Error:          run.Error,
+	}
+}
+
+func databaseBackupRunAPIResponse(run operationruns.DatabaseBackupRun) openapi.DatabaseBackupRun {
+	return openapi.DatabaseBackupRun{
+		OperationRunId: run.ID,
+		OperationId:    openapi.DatabaseBackupRunOperationId(run.OperationID),
+		Outcome:        openapi.DatabaseBackupRunOutcome(run.Status),
+		Trigger:        openapi.DatabaseBackupRunTrigger(run.Trigger),
+		StartedAt:      run.StartedAt,
+		CompletedAt:    run.CompletedAt,
+		Error:          run.Error,
+	}
 }
 
 func exchangeRateLoadingRunURL(runID int64) string {
@@ -230,13 +208,23 @@ func databaseBackupRunURL(runID int64) string {
 	return fmt.Sprintf("/api/background-operations/database-backup/runs/%d", runID)
 }
 
-func operationStatusURL(operationID operationruns.OperationID) string {
+func operationLinks(operationID operationruns.OperationID) openapi.BackgroundOperationLinks {
 	switch operationID {
 	case operationruns.ExchangeRateLoadingOperationID:
-		return "/api/background-operations/exchange-rate-loading/status"
+		return openapi.BackgroundOperationLinks{
+			Status:   "/api/background-operations/exchange-rate-loading/status",
+			StartRun: "/api/background-operations/exchange-rate-loading/runs",
+			Run:      "/api/background-operations/exchange-rate-loading/runs/{operation_run_id}",
+			Runs:     "/api/background-operations/runs?operation_id=exchange-rate-loading",
+		}
 	case operationruns.DatabaseBackupOperationID:
-		return "/api/background-operations/database-backup/status"
+		return openapi.BackgroundOperationLinks{
+			Status:   "/api/background-operations/database-backup/status",
+			StartRun: "/api/background-operations/database-backup/runs",
+			Run:      "/api/background-operations/database-backup/runs/{operation_run_id}",
+			Runs:     "/api/background-operations/runs?operation_id=database-backup",
+		}
 	default:
-		return ""
+		return openapi.BackgroundOperationLinks{}
 	}
 }

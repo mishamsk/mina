@@ -21,6 +21,7 @@ type operationRunRow struct {
 	RunID       int64
 	OperationID string
 	Status      string
+	Trigger     string
 	StartedAt   time.Time
 	CompletedAt *time.Time
 	Error       *string
@@ -44,10 +45,10 @@ func NewOperationRunRepository(ctx context.Context, db *AppDB) (operationruns.Re
 	return repo, nil
 }
 
-func (r *operationRunRepository) CreateRun(ctx context.Context, run operationruns.OperationRun) (operationruns.OperationRun, error) {
+func (r *operationRunRepository) CreateRun(ctx context.Context, run operationruns.RunEnvelope) (operationruns.RunEnvelope, error) {
 	runID, err := r.createRun(ctx, operationRunToRow(run))
 	if err != nil {
-		return operationruns.OperationRun{}, err
+		return operationruns.RunEnvelope{}, err
 	}
 
 	run.ID = runID
@@ -55,76 +56,82 @@ func (r *operationRunRepository) CreateRun(ctx context.Context, run operationrun
 	return run, nil
 }
 
-func (r *operationRunRepository) GetRun(ctx context.Context, runID int64) (operationruns.OperationRun, error) {
+func (r *operationRunRepository) GetRun(ctx context.Context, runID int64) (operationruns.RunEnvelope, error) {
 	row, err := r.getRun(ctx, runID)
 	if err != nil {
-		return operationruns.OperationRun{}, mapOperationStoreError(err)
+		return operationruns.RunEnvelope{}, mapOperationStoreError(err)
 	}
 
 	return operationRunFromRow(row), nil
 }
 
-func (r *operationRunRepository) ListRuns(
+func (r *operationRunRepository) ListRunEnvelopes(
 	ctx context.Context,
-	operationID operationruns.OperationID,
+	operationID *operationruns.OperationID,
 	opts operationruns.ListRunsOptions,
-) (services.PaginatedList[operationruns.OperationRun], error) {
+) (services.PaginatedList[operationruns.RunEnvelope], error) {
+	where := "WHERE app_id = ?"
+	args := []any{r.appID}
+	if operationID != nil {
+		where += " AND operation_id = ?"
+		args = append(args, *operationID)
+	}
+
 	var totalCount int64
 	if err := r.db.query().QueryRowContext(
 		ctx,
 		`SELECT COUNT(*)
 FROM `+operationRunTable()+`
-WHERE app_id = ? AND operation_id = ?`,
-		r.appID,
-		operationID,
+`+where,
+		args...,
 	).Scan(&totalCount); err != nil {
-		return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("count operation runs: %w", err)
+		return services.PaginatedList[operationruns.RunEnvelope]{}, fmt.Errorf("count operation runs: %w", err)
 	}
 
-	query := `SELECT operation_run_id, operation_id, status, started_at, completed_at, error
+	query := `SELECT operation_run_id, operation_id, status, trigger, started_at, completed_at, error
 FROM ` + operationRunTable() + `
-WHERE app_id = ? AND operation_id = ?
+` + where + `
 ORDER BY started_at DESC, operation_run_id DESC`
-	args := []any{r.appID, operationID}
 	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
 
 	rows, err := r.db.query().QueryContext(ctx, query, args...)
 	if err != nil {
-		return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("list operation runs: %w", err)
+		return services.PaginatedList[operationruns.RunEnvelope]{}, fmt.Errorf("list operation runs: %w", err)
 	}
 
-	runs := []operationruns.OperationRun{}
+	runs := []operationruns.RunEnvelope{}
 	for rows.Next() {
 		row := operationRunRow{}
 		if err := rows.Scan(
 			&row.RunID,
 			&row.OperationID,
 			&row.Status,
+			&row.Trigger,
 			&row.StartedAt,
 			&row.CompletedAt,
 			&row.Error,
 		); err != nil {
-			return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("scan operation run: %w", err)
+			return services.PaginatedList[operationruns.RunEnvelope]{}, fmt.Errorf("scan operation run: %w", err)
 		}
 		runs = append(runs, operationRunFromRow(row))
 	}
 	if err := rows.Err(); err != nil {
 		if closeErr := rows.Close(); closeErr != nil {
-			return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("iterate operation runs: %w; close operation run rows: %w", err, closeErr)
+			return services.PaginatedList[operationruns.RunEnvelope]{}, fmt.Errorf("iterate operation runs: %w; close operation run rows: %w", err, closeErr)
 		}
-		return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("iterate operation runs: %w", err)
+		return services.PaginatedList[operationruns.RunEnvelope]{}, fmt.Errorf("iterate operation runs: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return services.PaginatedList[operationruns.OperationRun]{}, fmt.Errorf("close operation run rows: %w", err)
+		return services.PaginatedList[operationruns.RunEnvelope]{}, fmt.Errorf("close operation run rows: %w", err)
 	}
 
-	return services.PaginatedList[operationruns.OperationRun]{
+	return services.PaginatedList[operationruns.RunEnvelope]{
 		Items:      runs,
 		TotalCount: totalCount,
 	}, nil
 }
 
-func (r *operationRunRepository) FinishRun(ctx context.Context, run operationruns.OperationRun) error {
+func (r *operationRunRepository) FinishRun(ctx context.Context, run operationruns.RunEnvelope) error {
 	if run.CompletedAt == nil {
 		return fmt.Errorf("operation run %d is missing completed_at", run.ID)
 	}
@@ -135,7 +142,7 @@ func (r *operationRunRepository) FinishRun(ctx context.Context, run operationrun
 func (r *operationRunRepository) RunStats(
 	ctx context.Context,
 	operationID operationruns.OperationID,
-) (int64, *operationruns.OperationRun, bool, error) {
+) (int64, *operationruns.RunEnvelope, bool, error) {
 	count, row, running, err := r.runStats(ctx, string(operationID))
 	if err != nil {
 		return 0, nil, false, mapOperationStoreError(err)
@@ -148,22 +155,24 @@ func (r *operationRunRepository) RunStats(
 	return count, &run, running, nil
 }
 
-func operationRunFromRow(row operationRunRow) operationruns.OperationRun {
-	return operationruns.OperationRun{
+func operationRunFromRow(row operationRunRow) operationruns.RunEnvelope {
+	return operationruns.RunEnvelope{
 		ID:          row.RunID,
 		OperationID: operationruns.OperationID(row.OperationID),
 		Status:      operationruns.RunStatus(row.Status),
+		Trigger:     operationruns.RunTrigger(row.Trigger),
 		StartedAt:   row.StartedAt,
 		CompletedAt: row.CompletedAt,
 		Error:       row.Error,
 	}
 }
 
-func operationRunToRow(run operationruns.OperationRun) operationRunRow {
+func operationRunToRow(run operationruns.RunEnvelope) operationRunRow {
 	return operationRunRow{
 		RunID:       run.ID,
 		OperationID: string(run.OperationID),
 		Status:      string(run.Status),
+		Trigger:     string(run.Trigger),
 		StartedAt:   run.StartedAt,
 		CompletedAt: run.CompletedAt,
 		Error:       run.Error,
@@ -217,6 +226,7 @@ func (r *operationRunRepository) prepare(ctx context.Context) error {
 	operation_run_id BIGINT NOT NULL,
 	operation_id TEXT NOT NULL,
 	status `+operationRunStatusType()+` NOT NULL,
+	trigger TEXT NOT NULL,
 	started_at TIMESTAMP NOT NULL,
 	completed_at TIMESTAMP,
 	error TEXT,
@@ -238,14 +248,16 @@ func (r *operationRunRepository) createRun(ctx context.Context, row operationRun
 	operation_run_id,
 	operation_id,
 	status,
+	trigger,
 	started_at,
 	completed_at,
 	error
-) VALUES (?, `+operationRunSequenceNextVal()+`, ?, ?, ?, ?, ?)
+) VALUES (?, `+operationRunSequenceNextVal()+`, ?, ?, ?, ?, ?, ?)
 RETURNING operation_run_id`,
 		r.appID,
 		row.OperationID,
 		row.Status,
+		row.Trigger,
 		row.StartedAt,
 		row.CompletedAt,
 		row.Error,
@@ -260,7 +272,7 @@ func (r *operationRunRepository) getRun(ctx context.Context, runID int64) (opera
 	row := operationRunRow{}
 	if err := r.db.query().QueryRowContext(
 		ctx,
-		`SELECT operation_run_id, operation_id, status, started_at, completed_at, error
+		`SELECT operation_run_id, operation_id, status, trigger, started_at, completed_at, error
 FROM `+operationRunTable()+`
 WHERE app_id = ? AND operation_run_id = ?`,
 		r.appID,
@@ -269,6 +281,7 @@ WHERE app_id = ? AND operation_run_id = ?`,
 		&row.RunID,
 		&row.OperationID,
 		&row.Status,
+		&row.Trigger,
 		&row.StartedAt,
 		&row.CompletedAt,
 		&row.Error,
@@ -339,7 +352,7 @@ WHERE app_id = ? AND operation_id = ? AND status != 'running'`,
 	row := operationRunRow{}
 	if err := r.db.query().QueryRowContext(
 		ctx,
-		`SELECT operation_run_id, operation_id, status, started_at, completed_at, error
+		`SELECT operation_run_id, operation_id, status, trigger, started_at, completed_at, error
 FROM `+operationRunTable()+`
 WHERE app_id = ? AND operation_id = ? AND status != 'running'
 ORDER BY completed_at DESC, operation_run_id DESC
@@ -350,6 +363,7 @@ LIMIT 1`,
 		&row.RunID,
 		&row.OperationID,
 		&row.Status,
+		&row.Trigger,
 		&row.StartedAt,
 		&row.CompletedAt,
 		&row.Error,

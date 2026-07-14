@@ -185,7 +185,7 @@ func (r *Runner) Start() {
 			r.wg.Add(1)
 			go func() {
 				defer r.wg.Done()
-				_, _ = r.run(r.ctx, op.withStartupRun())
+				_, _ = r.run(r.ctx, op.withStartupRun(), operationruns.RunTriggerStartup)
 			}()
 		}
 		if op.schedule != nil {
@@ -206,21 +206,21 @@ func (r *Runner) Close() {
 	r.wg.Wait()
 }
 
-// Trigger starts one registered operation asynchronously and returns an already recorded run.
-func (r *Runner) Trigger(ctx context.Context, operationID operationruns.OperationID) (operationruns.OperationRun, error) {
+// Trigger starts one registered operation asynchronously and returns an already recorded run envelope.
+func (r *Runner) Trigger(ctx context.Context, operationID operationruns.OperationID) (operationruns.RunEnvelope, error) {
 	if err := ctx.Err(); err != nil {
-		return operationruns.OperationRun{}, err
+		return operationruns.RunEnvelope{}, err
 	}
 	if err := r.ctx.Err(); err != nil {
-		return operationruns.OperationRun{}, err
+		return operationruns.RunEnvelope{}, err
 	}
 	op, ok := r.operations[operationID]
 	if !ok {
-		return operationruns.OperationRun{}, fmt.Errorf("unknown background operation %s", operationID)
+		return operationruns.RunEnvelope{}, fmt.Errorf("unknown background operation %s", operationID)
 	}
-	run, err := r.start(ctx, op)
+	run, err := r.start(ctx, op, operationruns.RunTriggerManual)
 	if err != nil {
-		return operationruns.OperationRun{}, err
+		return operationruns.RunEnvelope{}, err
 	}
 	if run.Status == operationruns.RunStatusRunning {
 		r.wg.Add(1)
@@ -245,7 +245,7 @@ func (r *Runner) runRecurring(ctx context.Context, op registeredOperation) {
 		}
 		now := r.clock.Now().UTC()
 		if !now.Before(next) {
-			_, _ = r.run(ctx, op)
+			_, _ = r.run(ctx, op, operationruns.RunTriggerScheduled)
 			next = op.schedule.Next(now)
 			if next.IsZero() {
 				r.log("%s schedule has no next matching time\n", op.ID)
@@ -277,10 +277,10 @@ func (r *Runner) waitUntil(ctx context.Context, next time.Time) bool {
 	}
 }
 
-func (r *Runner) run(ctx context.Context, op registeredOperation) (operationruns.OperationRun, error) {
-	started, err := r.start(ctx, op)
+func (r *Runner) run(ctx context.Context, op registeredOperation, trigger operationruns.RunTrigger) (operationruns.RunEnvelope, error) {
+	started, err := r.start(ctx, op, trigger)
 	if err != nil {
-		return operationruns.OperationRun{}, err
+		return operationruns.RunEnvelope{}, err
 	}
 	if started.Status != operationruns.RunStatusRunning {
 		return started, nil
@@ -289,14 +289,14 @@ func (r *Runner) run(ctx context.Context, op registeredOperation) (operationruns
 	return r.finish(ctx, op, started)
 }
 
-func (r *Runner) start(ctx context.Context, op registeredOperation) (operationruns.OperationRun, error) {
+func (r *Runner) start(ctx context.Context, op registeredOperation, trigger operationruns.RunTrigger) (operationruns.RunEnvelope, error) {
 	if !r.reserve(op.Key) {
-		return r.runs.RecordRunSkip(ctx, op.ID, errAlreadyRunning)
+		return r.runs.RecordRunSkip(ctx, op.ID, trigger, errAlreadyRunning)
 	}
-	started, err := r.runs.RecordRunStart(ctx, op.ID)
+	started, err := r.runs.RecordRunStart(ctx, op.ID, trigger)
 	if err != nil {
 		r.release(op.Key)
-		return operationruns.OperationRun{}, err
+		return operationruns.RunEnvelope{}, err
 	}
 
 	return started, nil
@@ -305,8 +305,8 @@ func (r *Runner) start(ctx context.Context, op registeredOperation) (operationru
 func (r *Runner) finish(
 	ctx context.Context,
 	op registeredOperation,
-	started operationruns.OperationRun,
-) (operationruns.OperationRun, error) {
+	started operationruns.RunEnvelope,
+) (operationruns.RunEnvelope, error) {
 	defer r.release(op.Key)
 
 	runCtx, cancel := context.WithTimeout(ctx, op.Timeout)
@@ -324,7 +324,7 @@ func (r *Runner) finish(
 
 	run, finishErr := r.runs.RecordRunFailure(finishCtx, started, err)
 	if finishErr != nil {
-		return operationruns.OperationRun{}, finishErr
+		return operationruns.RunEnvelope{}, finishErr
 	}
 	r.log("%s operation failed: %s\n", op.ID, err.Error())
 

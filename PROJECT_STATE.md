@@ -20,7 +20,7 @@
   - Transaction semantic shape validation with derived transaction class, summary titles, component summaries, and display amounts in REST responses.
   - Paginated journal-record search with account-FQN prefix register filtering, plus account-record search by account ID.
   - Bulk journal-record category, tag, account, and status updates.
-  - Background operation status, newest-first paged run listings and lookup, manual exchange-rate loading trigger, and manual database backup trigger flows.
+  - Background operation status, concrete typed run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows; one newest-first paged envelope listing spans all operations with an optional operation filter, while operation discovery returns links to each concrete API.
   - OpenAPI discovery through `GET /api/openapi.json`.
 - Implemented runtime/demo behavior:
   - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, and localhost-only publishing by default.

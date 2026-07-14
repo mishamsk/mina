@@ -161,6 +161,13 @@ test("status page navigates registered operation runs", async ({ page }) => {
   };
 
   await page.goto("/status");
+  const backupRunResponse = await page.request.post(
+    "/api/background-operations/database-backup/runs",
+  );
+  expect(backupRunResponse.status()).toBe(202);
+  const backupRun = (await backupRunResponse.json()) as {
+    readonly operation_run_id: number;
+  };
 
   const operationSelect = page.getByRole("combobox", { name: "Operation" });
   await operationSelect.click();
@@ -170,6 +177,29 @@ test("status page navigates registered operation runs", async ({ page }) => {
   await expect(page.getByTestId("select-option-database-backup")).toBeVisible();
   await page.getByTestId("select-option-database-backup").click();
   await expect(page).toHaveURL(/operation=database-backup/);
+
+  const backupRunsTable = page.getByTestId("operation-runs-table");
+  const backupRows = backupRunsTable.locator("tbody tr");
+  await expect
+    .poll(async () => await backupRows.count(), { timeout: 10000 })
+    .toBeGreaterThan(0);
+  await expect(
+    backupRunsTable.getByRole("columnheader", { name: "Started" }),
+  ).toBeVisible();
+  await expect(
+    backupRunsTable.getByRole("columnheader", { name: "Finished / duration" }),
+  ).toBeVisible();
+  await expect(
+    backupRunsTable.getByRole("columnheader", { name: "Trigger" }),
+  ).toBeVisible();
+  await expect(
+    backupRunsTable.getByRole("columnheader", { name: "Outcome" }),
+  ).toBeVisible();
+  await backupRows.first().click();
+  const backupDetail = page.getByTestId("operation-run-detail");
+  await expect(backupDetail).toContainText("Database backup");
+  await expect(backupDetail).toContainText("Local database backup");
+  await expect(backupDetail).toContainText(String(backupRun.operation_run_id));
 
   await operationSelect.click();
   await page.getByTestId("select-option-exchange-rate-loading").click();

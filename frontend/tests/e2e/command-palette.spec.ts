@@ -504,6 +504,6 @@ test("command palette surfaces database backup action result", async ({
   await page.getByRole("option", { name: "Run database backup" }).click();
   await backupRequest;
   await expect(page.getByRole("status")).toContainText(
-    "Database backup failed: backup file directory is not configured",
+    "Database backup started: run",
   );
 });

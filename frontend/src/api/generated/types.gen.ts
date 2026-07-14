@@ -491,8 +491,17 @@ export type BackgroundOperationListResponse = {
 };
 
 export type BackgroundOperationSummary = {
-    operation_id: 'exchange-rate-loading' | 'database-backup';
-    status_url: string;
+    operation_id: BackgroundOperationId;
+    links: BackgroundOperationLinks;
+};
+
+export type BackgroundOperationId = 'exchange-rate-loading' | 'database-backup';
+
+export type BackgroundOperationLinks = {
+    status: string;
+    start_run: string;
+    run: string;
+    runs: string;
 };
 
 export type ExchangeRateLoadingStatusResponse = {
@@ -533,17 +542,26 @@ export type OperationRunReferenceResponse = {
     status_url: string;
 };
 
-export type OperationRunResponse = {
+export type BackgroundOperationRun = {
     operation_run_id: number;
-    operation_id: 'exchange-rate-loading' | 'database-backup';
-    status: 'running' | 'succeeded' | 'failed' | 'skipped' | 'canceled';
+    operation_id: BackgroundOperationId;
+    outcome: 'running' | 'succeeded' | 'failed' | 'skipped' | 'canceled';
+    trigger: 'manual' | 'startup' | 'scheduled';
     started_at: string;
     completed_at?: string;
     error?: string | null;
 };
 
-export type OperationRunListResponse = {
-    runs: Array<OperationRunResponse>;
+export type ExchangeRateLoadingRun = BackgroundOperationRun & {
+    operation_id: 'exchange-rate-loading';
+};
+
+export type DatabaseBackupRun = BackgroundOperationRun & {
+    operation_id: 'database-backup';
+};
+
+export type BackgroundOperationRunListResponse = {
+    runs: Array<BackgroundOperationRun>;
     /**
      * Count of operation runs before limit and offset are applied.
      */
@@ -921,43 +939,38 @@ export type ListBackgroundOperationsResponses = {
 
 export type ListBackgroundOperationsResponse = ListBackgroundOperationsResponses[keyof ListBackgroundOperationsResponses];
 
-export type ListBackgroundOperationRunsData = {
+export type ListBackgroundOperationRunEnvelopesData = {
     body?: never;
-    path: {
-        operation_id: string;
-    };
+    path?: never;
     query?: {
+        operation_id?: BackgroundOperationId;
         limit?: number;
         offset?: number;
     };
-    url: '/api/background-operations/{operation_id}/runs';
+    url: '/api/background-operations/runs';
 };
 
-export type ListBackgroundOperationRunsErrors = {
+export type ListBackgroundOperationRunEnvelopesErrors = {
     /**
      * The request is invalid.
      */
     400: ErrorResponse;
-    /**
-     * The requested resource was not found.
-     */
-    404: ErrorResponse;
     /**
      * The route does not support the requested method.
      */
     405: ErrorResponse;
 };
 
-export type ListBackgroundOperationRunsError = ListBackgroundOperationRunsErrors[keyof ListBackgroundOperationRunsErrors];
+export type ListBackgroundOperationRunEnvelopesError = ListBackgroundOperationRunEnvelopesErrors[keyof ListBackgroundOperationRunEnvelopesErrors];
 
-export type ListBackgroundOperationRunsResponses = {
+export type ListBackgroundOperationRunEnvelopesResponses = {
     /**
-     * Newest-first operation run page.
+     * Newest-first background-operation run page.
      */
-    200: OperationRunListResponse;
+    200: BackgroundOperationRunListResponse;
 };
 
-export type ListBackgroundOperationRunsResponse = ListBackgroundOperationRunsResponses[keyof ListBackgroundOperationRunsResponses];
+export type ListBackgroundOperationRunEnvelopesResponse = ListBackgroundOperationRunEnvelopesResponses[keyof ListBackgroundOperationRunEnvelopesResponses];
 
 export type GetExchangeRateLoadingStatusData = {
     body?: never;
@@ -983,38 +996,6 @@ export type GetExchangeRateLoadingStatusResponses = {
 };
 
 export type GetExchangeRateLoadingStatusResponse = GetExchangeRateLoadingStatusResponses[keyof GetExchangeRateLoadingStatusResponses];
-
-export type ListExchangeRateLoadingRunsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        limit?: number;
-        offset?: number;
-    };
-    url: '/api/background-operations/exchange-rate-loading/runs';
-};
-
-export type ListExchangeRateLoadingRunsErrors = {
-    /**
-     * The request is invalid.
-     */
-    400: ErrorResponse;
-    /**
-     * The route does not support the requested method.
-     */
-    405: ErrorResponse;
-};
-
-export type ListExchangeRateLoadingRunsError = ListExchangeRateLoadingRunsErrors[keyof ListExchangeRateLoadingRunsErrors];
-
-export type ListExchangeRateLoadingRunsResponses = {
-    /**
-     * Newest-first operation run page.
-     */
-    200: OperationRunListResponse;
-};
-
-export type ListExchangeRateLoadingRunsResponse = ListExchangeRateLoadingRunsResponses[keyof ListExchangeRateLoadingRunsResponses];
 
 export type StartExchangeRateLoadingRunData = {
     body?: never;
@@ -1071,7 +1052,7 @@ export type GetExchangeRateLoadingRunResponses = {
     /**
      * Exchange-rate loading run status.
      */
-    200: OperationRunResponse;
+    200: ExchangeRateLoadingRun;
 };
 
 export type GetExchangeRateLoadingRunResponse = GetExchangeRateLoadingRunResponses[keyof GetExchangeRateLoadingRunResponses];
@@ -1100,38 +1081,6 @@ export type GetDatabaseBackupStatusResponses = {
 };
 
 export type GetDatabaseBackupStatusResponse = GetDatabaseBackupStatusResponses[keyof GetDatabaseBackupStatusResponses];
-
-export type ListDatabaseBackupRunsData = {
-    body?: never;
-    path?: never;
-    query?: {
-        limit?: number;
-        offset?: number;
-    };
-    url: '/api/background-operations/database-backup/runs';
-};
-
-export type ListDatabaseBackupRunsErrors = {
-    /**
-     * The request is invalid.
-     */
-    400: ErrorResponse;
-    /**
-     * The route does not support the requested method.
-     */
-    405: ErrorResponse;
-};
-
-export type ListDatabaseBackupRunsError = ListDatabaseBackupRunsErrors[keyof ListDatabaseBackupRunsErrors];
-
-export type ListDatabaseBackupRunsResponses = {
-    /**
-     * Newest-first operation run page.
-     */
-    200: OperationRunListResponse;
-};
-
-export type ListDatabaseBackupRunsResponse = ListDatabaseBackupRunsResponses[keyof ListDatabaseBackupRunsResponses];
 
 export type StartDatabaseBackupRunData = {
     body?: never;
@@ -1192,7 +1141,7 @@ export type GetDatabaseBackupRunResponses = {
     /**
      * Database backup run status.
      */
-    200: OperationRunResponse;
+    200: DatabaseBackupRun;
 };
 
 export type GetDatabaseBackupRunResponse = GetDatabaseBackupRunResponses[keyof GetDatabaseBackupRunResponses];

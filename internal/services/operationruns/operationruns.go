@@ -67,14 +67,37 @@ type DatabaseBackupStatus struct {
 	CompletedRunRevision int64
 }
 
-// OperationRun describes one operation invocation.
-type OperationRun struct {
+// RunTrigger identifies how one operation invocation was initiated.
+type RunTrigger string
+
+const (
+	// RunTriggerManual identifies an invocation started through a concrete manual API.
+	RunTriggerManual RunTrigger = "manual"
+	// RunTriggerStartup identifies an invocation started during runtime startup.
+	RunTriggerStartup RunTrigger = "startup"
+	// RunTriggerScheduled identifies an invocation started by its configured schedule.
+	RunTriggerScheduled RunTrigger = "scheduled"
+)
+
+// RunEnvelope describes fields shared by every operation invocation.
+type RunEnvelope struct {
 	ID          int64
 	OperationID OperationID
 	Status      RunStatus
+	Trigger     RunTrigger
 	StartedAt   time.Time
 	CompletedAt *time.Time
 	Error       *string
+}
+
+// ExchangeRateLoadingRun is the concrete exchange-rate loading run detail.
+type ExchangeRateLoadingRun struct {
+	RunEnvelope
+}
+
+// DatabaseBackupRun is the concrete database backup run detail.
+type DatabaseBackupRun struct {
+	RunEnvelope
 }
 
 // OperationConfig contains observable configuration for one registered operation.
@@ -91,11 +114,11 @@ type Config struct {
 
 // Repository stores background operation invocations.
 type Repository interface {
-	CreateRun(context.Context, OperationRun) (OperationRun, error)
-	GetRun(context.Context, int64) (OperationRun, error)
-	ListRuns(context.Context, OperationID, ListRunsOptions) (services.PaginatedList[OperationRun], error)
-	FinishRun(context.Context, OperationRun) error
-	RunStats(context.Context, OperationID) (int64, *OperationRun, bool, error)
+	CreateRun(context.Context, RunEnvelope) (RunEnvelope, error)
+	GetRun(context.Context, int64) (RunEnvelope, error)
+	ListRunEnvelopes(context.Context, *OperationID, ListRunsOptions) (services.PaginatedList[RunEnvelope], error)
+	FinishRun(context.Context, RunEnvelope) error
+	RunStats(context.Context, OperationID) (int64, *RunEnvelope, bool, error)
 }
 
 // ListRunsOptions controls operation-run page position.
@@ -106,8 +129,8 @@ type ListRunsOptions struct {
 
 // Trigger starts a registered operation through the background boundary.
 type Trigger interface {
-	// Trigger returns an already recorded OperationRun.
-	Trigger(context.Context, OperationID) (OperationRun, error)
+	// Trigger returns an already recorded run envelope.
+	Trigger(context.Context, OperationID) (RunEnvelope, error)
 }
 
 // Clock returns the current process time.
@@ -148,23 +171,23 @@ func (s *Service) List(context.Context) ([]OperationSummary, error) {
 	return summaries, nil
 }
 
-// ListRuns returns one newest-first page of runs for a registered operation.
-func (s *Service) ListRuns(
+// ListRunEnvelopes returns one newest-first page of run envelopes, optionally filtered by operation.
+func (s *Service) ListRunEnvelopes(
 	ctx context.Context,
-	operationID OperationID,
+	operationID *OperationID,
 	opts ListRunsOptions,
-) (services.PaginatedList[OperationRun], error) {
-	if !s.registeredOperation(operationID) {
-		return services.PaginatedList[OperationRun]{}, services.NotFound("background operation not found")
+) (services.PaginatedList[RunEnvelope], error) {
+	if operationID != nil && !s.registeredOperation(*operationID) {
+		return services.PaginatedList[RunEnvelope]{}, services.InvalidRequest("operation_id is not registered")
 	}
 	if opts.Limit != nil && *opts.Limit <= 0 {
-		return services.PaginatedList[OperationRun]{}, services.InvalidRequest("limit must be positive")
+		return services.PaginatedList[RunEnvelope]{}, services.InvalidRequest("limit must be positive")
 	}
 	if opts.Offset < 0 {
-		return services.PaginatedList[OperationRun]{}, services.InvalidRequest("offset must be non-negative")
+		return services.PaginatedList[RunEnvelope]{}, services.InvalidRequest("offset must be non-negative")
 	}
 
-	return s.repo.ListRuns(ctx, operationID, opts)
+	return s.repo.ListRunEnvelopes(ctx, operationID, opts)
 }
 
 // ExchangeRateLoadingStatus returns exchange-rate loading operation status.
@@ -212,46 +235,56 @@ func (s *Service) DatabaseBackupStatus(ctx context.Context) (DatabaseBackupStatu
 }
 
 // TriggerExchangeRateLoadingOperation triggers one asynchronous exchange-rate loading operation.
-func (s *Service) TriggerExchangeRateLoadingOperation(ctx context.Context) (OperationRun, error) {
+func (s *Service) TriggerExchangeRateLoadingOperation(ctx context.Context) (RunEnvelope, error) {
 	if s.trigger == nil {
-		return OperationRun{}, services.InvalidRequest("background operation trigger is not configured")
+		return RunEnvelope{}, services.InvalidRequest("background operation trigger is not configured")
 	}
 
 	return s.trigger.Trigger(ctx, ExchangeRateLoadingOperationID)
 }
 
 // TriggerDatabaseBackupOperation triggers one asynchronous database backup operation.
-func (s *Service) TriggerDatabaseBackupOperation(ctx context.Context) (OperationRun, error) {
+func (s *Service) TriggerDatabaseBackupOperation(ctx context.Context) (RunEnvelope, error) {
 	if !s.config.DatabaseBackup.Enabled {
-		return OperationRun{}, services.InvalidRequest("backup file directory is not configured")
+		return RunEnvelope{}, services.InvalidRequest("backup file directory is not configured")
 	}
 	if s.trigger == nil {
-		return OperationRun{}, services.InvalidRequest("background operation trigger is not configured")
+		return RunEnvelope{}, services.InvalidRequest("background operation trigger is not configured")
 	}
 
 	return s.trigger.Trigger(ctx, DatabaseBackupOperationID)
 }
 
 // GetExchangeRateLoadingRun returns one exchange-rate loading operation run.
-func (s *Service) GetExchangeRateLoadingRun(ctx context.Context, runID int64) (OperationRun, error) {
-	return s.getRun(ctx, ExchangeRateLoadingOperationID, runID)
+func (s *Service) GetExchangeRateLoadingRun(ctx context.Context, runID int64) (ExchangeRateLoadingRun, error) {
+	run, err := s.getRun(ctx, ExchangeRateLoadingOperationID, runID)
+	if err != nil {
+		return ExchangeRateLoadingRun{}, err
+	}
+
+	return ExchangeRateLoadingRun{RunEnvelope: run}, nil
 }
 
 // GetDatabaseBackupRun returns one database backup operation run.
-func (s *Service) GetDatabaseBackupRun(ctx context.Context, runID int64) (OperationRun, error) {
-	return s.getRun(ctx, DatabaseBackupOperationID, runID)
+func (s *Service) GetDatabaseBackupRun(ctx context.Context, runID int64) (DatabaseBackupRun, error) {
+	run, err := s.getRun(ctx, DatabaseBackupOperationID, runID)
+	if err != nil {
+		return DatabaseBackupRun{}, err
+	}
+
+	return DatabaseBackupRun{RunEnvelope: run}, nil
 }
 
-func (s *Service) getRun(ctx context.Context, operationID OperationID, runID int64) (OperationRun, error) {
+func (s *Service) getRun(ctx context.Context, operationID OperationID, runID int64) (RunEnvelope, error) {
 	run, err := s.repo.GetRun(ctx, runID)
 	if err != nil {
 		if errors.Is(err, services.ErrNotFound) {
-			return OperationRun{}, services.NotFound("operation run not found")
+			return RunEnvelope{}, services.NotFound("operation run not found")
 		}
-		return OperationRun{}, err
+		return RunEnvelope{}, err
 	}
 	if run.OperationID != operationID {
-		return OperationRun{}, services.NotFound("operation run not found")
+		return RunEnvelope{}, services.NotFound("operation run not found")
 	}
 
 	return run, nil
@@ -275,10 +308,11 @@ func (s *Service) registeredOperations() []OperationID {
 }
 
 // RecordRunStart records one running operation attempt.
-func (s *Service) RecordRunStart(ctx context.Context, operationID OperationID) (OperationRun, error) {
-	run := OperationRun{
+func (s *Service) RecordRunStart(ctx context.Context, operationID OperationID, trigger RunTrigger) (RunEnvelope, error) {
+	run := RunEnvelope{
 		OperationID: operationID,
 		Status:      RunStatusRunning,
+		Trigger:     trigger,
 		StartedAt:   s.clock.Now().UTC(),
 	}
 
@@ -286,22 +320,23 @@ func (s *Service) RecordRunStart(ctx context.Context, operationID OperationID) (
 }
 
 // RecordRunSuccess records a successful terminal transition.
-func (s *Service) RecordRunSuccess(ctx context.Context, started OperationRun) (OperationRun, error) {
+func (s *Service) RecordRunSuccess(ctx context.Context, started RunEnvelope) (RunEnvelope, error) {
 	return s.finishRun(ctx, started, RunStatusSucceeded, nil)
 }
 
 // RecordRunFailure records a failed terminal transition.
-func (s *Service) RecordRunFailure(ctx context.Context, started OperationRun, err error) (OperationRun, error) {
+func (s *Service) RecordRunFailure(ctx context.Context, started RunEnvelope, err error) (RunEnvelope, error) {
 	message := errorMessage(err)
 	return s.finishRun(ctx, started, RunStatusFailed, message)
 }
 
 // RecordRunSkip records a skipped terminal attempt.
-func (s *Service) RecordRunSkip(ctx context.Context, operationID OperationID, err error) (OperationRun, error) {
+func (s *Service) RecordRunSkip(ctx context.Context, operationID OperationID, trigger RunTrigger, err error) (RunEnvelope, error) {
 	message := errorMessage(err)
-	run := OperationRun{
+	run := RunEnvelope{
 		OperationID: operationID,
 		Status:      RunStatusSkipped,
+		Trigger:     trigger,
 		StartedAt:   s.clock.Now().UTC(),
 		CompletedAt: ptr(s.clock.Now().UTC()),
 		Error:       message,
@@ -311,28 +346,29 @@ func (s *Service) RecordRunSkip(ctx context.Context, operationID OperationID, er
 }
 
 // RecordRunCancel records a canceled terminal transition.
-func (s *Service) RecordRunCancel(ctx context.Context, started OperationRun, err error) (OperationRun, error) {
+func (s *Service) RecordRunCancel(ctx context.Context, started RunEnvelope, err error) (RunEnvelope, error) {
 	message := errorMessage(err)
 	return s.finishRun(ctx, started, RunStatusCanceled, message)
 }
 
 func (s *Service) finishRun(
 	ctx context.Context,
-	started OperationRun,
+	started RunEnvelope,
 	status RunStatus,
 	message *string,
-) (OperationRun, error) {
+) (RunEnvelope, error) {
 	completedAt := s.clock.Now().UTC()
-	run := OperationRun{
+	run := RunEnvelope{
 		ID:          started.ID,
 		OperationID: started.OperationID,
 		Status:      status,
+		Trigger:     started.Trigger,
 		StartedAt:   started.StartedAt,
 		CompletedAt: &completedAt,
 		Error:       message,
 	}
 	if err := s.repo.FinishRun(ctx, run); err != nil {
-		return OperationRun{}, err
+		return RunEnvelope{}, err
 	}
 
 	return run, nil
@@ -346,7 +382,7 @@ func state(running bool) string {
 	return "idle"
 }
 
-func latestRunFields(latest *OperationRun) (*time.Time, *time.Time, *bool, *string) {
+func latestRunFields(latest *RunEnvelope) (*time.Time, *time.Time, *bool, *string) {
 	if latest == nil {
 		return nil, nil, nil, nil
 	}

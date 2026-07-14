@@ -18,7 +18,7 @@
 - Unknown query parameter names are rejected by an adapter guard derived from the matched OpenAPI operation because the upstream validator ignores undeclared query names.
 - Parameter validation errors preserve Mina's JSON error envelope, normalize generic transport failure categories such as duplicate values, empty values, out-of-range schema values, and missing required parameters, and keep generated parse details for malformed values without endpoint-specific field-name message tables.
 - Strict-server handlers consume generated request objects and generated `request.Params`; they map DTOs to service inputs, call services, and map service outputs, errors, and statuses to generated responses.
-- Generic background-operation run listing maps the operation ID and page parameters to the operation-run service; the service owns registered-operation validation and newest-first semantics.
+- Full background-operation envelope listing maps optional enum-validated operation filtering and page parameters to the operation-run service; concrete per-operation endpoints own typed run-detail mapping and the service owns newest-first semantics.
 - Strict-server mappers parse OpenAPI string decimal fields into service value types; generated OpenAPI date values are mapped directly without string round-trips.
 - Direct raw query parsing in `internal/httpapi` is disallowed unless a specific transport rule cannot be expressed through OpenAPI validation or generated params; document any exception near the code.
 - Generated binding errors, OpenAPI validation errors, and strict handler errors all map to Mina's stable JSON error envelope before responses leave the adapter.

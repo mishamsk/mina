@@ -15,19 +15,57 @@ import (
 )
 
 func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
-	t.Run("operation list includes database backup", func(t *testing.T) {
+	t.Run("operation list links to concrete operation APIs", func(t *testing.T) {
 		client := newSharedClient(t)
 
 		response, err := client.REST().ListBackgroundOperationsWithResponse(context.Background())
 		requireClientResponse(t, "list background operations", err, response.StatusCode(), http.StatusOK, response.Body)
 
-		for _, operation := range response.JSON200.Operations {
-			if operation.OperationId == httpclient.BackgroundOperationSummaryOperationIdDatabaseBackup &&
-				operation.StatusUrl == "/api/background-operations/database-backup/status" {
-				return
-			}
+		expected := map[httpclient.BackgroundOperationId]struct {
+			statusURL string
+			startRun  string
+			run       string
+			runs      string
+			follow    func()
+		}{
+			httpclient.BackgroundOperationIdExchangeRateLoading: {
+				statusURL: "/api/background-operations/exchange-rate-loading/status",
+				startRun:  "/api/background-operations/exchange-rate-loading/runs",
+				run:       "/api/background-operations/exchange-rate-loading/runs/{operation_run_id}",
+				runs:      "/api/background-operations/runs?operation_id=exchange-rate-loading",
+				follow: func() {
+					status, err := client.REST().GetExchangeRateLoadingStatusWithResponse(context.Background())
+					requireClientResponse(t, "follow exchange-rate loading status link", err, status.StatusCode(), http.StatusOK, status.Body)
+				},
+			},
+			httpclient.BackgroundOperationIdDatabaseBackup: {
+				statusURL: "/api/background-operations/database-backup/status",
+				startRun:  "/api/background-operations/database-backup/runs",
+				run:       "/api/background-operations/database-backup/runs/{operation_run_id}",
+				runs:      "/api/background-operations/runs?operation_id=database-backup",
+				follow: func() {
+					status, err := client.REST().GetDatabaseBackupStatusWithResponse(context.Background())
+					requireClientResponse(t, "follow database backup status link", err, status.StatusCode(), http.StatusOK, status.Body)
+				},
+			},
 		}
-		t.Fatalf("operations = %+v, want database backup operation", response.JSON200.Operations)
+		for _, operation := range response.JSON200.Operations {
+			want, ok := expected[operation.OperationId]
+			if !ok {
+				continue
+			}
+			if operation.Links.Status != want.statusURL ||
+				operation.Links.StartRun != want.startRun ||
+				operation.Links.Run != want.run ||
+				operation.Links.Runs != want.runs {
+				t.Fatalf("%s links = %+v", operation.OperationId, operation.Links)
+			}
+			want.follow()
+			delete(expected, operation.OperationId)
+		}
+		if len(expected) > 0 {
+			t.Fatalf("operations = %+v, missing %v", response.JSON200.Operations, expected)
+		}
 	})
 
 	t.Run("status is disabled with default config", func(t *testing.T) {
@@ -75,8 +113,8 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 		started, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
 		requireClientResponse(t, "start database backup", err, started.StatusCode(), http.StatusAccepted, started.Body)
 		run := client.PollDatabaseBackupRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusSucceeded {
-			t.Fatalf("run status = %q, want succeeded; error = %v", run.Status, run.Error)
+		if string(run.Outcome) != "succeeded" {
+			t.Fatalf("run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 
 		files := backupFiles(t, backupDir)
@@ -97,8 +135,8 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 		started, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
 		requireClientResponse(t, "start database backup", err, started.StatusCode(), http.StatusAccepted, started.Body)
 		run := client.PollDatabaseBackupRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusSucceeded {
-			t.Fatalf("run status = %q, want succeeded; error = %v", run.Status, run.Error)
+		if string(run.Outcome) != "succeeded" {
+			t.Fatalf("run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 
 		files := providerBackupFiles(t, backupDir)
@@ -121,7 +159,7 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 
 		started, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
 		requireClientResponse(t, "start database backup", err, started.StatusCode(), http.StatusAccepted, started.Body)
-		if started.JSON202.OperationId != httpclient.OperationRunReferenceResponseOperationIdDatabaseBackup {
+		if string(started.JSON202.OperationId) != "database-backup" {
 			t.Fatalf("operation_id = %q, want database-backup", started.JSON202.OperationId)
 		}
 		wantStatusURL := fmt.Sprintf("/api/background-operations/database-backup/runs/%d", started.JSON202.OperationRunId)
@@ -130,9 +168,9 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 		}
 
 		run := client.PollDatabaseBackupRun(started.JSON202.OperationRunId)
-		if run.OperationId != httpclient.OperationRunResponseOperationIdDatabaseBackup ||
+		if string(run.OperationId) != "database-backup" ||
 			run.OperationRunId != started.JSON202.OperationRunId ||
-			run.Status != httpclient.OperationRunResponseStatusSucceeded ||
+			string(run.Outcome) != "succeeded" ||
 			run.CompletedAt == nil ||
 			run.Error != nil {
 			t.Fatalf("completed run = %+v, want successful database-backup run", run)
@@ -157,21 +195,21 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 
 		running, err := client.REST().GetDatabaseBackupRunWithResponse(context.Background(), started.JSON202.OperationRunId)
 		requireClientResponse(t, "get running database backup", err, running.StatusCode(), http.StatusOK, running.Body)
-		if running.JSON200.Status != httpclient.OperationRunResponseStatusRunning || running.JSON200.CompletedAt != nil {
+		if string(running.JSON200.Outcome) != "running" || running.JSON200.CompletedAt != nil {
 			t.Fatalf("running run = %+v, want running with no completed_at", running.JSON200)
 		}
 
 		skipped, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
 		requireClientResponse(t, "start concurrent database backup", err, skipped.StatusCode(), http.StatusAccepted, skipped.Body)
 		skippedRun := client.PollDatabaseBackupRun(skipped.JSON202.OperationRunId)
-		if skippedRun.Status != httpclient.OperationRunResponseStatusSkipped {
-			t.Fatalf("concurrent run status = %q, want skipped; error = %v", skippedRun.Status, skippedRun.Error)
+		if string(skippedRun.Outcome) != "skipped" {
+			t.Fatalf("concurrent run outcome = %q, want skipped; error = %v", skippedRun.Outcome, skippedRun.Error)
 		}
 
 		backup.Release()
 		run := client.PollDatabaseBackupRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusSucceeded {
-			t.Fatalf("released run status = %q, want succeeded; error = %v", run.Status, run.Error)
+		if string(run.Outcome) != "succeeded" {
+			t.Fatalf("released run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 	})
 
@@ -196,8 +234,8 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 
 		backup.Release()
 		run := client.PollDatabaseBackupRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusSucceeded {
-			t.Fatalf("released run status = %q, want succeeded; error = %v", run.Status, run.Error)
+		if string(run.Outcome) != "succeeded" {
+			t.Fatalf("released run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 	})
 
@@ -208,7 +246,7 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 		started, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
 		requireClientResponse(t, "start in-memory database backup", err, started.StatusCode(), http.StatusAccepted, started.Body)
 		run := client.PollDatabaseBackupRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusFailed || run.Error == nil || *run.Error != "in-memory accounting database cannot be backed up" {
+		if string(run.Outcome) != "failed" || run.Error == nil || *run.Error != "in-memory accounting database cannot be backed up" {
 			t.Fatalf("in-memory failure run = %+v, want stable failed operation error", run)
 		}
 		if files := providerBackupFiles(t, backupDir); len(files) != 0 {
@@ -244,8 +282,8 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 			started, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
 			requireClientResponse(t, "start retained database backup", err, started.StatusCode(), http.StatusAccepted, started.Body)
 			run := client.PollDatabaseBackupRun(started.JSON202.OperationRunId)
-			if run.Status != httpclient.OperationRunResponseStatusSucceeded {
-				t.Fatalf("run status = %q, want succeeded; error = %v", run.Status, run.Error)
+			if string(run.Outcome) != "succeeded" {
+				t.Fatalf("run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 			}
 		}
 
@@ -282,8 +320,8 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 		started, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
 		requireClientResponse(t, "start retained database backup", err, started.StatusCode(), http.StatusAccepted, started.Body)
 		run := client.PollDatabaseBackupRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusSucceeded {
-			t.Fatalf("run status = %q, want succeeded; error = %v", run.Status, run.Error)
+		if string(run.Outcome) != "succeeded" {
+			t.Fatalf("run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 
 		current := filepath.Join(backupDir, "mina-backup-20260401T120000000000000Z.duckdb")
@@ -309,8 +347,8 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 		started, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
 		requireClientResponse(t, "start database backup", err, started.StatusCode(), http.StatusAccepted, started.Body)
 		run := client.PollDatabaseBackupRun(started.JSON202.OperationRunId)
-		if run.Status != httpclient.OperationRunResponseStatusSucceeded {
-			t.Fatalf("run status = %q, want succeeded; error = %v", run.Status, run.Error)
+		if string(run.Outcome) != "succeeded" {
+			t.Fatalf("run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 		files := providerBackupFiles(t, backupDir)
 		if len(files) != 1 {
@@ -382,6 +420,7 @@ func TestDatabaseBackupOperationExpectedBehavior(t *testing.T) {
 		if after.LastSuccess == nil || !*after.LastSuccess {
 			t.Fatalf("scheduled status = %+v, want successful recurring run", after)
 		}
+		requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdDatabaseBackup, httpclient.BackgroundOperationRunTriggerBackgroundOperationRunTriggerScheduled)
 		if len(backupFiles(t, backupDir)) != 1 {
 			t.Fatalf("scheduled backup files = %v, want one backup", backupFiles(t, backupDir))
 		}

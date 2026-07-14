@@ -48,17 +48,16 @@ paths:
                 $ref: "#/components/schemas/BackgroundOperationListResponse"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
-  /api/background-operations/{operation_id}/runs:
-    parameters:
-      - name: operation_id
-        in: path
-        required: true
-        schema:
-          type: string
+  /api/background-operations/runs:
     get:
-      operationId: listBackgroundOperationRuns
-      summary: List runs for one registered background operation.
+      operationId: listBackgroundOperationRunEnvelopes
+      summary: List background-operation run envelopes.
       parameters:
+        - name: operation_id
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/BackgroundOperationId"
         - name: limit
           in: query
           required: false
@@ -74,15 +73,13 @@ paths:
             minimum: 0
       responses:
         "200":
-          description: Newest-first operation run page.
+          description: Newest-first background-operation run page.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OperationRunListResponse"
+                $ref: "#/components/schemas/BackgroundOperationRunListResponse"
         "400":
           $ref: "#/components/responses/InvalidRequest"
-        "404":
-          $ref: "#/components/responses/NotFound"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
   /api/background-operations/exchange-rate-loading/status:
@@ -99,34 +96,6 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
   /api/background-operations/exchange-rate-loading/runs:
-    get:
-      operationId: listExchangeRateLoadingRuns
-      summary: List exchange-rate loading runs.
-      parameters:
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 500
-        - name: offset
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 0
-      responses:
-        "200":
-          description: Newest-first operation run page.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OperationRunListResponse"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
     post:
       operationId: startExchangeRateLoadingRun
       summary: Start an exchange-rate loading run.
@@ -157,7 +126,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OperationRunResponse"
+                $ref: "#/components/schemas/ExchangeRateLoadingRun"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "404":
@@ -178,34 +147,6 @@ paths:
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
   /api/background-operations/database-backup/runs:
-    get:
-      operationId: listDatabaseBackupRuns
-      summary: List database backup runs.
-      parameters:
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 500
-        - name: offset
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 0
-      responses:
-        "200":
-          description: Newest-first operation run page.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OperationRunListResponse"
-        "400":
-          $ref: "#/components/responses/InvalidRequest"
-        "405":
-          $ref: "#/components/responses/MethodNotAllowed"
     post:
       operationId: startDatabaseBackupRun
       summary: Start a database backup run.
@@ -238,7 +179,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OperationRunResponse"
+                $ref: "#/components/schemas/DatabaseBackupRun"
         "400":
           $ref: "#/components/responses/InvalidRequest"
         "404":
@@ -3965,14 +3906,36 @@ components:
       additionalProperties: false
       required:
         - operation_id
-        - status_url
+        - links
       properties:
         operation_id:
+          $ref: "#/components/schemas/BackgroundOperationId"
+        links:
+          $ref: "#/components/schemas/BackgroundOperationLinks"
+    BackgroundOperationId:
+      type: string
+      enum:
+        - exchange-rate-loading
+        - database-backup
+      x-enum-varnames:
+        - BackgroundOperationIdExchangeRateLoading
+        - BackgroundOperationIdDatabaseBackup
+    BackgroundOperationLinks:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - start_run
+        - run
+        - runs
+      properties:
+        status:
           type: string
-          enum:
-            - exchange-rate-loading
-            - database-backup
-        status_url:
+        start_run:
+          type: string
+        run:
+          type: string
+        runs:
           type: string
     ExchangeRateLoadingStatusResponse:
       type: object
@@ -4087,13 +4050,14 @@ components:
             - database-backup
         status_url:
           type: string
-    OperationRunResponse:
+    BackgroundOperationRun:
       type: object
       additionalProperties: false
       required:
         - operation_run_id
         - operation_id
-        - status
+        - outcome
+        - trigger
         - started_at
       properties:
         operation_run_id:
@@ -4101,14 +4065,8 @@ components:
           format: int64
           minimum: 1
         operation_id:
-          type: string
-          enum:
-            - exchange-rate-loading
-            - database-backup
-          x-enum-varnames:
-            - OperationRunResponseOperationIdExchangeRateLoading
-            - OperationRunResponseOperationIdDatabaseBackup
-        status:
+          $ref: "#/components/schemas/BackgroundOperationId"
+        outcome:
           type: string
           enum:
             - running
@@ -4117,11 +4075,21 @@ components:
             - skipped
             - canceled
           x-enum-varnames:
-            - OperationRunResponseStatusRunning
-            - OperationRunResponseStatusSucceeded
-            - OperationRunResponseStatusFailed
-            - OperationRunResponseStatusSkipped
-            - OperationRunResponseStatusCanceled
+            - BackgroundOperationRunOutcomeRunning
+            - BackgroundOperationRunOutcomeSucceeded
+            - BackgroundOperationRunOutcomeFailed
+            - BackgroundOperationRunOutcomeSkipped
+            - BackgroundOperationRunOutcomeCanceled
+        trigger:
+          type: string
+          enum:
+            - manual
+            - startup
+            - scheduled
+          x-enum-varnames:
+            - BackgroundOperationRunTriggerManual
+            - BackgroundOperationRunTriggerStartup
+            - BackgroundOperationRunTriggerScheduled
         started_at:
           type: string
           format: date-time
@@ -4131,7 +4099,29 @@ components:
         error:
           type: string
           nullable: true
-    OperationRunListResponse:
+    ExchangeRateLoadingRun:
+      allOf:
+        - $ref: "#/components/schemas/BackgroundOperationRun"
+        - type: object
+          required:
+            - operation_id
+          properties:
+            operation_id:
+              type: string
+              enum:
+                - exchange-rate-loading
+    DatabaseBackupRun:
+      allOf:
+        - $ref: "#/components/schemas/BackgroundOperationRun"
+        - type: object
+          required:
+            - operation_id
+          properties:
+            operation_id:
+              type: string
+              enum:
+                - database-backup
+    BackgroundOperationRunListResponse:
       type: object
       additionalProperties: false
       required:
@@ -4141,7 +4131,7 @@ components:
         runs:
           type: array
           items:
-            $ref: "#/components/schemas/OperationRunResponse"
+            $ref: "#/components/schemas/BackgroundOperationRun"
         total_count:
           type: integer
           format: int64
