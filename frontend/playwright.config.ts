@@ -9,6 +9,7 @@ import {
 
 const browserNames = ["chromium", "webkit"] as const;
 const configuredWorkerCount = getConfiguredWorkerCount();
+const configuredRetryCount = process.env.CI ? 2 : 0;
 
 const rawWorkerArgument = process.argv.findIndex(
   (argument) =>
@@ -66,6 +67,7 @@ export default defineConfig({
   testDir: "tests/e2e",
   timeout: 30_000,
   forbidOnly: Boolean(process.env.CI),
+  retries: configuredRetryCount,
   workers: configuredWorkerCount,
   projects: [
     {
