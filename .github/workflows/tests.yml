@@ -1,0 +1,44 @@
+name: Tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: pre-commit
+            recipe: pre-commit
+            frontend: true
+          - name: test
+            recipe: test
+            frontend: false
+          - name: test-integration
+            recipe: test-integration
+            frontend: true
+          - name: test-frontend-e2e
+            recipe: test-frontend-e2e
+            frontend: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+
+      - name: Install mise
+        uses: jdx/mise-action@c53b9236f0b3370f31520f8b142f141256d839c6
+
+      - name: Install repo tools
+        run: mise install
+
+      - name: Install frontend dependencies
+        if: matrix.frontend
+        run: just frontend-install
+
+      - name: Run ${{ matrix.recipe }}
+        run: just ${{ matrix.recipe }}

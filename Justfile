@@ -14,10 +14,14 @@ default_codex_reasoning_effort := "high"
 [group('dev-tooling')]
 init:
     command -v mise >/dev/null || { echo "missing required tool: mise" >&2; exit 1; }
-    command -v prek >/dev/null || { echo "missing required tool: prek" >&2; exit 1; }
     mise install
     just frontend-install
-    prek install --hook-type pre-commit
+    mise exec -- prek install --hook-type pre-commit
+
+# Validate GitHub Actions workflow syntax.
+[group('dev-tooling')]
+workflow-check:
+    go tool actionlint
 
 # Format Go source files.
 [group('dev-tooling')]

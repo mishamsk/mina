@@ -28,6 +28,12 @@ repos:
         language: system
         pass_filenames: false
         files: ^(docker/Dockerfile|mise\.toml|frontend/package\.json|scripts/check-docker-versions\.sh)$
+      - id: mina-workflow-check
+        name: mina workflow check
+        entry: just workflow-check
+        language: system
+        pass_filenames: false
+        files: ^\.github/workflows/.*\.ya?ml$
       - id: mina-fmt-check
         name: mina fmt check
         entry: just fmt-check

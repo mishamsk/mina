@@ -22,22 +22,22 @@ Add reusable GitHub-hosted validation and Docker-image workflows, then continuou
 
 Establish one repository-owned validation boundary for current delivery and future PR automation. Pin runner tooling and validate GitHub workflow semantics locally so malformed workflow changes fail before push.
 
-- [ ] Add `just` and `prek` to `mise.toml` at current explicit versions; adjust `just init` only as needed so `mise install` owns the `prek` installation.
-- [ ] Track `github.com/rhysd/actionlint/cmd/actionlint` as a versioned Go tool.
-- [ ] Add a Justfile `workflow-check` recipe that runs the tracked `actionlint` tool.
-- [ ] Add a `mina-workflow-check` local pre-commit hook for `.github/workflows/*.yml` and `.yaml`; keep generic YAML validation unchanged.
-- [ ] Add `.github/workflows/tests.yml` with `workflow_call`, read-only permissions, and full-commit-SHA pins for every external action.
-- [ ] Use parallel matrix entries for these exact repository recipes:
-  - [ ] `just pre-commit`
-  - [ ] `just test`
-  - [ ] `just test-integration`
-  - [ ] `just test-frontend-e2e`
-- [ ] Install repo-declared tools through mise and run `just frontend-install` only for matrix entries that need frontend dependencies.
-- [ ] Verification
-  - [ ] `just workflow-check` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Update progress in Kata issue `qxan`
-  - [ ] Commit changes
+- [x] Add `just` and `prek` to `mise.toml` at current explicit versions; adjust `just init` only as needed so `mise install` owns the `prek` installation.
+- [x] Track `github.com/rhysd/actionlint/cmd/actionlint` as a versioned Go tool.
+- [x] Add a Justfile `workflow-check` recipe that runs the tracked `actionlint` tool.
+- [x] Add a `mina-workflow-check` local pre-commit hook for `.github/workflows/*.yml` and `.yaml`; keep generic YAML validation unchanged.
+- [x] Add `.github/workflows/tests.yml` with `workflow_call`, read-only permissions, and full-commit-SHA pins for every external action.
+- [x] Use parallel matrix entries for these exact repository recipes:
+  - [x] `just pre-commit`
+  - [x] `just test`
+  - [x] `just test-integration`
+  - [x] `just test-frontend-e2e`
+- [x] Install repo-declared tools through mise and run `just frontend-install` only for matrix entries that need frontend dependencies.
+- [x] Verification
+  - [x] `just workflow-check` passes
+  - [x] `just pre-commit` passes
+  - [x] Update progress in Kata issue `qxan`
+  - [x] Commit changes
 
 ### Task/Commit 2: Publish and verify Docker images
 
