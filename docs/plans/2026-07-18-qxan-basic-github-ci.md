@@ -69,19 +69,19 @@ Add the reusable registry-image boundary and the specifically named entry workfl
 
 Enable GitHub-native dependency update PRs across every dependency surface while keeping normal weekly noise bounded by ecosystem grouping. Automatic PR validation remains deferred; maintainers can dispatch the Docker publication workflow for a Dependabot branch after the workflow exists on `main`.
 
-- [ ] Add `.github/dependabot.yml` with weekly update entries for:
-  - [ ] Go modules at `/`
-  - [ ] npm/pnpm at `/frontend`
-  - [ ] Docker at `/docker`
-  - [ ] GitHub Actions at `/`
-- [ ] Group normal version updates by ecosystem, including major updates, so a typical cycle produces at most one grouped PR per ecosystem when grouping is supported.
-- [ ] Use one consistent weekly day, time, and `America/New_York` timezone.
-- [ ] Keep Dependabot responsible only for proposing changes; do not add auto-merge or an automatic PR workflow.
-- [ ] Verification
-  - [ ] `just pre-commit` passes
-  - [ ] `git diff --check` passes
-  - [ ] Update progress in Kata issue `qxan`
-  - [ ] Commit changes
+- [x] Add `.github/dependabot.yml` with weekly update entries for:
+  - [x] Go modules at `/`
+  - [x] npm/pnpm at `/frontend`
+  - [x] Docker at `/docker`
+  - [x] GitHub Actions at `/`
+- [x] Group normal version updates by ecosystem, including major updates, so a typical cycle produces at most one grouped PR per ecosystem when grouping is supported.
+- [x] Use one consistent weekly day, time, and `America/New_York` timezone.
+- [x] Keep Dependabot responsible only for proposing changes; do not add auto-merge or an automatic PR workflow.
+- [x] Verification
+  - [x] `just pre-commit` passes
+  - [x] `git diff --check` passes
+  - [x] Update progress in Kata issue `qxan`
+  - [x] Commit changes
 
 ### Task 4: Activate and prove the delivery path
 
