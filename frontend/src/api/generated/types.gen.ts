@@ -497,6 +497,10 @@ export type BackgroundOperationSummary = {
 
 export type BackgroundOperationId = 'exchange-rate-loading' | 'database-backup';
 
+export type BackgroundOperationRunOutcome = 'running' | 'succeeded' | 'failed' | 'skipped' | 'canceled';
+
+export type BackgroundOperationRunTrigger = 'manual' | 'startup' | 'scheduled';
+
 export type BackgroundOperationLinks = {
     status: string;
     start_run: string;
@@ -545,8 +549,8 @@ export type OperationRunReferenceResponse = {
 export type BackgroundOperationRun = {
     operation_run_id: number;
     operation_id: BackgroundOperationId;
-    outcome: 'running' | 'succeeded' | 'failed' | 'skipped' | 'canceled';
-    trigger: 'manual' | 'startup' | 'scheduled';
+    outcome: BackgroundOperationRunOutcome;
+    trigger: BackgroundOperationRunTrigger;
     started_at: string;
     completed_at?: string;
     error?: string | null;

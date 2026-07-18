@@ -87,25 +87,25 @@ func (e BackgroundOperationId) Valid() bool {
 
 // Defines values for BackgroundOperationRunOutcome.
 const (
-	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeCanceled  BackgroundOperationRunOutcome = "canceled"
-	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeFailed    BackgroundOperationRunOutcome = "failed"
-	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeRunning   BackgroundOperationRunOutcome = "running"
-	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeSkipped   BackgroundOperationRunOutcome = "skipped"
-	BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeSucceeded BackgroundOperationRunOutcome = "succeeded"
+	BackgroundOperationRunOutcomeCanceled  BackgroundOperationRunOutcome = "canceled"
+	BackgroundOperationRunOutcomeFailed    BackgroundOperationRunOutcome = "failed"
+	BackgroundOperationRunOutcomeRunning   BackgroundOperationRunOutcome = "running"
+	BackgroundOperationRunOutcomeSkipped   BackgroundOperationRunOutcome = "skipped"
+	BackgroundOperationRunOutcomeSucceeded BackgroundOperationRunOutcome = "succeeded"
 )
 
 // Valid indicates whether the value is a known member of the BackgroundOperationRunOutcome enum.
 func (e BackgroundOperationRunOutcome) Valid() bool {
 	switch e {
-	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeCanceled:
+	case BackgroundOperationRunOutcomeCanceled:
 		return true
-	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeFailed:
+	case BackgroundOperationRunOutcomeFailed:
 		return true
-	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeRunning:
+	case BackgroundOperationRunOutcomeRunning:
 		return true
-	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeSkipped:
+	case BackgroundOperationRunOutcomeSkipped:
 		return true
-	case BackgroundOperationRunOutcomeBackgroundOperationRunOutcomeSucceeded:
+	case BackgroundOperationRunOutcomeSucceeded:
 		return true
 	default:
 		return false
@@ -114,19 +114,19 @@ func (e BackgroundOperationRunOutcome) Valid() bool {
 
 // Defines values for BackgroundOperationRunTrigger.
 const (
-	BackgroundOperationRunTriggerBackgroundOperationRunTriggerManual    BackgroundOperationRunTrigger = "manual"
-	BackgroundOperationRunTriggerBackgroundOperationRunTriggerScheduled BackgroundOperationRunTrigger = "scheduled"
-	BackgroundOperationRunTriggerBackgroundOperationRunTriggerStartup   BackgroundOperationRunTrigger = "startup"
+	BackgroundOperationRunTriggerManual    BackgroundOperationRunTrigger = "manual"
+	BackgroundOperationRunTriggerScheduled BackgroundOperationRunTrigger = "scheduled"
+	BackgroundOperationRunTriggerStartup   BackgroundOperationRunTrigger = "startup"
 )
 
 // Valid indicates whether the value is a known member of the BackgroundOperationRunTrigger enum.
 func (e BackgroundOperationRunTrigger) Valid() bool {
 	switch e {
-	case BackgroundOperationRunTriggerBackgroundOperationRunTriggerManual:
+	case BackgroundOperationRunTriggerManual:
 		return true
-	case BackgroundOperationRunTriggerBackgroundOperationRunTriggerScheduled:
+	case BackgroundOperationRunTriggerScheduled:
 		return true
-	case BackgroundOperationRunTriggerBackgroundOperationRunTriggerStartup:
+	case BackgroundOperationRunTriggerStartup:
 		return true
 	default:
 		return false
@@ -184,54 +184,6 @@ func (e DatabaseBackupRunOperationId) Valid() bool {
 	}
 }
 
-// Defines values for DatabaseBackupRunOutcome.
-const (
-	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeCanceled  DatabaseBackupRunOutcome = "canceled"
-	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeFailed    DatabaseBackupRunOutcome = "failed"
-	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeRunning   DatabaseBackupRunOutcome = "running"
-	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeSkipped   DatabaseBackupRunOutcome = "skipped"
-	DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeSucceeded DatabaseBackupRunOutcome = "succeeded"
-)
-
-// Valid indicates whether the value is a known member of the DatabaseBackupRunOutcome enum.
-func (e DatabaseBackupRunOutcome) Valid() bool {
-	switch e {
-	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeCanceled:
-		return true
-	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeFailed:
-		return true
-	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeRunning:
-		return true
-	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeSkipped:
-		return true
-	case DatabaseBackupRunOutcomeBackgroundOperationRunOutcomeSucceeded:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for DatabaseBackupRunTrigger.
-const (
-	DatabaseBackupRunTriggerBackgroundOperationRunTriggerManual    DatabaseBackupRunTrigger = "manual"
-	DatabaseBackupRunTriggerBackgroundOperationRunTriggerScheduled DatabaseBackupRunTrigger = "scheduled"
-	DatabaseBackupRunTriggerBackgroundOperationRunTriggerStartup   DatabaseBackupRunTrigger = "startup"
-)
-
-// Valid indicates whether the value is a known member of the DatabaseBackupRunTrigger enum.
-func (e DatabaseBackupRunTrigger) Valid() bool {
-	switch e {
-	case DatabaseBackupRunTriggerBackgroundOperationRunTriggerManual:
-		return true
-	case DatabaseBackupRunTriggerBackgroundOperationRunTriggerScheduled:
-		return true
-	case DatabaseBackupRunTriggerBackgroundOperationRunTriggerStartup:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for DatabaseBackupStatusResponseOperationId.
 const (
 	DatabaseBackupStatusResponseOperationIdDatabaseBackup DatabaseBackupStatusResponseOperationId = "database-backup"
@@ -274,54 +226,6 @@ const (
 func (e ExchangeRateLoadingRunOperationId) Valid() bool {
 	switch e {
 	case ExchangeRateLoadingRunOperationIdExchangeRateLoading:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ExchangeRateLoadingRunOutcome.
-const (
-	BackgroundOperationRunOutcomeCanceled  ExchangeRateLoadingRunOutcome = "canceled"
-	BackgroundOperationRunOutcomeFailed    ExchangeRateLoadingRunOutcome = "failed"
-	BackgroundOperationRunOutcomeRunning   ExchangeRateLoadingRunOutcome = "running"
-	BackgroundOperationRunOutcomeSkipped   ExchangeRateLoadingRunOutcome = "skipped"
-	BackgroundOperationRunOutcomeSucceeded ExchangeRateLoadingRunOutcome = "succeeded"
-)
-
-// Valid indicates whether the value is a known member of the ExchangeRateLoadingRunOutcome enum.
-func (e ExchangeRateLoadingRunOutcome) Valid() bool {
-	switch e {
-	case BackgroundOperationRunOutcomeCanceled:
-		return true
-	case BackgroundOperationRunOutcomeFailed:
-		return true
-	case BackgroundOperationRunOutcomeRunning:
-		return true
-	case BackgroundOperationRunOutcomeSkipped:
-		return true
-	case BackgroundOperationRunOutcomeSucceeded:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ExchangeRateLoadingRunTrigger.
-const (
-	BackgroundOperationRunTriggerManual    ExchangeRateLoadingRunTrigger = "manual"
-	BackgroundOperationRunTriggerScheduled ExchangeRateLoadingRunTrigger = "scheduled"
-	BackgroundOperationRunTriggerStartup   ExchangeRateLoadingRunTrigger = "startup"
-)
-
-// Valid indicates whether the value is a known member of the ExchangeRateLoadingRunTrigger enum.
-func (e ExchangeRateLoadingRunTrigger) Valid() bool {
-	switch e {
-	case BackgroundOperationRunTriggerManual:
-		return true
-	case BackgroundOperationRunTriggerScheduled:
-		return true
-	case BackgroundOperationRunTriggerStartup:
 		return true
 	default:
 		return false
@@ -1076,12 +980,6 @@ type BackgroundOperationRun struct {
 	Trigger        BackgroundOperationRunTrigger `json:"trigger"`
 }
 
-// BackgroundOperationRunOutcome defines model for BackgroundOperationRun.Outcome.
-type BackgroundOperationRunOutcome string
-
-// BackgroundOperationRunTrigger defines model for BackgroundOperationRun.Trigger.
-type BackgroundOperationRunTrigger string
-
 // BackgroundOperationRunListResponse defines model for BackgroundOperationRunListResponse.
 type BackgroundOperationRunListResponse struct {
 	Runs []BackgroundOperationRun `json:"runs"`
@@ -1089,6 +987,12 @@ type BackgroundOperationRunListResponse struct {
 	// TotalCount Count of operation runs before limit and offset are applied.
 	TotalCount int64 `json:"total_count"`
 }
+
+// BackgroundOperationRunOutcome defines model for BackgroundOperationRunOutcome.
+type BackgroundOperationRunOutcome string
+
+// BackgroundOperationRunTrigger defines model for BackgroundOperationRunTrigger.
+type BackgroundOperationRunTrigger string
 
 // BackgroundOperationSummary defines model for BackgroundOperationSummary.
 type BackgroundOperationSummary struct {
@@ -1348,23 +1252,17 @@ type CreditLimitHistoryListResponse struct {
 
 // DatabaseBackupRun defines model for DatabaseBackupRun.
 type DatabaseBackupRun struct {
-	CompletedAt    *time.Time                   `json:"completed_at,omitempty"`
-	Error          *string                      `json:"error,omitempty"`
-	OperationId    DatabaseBackupRunOperationId `json:"operation_id"`
-	OperationRunId int64                        `json:"operation_run_id"`
-	Outcome        DatabaseBackupRunOutcome     `json:"outcome"`
-	StartedAt      time.Time                    `json:"started_at"`
-	Trigger        DatabaseBackupRunTrigger     `json:"trigger"`
+	CompletedAt    *time.Time                    `json:"completed_at,omitempty"`
+	Error          *string                       `json:"error,omitempty"`
+	OperationId    DatabaseBackupRunOperationId  `json:"operation_id"`
+	OperationRunId int64                         `json:"operation_run_id"`
+	Outcome        BackgroundOperationRunOutcome `json:"outcome"`
+	StartedAt      time.Time                     `json:"started_at"`
+	Trigger        BackgroundOperationRunTrigger `json:"trigger"`
 }
 
 // DatabaseBackupRunOperationId defines model for DatabaseBackupRun.OperationId.
 type DatabaseBackupRunOperationId string
-
-// DatabaseBackupRunOutcome defines model for DatabaseBackupRun.Outcome.
-type DatabaseBackupRunOutcome string
-
-// DatabaseBackupRunTrigger defines model for DatabaseBackupRun.Trigger.
-type DatabaseBackupRunTrigger string
 
 // DatabaseBackupStatusResponse defines model for DatabaseBackupStatusResponse.
 type DatabaseBackupStatusResponse struct {
@@ -1440,19 +1338,13 @@ type ExchangeRateLoadingRun struct {
 	Error          *string                           `json:"error,omitempty"`
 	OperationId    ExchangeRateLoadingRunOperationId `json:"operation_id"`
 	OperationRunId int64                             `json:"operation_run_id"`
-	Outcome        ExchangeRateLoadingRunOutcome     `json:"outcome"`
+	Outcome        BackgroundOperationRunOutcome     `json:"outcome"`
 	StartedAt      time.Time                         `json:"started_at"`
-	Trigger        ExchangeRateLoadingRunTrigger     `json:"trigger"`
+	Trigger        BackgroundOperationRunTrigger     `json:"trigger"`
 }
 
 // ExchangeRateLoadingRunOperationId defines model for ExchangeRateLoadingRun.OperationId.
 type ExchangeRateLoadingRunOperationId string
-
-// ExchangeRateLoadingRunOutcome defines model for ExchangeRateLoadingRun.Outcome.
-type ExchangeRateLoadingRunOutcome string
-
-// ExchangeRateLoadingRunTrigger defines model for ExchangeRateLoadingRun.Trigger.
-type ExchangeRateLoadingRunTrigger string
 
 // ExchangeRateLoadingStatusResponse defines model for ExchangeRateLoadingStatusResponse.
 type ExchangeRateLoadingStatusResponse struct {

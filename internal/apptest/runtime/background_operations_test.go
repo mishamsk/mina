@@ -43,7 +43,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if firstPage.JSON200.Runs[0].OperationRunId != runIDs[2] {
 			t.Fatalf("newest run id = %d, want %d", firstPage.JSON200.Runs[0].OperationRunId, runIDs[2])
 		}
-		if firstPage.JSON200.Runs[0].Trigger != httpclient.BackgroundOperationRunTriggerBackgroundOperationRunTriggerManual {
+		if firstPage.JSON200.Runs[0].Trigger != httpclient.BackgroundOperationRunTriggerManual {
 			t.Fatalf("trigger = %q, want manual", firstPage.JSON200.Runs[0].Trigger)
 		}
 
@@ -153,7 +153,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		}
 
 		run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
-		if string(run.Outcome) != "succeeded" {
+		if run.Outcome != httpclient.BackgroundOperationRunOutcomeSucceeded {
 			t.Fatalf("run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 		status := client.ExchangeRateLoadingStatus()
@@ -186,7 +186,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			started.JSON202.OperationRunId,
 		)
 		requireClientResponse(t, "get running exchange-rate loading run", err, runResponse.StatusCode(), http.StatusOK, runResponse.Body)
-		if string(runResponse.JSON200.Outcome) != "running" || runResponse.JSON200.CompletedAt != nil {
+		if runResponse.JSON200.Outcome != httpclient.BackgroundOperationRunOutcomeRunning || runResponse.JSON200.CompletedAt != nil {
 			t.Fatalf("running run = %+v, want running with no completed_at", runResponse.JSON200)
 		}
 
@@ -200,13 +200,13 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		skipped, err := client.REST().StartExchangeRateLoadingRunWithResponse(context.Background())
 		requireClientResponse(t, "start concurrent exchange-rate loading run", err, skipped.StatusCode(), http.StatusAccepted, skipped.Body)
 		skippedRun := client.PollExchangeRateLoadingRun(skipped.JSON202.OperationRunId)
-		if string(skippedRun.Outcome) != "skipped" {
+		if skippedRun.Outcome != httpclient.BackgroundOperationRunOutcomeSkipped {
 			t.Fatalf("concurrent run outcome = %q, want skipped; error = %v", skippedRun.Outcome, skippedRun.Error)
 		}
 
 		provider.Release()
 		run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
-		if string(run.Outcome) != "succeeded" {
+		if run.Outcome != httpclient.BackgroundOperationRunOutcomeSucceeded {
 			t.Fatalf("released run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
 		}
 	})
@@ -241,7 +241,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if status.LastSuccess == nil || !*status.LastSuccess {
 			t.Fatalf("startup status = %+v, want successful startup run", status)
 		}
-		requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdExchangeRateLoading, httpclient.BackgroundOperationRunTriggerBackgroundOperationRunTriggerStartup)
+		requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdExchangeRateLoading, httpclient.BackgroundOperationRunTriggerStartup)
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-01")
 	})
 
@@ -608,7 +608,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		if after.LastStartedAt == nil || after.LastStartedAt.Before(apptest.Timestamp("2026-04-02T18:00:00Z")) {
 			t.Fatalf("last_started_at = %v, want scheduled fake-clock time", after.LastStartedAt)
 		}
-		requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdExchangeRateLoading, httpclient.BackgroundOperationRunTriggerBackgroundOperationRunTriggerScheduled)
+		requireLatestRunEnvelopeTrigger(t, client, httpclient.BackgroundOperationIdExchangeRateLoading, httpclient.BackgroundOperationRunTriggerScheduled)
 		assertExchangeRateDateExists(t, client, "USD", "EUR", "2026-04-01")
 	})
 
@@ -652,7 +652,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 			t.Fatalf("failure status = %+v, want visible failure", status)
 		}
 		run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
-		if string(run.Outcome) != "failed" || run.Error == nil || *run.Error != "provider unavailable" {
+		if run.Outcome != httpclient.BackgroundOperationRunOutcomeFailed || run.Error == nil || *run.Error != "provider unavailable" {
 			t.Fatalf("failure run = %+v, want failed run with provider error", run)
 		}
 
@@ -681,7 +681,7 @@ func TestBackgroundOperationExpectedBehavior(t *testing.T) {
 		started, err := client.REST().StartExchangeRateLoadingRunWithResponse(context.Background())
 		requireClientResponse(t, "start transient failing exchange-rate loading run", err, started.StatusCode(), http.StatusAccepted, started.Body)
 		run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
-		if string(run.Outcome) != "failed" {
+		if run.Outcome != httpclient.BackgroundOperationRunOutcomeFailed {
 			t.Fatalf("transient failure run outcome = %q, want failed; error = %v", run.Outcome, run.Error)
 		}
 		if run.Error == nil || *run.Error != "exchange-rate provider unavailable" {

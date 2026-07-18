@@ -180,8 +180,8 @@ func exchangeRateLoadingRunAPIResponse(run operationruns.ExchangeRateLoadingRun)
 	return openapi.ExchangeRateLoadingRun{
 		OperationRunId: run.ID,
 		OperationId:    openapi.ExchangeRateLoadingRunOperationId(run.OperationID),
-		Outcome:        openapi.ExchangeRateLoadingRunOutcome(run.Status),
-		Trigger:        openapi.ExchangeRateLoadingRunTrigger(run.Trigger),
+		Outcome:        openapi.BackgroundOperationRunOutcome(run.Status),
+		Trigger:        openapi.BackgroundOperationRunTrigger(run.Trigger),
 		StartedAt:      run.StartedAt,
 		CompletedAt:    run.CompletedAt,
 		Error:          run.Error,
@@ -192,8 +192,8 @@ func databaseBackupRunAPIResponse(run operationruns.DatabaseBackupRun) openapi.D
 	return openapi.DatabaseBackupRun{
 		OperationRunId: run.ID,
 		OperationId:    openapi.DatabaseBackupRunOperationId(run.OperationID),
-		Outcome:        openapi.DatabaseBackupRunOutcome(run.Status),
-		Trigger:        openapi.DatabaseBackupRunTrigger(run.Trigger),
+		Outcome:        openapi.BackgroundOperationRunOutcome(run.Status),
+		Trigger:        openapi.BackgroundOperationRunTrigger(run.Trigger),
 		StartedAt:      run.StartedAt,
 		CompletedAt:    run.CompletedAt,
 		Error:          run.Error,

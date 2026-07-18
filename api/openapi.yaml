@@ -3920,6 +3920,30 @@ components:
       x-enum-varnames:
         - BackgroundOperationIdExchangeRateLoading
         - BackgroundOperationIdDatabaseBackup
+    BackgroundOperationRunOutcome:
+      type: string
+      enum:
+        - running
+        - succeeded
+        - failed
+        - skipped
+        - canceled
+      x-enum-varnames:
+        - BackgroundOperationRunOutcomeRunning
+        - BackgroundOperationRunOutcomeSucceeded
+        - BackgroundOperationRunOutcomeFailed
+        - BackgroundOperationRunOutcomeSkipped
+        - BackgroundOperationRunOutcomeCanceled
+    BackgroundOperationRunTrigger:
+      type: string
+      enum:
+        - manual
+        - startup
+        - scheduled
+      x-enum-varnames:
+        - BackgroundOperationRunTriggerManual
+        - BackgroundOperationRunTriggerStartup
+        - BackgroundOperationRunTriggerScheduled
     BackgroundOperationLinks:
       type: object
       additionalProperties: false
@@ -4067,29 +4091,9 @@ components:
         operation_id:
           $ref: "#/components/schemas/BackgroundOperationId"
         outcome:
-          type: string
-          enum:
-            - running
-            - succeeded
-            - failed
-            - skipped
-            - canceled
-          x-enum-varnames:
-            - BackgroundOperationRunOutcomeRunning
-            - BackgroundOperationRunOutcomeSucceeded
-            - BackgroundOperationRunOutcomeFailed
-            - BackgroundOperationRunOutcomeSkipped
-            - BackgroundOperationRunOutcomeCanceled
+          $ref: "#/components/schemas/BackgroundOperationRunOutcome"
         trigger:
-          type: string
-          enum:
-            - manual
-            - startup
-            - scheduled
-          x-enum-varnames:
-            - BackgroundOperationRunTriggerManual
-            - BackgroundOperationRunTriggerStartup
-            - BackgroundOperationRunTriggerScheduled
+          $ref: "#/components/schemas/BackgroundOperationRunTrigger"
         started_at:
           type: string
           format: date-time

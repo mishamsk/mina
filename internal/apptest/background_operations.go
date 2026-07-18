@@ -50,7 +50,7 @@ func (c *Client) PollExchangeRateLoadingRun(runID int64) *httpclient.ExchangeRat
 		response, err := c.REST().GetExchangeRateLoadingRunWithResponse(context.Background(), runID)
 		requireNoClientError(c, "get exchange-rate loading run", err)
 		requireStatus(c, "get exchange-rate loading run", response.StatusCode(), http.StatusOK, response.Body)
-		if string(response.JSON200.Outcome) != "running" {
+		if response.JSON200.Outcome != httpclient.BackgroundOperationRunOutcomeRunning {
 			return response.JSON200
 		}
 		if time.Now().After(deadline) {
@@ -102,7 +102,7 @@ func (c *Client) PollDatabaseBackupRun(runID int64) *httpclient.DatabaseBackupRu
 		response, err := c.REST().GetDatabaseBackupRunWithResponse(context.Background(), runID)
 		requireNoClientError(c, "get database backup run", err)
 		requireStatus(c, "get database backup run", response.StatusCode(), http.StatusOK, response.Body)
-		if string(response.JSON200.Outcome) != "running" {
+		if response.JSON200.Outcome != httpclient.BackgroundOperationRunOutcomeRunning {
 			return response.JSON200
 		}
 		if time.Now().After(deadline) {
