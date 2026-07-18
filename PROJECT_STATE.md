@@ -23,7 +23,7 @@
   - Background operation status, concrete typed run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows; one newest-first paged envelope listing spans all operations with an optional operation filter, while operation discovery returns links to each concrete API.
   - OpenAPI discovery through `GET /api/openapi.json`.
 - Implemented runtime/demo behavior:
-  - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, and localhost-only publishing by default.
+  - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, localhost-only publishing by default, and CI-published GHCR SHA images with guarded `main` promotion after registry-image Compose lifecycle verification.
   - `just test-docker` runs a real Docker lifecycle check covering Compose health, demo-data retention across recreation/restart/image replacement, backups, database validation, and cleanup.
   - Runtime opens one app for the process lifetime and composes REST and embedded web UI handlers.
   - Runtime runs non-blocking startup and recurring operations in `serve`, with public operation status and manual trigger APIs.

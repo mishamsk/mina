@@ -112,6 +112,19 @@ frontend-check: frontend-openapi-check frontend-fmt-check frontend-lint frontend
 docker-version-check:
     scripts/check-docker-versions.sh
 
+# Check that a remote image index includes every supported deployment platform.
+[group('docker')]
+docker-manifest-check image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    image={{ quote(image) }}
+    [ -n "$image" ] || { echo "usage: just docker-manifest-check IMAGE" >&2; exit 2; }
+    manifest="$(docker buildx imagetools inspect "$image")"
+    grep -Eq 'Platform:[[:space:]]+linux/amd64' <<<"$manifest" || { echo "$image is missing linux/amd64" >&2; exit 1; }
+    grep -Eq 'Platform:[[:space:]]+linux/arm64' <<<"$manifest" || { echo "$image is missing linux/arm64" >&2; exit 1; }
+    printf '%s includes linux/amd64 and linux/arm64\n' "$image"
+
 # Run the real Docker image and Compose lifecycle test.
 [group('docker')]
 test-docker:

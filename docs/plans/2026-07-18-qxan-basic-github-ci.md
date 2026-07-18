@@ -43,27 +43,27 @@ Establish one repository-owned validation boundary for current delivery and futu
 
 Add the reusable registry-image boundary and the specifically named entry workflow that composes tests with publication. The immutable image must be pulled from GHCR and exercised through the existing Compose lifecycle recipe before `main` advances.
 
-- [ ] Add a Justfile-owned remote-image manifest check that requires both `linux/amd64` and `linux/arm64` in the published image index.
-- [ ] Add `.github/workflows/docker-image.yml` with `workflow_call` and a boolean input controlling eligibility for `main` promotion.
-- [ ] Authenticate to GHCR with `GITHUB_TOKEN`; grant only `contents: read` and `packages: write` from the caller.
-- [ ] Build and push `ghcr.io/mishamsk/mina:<full-commit-sha>` from `docker/Dockerfile` for `linux/amd64` and `linux/arm64`, preserving source, revision, version, and creation labels.
-- [ ] Pin checkout, mise, QEMU, Buildx, registry-login, and build/push actions to verified full commit SHAs; enable the GitHub Actions BuildKit cache.
-- [ ] Run the remote manifest check against the SHA tag.
-- [ ] Run `MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker`; do not substitute a locally built lifecycle image.
-- [ ] When promotion is requested, re-read remote `refs/heads/main` and skip promotion unless it still equals the workflow commit SHA.
-- [ ] After the registry-image test and current-tip guard pass, retag the already-published manifest as `ghcr.io/mishamsk/mina:main` without rebuilding it.
-- [ ] Add `.github/workflows/build-and-publish-docker.yml`:
-  - [ ] Trigger automatically on pushes to `main` and expose `workflow_dispatch` for a selected branch.
-  - [ ] Call `tests.yml`, then call `docker-image.yml` only after every test matrix entry passes.
-  - [ ] Use a workflow-and-ref concurrency group with `cancel-in-progress: true` so unrelated refs remain independent.
-  - [ ] Request `main` promotion only for `refs/heads/main`; non-main manual runs publish only the SHA tag.
-- [ ] Update `README.md`, `docker/PACKAGE.md`, and the existing Docker item in `PROJECT_STATE.md` concisely with the SHA/`main` policy, registry-image gate, manual branch workflow, and equivalent local `just` commands.
-- [ ] Do not add release, semantic-version, `latest`, branch-name, or pull-request behavior.
-- [ ] Verification
-  - [ ] `just workflow-check` passes
-  - [ ] `just pre-commit` passes
-  - [ ] Update progress in Kata issue `qxan`
-  - [ ] Commit changes
+- [x] Add a Justfile-owned remote-image manifest check that requires both `linux/amd64` and `linux/arm64` in the published image index.
+- [x] Add `.github/workflows/docker-image.yml` with `workflow_call` and a boolean input controlling eligibility for `main` promotion.
+- [x] Authenticate to GHCR with `GITHUB_TOKEN`; grant only `contents: read` and `packages: write` from the caller.
+- [x] Build and push `ghcr.io/mishamsk/mina:<full-commit-sha>` from `docker/Dockerfile` for `linux/amd64` and `linux/arm64`, preserving source, revision, version, and creation labels.
+- [x] Pin checkout, mise, QEMU, Buildx, registry-login, and build/push actions to verified full commit SHAs; enable the GitHub Actions BuildKit cache.
+- [x] Run the remote manifest check against the SHA tag.
+- [x] Run `MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker`; do not substitute a locally built lifecycle image.
+- [x] When promotion is requested, re-read remote `refs/heads/main` and skip promotion unless it still equals the workflow commit SHA.
+- [x] After the registry-image test and current-tip guard pass, retag the already-published manifest as `ghcr.io/mishamsk/mina:main` without rebuilding it.
+- [x] Add `.github/workflows/build-and-publish-docker.yml`:
+  - [x] Trigger automatically on pushes to `main` and expose `workflow_dispatch` for a selected branch.
+  - [x] Call `tests.yml`, then call `docker-image.yml` only after every test matrix entry passes.
+  - [x] Use a workflow-and-ref concurrency group with `cancel-in-progress: true` so unrelated refs remain independent.
+  - [x] Request `main` promotion only for `refs/heads/main`; non-main manual runs publish only the SHA tag.
+- [x] Update `README.md`, `docker/PACKAGE.md`, and the existing Docker item in `PROJECT_STATE.md` concisely with the SHA/`main` policy, registry-image gate, manual branch workflow, and equivalent local `just` commands.
+- [x] Do not add release, semantic-version, `latest`, branch-name, or pull-request behavior.
+- [x] Verification
+  - [x] `just workflow-check` passes
+  - [x] `just pre-commit` passes
+  - [x] Update progress in Kata issue `qxan`
+  - [x] Commit changes
 
 ### Task/Commit 3: Add weekly dependency maintenance
 
