@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { test } from "@tests/e2e/test";
 
 interface AccountFixture {
   readonly account_id: number;
@@ -2033,6 +2034,7 @@ test("account edit changes type and retains values after a rejected type change"
   await expect(blockedRow).toBeVisible({ timeout: 10_000 });
   await blockedRow.getByRole("button", { name: "Edit account" }).click();
   const blockedPanel = page.getByRole("dialog", { name: "Edit account" });
+  await expect(blockedPanel).toBeFocused();
   await blockedPanel.getByLabel("External system").fill("e2e-system");
   await blockedPanel.getByLabel("External ID").fill("e2e-id");
   await blockedPanel.getByLabel("Hidden").click();

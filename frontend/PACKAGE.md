@@ -18,3 +18,4 @@
 ## Testing Notes
 
 - Use Justfile frontend recipes for formatting, linting, typechecking, build checks, and browser e2e checks.
+- Frontend e2e runs default to four workers; set `MINA_FRONTEND_E2E_WORKERS` to size the worker and Mina server pools.

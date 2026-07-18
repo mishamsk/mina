@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
+import { test } from "@tests/e2e/test";
 
 interface RowActionTarget {
   readonly actionCount: number;

@@ -1,4 +1,5 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
+import { test } from "@tests/e2e/test";
 
 interface AccountFixture {
   readonly account_id: number;

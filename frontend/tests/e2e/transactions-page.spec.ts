@@ -1,10 +1,5 @@
-import {
-  expect,
-  type Locator,
-  type Page,
-  type Route,
-  test,
-} from "@playwright/test";
+import { expect, type Locator, type Page, type Route } from "@playwright/test";
+import { test } from "@tests/e2e/test";
 
 interface AccountFixture {
   readonly account_id: number;
