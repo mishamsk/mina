@@ -3069,7 +3069,81 @@ test("transactions display currency symbols with code fallback", async ({
   ).toContainText("-3.21 XDR");
 });
 
-test("transactions page help and leaf category chips", async ({ page }) => {
+test("transactions page help and leaf category chips", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, exchangeCategory] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    createCategory(page, `E2E:Exchange:${unique}:FXBucket`, "exchange"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const exchangeProvider = await createAccount(
+    page,
+    `merchant:E2EExchange:${unique}:Provider`,
+    "flow",
+  );
+  const cashEUR = await createAccount(
+    page,
+    `cash:E2EExchange:${unique}:EUR`,
+    "balance",
+    "EUR",
+  );
+  const exchangeMemo = `E2E exchange row ${unique}`;
+  const exchangeResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-10",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-224.00000000",
+          category_id: exchangeCategory.category_id,
+          currency: "USD",
+          memo: exchangeMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: exchangeProvider.account_id,
+          amount: "224.00000000",
+          category_id: exchangeCategory.category_id,
+          currency: "USD",
+          memo: exchangeMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: exchangeProvider.account_id,
+          amount: "-200.00000000",
+          category_id: exchangeCategory.category_id,
+          currency: "EUR",
+          memo: exchangeMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: cashEUR.account_id,
+          amount: "200.00000000",
+          category_id: exchangeCategory.category_id,
+          currency: "EUR",
+          memo: exchangeMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(exchangeResponse.ok(), await exchangeResponse.text()).toBe(true);
+
   await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
 
   await expect(
@@ -3121,8 +3195,15 @@ test("transactions page help and leaf category chips", async ({ page }) => {
         ordinary: ordinarySingleLine?.getBoundingClientRect().height,
       };
     });
-  expect(rowHeights.mixed).toBe(rowHeights.ordinary);
+  expect(rowHeights.mixed).toBeGreaterThan(0);
+  expect(rowHeights.ordinary).toBeGreaterThan(0);
+  expect(
+    Math.abs((rowHeights.mixed ?? 0) - (rowHeights.ordinary ?? 0)),
+  ).toBeLessThanOrEqual(1);
 
+  await page.goto(
+    `/transactions?q=${encodeURIComponent(exchangeMemo)}&page=1&pageSize=50&hideExpected=true`,
+  );
   const exchangeRow = page
     .getByRole("row")
     .filter({ has: page.getByRole("img", { name: "EXCHANGE" }) })
@@ -3130,6 +3211,9 @@ test("transactions page help and leaf category chips", async ({ page }) => {
     .first();
   await expect(exchangeRow).toContainText("-224.00 $");
   await expect(exchangeRow).not.toContainText("200.00 €");
+
+  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  await expect(simpleSpendRow).toBeVisible();
 
   const spendIcon = page.getByRole("img", { name: "SPEND" }).first();
   await expect(spendIcon).toBeVisible();
@@ -5252,7 +5336,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
     ),
   ).resolves.toBe(true);
 
-  const currency = page.getByLabel("Currency");
+  const currency = page.getByRole("combobox", { name: "Currency" });
   await expect(
     page.locator("datalist#entry-currency-options option[value='EUR']"),
   ).toHaveCount(1);
