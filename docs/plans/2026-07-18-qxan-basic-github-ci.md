@@ -7,12 +7,13 @@ Add reusable GitHub-hosted validation and Docker-image workflows, then continuou
 - Current delivery goal: make `ghcr.io/mishamsk/mina:main` usable for the maintainer's deployment as soon as validated `main` commits land.
 - `.github/` has no existing workflows or Dependabot configuration. Repository Actions are enabled; the default `GITHUB_TOKEN` is read-only, so Docker publication must grant `packages: write` explicitly.
 - Add three workflows: reusable `tests.yml`, reusable `docker-image.yml`, and concrete `build-and-publish-docker.yml`, which composes the first two.
-- `build-and-publish-docker.yml` runs on pushes to `main` and manual dispatch from a selected branch. No automatic pull-request trigger is in scope yet.
+- `build-and-publish-docker.yml` runs on pushes to `main` and manual dispatch from a selected branch.
+- Pull-request CI calls the reusable non-Docker test workflow so Dependabot PRs get validation without publishing images.
 - Every delivery runs `just pre-commit`, `just test`, `just test-integration`, and `just test-frontend-e2e`. A future PR workflow must call the same reusable test workflow.
 - Every image build publishes only its full commit-SHA tag. A tested current `main` commit also advances the mutable `main` tag without rebuilding the image.
 - Per-ref concurrency is latest-wins: a newer run cancels an obsolete run for the same ref. Immediately before promotion, re-read `refs/heads/main`; a stale or re-run SHA must never move `main` backward.
 - A canceled or failed run may leave an unpromoted SHA image. Only `main` is the deployable tested-image contract.
-- Release triggers, semantic-version image tags, `latest`, automatic PR CI, and Docker path filtering are out of scope. Add path detection only with the future PR caller, when Docker work becomes conditional.
+- Release triggers, semantic-version image tags, `latest`, Docker publication on PRs, and Docker path filtering are out of scope. Add path detection only when Docker work becomes conditional.
 - GHCR creates the first container package as private. After the first successful build, the owner must explicitly make it public; this irreversible GitHub setting remains a human gate.
 - These are CI/tooling/documentation changes, not application-code changes. Follow the plan's targeted checks instead of adding unrelated broad local test runs; the activated workflow itself executes all four application validation recipes.
 
@@ -22,7 +23,7 @@ Add reusable GitHub-hosted validation and Docker-image workflows, then continuou
 
 Establish one repository-owned validation boundary for current delivery and future PR automation. Pin runner tooling and validate GitHub workflow semantics locally so malformed workflow changes fail before push.
 
-- [x] Add `just` and `prek` to `mise.toml` at current explicit versions; adjust `just init` only as needed so `mise install` owns the `prek` installation.
+- [x] Add `prek` to `mise.toml` at the current explicit version; keep `just` externally installed for local shells and pinned explicitly in GitHub workflows so mise does not shadow Homebrew `just`.
 - [x] Track `github.com/rhysd/actionlint/cmd/actionlint` as a versioned Go tool.
 - [x] Add a Justfile `workflow-check` recipe that runs the tracked `actionlint` tool.
 - [x] Add a `mina-workflow-check` local pre-commit hook for `.github/workflows/*.yml` and `.yaml`; keep generic YAML validation unchanged.
@@ -57,8 +58,8 @@ Add the reusable registry-image boundary and the specifically named entry workfl
   - [x] Call `tests.yml`, then call `docker-image.yml` only after every test matrix entry passes.
   - [x] Use a workflow-and-ref concurrency group with `cancel-in-progress: true` so unrelated refs remain independent.
   - [x] Request `main` promotion only for `refs/heads/main`; non-main manual runs publish only the SHA tag.
-- [x] Update `README.md`, `docker/PACKAGE.md`, and the existing Docker item in `PROJECT_STATE.md` concisely with the SHA/`main` policy, registry-image gate, manual branch workflow, and equivalent local `just` commands.
-- [x] Do not add release, semantic-version, `latest`, branch-name, or pull-request behavior.
+- [x] Update `CONTRIBUTING.md`, `docker/PACKAGE.md`, and the existing Docker item in `PROJECT_STATE.md` concisely with the SHA/`main` policy, registry-image gate, manual branch workflow, and equivalent local `just` commands.
+- [x] Do not add release, semantic-version, `latest`, branch-name, or Docker pull-request publication behavior.
 - [x] Verification
   - [x] `just workflow-check` passes
   - [x] `just pre-commit` passes
@@ -76,7 +77,8 @@ Enable GitHub-native dependency update PRs across every dependency surface while
   - [x] GitHub Actions at `/`
 - [x] Group normal version updates by ecosystem, including major updates, so a typical cycle produces at most one grouped PR per ecosystem when grouping is supported.
 - [x] Use one consistent weekly day, time, and `America/New_York` timezone.
-- [x] Keep Dependabot responsible only for proposing changes; do not add auto-merge or an automatic PR workflow.
+- [x] Keep Dependabot responsible only for proposing changes; do not add auto-merge.
+- [x] Add pull-request CI that calls the reusable non-Docker test workflow for Dependabot and maintainer PRs.
 - [x] Verification
   - [x] `just pre-commit` passes
   - [x] `git diff --check` passes

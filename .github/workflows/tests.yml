@@ -36,9 +36,12 @@ jobs:
       - name: Install repo tools
         run: mise install
 
+      - name: Install just
+        run: mise install just@1.56.0
+
       - name: Install frontend dependencies
         if: matrix.frontend
-        run: just frontend-install
+        run: mise exec just@1.56.0 -- just frontend-install
 
       - name: Run ${{ matrix.recipe }}
-        run: just ${{ matrix.recipe }}
+        run: mise exec just@1.56.0 -- just ${{ matrix.recipe }}

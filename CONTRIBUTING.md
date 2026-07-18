@@ -50,6 +50,8 @@ just test-integration
 just test-frontend-e2e
 ```
 
+Pull-request CI runs the same non-Docker test matrix.
+
 To verify a published container image before promotion:
 
 ```bash

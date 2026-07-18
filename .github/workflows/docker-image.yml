@@ -29,6 +29,9 @@ jobs:
       - name: Install repo tools
         run: mise install
 
+      - name: Install just
+        run: mise install just@1.56.0
+
       - name: Set image creation time
         run: echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
@@ -67,10 +70,10 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Check remote SHA manifest
-        run: just docker-manifest-check "${IMAGE_NAME}:${GITHUB_SHA}"
+        run: mise exec just@1.56.0 -- just docker-manifest-check "${IMAGE_NAME}:${GITHUB_SHA}"
 
       - name: Test published SHA image
-        run: MINA_IMAGE="${IMAGE_NAME}:${GITHUB_SHA}" just test-docker
+        run: MINA_IMAGE="${IMAGE_NAME}:${GITHUB_SHA}" mise exec just@1.56.0 -- just test-docker
 
       - name: Check current main tip
         if: inputs.promote-main
