@@ -333,7 +333,11 @@ test-frontend-e2e *playwright_args: frontend-install build
     #!/usr/bin/env bash
     set -euo pipefail
 
-    mise exec -- pnpm exec playwright install chromium webkit
+    playwright_install_args=(chromium webkit)
+    if [[ "$(uname -s)" == Linux ]]; then
+        playwright_install_args=(--with-deps "${playwright_install_args[@]}")
+    fi
+    mise exec -- pnpm exec playwright install "${playwright_install_args[@]}"
     if [[ $# -eq 1 && $1 == "" ]]; then
         set --
     fi
