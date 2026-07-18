@@ -1,6 +1,6 @@
 services:
   volume-init:
-    image: ${MINA_IMAGE:-ghcr.io/mishamsk/mina:latest}
+    image: ${MINA_IMAGE:-ghcr.io/mishamsk/mina:main}
     user: "0:0"
     command: ["volume-init"]
     restart: "no"
@@ -30,7 +30,7 @@ services:
           nocopy: true
 
   mina:
-    image: ${MINA_IMAGE:-ghcr.io/mishamsk/mina:latest}
+    image: ${MINA_IMAGE:-ghcr.io/mishamsk/mina:main}
     restart: unless-stopped
     stop_grace_period: 30s
     user: "${MINA_UID:-1000}:${MINA_GID:-1000}"

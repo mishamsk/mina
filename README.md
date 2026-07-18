@@ -48,7 +48,7 @@ docker compose up -d
 docker compose ps
 ```
 
-Open <http://127.0.0.1:8080>. The image is `ghcr.io/mishamsk/mina:latest`; the Compose health check uses `GET /api/health`.
+Open <http://127.0.0.1:8080>. The image is `ghcr.io/mishamsk/mina:main`; the Compose health check uses `GET /api/health`.
 
 Prefer to delegate? Give your coding agent this prompt:
 

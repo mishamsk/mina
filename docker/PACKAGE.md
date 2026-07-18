@@ -45,7 +45,7 @@
 
 ## Compose Contract
 
-- The template defaults to `ghcr.io/mishamsk/mina:latest`; `MINA_IMAGE` is the image-test and advanced-operator override.
+- The template defaults to `ghcr.io/mishamsk/mina:main`; `MINA_IMAGE` is the image-test and advanced-operator override.
 - Compose runs as numeric `MINA_UID:MINA_GID`, defaulting to `1000:1000`; effective UID and primary GID must both be nonzero.
 - The main `mina` service always runs directly as that non-root identity and waits for successful volume initialization.
 - The main service root filesystem is read-only, all capabilities are dropped, privilege escalation is disabled, and `/tmp` is a bounded tmpfs.
