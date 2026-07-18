@@ -50,8 +50,6 @@ docker compose ps
 
 Open <http://127.0.0.1:8080>. The image is `ghcr.io/mishamsk/mina:main`; the Compose health check uses `GET /api/health`.
 
-The `main` image is advanced only by GitHub Actions after the full non-Docker test suite passes, a multi-architecture SHA-tagged image is published, and `just test-docker` passes against that published GHCR image. Maintainers can also manually run the Docker publication workflow from another branch; those runs publish and test only the full commit-SHA tag.
-
 Prefer to delegate? Give your coding agent this prompt:
 
 ```text
@@ -152,24 +150,6 @@ The OpenAPI document is the machine-readable map. An agent should inspect it ins
 ## Contributing
 
 Ideas, bug reports, real-world workflows, and documentation feedback are welcome. Mina does not accept external pull requests; share the problem and your thinking in an issue instead. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening one.
-
-### Local Validation
-
-GitHub Actions runs these same repository recipes:
-
-```bash
-just pre-commit
-just test
-just test-integration
-just test-frontend-e2e
-```
-
-Workflow files are checked locally with `just workflow-check`. To verify a published image the same way CI does, run:
-
-```bash
-just docker-manifest-check ghcr.io/mishamsk/mina:<full-commit-sha>
-MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker
-```
 
 ## License
 

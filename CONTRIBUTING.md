@@ -38,4 +38,23 @@ Useful context:
 - [SCOPE.md](SCOPE.md): durable in-scope and out-of-scope boundaries.
 - [PROJECT_STATE.md](PROJECT_STATE.md): what is implemented now.
 
+## Maintainer Validation
+
+Repository validation is owned by `just` recipes:
+
+```bash
+just workflow-check
+just pre-commit
+just test
+just test-integration
+just test-frontend-e2e
+```
+
+To verify a published container image before promotion:
+
+```bash
+just docker-manifest-check ghcr.io/mishamsk/mina:<full-commit-sha>
+MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker
+```
+
 Thanks for helping Mina encounter more interesting financial reality than one household can generate on its own.

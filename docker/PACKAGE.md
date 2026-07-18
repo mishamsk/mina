@@ -65,7 +65,7 @@
 ## Architecture Support
 
 - Local images support `linux/amd64` and `linux/arm64`, including compatible Synology models.
-- GitHub Actions publishes GHCR commit-SHA image indexes for `linux/amd64` and `linux/arm64`.
+- The Docker publication workflow builds GHCR commit-SHA image indexes for `linux/amd64` and `linux/arm64`.
 - The mutable `ghcr.io/mishamsk/mina:main` tag advances only after the published SHA image passes the Compose lifecycle test and still matches the current `main` tip.
 - Manual branch runs publish and test only the full commit-SHA tag; they do not move `main`.
 - Do not claim ARMv7 support.
@@ -76,7 +76,7 @@
 - `just docker-version-check` detects tool-version drift.
 - `just docker-manifest-check IMAGE` verifies that a remote image index contains `linux/amd64` and `linux/arm64`.
 - `just test-docker` builds real images unless `MINA_IMAGE` is supplied.
-- CI runs `MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker` against the published registry image before promotion.
+- The publication workflow runs `MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker` against the published registry image before promotion.
 - The lifecycle test covers private bind permissions, named-volume ownership and `down` persistence, explicit import, config bootstrap and writes, hardening, reachability, recreation, restart, image replacement, backups, validation, and destructive test cleanup.
 - It also builds and runs the non-native supported architecture when local emulation is available and reports an explicit limitation otherwise.
 - Docker tests must leave no test containers, networks, tagged test images, or temporary state.
