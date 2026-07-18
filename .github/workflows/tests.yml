@@ -44,4 +44,6 @@ jobs:
         run: mise exec just@1.56.0 -- just frontend-install
 
       - name: Run ${{ matrix.recipe }}
+        env:
+          MINA_FRONTEND_E2E_WORKERS: "1"
         run: mise exec just@1.56.0 -- just ${{ matrix.recipe }}
