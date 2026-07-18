@@ -374,7 +374,7 @@ pre-commit:
 
 # Run the automated review loop.
 [group('agents')]
-review-loop goal branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="":
+review-loop goal branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model="opus" codex_reviewer="5.6-sol/xhigh" codex_aggregator="5.6-sol/medium" codex_validator="5.6-sol/high" codex_fixer="5.6-sol/high":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -383,7 +383,12 @@ review-loop goal branch_or_commit="" base_ref="" max_iterations="" claude_review
     max_iterations={{ quote(max_iterations) }}
     claude_review_percent={{ quote(claude_review_percent) }}
 
-    set -- --codex-model {{ quote(default_codex_model) }} --codex-reasoning-effort {{ quote(default_codex_reasoning_effort) }}
+    set -- \
+        --claude-model {{ quote(claude_model) }} \
+        --codex-reviewer {{ quote(codex_reviewer) }} \
+        --codex-aggregator {{ quote(codex_aggregator) }} \
+        --codex-validator {{ quote(codex_validator) }} \
+        --codex-fixer {{ quote(codex_fixer) }}
     if [ -n "$base_ref" ]; then
         set -- "$@" --base "$base_ref"
     fi
