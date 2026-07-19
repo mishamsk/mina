@@ -26,9 +26,33 @@ const (
 
 // Options contains live process dependencies and controls supplied by composition.
 type Options struct {
-	HTTP         HTTPConfig
-	Operations   OperationConfig
-	Dependencies Dependencies
+	ExecutionProfile ExecutionProfile
+	HTTP             HTTPConfig
+	Operations       OperationConfig
+	Dependencies     Dependencies
+}
+
+// ExecutionProfile selects the runtime lifecycle policy used by an app.
+type ExecutionProfile string
+
+const (
+	// ExecutionProfileLongRunning preserves server startup validation and automatic operation execution.
+	ExecutionProfileLongRunning ExecutionProfile = "long-running"
+	// ExecutionProfileOneShot skips startup database validation and automatic operation execution.
+	ExecutionProfileOneShot ExecutionProfile = "one-shot"
+)
+
+func (opts Options) validateExecutionProfile() error {
+	switch opts.ExecutionProfile {
+	case ExecutionProfileLongRunning, ExecutionProfileOneShot:
+		return nil
+	default:
+		return fmt.Errorf("runtime execution profile must be %q or %q", ExecutionProfileLongRunning, ExecutionProfileOneShot)
+	}
+}
+
+func (opts Options) automaticOperationsEnabled() bool {
+	return opts.ExecutionProfile == ExecutionProfileLongRunning && opts.Operations.Enabled
 }
 
 // HTTPConfig controls process-local HTTP adapter behavior.

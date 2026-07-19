@@ -43,6 +43,7 @@ type App struct {
 	services          appServices
 	handler           http.Handler
 	background        *background.Runner
+	executionProfile  ExecutionProfile
 	operationsMu      sync.Mutex
 	operationsStarted bool
 }
@@ -73,7 +74,10 @@ func newApp(
 	opts Options,
 	openAppDB func(context.Context, store.AppDBOpenRequest) (*store.AppDB, error),
 ) (*App, error) {
-	if err := Validate(cfg, opts.Operations.Enabled); err != nil {
+	if err := opts.validateExecutionProfile(); err != nil {
+		return nil, err
+	}
+	if err := Validate(cfg, opts.automaticOperationsEnabled()); err != nil {
 		return nil, err
 	}
 	if cfg.DatabasePath != "" {
@@ -90,8 +94,10 @@ func newApp(
 	if err := store.Migrate(ctx, appDB); err != nil {
 		return nil, closeAppDBAfterError(appDB, fmt.Errorf("migrate database: %w", err))
 	}
-	if err := validateStartupDatabase(ctx, cfg, appDB); err != nil {
-		return nil, closeAppDBAfterError(appDB, err)
+	if opts.ExecutionProfile == ExecutionProfileLongRunning {
+		if err := validateStartupDatabase(ctx, cfg, appDB); err != nil {
+			return nil, closeAppDBAfterError(appDB, err)
+		}
 	}
 
 	app, err := NewWithAppDB(ctx, appDB, cfg, opts)
@@ -224,6 +230,9 @@ func AccountingSchemaExists(ctx context.Context, cfg appconfig.Config, operation
 
 // NewWithAppDB wires services and the composed HTTP handler around an already-opened migrated AppDB.
 func NewWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config, opts Options) (*App, error) {
+	if err := opts.validateExecutionProfile(); err != nil {
+		return nil, err
+	}
 	operationRepo, err := store.NewOperationRunRepository(ctx, appDB)
 	if err != nil {
 		return nil, err
@@ -245,12 +254,13 @@ func NewWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	}
 
 	app := &App{
-		appDB:      appDB,
-		services:   services,
-		handler:    handler,
-		background: backgroundRunner,
+		appDB:            appDB,
+		services:         services,
+		handler:          handler,
+		background:       backgroundRunner,
+		executionProfile: opts.ExecutionProfile,
 	}
-	if opts.Operations.Enabled && !opts.Operations.DeferStart {
+	if opts.automaticOperationsEnabled() && !opts.Operations.DeferStart {
 		app.StartOperations()
 	}
 
@@ -428,7 +438,7 @@ func startupExchangeRateProvider(cfg appconfig.Config, opts Options) (exchangera
 	if opts.Dependencies.StartupExchangeRateProviderFactory != nil {
 		return opts.Dependencies.StartupExchangeRateProviderFactory, nil
 	}
-	if !opts.Operations.Enabled || !cfg.ExchangeRates.AutomaticLoadingEnabled {
+	if !opts.automaticOperationsEnabled() || !cfg.ExchangeRates.AutomaticLoadingEnabled {
 		return exchangeRateProvider(cfg, opts), nil
 	}
 	if exchangeRateStartupProvider(cfg) == "frankfurter_api" {
@@ -497,7 +507,7 @@ func (a *App) SeedDemo(ctx context.Context) (demo.Summary, error) {
 
 // StartOperations starts runtime-owned startup and recurring operations once.
 func (a *App) StartOperations() {
-	if a == nil || a.background == nil {
+	if a == nil || a.background == nil || a.executionProfile != ExecutionProfileLongRunning {
 		return
 	}
 	a.operationsMu.Lock()
@@ -536,7 +546,7 @@ func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServ
 		Timeout:    2 * time.Minute,
 		MaxRetries: 2,
 	}
-	if opts.Operations.Enabled && cfg.ExchangeRates.AutomaticLoadingEnabled {
+	if opts.automaticOperationsEnabled() && cfg.ExchangeRates.AutomaticLoadingEnabled {
 		op.Startup = true
 		op.Schedule = cfg.ExchangeRates.LoadScheduleUTC
 	}
@@ -551,7 +561,7 @@ func newAppBackgroundRunner(cfg appconfig.Config, opts Options, services appServ
 		Timeout:    2 * time.Minute,
 		MaxRetries: 0,
 	}
-	if opts.Operations.Enabled && cfg.Backups.File.ScheduleUTC != "" {
+	if opts.automaticOperationsEnabled() && cfg.Backups.File.ScheduleUTC != "" {
 		backupOp.Schedule = cfg.Backups.File.ScheduleUTC
 	}
 	if err := runner.Register(backupOp); err != nil {

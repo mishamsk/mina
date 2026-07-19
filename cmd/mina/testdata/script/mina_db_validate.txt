@@ -264,6 +264,12 @@ stderr 'error: schema: missing column journal_record.memo'
 stderr 'database validation failed'
 stderr 'error: schema: missing column journal_record.memo'
 
+# One-shot local clients skip startup validation even when the selected database fails it.
+env MINA_SCHEMA=demo
+exec mina client --db $WORK/startup_broken_schema.db --yes tags list
+stdout '"total_count":8'
+env MINA_SCHEMA=
+
 ! exec mina serve --config-file startup-validation-none.toml --db $WORK/startup_broken_schema.db --schema demo --yes --host 192.0.2.1 --port 0 --quiet
 stderr 'listen error:'
 

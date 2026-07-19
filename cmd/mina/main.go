@@ -33,7 +33,9 @@ func main() {
 func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	root := newRootCommand(stdin, stdout, stderr)
 	root.SetArgs(args)
-	if err := root.Execute(); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := root.ExecuteContext(ctx); err != nil {
 		var reportedErr *clientcli.ReportedError
 		if errors.As(err, &reportedErr) {
 			return 1
@@ -89,7 +91,11 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 	)
 
 	root.AddCommand(newVersionCommand(stdout))
-	root.AddCommand(clientcli.NewCommand(stdin, stdout, stderr))
+	clientStdin := bufio.NewReader(stdin)
+	root.AddCommand(clientcli.NewCommand(clientStdin, stdout, stderr, clientcli.CommandOptions{
+		ConfigFilePath:      &configFilePath,
+		LocalSessionFactory: newLocalClientSessionFactory(clientStdin, stderr),
+	}))
 	root.AddCommand(newServeCommand(stdin, stdout, stderr, &configFilePath))
 	root.AddCommand(newMigrateCommand(stdin, stderr, &configFilePath))
 	root.AddCommand(newDBCommand(stdout, stderr, &configFilePath))
@@ -107,6 +113,40 @@ func newVersionCommand(stdout io.Writer) *cobra.Command {
 			_, err := fmt.Fprintf(stdout, "mina %s\n", version)
 			return err
 		},
+	}
+}
+
+func newLocalClientSessionFactory(stdin io.Reader, stderr io.Writer) clientcli.LocalSessionFactory {
+	return func(cmd *cobra.Command, cfg appconfig.Config) (clientcli.LocalSession, error) {
+		assumeYesFlag, err := cmd.Flags().GetBool("yes")
+		if err != nil {
+			return clientcli.LocalSession{}, err
+		}
+		assumeYes, err := commandBoolValue(cmd, "yes", assumeYesFlag, "MINA_YES")
+		if err != nil {
+			return clientcli.LocalSession{}, err
+		}
+		created, err := confirmDatabaseCreation(cmd.Context(), stdin, stderr, cfg, assumeYes)
+		if err != nil {
+			return clientcli.LocalSession{}, err
+		}
+		if !created {
+			if err := confirmPendingMigrations(cmd.Context(), stdin, stderr, cfg, false, assumeYes); err != nil {
+				return clientcli.LocalSession{}, err
+			}
+		}
+
+		appInstance, err := runtime.New(cmd.Context(), cfg, runtime.Options{
+			ExecutionProfile: runtime.ExecutionProfileOneShot,
+		})
+		if err != nil {
+			return clientcli.LocalSession{}, fmt.Errorf("startup error: %w", err)
+		}
+
+		return clientcli.LocalSession{
+			Handler: appInstance.Handler(),
+			Close:   appInstance.Close,
+		}, nil
 	}
 }
 
@@ -149,7 +189,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 				return err
 			}
 
-			if err := serve(stdin, stdout, stderr, cfg, quietValue, seedDemo, assumeYesValue); err != nil {
+			if err := serve(cmd.Context(), stdin, stdout, stderr, cfg, quietValue, seedDemo, assumeYesValue); err != nil {
 				return commandExitError(err)
 			}
 
@@ -217,7 +257,7 @@ func newMigrateCommand(stdin io.Reader, stderr io.Writer, configFilePath *string
 				return err
 			}
 
-			if err := migrate(stdin, stderr, cfg, assumeYesValue); err != nil {
+			if err := migrate(cmd.Context(), stdin, stderr, cfg, assumeYesValue); err != nil {
 				return commandExitError(err)
 			}
 
@@ -375,6 +415,7 @@ func normalizeFlagError(err error) error {
 }
 
 func serve(
+	ctx context.Context,
 	stdin io.Reader,
 	stdout io.Writer,
 	stderr io.Writer,
@@ -383,9 +424,6 @@ func serve(
 	seedDemo bool,
 	assumeYes bool,
 ) error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	if cfg.DatabasePath == "" {
 		if _, err := fmt.Fprintln(stderr, "warning: no --db provided; using ephemeral in-memory accounting state"); err != nil {
 			return err
@@ -399,6 +437,7 @@ func serve(
 	defer closeAccessLog()
 
 	runtimeOpts := runtime.Options{
+		ExecutionProfile: runtime.ExecutionProfileLongRunning,
 		HTTP: runtime.HTTPConfig{
 			AccessLog: accessLog,
 		},
@@ -408,7 +447,7 @@ func serve(
 			ErrorLog:   stderr,
 		},
 	}
-	created, err := confirmDatabaseCreation(stdin, stderr, cfg, assumeYes)
+	created, err := confirmDatabaseCreation(ctx, stdin, stderr, cfg, assumeYes)
 	if err != nil {
 		return err
 	}
@@ -489,9 +528,8 @@ func openAccessLog(stderr io.Writer, path string, quiet bool) (io.Writer, func()
 	}, nil
 }
 
-func migrate(stdin io.Reader, stderr io.Writer, cfg appconfig.Config, assumeYes bool) error {
-	ctx := context.Background()
-	created, err := confirmDatabaseCreation(stdin, stderr, cfg, assumeYes)
+func migrate(ctx context.Context, stdin io.Reader, stderr io.Writer, cfg appconfig.Config, assumeYes bool) error {
+	created, err := confirmDatabaseCreation(ctx, stdin, stderr, cfg, assumeYes)
 	if err != nil {
 		return err
 	}
@@ -500,7 +538,7 @@ func migrate(stdin io.Reader, stderr io.Writer, cfg appconfig.Config, assumeYes 
 			return err
 		}
 	}
-	appInstance, err := runtime.New(ctx, cfg, runtime.Options{})
+	appInstance, err := runtime.New(ctx, cfg, runtime.Options{ExecutionProfile: runtime.ExecutionProfileLongRunning})
 	if err != nil {
 		return fmt.Errorf("startup error: %w", err)
 	}
@@ -536,7 +574,13 @@ func dbValidate(ctx context.Context, cfg appconfig.Config, shallow bool, stdout 
 	return report.Write(stdout)
 }
 
-func confirmDatabaseCreation(stdin io.Reader, stderr io.Writer, cfg appconfig.Config, assumeYes bool) (bool, error) {
+func confirmDatabaseCreation(
+	ctx context.Context,
+	stdin io.Reader,
+	stderr io.Writer,
+	cfg appconfig.Config,
+	assumeYes bool,
+) (bool, error) {
 	if cfg.DatabasePath == "" {
 		return false, nil
 	}
@@ -558,7 +602,7 @@ func confirmDatabaseCreation(stdin io.Reader, stderr io.Writer, cfg appconfig.Co
 	); err != nil {
 		return false, err
 	}
-	answer, err := readConfirmation(stdin)
+	answer, err := readConfirmation(ctx, stdin)
 	if err != nil {
 		return false, err
 	}
@@ -599,7 +643,7 @@ func confirmPendingMigrations(
 	); err != nil {
 		return err
 	}
-	confirmed, err := readConfirmation(stdin)
+	confirmed, err := readConfirmation(ctx, stdin)
 	if err != nil {
 		return err
 	}
@@ -610,13 +654,28 @@ func confirmPendingMigrations(
 	return errors.New("database migrations not confirmed")
 }
 
-func readConfirmation(stdin io.Reader) (bool, error) {
-	answer, err := bufio.NewReader(stdin).ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		return false, fmt.Errorf("read confirmation: %w", err)
+func readConfirmation(ctx context.Context, stdin io.Reader) (bool, error) {
+	type readResult struct {
+		answer string
+		err    error
+	}
+	resultCh := make(chan readResult, 1)
+	go func() {
+		answer, err := bufio.NewReader(stdin).ReadString('\n')
+		resultCh <- readResult{answer: answer, err: err}
+	}()
+
+	var result readResult
+	select {
+	case <-ctx.Done():
+		return false, ctx.Err()
+	case result = <-resultCh:
+	}
+	if result.err != nil && !errors.Is(result.err, io.EOF) {
+		return false, fmt.Errorf("read confirmation: %w", result.err)
 	}
 
-	switch strings.ToLower(strings.TrimSpace(answer)) {
+	switch strings.ToLower(strings.TrimSpace(result.answer)) {
 	case "y", "yes":
 		return true, nil
 	default:

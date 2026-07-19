@@ -27,10 +27,5 @@ stdout '"tag_id"'
 stderr '"code":"invalid_request"'
 stderr '"message"'
 
-# A target is mandatory until local mode is implemented.
-! exec mina client transactions list
-! stdout .
-stderr 'mina client requires --server URL; local --db mode is not available yet'
-
 kill -INT server
 wait server

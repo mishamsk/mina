@@ -1,0 +1,59 @@
+# A fresh local target is created, migrated, and served in-process without a listener.
+env MINA_FX_AUTO_LOAD_ENABLED=false
+exec mina client --db $WORK/local.db --yes tags create --json '{"fqn":"LocalCLI"}'
+stdout '"fqn":"LocalCLI"'
+stdout '"tag_id":1'
+! stderr .
+exists local.db
+
+# Consent and a JSON stdin body share one stream without losing buffered body bytes.
+stdin consent-and-body.txt
+exec mina client --db $WORK/piped.db tags create --json -
+stdout '"fqn":"PipeBody"'
+! stderr 'invalid JSON request body'
+exec mina client --db $WORK/piped.db --yes tags list
+stdout '"fqn":"PipeBody"'
+
+# A second invocation reopens the file and observes persisted state.
+exec mina client --db $WORK/local.db --yes tags list
+stdout '"fqn":"LocalCLI"'
+stdout '"total_count":1'
+! stderr .
+
+# Explicit local and remote selectors are mutually exclusive.
+! exec mina client --db $WORK/local.db --server http://127.0.0.1:8080 tags list
+! stdout .
+stderr '--db and --server are mutually exclusive'
+
+# An explicitly empty remote selector is rejected instead of falling back to configured local state.
+env MINA_DB=$WORK/local.db
+! exec mina client --server '' tags list
+! stdout .
+stderr 'invalid --server URL ""'
+
+# A database owned by mina serve directs local callers to remote mode.
+freeport
+exec mina serve --db $WORK/local.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpwait -timeout 10s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+! exec mina client --db $WORK/local.db --yes tags list
+! stdout .
+stderr 'database .*local.db is already in use'
+stderr 'use --server URL to connect to the Mina server that owns it'
+kill -INT server
+wait server
+
+# Lock guidance is reserved for DuckDB lock failures, not matching path text.
+mkdir 'database is locked'
+! exec mina client --db 'database is locked' --yes tags list
+! stderr 'already in use'
+stderr 'Is a directory'
+
+# Mina refuses ephemeral client state when no target is explicit or configured.
+env XDG_CONFIG_HOME=$WORK/empty-config MINA_DB=
+! exec mina client tags list
+! stdout .
+stderr 'mina client requires a target: use --db PATH for local mode or --server URL for remote mode'
+
+-- consent-and-body.txt --
+y
+{"fqn":"PipeBody"}

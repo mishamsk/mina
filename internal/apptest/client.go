@@ -213,6 +213,13 @@ func WithOperationsEnabled(enabled bool) Option {
 	}
 }
 
+// WithOneShotExecutionProfile selects the one-shot runtime policy for the test app.
+func WithOneShotExecutionProfile() Option {
+	return func(opts *clientOptions) {
+		opts.runtimeOptions.ExecutionProfile = runtime.ExecutionProfileOneShot
+	}
+}
+
 // New creates an in-process app backed by migrated in-memory DuckDB state.
 func New(t *testing.T, options ...Option) *Client {
 	t.Helper()
@@ -237,6 +244,9 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 	cfg.ExchangeRates.AutomaticLoadingEnabled = false
 	opts := clientOptions{
 		config: cfg,
+		runtimeOptions: runtime.Options{
+			ExecutionProfile: runtime.ExecutionProfileLongRunning,
+		},
 	}
 	for _, option := range options {
 		option(&opts)

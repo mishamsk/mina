@@ -8,17 +8,20 @@
 ## Implicit Contracts
 
 - Runtime composition is the only place that wires concrete service, store, and adapter implementations.
+- Every app selects an explicit long-running or one-shot execution profile.
+- One-shot apps open and migrate normally, skip startup database validation, and never start automatic operations.
+- One-shot apps register the same manual-operation REST handlers as long-running apps.
 - App instances own one initialized `AppDB`, app service bundle, REST handler, and web UI handler.
 - Startup demo seeding runs after app composition and before HTTP listen.
 - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Runtime decides DuckDB open policy and database lifecycle, then delegates DuckDB mechanics to store `AppDB` open helpers.
 - Runtime keeps DuckDB connection parallelism fixed and CPU-bounded; it is not app config.
-- Startup runs configured database validation after migration for file-backed accounting state only; error findings abort startup.
+- Long-running startup runs configured database validation after migration for file-backed accounting state only; error findings abort startup.
 - `ValidateDatabase` opens the selected file-backed accounting state read-only and never writes to the target.
 - Runtime derives accounting database and schema defaults from `appconfig.Config`.
 - Runtime consumes source-loaded app settings from `internal/appconfig`.
 - Runtime consumes the cache directory resolved by `internal/appconfig`.
-- Process execution is opt-in per runtime mode; `serve` enables it and utility flows leave it disabled.
+- Automatic operation execution requires both the long-running profile and enabled runtime operations.
 - Runtime dependencies carry only true side-effect seams such as clocks, network provider factories, and cache HTTP clients.
 - Runtime operations start after app composition, publish operation status, and do not block app creation.
 - Runtime registers exchange-rate loading as startup, recurring, and manual-started work against one operation status surface.

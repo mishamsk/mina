@@ -15,25 +15,46 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/httpclient"
 )
 
 const (
 	clientCommandName = "client"
 	serverFlagName    = "server"
+	databaseFlagName  = "db"
+	yesFlagName       = "yes"
 	jsonFlagName      = "json"
 )
 
 var reservedBodyFlagNames = map[string]struct{}{
-	"help":         {},
-	jsonFlagName:   {},
-	serverFlagName: {},
+	"help":           {},
+	jsonFlagName:     {},
+	serverFlagName:   {},
+	databaseFlagName: {},
+	yesFlagName:      {},
 }
 
+// CommandOptions supplies process-composed local-mode dependencies.
+type CommandOptions struct {
+	ConfigFilePath      *string
+	LocalSessionFactory LocalSessionFactory
+}
+
+// LocalSession contains the in-process handler and lifecycle cleanup composed by cmd/mina.
+type LocalSession struct {
+	Handler http.Handler
+	Close   func() error
+}
+
+// LocalSessionFactory opens one local runtime session for resolved app config.
+type LocalSessionFactory func(*cobra.Command, appconfig.Config) (LocalSession, error)
+
 // Session gives a hand-written extension access to the generated REST client
-// for one remote target.
+// for one local or remote target.
 type Session struct {
 	client httpclient.ClientWithResponsesInterface
+	close  func() error
 }
 
 // Client returns the generated REST client owned by the session.
@@ -47,7 +68,17 @@ func (s *Session) Operations() []httpclient.Operation {
 	return httpclient.CLIOperations()
 }
 
-// SessionFactory opens a remote client session using the client command's
+// Close releases lifecycle resources owned by the session.
+func (s *Session) Close() error {
+	if s == nil || s.close == nil {
+		return nil
+	}
+	close := s.close
+	s.close = nil
+	return close()
+}
+
+// SessionFactory opens a local or remote client session using the client command's
 // configured target. Extensions call it from their Cobra command action.
 type SessionFactory func(*cobra.Command) (*Session, error)
 
@@ -71,25 +102,36 @@ func (e *ReportedError) Unwrap() error {
 	return e.err
 }
 
-// NewCommand builds the catalog-driven remote client command tree.
-func NewCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+// NewCommand builds the catalog-driven local-or-remote client command tree.
+func NewCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, options CommandOptions) *cobra.Command {
 	var serverURL string
+	var databasePath string
 	cmd := &cobra.Command{
 		Use:          clientCommandName,
-		Short:        "Call a Mina server",
+		Short:        "Call Mina through a local database or server",
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if _, err := openSession(cmd); err != nil {
-				return reportError(cmd, err)
-			}
-			return cmd.Help()
+			return runSessionHelp(cmd, newSessionFactory(options))
 		},
 	}
 	cmd.SetIn(stdin)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 	cmd.PersistentFlags().StringVar(&serverURL, serverFlagName, "", "Mina server URL")
+	source := appconfig.Sources()[appconfig.SourceDatabasePath]
+	cmd.PersistentFlags().StringVar(
+		&databasePath,
+		databaseFlagName,
+		"",
+		fmt.Sprintf("path to the Mina database file (config: %s; env: %s)", source.ConfigPath, source.EnvVar),
+	)
+	cmd.PersistentFlags().Bool(
+		yesFlagName,
+		false,
+		"answer yes to database creation and migration prompts (env: MINA_YES)",
+	)
+	sessionFactory := newSessionFactory(options)
 
 	areas := make(map[string]*cobra.Command)
 	for _, operation := range httpclient.CLIOperations() {
@@ -102,16 +144,13 @@ func NewCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 				Args:         cobra.NoArgs,
 				SilenceUsage: true,
 				RunE: func(cmd *cobra.Command, _ []string) error {
-					if _, err := openSession(cmd); err != nil {
-						return reportError(cmd, err)
-					}
-					return cmd.Help()
+					return runSessionHelp(cmd, sessionFactory)
 				},
 			}
 			areas[areaName] = area
 			cmd.AddCommand(area)
 		}
-		area.AddCommand(newOperationCommand(operation))
+		area.AddCommand(newOperationCommand(operation, sessionFactory))
 	}
 
 	return cmd
@@ -119,8 +158,8 @@ func NewCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Comm
 
 // RegisterExtensions adds hand-written top-level client commands after checking
 // their names against generated areas, generated commands, and prior extensions.
-func RegisterExtensions(client *cobra.Command, extensions ...Extension) error {
-	if client == nil || client.Name() != clientCommandName || client.PersistentFlags().Lookup(serverFlagName) == nil {
+func RegisterExtensions(client *cobra.Command, options CommandOptions, extensions ...Extension) error {
+	if client == nil || client.Name() != clientCommandName || client.PersistentFlags().Lookup(serverFlagName) == nil || client.PersistentFlags().Lookup(databaseFlagName) == nil {
 		return errors.New("extensions require a client command built by clientcli.NewCommand")
 	}
 
@@ -137,7 +176,7 @@ func RegisterExtensions(client *cobra.Command, extensions ...Extension) error {
 		if extension == nil {
 			return fmt.Errorf("client extension %d is nil", index+1)
 		}
-		command, err := extension(openSession)
+		command, err := extension(newSessionFactory(options))
 		if err != nil {
 			return fmt.Errorf("build client extension %d: %w", index+1, err)
 		}
@@ -164,7 +203,7 @@ func RegisterExtensions(client *cobra.Command, extensions ...Extension) error {
 	return nil
 }
 
-func newOperationCommand(operation httpclient.Operation) *cobra.Command {
+func newOperationCommand(operation httpclient.Operation, sessionFactory SessionFactory) *cobra.Command {
 	pathNames := make([]string, 0, len(operation.Input.Path))
 	for _, parameter := range operation.Input.Path {
 		pathNames = append(pathNames, "<"+parameter.Name+">")
@@ -197,11 +236,14 @@ func newOperationCommand(operation httpclient.Operation) *cobra.Command {
 		}
 	}
 
-	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		session, err := openSession(cmd)
+	cmd.RunE = func(cmd *cobra.Command, args []string) (runErr error) {
+		session, err := sessionFactory(cmd)
 		if err != nil {
 			return reportError(cmd, err)
 		}
+		defer func() {
+			runErr = closeSession(cmd, session, runErr)
+		}()
 		input, err := composeInvocationInput(cmd, args, operation, bodyFieldFlags)
 		if err != nil {
 			return reportError(cmd, err)
@@ -232,22 +274,101 @@ func newOperationCommand(operation httpclient.Operation) *cobra.Command {
 	return cmd
 }
 
-func openSession(command *cobra.Command) (*Session, error) {
+func newSessionFactory(options CommandOptions) SessionFactory {
+	return func(command *cobra.Command) (*Session, error) {
+		return openSession(command, options)
+	}
+}
+
+func openSession(command *cobra.Command, options CommandOptions) (*Session, error) {
 	serverURL, err := command.Flags().GetString(serverFlagName)
 	if err != nil {
 		return nil, err
 	}
-	if serverURL == "" {
-		return nil, errors.New("mina client requires --server URL; local --db mode is not available yet")
-	}
-	if err := validateServerURL(serverURL); err != nil {
+	databasePath, err := command.Flags().GetString(databaseFlagName)
+	if err != nil {
 		return nil, err
 	}
-	client, err := httpclient.NewClientWithResponses(serverURL)
-	if err != nil {
-		return nil, fmt.Errorf("create remote client: %w", err)
+	if command.Flags().Changed(serverFlagName) && command.Flags().Changed(databaseFlagName) {
+		return nil, errors.New("--db and --server are mutually exclusive")
 	}
-	return &Session{client: client}, nil
+	if command.Flags().Changed(serverFlagName) {
+		if err := validateServerURL(serverURL); err != nil {
+			return nil, err
+		}
+		client, err := httpclient.NewClientWithResponses(serverURL)
+		if err != nil {
+			return nil, fmt.Errorf("create remote client: %w", err)
+		}
+		return &Session{client: client}, nil
+	}
+
+	overrides := appconfig.Overrides{}
+	if command.Flags().Changed(databaseFlagName) {
+		overrides.DatabasePath = appconfig.Set(databasePath)
+	}
+	configFilePath := ""
+	if options.ConfigFilePath != nil {
+		configFilePath = *options.ConfigFilePath
+	}
+	cfg, err := appconfig.Load(appconfig.LoadOptions{ConfigFilePath: configFilePath}, overrides)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.DatabasePath == "" {
+		return nil, errors.New("mina client requires a target: use --db PATH for local mode or --server URL for remote mode")
+	}
+	if options.LocalSessionFactory == nil {
+		return nil, errors.New("local client sessions are not configured")
+	}
+	local, err := options.LocalSessionFactory(command, cfg)
+	if err != nil {
+		if isDatabaseLockError(err) {
+			return nil, fmt.Errorf("database %s is already in use; use --server URL to connect to the Mina server that owns it: %w", cfg.DatabasePath, err)
+		}
+		return nil, fmt.Errorf("open local client session: %w", err)
+	}
+	if local.Handler == nil || local.Close == nil {
+		if local.Close != nil {
+			_ = local.Close()
+		}
+		return nil, errors.New("open local client session: local session factory returned incomplete resources")
+	}
+	client, err := httpclient.NewInProcessClient(local.Handler)
+	if err != nil {
+		if closeErr := local.Close(); closeErr != nil {
+			return nil, fmt.Errorf("create in-process client: %w; close local session: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("create in-process client: %w", err)
+	}
+
+	return &Session{client: client, close: local.Close}, nil
+}
+
+func runSessionHelp(command *cobra.Command, factory SessionFactory) (runErr error) {
+	session, err := factory(command)
+	if err != nil {
+		return reportError(command, err)
+	}
+	defer func() {
+		runErr = closeSession(command, session, runErr)
+	}()
+
+	return command.Help()
+}
+
+func closeSession(command *cobra.Command, session *Session, runErr error) error {
+	if err := session.Close(); err != nil && runErr == nil {
+		return reportError(command, fmt.Errorf("close client session: %w", err))
+	}
+	return runErr
+}
+
+func isDatabaseLockError(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "could not set lock on file") ||
+		strings.Contains(message, "conflicting lock") ||
+		strings.Contains(message, "unique file handle conflict")
 }
 
 func validateServerURL(raw string) error {
