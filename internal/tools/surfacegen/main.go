@@ -20,6 +20,7 @@ import (
 const (
 	defaultOpenAPIPath = "api/openapi.yaml"
 	defaultConfigPath  = "api/client-surfaces.yaml"
+	defaultOutputPath  = "internal/httpclient/surfaces.gen.go"
 )
 
 type surfaceConfig struct {
@@ -56,6 +57,8 @@ type mcpAnnotations struct {
 type operationInfo struct {
 	operation *openapi3.Operation
 	pathItem  *openapi3.PathItem
+	method    string
+	path      string
 }
 
 type finding struct {
@@ -68,22 +71,56 @@ func main() {
 	check := flag.Bool("check", false, "validate the OpenAPI and client-surface contracts")
 	openAPIPath := flag.String("openapi", defaultOpenAPIPath, "OpenAPI document path")
 	configPath := flag.String("config", defaultConfigPath, "client-surface configuration path")
+	outputPath := flag.String("output", defaultOutputPath, "generated Go output path")
 	flag.Parse()
 
-	if !*check || flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: surfacegen -check [-openapi path] [-config path]")
+	if flag.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "usage: surfacegen [-check] [-openapi path] [-config path] [-output path]")
 		os.Exit(2)
 	}
 
-	findings, err := validate(*openAPIPath, *configPath)
+	document, config, operations, findings, err := loadContracts(*openAPIPath, *configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "surfacegen: %v\n", err)
 		os.Exit(2)
 	}
-	if len(findings) == 0 {
+	if len(findings) > 0 {
+		printFindings(findings)
+		os.Exit(1)
+	}
+	if *check {
 		return
 	}
 
+	if err := generate(*outputPath, document, config, operations); err != nil {
+		fmt.Fprintf(os.Stderr, "surfacegen: %v\n", err)
+		os.Exit(2)
+	}
+}
+
+func loadContracts(
+	openAPIPath string,
+	configPath string,
+) (*openapi3.T, surfaceConfig, map[string]operationInfo, []finding, error) {
+	document, err := openapi3.NewLoader().LoadFromFile(openAPIPath)
+	if err != nil {
+		return nil, surfaceConfig{}, nil, nil, fmt.Errorf("load %s: %w", openAPIPath, err)
+	}
+	if err := document.Validate(context.Background()); err != nil {
+		return nil, surfaceConfig{}, nil, nil, fmt.Errorf("validate %s: %w", openAPIPath, err)
+	}
+
+	config, err := loadSurfaceConfig(configPath)
+	if err != nil {
+		return nil, surfaceConfig{}, nil, nil, err
+	}
+
+	operations, findings := collectOperations(openAPIPath, document)
+	findings = append(findings, validateContracts(openAPIPath, configPath, operations, config)...)
+	return document, config, operations, findings, nil
+}
+
+func printFindings(findings []finding) {
 	sort.Slice(findings, func(i int, j int) bool {
 		if findings[i].path != findings[j].path {
 			return findings[i].path < findings[j].path
@@ -100,26 +137,6 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "%s: operation %s: %s\n", item.path, item.operation, item.message)
 	}
-	os.Exit(1)
-}
-
-func validate(openAPIPath string, configPath string) ([]finding, error) {
-	document, err := openapi3.NewLoader().LoadFromFile(openAPIPath)
-	if err != nil {
-		return nil, fmt.Errorf("load %s: %w", openAPIPath, err)
-	}
-	if err := document.Validate(context.Background()); err != nil {
-		return nil, fmt.Errorf("validate %s: %w", openAPIPath, err)
-	}
-
-	config, err := loadSurfaceConfig(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	operations, findings := collectOperations(openAPIPath, document)
-	findings = append(findings, validateContracts(openAPIPath, configPath, operations, config)...)
-	return findings, nil
 }
 
 func loadSurfaceConfig(path string) (surfaceConfig, error) {
@@ -160,6 +177,8 @@ func collectOperations(path string, document *openapi3.T) (map[string]operationI
 			operations[operation.OperationID] = operationInfo{
 				operation: operation,
 				pathItem:  pathItem,
+				method:    strings.ToUpper(method),
+				path:      operationPath,
 			}
 		}
 	}

@@ -50,11 +50,13 @@ lint:
 openapi:
     go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
     go tool oapi-codegen -config api/oapi-codegen-httpclient.yaml api/openapi.yaml
+    go run ./internal/tools/surfacegen
 
 # Validate OpenAPI client-surface exposure decisions.
 [group('codegen')]
 surface-check:
     go run ./internal/tools/surfacegen -check
+    tmpdir="$(mktemp -d)"; trap 'rm -rf "$tmpdir"' EXIT; go run ./internal/tools/surfacegen -output "$tmpdir/surfaces.gen.go"; cmp -s "$tmpdir/surfaces.gen.go" internal/httpclient/surfaces.gen.go || { echo 'generated client-surface output is stale; run `just openapi`' >&2; diff -u internal/httpclient/surfaces.gen.go "$tmpdir/surfaces.gen.go" >&2; exit 1; }
 
 # Validate OpenAPI and generated code freshness.
 [group('codegen')]
