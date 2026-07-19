@@ -34,6 +34,8 @@
   - File-backed startup demo seeding refuses when the selected accounting schema already exists.
   - File-backed startup runs configurable database validation (`none`, `shallow`, or `full`; default `shallow`) after migrations.
   - CLI-only `mina db validate` runs offline integrity checks with schema, referential, SQL invariant, and transaction-classification layers.
+- Implemented client surfaces:
+  - `mina client --server URL` exposes every configured CLI operation through a generated REST-backed command tree with typed inputs and raw JSON output.
 - Implemented web UI behavior:
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.

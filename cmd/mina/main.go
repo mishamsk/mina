@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/mishamsk/mina/internal/appconfig"
+	"github.com/mishamsk/mina/internal/clientcli"
 	"github.com/mishamsk/mina/internal/runtime"
 )
 
@@ -33,6 +34,10 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 	root := newRootCommand(stdin, stdout, stderr)
 	root.SetArgs(args)
 	if err := root.Execute(); err != nil {
+		var reportedErr *clientcli.ReportedError
+		if errors.As(err, &reportedErr) {
+			return 1
+		}
 		var runtimeErr *exitError
 		if errors.As(err, &runtimeErr) {
 			if _, writeErr := fmt.Fprintln(stderr, runtimeErr.Error()); writeErr != nil {
@@ -84,6 +89,7 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 	)
 
 	root.AddCommand(newVersionCommand(stdout))
+	root.AddCommand(clientcli.NewCommand(stdin, stdout, stderr))
 	root.AddCommand(newServeCommand(stdin, stdout, stderr, &configFilePath))
 	root.AddCommand(newMigrateCommand(stdin, stderr, &configFilePath))
 	root.AddCommand(newDBCommand(stdout, stderr, &configFilePath))

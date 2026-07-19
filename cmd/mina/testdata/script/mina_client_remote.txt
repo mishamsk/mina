@@ -1,0 +1,36 @@
+# The generated remote client covers representative list, path, and JSON-body shapes.
+env MINA_FX_AUTO_LOAD_ENABLED=false
+freeport
+exec mina serve --demo --db $WORK/client-remote.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpwait -timeout 10s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+
+# Query/list output is raw JSON on stdout.
+exec mina client --server http://127.0.0.1:$PORT transactions list --limit 5
+stdout '"transactions":\['
+stdout '"transaction_id":349'
+! stderr .
+
+# A path argument selects the transaction observed in the prior list.
+exec mina client --server http://127.0.0.1:$PORT transactions get 349
+stdout '"transaction_id":349'
+stdout '"records":\['
+! stderr .
+
+# JSON bodies pass through for successful and failing writes.
+exec mina client --server http://127.0.0.1:$PORT tags create --json '{"fqn":"RemoteCLI"}'
+stdout '"fqn":"RemoteCLI"'
+stdout '"tag_id"'
+! stderr .
+
+! exec mina client --server http://127.0.0.1:$PORT tags create --json '{}'
+! stdout .
+stderr '"code":"invalid_request"'
+stderr '"message"'
+
+# A target is mandatory until local mode is implemented.
+! exec mina client transactions list
+! stdout .
+stderr 'mina client requires --server URL; local --db mode is not available yet'
+
+kill -INT server
+wait server
