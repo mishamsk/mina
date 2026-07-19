@@ -21,8 +21,9 @@
 - Repository constructors receive `AppDB` and qualify accounting objects through `AppDB` helpers.
 - Repository methods execute SQL only through `AppDB.query()` or `AppDB.withTx()`.
 - `AppDB.query()` routes direct repository queries to the active transaction when one exists.
+- `AppDB.withConn()` runs callback SQL on one physical connection without starting a transaction, rejects transaction-scoped handles, and owns release of the connection it acquires.
 - `AppDB.withTx()` starts a transaction or reuses the active one on transaction-scoped `AppDB` handles.
-- Direct `AppDB.db` access is limited to open, attach, detach, migration setup, transaction creation, backup database copy, and close paths.
+- Direct `AppDB.db` access is limited to open, attach, detach, migration setup, connection or transaction creation, and close paths.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.
 - Store code reads account-type and category economic-intent metadata for service-owned semantic decisions.

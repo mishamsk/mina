@@ -1,4 +1,4 @@
-// reviewloop runs the repository's local automated review loop.
+// reviewloop orchestrates local Codex and Claude CLI sessions for repository review.
 package main
 
 import (
@@ -62,6 +62,7 @@ var (
 		"quality",
 		"simplification",
 		"testing",
+		"ci",
 		"docs",
 		"dev-tooling",
 	}
@@ -963,6 +964,8 @@ func selectReviewersForPath(selected *reviewerSelectionState, path string) {
 	switch {
 	case path == "", isReviewExcludedPath(path):
 		return
+	case isCIPath(path):
+		selected.repo["ci"] = true
 	case isDocumentationPath(path):
 		selected.repo["docs"] = true
 	case isFrontendToolingPath(path):
@@ -976,6 +979,13 @@ func selectReviewersForPath(selected *reviewerSelectionState, path string) {
 	case isDevToolingPath(path):
 		selected.repo["dev-tooling"] = true
 	}
+}
+
+func isCIPath(path string) bool {
+	return path == ".github/workflows" ||
+		strings.HasPrefix(path, ".github/workflows/") ||
+		path == ".github/actions" ||
+		strings.HasPrefix(path, ".github/actions/")
 }
 
 func isReviewExcludedPath(path string) bool {
@@ -1116,6 +1126,11 @@ func reviewerScopedReviewScope(reviewScope string, reviewer reviewerPrompt) stri
 		scopeLines = append(scopeLines,
 			"- Review changed paths under `frontend/` only when they are build, lint, test, format, or dependency configuration files.",
 			"- Do not review frontend application code under `frontend/src/` or `frontend/tests/`.",
+		)
+	case reviewer.name == "ci":
+		scopeLines = append(scopeLines,
+			"- Review only changed CI definitions under `.github/workflows/` and reusable actions under `.github/actions/`.",
+			"- Inspect invoked scripts or actions only as needed to trace a security or destructive execution path from a changed CI job.",
 		)
 	default:
 		scopeLines = append(scopeLines,

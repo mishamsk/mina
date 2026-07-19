@@ -1,0 +1,5 @@
+prefix_rule(
+    pattern = ["just", "review-loop"],
+    decision = "allow",
+    justification = "Runs Mina's repository-local review workflow through local Codex and Claude CLI sessions.",
+)

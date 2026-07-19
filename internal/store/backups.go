@@ -34,39 +34,42 @@ func (s *backupSource) CopyDatabaseToDuckDBFile(ctx context.Context, path string
 	}
 
 	targetIdentifier := backupTargetIdentifier()
-	if err := s.attachTarget(ctx, path, targetIdentifier); err != nil {
-		return err
-	}
-
-	copyErr := s.copyDatabase(ctx, targetIdentifier)
-	cleanupCtx := context.WithoutCancel(ctx)
-	detachErr := s.detachTarget(cleanupCtx, targetIdentifier)
-	if copyErr != nil {
-		if detachErr != nil {
-			return errors.Join(copyErr, detachErr)
+	connectionErr := s.db.withConn(ctx, func(conn sqlQueryer) error {
+		if err := s.attachTarget(ctx, conn, path, targetIdentifier); err != nil {
+			return err
 		}
-		return copyErr
-	}
-	if detachErr != nil {
-		return detachErr
+
+		copyErr := s.copyDatabase(ctx, conn, targetIdentifier)
+		cleanupCtx := context.WithoutCancel(ctx)
+		detachErr := s.detachTarget(cleanupCtx, conn, targetIdentifier)
+
+		return errors.Join(copyErr, detachErr)
+	})
+	if connectionErr == nil {
+		return nil
 	}
 
-	return nil
+	var scopeErr *connectionScopeError
+	if !errors.As(connectionErr, &scopeErr) {
+		return connectionErr
+	}
+
+	return backupSourceError(ctx, scopeErr.Error(), scopeErr)
 }
 
-func (s *backupSource) attachTarget(ctx context.Context, path string, targetIdentifier string) error {
-	_, err := s.db.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+targetIdentifier)
+func (s *backupSource) attachTarget(ctx context.Context, conn sqlQueryer, path string, targetIdentifier string) error {
+	_, err := conn.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+targetIdentifier)
 	return backupSourceError(ctx, "attach backup target database", err)
 }
 
-func (s *backupSource) copyDatabase(ctx context.Context, targetIdentifier string) error {
+func (s *backupSource) copyDatabase(ctx context.Context, conn sqlQueryer, targetIdentifier string) error {
 	sql := "COPY FROM DATABASE " + s.db.accountingDatabaseIdentifier() + " TO " + targetIdentifier
-	_, err := s.db.db.ExecContext(ctx, sql)
+	_, err := conn.ExecContext(ctx, sql)
 	return backupSourceError(ctx, "copy database", err)
 }
 
-func (s *backupSource) detachTarget(ctx context.Context, targetIdentifier string) error {
-	if _, err := s.db.db.ExecContext(ctx, "DETACH "+targetIdentifier); err != nil {
+func (s *backupSource) detachTarget(ctx context.Context, conn sqlQueryer, targetIdentifier string) error {
+	if _, err := conn.ExecContext(ctx, "DETACH "+targetIdentifier); err != nil {
 		return backupSourceError(ctx, "detach backup target database", err)
 	}
 
