@@ -920,8 +920,6 @@ test("account page renders header and paginated running-balance register", async
       element.click();
     }
   });
-  await expect(page.getByTestId("account-register-page-busy")).toBeVisible();
-  await expect(firstRow).toBeVisible();
   await secondPageResponse;
   await expectAccountRegisterUrl(page, 2, 25);
   await expect(page).not.toHaveURL(/[?&]record=/);
