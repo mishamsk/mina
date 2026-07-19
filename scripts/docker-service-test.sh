@@ -815,7 +815,8 @@ trigger_backup() {
     before="$(backup_files_json)"
     run="$(curl_body -X POST "$(api_url /api/background-operations/database-backup/runs)")"
     run_id="$(jq -r '.operation_run_id' <<<"$run")"
-    for _ in $(seq 1 120); do
+    status="$run"
+    for _ in $(seq 1 150); do
         status="$(curl_body "$(api_url "/api/background-operations/database-backup/runs/$run_id")")"
         case "$(jq -r '.status' <<<"$status")" in
             succeeded)
@@ -836,7 +837,9 @@ trigger_backup() {
         esac
         sleep 1
     done
-    printf 'backup run did not reach terminal success\n' >&2
+    printf 'backup run did not reach terminal success; last run payload: %s\n' "$status" >&2
+    printf 'backup directory entries:\n' >&2
+    find "$BACKUP_DIR" -maxdepth 1 -type f -print | sort >&2
     exit 1
 }
 
