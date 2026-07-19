@@ -1,0 +1,111 @@
+# Plan: CLI and MCP clients — sequential sub-branch delivery (user-defined inline scope; no Kata issue set)
+
+Deliver the generated, config-driven REST-backed CLI and MCP surfaces defined by `docs/cli-mcp-architecture.md`. Deliver one self-contained fleet task at a time as a Codex-implemented sub-branch of the main working branch, with the Codex session running this plan acting as operator: plan author, reviewer, and integrator. This plan is self-contained; it deliberately inlines a modified, strictly sequential version of the codex-goal-fleet workflow and does not depend on that skill.
+
+## Plan Context
+
+### Roles and ground rules
+
+- Operator: the Codex session executing this plan. Authors sub-branch plans, launches and waits on implementor Codex sessions, reviews, and merges. Never edits implementation code — all code changes flow through implementor sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
+- Implementor Codex: the only implementor, headless, one session at a time, running `gpt-5.6-terra` with `high` reasoning effort.
+- Integration branch ("main working branch"): whatever branch the operator session is currently on when executing this plan. Never touch `main`.
+- Task set: the nine inline fleet tasks below, derived directly from the approved architecture. No Kata issue exists for this initiative; do not search, create, claim, update, or close one for these tasks.
+
+### Rules of engagement
+
+- Strictly sequential: exactly one active sub-branch and Codex session at any time. Finish or fail the current task before starting the next.
+- Codex quota exhausted: stop, schedule a timed background wait until the stated reset time, relaunch once. Do not ask the user.
+- Operator Codex quota exhausted: stop and wait without asking.
+- Review budget per task: at most ONE `just review-loop`, run by Codex from the initial implementation plan's Success Criteria. If review-loop leaves unresolved comments, they fold into operator fix plans — never re-run review-loop.
+- After the Codex session, the operator runs the review below. Findings warrant at most TWO fix plans per task. Every fix plan MUST state "Do not run review-loop." in its Plan Context and omit review-loop from its Success Criteria.
+- A task still failing after two fix plans: leave the sub-branch unmerged, mark the task failed with findings, then skip every task that depends on it directly or transitively. If no viable tasks remain, stop the fleet. Never merge a failing branch or silently drop scope.
+- Environmental failure involving the toolchain, `gt`, or non-resetting quota: stop and ask.
+
+### Test strategy
+
+- Do not create a new test class, test package, or test boundary. Runtime behavior belongs in existing app-tests under `internal/apptest/runtime`; launched CLI and MCP protocol wiring belongs in the existing e2e boundary owned by `cmd/mina/cli_smoke_test.go` and `cmd/mina/testdata/script`.
+- Generated exact-set, compilation, and freshness checks prove exhaustive coverage. E2e tests sample only two or three representative operation shapes per generated surface — for example query/list, positional-path read, and JSON-body write/error — rather than adding a case per operation.
+- Local versus remote and stdio versus Streamable HTTP require only minimal transport-wiring smokes once the shared generated behavior is proven. Do not repeat the representative shape matrix for every transport.
+- `internal/tools` has no tests. Do not add tests for `surfacegen` or create a tooling-test location; use deterministic generation/check recipes, compilation, manual smoke checks, and `just pre-commit`.
+- Do not add unit tests in `internal/httpclient`, `internal/clientcli`, or `internal/mcpserver`. Follow `docs/TESTING.md` even if a library's usual examples use package-local tests.
+
+### Per-task workflow
+
+1. Setup: from the main working branch, set the task branch name from the task entry and run `gt "$task_branch" "$main_working_branch" -x true`; its worktree lands in `.worktrees/$task_branch`.
+2. Author the Codex implementation plan in the sub-worktree at `docs/plans/YYYY-MM-DD-$task_topic.md` from `docs/plan_template.md`. Make concrete checkboxes sized to 1–4 independently verifiable commits. Follow each task's inline scope, dependencies, exclusions, and completion evidence. Select repository verification per `AGENTS.md` and `docs/TESTING.md`; feature-delivering plans update `PROJECT_STATE.md`, and changed implicit contracts update their package docs. Before authoring, read `docs/architecture.md`, `docs/cli-mcp-architecture.md`, `api/openapi.yaml`, and every owning package doc. Commit the plan in the sub-worktree.
+3. Dispatch: from the sub-worktree, set `plan_file` to the committed implementation-plan path and run headless in the background exactly:
+
+   ```sh
+   codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox "/goal implement ${plan_file}. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
+   ```
+
+   Do not touch the worktree while the session runs. Completion requires process exit and the plan moved to `docs/plans/completed/`. Review-loop can take about ten minutes; use long poll timeouts and do not kill it while heartbeat or progress lines continue.
+4. Operator review after each implementation or fix iteration:
+   - Sanity: all checkboxes ticked, plan archived, sub-worktree clean, stated suites green, and commits match the planned sequence.
+   - Docs governance: inspect `git diff "$main_working_branch"..."$task_branch" -- docs/`. Implementors and review fixers must not change scope or architecture rules in ground-truth docs. Revert unauthorized edits in an operator-owned commit and record the intervention.
+   - Architectural audit: use read-only subagents over the sub-branch diff against the owning docs; require file:line evidence and severity for findings.
+   - Live verification: exercise every new runtime surface through the appropriate process or protocol boundary. For embedded HTTP composition, also verify existing REST and web UI routing remain intact. Observed behavior beats checkboxes.
+5. Fix loop, maximum two per task: author an implementation-only fix plan from `docs/plan_template.md` with file:line defects, live evidence, a protect/do-not-regress list, explicit exclusions, "Do not run review-loop." in Plan Context, and no review-loop in Success Criteria. Commit, re-dispatch Codex, and re-review.
+6. Merge: from the main working branch worktree, run `git merge --squash "$task_branch"` and commit as `Squash merge branch '$task_branch'`. Resolve trivial plan-document conflicts as operator. For implementation conflicts, abort, merge the main working branch into the sub-worktree, hand resolution to Codex through a no-review-loop fix plan, re-review, and retry.
+7. Cleanup: remove the sub-worktree with `git worktree remove ".worktrees/$task_branch"`, then delete the branch with `git branch -D "$task_branch"`.
+8. Evidence: record the merged or failed result, squash commit, validations, fix-plan count, live evidence, governance interventions, and residual findings in this fleet plan before marking the task complete.
+9. Rule changes discovered during review go into ground-truth docs first as an operator-owned commit. Long-horizon gaps outside this fleet become Kata issues rather than unplanned implementation.
+
+## Tasks
+
+Every task runs the full per-task workflow. Tick a task only after setup, implementation, operator review, squash merge, cleanup, and evidence recording are complete. Scope is intentionally inline because there is no Kata issue to consult.
+
+- [ ] Task 1: Extract the reusable in-process generated REST client transport (internal refactor; first because every local consumer depends on it) — branch `mcpcli-httpclient-transport`
+  - Scope: move the synthetic-base-URL client construction and `http.Handler`-backed request doer now embedded in `internal/apptest/client.go` into a small exported `internal/httpclient` API. Keep runtime construction, test-only configuration, fake dependencies, and cleanup policy in `internal/apptest`; `internal/httpclient` must not import runtime, services, stores, SQL, or testing packages.
+  - Completion evidence: existing app-test scenarios and public test harness behavior remain unchanged; no test scenarios or production behavior are added or altered. Package documentation describes remote HTTP and in-process handler transports. `just test` and `just pre-commit` pass.
+
+- [ ] Task 2: Bootstrap and enforce the client-surface package boundaries (architecture enforcement; requires Task 1) — branch `mcpcli-boundary-scaffolds`
+  - Scope: add documentation-only compilable scaffolds for `internal/clientcli` and `internal/mcpserver`, then add path-scoped depguard rules matching `docs/architecture.md`. Both surface packages may depend on `internal/httpclient` and their protocol libraries but must be prevented from importing runtime, HTTP server adapters, services, stores, SQL, or each other. Product packages must be prevented from importing `internal/tools`; add archlint coverage only for a boundary depguard cannot express.
+  - Completion evidence: there is still no CLI or MCP behavior. Package docs state the implicit contracts, representative prohibited imports are enforced by repository lint configuration, and `just test` plus `just pre-commit` pass.
+
+- [ ] Task 3: Establish the OpenAPI grouping and explicit surface configuration contract (codegen tooling; requires Task 2) — branch `mcpcli-surface-contract`
+  - Scope: assign each current OpenAPI operation exactly one durable tag, add `api/client-surfaces.yaml`, and make an explicit independent CLI and MCP expose/exclude decision for every `operationId`. CLI and MCP area/group overrides remain optional and otherwise resolve from the single tag. CLI decisions should preserve the full REST-client intent; MCP decisions must be curated for agent usefulness, with a specific reason for every exclusion and explicit behavioral annotations for every exposure.
+  - Scope: create the Mina-owned `internal/tools/surfacegen` validator using `kin-openapi`. It must reject missing or unknown operations, missing surface decisions, empty exclusion reasons, unresolved or colliding groups/names, incomplete MCP annotations, and unsupported exposed OpenAPI shapes. Wire the validator through Justfile-owned generation/check recipes without generating runtime registrations yet.
+  - Completion evidence: changing the OpenAPI operation set without changing the overlay fails deterministically; tag defaults and explicit overrides both validate; generated OpenAPI server/client behavior remains unchanged. Run the tooling smoke checks prescribed by its implementation plan and `just pre-commit`; do not add tests for the tool or create a new test boundary.
+
+- [ ] Task 4: Generate the shared REST operation catalog and typed invokers (code generation and client foundation; requires Task 3) — branch `mcpcli-generated-invokers`
+  - Scope: extend `surfacegen` to emit deterministic code inside `internal/httpclient`: resolved per-surface metadata, input descriptors, and typed invokers calling `ClientWithResponsesInterface`. Preserve arbitrary JSON bodies so nulls and unknown fields reach REST validation, and normalize status, headers, and raw response bodies without duplicating domain or transport validation.
+  - Scope: integrate generation and freshness checking with the existing OpenAPI Justfile recipes. Excluded-from-both operations need no invoker, while every configured exposure must compile against the generated REST client and appear in the exact generated registration set for its surface.
+  - Completion evidence: stale or incomplete generated output fails repository checks; regeneration is deterministic; current REST app behavior remains green under `just test`, `just pre-commit`, and the generator smoke checks selected by the implementation plan. Do not test invokers operation-by-operation or add tests under `internal/tools`.
+
+- [ ] Task 5: Deliver the generated CLI in remote mode (user-facing CLI; requires Task 4) — branch `mcpcli-remote-cli`
+  - Scope: implement `internal/clientcli` and wire `mina client --server URL <area> <command>`. Build the command tree from configured generated metadata, use path parameters as ordered positional arguments and query parameters as typed flags, and apply the documented simple-body rule. Every JSON request body must retain the mutually exclusive `--json` inline/`@file`/stdin path.
+  - Scope: render successful JSON to stdout, stable REST errors to stderr with non-zero exit status, and empty successes without output. Add a collision-checked hand-written command registration seam whose implementations can compose only generated REST operations. Do not add local database behavior in this task.
+  - Completion evidence: generated command registrations exactly equal configured CLI exposures. Add only two or three launched-process cases in the existing `cmd/mina` e2e boundary, chosen to cover materially different query/list, positional-path, and JSON-body write/error shapes; do not enumerate commands or create a client-specific test package. Update user-visible state and package docs, then pass `just test`, `just test-integration`, and `just pre-commit`.
+
+- [ ] Task 6: Deliver the one-shot runtime profile and CLI local mode (runtime boundary and local CLI; requires Task 5) — branch `mcpcli-local-cli`
+  - Scope: refactor runtime composition into explicit long-running and one-shot profiles. The one-shot profile used by local mode must open and migrate the selected database, expose manual-operation REST handlers, skip all database validation including shallow validation, and never start startup work, schedulers, or recurring-operation goroutines.
+  - Scope: wire `mina client --db PATH <area> <command>` through the Task 1 in-process `internal/httpclient` transport with no listener or loopback traffic. Make `--db` and `--server` mutually exclusive, refuse an unconfigured ephemeral target, own runtime/database cleanup for the command lifetime, and give actionable guidance when another process owns the database.
+  - Completion evidence: existing app-tests prove the one-shot runtime policy, while one minimal launched-process local-mode smoke proves the in-process transport and database lifecycle. Do not repeat the remote CLI shape matrix. Instrumentation proves no network listener, automatic operation, or validation pass occurs, and existing long-running behavior remains intact. Update package docs and user-visible state, then pass `just test`, `just test-integration`, and `just pre-commit`.
+
+- [ ] Task 7: Complete local manual-operation lifecycle handling (CLI composition; requires Task 6) — branch `mcpcli-local-manual-runs`
+  - Scope: add explicit CLI completion metadata for asynchronous manual trigger operations and generate the composition needed to keep a local session alive. After a local trigger returns its run reference, poll only through the configured generated status operation until a configured terminal state; propagate terminal failure, and cancel active work before closing on interruption. Remote-mode ownership and ordinary `202` behavior must not be coupled to the local runtime lifetime.
+  - Scope: prove unrelated commands and status reads never start work, while explicitly selected backup and exchange-rate triggers can run with automatic operations disabled. Keep orchestration in the client surface and generated REST path rather than calling runtime or operation services.
+  - Completion evidence: app-tests own automatic/manual operation policy. Keep launched-process coverage to the smallest set proving wait-to-terminal and interruption/cleanup wiring; do not duplicate REST operation scenarios or add a new test package. Pass `just test`, `just test-integration`, and `just pre-commit`.
+
+- [ ] Task 8: Deliver the generated standalone stdio MCP server (user-facing MCP; requires Task 7) — branch `mcpcli-stdio-mcp`
+  - Scope: adopt the official `modelcontextprotocol/go-sdk`, implement `internal/mcpserver`, and wire `mina mcp stdio --server URL`. Register exactly the configured MCP exposure set using resolved groups/names, generated JSON Schemas, descriptions, and explicit annotations. Map Mina results and stable REST error envelopes into MCP structured content and tool errors without adding a second validation or behavior path.
+  - Scope: reserve stdout for protocol frames, send diagnostics to stderr, and add a collision-checked hand-written tool registration seam whose implementations compose only generated REST operations. This task is remote-only and must not construct a Mina runtime.
+  - Completion evidence: in the existing `cmd/mina` e2e boundary, an official-SDK MCP client can initialize, list the exact configured tools, and call only two or three materially different read/query, path, and body/error tools over stdio while observing annotations and structured results. Do not enumerate tools or create an MCP-specific test package. Update user-visible state and package docs, then pass `just test`, `just test-integration`, and `just pre-commit`.
+
+- [ ] Task 9: Embed the shared MCP server over Streamable HTTP (networked MCP and final integration; requires Task 8) — branch `mcpcli-streamable-http-mcp`
+  - Scope: expose Streamable HTTP at `/mcp` on Mina's existing listener using the same registry as stdio. Give MCP an in-process generated REST client targeting the isolated REST handler; compose `/mcp` beside `/api` and the web UI without a listener loop, recursive final-handler calls, or direct service/store access. Retain the loopback listener default, validate origins, and apply the same non-loopback deployment/authentication policy as REST.
+  - Scope: finish exact-set and freshness enforcement so every OpenAPI operation has valid CLI and MCP decisions, every generated surface equals its configured exposure set, and extension names cannot collide. Update package docs and `PROJECT_STATE.md` to describe the completed user-visible surfaces.
+  - Completion evidence: one minimal existing-boundary e2e smoke proves official-SDK initialization, listing, and a representative call over Streamable HTTP; do not repeat the stdio tool-shape matrix. REST, web UI routing, remote/local CLI, and stdio MCP remain intact. Pass `just test`, `just test-integration`, `just test-frontend-e2e`, and `just pre-commit`.
+
+## Final Verification
+
+- [ ] On the main working branch with all viable tasks merged, `just test` passes
+- [ ] `just test-integration` passes
+- [ ] `just test-frontend-e2e` passes
+- [ ] `just pre-commit` passes, including OpenAPI, surface-config, generated-output, depguard, and architecture checks
+- [ ] Generated CLI registrations exactly match configured CLI exposures, and generated MCP registrations exactly match configured MCP exposures
+- [ ] Live smoke evidence covers local and remote CLI, standalone stdio MCP, embedded Streamable HTTP MCP, and unchanged REST/web UI routing
+- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` because each branch already ran its one allowed loop, unless merges required conflict resolution or cross-branch interactions were never covered; in that case run exactly one and fold unresolved comments into a final fix plan with no further review-loop
+- [ ] Final report records each task as merged, failed, or skipped; squash commits; fix-plan counts; live evidence; governance interventions; validations; and residual findings or unmerged branches
+- [ ] Move this plan to `docs/plans/completed/`
