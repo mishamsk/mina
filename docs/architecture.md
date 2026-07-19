@@ -6,7 +6,7 @@ Mina is a local-first personal finance system for one household.
 
 - Go 1.26+ application.
 - One `cmd/mina` binary.
-- REST API with web UI served from the binary and later a TUI.
+- REST API, web UI, REST-backed CLI client, and MCP server in one binary, with a later TUI.
 - Portable accounting state stored in a DuckDB database (file or in-memory).
 - Frontend architecture is owned by `docs/frontend-architecture.md`.
 
@@ -26,14 +26,17 @@ Mina is a local-first personal finance system for one household.
 
 Imports and runtime knowledge flow inward toward app-owned service packages. Composition may import every layer.
 
-- `cmd/mina`: one binary and Cobra command tree. Cobra owns CLI parsing and command help. Should delegate all operations to runtime.
-- `internal/httpclient`: generated REST client code from the OpenAPI source.
+- `cmd/mina`: one binary, process composition, and top-level Cobra command tree. It delegates client, MCP, serving, and runtime behavior to their owning packages.
+- `internal/httpclient`: generated REST client code, generated operation catalog and invokers, and remote or in-process client session construction and lifecycle.
+- `internal/clientcli`: REST-backed client command tree, request input and output rendering, and hand-written composite client commands.
+- `internal/mcpserver`: REST-backed MCP tool registry, MCP result mapping, stdio and Streamable HTTP protocol handling, and hand-written composite tools.
 - `internal/webui`: embedded web UI assets and root browser routing boundary.
 - `internal/appconfig`: local app config source loading, config-file discovery, env parsing, explicit overrides, source precedence, defaults, and source metadata.
 - `internal/runtime`: database lifecycle policy, runtime option handling, and manual composition root.
 - `internal/httpapi`: REST/OpenAPI adapter, generated REST contract code, generated route registration, generated request binding, OpenAPI request validation for transport shape, HTTP DTO mapping, and HTTP status/error mapping.
 - App-owned service packages: domain types, validation, use cases, and repository interfaces.
 - `internal/store`: DuckDB driver access, migrations, transactions, query code, and repository implementations.
+- `internal/tools`: repository-only generators, architecture checks, and developer workflow commands; never product behavior.
 - `internal/x`: pure in-process library packages with app-agnostic data structures and helpers.
 
 Rules:
@@ -46,8 +49,11 @@ Rules:
 - `internal/store` owns DB-facing row types, migrations, transactions, DuckDB-specific error mapping, and app-to-DB type conversion.
 - `internal/store` does not know HTTP, OpenAPI, Cobra, or runtime composition.
 - `internal/webui` serves embedded frontend assets and does not own REST handlers, database access, or domain behavior.
-- `internal/runtime` wires concrete implementations manually. Avoid hidden global state for database handles, config, clocks, listeners, or services.
+- `internal/clientcli` and `internal/mcpserver` invoke Mina behavior only through generated REST operations owned by `internal/httpclient`; they do not call services, stores, SQL, or runtime application methods.
+- `internal/mcpserver` owns MCP protocol behavior; `internal/httpapi` remains the REST protocol and application transport boundary.
+- `internal/runtime` wires concrete implementations and owns explicit one-shot and long-running execution profiles. Avoid hidden global state for database handles, config, clocks, listeners, or services.
 - `internal/appconfig` does not import runtime, store, HTTP, OpenAPI, background, provider, service, Cobra, or pflag packages.
+- `internal/tools` is not imported by product packages.
 - `internal/x` packages do not import app packages or own side-effect boundaries.
 - Shared contracts belong at the lowest layer that can own them.
 
@@ -83,6 +89,14 @@ Rules:
 - Dynamic filters, sort keys, and field names must come from typed allowlists.
 - Hidden accounts, categories, and tags are excluded by default and included only by explicit query.
 - Database validation is a CLI-only pre-trust diagnostic and is deliberately not exposed over REST.
+
+## REST-Backed Client Surfaces
+
+- `docs/cli-mcp-architecture.md` owns CLI client, MCP, generation, and local-session design.
+- Every OpenAPI operation has an explicit, independent CLI and MCP exposure or exclusion decision; tags may supply default grouping but never exposure.
+- Generated and hand-written client-surface CLI commands and MCP tools invoke application behavior only through the generated REST client.
+- Local CLI sessions run the REST handler against the selected database in-process, without a listener or automatic operations.
+- Client-surface generation is build-time repository tooling under `internal/tools`, not a runtime boundary.
 
 ## Testing
 
