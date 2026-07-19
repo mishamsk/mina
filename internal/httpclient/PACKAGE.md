@@ -11,7 +11,8 @@
 
 - `internal/apptest` is the first approved in-process transport consumer.
 - Normal tests may import generated types when client method signatures require them.
-- Other production use needs an explicit approved use case; `docs/cli-mcp-architecture.md` owns the planned local CLI and embedded MCP uses.
+- `internal/clientcli` and `internal/mcpserver` are the approved production consumers; `docs/cli-mcp-architecture.md` owns their uses.
+- Other production use needs an explicit approved use case.
 - In-process transport callers supply the handler and own its lifecycle.
 
 ## Boundaries

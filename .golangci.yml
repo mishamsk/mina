@@ -30,6 +30,77 @@ linters:
               desc: cmd/mina should delegate application behavior through internal/runtime
             - pkg: github.com/mishamsk/mina/internal/store
               desc: cmd/mina should delegate application behavior through internal/runtime
+        clientcli-boundaries:
+          list-mode: lax
+          files:
+            - internal/clientcli/*.go
+            - internal/clientcli/**/*.go
+            - "**/internal/clientcli/*.go"
+            - "**/internal/clientcli/**/*.go"
+          deny:
+            - pkg: database/sql
+              desc: client CLI packages must not own SQL access
+            - pkg: github.com/duckdb/duckdb-go/v2
+              desc: client CLI packages must not know DuckDB
+            - pkg: github.com/mishamsk/mina/internal/background
+              desc: client CLI packages must not know background runners
+            - pkg: github.com/mishamsk/mina/internal/httpapi
+              desc: client CLI packages must not know REST/OpenAPI server adapters
+            - pkg: github.com/mishamsk/mina/internal/mcpserver
+              desc: client CLI packages must not know MCP server behavior
+            - pkg: github.com/mishamsk/mina/internal/providers
+              desc: client CLI packages must not know concrete providers
+            - pkg: github.com/mishamsk/mina/internal/runtime
+              desc: client CLI packages must not know runtime composition
+            - pkg: github.com/mishamsk/mina/internal/services
+              desc: client CLI packages must not know service packages
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: client CLI packages must not own persistence
+            - pkg: github.com/mishamsk/mina/internal/webui
+              desc: client CLI packages must not know web UI behavior
+        mcpserver-boundaries:
+          list-mode: lax
+          files:
+            - internal/mcpserver/*.go
+            - internal/mcpserver/**/*.go
+            - "**/internal/mcpserver/*.go"
+            - "**/internal/mcpserver/**/*.go"
+          deny:
+            - pkg: database/sql
+              desc: MCP server packages must not own SQL access
+            - pkg: github.com/duckdb/duckdb-go/v2
+              desc: MCP server packages must not know DuckDB
+            - pkg: github.com/mishamsk/mina/internal/background
+              desc: MCP server packages must not know background runners
+            - pkg: github.com/mishamsk/mina/internal/clientcli
+              desc: MCP server packages must not know client CLI behavior
+            - pkg: github.com/mishamsk/mina/internal/httpapi
+              desc: MCP server packages must not know REST/OpenAPI server adapters
+            - pkg: github.com/mishamsk/mina/internal/providers
+              desc: MCP server packages must not know concrete providers
+            - pkg: github.com/mishamsk/mina/internal/runtime
+              desc: MCP server packages must not know runtime composition
+            - pkg: github.com/mishamsk/mina/internal/services
+              desc: MCP server packages must not know service packages
+            - pkg: github.com/mishamsk/mina/internal/store
+              desc: MCP server packages must not own persistence
+            - pkg: github.com/mishamsk/mina/internal/webui
+              desc: MCP server packages must not know web UI behavior
+            - pkg: github.com/spf13/cobra
+              desc: MCP server packages must not know CLI parsing
+            - pkg: github.com/spf13/pflag
+              desc: MCP server packages must not know CLI flags
+        product-no-tools:
+          list-mode: lax
+          files:
+            - $all
+            - "!internal/tools/*.go"
+            - "!internal/tools/**/*.go"
+            - "!**/internal/tools/*.go"
+            - "!**/internal/tools/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/tools
+              desc: product packages must not import repository tooling
         normal-app-test-boundaries:
           list-mode: lax
           files:
@@ -297,8 +368,16 @@ linters:
             - "!internal/apptest/**/*.go"
             - "!**/internal/apptest/*.go"
             - "!**/internal/apptest/**/*.go"
+            - "!internal/clientcli/*.go"
+            - "!internal/clientcli/**/*.go"
+            - "!**/internal/clientcli/*.go"
+            - "!**/internal/clientcli/**/*.go"
+            - "!internal/mcpserver/*.go"
+            - "!internal/mcpserver/**/*.go"
+            - "!**/internal/mcpserver/*.go"
+            - "!**/internal/mcpserver/**/*.go"
           deny:
             - pkg: github.com/mishamsk/mina/internal/httpclient
-              desc: production code must not use the generated REST client until an approved production use case exists
+              desc: production REST client use is limited to the approved client surfaces
             - pkg: github.com/mishamsk/mina/internal/runtime
               desc: runtime composition may only be imported by cmd/mina and app-test helpers
