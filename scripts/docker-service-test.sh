@@ -818,7 +818,7 @@ trigger_backup() {
     status="$run"
     for _ in $(seq 1 150); do
         status="$(curl_body "$(api_url "/api/background-operations/database-backup/runs/$run_id")")"
-        case "$(jq -r '.status' <<<"$status")" in
+        case "$(jq -r '.outcome' <<<"$status")" in
             succeeded)
                 after="$(backup_files_json)"
                 path="$(jq -rnc --argjson before "$before" --argjson after "$after" '$after - $before | if length == 1 then .[0] else empty end')"
