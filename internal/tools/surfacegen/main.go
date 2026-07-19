@@ -11,6 +11,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -33,10 +34,20 @@ type operationConfig struct {
 }
 
 type cliDecision struct {
-	State  string `yaml:"state"`
-	Area   string `yaml:"area,omitempty"`
-	Name   string `yaml:"name,omitempty"`
-	Reason string `yaml:"reason,omitempty"`
+	State      string         `yaml:"state"`
+	Area       string         `yaml:"area,omitempty"`
+	Name       string         `yaml:"name,omitempty"`
+	Reason     string         `yaml:"reason,omitempty"`
+	Completion *cliCompletion `yaml:"completion,omitempty"`
+}
+
+type cliCompletion struct {
+	StatusOperationID   string   `yaml:"status_operation_id"`
+	RunIDResponseField  string   `yaml:"run_id_response_field"`
+	StatusPathParameter string   `yaml:"status_path_parameter"`
+	TerminalField       string   `yaml:"terminal_field"`
+	TerminalValues      []string `yaml:"terminal_values"`
+	FailureValues       []string `yaml:"failure_values"`
 }
 
 type mcpDecision struct {
@@ -228,6 +239,9 @@ func validateContracts(
 		decisions := config.Operations[operationID]
 		findings = append(findings, validateCLIDecision(configPath, operationID, decisions.CLI)...)
 		findings = append(findings, validateMCPDecision(configPath, operationID, decisions.MCP)...)
+		findings = append(findings, validateCLICompletion(
+			configPath, operationID, decisions.CLI, operations, config,
+		)...)
 
 		if decisions.CLI != nil && decisions.CLI.State == "exposed" {
 			area, resolutionFindings := resolveCLI(openAPIPath, operationID, info.operation, decisions.CLI)
@@ -298,6 +312,248 @@ func validateCLIDecision(path string, operationID string, decision *cliDecision)
 		}}
 	}
 	return validateDecision(path, operationID, "CLI", decision.State, decision.Name, decision.Reason)
+}
+
+func validateCLICompletion(
+	path string,
+	operationID string,
+	decision *cliDecision,
+	operations map[string]operationInfo,
+	config surfaceConfig,
+) []finding {
+	if decision == nil || decision.Completion == nil {
+		return nil
+	}
+	completion := decision.Completion
+	if decision.State != "exposed" {
+		return []finding{{
+			path:      path,
+			operation: operationID,
+			message:   "CLI completion metadata requires an exposed CLI operation",
+		}}
+	}
+
+	var findings []finding
+	stringFields := []struct {
+		name  string
+		value string
+	}{
+		{name: "status_operation_id", value: completion.StatusOperationID},
+		{name: "run_id_response_field", value: completion.RunIDResponseField},
+		{name: "status_path_parameter", value: completion.StatusPathParameter},
+		{name: "terminal_field", value: completion.TerminalField},
+	}
+	for _, field := range stringFields {
+		if strings.TrimSpace(field.value) == "" {
+			findings = append(findings, finding{
+				path:      path,
+				operation: operationID,
+				message:   fmt.Sprintf("CLI completion field %q must not be empty", field.name),
+			})
+		}
+	}
+	if len(completion.TerminalValues) == 0 {
+		findings = append(findings, finding{
+			path:      path,
+			operation: operationID,
+			message:   "CLI completion terminal_values must not be empty",
+		})
+	}
+	findings = append(findings, validateCompletionValues(
+		path, operationID, "terminal_values", completion.TerminalValues,
+	)...)
+	findings = append(findings, validateCompletionValues(
+		path, operationID, "failure_values", completion.FailureValues,
+	)...)
+	findings = append(findings, validateCompletionResponseField(
+		path,
+		operationID,
+		"run_id_response_field",
+		completion.RunIDResponseField,
+		"trigger operation",
+		operations[operationID],
+	)...)
+
+	statusInfo, statusExists := operations[completion.StatusOperationID]
+	if strings.TrimSpace(completion.StatusOperationID) != "" {
+		if !statusExists {
+			findings = append(findings, finding{
+				path:      path,
+				operation: operationID,
+				message: fmt.Sprintf(
+					"CLI completion status operation %q does not match an OpenAPI operation",
+					completion.StatusOperationID,
+				),
+			})
+		} else if !isExposed(config.Operations[completion.StatusOperationID]) {
+			findings = append(findings, finding{
+				path:      path,
+				operation: operationID,
+				message: fmt.Sprintf(
+					"CLI completion status operation %q has no generated invoker",
+					completion.StatusOperationID,
+				),
+			})
+		}
+	}
+	if statusExists {
+		findings = append(findings, validateCompletionResponseField(
+			path,
+			operationID,
+			"terminal_field",
+			completion.TerminalField,
+			fmt.Sprintf("status operation %q", completion.StatusOperationID),
+			statusInfo,
+		)...)
+	}
+	if statusExists && strings.TrimSpace(completion.StatusPathParameter) != "" &&
+		!operationHasPathParameter(statusInfo, completion.StatusPathParameter) {
+		findings = append(findings, finding{
+			path:      path,
+			operation: operationID,
+			message: fmt.Sprintf(
+				"CLI completion status path parameter %q is not declared by operation %q",
+				completion.StatusPathParameter, completion.StatusOperationID,
+			),
+		})
+	}
+
+	terminalValues := make(map[string]struct{}, len(completion.TerminalValues))
+	for _, value := range completion.TerminalValues {
+		terminalValues[value] = struct{}{}
+	}
+	for _, value := range completion.FailureValues {
+		if _, ok := terminalValues[value]; !ok {
+			findings = append(findings, finding{
+				path:      path,
+				operation: operationID,
+				message: fmt.Sprintf(
+					"CLI completion failure value %q is not a terminal value", value,
+				),
+			})
+		}
+	}
+	return findings
+}
+
+func validateCompletionResponseField(
+	path string,
+	operationID string,
+	metadataName string,
+	field string,
+	responseSource string,
+	info operationInfo,
+) []finding {
+	if strings.TrimSpace(field) == "" {
+		return nil
+	}
+
+	var findings []finding
+	foundSchema := false
+	if responses := info.operation.Responses; responses != nil {
+		for _, status := range responses.Keys() {
+			statusCode, err := strconv.Atoi(status)
+			if err != nil || statusCode < 200 || statusCode >= 300 {
+				continue
+			}
+			response := responses.Value(status)
+			if response == nil || response.Value == nil {
+				continue
+			}
+			for contentType, media := range response.Value.Content {
+				parsedType, _, err := mime.ParseMediaType(contentType)
+				isJSON := err == nil &&
+					(parsedType == "application/json" || strings.HasSuffix(parsedType, "+json"))
+				if !isJSON || media == nil || media.Schema == nil || media.Schema.Value == nil {
+					continue
+				}
+				foundSchema = true
+				if !schemaDeclaresProperty(media.Schema, field, make(map[*openapi3.Schema]struct{})) {
+					findings = append(findings, finding{
+						path:      path,
+						operation: operationID,
+						message: fmt.Sprintf(
+							"CLI completion %s %q is not declared by %s response %s",
+							metadataName, field, responseSource, status,
+						),
+					})
+				}
+			}
+		}
+	}
+	if !foundSchema {
+		findings = append(findings, finding{
+			path:      path,
+			operation: operationID,
+			message: fmt.Sprintf(
+				"CLI completion %s %q cannot be validated because %s has no successful JSON response schema",
+				metadataName, field, responseSource,
+			),
+		})
+	}
+	return findings
+}
+
+func schemaDeclaresProperty(
+	schemaRef *openapi3.SchemaRef,
+	field string,
+	visited map[*openapi3.Schema]struct{},
+) bool {
+	if schemaRef == nil || schemaRef.Value == nil {
+		return false
+	}
+	schema := schemaRef.Value
+	if _, ok := visited[schema]; ok {
+		return false
+	}
+	visited[schema] = struct{}{}
+	if _, ok := schema.Properties[field]; ok {
+		return true
+	}
+	for _, schemas := range []openapi3.SchemaRefs{schema.AllOf, schema.AnyOf, schema.OneOf} {
+		for _, composed := range schemas {
+			if schemaDeclaresProperty(composed, field, visited) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func validateCompletionValues(path string, operationID string, field string, values []string) []finding {
+	var findings []finding
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" {
+			findings = append(findings, finding{
+				path:      path,
+				operation: operationID,
+				message:   fmt.Sprintf("CLI completion %s contains an empty value", field),
+			})
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			findings = append(findings, finding{
+				path:      path,
+				operation: operationID,
+				message:   fmt.Sprintf("CLI completion %s contains duplicate value %q", field, value),
+			})
+		}
+		seen[value] = struct{}{}
+	}
+	return findings
+}
+
+func operationHasPathParameter(info operationInfo, name string) bool {
+	for _, parameters := range []openapi3.Parameters{info.pathItem.Parameters, info.operation.Parameters} {
+		for _, parameterRef := range parameters {
+			if parameterRef != nil && parameterRef.Value != nil &&
+				parameterRef.Value.In == openapi3.ParameterInPath && parameterRef.Value.Name == name {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func validateMCPDecision(path string, operationID string, decision *mcpDecision) []finding {

@@ -44,6 +44,13 @@ operations:
       state: exposed
       area: <optional-area-override>
       name: <command>
+      completion: # optional; local asynchronous triggers only
+        status_operation_id: <OpenAPI-operationId>
+        run_id_response_field: <trigger-response-field>
+        status_path_parameter: <status-operation-path-parameter>
+        terminal_field: <status-response-field>
+        terminal_values: [<terminal-value>]
+        failure_values: [<terminal-failure-value>]
     mcp:
       state: exposed
       group: <optional-group-override>
@@ -101,7 +108,7 @@ operations:
 - Manual operation triggers remain available without starting automatic operations.
 - A local client runs a manual operation only when its selected REST operation explicitly triggers one.
 - A local client that triggers asynchronous manual work keeps the runtime open until that run is terminal.
-- CLI exposure config for an asynchronous manual trigger identifies its generated status operation, run identifier, terminal field, and terminal values.
+- CLI completion config identifies the trigger response's run-ID field, generated status operation and path parameter, status response's terminal field and values, and the terminal values treated as failures.
 - The CLI polls completion only through generated REST client operations.
 - Canceling the command cancels any active manual run before the local session closes.
 - Reading operation status or invoking unrelated commands never starts operation execution.
@@ -122,6 +129,7 @@ operations:
 - `--json` and body field flags are mutually exclusive; bodies outside the simple-object rule use `--json` only.
 - A body/query/reserved flag-name collision makes that body JSON-only instead of introducing implicit prefixes.
 - Successful response bodies are written to stdout as JSON.
+- A configured local-completion failure is the exception: its HTTP-success terminal body is written to stderr and the command exits non-zero.
 - REST error envelopes are written to stderr and produce a non-zero exit status.
 - Empty successful responses produce no body output.
 - Base generated commands favor stable JSON over operation-specific tables.

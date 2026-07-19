@@ -3328,7 +3328,17 @@ func Operations() []Operation {
 			Path:        "/api/background-operations/database-backup/runs",
 			Summary:     "Start a database backup run.",
 			Description: "",
-			CLI:         &CLIOperation{Area: "operations", Name: "start-database-backup"},
+			CLI: &CLIOperation{
+				Area: "operations", Name: "start-database-backup",
+				Completion: &CLICompletion{
+					StatusOperationID:   "getDatabaseBackupRun",
+					RunIDResponseField:  "operation_run_id",
+					StatusPathParameter: "operation_run_id",
+					TerminalField:       "outcome",
+					TerminalValues:      []string{"succeeded", "failed", "skipped", "canceled"},
+					FailureValues:       []string{"failed", "canceled"},
+				},
+			},
 			MCP: &MCPOperation{
 				Group: "operations", Name: "start_database_backup",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
@@ -3342,7 +3352,17 @@ func Operations() []Operation {
 			Path:        "/api/background-operations/exchange-rate-loading/runs",
 			Summary:     "Start an exchange-rate loading run.",
 			Description: "",
-			CLI:         &CLIOperation{Area: "operations", Name: "start-exchange-rate-loading"},
+			CLI: &CLIOperation{
+				Area: "operations", Name: "start-exchange-rate-loading",
+				Completion: &CLICompletion{
+					StatusOperationID:   "getExchangeRateLoadingRun",
+					RunIDResponseField:  "operation_run_id",
+					StatusPathParameter: "operation_run_id",
+					TerminalField:       "outcome",
+					TerminalValues:      []string{"succeeded", "failed", "skipped", "canceled"},
+					FailureValues:       []string{"failed", "canceled"},
+				},
+			},
 			MCP: &MCPOperation{
 				Group: "operations", Name: "start_exchange_rate_loading",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,

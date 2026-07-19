@@ -28,7 +28,16 @@ operations:
       name: exchange_rate_loading_status
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   startExchangeRateLoadingRun:
-    cli: {state: exposed, name: start-exchange-rate-loading}
+    cli:
+      state: exposed
+      name: start-exchange-rate-loading
+      completion:
+        status_operation_id: getExchangeRateLoadingRun
+        run_id_response_field: operation_run_id
+        status_path_parameter: operation_run_id
+        terminal_field: outcome
+        terminal_values: [succeeded, failed, skipped, canceled]
+        failure_values: [failed, canceled]
     mcp:
       state: exposed
       name: start_exchange_rate_loading
@@ -46,7 +55,16 @@ operations:
       name: database_backup_status
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   startDatabaseBackupRun:
-    cli: {state: exposed, name: start-database-backup}
+    cli:
+      state: exposed
+      name: start-database-backup
+      completion:
+        status_operation_id: getDatabaseBackupRun
+        run_id_response_field: operation_run_id
+        status_path_parameter: operation_run_id
+        terminal_field: outcome
+        terminal_values: [succeeded, failed, skipped, canceled]
+        failure_values: [failed, canceled]
     mcp:
       state: exposed
       name: start_database_backup

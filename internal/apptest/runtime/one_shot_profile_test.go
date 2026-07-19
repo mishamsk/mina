@@ -3,6 +3,7 @@ package runtime_test
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -11,17 +12,25 @@ import (
 
 func TestOneShotExecutionProfilePolicy(t *testing.T) {
 	provider := apptest.NewFakeExchangeRateProvider()
+	tempDir := t.TempDir()
 	client := newSharedClient(
 		t,
 		apptest.WithOneShotExecutionProfile(),
 		apptest.WithOperationsEnabled(true),
 		apptest.WithExchangeRateLoading(true),
 		apptest.WithExchangeRateProviderFactory(provider),
+		apptest.WithDatabasePath(filepath.Join(tempDir, "mina.duckdb")),
+		apptest.WithBackupFileDirectory(filepath.Join(tempDir, "backups")),
+		apptest.WithBackupFileScheduleUTC("0 18 * * *"),
 	)
 
 	status := client.ExchangeRateLoadingStatus()
 	if !status.Enabled || status.RunCount != 0 || status.CompletedRunRevision != 0 {
 		t.Fatalf("initial one-shot status = %+v, want enabled operation with no automatic runs", status)
+	}
+	backupStatus := client.DatabaseBackupStatus()
+	if !backupStatus.Enabled || backupStatus.RunCount != 0 || backupStatus.CompletedRunRevision != 0 {
+		t.Fatalf("initial one-shot backup status = %+v, want enabled operation with no automatic runs", backupStatus)
 	}
 	runs, err := client.REST().ListBackgroundOperationRunEnvelopesWithResponse(context.Background(), nil)
 	requireClientResponse(t, "list one-shot operation runs", err, runs.StatusCode(), http.StatusOK, runs.Body)
@@ -34,6 +43,13 @@ func TestOneShotExecutionProfilePolicy(t *testing.T) {
 	run := client.PollExchangeRateLoadingRun(started.JSON202.OperationRunId)
 	if run.Outcome != httpclient.BackgroundOperationRunOutcomeSucceeded {
 		t.Fatalf("manual one-shot run outcome = %q, want succeeded; error = %v", run.Outcome, run.Error)
+	}
+
+	backupStarted, err := client.REST().StartDatabaseBackupRunWithResponse(context.Background())
+	requireClientResponse(t, "start manual one-shot database backup", err, backupStarted.StatusCode(), http.StatusAccepted, backupStarted.Body)
+	backupRun := client.PollDatabaseBackupRun(backupStarted.JSON202.OperationRunId)
+	if backupRun.Outcome != httpclient.BackgroundOperationRunOutcomeSucceeded {
+		t.Fatalf("manual one-shot backup outcome = %q, want succeeded; error = %v", backupRun.Outcome, backupRun.Error)
 	}
 
 	created, err := client.REST().CreateMemberWithResponse(context.Background(), httpclient.CreateMemberRequest{Name: "Alex"})

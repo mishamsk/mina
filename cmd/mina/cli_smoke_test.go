@@ -287,14 +287,30 @@ func testscriptFrankfurter(ts *testscript.TestScript, neg bool, args []string) {
 	if neg {
 		ts.Fatalf("frankfurter does not support negation")
 	}
+	blockUntilCanceled := ""
+	if len(args) >= 1 && args[0] == "-block-until-canceled" {
+		if len(args) < 2 {
+			ts.Fatalf("usage: frankfurter [-block-until-canceled ready-file] url_env_var")
+		}
+		blockUntilCanceled = ts.MkAbs(args[1])
+		args = args[2:]
+	}
 	if len(args) != 1 {
-		ts.Fatalf("usage: frankfurter url_env_var")
+		ts.Fatalf("usage: frankfurter [-block-until-canceled ready-file] url_env_var")
 	}
 
 	urlEnvVar := args[0]
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rates" {
 			http.NotFound(w, r)
+			return
+		}
+		if blockUntilCanceled != "" {
+			if err := os.WriteFile(blockUntilCanceled, nil, 0o644); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			<-r.Context().Done()
 			return
 		}
 		from := r.URL.Query().Get("from")

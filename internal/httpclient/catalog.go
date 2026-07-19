@@ -33,6 +33,24 @@ type CLIOperation struct {
 	Area string
 	// Name is the configured command name within Area.
 	Name string
+	// Completion describes how local CLI mode waits for an asynchronous operation.
+	Completion *CLICompletion
+}
+
+// CLICompletion describes generated REST polling metadata for an asynchronous CLI operation.
+type CLICompletion struct {
+	// StatusOperationID identifies the generated operation used to read run status.
+	StatusOperationID string
+	// RunIDResponseField identifies the trigger response field containing the run identifier.
+	RunIDResponseField string
+	// StatusPathParameter identifies the status operation path parameter receiving the run identifier.
+	StatusPathParameter string
+	// TerminalField identifies the status response field containing the run outcome.
+	TerminalField string
+	// TerminalValues lists every value that ends polling.
+	TerminalValues []string
+	// FailureValues lists terminal values that make the CLI invocation fail.
+	FailureValues []string
 }
 
 // MCPOperation describes the resolved MCP exposure and behavioral annotations of an operation.

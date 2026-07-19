@@ -198,7 +198,22 @@ func writeOperation(output *bytes.Buffer, generated generatedOperation) {
 	fmt.Fprintf(output, "\t\t\tDescription: %q,\n", operation.Description)
 	if decision := generated.decisions.CLI; decision != nil && decision.State == "exposed" {
 		area, _ := resolveCLI("", generated.id, operation, decision)
-		fmt.Fprintf(output, "\t\t\tCLI: &CLIOperation{Area: %q, Name: %q},\n", area, decision.Name)
+		if decision.Completion == nil {
+			fmt.Fprintf(output, "\t\t\tCLI: &CLIOperation{Area: %q, Name: %q},\n", area, decision.Name)
+		} else {
+			completion := decision.Completion
+			fmt.Fprintln(output, "\t\t\tCLI: &CLIOperation{")
+			fmt.Fprintf(output, "\t\t\t\tArea: %q, Name: %q,\n", area, decision.Name)
+			fmt.Fprintln(output, "\t\t\t\tCompletion: &CLICompletion{")
+			fmt.Fprintf(output, "\t\t\t\t\tStatusOperationID: %q,\n", completion.StatusOperationID)
+			fmt.Fprintf(output, "\t\t\t\t\tRunIDResponseField: %q,\n", completion.RunIDResponseField)
+			fmt.Fprintf(output, "\t\t\t\t\tStatusPathParameter: %q,\n", completion.StatusPathParameter)
+			fmt.Fprintf(output, "\t\t\t\t\tTerminalField: %q,\n", completion.TerminalField)
+			writeStringSliceField(output, "\t\t\t\t\t", "TerminalValues", completion.TerminalValues)
+			writeStringSliceField(output, "\t\t\t\t\t", "FailureValues", completion.FailureValues)
+			fmt.Fprintln(output, "\t\t\t\t},")
+			fmt.Fprintln(output, "\t\t\t},")
+		}
 	}
 	if decision := generated.decisions.MCP; decision != nil && decision.State == "exposed" {
 		group, _ := resolveMCP("", generated.id, operation, decision)
@@ -221,6 +236,17 @@ func writeOperation(output *bytes.Buffer, generated generatedOperation) {
 	fmt.Fprintln(output, "\t\t\t},")
 	fmt.Fprintf(output, "\t\t\tInvoke: invoke%s,\n", generated.definition.OperationId)
 	fmt.Fprintln(output, "\t\t},")
+}
+
+func writeStringSliceField(output *bytes.Buffer, indent string, field string, values []string) {
+	fmt.Fprintf(output, "%s%s: []string{", indent, field)
+	for index, value := range values {
+		if index > 0 {
+			fmt.Fprint(output, ", ")
+		}
+		fmt.Fprintf(output, "%q", value)
+	}
+	fmt.Fprintln(output, "},")
 }
 
 func writeParameterDescriptors(output *bytes.Buffer, field string, parameters []codegen.ParameterDefinition) {

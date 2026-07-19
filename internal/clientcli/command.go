@@ -1,6 +1,8 @@
 package clientcli
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,9 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -20,11 +24,12 @@ import (
 )
 
 const (
-	clientCommandName = "client"
-	serverFlagName    = "server"
-	databaseFlagName  = "db"
-	yesFlagName       = "yes"
-	jsonFlagName      = "json"
+	clientCommandName      = "client"
+	serverFlagName         = "server"
+	databaseFlagName       = "db"
+	yesFlagName            = "yes"
+	jsonFlagName           = "json"
+	completionPollInterval = 25 * time.Millisecond
 )
 
 var reservedBodyFlagNames = map[string]struct{}{
@@ -55,6 +60,7 @@ type LocalSessionFactory func(*cobra.Command, appconfig.Config) (LocalSession, e
 type Session struct {
 	client httpclient.ClientWithResponsesInterface
 	close  func() error
+	local  bool
 }
 
 // Client returns the generated REST client owned by the session.
@@ -253,14 +259,10 @@ func newOperationCommand(operation httpclient.Operation, sessionFactory SessionF
 			return reportError(cmd, err)
 		}
 		if result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
-			failure := fmt.Errorf("request failed with HTTP status %d", result.StatusCode)
-			if len(result.Body) > 0 {
-				if err := writeLine(cmd.ErrOrStderr(), result.Body); err != nil {
-					return &ReportedError{err: err}
-				}
-				return &ReportedError{err: failure}
-			}
-			return reportError(cmd, failure)
+			return reportHTTPFailure(cmd, result)
+		}
+		if session.local && operation.CLI.Completion != nil {
+			return waitForLocalCompletion(cmd, session.Client(), operation.CLI.Completion, result.Body)
 		}
 		if len(result.Body) == 0 {
 			return nil
@@ -342,7 +344,142 @@ func openSession(command *cobra.Command, options CommandOptions) (*Session, erro
 		return nil, fmt.Errorf("create in-process client: %w", err)
 	}
 
-	return &Session{client: client, close: local.Close}, nil
+	return &Session{client: client, close: local.Close, local: true}, nil
+}
+
+func waitForLocalCompletion(
+	command *cobra.Command,
+	client httpclient.ClientWithResponsesInterface,
+	completion *httpclient.CLICompletion,
+	triggerBody []byte,
+) error {
+	runID, err := responseFieldString(triggerBody, completion.RunIDResponseField)
+	if err != nil {
+		return reportError(command, fmt.Errorf("read completion run identifier: %w", err))
+	}
+	statusOperation, err := operationByID(completion.StatusOperationID)
+	if err != nil {
+		return reportError(command, err)
+	}
+	statusInput, err := completionStatusInput(statusOperation, completion.StatusPathParameter, runID)
+	if err != nil {
+		return reportError(command, err)
+	}
+
+	for {
+		result, invokeErr := statusOperation.Invoke(command.Context(), client, statusInput)
+		if invokeErr != nil {
+			return reportError(command, invokeErr)
+		}
+		if result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
+			return reportHTTPFailure(command, result)
+		}
+		outcome, fieldErr := responseFieldString(result.Body, completion.TerminalField)
+		if fieldErr != nil {
+			return reportError(command, fmt.Errorf("read completion terminal state: %w", fieldErr))
+		}
+		if slices.Contains(completion.TerminalValues, outcome) {
+			if slices.Contains(completion.FailureValues, outcome) {
+				if writeErr := writeLine(command.ErrOrStderr(), result.Body); writeErr != nil {
+					return &ReportedError{err: writeErr}
+				}
+				return &ReportedError{err: fmt.Errorf("operation completed with outcome %q", outcome)}
+			}
+			if writeErr := writeLine(command.OutOrStdout(), result.Body); writeErr != nil {
+				return reportError(command, writeErr)
+			}
+			return nil
+		}
+		if err := waitForCompletionPoll(command.Context()); err != nil {
+			return reportError(command, err)
+		}
+	}
+}
+
+func operationByID(operationID string) (httpclient.Operation, error) {
+	for _, operation := range httpclient.Operations() {
+		if operation.ID == operationID {
+			return operation, nil
+		}
+	}
+	return httpclient.Operation{}, fmt.Errorf("completion status operation %q is unavailable", operationID)
+}
+
+func completionStatusInput(
+	operation httpclient.Operation,
+	pathParameter string,
+	runID string,
+) (httpclient.InvocationInput, error) {
+	input := httpclient.InvocationInput{
+		Path:  make([]string, len(operation.Input.Path)),
+		Query: make(map[string][]string),
+	}
+	found := false
+	for index, parameter := range operation.Input.Path {
+		if parameter.Name == pathParameter {
+			input.Path[index] = runID
+			found = true
+		}
+	}
+	if !found {
+		return httpclient.InvocationInput{}, fmt.Errorf(
+			"completion status operation %q has no path parameter %q",
+			operation.ID,
+			pathParameter,
+		)
+	}
+	return input, nil
+}
+
+func responseFieldString(body []byte, field string) (string, error) {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(body, &object); err != nil {
+		return "", fmt.Errorf("decode JSON response: %w", err)
+	}
+	raw, ok := object[field]
+	if !ok {
+		return "", fmt.Errorf("JSON response is missing field %q", field)
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return "", fmt.Errorf("decode JSON response field %q: %w", field, err)
+	}
+	switch typed := value.(type) {
+	case string:
+		if typed == "" {
+			return "", fmt.Errorf("JSON response field %q is empty", field)
+		}
+		return typed, nil
+	case json.Number:
+		return typed.String(), nil
+	default:
+		return "", fmt.Errorf("JSON response field %q must be a string or number", field)
+	}
+}
+
+func waitForCompletionPoll(ctx context.Context) error {
+	timer := time.NewTimer(completionPollInterval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func reportHTTPFailure(command *cobra.Command, result httpclient.InvocationResult) error {
+	failure := fmt.Errorf("request failed with HTTP status %d", result.StatusCode)
+	if len(result.Body) > 0 {
+		if err := writeLine(command.ErrOrStderr(), result.Body); err != nil {
+			return &ReportedError{err: err}
+		}
+		return &ReportedError{err: failure}
+	}
+	return reportError(command, failure)
 }
 
 func runSessionHelp(command *cobra.Command, factory SessionFactory) (runErr error) {
