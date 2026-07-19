@@ -1,13 +1,13 @@
 # Plan: CLI and MCP clients — sequential sub-branch delivery (user-defined inline scope; no Kata issue set)
 
-Deliver the generated, config-driven REST-backed CLI and MCP surfaces defined by `docs/cli-mcp-architecture.md`. Deliver one self-contained fleet task at a time as a Codex-implemented sub-branch of the main working branch, with the Codex session running this plan acting as operator: plan author, reviewer, and integrator. This plan is self-contained; it deliberately inlines a modified, strictly sequential version of the codex-goal-fleet workflow and does not depend on that skill.
+Deliver the generated, config-driven REST-backed CLI and MCP surfaces defined by `docs/cli-mcp-architecture.md`. Deliver one self-contained fleet task at a time as a Codex-implemented sub-branch of the main working branch, with the Claude session running this plan acting as operator: plan author, reviewer, and integrator. This plan is self-contained; it deliberately inlines a modified, strictly sequential version of the codex-goal-fleet workflow and does not depend on that skill.
 
 ## Plan Context
 
 ### Roles and ground rules
 
-- Operator: the Codex session executing this plan. Authors sub-branch plans, launches and waits on implementor Codex sessions, reviews, and merges. Never edits implementation code — all code changes flow through implementor sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
-- Implementor Codex: the only implementor, headless, one session at a time, running `gpt-5.6-terra` with `high` reasoning effort.
+- Operator: the Claude session executing this plan. Authors sub-branch plans, launches and waits on implementor Codex sessions, reviews, and merges. Never edits implementation code — all code changes flow through implementor sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
+- Implementor Codex: the only implementor, headless, one session at a time, running `gpt-5.6-sol` with `high` reasoning effort.
 - Integration branch ("main working branch"): whatever branch the operator session is currently on when executing this plan. Never touch `main`.
 - Task set: the nine inline fleet tasks below, derived directly from the approved architecture. No Kata issue exists for this initiative; do not search, create, claim, update, or close one for these tasks.
 
@@ -15,7 +15,7 @@ Deliver the generated, config-driven REST-backed CLI and MCP surfaces defined by
 
 - Strictly sequential: exactly one active sub-branch and Codex session at any time. Finish or fail the current task before starting the next.
 - Codex quota exhausted: stop, schedule a timed background wait until the stated reset time, relaunch once. Do not ask the user.
-- Operator Codex quota exhausted: stop and wait without asking.
+- Operator (Claude) quota exhausted: stop and wait without asking.
 - Review budget per task: at most ONE `just review-loop`, run by Codex from the initial implementation plan's Success Criteria. If review-loop leaves unresolved comments, they fold into operator fix plans — never re-run review-loop.
 - After the Codex session, the operator runs the review below. Findings warrant at most TWO fix plans per task. Every fix plan MUST state "Do not run review-loop." in its Plan Context and omit review-loop from its Success Criteria.
 - A task still failing after two fix plans: leave the sub-branch unmerged, mark the task failed with findings, then skip every task that depends on it directly or transitively. If no viable tasks remain, stop the fleet. Never merge a failing branch or silently drop scope.
@@ -36,7 +36,7 @@ Deliver the generated, config-driven REST-backed CLI and MCP surfaces defined by
 3. Dispatch: from the sub-worktree, set `plan_file` to the committed implementation-plan path and run headless in the background exactly:
 
    ```sh
-   codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox "/goal implement ${plan_file}. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
+   codex exec -m gpt-5.6-sol -c model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox "/goal implement ${plan_file}. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
    ```
 
    Do not touch the worktree while the session runs. Completion requires process exit and the plan moved to `docs/plans/completed/`. Review-loop can take about ten minutes; use long poll timeouts and do not kill it while heartbeat or progress lines continue.
