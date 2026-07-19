@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,7 +18,7 @@ import (
 	"github.com/mishamsk/mina/internal/httpclient"
 )
 
-// Options configures a standalone remote-backed MCP server.
+// Options configures an MCP server.
 type Options struct {
 	// Version is reported to MCP clients as the Mina server implementation version.
 	Version string
@@ -25,8 +26,7 @@ type Options struct {
 	Diagnostics io.Writer
 }
 
-// Session gives hand-written extensions access to the generated REST client
-// for the configured remote Mina server.
+// Session gives hand-written extensions access to the generated REST client.
 type Session struct {
 	client httpclient.ClientWithResponsesInterface
 }
@@ -55,7 +55,7 @@ type ToolRegistration struct {
 	Handler ToolHandler
 }
 
-// Extension builds one hand-written tool using only the remote REST session.
+// Extension builds one hand-written tool using only the REST session.
 type Extension func(*Session) (ToolRegistration, error)
 
 // Server owns a generated REST-backed MCP registry.
@@ -75,6 +75,34 @@ func NewRemote(serverURL string, options Options, extensions ...Extension) (*Ser
 	if err != nil {
 		return nil, fmt.Errorf("create remote REST client: %w", err)
 	}
+	return newServer(client, options, extensions)
+}
+
+// NewStreamableHTTP builds a Streamable HTTP MCP handler backed by the
+// isolated in-process Mina REST handler.
+func NewStreamableHTTP(restHandler http.Handler, options Options, extensions ...Extension) (http.Handler, error) {
+	if restHandler == nil {
+		return nil, errors.New("MCP Streamable HTTP requires a REST handler")
+	}
+	client, err := httpclient.NewInProcessClient(restHandler)
+	if err != nil {
+		return nil, fmt.Errorf("create in-process REST client: %w", err)
+	}
+	server, err := newServer(client, options, extensions)
+	if err != nil {
+		return nil, err
+	}
+	streamable := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		return server.protocol
+	}, nil)
+	return validateLoopbackOrigin(streamable), nil
+}
+
+func newServer(
+	client httpclient.ClientWithResponsesInterface,
+	options Options,
+	extensions []Extension,
+) (*Server, error) {
 
 	serverOptions := &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}}
 	if options.Diagnostics != nil {
@@ -95,6 +123,32 @@ func NewRemote(serverURL string, options Options, extensions ...Extension) (*Ser
 		return nil, err
 	}
 	return &Server{protocol: protocol}, nil
+}
+
+func validateLoopbackOrigin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" && !isLoopbackOrigin(origin) {
+			http.Error(w, "Forbidden: Origin must be loopback", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isLoopbackOrigin(origin string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
+		parsed.Host == "" || parsed.User != nil || parsed.Path != "" ||
+		parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	hostname := parsed.Hostname()
+	if strings.EqualFold(hostname, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(hostname)
+	return ip != nil && ip.IsLoopback()
 }
 
 // RunStdio serves one MCP session over the supplied standard-input and

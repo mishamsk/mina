@@ -440,7 +440,8 @@ func serve(
 	runtimeOpts := runtime.Options{
 		ExecutionProfile: runtime.ExecutionProfileLongRunning,
 		HTTP: runtime.HTTPConfig{
-			AccessLog: accessLog,
+			AccessLog:  accessLog,
+			MCPVersion: version,
 		},
 		Operations: runtime.OperationConfig{
 			Enabled:    true,

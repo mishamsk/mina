@@ -49,11 +49,68 @@ func TestIntegrationScripts(t *testing.T) {
 			"frankfurter":    testscriptFrankfurter,
 			"httpget":        testscriptHTTPGet,
 			"httpwait":       testscriptHTTPWait,
+			"mcphttp":        testscriptMCPHTTP,
 			"mcpstdio":       testscriptMCPStdio,
 			"glob":           testscriptGlob,
 			"waitfile":       testscriptWaitFile,
 		},
 	})
+}
+
+func testscriptMCPHTTP(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("mcphttp does not support negation")
+	}
+	if len(args) != 1 {
+		ts.Fatalf("usage: mcphttp endpoint")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	client := mcp.NewClient(&mcp.Implementation{Name: "mina-integration", Version: "test"}, nil)
+	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: args[0]}, nil)
+	ts.Check(err)
+	defer func() {
+		ts.Check(session.Close())
+	}()
+	initialized := session.InitializeResult()
+	if initialized == nil || initialized.ServerInfo == nil || initialized.ServerInfo.Name != "mina" {
+		ts.Fatalf("unexpected MCP initialize result: %+v", initialized)
+	}
+
+	listed, err := session.ListTools(ctx, nil)
+	ts.Check(err)
+	if listed.NextCursor != "" {
+		ts.Fatalf("MCP tool list unexpectedly paginated with cursor %q", listed.NextCursor)
+	}
+	if len(listed.Tools) != 83 {
+		ts.Fatalf("MCP tool count = %d, want 83", len(listed.Tools))
+	}
+
+	transactions := callMCPTool(ts, ctx, session, "transactions_list", map[string]any{"limit": 5})
+	transactionsBody := successfulMCPBody(ts, transactions, http.StatusOK)
+	if len(objectArrayField(ts, transactionsBody, "transactions")) == 0 {
+		ts.Fatalf("transactions_list returned no demo transactions")
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, args[0], bytes.NewBufferString(
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"origin-probe","version":"test"}}}`,
+	))
+	ts.Check(err)
+	request.Header.Set("Origin", "https://example.com")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json, text/event-stream")
+	response, err := http.DefaultClient.Do(request)
+	ts.Check(err)
+	responseBody, err := io.ReadAll(response.Body)
+	ts.Check(err)
+	ts.Check(response.Body.Close())
+	if response.StatusCode != http.StatusForbidden {
+		ts.Fatalf("non-loopback Origin status = %d, want %d; body: %s", response.StatusCode, http.StatusForbidden, responseBody)
+	}
+
+	_, err = fmt.Fprintf(ts.Stdout(), "initialize=ok tools=%d transactions_list=ok origin=forbidden\n", len(listed.Tools))
+	ts.Check(err)
 }
 
 func testscriptMCPStdio(ts *testscript.TestScript, neg bool, args []string) {

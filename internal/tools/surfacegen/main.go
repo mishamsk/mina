@@ -279,18 +279,18 @@ func validateContracts(
 				configPath, operationID, "MCP tool", decisions.MCP.Name, mcpPattern,
 			)...)
 			if group != "" && decisions.MCP.Name != "" {
-				key := group + "\x00" + decisions.MCP.Name
-				if previous, ok := mcpNames[key]; ok {
+				composedName := group + "_" + decisions.MCP.Name
+				if previous, ok := mcpNames[composedName]; ok {
 					findings = append(findings, finding{
 						path:      configPath,
 						operation: operationID,
 						message: fmt.Sprintf(
-							"MCP name %q in group %q collides with operation %s",
-							decisions.MCP.Name, group, previous,
+							"composed MCP tool name %q collides with operation %s",
+							composedName, previous,
 						),
 					})
 				} else {
-					mcpNames[key] = operationID
+					mcpNames[composedName] = operationID
 				}
 			}
 			findings = append(findings, validateMCPInputSchema(openAPIPath, operationID, info)...)

@@ -33,13 +33,14 @@
 - Runtime operation status reads operation-run rows from ephemeral store-owned process tables.
 - Runtime operation failures are recorded and logged without failing app creation or normal HTTP readiness.
 - Runtime cancels operations and waits for them before closing `AppDB`.
-- Runtime composes REST and embedded UI handlers without changing REST ownership.
-- Runtime applies configured HTTP access logging around the composed REST and embedded UI handler.
+- Runtime composes REST, embedded Streamable HTTP MCP, and embedded UI handlers without changing protocol ownership.
+- Embedded MCP exists only in the long-running profile at `/mcp` and targets the isolated REST handler, never the composed root handler.
+- Runtime applies configured HTTP access logging around the composed REST, MCP, and embedded UI handler.
 - Runtime may import every app layer, but app service packages must not import runtime.
 
 ## Boundaries
 
-- Owns: runtime options, database lifecycle policy, HTTP adapter configuration, app composition, REST/UI handler composition, background operation lifecycle, and mode-ready runtime values.
+- Owns: runtime options, database lifecycle policy, HTTP adapter configuration, app composition, REST/MCP/UI handler composition, background operation lifecycle, and mode-ready runtime values.
 - Does not own: source-loaded app config, CLI flags, SQL statements, domain validation, REST DTO mapping, UI asset serving behavior, or CLI command help.
 
 ## Testing Notes

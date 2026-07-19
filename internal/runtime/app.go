@@ -16,6 +16,7 @@ import (
 	"github.com/mishamsk/mina/internal/appconfig"
 	"github.com/mishamsk/mina/internal/background"
 	"github.com/mishamsk/mina/internal/httpapi"
+	"github.com/mishamsk/mina/internal/mcpserver"
 	backupfile "github.com/mishamsk/mina/internal/providers/backups/file"
 	"github.com/mishamsk/mina/internal/providers/exchangerates/frankfurter"
 	"github.com/mishamsk/mina/internal/services/accounts"
@@ -248,7 +249,16 @@ func NewWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	restHandler := httpapi.NewWithOptions(services.Dependencies, httpapi.Options{
 		Timeout: opts.HTTP.Timeout,
 	})
-	handler := composeHTTPHandler(restHandler, webui.New())
+	var mcpHandler http.Handler
+	if opts.ExecutionProfile == ExecutionProfileLongRunning {
+		mcpHandler, err = mcpserver.NewStreamableHTTP(restHandler, mcpserver.Options{
+			Version: opts.HTTP.MCPVersion,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	handler := composeHTTPHandler(restHandler, mcpHandler, webui.New())
 	if opts.HTTP.AccessLog != nil {
 		handler = httpapi.AccessLogger(opts.HTTP.AccessLog)(handler)
 	}
@@ -278,10 +288,14 @@ func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, oper
 	return services, nil
 }
 
-func composeHTTPHandler(restHandler http.Handler, webUIHandler http.Handler) http.Handler {
+func composeHTTPHandler(restHandler http.Handler, mcpHandler http.Handler, webUIHandler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
 			restHandler.ServeHTTP(w, r)
+			return
+		}
+		if r.URL.Path == "/mcp" && mcpHandler != nil {
+			mcpHandler.ServeHTTP(w, r)
 			return
 		}
 		if r.URL.Path == "/ui" || strings.HasPrefix(r.URL.Path, "/ui/") {

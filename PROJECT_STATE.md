@@ -26,7 +26,7 @@
   - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, and localhost-only publishing by default.
   - Docker publication workflows build multi-architecture GHCR SHA images and guard `main` promotion behind registry-image Compose lifecycle verification.
   - `just test-docker` runs a real Docker lifecycle check covering Compose health, demo-data retention across recreation/restart/image replacement, backups, database validation, and cleanup.
-  - Runtime opens one app for the process lifetime and composes REST and embedded web UI handlers.
+  - Runtime opens one app for the process lifetime and composes REST, embedded Streamable HTTP MCP at `/mcp`, and embedded web UI handlers.
   - Runtime runs non-blocking startup and recurring operations in `serve`, with public operation status and manual trigger APIs.
   - Exchange-rate startup loading uses a Frankfurter USD NDJSON cache file by default; scheduled and manual REST-triggered loading use targeted Frankfurter API requests.
   - Database backups copy the selected file-backed DuckDB accounting database to configured local backup files; empty backup config creates no automatic runs.
@@ -38,6 +38,7 @@
   - `mina client --server URL` exposes every configured CLI operation through a generated REST-backed command tree with typed inputs and raw JSON output.
   - `mina client --db PATH` runs the same REST-backed command tree against a one-shot in-process app with no listener or automatic operations, waiting for manual exchange-rate loading and database backup runs to finish.
   - `mina mcp stdio --server URL` exposes the configured 83-tool MCP surface through the official SDK against a running Mina REST server.
+  - `mina serve` exposes the same MCP registry over Streamable HTTP at `/mcp`, backed by an in-process generated REST client against the isolated REST handler.
 - Implemented web UI behavior:
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.

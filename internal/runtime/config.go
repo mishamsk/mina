@@ -57,8 +57,9 @@ func (opts Options) automaticOperationsEnabled() bool {
 
 // HTTPConfig controls process-local HTTP adapter behavior.
 type HTTPConfig struct {
-	AccessLog io.Writer
-	Timeout   time.Duration
+	AccessLog  io.Writer
+	MCPVersion string
+	Timeout    time.Duration
 }
 
 // Clock returns the current process time.
