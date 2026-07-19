@@ -109,12 +109,22 @@ Every task runs the full per-task workflow. Tick a task only after setup, implem
 
 ## Final Verification
 
-- [ ] On the main working branch with all viable tasks merged, `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just test-frontend-e2e` passes
-- [ ] `just pre-commit` passes, including OpenAPI, surface-config, generated-output, depguard, and architecture checks
-- [ ] Generated CLI registrations exactly match configured CLI exposures, and generated MCP registrations exactly match configured MCP exposures
-- [ ] Live smoke evidence covers local and remote CLI, standalone stdio MCP, embedded Streamable HTTP MCP, and unchanged REST/web UI routing
-- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` because each branch already ran its one allowed loop, unless merges required conflict resolution or cross-branch interactions were never covered; in that case run exactly one and fold unresolved comments into a final fix plan with no further review-loop
-- [ ] Final report records each task as merged, failed, or skipped; squash commits; fix-plan counts; live evidence; governance interventions; validations; and residual findings or unmerged branches
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] On the main working branch with all viable tasks merged, `just test` passes
+- [x] `just test-integration` passes
+- [x] `just test-frontend-e2e` passes — first run 229/230 with one webkit URL-state spec failing while operator live-smoke probes ran concurrently against the same worktree; clean isolated rerun passed 230/230
+- [x] `just pre-commit` passes, including OpenAPI, surface-config, generated-output, depguard, and architecture checks (all hooks Passed)
+- [x] Generated CLI registrations exactly match configured CLI exposures, and generated MCP registrations exactly match configured MCP exposures — 85 `CLIOperation` and 83 `MCPOperation` catalog entries equal the 168 exposed decisions in `api/client-surfaces.yaml` (85 CLI + 83 MCP; seedDemo/getHealth MCP-excluded); `just surface-check` enforces exact-set and freshness in pre-commit
+- [x] Live smoke evidence covers local and remote CLI, standalone stdio MCP, embedded Streamable HTTP MCP, and unchanged REST/web UI routing — merged-branch binary: `client --db` member create (fresh DB, consent, in-process), `client --server` accounts list against demo server, stdio MCP initialize + 83 tools, Streamable HTTP `/mcp` initialize 200, `/api/health` 200, web UI root 200 with `div#root` (after rebuilding with freshly built frontend assets; an initial 404 was a stale-embedded-assets artifact of the worktree, not a routing defect)
+- [x] Deviation from template, per operator rules: NO fleet-level `just review-loop` — all nine squash merges were conflict-free (each fast-forwarded onto the fully merged predecessor), and cross-branch interactions were continuously covered because every branch was cut from the integration branch containing all prior merges and re-ran the repository suites there
+- [x] Final report: see "Final Report" below
+- [x] Move this plan to `docs/plans/completed/`
+
+## Final Report
+
+- All nine tasks MERGED, zero failed, zero skipped, zero operator fix plans across the fleet. Squash commits on `mcp-and-cli-client`: Task 1 `3770d064`, Task 2 `34bb019f`, Task 3 `e0598831`, Task 4 `ceba6561`, Task 5 `56b31f68`, Task 6 `0451f8c1`, Task 7 `0cd1bb39`, Task 8 `1020a248`, Task 9 `ebf4acd9`.
+- Codex sessions: nine, one per task (~9 to ~70 minutes each); every task ran exactly one review-loop (its allowed budget) inside its Codex session; review-loop findings were fixed in-session, none left unresolved.
+- Governance interventions: one — Task 7's implementor edited ground-truth `docs/cli-mcp-architecture.md` (completion config shape, reworded completion bullet, stderr-failure-output rule); the operator reviewed the diff line-by-line and ratified it as a faithful transcription of the operator-authored plan contract instead of reverting. No other ground-truth doc was touched by any implementor.
+- Validations: per-task operator re-runs of the relevant suites all green (recorded in each task's evidence); fleet-level `just test`, `just test-integration`, `just test-frontend-e2e` (230/230 on clean rerun), and `just pre-commit` green on the merged branch.
+- Live evidence: recorded per task plus the consolidated merged-branch smoke above (all four client surfaces, REST, and web UI).
+- Residual findings (all info/latent, none blocking, recorded in task evidence): httpclient in-process recorder leaves `Proto`/`ContentLength` unset; optional simple body ordering and reserved-query-flag-name panics are unreachable-today CLI edges; generated remote client has no HTTP timeout; MCP SDK argument pipeline decodes numbers as float64 (precision above 2^53 only); `integration-test-boundaries` depguard rule is dormant (build-tagged file not linted — pre-existing); MCP e2e asserts tool count + samples rather than full set equality (exactness owned by surfacegen); idle Streamable HTTP sessions are never evicted (SDK default; loopback single-household posture); `mina client <area>` bare help opens a local session (pre-existing design, `--help` avoids it).
+- Unmerged branches: none; all nine sub-worktrees and branches removed.
