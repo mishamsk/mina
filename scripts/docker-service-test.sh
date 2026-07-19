@@ -332,12 +332,12 @@ snapshot_demo_data() {
     local accounts transactions
     accounts="$(curl_body "$(api_url '/api/accounts?limit=500')")"
     transactions="$(curl_body "$(api_url '/api/transactions?limit=500')")"
-    jq -nc --argjson accounts "$accounts" --argjson transactions "$transactions" '{
-        account_total: $accounts.total_count,
-        checking_id: ($accounts.accounts[] | select(.fqn == "checking:Chase:Joint") | .account_id),
-        emergency_id: ($accounts.accounts[] | select(.fqn == "savings:Ally:Emergency") | .account_id),
-        featured_account_fqns: [$accounts.accounts[] | select(.is_featured == true) | .fqn] | sort,
-        transaction_total: $transactions.total_count
+    printf '%s\n%s\n' "$accounts" "$transactions" | jq -cs '{
+        account_total: .[0].total_count,
+        checking_id: (.[0].accounts[] | select(.fqn == "checking:Chase:Joint") | .account_id),
+        emergency_id: (.[0].accounts[] | select(.fqn == "savings:Ally:Emergency") | .account_id),
+        featured_account_fqns: [.[0].accounts[] | select(.is_featured == true) | .fqn] | sort,
+        transaction_total: .[1].total_count
     }'
 }
 
