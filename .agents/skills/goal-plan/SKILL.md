@@ -1,114 +1,84 @@
 ---
 name: goal-plan
-description: "Use when creating implementation plans with user interactively. Do not use for unattended sessions. Produces plans with Task headers, Validation Commands, and checkbox items suitable for automated agent execution."
+description: "Use when creating implementation plans with the user interactively. Do not use for unattended sessions. Produces sequential, outcome-oriented plans with concrete validation and checkbox items suitable for automated agent execution."
 ---
 
 # Goal Plan Creation
 
-## Overview
+Create a reliable implementation plan through focused collaboration. Ground the plan in repository evidence, resolve only decisions that materially affect the result, and leave implementation mechanics to the executing agent when the repository already makes them clear.
 
-Turn ideas into implementation plans through **collaborative dialogue**. Output follows the plan format for automated orchestration below.
+## Constraints
 
-<CRITICAL>
-## MANDATORY: Follow This Process
+- This is plan-only work. Inspect the repository and issue ledger, but do not implement, run implementation validation, or make unrelated changes.
 
-You MUST NOT write any plan file until you have completed these steps:
+## Workflow
 
-### Step 1: Understand (ask 2-3 questions minimum)
-- Check out the current project state first (files, docs, recent commits)
-- Ask questions ONE AT A TIME to refine the idea
-- Prefer multiple choice questions when possible
-- WAIT for user response before asking next question
-- Focus on: purpose, constraints, success criteria
-
-### Step 2: Propose Approaches
-- Propose 2-3 different approaches with trade-offs
-- Lead with your recommended option and explain why
-- WAIT for user agreement before proceeding
-
-### Step 3: Design Tasks
-- Break the work into sequential tasks (one unit of work each) with subtasks
-- Present tasks one at a time, validating each before moving on
-- Each task should be independently verifiable
-- Ask: "Does this task breakdown make sense?"
-- WAIT for user confirmation
-
-### Step 4: Write the Plan
-- ONLY after user validates tasks, write the plan file
-- Write specific, concrete, actionable checkbox items for each task
-- Include test items in each task where applicable
-
-DO NOT skip steps. DO NOT dump a complete plan without the conversation.
-</CRITICAL>
+1. Ground the request.
+   - Read the repository guidance and owning product, architecture, semantic, API, and package docs.
+   - Inspect current code, relevant tests, recent changes, and the Kata issue when one exists.
+   - Identify the requested outcome, constraints, approval boundaries, completion bar, and validation requirements.
+2. Resolve material decisions.
+   - Infer details that repository evidence answers clearly.
+   - Ask the smallest useful question only when the answer would materially change scope, architecture, behavior, or acceptance.
+   - Offer alternatives only when there is a real tradeoff; lead with the recommended choice and its evidence.
+3. Shape the work.
+   - Preserve a sequential, multi-task structure.
+   - Make each task an independently useful, verifiable outcome and usually one commit.
+   - Name affected files, packages, interfaces, state/data flow, failure behavior, tests, docs, and security/privacy considerations only when relevant.
+   - Decide which tasks need validation and which exact repository-owned commands provide useful evidence. Do not mechanically repeat broad checks under every task.
+   - Keep `review-loop` in the plan-wide Success Criteria by default; omit it only when the user's request explicitly excludes it.
+4. Align and write.
+   - Share a concise task outline and any material decisions when user confirmation would prevent meaningful rework.
+   - Once the plan is sufficiently determined, write it to `docs/plans/YYYY-MM-DD-<topic>.md` and commit the plan.
+   - If a material question remains unresolved, record it only when implementation can still proceed safely; otherwise stop and ask.
 
 ## Plan Format
 
 ```markdown
-# Plan: <Replace with a short project name/goal description> <optional: Kata issue>
+# Plan: <Short outcome-oriented title> <optional: Kata issue>
 
-<Brief description of the feature and overall goal - the overview section>
+<In 1-2 sentences, state the user-visible outcome and what must be true for the plan to be complete.>
 
 ## Plan Context
 
-<Add only context needed to understand this plan. Do not repeat project docs.>
+<Include only context that changes implementation: requirements, constraints, chosen decisions, named files or interfaces, state/data flow, failure behavior, privacy/security concerns, and material open questions. Link to owning docs instead of repeating them. Omit categories that do not apply. If the user's request explicitly excludes review-loop, record `Do not run review-loop.` here.>
 
 ## Tasks
 
-### Task/Commit 1: [First Task Title]
+> Keep a sequential, multi-task structure. Size tasks as small, self-contained commits that are independently verifiable when practical.
+> Describe the required outcome and completion evidence for each task; do not prescribe implementation mechanics the executing agent can derive from the repository.
+> Add validation to the task(s) where it provides useful evidence. Select repository-owned commands from the affected behavior and guidance; do not mechanically repeat irrelevant checks. Do not include this note in the resulting plan.
 
-<2-4 sentences of context: what this task accomplishes, key components involved, what becomes possible after this task completes>
+### Task 1: [First independently useful outcome]
 
-- [ ] Implement X
-- [ ] ...
-- [ ] Add tests for Y
-- [ ] Verification
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] <OPTIONAL, only when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, UI: `just test-integration` passes>
-  - [ ] <OPTIONAL, if a Kata issue exists: update progress in the Kata issue>
-  - [ ] Commit changes
-  - [ ] <OPTIONAL, only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
+<State the end state, affected resources or contracts, dependencies, and success criteria.>
 
-### Task/Commit 2: [Second Task/Commit Title]
+- [ ] Deliver <observable implementation outcome>, including required tests and documentation.
+- [ ] <Add further outcome, acceptance, or task-specific validation checkboxes only when they change the completion bar.>
+- [ ] Commit the task as `<descriptive commit subject>`.
 
-<Context for task 2...>
+### Task 2: [Next independently useful outcome]
 
-- [ ] Implement Z
-- [ ] ...
-- [ ] Update documentation
-- [ ] Verification
-  - [ ] `just test` passes
-  - [ ] `just pre-commit` passes
-  - [ ] <OPTIONAL, only when touched behavior affects CLI, real-network REST, process startup, JSON-over-HTTP behavior, UI: `just test-integration` passes>
-  - [ ] <OPTIONAL, if a Kata issue exists: update progress in the Kata issue>
-  - [ ] Commit changes
-  - [ ] <OPTIONAL, only add if it is a big independent commit: with a clean worktree, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>" <current commit sha>`>
+<State how this task builds on the prior task, plus its end state and success criteria. Add further tasks only when they represent distinct, ordered outcomes.>
 
-## Final Verification
+- [ ] Deliver <observable implementation outcome>, including required tests and documentation.
+- [ ] <Add further outcome, acceptance, or task-specific validation checkboxes only when they change the completion bar.>
+- [ ] Commit the task as `<descriptive commit subject>`.
 
-- [ ] `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] Commit final changes
-- [ ] Run `just review-loop "<short task/goal summary; review-relevant constraints or decisions from user task or plan: item 1; item 2>"`
-- [ ] Move this plan to `docs/plans/completed/`
-- [ ] <optional: If a Kata issue exists, close it after the plan is moved to completed>
+## Success Criteria
+
+- [ ] Every task's stated outcome and acceptance conditions are complete.
+- [ ] `<Exact repository validation selected for the affected behavior>` passes; omit commands that do not provide relevant evidence.
+- [ ] Planned commits are present and the worktree is clean.
+- [ ] Unless Plan Context records the user's explicit request to omit it, with a clean worktree run `just review-loop "<short goal; review-relevant constraints and decisions>"`; resolve findings, rerun affected validation, and commit the fixes.
+- [ ] Move this plan to `docs/plans/completed/` and commit the move.
+- [ ] <If a Kata issue exists, close it with the commits and validation evidence.>
 ```
 
-**Format rules:**
-- Keep tasks/commits small, self-contained, and individually verifiable when practical.
-- Make sure that review-loop steps always come after committing.
+## Quality Bar
 
-## After the Plan
-
-**Documentation:**
-- Write the plan to `docs/plans/YYYY-MM-DD-<topic>.md`
-- Commit the plan to git
-
-## Key Principles
-
-- **One question at a time** - Don't overwhelm
-- **Multiple choice preferred** - Easier to answer
-- **YAGNI ruthlessly** - Remove unnecessary work from plans
-- **Verifiable tasks** - Each task must be mechanically verifiable via Validation Commands
-- **Incremental validation** - Validate tasks, then write plan immediately
+- Outcome-first: specify what must be true, not an exhaustive coding recipe.
+- Evidence-backed: derive scope and decisions from the issue, code, and owning docs.
+- Concrete: replace placeholders with named resources, observable behavior, and exact validation.
+- Lean: state each requirement once and omit detail that does not change execution.
+- Executable: include stopping conditions or open questions when missing evidence would make implementation unsafe or speculative.

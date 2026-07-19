@@ -1,41 +1,41 @@
 ---
 name: rebase
-description: Safely rebase the current Git branch onto main. Use when Codex is asked to update a feature branch with the latest main branch, or when the user sends only "$rebase". Resolve conflicts by preserving new main changes and replaying the current branch's intent on top, then run full verification and commit any post-rebase fixes.
+description: Safely rebase the current Git branch onto main. Use when Codex is asked to update a feature branch with the latest main branch, or when the user sends only "$rebase". Preserve new main behavior and the branch's intent, resolve conflicts deliberately, run repository verification, and commit any resulting fixes.
 ---
 
 # Rebase
 
-## Overview
+## Goal
 
-When invoked, rebase the current branch onto the latest main branch without needing extra instructions. Treat conflict resolution as re-applying the branch's work onto main, then verify the complete result.
+Rebase the current feature branch onto the latest available main ref and leave a clean, verified local branch.
+
+Success means:
+
+- `origin/main` is the new base when available; otherwise the local `main` is the base.
+- New main behavior remains intact and the feature branch's still-applicable intent is replayed on top.
+- Repository-owned validation selected for the combined scope of main's incoming changes and the feature branch passes, including frontend checks when applicable.
+- Rebase-caused fixes are committed separately, the worktree is clean, and nothing is pushed.
+
+## Constraints
+
+- Read `AGENTS.md` and required project docs before acting.
+- Preserve uncommitted user work. If the worktree is dirty, stop and report the blocker.
+- Do not rebase while on `main`.
+- During conflicts, remember that `--ours` is main/upstream and `--theirs` is the branch commit being replayed.
+- Resolve each conflict from current main behavior plus the branch's applicable intent. Do not use blanket side selection.
+- Do not use `git reset --hard`, skip or delete commits, abort the rebase, or force-push unless the user explicitly authorizes it or the repository is otherwise unrecoverable.
+- Do not run `review-loop`.
 
 ## Workflow
 
-1. Read the repo instructions first, including `AGENTS.md` and any required project docs.
-2. Inspect `git status --short`, the current branch, remotes, and available main refs.
-3. Do not discard, reset, or overwrite uncommitted user work. If the worktree is dirty before starting, either make a clearly scoped commit for existing work when appropriate or stop and explain the blocker.
-4. Fetch the latest remote refs. Prefer rebasing onto `origin/main` when it exists; otherwise use the local `main`.
-5. Do not rebase while on `main`. Stop if the current branch is `main`.
-6. Start the rebase with `git rebase <main-ref>`.
+1. Inspect the worktree, current branch, remotes, and available main refs.
+2. Fetch current remote refs and choose the base using the goal above. Stop on missing tools, authentication failure, or an unavailable base.
+3. Run `git rebase <main-ref>`.
+4. If conflicts occur, inspect both sides and relevant history, preserve compatible changes, stage only resolved files, and continue the rebase.
+5. Choose and run the verification required by `AGENTS.md`, owning docs, and the combined change scope from main and the feature branch. Fix failures caused by the rebase and commit those fixes as follow-up commits; do not silently fold them into replayed commits unless the user asks.
+6. Confirm the final worktree is clean and report the base, new branch tip, verification results, conflicts resolved, and follow-up commits.
 
-## Conflict Rules
+## Stop Rules
 
-- Never solve conflicts by undoing new work from main.
-- During a rebase conflict, remember that Git side names are inverted from a normal merge: `--ours` is the main/upstream side, and `--theirs` is the branch commit being replayed.
-- Resolve conflicts by starting from main's version and re-applying the current branch's intended change where it still belongs.
-- Avoid blanket `git checkout --ours` or `git checkout --theirs`. Review each conflicted file and preserve both sides when they are compatible.
-- Use `git diff`, `git diff --ours`, `git diff --theirs`, and `git log --oneline --left-right --cherry-pick <main-ref>...HEAD` as needed to understand intent.
-- After resolving each conflict, stage only the resolved files and continue with `git rebase --continue`.
-- Do not use `git reset --hard`, delete commits, skip commits, or abort the rebase unless the user explicitly approves or the repository is otherwise unrecoverable.
-
-## Verification And Fixes
-
-1. Run the repository's recipe based verification commands: `just pre-commit`, `just test`, and `just test-integration` after the rebase. Do NOT run review-loop!
-2. Fix any failures caused by the rebase.
-3. Commit post-rebase fixes as follow-up commits instead of silently folding them into replayed commits, unless the user explicitly asks to rewrite or squash.
-4. Finish with `git status --short`, the new branch tip, the main ref used, verification results, and any follow-up commits created.
-
-## Stop Conditions
-
-- Stop rather than working around missing tools, broken recipes, failed fetches, authentication failures, or unclear pre-existing worktree changes.
-- Do not force-push unless the user explicitly asks for it after the local rebase and verification are complete.
+- Stop when pre-existing work, a conflict's intended result, or a verification failure cannot be resolved from repository evidence without changing scope.
+- Report the concrete blocker and current rebase state instead of guessing or discarding work.

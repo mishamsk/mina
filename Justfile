@@ -3,8 +3,9 @@ import? "~/.justfile"
 set shell := ["bash", "-euo", "pipefail", "-c"]
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
-default_codex_model := "gpt-5.5"
+default_codex_model := "gpt-5.6-sol"
 default_codex_reasoning_effort := "high"
+planning_codex_reasoning_effort := "xhigh"
 
 [private]
 @default:
@@ -407,7 +408,7 @@ codex-goal plan_file="":
         [ -n "$plan_file" ] || { echo "no plan selected" >&2; exit 1; }
     fi
 
-    command codex -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + default_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "/goal implement ${plan_file}. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
+    command codex -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + planning_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "Implement ${plan_file} end to end. Follow its task order, constraints, and stopping conditions. Success means every applicable checkbox and the plan's success criteria are complete, task commits are created as directed, and the finished plan is moved to docs/plans/completed. If blocked, leave the affected checkbox open and report the blocker with evidence."
 
 # Run a Codex operator against a sequential fleet plan.
 [group('agents')]
@@ -441,7 +442,7 @@ codex-goal-fleet plan_file="":
     }
     [ -f "$plan_file" ] || { echo "fleet plan not found: $plan_file" >&2; exit 1; }
 
-    command codex -m gpt-5.6-sol -c model_reasoning_effort=xhigh --dangerously-bypass-approvals-and-sandbox "/goal implement @${plan_file} - make sure to follow the workflow exactly as stated in that document. Remember that you are the operator and should never edit code yourself, but only manage implementation & review subagents and prepare plans."
+    command codex -m gpt-5.6-sol -c model_reasoning_effort=xhigh --dangerously-bypass-approvals-and-sandbox "Operate @${plan_file} end to end in its stated order. You are the fleet operator: prepare plans, delegate implementation and review to subagents, and integrate results; do not edit implementation code yourself. Success means every applicable fleet checkbox is complete and the plan's validation, review limits, and stopping rules are honored. Report blockers with evidence instead of expanding scope."
 
 # Start a kata plan-only worktree through Codex.
 [group('agents')]
@@ -482,7 +483,7 @@ codex-kata-plan:
     [ -n "$selected" ] || { echo "no kata issue selected" >&2; exit 1; }
 
     issue="${selected%%$'\t'*}"
-    command codex exec -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + default_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "\$kata-plan-worktree #${issue}"
+    command codex exec -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + planning_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "\$kata-plan-worktree #${issue}"
 
 # Rebase the current branch through Codex.
 [group('agents')]
