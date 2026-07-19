@@ -649,10 +649,10 @@ assert_traefik_overlay_config() {
         and (.services.mina.security_opt | index("no-new-privileges:true") != null)
         and (.services.mina.tmpfs | any(contains("size=64m") and contains("mode=1777")))
         and (.services.mina.ports | any(.target == 8080 and .published == $host_port and .host_ip == "127.0.0.1"))
-        and (.services.mina.volumes | any(.type == "bind" and .source == $config_dir and .target == "/config/mina" and .read_only != true and .bind.create_host_path == false))
+        and (.services.mina.volumes | any(.type == "bind" and .source == $config_dir and .target == "/config/mina" and .read_only != true and .bind.create_host_path != true))
         and (.services.mina.volumes | any(.type == "volume" and .target == "/data" and .volume.nocopy == true))
         and (.services.mina.volumes | any(.type == "volume" and .target == "/cache" and .volume.nocopy == true))
-        and (.services.mina.volumes | any(.type == "bind" and .source == $backup_dir and .target == "/backups" and .bind.create_host_path == false))
+        and (.services.mina.volumes | any(.type == "bind" and .source == $backup_dir and .target == "/backups" and .bind.create_host_path != true))
         and .services.mina.depends_on["volume-init"].condition == "service_completed_successfully"
         and .services["volume-init"].user == "0:0"
         and .services["volume-init"].network_mode == "none"
@@ -681,10 +681,10 @@ assert_rendered_compose_config() {
         --arg backup_dir "$backup_dir" \
         '
         .services.mina.image == $image
-        and (.services.mina.volumes | any(.source == $config_dir and .target == "/config/mina" and .read_only != true and .bind.create_host_path == false))
+        and (.services.mina.volumes | any(.source == $config_dir and .target == "/config/mina" and .read_only != true and .bind.create_host_path != true))
         and (.services.mina.volumes | any(.type == "volume" and .target == "/data" and .volume.nocopy == true))
         and (.services.mina.volumes | any(.type == "volume" and .target == "/cache" and .volume.nocopy == true))
-        and (.services.mina.volumes | any(.source == $backup_dir and .target == "/backups" and .bind.create_host_path == false))
+        and (.services.mina.volumes | any(.source == $backup_dir and .target == "/backups" and .bind.create_host_path != true))
         and .services["volume-init"].user == "0:0"
         and .services["volume-init"].network_mode == "none"
         and (.services["volume-init"].volumes | all(.type == "volume" and .volume.nocopy == true))
