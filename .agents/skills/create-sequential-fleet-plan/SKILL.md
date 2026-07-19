@@ -1,6 +1,6 @@
 ---
 name: create-sequential-fleet-plan
-description: Find existing Kata issues relevant to a user-provided goal, inspect and dependency-order the issue set, render it into a dated sequential fleet plan from the bundled template, and commit the plan on an appropriate working branch. Use when the user asks to prepare, create, or commit a fleet plan that a Codex operator can execute one Kata task at a time.
+description: Find existing Kata issues relevant to a user-provided goal, inspect and dependency-order the issue set, render it into a dated sequential fleet plan from the bundled template, and commit the plan on an appropriate working branch. Use when the user asks to prepare, create, or commit a fleet plan that an operator can execute one Kata task at a time.
 ---
 
 # Create Sequential Fleet Plan
@@ -90,7 +90,7 @@ issue while preparing the fleet.
      sub-branch at a time.
    - No `<Replace ...>` instructions, example tasks, completed checkboxes, or stale
      scope from the template remain.
-   - The implementor command uses `gpt-5.6-terra` with `high` reasoning.
+   - The implementor command uses `gpt-5.6-sol` with `high` reasoning.
 
 9. Stage only the new plan and commit it:
 

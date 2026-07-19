@@ -1,34 +1,34 @@
 # Plan: <Replace with a short fleet goal> — sequential sub-branch delivery (<Replace with the Kata query, label, or issue set selector>)
 
-<Replace with a brief description of the fleet's scope and outcome.> Deliver one Kata issue at a time as a Codex-implemented sub-branch of the main working branch, with the Codex session running this plan acting as operator: plan author, reviewer, integrator. This plan is self-contained; it deliberately inlines a modified (strictly sequential) version of the codex-goal-fleet workflow and does not depend on that skill.
+<Replace with a brief description of the fleet's scope and outcome.> Deliver one Kata issue at a time as a Codex-implemented sub-branch of the main working branch, with the session running this plan acting as operator: plan author, reviewer, integrator. This plan is self-contained; it deliberately inlines a modified (strictly sequential) version of the codex-goal-fleet workflow and does not depend on that skill.
 
 ## Plan Context
 
 ### Roles and ground rules
 
-- Operator: the Codex session executing this plan. Authors sub-branch plans, launches and waits on implementor Codex sessions, reviews, merges, closes kata issues. Never edits implementation code — all code changes flow through implementor sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
-- Implementor Codex: the only implementor, headless, one session at a time, running `gpt-5.6-terra` with `high` reasoning effort.
+- Operator: the session executing this plan. Authors sub-branch plans, launches and waits on implementor Codex sessions, reviews, merges, closes kata issues. Never edits implementation code — all code changes flow through implementor sessions against committed plan files. Plan files and reverts of unauthorized `docs/` edits are operator-owned.
+- Implementor Codex: the only implementor, headless, one session at a time, running `gpt-5.6-sol` with `high` reasoning effort.
 - Integration branch ("main working branch"): whatever branch the operator session is currently on when executing this plan. Never touch `main`.
 - Issue set: <Replace with the exact Kata query or explicit refs used to select this fleet.>
 
 ### Rules of engagement
 
-- Strictly sequential: exactly one active sub-branch / Codex session at any time. Finish (merge or fail) the current task before starting the next.
-- Codex quota exhausted: stop, schedule a timed background wait until the stated reset time, relaunch once. Do not ask the user.
-- Operator (Codex) quota exhausted: stop and wait without asking.
-- Review budget per task: at most ONE `just review-loop`, run by Codex from the initial implementation plan's Success Criteria. If review-loop leaves unresolved comments, they fold into operator fix plans — never re-run review-loop.
-- After the Codex session: the operator runs the review below. Findings warrant at most TWO fix plans per task. Every fix plan MUST state "Do not run review-loop." in its Plan Context and omit review-loop from its Success Criteria.
+- Strictly sequential: exactly one active sub-branch / implementor session at any time. Finish (merge or fail) the current task before starting the next.
+- Implementor quota exhausted: stop, schedule a timed background wait until the stated reset time, relaunch once. Do not ask the user.
+- Operator quota exhausted: stop and wait without asking.
+- Review budget per task: at most ONE `just review-loop`, run by the implementor from the initial implementation plan's Success Criteria. If review-loop leaves unresolved comments, they fold into operator fix plans — never re-run review-loop.
+- After the implementor session: the operator runs the review below. Findings warrant at most TWO fix plans per task. Every fix plan MUST state "Do not run review-loop." in its Plan Context and omit review-loop from its Success Criteria.
 - A task still failing after 2 fix plans: leave the sub-branch unmerged, mark the task failed with findings, then proceed only to a task that is still viable — skip any task that depends on the failed one, directly or transitively. If no viable tasks remain, stop the fleet entirely. Never merge a failing branch; never silently drop scope.
 - Environmental failure (toolchain, `gt`, non-resetting quota): stop and ask.
 
 ### Per-task workflow (referenced by every task below)
 
 1. Setup: from the main working branch, `gt <branch> <main-working-branch> -x true` (worktree lands in `.worktrees/<branch>`). Claim: `kata claim <ref> --comment "Fleet sub-branch <branch>." --agent`.
-2. Author the Codex implementation plan in the sub-worktree at `docs/plans/2026-MM-DD-<topic>.md` from `docs/plan_template.md`: concrete checkboxes sized 1–4 commits, the kata ref, repo verification commands per commit (`just test`, `just pre-commit`; `just test-integration` for API/HTTP behavior; `just test-frontend-e2e` for frontend runtime behavior). Initial plans keep the standard Success Criteria including one `just review-loop`. Feature-delivering plans include a PROJECT_STATE.md update item and package-doc updates where contracts change. Before authoring, read the owning ground-truth docs for the touched area (`docs/architecture.md`; for frontend also `docs/frontend-architecture.md`, `docs/webui-design.md`, `docs/webui-theme-arcade-cabinet.md`; for API semantics `docs/business-requirements.md`, `api/openapi.yaml`). Commit the plan in the sub-worktree.
+2. Author the implementation plan in the sub-worktree at `docs/plans/2026-MM-DD-<topic>.md` from `docs/plan_template.md`: concrete checkboxes sized 1–4 commits, the kata ref, repo verification commands per commit (`just test`, `just pre-commit`; `just test-integration` for API/HTTP behavior; `just test-frontend-e2e` for frontend runtime behavior). Initial plans keep the standard Success Criteria including one `just review-loop`. Feature-delivering plans include a PROJECT_STATE.md update item and package-doc updates where contracts change. Before authoring, read the owning ground-truth docs for the touched area (`docs/architecture.md`; for frontend also `docs/frontend-architecture.md`, `docs/webui-design.md`, `docs/webui-theme-arcade-cabinet.md`; for API semantics `docs/business-requirements.md`, `api/openapi.yaml`). Commit the plan in the sub-worktree.
 3. Dispatch: from the sub-worktree, headless in the background (do not use `just codex-goal` — it fails without a terminal), run exactly:
 
    ```sh
-   codex exec -m gpt-5.6-terra -c model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox "/goal implement <plan_file>. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
+   codex exec -m gpt-5.6-sol -c model_reasoning_effort=high --dangerously-bypass-approvals-and-sandbox "/goal implement <plan_file>. Acceptance criteria - all checkboxes are ticked. When done - move file to docs/plans/completed folder. Make sure you go commit by commit, task by task and never jump forward or skip any item."
    ```
 
    Do not touch the worktree while the session runs. Completion signal: plan moved to `docs/plans/completed/` and process exit. Review-loop can take ~10 minutes; use long poll timeouts and do not kill it while heartbeat/progress lines continue.
@@ -47,8 +47,8 @@
 
 Per-task checklist — every task below runs the full per-task workflow; tick a task only after completing all of:
 
-1. Setup, claim, Codex plan authored and committed
-2. Codex session completed (plan archived, worktree clean, suites green)
+1. Setup, claim, implementation plan authored and committed
+2. Implementor session completed (plan archived, worktree clean, suites green)
 3. Operator review passed (fix plans used ≤2)
 4. Squash-merged into the main working branch; worktree and branch removed
 5. Kata issue closed with evidence
