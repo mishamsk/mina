@@ -701,7 +701,7 @@ assert_default_compose_config() {
     config="$(compose_default_config)"
     assert_rendered_compose_config \
         "$config" \
-        "ghcr.io/mishamsk/mina:latest" \
+        "ghcr.io/mishamsk/mina:main" \
         "$ROOT_DIR/docker/config" \
         "$ROOT_DIR/docker/backups"
 
