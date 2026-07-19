@@ -1,0 +1,518 @@
+operations:
+  seedDemo:
+    cli: {state: exposed, name: seed}
+    mcp:
+      state: excluded
+      reason: Bulk demo seeding can overwrite real household state and belongs to developer setup workflows.
+  getHealth:
+    cli: {state: exposed, name: status}
+    mcp:
+      state: excluded
+      reason: Transport liveness is a deployment diagnostic and provides no household accounting value to an agent.
+  listBackgroundOperations:
+    cli: {state: exposed, name: list}
+    mcp:
+      state: exposed
+      name: list
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  listBackgroundOperationRunEnvelopes:
+    cli: {state: exposed, name: list-runs}
+    mcp:
+      state: exposed
+      name: list_runs
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getExchangeRateLoadingStatus:
+    cli: {state: exposed, name: exchange-rate-loading-status}
+    mcp:
+      state: exposed
+      name: exchange_rate_loading_status
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  startExchangeRateLoadingRun:
+    cli: {state: exposed, name: start-exchange-rate-loading}
+    mcp:
+      state: exposed
+      name: start_exchange_rate_loading
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  getExchangeRateLoadingRun:
+    cli: {state: exposed, name: get-exchange-rate-loading-run}
+    mcp:
+      state: exposed
+      name: get_exchange_rate_loading_run
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getDatabaseBackupStatus:
+    cli: {state: exposed, name: database-backup-status}
+    mcp:
+      state: exposed
+      name: database_backup_status
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  startDatabaseBackupRun:
+    cli: {state: exposed, name: start-database-backup}
+    mcp:
+      state: exposed
+      name: start_database_backup
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  getDatabaseBackupRun:
+    cli: {state: exposed, name: get-database-backup-run}
+    mcp:
+      state: exposed
+      name: get_database_backup_run
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+
+  listCategories:
+    cli: {state: exposed, name: list}
+    mcp:
+      state: exposed
+      name: list
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createCategory:
+    cli: {state: exposed, name: create}
+    mcp:
+      state: exposed
+      name: create
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  restructureCategories:
+    cli: {state: exposed, name: restructure}
+    mcp:
+      state: exposed
+      name: restructure
+      annotations: {read_only: false, destructive: true, idempotent: false, open_world: false}
+  listCategoryGroups:
+    cli: {state: exposed, name: list-groups}
+    mcp:
+      state: exposed
+      name: list_groups
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  setCategoryHiddenByPath:
+    cli: {state: exposed, name: set-hidden}
+    mcp:
+      state: exposed
+      name: set_hidden
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  getCategory:
+    cli: {state: exposed, name: get}
+    mcp:
+      state: exposed
+      name: get
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  updateCategory:
+    cli: {state: exposed, name: update}
+    mcp:
+      state: exposed
+      name: update
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  deleteCategory:
+    cli: {state: exposed, name: delete}
+    mcp:
+      state: exposed
+      name: delete
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+
+  listTags:
+    cli: {state: exposed, name: list}
+    mcp:
+      state: exposed
+      name: list
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createTag:
+    cli: {state: exposed, name: create}
+    mcp:
+      state: exposed
+      name: create
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  restructureTags:
+    cli: {state: exposed, name: restructure}
+    mcp:
+      state: exposed
+      name: restructure
+      annotations: {read_only: false, destructive: true, idempotent: false, open_world: false}
+  listTagGroups:
+    cli: {state: exposed, name: list-groups}
+    mcp:
+      state: exposed
+      name: list_groups
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  setTagHiddenByPath:
+    cli: {state: exposed, name: set-hidden}
+    mcp:
+      state: exposed
+      name: set_hidden
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  getTag:
+    cli: {state: exposed, name: get}
+    mcp:
+      state: exposed
+      name: get
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  updateTag:
+    cli: {state: exposed, name: update}
+    mcp:
+      state: exposed
+      name: update
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  deleteTag:
+    cli: {state: exposed, name: delete}
+    mcp:
+      state: exposed
+      name: delete
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+
+  listMembers:
+    cli: {state: exposed, name: list}
+    mcp:
+      state: exposed
+      name: list
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createMember:
+    cli: {state: exposed, name: create}
+    mcp:
+      state: exposed
+      name: create
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  getMember:
+    cli: {state: exposed, name: get}
+    mcp:
+      state: exposed
+      name: get
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  updateMember:
+    cli: {state: exposed, name: update}
+    mcp:
+      state: exposed
+      name: update
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  deleteMember:
+    cli: {state: exposed, name: delete}
+    mcp:
+      state: exposed
+      name: delete
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  updateMemberHidden:
+    cli: {state: exposed, name: set-hidden}
+    mcp:
+      state: exposed
+      name: set_hidden
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+
+  listAccounts:
+    cli: {state: exposed, name: list}
+    mcp:
+      state: exposed
+      name: list
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createAccount:
+    cli: {state: exposed, name: create}
+    mcp:
+      state: exposed
+      name: create
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  restructureAccounts:
+    cli: {state: exposed, name: restructure}
+    mcp:
+      state: exposed
+      name: restructure
+      annotations: {read_only: false, destructive: true, idempotent: false, open_world: false}
+  listAccountGroups:
+    cli: {state: exposed, name: list-groups}
+    mcp:
+      state: exposed
+      name: list_groups
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  setAccountHiddenByPath:
+    cli: {state: exposed, name: set-hidden}
+    mcp:
+      state: exposed
+      name: set_hidden
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  listAccountBalances:
+    cli: {state: exposed, name: list-balances}
+    mcp:
+      state: exposed
+      name: list_balances
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  getAccount:
+    cli: {state: exposed, name: get}
+    mcp:
+      state: exposed
+      name: get
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  updateAccount:
+    cli: {state: exposed, name: update}
+    mcp:
+      state: exposed
+      name: update
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  deleteAccount:
+    cli: {state: exposed, name: delete}
+    mcp:
+      state: exposed
+      name: delete
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  listCreditLimitHistory:
+    cli: {state: exposed, name: list-credit-limits}
+    mcp:
+      state: exposed
+      name: list_credit_limits
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createCreditLimitHistory:
+    cli: {state: exposed, name: create-credit-limit}
+    mcp:
+      state: exposed
+      name: create_credit_limit
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  getCreditLimitHistory:
+    cli: {state: exposed, name: get-credit-limit}
+    mcp:
+      state: exposed
+      name: get_credit_limit
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  deleteCreditLimitHistory:
+    cli: {state: exposed, name: delete-credit-limit}
+    mcp:
+      state: exposed
+      name: delete_credit_limit
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+
+  listExchangeRates:
+    cli: {state: exposed, name: list}
+    mcp:
+      state: exposed
+      name: list
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createExchangeRate:
+    cli: {state: exposed, name: create}
+    mcp:
+      state: exposed
+      name: create
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  getExchangeRate:
+    cli: {state: exposed, name: get}
+    mcp:
+      state: exposed
+      name: get
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  updateExchangeRate:
+    cli: {state: exposed, name: update}
+    mcp:
+      state: exposed
+      name: update
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  deleteExchangeRate:
+    cli: {state: exposed, name: delete}
+    mcp:
+      state: exposed
+      name: delete
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+
+  listTransactionTemplates:
+    cli: {state: exposed, name: list}
+    mcp:
+      state: exposed
+      name: list
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createTransactionTemplate:
+    cli: {state: exposed, name: create}
+    mcp:
+      state: exposed
+      name: create
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  restructureTransactionTemplates:
+    cli: {state: exposed, name: restructure}
+    mcp:
+      state: exposed
+      name: restructure
+      annotations: {read_only: false, destructive: true, idempotent: false, open_world: false}
+  getTransactionTemplate:
+    cli: {state: exposed, name: get}
+    mcp:
+      state: exposed
+      name: get
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  replaceTransactionTemplate:
+    cli: {state: exposed, name: replace}
+    mcp:
+      state: exposed
+      name: replace
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  deleteTransactionTemplate:
+    cli: {state: exposed, name: delete}
+    mcp:
+      state: exposed
+      name: delete
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+
+  listRecurringDefinitions:
+    cli: {state: exposed, name: list-definitions}
+    mcp:
+      state: exposed
+      name: list_definitions
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createRecurringDefinition:
+    cli: {state: exposed, name: create-definition}
+    mcp:
+      state: exposed
+      name: create_definition
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  getRecurringDefinition:
+    cli: {state: exposed, name: get-definition}
+    mcp:
+      state: exposed
+      name: get_definition
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  replaceRecurringDefinition:
+    cli: {state: exposed, name: replace-definition}
+    mcp:
+      state: exposed
+      name: replace_definition
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  deleteRecurringDefinition:
+    cli: {state: exposed, name: delete-definition}
+    mcp:
+      state: exposed
+      name: delete_definition
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  confirmNextRecurringDefinition:
+    cli: {state: exposed, name: confirm-next}
+    mcp:
+      state: exposed
+      name: confirm_next
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  deferRecurringDefinition:
+    cli: {state: exposed, name: defer}
+    mcp:
+      state: exposed
+      name: defer
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  pauseRecurringDefinition:
+    cli: {state: exposed, name: pause}
+    mcp:
+      state: exposed
+      name: pause
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  resumeRecurringDefinition:
+    cli: {state: exposed, name: resume}
+    mcp:
+      state: exposed
+      name: resume
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  listRecurringOccurrences:
+    cli: {state: exposed, name: list-occurrences}
+    mcp:
+      state: exposed
+      name: list_occurrences
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  confirmRecurringOccurrence:
+    cli: {state: exposed, name: confirm-occurrence}
+    mcp:
+      state: exposed
+      name: confirm_occurrence
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  dismissRecurringOccurrence:
+    cli: {state: exposed, name: dismiss-occurrence}
+    mcp:
+      state: exposed
+      name: dismiss_occurrence
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+
+  listTransactions:
+    cli: {state: exposed, name: list}
+    mcp:
+      state: exposed
+      name: list
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createTransaction:
+    cli: {state: exposed, name: create}
+    mcp:
+      state: exposed
+      name: create
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  getTransactionMonthTotals:
+    cli: {state: exposed, name: month-totals}
+    mcp:
+      state: exposed
+      name: month_totals
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createSpendTransaction:
+    cli: {state: exposed, name: create-spend}
+    mcp:
+      state: exposed
+      name: create_spend
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  createIncomeTransaction:
+    cli: {state: exposed, name: create-income}
+    mcp:
+      state: exposed
+      name: create_income
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  createRefundTransaction:
+    cli: {state: exposed, name: create-refund}
+    mcp:
+      state: exposed
+      name: create_refund
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  createTransferTransaction:
+    cli: {state: exposed, name: create-transfer}
+    mcp:
+      state: exposed
+      name: create_transfer
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  getTransaction:
+    cli: {state: exposed, name: get}
+    mcp:
+      state: exposed
+      name: get
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  replaceTransaction:
+    cli: {state: exposed, name: replace}
+    mcp:
+      state: exposed
+      name: replace
+      annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
+  deleteTransaction:
+    cli: {state: exposed, name: delete}
+    mcp:
+      state: exposed
+      name: delete
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  cancelTransaction:
+    cli: {state: exposed, name: cancel}
+    mcp:
+      state: exposed
+      name: cancel
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+
+  searchJournalRecords:
+    cli: {state: exposed, name: search}
+    mcp:
+      state: exposed
+      name: search
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  searchAccountJournalRecords:
+    cli: {state: exposed, name: search-account}
+    mcp:
+      state: exposed
+      name: search_account
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  bulkCategorizeJournalRecords:
+    cli: {state: exposed, name: bulk-categorize}
+    mcp:
+      state: exposed
+      name: bulk_categorize
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  bulkUpdateJournalRecordTags:
+    cli: {state: exposed, name: bulk-update-tags}
+    mcp:
+      state: exposed
+      name: bulk_update_tags
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  bulkReassignJournalRecordAccount:
+    cli: {state: exposed, name: bulk-reassign-account}
+    mcp:
+      state: exposed
+      name: bulk_reassign_account
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
+  bulkUpdateJournalRecordStatuses:
+    cli: {state: exposed, name: bulk-update-statuses}
+    mcp:
+      state: exposed
+      name: bulk_update_statuses
+      annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}

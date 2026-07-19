@@ -6,6 +6,8 @@ paths:
   /api/app/demo-seed:
     post:
       operationId: seedDemo
+      tags:
+        - demo
       summary: Seed demo data into the opened app.
       responses:
         "200":
@@ -25,6 +27,8 @@ paths:
   /api/health:
     get:
       operationId: getHealth
+      tags:
+        - health
       summary: Report process health.
       responses:
         "200":
@@ -38,6 +42,8 @@ paths:
   /api/background-operations:
     get:
       operationId: listBackgroundOperations
+      tags:
+        - operations
       summary: List registered background operations.
       responses:
         "200":
@@ -51,6 +57,8 @@ paths:
   /api/background-operations/runs:
     get:
       operationId: listBackgroundOperationRunEnvelopes
+      tags:
+        - operations
       summary: List background-operation run envelopes.
       parameters:
         - name: operation_id
@@ -85,6 +93,8 @@ paths:
   /api/background-operations/exchange-rate-loading/status:
     get:
       operationId: getExchangeRateLoadingStatus
+      tags:
+        - operations
       summary: Get exchange-rate loading operation status.
       responses:
         "200":
@@ -98,6 +108,8 @@ paths:
   /api/background-operations/exchange-rate-loading/runs:
     post:
       operationId: startExchangeRateLoadingRun
+      tags:
+        - operations
       summary: Start an exchange-rate loading run.
       responses:
         "202":
@@ -119,6 +131,8 @@ paths:
           minimum: 1
     get:
       operationId: getExchangeRateLoadingRun
+      tags:
+        - operations
       summary: Get one exchange-rate loading run.
       responses:
         "200":
@@ -136,6 +150,8 @@ paths:
   /api/background-operations/database-backup/status:
     get:
       operationId: getDatabaseBackupStatus
+      tags:
+        - operations
       summary: Get database backup operation status.
       responses:
         "200":
@@ -149,6 +165,8 @@ paths:
   /api/background-operations/database-backup/runs:
     post:
       operationId: startDatabaseBackupRun
+      tags:
+        - operations
       summary: Start a database backup run.
       responses:
         "202":
@@ -172,6 +190,8 @@ paths:
           minimum: 1
     get:
       operationId: getDatabaseBackupRun
+      tags:
+        - operations
       summary: Get one database backup run.
       responses:
         "200":
@@ -189,6 +209,8 @@ paths:
   /api/categories:
     get:
       operationId: listCategories
+      tags:
+        - categories
       summary: List categories.
       parameters:
         - name: include_hidden
@@ -260,6 +282,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
     post:
       operationId: createCategory
+      tags:
+        - categories
       summary: Create a category.
       requestBody:
         required: true
@@ -281,6 +305,8 @@ paths:
   /api/categories/restructure:
     post:
       operationId: restructureCategories
+      tags:
+        - categories
       summary: Rename or move a category hierarchy path.
       description: Atomically rewrites active category FQNs and active budget category paths equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned categories and budgets are not changed.
       requestBody:
@@ -305,6 +331,8 @@ paths:
   /api/categories/groups:
     get:
       operationId: listCategoryGroups
+      tags:
+        - categories
       summary: List implicit category groups.
       description: Returns one item per active category FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
       parameters:
@@ -326,6 +354,8 @@ paths:
   /api/categories/set-hidden:
     post:
       operationId: setCategoryHiddenByPath
+      tags:
+        - categories
       summary: Set hidden state for a category path.
       description: Sets `is_hidden` on every active category leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
       requestBody:
@@ -356,6 +386,8 @@ paths:
           minimum: 1
     get:
       operationId: getCategory
+      tags:
+        - categories
       summary: Get a category.
       parameters:
         - name: include_tombstoned
@@ -377,6 +409,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateCategory
+      tags:
+        - categories
       summary: Update category mutable metadata.
       requestBody:
         required: true
@@ -397,6 +431,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: deleteCategory
+      tags:
+        - categories
       summary: Tombstone a category.
       responses:
         "204":
@@ -410,6 +446,8 @@ paths:
   /api/tags:
     get:
       operationId: listTags
+      tags:
+        - tags
       summary: List tags.
       parameters:
         - name: include_hidden
@@ -472,6 +510,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
     post:
       operationId: createTag
+      tags:
+        - tags
       summary: Create a tag.
       requestBody:
         required: true
@@ -493,6 +533,8 @@ paths:
   /api/tags/restructure:
     post:
       operationId: restructureTags
+      tags:
+        - tags
       summary: Rename or move a tag hierarchy path.
       description: Atomically rewrites active tag FQNs equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned tags are not changed.
       requestBody:
@@ -517,6 +559,8 @@ paths:
   /api/tags/groups:
     get:
       operationId: listTagGroups
+      tags:
+        - tags
       summary: List implicit tag groups.
       description: Returns one item per active tag FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
       parameters:
@@ -538,6 +582,8 @@ paths:
   /api/tags/set-hidden:
     post:
       operationId: setTagHiddenByPath
+      tags:
+        - tags
       summary: Set hidden state for a tag path.
       description: Sets `is_hidden` on every active tag leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
       requestBody:
@@ -568,6 +614,8 @@ paths:
           minimum: 1
     get:
       operationId: getTag
+      tags:
+        - tags
       summary: Get a tag.
       parameters:
         - name: include_tombstoned
@@ -589,6 +637,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateTag
+      tags:
+        - tags
       summary: Update tag hidden state.
       requestBody:
         required: true
@@ -609,6 +659,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: deleteTag
+      tags:
+        - tags
       summary: Tombstone a tag.
       responses:
         "204":
@@ -622,6 +674,8 @@ paths:
   /api/members:
     get:
       operationId: listMembers
+      tags:
+        - members
       summary: List household members.
       parameters:
         - name: include_hidden
@@ -679,6 +733,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
     post:
       operationId: createMember
+      tags:
+        - members
       summary: Create a household member.
       requestBody:
         required: true
@@ -708,6 +764,8 @@ paths:
           minimum: 1
     get:
       operationId: getMember
+      tags:
+        - members
       summary: Get a household member.
       parameters:
         - name: include_tombstoned
@@ -729,6 +787,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateMember
+      tags:
+        - members
       summary: Update household member name.
       requestBody:
         required: true
@@ -751,6 +811,8 @@ paths:
           $ref: "#/components/responses/Conflict"
     delete:
       operationId: deleteMember
+      tags:
+        - members
       summary: Tombstone a household member.
       responses:
         "204":
@@ -772,6 +834,8 @@ paths:
           minimum: 1
     put:
       operationId: updateMemberHidden
+      tags:
+        - members
       summary: Update household member hidden state.
       requestBody:
         required: true
@@ -793,6 +857,8 @@ paths:
   /api/accounts:
     get:
       operationId: listAccounts
+      tags:
+        - accounts
       summary: List accounts.
       parameters:
         - name: include_hidden
@@ -860,6 +926,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
     post:
       operationId: createAccount
+      tags:
+        - accounts
       summary: Create an account.
       requestBody:
         required: true
@@ -881,6 +949,8 @@ paths:
   /api/accounts/restructure:
     post:
       operationId: restructureAccounts
+      tags:
+        - accounts
       summary: Rename or move an account hierarchy path.
       description: Atomically rewrites active account FQNs equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned accounts are not changed.
       requestBody:
@@ -905,6 +975,8 @@ paths:
   /api/accounts/groups:
     get:
       operationId: listAccountGroups
+      tags:
+        - accounts
       summary: List implicit account groups.
       description: Returns one item per active account FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
       parameters:
@@ -926,6 +998,8 @@ paths:
   /api/accounts/set-hidden:
     post:
       operationId: setAccountHiddenByPath
+      tags:
+        - accounts
       summary: Set hidden state for an account path.
       description: Sets `is_hidden` on every active account leaf at or under `path_fqn`. A leaf path and a group path are handled identically.
       requestBody:
@@ -948,6 +1022,8 @@ paths:
   /api/accounts/balances:
     get:
       operationId: listAccountBalances
+      tags:
+        - accounts
       summary: List current and posted-only balances for active balance accounts.
       description: Returns server-computed per-currency balances for active `balance` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
       parameters:
@@ -988,6 +1064,8 @@ paths:
           minimum: 1
     get:
       operationId: getAccount
+      tags:
+        - accounts
       summary: Get an account.
       parameters:
         - name: include_tombstoned
@@ -1009,6 +1087,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateAccount
+      tags:
+        - accounts
       summary: Update mutable account fields.
       requestBody:
         required: true
@@ -1031,6 +1111,8 @@ paths:
           $ref: "#/components/responses/Conflict"
     delete:
       operationId: deleteAccount
+      tags:
+        - accounts
       summary: Tombstone an account.
       responses:
         "204":
@@ -1052,6 +1134,8 @@ paths:
           minimum: 1
     get:
       operationId: listCreditLimitHistory
+      tags:
+        - accounts
       summary: List credit limit history for an account.
       parameters:
         - name: include_tombstoned
@@ -1104,6 +1188,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     post:
       operationId: createCreditLimitHistory
+      tags:
+        - accounts
       summary: Create a credit limit history entry.
       requestBody:
         required: true
@@ -1135,6 +1221,8 @@ paths:
           minimum: 1
     get:
       operationId: getCreditLimitHistory
+      tags:
+        - accounts
       summary: Get a credit limit history entry.
       parameters:
         - name: include_tombstoned
@@ -1156,6 +1244,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: deleteCreditLimitHistory
+      tags:
+        - accounts
       summary: Tombstone a credit limit history entry.
       responses:
         "204":
@@ -1167,6 +1257,8 @@ paths:
   /api/exchange-rates:
     get:
       operationId: listExchangeRates
+      tags:
+        - exchange-rates
       summary: List exchange rates.
       parameters:
         - name: from_currency
@@ -1238,6 +1330,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
     post:
       operationId: createExchangeRate
+      tags:
+        - exchange-rates
       summary: Create an exchange rate.
       requestBody:
         required: true
@@ -1267,6 +1361,8 @@ paths:
           minimum: 1
     get:
       operationId: getExchangeRate
+      tags:
+        - exchange-rates
       summary: Get an exchange rate.
       parameters:
         - name: include_tombstoned
@@ -1288,6 +1384,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     patch:
       operationId: updateExchangeRate
+      tags:
+        - exchange-rates
       summary: Update an exchange rate value.
       requestBody:
         required: true
@@ -1308,6 +1406,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: deleteExchangeRate
+      tags:
+        - exchange-rates
       summary: Tombstone an exchange rate.
       responses:
         "204":
@@ -1319,6 +1419,8 @@ paths:
   /api/transaction-templates:
     get:
       operationId: listTransactionTemplates
+      tags:
+        - transaction-templates
       summary: List transaction templates.
       parameters:
         - name: sort
@@ -1371,6 +1473,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
     post:
       operationId: createTransactionTemplate
+      tags:
+        - transaction-templates
       summary: Create a transaction template.
       requestBody:
         required: true
@@ -1392,6 +1496,8 @@ paths:
   /api/transaction-templates/restructure:
     post:
       operationId: restructureTransactionTemplates
+      tags:
+        - transaction-templates
       summary: Rename or move a transaction template hierarchy path.
       description: Atomically rewrites active transaction template FQNs equal to or under `from_fqn` to the `to_fqn` prefix. Tombstoned templates are not changed.
       requestBody:
@@ -1424,6 +1530,8 @@ paths:
           minimum: 1
     get:
       operationId: getTransactionTemplate
+      tags:
+        - transaction-templates
       summary: Get a transaction template.
       responses:
         "200":
@@ -1438,6 +1546,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     put:
       operationId: replaceTransactionTemplate
+      tags:
+        - transaction-templates
       summary: Replace a transaction template.
       description: Replaces the full date-free template record set atomically. The request `fqn` must equal the current template `fqn`; rename and move operations go through `/api/transaction-templates/restructure`. The transaction_template_id is preserved, previous active record defaults are tombstoned, and replacement records are partial defaults that do not need to balance.
       requestBody:
@@ -1459,6 +1569,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: deleteTransactionTemplate
+      tags:
+        - transaction-templates
       summary: Tombstone a transaction template and its record defaults.
       responses:
         "204":
@@ -1470,6 +1582,8 @@ paths:
   /api/recurring-definitions:
     get:
       operationId: listRecurringDefinitions
+      tags:
+        - recurring
       summary: List recurring definitions.
       parameters:
         - name: sort
@@ -1522,6 +1636,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
     post:
       operationId: createRecurringDefinition
+      tags:
+        - recurring
       summary: Create a recurring definition.
       requestBody:
         required: true
@@ -1551,6 +1667,8 @@ paths:
           minimum: 1
     get:
       operationId: getRecurringDefinition
+      tags:
+        - recurring
       summary: Get a recurring definition.
       responses:
         "200":
@@ -1565,6 +1683,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     put:
       operationId: replaceRecurringDefinition
+      tags:
+        - recurring
       summary: Replace a recurring definition.
       description: Replaces the schedule and full complete record set atomically. The recurring_definition_id is preserved, definition_version increments, and previous active records are tombstoned.
       requestBody:
@@ -1588,6 +1708,8 @@ paths:
           $ref: "#/components/responses/Conflict"
     delete:
       operationId: deleteRecurringDefinition
+      tags:
+        - recurring
       summary: Cancel a recurring definition.
       responses:
         "204":
@@ -1607,6 +1729,8 @@ paths:
           minimum: 1
     post:
       operationId: confirmNextRecurringDefinition
+      tags:
+        - recurring
       summary: Confirm the next recurring occurrence early.
       responses:
         "200":
@@ -1632,6 +1756,8 @@ paths:
           minimum: 1
     post:
       operationId: deferRecurringDefinition
+      tags:
+        - recurring
       summary: Defer the next non-materialized interval occurrence.
       requestBody:
         required: false
@@ -1663,6 +1789,8 @@ paths:
           minimum: 1
     post:
       operationId: pauseRecurringDefinition
+      tags:
+        - recurring
       summary: Pause a recurring definition.
       responses:
         "200":
@@ -1686,6 +1814,8 @@ paths:
           minimum: 1
     post:
       operationId: resumeRecurringDefinition
+      tags:
+        - recurring
       summary: Resume a recurring definition.
       responses:
         "200":
@@ -1701,6 +1831,8 @@ paths:
   /api/recurring-occurrences:
     get:
       operationId: listRecurringOccurrences
+      tags:
+        - recurring
       summary: List recurring occurrences.
       description: Runs catch-up materialization through the server's current civil date before listing.
       parameters:
@@ -1779,6 +1911,8 @@ paths:
           minimum: 1
     post:
       operationId: confirmRecurringOccurrence
+      tags:
+        - recurring
       summary: Confirm a recurring occurrence.
       responses:
         "200":
@@ -1802,6 +1936,8 @@ paths:
           minimum: 1
     post:
       operationId: dismissRecurringOccurrence
+      tags:
+        - recurring
       summary: Dismiss a recurring occurrence.
       responses:
         "200":
@@ -1817,6 +1953,8 @@ paths:
   /api/transactions:
     get:
       operationId: listTransactions
+      tags:
+        - transactions
       summary: List transactions with journal records.
       description: Defaults to `initiated_date` descending with `transaction_id` descending as the stable tiebreaker.
       parameters:
@@ -2011,6 +2149,8 @@ paths:
           $ref: "#/components/responses/InvalidRequest"
     post:
       operationId: createTransaction
+      tags:
+        - transactions
       summary: Create a per-currency balanced transaction.
       requestBody:
         required: true
@@ -2030,6 +2170,8 @@ paths:
   /api/transactions/month-totals:
     get:
       operationId: getTransactionMonthTotals
+      tags:
+        - transactions
       summary: Get server-computed spend and income totals for a civil month.
       description: Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense and fee component records increase spend, income component records increase income, refund records are excluded from both spend and gross income, and transfer/exchange/adjustment/fx_gain_loss records are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
       parameters:
@@ -2051,6 +2193,8 @@ paths:
   /api/transactions/spend:
     post:
       operationId: createSpendTransaction
+      tags:
+        - transactions
       summary: Create a same-currency spend transaction.
       requestBody:
         required: true
@@ -2070,6 +2214,8 @@ paths:
   /api/transactions/income:
     post:
       operationId: createIncomeTransaction
+      tags:
+        - transactions
       summary: Create a same-currency income transaction.
       requestBody:
         required: true
@@ -2089,6 +2235,8 @@ paths:
   /api/transactions/refund:
     post:
       operationId: createRefundTransaction
+      tags:
+        - transactions
       summary: Create a same-currency refund transaction.
       requestBody:
         required: true
@@ -2108,6 +2256,8 @@ paths:
   /api/transactions/transfer:
     post:
       operationId: createTransferTransaction
+      tags:
+        - transactions
       summary: Create a same-currency transfer transaction.
       requestBody:
         required: true
@@ -2127,6 +2277,8 @@ paths:
   /api/records:
     get:
       operationId: searchJournalRecords
+      tags:
+        - records
       summary: Search active journal records.
       parameters:
         - name: account_id
@@ -2289,6 +2441,8 @@ paths:
           minimum: 1
     get:
       operationId: searchAccountJournalRecords
+      tags:
+        - records
       summary: Search active journal records for one account.
       parameters:
         - name: category_id
@@ -2439,6 +2593,8 @@ paths:
   /api/records/bulk/category:
     post:
       operationId: bulkCategorizeJournalRecords
+      tags:
+        - records
       summary: Assign one category to selected journal records.
       requestBody:
         required: true
@@ -2458,6 +2614,8 @@ paths:
   /api/records/bulk/tags:
     post:
       operationId: bulkUpdateJournalRecordTags
+      tags:
+        - records
       summary: Add and remove tags on selected journal records.
       requestBody:
         required: true
@@ -2477,6 +2635,8 @@ paths:
   /api/records/bulk/account:
     post:
       operationId: bulkReassignJournalRecordAccount
+      tags:
+        - records
       summary: Assign one account to selected journal records.
       requestBody:
         required: true
@@ -2496,6 +2656,8 @@ paths:
   /api/records/bulk/status:
     post:
       operationId: bulkUpdateJournalRecordStatuses
+      tags:
+        - records
       summary: Update posting and reconciliation statuses on selected journal records.
       description: Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.
       requestBody:
@@ -2524,6 +2686,8 @@ paths:
           minimum: 1
     get:
       operationId: getTransaction
+      tags:
+        - transactions
       summary: Get a transaction with journal records.
       responses:
         "200":
@@ -2538,6 +2702,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     put:
       operationId: replaceTransaction
+      tags:
+        - transactions
       summary: Replace a transaction and its journal records.
       description: Replaces initiated_date and the full journal record set atomically. The transaction_id is preserved, previous active records are tombstoned, and replacement records must balance to zero amount within each currency.
       requestBody:
@@ -2559,6 +2725,8 @@ paths:
           $ref: "#/components/responses/NotFound"
     delete:
       operationId: deleteTransaction
+      tags:
+        - transactions
       summary: Tombstone a transaction and its journal records.
       responses:
         "204":
@@ -2578,6 +2746,8 @@ paths:
           minimum: 1
     post:
       operationId: cancelTransaction
+      tags:
+        - transactions
       summary: Cancel a transaction.
       description: Sets posting_status to cancelled on all active journal records for the transaction. The operation is idempotent for an already-cancelled transaction and does not change dates or reconciliation status.
       responses:

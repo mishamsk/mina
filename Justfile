@@ -51,9 +51,14 @@ openapi:
     go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
     go tool oapi-codegen -config api/oapi-codegen-httpclient.yaml api/openapi.yaml
 
+# Validate OpenAPI client-surface exposure decisions.
+[group('codegen')]
+surface-check:
+    go run ./internal/tools/surfacegen -check
+
 # Validate OpenAPI and generated code freshness.
 [group('codegen')]
-openapi-check:
+openapi-check: surface-check
     go run github.com/getkin/kin-openapi/cmd/validate api/openapi.yaml
     tmpdir="$(mktemp -d)"; trap 'rm -rf "$tmpdir"' EXIT; awk -v output="$tmpdir/server/openapi.gen.go" '/^output:/ { print "output: " output; next } { print }' api/oapi-codegen.yaml > "$tmpdir/oapi-codegen.yaml"; mkdir -p "$tmpdir/server"; go tool oapi-codegen -config "$tmpdir/oapi-codegen.yaml" api/openapi.yaml; cmp -s "$tmpdir/server/openapi.gen.go" internal/httpapi/openapi/openapi.gen.go || { echo 'generated OpenAPI server output is stale; run `just openapi`' >&2; diff -u internal/httpapi/openapi/openapi.gen.go "$tmpdir/server/openapi.gen.go" >&2; exit 1; }; awk -v output="$tmpdir/client/openapi.gen.go" '/^output:/ { print "output: " output; next } { print }' api/oapi-codegen-httpclient.yaml > "$tmpdir/oapi-codegen-httpclient.yaml"; mkdir -p "$tmpdir/client"; go tool oapi-codegen -config "$tmpdir/oapi-codegen-httpclient.yaml" api/openapi.yaml; cmp -s "$tmpdir/client/openapi.gen.go" internal/httpclient/openapi.gen.go || { echo 'generated OpenAPI client output is stale; run `just openapi`' >&2; diff -u internal/httpclient/openapi.gen.go "$tmpdir/client/openapi.gen.go" >&2; exit 1; }
 
