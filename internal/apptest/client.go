@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -21,7 +20,6 @@ import (
 )
 
 const duckDBDriverName = "duckdb"
-const testServerURL = "http://mina.test"
 
 // Client sends generated REST requests through an in-process app handler.
 type Client struct {
@@ -257,9 +255,7 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	restClient, err := httpclient.NewClientWithResponses(testServerURL, httpclient.WithHTTPClient(inProcessDoer{
-		handler: appInstance.Handler(),
-	}))
+	restClient, err := httpclient.NewInProcessClient(appInstance.Handler())
 	if err != nil {
 		if closeErr := appInstance.Close(); closeErr != nil {
 			return nil, fmt.Errorf("new generated REST client: %w; close app: %w", err, closeErr)
@@ -293,25 +289,6 @@ func (c *Client) Close() {
 	if err := c.app.Close(); err != nil {
 		c.t.Fatalf("close test app: %v", err)
 	}
-}
-
-type inProcessDoer struct {
-	handler http.Handler
-}
-
-func (d inProcessDoer) Do(req *http.Request) (*http.Response, error) {
-	if err := req.Context().Err(); err != nil {
-		return nil, err
-	}
-	if req.Body != nil {
-		defer func() {
-			_ = req.Body.Close()
-		}()
-	}
-
-	recorder := httptest.NewRecorder()
-	d.handler.ServeHTTP(recorder, req)
-	return recorder.Result(), nil
 }
 
 func testSchemaName(t *testing.T) string {

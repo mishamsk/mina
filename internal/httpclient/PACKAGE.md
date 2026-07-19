@@ -3,18 +3,21 @@
 ## Purpose
 
 - Generated REST client code from `api/openapi.yaml`.
-- Shared DTO, params, enum, response, and client types for app test harnesses.
+- Remote HTTP transport through the generated client constructors.
+- In-process `http.Handler` transport through the hand-written client constructor.
+- Shared DTO, params, enum, response, and client types for client consumers.
 
 ## Implicit Contracts
 
-- `internal/apptest` is the first approved consumer.
+- `internal/apptest` is the first approved in-process transport consumer.
 - Normal tests may import generated types when client method signatures require them.
-- Production use needs an explicit approved use case before importing this package.
+- Other production use needs an explicit approved use case; `docs/cli-mcp-architecture.md` owns the planned local CLI and embedded MCP uses.
+- In-process transport callers supply the handler and own its lifecycle.
 
 ## Boundaries
 
-- Owns: generated client-side REST contract types.
-- Does not own: app setup, test harness lifecycle, service behavior, or server routing.
+- Owns: generated client-side REST contract types and remote or in-process client transport construction.
+- Does not own: app setup, handler lifecycle, test harness lifecycle, service behavior, or server routing.
 
 ## Testing Notes
 
