@@ -37,6 +37,7 @@
 - Implemented client surfaces:
   - `mina client --server URL` exposes every configured CLI operation through a generated REST-backed command tree with typed inputs and raw JSON output.
   - `mina client --db PATH` runs the same REST-backed command tree against a one-shot in-process app with no listener or automatic operations, waiting for manual exchange-rate loading and database backup runs to finish.
+  - `mina mcp stdio --server URL` exposes the configured 83-tool MCP surface through the official SDK against a running Mina REST server.
 - Implemented web UI behavior:
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.

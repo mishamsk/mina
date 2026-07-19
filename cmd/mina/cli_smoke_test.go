@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	_ "github.com/duckdb/duckdb-go/v2"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rogpeppe/go-internal/testscript"
 )
 
@@ -47,10 +49,191 @@ func TestIntegrationScripts(t *testing.T) {
 			"frankfurter":    testscriptFrankfurter,
 			"httpget":        testscriptHTTPGet,
 			"httpwait":       testscriptHTTPWait,
+			"mcpstdio":       testscriptMCPStdio,
 			"glob":           testscriptGlob,
 			"waitfile":       testscriptWaitFile,
 		},
 	})
+}
+
+func testscriptMCPStdio(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("mcpstdio does not support negation")
+	}
+	if len(args) != 1 {
+		ts.Fatalf("usage: mcpstdio server-url")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	command := exec.Command("mina", "mcp", "stdio", "--server", args[0])
+	command.Dir = ts.MkAbs(".")
+	command.Stderr = ts.Stderr()
+	client := mcp.NewClient(&mcp.Implementation{Name: "mina-integration", Version: "test"}, &mcp.ClientOptions{
+		Capabilities: &mcp.ClientCapabilities{},
+	})
+	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
+	ts.Check(err)
+	defer func() {
+		ts.Check(session.Close())
+	}()
+
+	listed, err := session.ListTools(ctx, nil)
+	ts.Check(err)
+	if listed.NextCursor != "" {
+		ts.Fatalf("MCP tool list unexpectedly paginated with cursor %q", listed.NextCursor)
+	}
+	if len(listed.Tools) != 83 {
+		ts.Fatalf("MCP tool count = %d, want 83", len(listed.Tools))
+	}
+	tools := make(map[string]*mcp.Tool, len(listed.Tools))
+	for _, tool := range listed.Tools {
+		tools[tool.Name] = tool
+	}
+	for _, name := range []string{"transactions_list", "accounts_get", "members_create", "accounts_delete"} {
+		if tools[name] == nil {
+			ts.Fatalf("MCP tool list is missing %q", name)
+		}
+	}
+	assertMCPToolAnnotations(ts, tools["transactions_list"], true, false, true, false)
+	assertMCPToolAnnotations(ts, tools["accounts_delete"], false, true, true, false)
+	_, err = fmt.Fprintf(ts.Stdout(), "tools=%d annotations=ok\n", len(listed.Tools))
+	ts.Check(err)
+
+	transactions := callMCPTool(ts, ctx, session, "transactions_list", map[string]any{"limit": 5})
+	transactionsBody := successfulMCPBody(ts, transactions, http.StatusOK)
+	transactionItems := objectArrayField(ts, transactionsBody, "transactions")
+	if len(transactionItems) == 0 {
+		ts.Fatalf("transactions_list returned no demo transactions")
+	}
+	_, err = fmt.Fprintln(ts.Stdout(), "transactions_list=ok")
+	ts.Check(err)
+
+	accounts := callMCPTool(ts, ctx, session, "accounts_list", map[string]any{"limit": 5})
+	accountsBody := successfulMCPBody(ts, accounts, http.StatusOK)
+	accountItems := objectArrayField(ts, accountsBody, "accounts")
+	if len(accountItems) == 0 {
+		ts.Fatalf("accounts_list returned no demo accounts")
+	}
+	accountID := integerField(ts, accountItems[0], "account_id")
+	account := callMCPTool(ts, ctx, session, "accounts_get", map[string]any{"account_id": accountID})
+	accountBody := successfulMCPBody(ts, account, http.StatusOK)
+	if got := integerField(ts, accountBody, "account_id"); got != accountID {
+		ts.Fatalf("accounts_get account_id = %d, want %d", got, accountID)
+	}
+	_, err = fmt.Fprintln(ts.Stdout(), "accounts_get=ok")
+	ts.Check(err)
+
+	invalidMember := callMCPTool(ts, ctx, session, "members_create", map[string]any{
+		"body": map[string]any{"name": ""},
+	})
+	if !invalidMember.IsError {
+		ts.Fatalf("members_create invalid body did not return a tool error")
+	}
+	invalidText := textContent(ts, invalidMember)
+	if !strings.Contains(invalidText, `"code":"invalid_request"`) || !strings.Contains(invalidText, `"message"`) {
+		ts.Fatalf("members_create error does not carry Mina's stable envelope: %s", invalidText)
+	}
+	_, err = fmt.Fprintln(ts.Stdout(), "members_create_invalid=ok")
+	ts.Check(err)
+
+	validMember := callMCPTool(ts, ctx, session, "members_create", map[string]any{
+		"body": map[string]any{"name": "MCP Smoke Member"},
+	})
+	validMemberBody := successfulMCPBody(ts, validMember, http.StatusCreated)
+	if integerField(ts, validMemberBody, "member_id") < 1 {
+		ts.Fatalf("members_create returned an invalid member_id")
+	}
+	_, err = fmt.Fprintln(ts.Stdout(), "members_create_valid=ok")
+	ts.Check(err)
+}
+
+func assertMCPToolAnnotations(
+	ts *testscript.TestScript,
+	tool *mcp.Tool,
+	readOnly bool,
+	destructive bool,
+	idempotent bool,
+	openWorld bool,
+) {
+	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || tool.Annotations.OpenWorldHint == nil {
+		ts.Fatalf("MCP tool %q is missing explicit annotations", tool.Name)
+	}
+	annotations := tool.Annotations
+	if annotations.ReadOnlyHint != readOnly || *annotations.DestructiveHint != destructive ||
+		annotations.IdempotentHint != idempotent || *annotations.OpenWorldHint != openWorld {
+		ts.Fatalf("MCP tool %q annotations = %+v", tool.Name, annotations)
+	}
+}
+
+func callMCPTool(
+	ts *testscript.TestScript,
+	ctx context.Context,
+	session *mcp.ClientSession,
+	name string,
+	arguments map[string]any,
+) *mcp.CallToolResult {
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: arguments})
+	ts.Check(err)
+	return result
+}
+
+func successfulMCPBody(
+	ts *testscript.TestScript,
+	result *mcp.CallToolResult,
+	wantStatus int,
+) map[string]any {
+	if result.IsError {
+		ts.Fatalf("MCP tool returned an error: %s", textContent(ts, result))
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		ts.Fatalf("MCP structured content has type %T", result.StructuredContent)
+	}
+	status, ok := structured["status"].(float64)
+	if !ok || int(status) != wantStatus {
+		ts.Fatalf("MCP structured status = %v, want %d", structured["status"], wantStatus)
+	}
+	body, ok := structured["body"].(map[string]any)
+	if !ok {
+		ts.Fatalf("MCP structured body has type %T", structured["body"])
+	}
+	return body
+}
+
+func objectArrayField(ts *testscript.TestScript, object map[string]any, field string) []map[string]any {
+	raw, ok := object[field].([]any)
+	if !ok {
+		ts.Fatalf("MCP body field %q has type %T", field, object[field])
+	}
+	values := make([]map[string]any, 0, len(raw))
+	for index, item := range raw {
+		value, ok := item.(map[string]any)
+		if !ok {
+			ts.Fatalf("MCP body field %q item %d has type %T", field, index, item)
+		}
+		values = append(values, value)
+	}
+	return values
+}
+
+func integerField(ts *testscript.TestScript, object map[string]any, field string) int64 {
+	value, ok := object[field].(float64)
+	if !ok || value != float64(int64(value)) {
+		ts.Fatalf("MCP body field %q is not an integer: %v", field, object[field])
+	}
+	return int64(value)
+}
+
+func textContent(ts *testscript.TestScript, result *mcp.CallToolResult) string {
+	if len(result.Content) != 1 {
+		ts.Fatalf("MCP tool content length = %d, want 1", len(result.Content))
+	}
+	content, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		ts.Fatalf("MCP tool content has type %T", result.Content[0])
+	}
+	return content.Text
 }
 
 func testscriptDuckDBClone(ts *testscript.TestScript, neg bool, args []string) {

@@ -96,6 +96,7 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 		ConfigFilePath:      &configFilePath,
 		LocalSessionFactory: newLocalClientSessionFactory(clientStdin, stderr),
 	}))
+	root.AddCommand(newMCPCommand(stdin, stdout, stderr))
 	root.AddCommand(newServeCommand(stdin, stdout, stderr, &configFilePath))
 	root.AddCommand(newMigrateCommand(stdin, stderr, &configFilePath))
 	root.AddCommand(newDBCommand(stdout, stderr, &configFilePath))

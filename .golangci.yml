@@ -138,11 +138,13 @@ linters:
             - cmd/mina/cli_smoke_test.go
             - "**/cmd/mina/cli_smoke_test.go"
           allow:
+            - github.com/modelcontextprotocol/go-sdk/mcp$
             - github.com/rogpeppe/go-internal/testscript$
             - io$
             - net$
             - net/http$
             - os$
+            - os/exec$
             - strconv$
             - testing$
             - time$

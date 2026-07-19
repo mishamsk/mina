@@ -28,6 +28,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "records", Name: "bulk_categorize",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"record_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"category_id\",\"record_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -66,6 +67,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "records", Name: "bulk_reassign_account",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"record_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"account_id\",\"record_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -104,6 +106,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "records", Name: "bulk_update_statuses",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"description\":\"Provide posting_status, reconciliation_status, or both.\",\"minProperties\":2,\"properties\":{\"posting_status\":{\"enum\":[\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"record_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"record_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -150,6 +153,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "records", Name: "bulk_update_tags",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"description\":\"Provide at least one non-empty add_tag_ids or remove_tag_ids array. The two arrays must not overlap.\",\"minProperties\":2,\"properties\":{\"add_tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true},\"record_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true},\"remove_tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"minItems\":1,\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"record_ids\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -198,6 +202,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "cancel",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"transaction_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"transaction_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -221,6 +226,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "confirm_next",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_definition_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_definition_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -244,6 +250,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "confirm_occurrence",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_occurrence_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_occurrence_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -267,6 +274,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"account_type\":{\"enum\":[\"balance\",\"flow\",\"system\"],\"type\":\"string\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"fqn\":{\"type\":\"string\"},\"is_featured\":{\"default\":false,\"type\":\"boolean\"},\"is_hidden\":{\"default\":false,\"type\":\"boolean\"}},\"required\":[\"account_type\",\"fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -334,6 +342,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "categories", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"economic_intent\":{\"enum\":[\"expense\",\"fee\",\"income\",\"refund\",\"transfer\",\"exchange\",\"adjustment\",\"fx_gain_loss\"],\"type\":\"string\"},\"fqn\":{\"type\":\"string\"},\"is_featured\":{\"default\":false,\"type\":\"boolean\"},\"is_hidden\":{\"default\":false,\"type\":\"boolean\"}},\"required\":[\"economic_intent\",\"fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -383,6 +392,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "create_credit_limit",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"body\":{\"additionalProperties\":false,\"properties\":{\"credit_limit\":{\"description\":\"JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"effective_date\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"}},\"required\":[\"credit_limit\",\"effective_date\"],\"type\":\"object\"}},\"required\":[\"account_id\",\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -427,6 +437,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "exchange_rates", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"effective_date\":{\"format\":\"date-time\",\"type\":\"string\"},\"from_currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"rate\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"to_currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"}},\"required\":[\"effective_date\",\"from_currency\",\"rate\",\"to_currency\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -475,6 +486,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "create_income",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"destination_account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"pending_date\":{\"anyOf\":[{\"description\":\"UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posted_date\":{\"anyOf\":[{\"description\":\"UTC timestamp when the generated records posted.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posting_status\":{\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"source_account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"currency\",\"destination_account_id\",\"initiated_date\",\"source_account_id\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -581,6 +593,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "members", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -611,6 +624,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "create_definition",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"anchor_date\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"fqn\":{\"type\":\"string\"},\"records\":{\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"amount\":{\"anyOf\":[{\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"type\":\"object\"},\"type\":\"array\"},\"schedule_rule\":{\"additionalProperties\":true,\"description\":\"Versioned recurring schedule payload validated by the recurring service.\",\"type\":\"object\"},\"template_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]}},\"required\":[\"anchor_date\",\"fqn\",\"schedule_rule\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -667,6 +681,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "create_refund",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"counterparty_account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"destination_account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"pending_date\":{\"anyOf\":[{\"description\":\"UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posted_date\":{\"anyOf\":[{\"description\":\"UTC timestamp when the generated records posted.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posting_status\":{\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"counterparty_account_id\",\"currency\",\"destination_account_id\",\"initiated_date\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -773,6 +788,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "create_spend",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"counterparty_account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"funding_account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"pending_date\":{\"anyOf\":[{\"description\":\"UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posted_date\":{\"anyOf\":[{\"description\":\"UTC timestamp when the generated records posted.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posting_status\":{\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"counterparty_account_id\",\"currency\",\"funding_account_id\",\"initiated_date\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -879,6 +895,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "tags", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"fqn\":{\"type\":\"string\"},\"is_featured\":{\"default\":false,\"type\":\"boolean\"},\"is_hidden\":{\"default\":false,\"type\":\"boolean\"}},\"required\":[\"fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -921,6 +938,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"initiated_date\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"records\":{\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount\":{\"description\":\"JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd\":{\"anyOf\":[{\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"pending_date\":{\"anyOf\":[{\"description\":\"UTC banking transaction timestamp, such as a card hold; when omitted or null, defaults to initiated_date at 00:00:00Z for non-bank records.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posted_date\":{\"anyOf\":[{\"description\":\"UTC timestamp when the record posted; use pending_date for manual non-bank records and null until posted.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posting_status\":{\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"source\":{\"enum\":[\"manual\"],\"type\":\"string\"},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"}},\"required\":[\"account_id\",\"amount\",\"category_id\",\"currency\",\"posting_status\",\"reconciliation_status\",\"source\"],\"type\":\"object\"},\"minItems\":2,\"type\":\"array\"}},\"required\":[\"initiated_date\",\"records\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -959,6 +977,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transaction_templates", Name: "create",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"fqn\":{\"type\":\"string\"},\"records\":{\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"amount\":{\"anyOf\":[{\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"posting_status\":{\"anyOf\":[{\"allOf\":[{\"enum\":[\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"}]},{\"type\":\"null\"}]},\"reconciliation_status\":{\"anyOf\":[{\"allOf\":[{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"}]},{\"type\":\"null\"}]},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"category_id\"],\"type\":\"object\"},\"minItems\":1,\"type\":\"array\"}},\"required\":[\"fqn\",\"records\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -997,6 +1016,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "create_transfer",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"amount\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"destination_account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"initiated_date\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"pending_date\":{\"anyOf\":[{\"description\":\"UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posted_date\":{\"anyOf\":[{\"description\":\"UTC timestamp when the generated records posted.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posting_status\":{\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"source_account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"amount\",\"category_id\",\"currency\",\"destination_account_id\",\"initiated_date\",\"source_account_id\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -1103,6 +1123,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "defer",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"every\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"unit\":{\"enum\":[\"DAY\",\"WEEK\",\"MONTH\",\"YEAR\"],\"type\":\"string\"}},\"type\":\"object\"},\"recurring_definition_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_definition_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1147,6 +1168,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "delete",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"account_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1170,6 +1192,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "categories", Name: "delete",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"category_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1193,6 +1216,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "delete_credit_limit",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"credit_limit_history_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"credit_limit_history_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1216,6 +1240,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "exchange_rates", Name: "delete",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"exchange_rate_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"exchange_rate_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1239,6 +1264,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "members", Name: "delete",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"member_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"member_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1262,6 +1288,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "delete_definition",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_definition_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_definition_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1285,6 +1312,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "tags", Name: "delete",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"tag_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"tag_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1308,6 +1336,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "delete",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"transaction_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"transaction_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1331,6 +1360,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transaction_templates", Name: "delete",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"transaction_template_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"transaction_template_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1354,6 +1384,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "dismiss_occurrence",
 				ReadOnly: false, Destructive: true, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_occurrence_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_occurrence_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1377,6 +1408,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "get",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"}},\"required\":[\"account_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1408,6 +1440,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "categories", Name: "get",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"}},\"required\":[\"category_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1439,6 +1472,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "get_credit_limit",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"credit_limit_history_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"}},\"required\":[\"credit_limit_history_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1470,6 +1504,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "operations", Name: "get_database_backup_run",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"operation_run_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"operation_run_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1493,6 +1528,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "operations", Name: "database_backup_status",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
 			},
 			Input:  InputDescriptor{},
 			Invoke: invokeGetDatabaseBackupStatus,
@@ -1507,6 +1543,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "exchange_rates", Name: "get",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"exchange_rate_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"}},\"required\":[\"exchange_rate_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1538,6 +1575,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "operations", Name: "get_exchange_rate_loading_run",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"operation_run_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"operation_run_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1561,6 +1599,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "operations", Name: "exchange_rate_loading_status",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
 			},
 			Input:  InputDescriptor{},
 			Invoke: invokeGetExchangeRateLoadingStatus,
@@ -1585,6 +1624,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "members", Name: "get",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"},\"member_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"member_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1616,6 +1656,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "get_definition",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_definition_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_definition_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1639,6 +1680,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "tags", Name: "get",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"},\"tag_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"tag_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1670,6 +1712,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "get",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"transaction_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"transaction_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1693,6 +1736,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "month_totals",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"month\":{\"pattern\":\"^[0-9]{4}-[0-9]{2}$\",\"type\":\"string\"}},\"required\":[\"month\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -1716,6 +1760,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transaction_templates", Name: "get",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"transaction_template_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"transaction_template_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -1739,6 +1784,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "list_balances",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"include_hidden\":{\"default\":false,\"type\":\"boolean\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -1770,6 +1816,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "list_groups",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"include_hidden\":{\"default\":false,\"type\":\"boolean\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -1793,6 +1840,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_type\":{\"enum\":[\"balance\",\"flow\",\"system\"],\"type\":\"string\"},\"include_hidden\":{\"default\":false,\"type\":\"boolean\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"},\"is_featured\":{\"type\":\"boolean\"},\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"fqn\",\"enum\":[\"fqn\",\"created_at\",\"updated_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -1861,6 +1909,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "operations", Name: "list_runs",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"operation_id\":{\"enum\":[\"exchange-rate-loading\",\"database-backup\"],\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -1897,6 +1946,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "operations", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
 			},
 			Input:  InputDescriptor{},
 			Invoke: invokeListBackgroundOperations,
@@ -1911,6 +1961,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "categories", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"economic_intent\":{\"items\":{\"enum\":[\"expense\",\"fee\",\"income\",\"refund\",\"transfer\",\"exchange\",\"adjustment\",\"fx_gain_loss\"],\"type\":\"string\"},\"type\":\"array\"},\"include_hidden\":{\"default\":false,\"type\":\"boolean\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"},\"is_featured\":{\"type\":\"boolean\"},\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"fqn\",\"enum\":[\"fqn\",\"created_at\",\"updated_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -1981,6 +2032,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "categories", Name: "list_groups",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"include_hidden\":{\"default\":false,\"type\":\"boolean\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2004,6 +2056,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "list_credit_limits",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"},\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"effective_date\",\"enum\":[\"effective_date\",\"created_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"}},\"required\":[\"account_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -2061,6 +2114,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "exchange_rates", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"effective_date\":{\"format\":\"date-time\",\"type\":\"string\"},\"from_currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"},\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"currency_pair\",\"enum\":[\"currency_pair\",\"from_currency\",\"to_currency\",\"effective_date\",\"created_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"to_currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2128,6 +2182,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "members", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"include_hidden\":{\"default\":false,\"type\":\"boolean\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"},\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"name\",\"enum\":[\"name\",\"created_at\",\"updated_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2183,6 +2238,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "list_definitions",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"fqn\",\"enum\":[\"fqn\",\"created_at\",\"updated_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2226,6 +2282,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "list_occurrences",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"recurring_definition_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"sort\":{\"default\":\"scheduled_date\",\"enum\":[\"scheduled_date\",\"created_at\",\"updated_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"status\":{\"items\":{\"enum\":[\"expected\",\"confirmed\",\"dismissed\",\"deferred\"],\"type\":\"string\"},\"type\":\"array\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2284,6 +2341,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "tags", Name: "list_groups",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"include_hidden\":{\"default\":false,\"type\":\"boolean\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2307,6 +2365,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "tags", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"include_hidden\":{\"default\":false,\"type\":\"boolean\"},\"include_tombstoned\":{\"default\":false,\"type\":\"boolean\"},\"is_featured\":{\"type\":\"boolean\"},\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"fqn\",\"enum\":[\"fqn\",\"created_at\",\"updated_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2368,6 +2427,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transaction_templates", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"sort\":{\"default\":\"fqn\",\"enum\":[\"fqn\",\"created_at\",\"updated_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2411,6 +2471,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "list",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"anchor_date\":{\"description\":\"Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"category_id\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"initiated_date_from\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.\",\"items\":{\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"type\":\"array\"},\"search\":{\"description\":\"Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.\",\"type\":\"string\"},\"sort\":{\"default\":\"initiated_date\",\"enum\":[\"initiated_date\",\"created_at\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"desc\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_id\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"},\"transaction_class\":{\"items\":{\"enum\":[\"spend\",\"income\",\"refund\",\"transfer\",\"currency_exchange\",\"adjustment\",\"fx_gain_loss\",\"mixed\"],\"type\":\"string\"},\"type\":\"array\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -2576,6 +2637,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "pause",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_definition_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_definition_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -2599,6 +2661,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "replace_definition",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"anchor_date\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"fqn\":{\"type\":\"string\"},\"records\":{\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"amount\":{\"anyOf\":[{\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"category_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"type\":\"object\"},\"type\":\"array\"},\"schedule_rule\":{\"additionalProperties\":true,\"description\":\"Versioned recurring schedule payload validated by the recurring service.\",\"type\":\"object\"},\"template_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]}},\"required\":[\"anchor_date\",\"fqn\",\"schedule_rule\"],\"type\":\"object\"},\"recurring_definition_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"recurring_definition_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -2663,6 +2726,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transactions", Name: "replace",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"initiated_date\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"records\":{\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount\":{\"description\":\"JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd\":{\"anyOf\":[{\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"pending_date\":{\"anyOf\":[{\"description\":\"UTC banking transaction timestamp, such as a card hold; when omitted or null, defaults to initiated_date at 00:00:00Z for non-bank records.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posted_date\":{\"anyOf\":[{\"description\":\"UTC timestamp when the record posted; use pending_date for manual non-bank records and null until posted.\",\"format\":\"date-time\",\"type\":\"string\"},{\"type\":\"null\"}]},\"posting_status\":{\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"source\":{\"enum\":[\"manual\"],\"type\":\"string\"},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\"}},\"required\":[\"account_id\",\"amount\",\"category_id\",\"currency\",\"posting_status\",\"reconciliation_status\",\"source\"],\"type\":\"object\"},\"minItems\":2,\"type\":\"array\"}},\"required\":[\"initiated_date\",\"records\"],\"type\":\"object\"},\"transaction_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"transaction_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -2709,6 +2773,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transaction_templates", Name: "replace",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"fqn\":{\"type\":\"string\"},\"records\":{\"items\":{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"amount\":{\"anyOf\":[{\"description\":\"JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"currency\":{\"anyOf\":[{\"pattern\":\"^([A-Z]{3}|C::.+)$\",\"type\":\"string\"},{\"type\":\"null\"}]},\"member_id\":{\"anyOf\":[{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},{\"type\":\"null\"}]},\"memo\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"posting_status\":{\"anyOf\":[{\"allOf\":[{\"enum\":[\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"}]},{\"type\":\"null\"}]},\"reconciliation_status\":{\"anyOf\":[{\"allOf\":[{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"}]},{\"type\":\"null\"}]},\"tag_ids\":{\"items\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"type\":\"array\",\"uniqueItems\":true}},\"required\":[\"category_id\"],\"type\":\"object\"},\"minItems\":1,\"type\":\"array\"}},\"required\":[\"fqn\",\"records\"],\"type\":\"object\"},\"transaction_template_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"transaction_template_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -2755,6 +2820,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "restructure",
 				ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"from_fqn\":{\"type\":\"string\"},\"to_fqn\":{\"type\":\"string\"}},\"required\":[\"from_fqn\",\"to_fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -2791,6 +2857,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "categories", Name: "restructure",
 				ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"from_fqn\":{\"type\":\"string\"},\"to_fqn\":{\"type\":\"string\"}},\"required\":[\"from_fqn\",\"to_fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -2827,6 +2894,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "tags", Name: "restructure",
 				ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"from_fqn\":{\"type\":\"string\"},\"to_fqn\":{\"type\":\"string\"}},\"required\":[\"from_fqn\",\"to_fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -2863,6 +2931,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "transaction_templates", Name: "restructure",
 				ReadOnly: false, Destructive: true, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"from_fqn\":{\"type\":\"string\"},\"to_fqn\":{\"type\":\"string\"}},\"required\":[\"from_fqn\",\"to_fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -2899,6 +2968,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "recurring", Name: "resume",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"recurring_definition_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"recurring_definition_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -2922,6 +2992,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "records", Name: "search_account",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_expected\":{\"default\":false,\"description\":\"Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.\",\"type\":\"boolean\"},\"include_running_balance\":{\"default\":false,\"description\":\"When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.\",\"type\":\"boolean\"},\"initiated_date_from\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"type\":\"string\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"tag_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"account_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3069,6 +3140,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "records", Name: "search",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_fqn_prefix\":{\"description\":\"Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.\",\"type\":\"string\"},\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_expected\":{\"default\":false,\"description\":\"Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.\",\"type\":\"boolean\"},\"initiated_date_from\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"type\":\"string\"},\"offset\":{\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"tag_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -3224,6 +3296,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "set_hidden",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"is_hidden\":{\"type\":\"boolean\"},\"path_fqn\":{\"type\":\"string\"}},\"required\":[\"is_hidden\",\"path_fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -3260,6 +3333,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "categories", Name: "set_hidden",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"is_hidden\":{\"type\":\"boolean\"},\"path_fqn\":{\"type\":\"string\"}},\"required\":[\"is_hidden\",\"path_fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -3296,6 +3370,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "tags", Name: "set_hidden",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"is_hidden\":{\"type\":\"boolean\"},\"path_fqn\":{\"type\":\"string\"}},\"required\":[\"is_hidden\",\"path_fqn\"],\"type\":\"object\"}},\"required\":[\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -3342,6 +3417,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "operations", Name: "start_database_backup",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
 			},
 			Input:  InputDescriptor{},
 			Invoke: invokeStartDatabaseBackupRun,
@@ -3366,6 +3442,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "operations", Name: "start_exchange_rate_loading",
 				ReadOnly: false, Destructive: false, Idempotent: false, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
 			},
 			Input:  InputDescriptor{},
 			Invoke: invokeStartExchangeRateLoadingRun,
@@ -3380,6 +3457,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "accounts", Name: "update",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"body\":{\"additionalProperties\":false,\"properties\":{\"account_type\":{\"enum\":[\"balance\",\"flow\",\"system\"],\"type\":\"string\"},\"external_id\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"external_system\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"is_featured\":{\"type\":\"boolean\"},\"is_hidden\":{\"type\":\"boolean\"}},\"type\":\"object\"}},\"required\":[\"account_id\",\"body\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3442,6 +3520,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "categories", Name: "update",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"is_featured\":{\"type\":\"boolean\"},\"is_hidden\":{\"type\":\"boolean\"}},\"type\":\"object\"},\"category_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"category_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3485,6 +3564,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "exchange_rates", Name: "update",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"rate\":{\"description\":\"JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":19,\"not\":{\"pattern\":\"^0{1,10}(\\\\.0{1,8})?$\"},\"pattern\":\"^[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"}},\"required\":[\"rate\"],\"type\":\"object\"},\"exchange_rate_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"exchange_rate_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3523,6 +3603,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "members", Name: "update",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"],\"type\":\"object\"},\"member_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"member_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3561,6 +3642,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "members", Name: "set_hidden",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"is_hidden\":{\"type\":\"boolean\"}},\"required\":[\"is_hidden\"],\"type\":\"object\"},\"member_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"member_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3599,6 +3681,7 @@ func Operations() []Operation {
 			MCP: &MCPOperation{
 				Group: "tags", Name: "update",
 				ReadOnly: false, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"body\":{\"additionalProperties\":false,\"properties\":{\"is_featured\":{\"type\":\"boolean\"},\"is_hidden\":{\"type\":\"boolean\"}},\"type\":\"object\"},\"tag_id\":{\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"body\",\"tag_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{

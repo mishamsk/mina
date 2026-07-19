@@ -2,6 +2,7 @@ package httpclient
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 )
 
@@ -67,6 +68,8 @@ type MCPOperation struct {
 	Idempotent bool
 	// OpenWorld reports whether the operation is annotated as interacting with an open world.
 	OpenWorld bool
+	// InputSchema is the generated MCP-compatible JSON Schema for tool arguments.
+	InputSchema json.RawMessage
 }
 
 // InputDescriptor describes an operation's ordered path, query, and body inputs.

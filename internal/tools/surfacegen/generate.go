@@ -14,10 +14,11 @@ import (
 )
 
 type generatedOperation struct {
-	id         string
-	info       operationInfo
-	decisions  operationConfig
-	definition codegen.OperationDefinition
+	id             string
+	info           operationInfo
+	decisions      operationConfig
+	definition     codegen.OperationDefinition
+	mcpInputSchema []byte
 }
 
 func generate(
@@ -52,12 +53,19 @@ func generate(
 		if !ok {
 			return fmt.Errorf("OpenAPI operation %s has no generated client definition", operationID)
 		}
-		generated = append(generated, generatedOperation{
+		item := generatedOperation{
 			id:         operationID,
 			info:       operations[operationID],
 			decisions:  config.Operations[operationID],
 			definition: definition,
-		})
+		}
+		if decision := item.decisions.MCP; decision != nil && decision.State == "exposed" {
+			item.mcpInputSchema, err = buildMCPInputSchema(definition)
+			if err != nil {
+				return fmt.Errorf("build MCP input schema for %s: %w", operationID, err)
+			}
+		}
+		generated = append(generated, item)
 	}
 
 	var output bytes.Buffer
@@ -227,6 +235,7 @@ func writeOperation(output *bytes.Buffer, generated generatedOperation) {
 			*decision.Annotations.Idempotent,
 			*decision.Annotations.OpenWorld,
 		)
+		fmt.Fprintf(output, "\t\t\t\tInputSchema: json.RawMessage(%q),\n", generated.mcpInputSchema)
 		fmt.Fprintln(output, "\t\t\t},")
 	}
 	fmt.Fprintln(output, "\t\t\tInput: InputDescriptor{")
@@ -358,19 +367,8 @@ func openAPIType(schema *openapi3.Schema) string {
 	if schema == nil {
 		return ""
 	}
-	for _, name := range []string{
-		openapi3.TypeArray,
-		openapi3.TypeObject,
-		openapi3.TypeString,
-		openapi3.TypeInteger,
-		openapi3.TypeNumber,
-		openapi3.TypeBoolean,
-	} {
-		if schema.Type.Is(name) {
-			return name
-		}
-	}
-	return ""
+	typeName, _ := effectiveOpenAPIType(schema)
+	return typeName
 }
 
 func descriptorEnum(schema *openapi3.Schema) []string {
@@ -418,11 +416,15 @@ func isSimpleBodyProperty(schema *openapi3.Schema, allowArray bool) bool {
 	if schema == nil || schema.Nullable || hasComposition(schema) {
 		return false
 	}
-	if schema.Type.Is(openapi3.TypeString) || schema.Type.Is(openapi3.TypeInteger) ||
-		schema.Type.Is(openapi3.TypeNumber) || schema.Type.Is(openapi3.TypeBoolean) {
+	typeName, err := effectiveOpenAPIType(schema)
+	if err != nil {
+		return false
+	}
+	if typeName == openapi3.TypeString || typeName == openapi3.TypeInteger ||
+		typeName == openapi3.TypeNumber || typeName == openapi3.TypeBoolean {
 		return true
 	}
-	return allowArray && schema.Type.Is(openapi3.TypeArray) && schema.Items != nil &&
+	return allowArray && typeName == openapi3.TypeArray && schema.Items != nil &&
 		isSimpleBodyProperty(schema.Items.Value, false)
 }
 
@@ -697,5 +699,9 @@ func writeQueryAssignment(
 }
 
 func isStringSchema(schema *openapi3.Schema) bool {
-	return schema != nil && schema.Type.Is(openapi3.TypeString)
+	if schema == nil {
+		return false
+	}
+	typeName, err := effectiveOpenAPIType(schema)
+	return err == nil && typeName == openapi3.TypeString
 }

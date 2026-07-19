@@ -293,6 +293,7 @@ func validateContracts(
 					mcpNames[key] = operationID
 				}
 			}
+			findings = append(findings, validateMCPInputSchema(openAPIPath, operationID, info)...)
 		}
 
 		if decisions.CLI != nil && decisions.CLI.State == "exposed" ||
@@ -405,6 +406,9 @@ func validateCLICompletion(
 			fmt.Sprintf("status operation %q", completion.StatusOperationID),
 			statusInfo,
 		)...)
+		findings = append(findings, validateCompletionEnumValues(
+			path, operationID, completion, statusInfo,
+		)...)
 	}
 	if statusExists && strings.TrimSpace(completion.StatusPathParameter) != "" &&
 		!operationHasPathParameter(statusInfo, completion.StatusPathParameter) {
@@ -492,6 +496,120 @@ func validateCompletionResponseField(
 		})
 	}
 	return findings
+}
+
+func validateCompletionEnumValues(
+	path string,
+	operationID string,
+	completion *cliCompletion,
+	info operationInfo,
+) []finding {
+	if strings.TrimSpace(completion.TerminalField) == "" {
+		return nil
+	}
+
+	var enumValues []any
+	if responses := info.operation.Responses; responses != nil {
+		for _, status := range responses.Keys() {
+			statusCode, err := strconv.Atoi(status)
+			if err != nil || statusCode < 200 || statusCode >= 300 {
+				continue
+			}
+			response := responses.Value(status)
+			if response == nil || response.Value == nil {
+				continue
+			}
+			for contentType, media := range response.Value.Content {
+				parsedType, _, err := mime.ParseMediaType(contentType)
+				isJSON := err == nil &&
+					(parsedType == "application/json" || strings.HasSuffix(parsedType, "+json"))
+				if !isJSON || media == nil || media.Schema == nil {
+					continue
+				}
+				for _, fieldSchema := range schemasForProperty(
+					media.Schema, completion.TerminalField, make(map[*openapi3.Schema]struct{}),
+				) {
+					enumValues = append(enumValues, resolvedSchemaEnum(fieldSchema, make(map[*openapi3.Schema]struct{}))...)
+				}
+			}
+		}
+	}
+	if len(enumValues) == 0 {
+		return nil
+	}
+
+	allowed := make(map[string]struct{}, len(enumValues))
+	for _, value := range enumValues {
+		text, ok := value.(string)
+		if !ok {
+			continue
+		}
+		allowed[text] = struct{}{}
+	}
+	var findings []finding
+	for field, values := range map[string][]string{
+		"terminal_values": completion.TerminalValues,
+		"failure_values":  completion.FailureValues,
+	} {
+		for _, value := range values {
+			if _, ok := allowed[value]; ok {
+				continue
+			}
+			findings = append(findings, finding{
+				path:      path,
+				operation: operationID,
+				message: fmt.Sprintf(
+					"CLI completion %s value %q is not declared by terminal field %q enum",
+					field, value, completion.TerminalField,
+				),
+			})
+		}
+	}
+	return findings
+}
+
+func schemasForProperty(
+	schemaRef *openapi3.SchemaRef,
+	field string,
+	visited map[*openapi3.Schema]struct{},
+) []*openapi3.Schema {
+	if schemaRef == nil || schemaRef.Value == nil {
+		return nil
+	}
+	schema := schemaRef.Value
+	if _, ok := visited[schema]; ok {
+		return nil
+	}
+	visited[schema] = struct{}{}
+	var found []*openapi3.Schema
+	if property := schema.Properties[field]; property != nil && property.Value != nil {
+		found = append(found, property.Value)
+	}
+	for _, schemas := range []openapi3.SchemaRefs{schema.AllOf, schema.AnyOf, schema.OneOf} {
+		for _, composed := range schemas {
+			found = append(found, schemasForProperty(composed, field, visited)...)
+		}
+	}
+	return found
+}
+
+func resolvedSchemaEnum(schema *openapi3.Schema, visited map[*openapi3.Schema]struct{}) []any {
+	if schema == nil {
+		return nil
+	}
+	if _, ok := visited[schema]; ok {
+		return nil
+	}
+	visited[schema] = struct{}{}
+	values := append([]any(nil), schema.Enum...)
+	for _, schemas := range []openapi3.SchemaRefs{schema.AllOf, schema.AnyOf, schema.OneOf} {
+		for _, composed := range schemas {
+			if composed != nil {
+				values = append(values, resolvedSchemaEnum(composed.Value, visited)...)
+			}
+		}
+	}
+	return values
 }
 
 func schemaDeclaresProperty(
@@ -717,6 +835,12 @@ func validateOperationShape(path string, operationID string, info operationInfo)
 	var findings []finding
 	if requestBody := info.operation.RequestBody; requestBody != nil && requestBody.Value != nil {
 		findings = append(findings, validateContent(path, operationID, "request", requestBody.Value.Content)...)
+		if err := validateTypelessEnums(requestBodySchema(requestBody), make(map[*openapi3.Schema]struct{})); err != nil {
+			findings = append(findings, finding{
+				path: path, operation: operationID,
+				message: fmt.Sprintf("request body schema is unsupported: %v", err),
+			})
+		}
 	}
 	if responses := info.operation.Responses; responses != nil {
 		for _, status := range responses.Keys() {
@@ -730,26 +854,7 @@ func validateOperationShape(path string, operationID string, info operationInfo)
 		}
 	}
 
-	overriddenParameters := make(map[[2]string]struct{}, len(info.operation.Parameters))
-	for _, parameterRef := range info.operation.Parameters {
-		if parameterRef != nil && parameterRef.Value != nil {
-			parameter := parameterRef.Value
-			overriddenParameters[[2]string{parameter.Name, parameter.In}] = struct{}{}
-		}
-	}
-
-	parameters := make(openapi3.Parameters, 0, len(info.pathItem.Parameters)+len(info.operation.Parameters))
-	for _, parameterRef := range info.pathItem.Parameters {
-		if parameterRef != nil && parameterRef.Value != nil {
-			parameter := parameterRef.Value
-			if _, overridden := overriddenParameters[[2]string{parameter.Name, parameter.In}]; overridden {
-				continue
-			}
-		}
-		parameters = append(parameters, parameterRef)
-	}
-	parameters = append(parameters, info.operation.Parameters...)
-	for _, parameterRef := range parameters {
+	for _, parameterRef := range effectiveOperationParameters(info) {
 		if parameterRef == nil || parameterRef.Value == nil {
 			continue
 		}
@@ -777,6 +882,71 @@ func validateOperationShape(path string, operationID string, info operationInfo)
 		}
 	}
 	return findings
+}
+
+func validateMCPInputSchema(path string, operationID string, info operationInfo) []finding {
+	names := make(map[string]struct{})
+	for _, parameterRef := range effectiveOperationParameters(info) {
+		if parameterRef == nil || parameterRef.Value == nil {
+			continue
+		}
+		parameter := parameterRef.Value
+		if _, exists := names[parameter.Name]; exists {
+			return []finding{{
+				path: path, operation: operationID,
+				message: fmt.Sprintf("MCP input parameter name %q collides across locations", parameter.Name),
+			}}
+		}
+		names[parameter.Name] = struct{}{}
+		if parameter.Schema == nil || parameter.Schema.Value == nil {
+			return []finding{{
+				path: path, operation: operationID,
+				message: fmt.Sprintf("MCP input schema for %s parameter %q is unresolved", parameter.In, parameter.Name),
+			}}
+		}
+		if _, err := convertMCPJSONSchema(parameter.Schema.Value); err != nil {
+			return []finding{{
+				path: path, operation: operationID,
+				message: fmt.Sprintf("MCP input schema for %s parameter %q is unsupported: %v", parameter.In, parameter.Name, err),
+			}}
+		}
+	}
+	if requestBody := info.operation.RequestBody; requestBody != nil && requestBody.Value != nil {
+		if _, exists := names["body"]; exists {
+			return []finding{{
+				path: path, operation: operationID,
+				message: "MCP input parameter name \"body\" collides with the request body property",
+			}}
+		}
+		if _, err := convertMCPJSONSchema(requestBodySchema(requestBody)); err != nil {
+			return []finding{{
+				path: path, operation: operationID,
+				message: fmt.Sprintf("MCP request body schema is unsupported: %v", err),
+			}}
+		}
+	}
+	return nil
+}
+
+func effectiveOperationParameters(info operationInfo) openapi3.Parameters {
+	overridden := make(map[[2]string]struct{}, len(info.operation.Parameters))
+	for _, parameterRef := range info.operation.Parameters {
+		if parameterRef != nil && parameterRef.Value != nil {
+			parameter := parameterRef.Value
+			overridden[[2]string{parameter.Name, parameter.In}] = struct{}{}
+		}
+	}
+	parameters := make(openapi3.Parameters, 0, len(info.pathItem.Parameters)+len(info.operation.Parameters))
+	for _, parameterRef := range info.pathItem.Parameters {
+		if parameterRef != nil && parameterRef.Value != nil {
+			parameter := parameterRef.Value
+			if _, exists := overridden[[2]string{parameter.Name, parameter.In}]; exists {
+				continue
+			}
+		}
+		parameters = append(parameters, parameterRef)
+	}
+	return append(parameters, info.operation.Parameters...)
 }
 
 func validateContent(path string, operationID string, kind string, content openapi3.Content) []finding {
@@ -810,6 +980,14 @@ func supportedScalarOrEnum(schema *openapi3.Schema, allowArray bool) bool {
 		if schema.Type.Is(openapi3.TypeArray) || schema.Type.Is(openapi3.TypeObject) {
 			return false
 		}
+		if schema.Type == nil || schema.Type.IsEmpty() {
+			for _, value := range schema.Enum {
+				if _, ok := value.(string); !ok {
+					return false
+				}
+			}
+			return true
+		}
 		for _, value := range schema.Enum {
 			if !isScalarEnumValue(value) {
 				return false
@@ -827,6 +1005,58 @@ func supportedScalarOrEnum(schema *openapi3.Schema, allowArray bool) bool {
 		return false
 	}
 	return supportedScalarOrEnum(schema.Items.Value, false)
+}
+
+func validateTypelessEnums(schema *openapi3.Schema, visited map[*openapi3.Schema]struct{}) error {
+	if schema == nil {
+		return nil
+	}
+	if _, ok := visited[schema]; ok {
+		return nil
+	}
+	visited[schema] = struct{}{}
+	if len(schema.Enum) > 0 && (schema.Type == nil || schema.Type.IsEmpty()) {
+		for _, value := range schema.Enum {
+			if _, ok := value.(string); !ok {
+				return errors.New("enum without a type must contain only string values")
+			}
+		}
+	}
+	for name, property := range schema.Properties {
+		if property != nil {
+			if err := validateTypelessEnums(property.Value, visited); err != nil {
+				return fmt.Errorf("property %q: %w", name, err)
+			}
+		}
+	}
+	if schema.Items != nil {
+		if err := validateTypelessEnums(schema.Items.Value, visited); err != nil {
+			return fmt.Errorf("items: %w", err)
+		}
+	}
+	compositions := []struct {
+		keyword string
+		refs    openapi3.SchemaRefs
+	}{
+		{keyword: "allOf", refs: schema.AllOf},
+		{keyword: "anyOf", refs: schema.AnyOf},
+		{keyword: "oneOf", refs: schema.OneOf},
+	}
+	for _, composition := range compositions {
+		for index, ref := range composition.refs {
+			if ref != nil {
+				if err := validateTypelessEnums(ref.Value, visited); err != nil {
+					return fmt.Errorf("%s item %d: %w", composition.keyword, index, err)
+				}
+			}
+		}
+	}
+	if schema.Not != nil {
+		if err := validateTypelessEnums(schema.Not.Value, visited); err != nil {
+			return fmt.Errorf("not: %w", err)
+		}
+	}
+	return nil
 }
 
 func isScalarEnumValue(value any) bool {

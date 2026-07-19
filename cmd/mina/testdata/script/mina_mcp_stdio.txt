@@ -1,0 +1,16 @@
+# The standalone stdio MCP server exposes the configured registry and representative REST shapes.
+env MINA_FX_AUTO_LOAD_ENABLED=false
+freeport
+exec mina serve --demo --db $WORK/mcp-stdio.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpwait -timeout 10s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+
+mcpstdio http://127.0.0.1:$PORT
+stdout 'tools=83 annotations=ok'
+stdout 'transactions_list=ok'
+stdout 'accounts_get=ok'
+stdout 'members_create_invalid=ok'
+stdout 'members_create_valid=ok'
+! stderr .
+
+kill -INT server
+wait server
