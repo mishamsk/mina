@@ -35,11 +35,12 @@ type operationConfig struct {
 }
 
 type cliDecision struct {
-	State   string      `yaml:"state"`
-	Area    string      `yaml:"area,omitempty"`
-	Name    string      `yaml:"name,omitempty"`
-	Reason  string      `yaml:"reason,omitempty"`
-	RunWait *cliRunWait `yaml:"run_wait,omitempty"`
+	State       string      `yaml:"state"`
+	Area        string      `yaml:"area,omitempty"`
+	Name        string      `yaml:"name,omitempty"`
+	Description *string     `yaml:"description,omitempty"`
+	Reason      string      `yaml:"reason,omitempty"`
+	RunWait     *cliRunWait `yaml:"run_wait,omitempty"`
 }
 
 type cliRunWait struct {
@@ -55,6 +56,7 @@ type mcpDecision struct {
 	State       string          `yaml:"state"`
 	Group       string          `yaml:"group,omitempty"`
 	Name        string          `yaml:"name,omitempty"`
+	Description *string         `yaml:"description,omitempty"`
 	Annotations *mcpAnnotations `yaml:"annotations,omitempty"`
 	Reason      string          `yaml:"reason,omitempty"`
 }
@@ -331,7 +333,10 @@ func validateCLIDecision(path string, operationID string, decision *cliDecision)
 			message:   "missing CLI decision",
 		}}
 	}
-	return validateDecision(path, operationID, "CLI", decision.State, decision.Name, decision.Reason)
+	findings := validateDecision(path, operationID, "CLI", decision.State, decision.Name, decision.Reason)
+	return append(findings, validateDescriptionOverride(
+		path, operationID, "CLI", decision.State, decision.Description,
+	)...)
 }
 
 func validateCLIRunWait(
@@ -702,8 +707,39 @@ func validateMCPDecision(path string, operationID string, decision *mcpDecision)
 		}}
 	}
 	findings := validateDecision(path, operationID, "MCP", decision.State, decision.Name, decision.Reason)
+	findings = append(findings, validateDescriptionOverride(
+		path, operationID, "MCP", decision.State, decision.Description,
+	)...)
 	if decision.State == "exposed" {
 		findings = append(findings, validateMCPAnnotations(path, operationID, decision.Annotations)...)
+	}
+	return findings
+}
+
+func validateDescriptionOverride(
+	path string,
+	operationID string,
+	surface string,
+	state string,
+	description *string,
+) []finding {
+	if description == nil {
+		return nil
+	}
+	var findings []finding
+	if strings.TrimSpace(*description) == "" {
+		findings = append(findings, finding{
+			path:      path,
+			operation: operationID,
+			message:   fmt.Sprintf("%s description override must be non-empty when present", surface),
+		})
+	}
+	if state != "exposed" {
+		findings = append(findings, finding{
+			path:      path,
+			operation: operationID,
+			message:   fmt.Sprintf("%s description override requires an exposed %s operation", surface, surface),
+		})
 	}
 	return findings
 }

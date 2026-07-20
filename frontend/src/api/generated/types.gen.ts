@@ -57,7 +57,13 @@ export type GroupStateListResponse = {
 };
 
 export type RestructureRequest = {
+    /**
+     * Existing leaf or implicit-group FQN prefix whose active subtree will move.
+     */
     from_fqn: string;
+    /**
+     * Destination FQN prefix for the moved active subtree.
+     */
     to_fqn: string;
 };
 
@@ -66,7 +72,13 @@ export type RestructureResponse = {
 };
 
 export type SetHiddenByPathRequest = {
+    /**
+     * Leaf or implicit-group FQN path whose active descendants will be updated.
+     */
     path_fqn: string;
+    /**
+     * Whether the entity is excluded from default lists.
+     */
     is_hidden: boolean;
 };
 
@@ -103,6 +115,9 @@ export type AccountBalanceListResponse = {
     balances: Array<AccountBalance>;
 };
 
+/**
+ * Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+ */
 export type AccountType = 'balance' | 'flow' | 'system';
 
 export type CreditLimitHistory = {
@@ -177,22 +192,52 @@ export type CategoryListResponse = {
     total_count: number;
 };
 
+/**
+ * Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+ */
 export type CategoryEconomicIntent = 'expense' | 'fee' | 'income' | 'refund' | 'transfer' | 'exchange' | 'adjustment' | 'fx_gain_loss';
 
 export type CreateCategoryRequest = {
+    /**
+     * Colon-separated hierarchical FQN for the category leaf.
+     */
     fqn: string;
     economic_intent: CategoryEconomicIntent;
+    /**
+     * Whether the entity is excluded from default lists.
+     */
     is_hidden?: boolean;
+    /**
+     * Whether the entity is featured in prominent selection and display surfaces.
+     */
     is_featured?: boolean;
 };
 
 export type CreateAccountRequest = {
+    /**
+     * Colon-separated hierarchical FQN for the account leaf.
+     */
     fqn: string;
     account_type: AccountType;
+    /**
+     * Whether the entity is excluded from default lists.
+     */
     is_hidden?: boolean;
+    /**
+     * Whether the entity is featured in prominent selection and display surfaces.
+     */
     is_featured?: boolean;
+    /**
+     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     currency?: string | null;
+    /**
+     * Optional identifier assigned by an external system.
+     */
     external_id?: string | null;
+    /**
+     * Optional namespace for `external_id`, such as a provider name.
+     */
     external_system?: string | null;
 };
 
@@ -201,22 +246,43 @@ export type CreateCreditLimitHistoryRequest = {
      * JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     credit_limit: string;
+    /**
+     * ISO 8601 date or timestamp when the value starts applying.
+     */
     effective_date: string;
 };
 
 export type CreateExchangeRateRequest = {
+    /**
+     * Source currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     from_currency: string;
+    /**
+     * Destination currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     to_currency: string;
     /**
      * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     rate: string;
+    /**
+     * ISO 8601 date or timestamp when the value starts applying.
+     */
     effective_date: string;
 };
 
 export type CreateJournalRecordRequest = {
+    /**
+     * Account identifier for this journal record or request.
+     */
     account_id: number;
+    /**
+     * Optional household-member identifier for the journal records.
+     */
     member_id?: number | null;
+    /**
+     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     currency: string;
     /**
      * JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -226,8 +292,17 @@ export type CreateJournalRecordRequest = {
      * JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount_usd?: string | null;
+    /**
+     * Category identifier for this journal record or shorthand transaction.
+     */
     category_id: number;
+    /**
+     * Tag identifiers to assign to the journal records.
+     */
     tag_ids?: Array<number>;
+    /**
+     * Optional memo text for the journal records.
+     */
     memo?: string | null;
     /**
      * UTC banking transaction timestamp, such as a card hold; when omitted or null, defaults to initiated_date at 00:00:00Z for non-bank records.
@@ -240,12 +315,24 @@ export type CreateJournalRecordRequest = {
     posting_status: PostingStatus;
     reconciliation_status: ReconciliationStatus;
     source: ManualSource;
+    /**
+     * Optional identifier assigned by an external system.
+     */
     external_id?: string | null;
+    /**
+     * Optional namespace for `external_id`, such as a provider name.
+     */
     external_system?: string | null;
 };
 
 export type BulkCategorizeRecordsRequest = {
+    /**
+     * Journal-record identifiers to update.
+     */
     record_ids: Array<number>;
+    /**
+     * Category identifier for this journal record or shorthand transaction.
+     */
     category_id: number;
 };
 
@@ -253,13 +340,28 @@ export type BulkCategorizeRecordsRequest = {
  * Provide at least one non-empty add_tag_ids or remove_tag_ids array. The two arrays must not overlap.
  */
 export type BulkTagRecordsRequest = {
+    /**
+     * Journal-record identifiers to update.
+     */
     record_ids: Array<number>;
+    /**
+     * Tag identifiers to add to every selected journal record.
+     */
     add_tag_ids?: Array<number>;
+    /**
+     * Tag identifiers to remove from every selected journal record.
+     */
     remove_tag_ids?: Array<number>;
 };
 
 export type BulkReassignRecordsAccountRequest = {
+    /**
+     * Journal-record identifiers to update.
+     */
     record_ids: Array<number>;
+    /**
+     * Account identifier for this journal record or request.
+     */
     account_id: number;
 };
 
@@ -267,6 +369,9 @@ export type BulkReassignRecordsAccountRequest = {
  * Provide posting_status, reconciliation_status, or both.
  */
 export type BulkUpdateRecordStatusRequest = {
+    /**
+     * Journal-record identifiers to update.
+     */
     record_ids: Array<number>;
     posting_status?: NonExpectedPostingStatus;
     reconciliation_status?: ReconciliationStatus;
@@ -278,17 +383,41 @@ export type BulkRecordOperationResponse = {
 };
 
 export type CreateSpendTransactionRequest = {
+    /**
+     * Human-facing transaction date in YYYY-MM-DD format.
+     */
     initiated_date: string;
+    /**
+     * Balance-account identifier that funds the spend.
+     */
     funding_account_id: number;
+    /**
+     * Flow-account identifier for the spend or refund counterparty record.
+     */
     counterparty_account_id: number;
+    /**
+     * Category identifier for this journal record or shorthand transaction.
+     */
     category_id: number;
+    /**
+     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     currency: string;
     /**
      * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount: string;
+    /**
+     * Optional household-member identifier for the journal records.
+     */
     member_id?: number | null;
+    /**
+     * Tag identifiers to assign to the journal records.
+     */
     tag_ids?: Array<number>;
+    /**
+     * Optional memo text for the journal records.
+     */
     memo?: string | null;
     /**
      * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
@@ -303,17 +432,41 @@ export type CreateSpendTransactionRequest = {
 };
 
 export type CreateIncomeTransactionRequest = {
+    /**
+     * Human-facing transaction date in YYYY-MM-DD format.
+     */
     initiated_date: string;
+    /**
+     * Destination balance-account identifier for the income, refund, or transfer.
+     */
     destination_account_id: number;
+    /**
+     * Source account identifier for the income or transfer.
+     */
     source_account_id: number;
+    /**
+     * Category identifier for this journal record or shorthand transaction.
+     */
     category_id: number;
+    /**
+     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     currency: string;
     /**
      * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount: string;
+    /**
+     * Optional household-member identifier for the journal records.
+     */
     member_id?: number | null;
+    /**
+     * Tag identifiers to assign to the journal records.
+     */
     tag_ids?: Array<number>;
+    /**
+     * Optional memo text for the journal records.
+     */
     memo?: string | null;
     /**
      * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
@@ -328,17 +481,41 @@ export type CreateIncomeTransactionRequest = {
 };
 
 export type CreateRefundTransactionRequest = {
+    /**
+     * Human-facing transaction date in YYYY-MM-DD format.
+     */
     initiated_date: string;
+    /**
+     * Destination balance-account identifier for the income, refund, or transfer.
+     */
     destination_account_id: number;
+    /**
+     * Flow-account identifier for the spend or refund counterparty record.
+     */
     counterparty_account_id: number;
+    /**
+     * Category identifier for this journal record or shorthand transaction.
+     */
     category_id: number;
+    /**
+     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     currency: string;
     /**
      * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount: string;
+    /**
+     * Optional household-member identifier for the journal records.
+     */
     member_id?: number | null;
+    /**
+     * Tag identifiers to assign to the journal records.
+     */
     tag_ids?: Array<number>;
+    /**
+     * Optional memo text for the journal records.
+     */
     memo?: string | null;
     /**
      * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
@@ -353,17 +530,41 @@ export type CreateRefundTransactionRequest = {
 };
 
 export type CreateTransferTransactionRequest = {
+    /**
+     * Human-facing transaction date in YYYY-MM-DD format.
+     */
     initiated_date: string;
+    /**
+     * Source account identifier for the income or transfer.
+     */
     source_account_id: number;
+    /**
+     * Destination balance-account identifier for the income, refund, or transfer.
+     */
     destination_account_id: number;
+    /**
+     * Category identifier for this journal record or shorthand transaction.
+     */
     category_id: number;
+    /**
+     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     currency: string;
     /**
      * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount: string;
+    /**
+     * Optional household-member identifier for the journal records.
+     */
     member_id?: number | null;
+    /**
+     * Tag identifiers to assign to the journal records.
+     */
     tag_ids?: Array<number>;
+    /**
+     * Optional memo text for the journal records.
+     */
     memo?: string | null;
     /**
      * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
@@ -378,7 +579,13 @@ export type CreateTransferTransactionRequest = {
 };
 
 export type CreateTransactionRequest = {
+    /**
+     * Human-facing transaction date in YYYY-MM-DD format.
+     */
     initiated_date: string;
+    /**
+     * Complete journal-record set; active records must balance to zero within each currency.
+     */
     records: Array<CreateJournalRecordRequest>;
 };
 
@@ -415,40 +622,94 @@ export type TransactionComponent = {
 };
 
 export type UpdateTransactionRequest = {
+    /**
+     * Human-facing transaction date in YYYY-MM-DD format.
+     */
     initiated_date: string;
+    /**
+     * Complete journal-record set; active records must balance to zero within each currency.
+     */
     records: Array<CreateJournalRecordRequest>;
 };
 
 export type TransactionTemplateWriteRequest = {
+    /**
+     * Colon-separated hierarchical FQN for the transaction template leaf.
+     */
     fqn: string;
+    /**
+     * Partial date-free record defaults; template records do not need to balance.
+     */
     records: Array<TransactionTemplateRecordRequest>;
 };
 
 export type TransactionTemplateRecordRequest = {
+    /**
+     * Category identifier for this journal record or shorthand transaction.
+     */
     category_id: number;
+    /**
+     * Account identifier for this journal record or request.
+     */
     account_id?: number | null;
+    /**
+     * Optional household-member identifier for the journal records.
+     */
     member_id?: number | null;
+    /**
+     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     currency?: string | null;
     /**
      * JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount?: string | null;
+    /**
+     * Tag identifiers to assign to the journal records.
+     */
     tag_ids?: Array<number>;
+    /**
+     * Optional memo text for the journal records.
+     */
     memo?: string | null;
+    /**
+     * Posting-status value or optional template default for the journal record.
+     */
     posting_status?: NonExpectedPostingStatus | null;
+    /**
+     * Reconciliation-status value or optional template default for the journal record.
+     */
     reconciliation_status?: ReconciliationStatus | null;
 };
 
 export type RecurringDefinitionWriteRequest = {
+    /**
+     * Colon-separated hierarchical FQN for the recurring definition leaf.
+     */
     fqn: string;
     schedule_rule: RecurringScheduleRule;
+    /**
+     * Schedule anchor date in YYYY-MM-DD format.
+     */
     anchor_date: string;
+    /**
+     * Optional template identifier whose record shape is copied once when creating the definition.
+     */
     template_id?: number | null;
+    /**
+     * Complete balanced record shape copied to each generated occurrence transaction.
+     */
     records?: Array<RecurringDefinitionRecordRequest>;
 };
 
 export type RecurringDefinitionDeferRequest = {
+    /**
+     * Positive number of cadence units by which to re-anchor the interval schedule.
+     */
     every?: number;
+    /**
+     * Cadence unit used for the defer offset.
+     */
     unit?: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 };
 
@@ -460,25 +721,55 @@ export type RecurringScheduleRule = {
 };
 
 export type RecurringDefinitionRecordRequest = {
+    /**
+     * Account identifier for this journal record or request.
+     */
     account_id?: number | null;
+    /**
+     * Optional household-member identifier for the journal records.
+     */
     member_id?: number | null;
+    /**
+     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     */
     currency?: string | null;
     /**
      * JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount?: string | null;
+    /**
+     * Category identifier for this journal record or shorthand transaction.
+     */
     category_id?: number | null;
+    /**
+     * Tag identifiers to assign to the journal records.
+     */
     tag_ids?: Array<number>;
+    /**
+     * Optional memo text for the journal records.
+     */
     memo?: string | null;
 };
 
 export type CreateTagRequest = {
+    /**
+     * Colon-separated hierarchical FQN for the tag leaf.
+     */
     fqn: string;
+    /**
+     * Whether the entity is excluded from default lists.
+     */
     is_hidden?: boolean;
+    /**
+     * Whether the entity is featured in prominent selection and display surfaces.
+     */
     is_featured?: boolean;
 };
 
 export type CreateMemberRequest = {
+    /**
+     * Unique flat household-member name.
+     */
     name: string;
 };
 
@@ -645,12 +936,24 @@ export type JournalRecordSearchResponse = {
     total_count: number;
 };
 
+/**
+ * Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+ */
 export type PostingStatus = 'expected' | 'pending' | 'posted' | 'cancelled';
 
+/**
+ * Non-expected posting status accepted by bulk status updates.
+ */
 export type NonExpectedPostingStatus = 'pending' | 'posted' | 'cancelled';
 
+/**
+ * Whether a journal record has been reconciled with its external or expected source.
+ */
 export type ReconciliationStatus = 'reconciled' | 'unreconciled';
 
+/**
+ * Origin value accepted for manually created journal records.
+ */
 export type ManualSource = 'manual';
 
 export type Source = 'manual' | 'recurring_template';
@@ -658,7 +961,13 @@ export type Source = 'manual' | 'recurring_template';
 export type Tag = {
     tag_id: number;
     fqn: string;
+    /**
+     * Whether the entity is excluded from default lists.
+     */
     is_hidden: boolean;
+    /**
+     * Whether the entity is featured in prominent selection and display surfaces.
+     */
     is_featured: boolean;
     /**
      * Populated in listTags responses. True when the active tag has no active dependent resources and can be tombstone-deleted.
@@ -824,15 +1133,33 @@ export type TransactionListResponse = {
 };
 
 export type UpdateCategoryRequest = {
+    /**
+     * Whether the entity is excluded from default lists.
+     */
     is_hidden?: boolean;
+    /**
+     * Whether the entity is featured in prominent selection and display surfaces.
+     */
     is_featured?: boolean;
 };
 
 export type UpdateAccountRequest = {
     account_type?: AccountType;
+    /**
+     * Whether the account is excluded from default lists.
+     */
     is_hidden?: boolean;
+    /**
+     * Whether the account is featured in prominent selection and display surfaces.
+     */
     is_featured?: boolean;
+    /**
+     * Optional identifier assigned by an external system.
+     */
     external_id?: string | null;
+    /**
+     * Optional namespace for `external_id`, such as a provider name.
+     */
     external_system?: string | null;
 };
 
@@ -844,15 +1171,27 @@ export type UpdateExchangeRateRequest = {
 };
 
 export type UpdateTagRequest = {
+    /**
+     * Whether the entity is excluded from default lists.
+     */
     is_hidden?: boolean;
+    /**
+     * Whether the entity is featured in prominent selection and display surfaces.
+     */
     is_featured?: boolean;
 };
 
 export type UpdateMemberRequest = {
+    /**
+     * Unique flat household-member name.
+     */
     name: string;
 };
 
 export type UpdateMemberHiddenRequest = {
+    /**
+     * Whether the entity is excluded from default lists.
+     */
     is_hidden: boolean;
 };
 
@@ -947,8 +1286,17 @@ export type ListBackgroundOperationRunEnvelopesData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Filter run history to one registered background-operation type.
+         */
         operation_id?: BackgroundOperationId;
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/background-operations/runs';
@@ -1029,6 +1377,9 @@ export type StartExchangeRateLoadingRunResponse = StartExchangeRateLoadingRunRes
 export type GetExchangeRateLoadingRunData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the background-operation run.
+         */
         operation_run_id: number;
     };
     query?: never;
@@ -1118,6 +1469,9 @@ export type StartDatabaseBackupRunResponse = StartDatabaseBackupRunResponses[key
 export type GetDatabaseBackupRunData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the background-operation run.
+         */
         operation_run_id: number;
     };
     query?: never;
@@ -1154,13 +1508,37 @@ export type ListCategoriesData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Include hidden active entities; defaults to false.
+         */
         include_hidden?: boolean;
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
+        /**
+         * Filter by featured state when provided.
+         */
         is_featured?: boolean;
+        /**
+         * Filter by one or more category economic intents.
+         */
         economic_intent?: Array<CategoryEconomicIntent>;
+        /**
+         * Field used to sort matching results; defaults to `fqn`.
+         */
         sort?: 'fqn' | 'created_at' | 'updated_at';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/categories';
@@ -1250,6 +1628,9 @@ export type ListCategoryGroupsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Include hidden active entities; defaults to false.
+         */
         include_hidden?: boolean;
     };
     url: '/api/categories/groups';
@@ -1305,6 +1686,9 @@ export type SetCategoryHiddenByPathResponse = SetCategoryHiddenByPathResponses[k
 export type DeleteCategoryData = {
     body?: never;
     path: {
+        /**
+         * Category identifier to target or filter by.
+         */
         category_id: number;
     };
     query?: never;
@@ -1340,9 +1724,15 @@ export type DeleteCategoryResponse = DeleteCategoryResponses[keyof DeleteCategor
 export type GetCategoryData = {
     body?: never;
     path: {
+        /**
+         * Category identifier to target or filter by.
+         */
         category_id: number;
     };
     query?: {
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
     };
     url: '/api/categories/{category_id}';
@@ -1373,6 +1763,9 @@ export type GetCategoryResponse = GetCategoryResponses[keyof GetCategoryResponse
 export type UpdateCategoryData = {
     body: UpdateCategoryRequest;
     path: {
+        /**
+         * Category identifier to target or filter by.
+         */
         category_id: number;
     };
     query?: never;
@@ -1405,12 +1798,33 @@ export type ListTagsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Include hidden active entities; defaults to false.
+         */
         include_hidden?: boolean;
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
+        /**
+         * Filter by featured state when provided.
+         */
         is_featured?: boolean;
+        /**
+         * Field used to sort matching results; defaults to `fqn`.
+         */
         sort?: 'fqn' | 'created_at' | 'updated_at';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/tags';
@@ -1500,6 +1914,9 @@ export type ListTagGroupsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Include hidden active entities; defaults to false.
+         */
         include_hidden?: boolean;
     };
     url: '/api/tags/groups';
@@ -1555,6 +1972,9 @@ export type SetTagHiddenByPathResponse = SetTagHiddenByPathResponses[keyof SetTa
 export type DeleteTagData = {
     body?: never;
     path: {
+        /**
+         * Tag identifier to target or filter by.
+         */
         tag_id: number;
     };
     query?: never;
@@ -1590,9 +2010,15 @@ export type DeleteTagResponse = DeleteTagResponses[keyof DeleteTagResponses];
 export type GetTagData = {
     body?: never;
     path: {
+        /**
+         * Tag identifier to target or filter by.
+         */
         tag_id: number;
     };
     query?: {
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
     };
     url: '/api/tags/{tag_id}';
@@ -1623,6 +2049,9 @@ export type GetTagResponse = GetTagResponses[keyof GetTagResponses];
 export type UpdateTagData = {
     body: UpdateTagRequest;
     path: {
+        /**
+         * Tag identifier to target or filter by.
+         */
         tag_id: number;
     };
     query?: never;
@@ -1655,11 +2084,29 @@ export type ListMembersData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Include hidden active entities; defaults to false.
+         */
         include_hidden?: boolean;
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
+        /**
+         * Field used to sort matching results; defaults to `name`.
+         */
         sort?: 'name' | 'created_at' | 'updated_at';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/members';
@@ -1715,6 +2162,9 @@ export type CreateMemberResponse = CreateMemberResponses[keyof CreateMemberRespo
 export type DeleteMemberData = {
     body?: never;
     path: {
+        /**
+         * Household-member identifier to target or filter by.
+         */
         member_id: number;
     };
     query?: never;
@@ -1750,9 +2200,15 @@ export type DeleteMemberResponse = DeleteMemberResponses[keyof DeleteMemberRespo
 export type GetMemberData = {
     body?: never;
     path: {
+        /**
+         * Household-member identifier to target or filter by.
+         */
         member_id: number;
     };
     query?: {
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
     };
     url: '/api/members/{member_id}';
@@ -1783,6 +2239,9 @@ export type GetMemberResponse = GetMemberResponses[keyof GetMemberResponses];
 export type UpdateMemberData = {
     body: UpdateMemberRequest;
     path: {
+        /**
+         * Household-member identifier to target or filter by.
+         */
         member_id: number;
     };
     query?: never;
@@ -1818,6 +2277,9 @@ export type UpdateMemberResponse = UpdateMemberResponses[keyof UpdateMemberRespo
 export type UpdateMemberHiddenData = {
     body: UpdateMemberHiddenRequest;
     path: {
+        /**
+         * Household-member identifier to target or filter by.
+         */
         member_id: number;
     };
     query?: never;
@@ -1850,13 +2312,37 @@ export type ListAccountsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Include hidden active entities; defaults to false.
+         */
         include_hidden?: boolean;
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
+        /**
+         * Filter by balance, flow, or system account type.
+         */
         account_type?: AccountType;
+        /**
+         * Filter by featured state when provided.
+         */
         is_featured?: boolean;
+        /**
+         * Field used to sort matching results; defaults to `fqn`.
+         */
         sort?: 'fqn' | 'created_at' | 'updated_at';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/accounts';
@@ -1946,6 +2432,9 @@ export type ListAccountGroupsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Include hidden active entities; defaults to false.
+         */
         include_hidden?: boolean;
     };
     url: '/api/accounts/groups';
@@ -2002,7 +2491,13 @@ export type ListAccountBalancesData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Include hidden active entities; defaults to false.
+         */
         include_hidden?: boolean;
+        /**
+         * Account identifiers to include; omit to return all eligible active balance accounts.
+         */
         account_ids?: Array<number>;
     };
     url: '/api/accounts/balances';
@@ -2029,6 +2524,9 @@ export type ListAccountBalancesResponse = ListAccountBalancesResponses[keyof Lis
 export type DeleteAccountData = {
     body?: never;
     path: {
+        /**
+         * Account identifier to target or filter by.
+         */
         account_id: number;
     };
     query?: never;
@@ -2064,9 +2562,15 @@ export type DeleteAccountResponse = DeleteAccountResponses[keyof DeleteAccountRe
 export type GetAccountData = {
     body?: never;
     path: {
+        /**
+         * Account identifier to target or filter by.
+         */
         account_id: number;
     };
     query?: {
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
     };
     url: '/api/accounts/{account_id}';
@@ -2097,6 +2601,9 @@ export type GetAccountResponse = GetAccountResponses[keyof GetAccountResponses];
 export type UpdateAccountData = {
     body: UpdateAccountRequest;
     path: {
+        /**
+         * Account identifier to target or filter by.
+         */
         account_id: number;
     };
     query?: never;
@@ -2132,13 +2639,31 @@ export type UpdateAccountResponse = UpdateAccountResponses[keyof UpdateAccountRe
 export type ListCreditLimitHistoryData = {
     body?: never;
     path: {
+        /**
+         * Account identifier to target or filter by.
+         */
         account_id: number;
     };
     query?: {
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
+        /**
+         * Field used to sort matching results; defaults to `effective_date`.
+         */
         sort?: 'effective_date' | 'created_at';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/accounts/{account_id}/credit-limit-history';
@@ -2169,6 +2694,9 @@ export type ListCreditLimitHistoryResponse = ListCreditLimitHistoryResponses[key
 export type CreateCreditLimitHistoryData = {
     body: CreateCreditLimitHistoryRequest;
     path: {
+        /**
+         * Account identifier to target or filter by.
+         */
         account_id: number;
     };
     query?: never;
@@ -2204,6 +2732,9 @@ export type CreateCreditLimitHistoryResponse = CreateCreditLimitHistoryResponses
 export type DeleteCreditLimitHistoryData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the credit-limit-history entry.
+         */
         credit_limit_history_id: number;
     };
     query?: never;
@@ -2235,9 +2766,15 @@ export type DeleteCreditLimitHistoryResponse = DeleteCreditLimitHistoryResponses
 export type GetCreditLimitHistoryData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the credit-limit-history entry.
+         */
         credit_limit_history_id: number;
     };
     query?: {
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
     };
     url: '/api/credit-limit-history/{credit_limit_history_id}';
@@ -2269,13 +2806,37 @@ export type ListExchangeRatesData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Source currency code filter, using ISO 4217 or the `C::` crypto prefix.
+         */
         from_currency?: string;
+        /**
+         * Destination currency code filter, using ISO 4217 or the `C::` crypto prefix.
+         */
         to_currency?: string;
+        /**
+         * Exact ISO 8601 effective timestamp filter.
+         */
         effective_date?: string;
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
+        /**
+         * Field used to sort matching results; defaults to `currency_pair`.
+         */
         sort?: 'currency_pair' | 'from_currency' | 'to_currency' | 'effective_date' | 'created_at';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/exchange-rates';
@@ -2331,6 +2892,9 @@ export type CreateExchangeRateResponse = CreateExchangeRateResponses[keyof Creat
 export type DeleteExchangeRateData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the exchange-rate entry.
+         */
         exchange_rate_id: number;
     };
     query?: never;
@@ -2362,9 +2926,15 @@ export type DeleteExchangeRateResponse = DeleteExchangeRateResponses[keyof Delet
 export type GetExchangeRateData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the exchange-rate entry.
+         */
         exchange_rate_id: number;
     };
     query?: {
+        /**
+         * Include tombstoned entities; defaults to false.
+         */
         include_tombstoned?: boolean;
     };
     url: '/api/exchange-rates/{exchange_rate_id}';
@@ -2395,6 +2965,9 @@ export type GetExchangeRateResponse = GetExchangeRateResponses[keyof GetExchange
 export type UpdateExchangeRateData = {
     body: UpdateExchangeRateRequest;
     path: {
+        /**
+         * Numeric identifier of the exchange-rate entry.
+         */
         exchange_rate_id: number;
     };
     query?: never;
@@ -2427,9 +3000,21 @@ export type ListTransactionTemplatesData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Field used to sort matching results; defaults to `fqn`.
+         */
         sort?: 'fqn' | 'created_at' | 'updated_at';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/transaction-templates';
@@ -2518,6 +3103,9 @@ export type RestructureTransactionTemplatesResponse = RestructureTransactionTemp
 export type DeleteTransactionTemplateData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the transaction template.
+         */
         transaction_template_id: number;
     };
     query?: never;
@@ -2549,6 +3137,9 @@ export type DeleteTransactionTemplateResponse = DeleteTransactionTemplateRespons
 export type GetTransactionTemplateData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the transaction template.
+         */
         transaction_template_id: number;
     };
     query?: never;
@@ -2580,6 +3171,9 @@ export type GetTransactionTemplateResponse = GetTransactionTemplateResponses[key
 export type ReplaceTransactionTemplateData = {
     body: TransactionTemplateWriteRequest;
     path: {
+        /**
+         * Numeric identifier of the transaction template.
+         */
         transaction_template_id: number;
     };
     query?: never;
@@ -2612,9 +3206,21 @@ export type ListRecurringDefinitionsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Field used to sort matching results; defaults to `fqn`.
+         */
         sort?: 'fqn' | 'created_at' | 'updated_at';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/recurring-definitions';
@@ -2670,6 +3276,9 @@ export type CreateRecurringDefinitionResponse = CreateRecurringDefinitionRespons
 export type DeleteRecurringDefinitionData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the recurring definition to target or filter by.
+         */
         recurring_definition_id: number;
     };
     query?: never;
@@ -2701,6 +3310,9 @@ export type DeleteRecurringDefinitionResponse = DeleteRecurringDefinitionRespons
 export type GetRecurringDefinitionData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the recurring definition to target or filter by.
+         */
         recurring_definition_id: number;
     };
     query?: never;
@@ -2732,6 +3344,9 @@ export type GetRecurringDefinitionResponse = GetRecurringDefinitionResponses[key
 export type ReplaceRecurringDefinitionData = {
     body: RecurringDefinitionWriteRequest;
     path: {
+        /**
+         * Numeric identifier of the recurring definition to target or filter by.
+         */
         recurring_definition_id: number;
     };
     query?: never;
@@ -2767,6 +3382,9 @@ export type ReplaceRecurringDefinitionResponse = ReplaceRecurringDefinitionRespo
 export type ConfirmNextRecurringDefinitionData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the recurring definition to target or filter by.
+         */
         recurring_definition_id: number;
     };
     query?: never;
@@ -2802,6 +3420,9 @@ export type ConfirmNextRecurringDefinitionResponse = ConfirmNextRecurringDefinit
 export type DeferRecurringDefinitionData = {
     body?: RecurringDefinitionDeferRequest;
     path: {
+        /**
+         * Numeric identifier of the recurring definition to target or filter by.
+         */
         recurring_definition_id: number;
     };
     query?: never;
@@ -2837,6 +3458,9 @@ export type DeferRecurringDefinitionResponse = DeferRecurringDefinitionResponses
 export type PauseRecurringDefinitionData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the recurring definition to target or filter by.
+         */
         recurring_definition_id: number;
     };
     query?: never;
@@ -2868,6 +3492,9 @@ export type PauseRecurringDefinitionResponse = PauseRecurringDefinitionResponses
 export type ResumeRecurringDefinitionData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the recurring definition to target or filter by.
+         */
         recurring_definition_id: number;
     };
     query?: never;
@@ -2900,11 +3527,29 @@ export type ListRecurringOccurrencesData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Numeric identifier of the recurring definition to target or filter by.
+         */
         recurring_definition_id?: number;
+        /**
+         * Filter by one or more recurring-occurrence lifecycle statuses.
+         */
         status?: Array<RecurringOccurrenceStatus>;
+        /**
+         * Field used to sort matching results; defaults to `scheduled_date`.
+         */
         sort?: 'scheduled_date' | 'created_at' | 'updated_at';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/recurring-occurrences';
@@ -2931,6 +3576,9 @@ export type ListRecurringOccurrencesResponse = ListRecurringOccurrencesResponses
 export type ConfirmRecurringOccurrenceData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the recurring occurrence.
+         */
         recurring_occurrence_id: number;
     };
     query?: never;
@@ -2962,6 +3610,9 @@ export type ConfirmRecurringOccurrenceResponse = ConfirmRecurringOccurrenceRespo
 export type DismissRecurringOccurrenceData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the recurring occurrence.
+         */
         recurring_occurrence_id: number;
     };
     query?: never;
@@ -2994,22 +3645,49 @@ export type ListTransactionsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Field used to sort matching results; defaults to `initiated_date`.
+         */
         sort?: 'initiated_date' | 'created_at';
+        /**
+         * Sort direction for matching results; defaults to `desc`.
+         */
         sort_dir?: 'asc' | 'desc';
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
         /**
          * Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.
          */
         anchor_date?: string;
+        /**
+         * Account identifier to target or filter by.
+         */
         account_id?: Array<number>;
+        /**
+         * Category identifier to target or filter by.
+         */
         category_id?: Array<number>;
+        /**
+         * Tag identifier to target or filter by.
+         */
         tag_id?: Array<number>;
+        /**
+         * Household-member identifier to target or filter by.
+         */
         member_id?: Array<number>;
         /**
          * Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
          */
         posting_status?: Array<PostingStatus>;
+        /**
+         * Filter by one or more server-derived transaction classes.
+         */
         transaction_class?: Array<TransactionClass>;
         /**
          * JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
@@ -3027,11 +3705,29 @@ export type ListTransactionsData = {
          * JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.
          */
         amount_usd_max?: string;
+        /**
+         * Minimum transaction initiated date in YYYY-MM-DD format.
+         */
         initiated_date_from?: string;
+        /**
+         * Maximum transaction initiated date in YYYY-MM-DD format.
+         */
         initiated_date_to?: string;
+        /**
+         * Minimum pending timestamp in ISO 8601 format.
+         */
         pending_date_from?: string;
+        /**
+         * Maximum pending timestamp in ISO 8601 format.
+         */
         pending_date_to?: string;
+        /**
+         * Minimum posted timestamp in ISO 8601 format.
+         */
         posted_date_from?: string;
+        /**
+         * Maximum posted timestamp in ISO 8601 format.
+         */
         posted_date_to?: string;
         /**
          * Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.
@@ -3088,6 +3784,9 @@ export type GetTransactionMonthTotalsData = {
     body?: never;
     path?: never;
     query: {
+        /**
+         * Civil month to aggregate in YYYY-MM format.
+         */
         month: string;
     };
     url: '/api/transactions/month-totals';
@@ -3215,13 +3914,25 @@ export type SearchJournalRecordsData = {
     body?: never;
     path?: never;
     query?: {
+        /**
+         * Account identifier to target or filter by.
+         */
         account_id?: number;
         /**
          * Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.
          */
         account_fqn_prefix?: string;
+        /**
+         * Category identifier to target or filter by.
+         */
         category_id?: number;
+        /**
+         * Tag identifier to target or filter by.
+         */
         tag_id?: number;
+        /**
+         * Household-member identifier to target or filter by.
+         */
         member_id?: number;
         /**
          * Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
@@ -3231,6 +3942,9 @@ export type SearchJournalRecordsData = {
          * Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
          */
         include_expected?: boolean;
+        /**
+         * Filter by reconciled or unreconciled journal-record status.
+         */
         reconciliation_status?: ReconciliationStatus;
         /**
          * JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -3248,14 +3962,41 @@ export type SearchJournalRecordsData = {
          * JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
          */
         amount_usd_max?: string;
+        /**
+         * Minimum transaction initiated date in YYYY-MM-DD format.
+         */
         initiated_date_from?: string;
+        /**
+         * Maximum transaction initiated date in YYYY-MM-DD format.
+         */
         initiated_date_to?: string;
+        /**
+         * Minimum pending timestamp in ISO 8601 format.
+         */
         pending_date_from?: string;
+        /**
+         * Maximum pending timestamp in ISO 8601 format.
+         */
         pending_date_to?: string;
+        /**
+         * Minimum posted timestamp in ISO 8601 format.
+         */
         posted_date_from?: string;
+        /**
+         * Maximum posted timestamp in ISO 8601 format.
+         */
         posted_date_to?: string;
+        /**
+         * Memo substring filter for matching journal records.
+         */
         memo_contains?: string;
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/records';
@@ -3282,11 +4023,23 @@ export type SearchJournalRecordsResponse = SearchJournalRecordsResponses[keyof S
 export type SearchAccountJournalRecordsData = {
     body?: never;
     path: {
+        /**
+         * Account identifier to target or filter by.
+         */
         account_id: number;
     };
     query?: {
+        /**
+         * Category identifier to target or filter by.
+         */
         category_id?: number;
+        /**
+         * Tag identifier to target or filter by.
+         */
         tag_id?: number;
+        /**
+         * Household-member identifier to target or filter by.
+         */
         member_id?: number;
         /**
          * Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
@@ -3296,6 +4049,9 @@ export type SearchAccountJournalRecordsData = {
          * Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
          */
         include_expected?: boolean;
+        /**
+         * Filter by reconciled or unreconciled journal-record status.
+         */
         reconciliation_status?: ReconciliationStatus;
         /**
          * JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -3313,18 +4069,45 @@ export type SearchAccountJournalRecordsData = {
          * JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
          */
         amount_usd_max?: string;
+        /**
+         * Minimum transaction initiated date in YYYY-MM-DD format.
+         */
         initiated_date_from?: string;
+        /**
+         * Maximum transaction initiated date in YYYY-MM-DD format.
+         */
         initiated_date_to?: string;
+        /**
+         * Minimum pending timestamp in ISO 8601 format.
+         */
         pending_date_from?: string;
+        /**
+         * Maximum pending timestamp in ISO 8601 format.
+         */
         pending_date_to?: string;
+        /**
+         * Minimum posted timestamp in ISO 8601 format.
+         */
         posted_date_from?: string;
+        /**
+         * Maximum posted timestamp in ISO 8601 format.
+         */
         posted_date_to?: string;
+        /**
+         * Memo substring filter for matching journal records.
+         */
         memo_contains?: string;
         /**
          * When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.
          */
         include_running_balance?: boolean;
+        /**
+         * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+         */
         limit?: number;
+        /**
+         * Zero-based number of matching results to skip.
+         */
         offset?: number;
     };
     url: '/api/accounts/{account_id}/records';
@@ -3455,6 +4238,9 @@ export type BulkUpdateJournalRecordStatusesResponse = BulkUpdateJournalRecordSta
 export type DeleteTransactionData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the transaction.
+         */
         transaction_id: number;
     };
     query?: never;
@@ -3486,6 +4272,9 @@ export type DeleteTransactionResponse = DeleteTransactionResponses[keyof DeleteT
 export type GetTransactionData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the transaction.
+         */
         transaction_id: number;
     };
     query?: never;
@@ -3517,6 +4306,9 @@ export type GetTransactionResponse = GetTransactionResponses[keyof GetTransactio
 export type ReplaceTransactionData = {
     body: UpdateTransactionRequest;
     path: {
+        /**
+         * Numeric identifier of the transaction.
+         */
         transaction_id: number;
     };
     query?: never;
@@ -3548,6 +4340,9 @@ export type ReplaceTransactionResponse = ReplaceTransactionResponses[keyof Repla
 export type CancelTransactionData = {
     body?: never;
     path: {
+        /**
+         * Numeric identifier of the transaction.
+         */
         transaction_id: number;
     };
     query?: never;

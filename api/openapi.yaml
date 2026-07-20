@@ -62,11 +62,13 @@ paths:
       summary: List background-operation run envelopes.
       parameters:
         - name: operation_id
+          description: "Filter run history to one registered background-operation type."
           in: query
           required: false
           schema:
             $ref: "#/components/schemas/BackgroundOperationId"
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -74,6 +76,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -123,6 +126,7 @@ paths:
   /api/background-operations/exchange-rate-loading/runs/{operation_run_id}:
     parameters:
       - name: operation_run_id
+        description: "Numeric identifier of the background-operation run."
         in: path
         required: true
         schema:
@@ -182,6 +186,7 @@ paths:
   /api/background-operations/database-backup/runs/{operation_run_id}:
     parameters:
       - name: operation_run_id
+        description: "Numeric identifier of the background-operation run."
         in: path
         required: true
         schema:
@@ -214,23 +219,27 @@ paths:
       summary: List categories.
       parameters:
         - name: include_hidden
+          description: "Include hidden active entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: is_featured
+          description: "Filter by featured state when provided."
           in: query
           required: false
           schema:
             type: boolean
         - name: economic_intent
+          description: "Filter by one or more category economic intents."
           in: query
           required: false
           style: form
@@ -240,6 +249,7 @@ paths:
             items:
               $ref: "#/components/schemas/CategoryEconomicIntent"
         - name: sort
+          description: "Field used to sort matching results; defaults to `fqn`."
           in: query
           required: false
           schema:
@@ -250,6 +260,7 @@ paths:
               - created_at
               - updated_at
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
           in: query
           required: false
           schema:
@@ -259,6 +270,7 @@ paths:
               - asc
               - desc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -266,6 +278,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -337,6 +350,7 @@ paths:
       description: Returns one item per active category FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
       parameters:
         - name: include_hidden
+          description: "Include hidden active entities; defaults to false."
           in: query
           required: false
           schema:
@@ -378,6 +392,7 @@ paths:
   /api/categories/{category_id}:
     parameters:
       - name: category_id
+        description: "Category identifier to target or filter by."
         in: path
         required: true
         schema:
@@ -391,6 +406,7 @@ paths:
       summary: Get a category.
       parameters:
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
@@ -451,23 +467,27 @@ paths:
       summary: List tags.
       parameters:
         - name: include_hidden
+          description: "Include hidden active entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: is_featured
+          description: "Filter by featured state when provided."
           in: query
           required: false
           schema:
             type: boolean
         - name: sort
+          description: "Field used to sort matching results; defaults to `fqn`."
           in: query
           required: false
           schema:
@@ -478,6 +498,7 @@ paths:
               - created_at
               - updated_at
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
           in: query
           required: false
           schema:
@@ -487,6 +508,7 @@ paths:
               - asc
               - desc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -494,6 +516,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -565,6 +588,7 @@ paths:
       description: Returns one item per active tag FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
       parameters:
         - name: include_hidden
+          description: "Include hidden active entities; defaults to false."
           in: query
           required: false
           schema:
@@ -606,6 +630,7 @@ paths:
   /api/tags/{tag_id}:
     parameters:
       - name: tag_id
+        description: "Tag identifier to target or filter by."
         in: path
         required: true
         schema:
@@ -619,6 +644,7 @@ paths:
       summary: Get a tag.
       parameters:
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
@@ -679,18 +705,21 @@ paths:
       summary: List household members.
       parameters:
         - name: include_hidden
+          description: "Include hidden active entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: sort
+          description: "Field used to sort matching results; defaults to `name`."
           in: query
           required: false
           schema:
@@ -701,6 +730,7 @@ paths:
               - created_at
               - updated_at
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
           in: query
           required: false
           schema:
@@ -710,6 +740,7 @@ paths:
               - asc
               - desc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -717,6 +748,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -756,6 +788,7 @@ paths:
   /api/members/{member_id}:
     parameters:
       - name: member_id
+        description: "Household-member identifier to target or filter by."
         in: path
         required: true
         schema:
@@ -769,6 +802,7 @@ paths:
       summary: Get a household member.
       parameters:
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
@@ -826,6 +860,7 @@ paths:
   /api/members/{member_id}/hidden:
     parameters:
       - name: member_id
+        description: "Household-member identifier to target or filter by."
         in: path
         required: true
         schema:
@@ -862,28 +897,33 @@ paths:
       summary: List accounts.
       parameters:
         - name: include_hidden
+          description: "Include hidden active entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: account_type
+          description: "Filter by balance, flow, or system account type."
           in: query
           required: false
           schema:
             $ref: "#/components/schemas/AccountType"
         - name: is_featured
+          description: "Filter by featured state when provided."
           in: query
           required: false
           schema:
             type: boolean
         - name: sort
+          description: "Field used to sort matching results; defaults to `fqn`."
           in: query
           required: false
           schema:
@@ -894,6 +934,7 @@ paths:
               - created_at
               - updated_at
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
           in: query
           required: false
           schema:
@@ -903,6 +944,7 @@ paths:
               - asc
               - desc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -910,6 +952,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -981,6 +1024,7 @@ paths:
       description: Returns one item per active account FQN proper prefix. A group is hidden when every active leaf at or under it is hidden; hidden groups are excluded unless `include_hidden=true`.
       parameters:
         - name: include_hidden
+          description: "Include hidden active entities; defaults to false."
           in: query
           required: false
           schema:
@@ -1028,12 +1072,14 @@ paths:
       description: Returns server-computed per-currency balances for active `balance` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
       parameters:
         - name: include_hidden
+          description: "Include hidden active entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: account_ids
+          description: "Account identifiers to include; omit to return all eligible active balance accounts."
           in: query
           required: false
           style: form
@@ -1056,6 +1102,7 @@ paths:
   /api/accounts/{account_id}:
     parameters:
       - name: account_id
+        description: "Account identifier to target or filter by."
         in: path
         required: true
         schema:
@@ -1069,6 +1116,7 @@ paths:
       summary: Get an account.
       parameters:
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
@@ -1126,6 +1174,7 @@ paths:
   /api/accounts/{account_id}/credit-limit-history:
     parameters:
       - name: account_id
+        description: "Account identifier to target or filter by."
         in: path
         required: true
         schema:
@@ -1139,12 +1188,14 @@ paths:
       summary: List credit limit history for an account.
       parameters:
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: sort
+          description: "Field used to sort matching results; defaults to `effective_date`."
           in: query
           required: false
           schema:
@@ -1154,6 +1205,7 @@ paths:
               - effective_date
               - created_at
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
           in: query
           required: false
           schema:
@@ -1163,6 +1215,7 @@ paths:
               - asc
               - desc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -1170,6 +1223,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -1213,6 +1267,7 @@ paths:
   /api/credit-limit-history/{credit_limit_history_id}:
     parameters:
       - name: credit_limit_history_id
+        description: "Numeric identifier of the credit-limit-history entry."
         in: path
         required: true
         schema:
@@ -1226,6 +1281,7 @@ paths:
       summary: Get a credit limit history entry.
       parameters:
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
@@ -1262,30 +1318,35 @@ paths:
       summary: List exchange rates.
       parameters:
         - name: from_currency
+          description: "Source currency code filter, using ISO 4217 or the `C::` crypto prefix."
           in: query
           required: false
           schema:
             type: string
             pattern: ^([A-Z]{3}|C::.+)$
         - name: to_currency
+          description: "Destination currency code filter, using ISO 4217 or the `C::` crypto prefix."
           in: query
           required: false
           schema:
             type: string
             pattern: ^([A-Z]{3}|C::.+)$
         - name: effective_date
+          description: "Exact ISO 8601 effective timestamp filter."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
             type: boolean
             default: false
         - name: sort
+          description: "Field used to sort matching results; defaults to `currency_pair`."
           in: query
           required: false
           schema:
@@ -1298,6 +1359,7 @@ paths:
               - effective_date
               - created_at
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
           in: query
           required: false
           schema:
@@ -1307,6 +1369,7 @@ paths:
               - asc
               - desc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -1314,6 +1377,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -1353,6 +1417,7 @@ paths:
   /api/exchange-rates/{exchange_rate_id}:
     parameters:
       - name: exchange_rate_id
+        description: "Numeric identifier of the exchange-rate entry."
         in: path
         required: true
         schema:
@@ -1366,6 +1431,7 @@ paths:
       summary: Get an exchange rate.
       parameters:
         - name: include_tombstoned
+          description: "Include tombstoned entities; defaults to false."
           in: query
           required: false
           schema:
@@ -1424,6 +1490,7 @@ paths:
       summary: List transaction templates.
       parameters:
         - name: sort
+          description: "Field used to sort matching results; defaults to `fqn`."
           in: query
           required: false
           schema:
@@ -1438,6 +1505,7 @@ paths:
               - CreatedAt
               - UpdatedAt
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
           in: query
           required: false
           schema:
@@ -1450,6 +1518,7 @@ paths:
               - Asc
               - Desc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -1457,6 +1526,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -1522,6 +1592,7 @@ paths:
   /api/transaction-templates/{transaction_template_id}:
     parameters:
       - name: transaction_template_id
+        description: "Numeric identifier of the transaction template."
         in: path
         required: true
         schema:
@@ -1587,6 +1658,7 @@ paths:
       summary: List recurring definitions.
       parameters:
         - name: sort
+          description: "Field used to sort matching results; defaults to `fqn`."
           in: query
           required: false
           schema:
@@ -1601,6 +1673,7 @@ paths:
               - CreatedAt
               - UpdatedAt
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
           in: query
           required: false
           schema:
@@ -1613,6 +1686,7 @@ paths:
               - Asc
               - Desc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -1620,6 +1694,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -1659,6 +1734,7 @@ paths:
   /api/recurring-definitions/{recurring_definition_id}:
     parameters:
       - name: recurring_definition_id
+        description: "Numeric identifier of the recurring definition to target or filter by."
         in: path
         required: true
         schema:
@@ -1721,6 +1797,7 @@ paths:
   /api/recurring-definitions/{recurring_definition_id}/confirm-next:
     parameters:
       - name: recurring_definition_id
+        description: "Numeric identifier of the recurring definition to target or filter by."
         in: path
         required: true
         schema:
@@ -1748,6 +1825,7 @@ paths:
   /api/recurring-definitions/{recurring_definition_id}/defer:
     parameters:
       - name: recurring_definition_id
+        description: "Numeric identifier of the recurring definition to target or filter by."
         in: path
         required: true
         schema:
@@ -1781,6 +1859,7 @@ paths:
   /api/recurring-definitions/{recurring_definition_id}/pause:
     parameters:
       - name: recurring_definition_id
+        description: "Numeric identifier of the recurring definition to target or filter by."
         in: path
         required: true
         schema:
@@ -1806,6 +1885,7 @@ paths:
   /api/recurring-definitions/{recurring_definition_id}/resume:
     parameters:
       - name: recurring_definition_id
+        description: "Numeric identifier of the recurring definition to target or filter by."
         in: path
         required: true
         schema:
@@ -1837,6 +1917,7 @@ paths:
       description: Runs catch-up materialization through the server's current civil date before listing.
       parameters:
         - name: recurring_definition_id
+          description: "Numeric identifier of the recurring definition to target or filter by."
           in: query
           required: false
           schema:
@@ -1844,6 +1925,7 @@ paths:
             format: int64
             minimum: 1
         - name: status
+          description: "Filter by one or more recurring-occurrence lifecycle statuses."
           in: query
           required: false
           style: form
@@ -1853,6 +1935,7 @@ paths:
             items:
               $ref: "#/components/schemas/RecurringOccurrenceStatus"
         - name: sort
+          description: "Field used to sort matching results; defaults to `scheduled_date`."
           in: query
           required: false
           schema:
@@ -1867,6 +1950,7 @@ paths:
               - CreatedAt
               - UpdatedAt
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
           in: query
           required: false
           schema:
@@ -1879,6 +1963,7 @@ paths:
               - Asc
               - Desc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -1886,6 +1971,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -1903,6 +1989,7 @@ paths:
   /api/recurring-occurrences/{recurring_occurrence_id}/confirm:
     parameters:
       - name: recurring_occurrence_id
+        description: "Numeric identifier of the recurring occurrence."
         in: path
         required: true
         schema:
@@ -1928,6 +2015,7 @@ paths:
   /api/recurring-occurrences/{recurring_occurrence_id}/dismiss:
     parameters:
       - name: recurring_occurrence_id
+        description: "Numeric identifier of the recurring occurrence."
         in: path
         required: true
         schema:
@@ -1959,6 +2047,7 @@ paths:
       description: Defaults to `initiated_date` descending with `transaction_id` descending as the stable tiebreaker.
       parameters:
         - name: sort
+          description: "Field used to sort matching results; defaults to `initiated_date`."
           in: query
           required: false
           schema:
@@ -1969,6 +2058,7 @@ paths:
               - ListTransactionsParamsSortInitiatedDate
               - ListTransactionsParamsSortCreatedAt
         - name: sort_dir
+          description: "Sort direction for matching results; defaults to `desc`."
           in: query
           required: false
           schema:
@@ -1979,6 +2069,7 @@ paths:
               - ListTransactionsParamsSortDirAsc
               - ListTransactionsParamsSortDirDesc
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -1986,6 +2077,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -2000,6 +2092,7 @@ paths:
             pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             format: date
         - name: account_id
+          description: "Account identifier to target or filter by."
           in: query
           required: false
           style: form
@@ -2011,6 +2104,7 @@ paths:
               format: int64
               minimum: 1
         - name: category_id
+          description: "Category identifier to target or filter by."
           in: query
           required: false
           style: form
@@ -2022,6 +2116,7 @@ paths:
               format: int64
               minimum: 1
         - name: tag_id
+          description: "Tag identifier to target or filter by."
           in: query
           required: false
           style: form
@@ -2033,6 +2128,7 @@ paths:
               format: int64
               minimum: 1
         - name: member_id
+          description: "Household-member identifier to target or filter by."
           in: query
           required: false
           style: form
@@ -2054,6 +2150,7 @@ paths:
             items:
               $ref: "#/components/schemas/PostingStatus"
         - name: transaction_class
+          description: "Filter by one or more server-derived transaction classes."
           in: query
           required: false
           style: form
@@ -2095,6 +2192,7 @@ paths:
             pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
             maxLength: 20
         - name: initiated_date_from
+          description: "Minimum transaction initiated date in YYYY-MM-DD format."
           in: query
           required: false
           schema:
@@ -2102,6 +2200,7 @@ paths:
             pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             format: date
         - name: initiated_date_to
+          description: "Maximum transaction initiated date in YYYY-MM-DD format."
           in: query
           required: false
           schema:
@@ -2109,24 +2208,28 @@ paths:
             pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             format: date
         - name: pending_date_from
+          description: "Minimum pending timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: pending_date_to
+          description: "Maximum pending timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: posted_date_from
+          description: "Minimum posted timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: posted_date_to
+          description: "Maximum posted timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
@@ -2176,6 +2279,7 @@ paths:
       description: Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense and fee component records increase spend, income component records increase income, refund records are excluded from both spend and gross income, and transfer/exchange/adjustment/fx_gain_loss records are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
       parameters:
         - name: month
+          description: "Civil month to aggregate in YYYY-MM format."
           in: query
           required: true
           schema:
@@ -2282,6 +2386,7 @@ paths:
       summary: Search active journal records.
       parameters:
         - name: account_id
+          description: "Account identifier to target or filter by."
           in: query
           required: false
           schema:
@@ -2295,6 +2400,7 @@ paths:
           schema:
             type: string
         - name: category_id
+          description: "Category identifier to target or filter by."
           in: query
           required: false
           schema:
@@ -2302,6 +2408,7 @@ paths:
             format: int64
             minimum: 1
         - name: tag_id
+          description: "Tag identifier to target or filter by."
           in: query
           required: false
           schema:
@@ -2309,6 +2416,7 @@ paths:
             format: int64
             minimum: 1
         - name: member_id
+          description: "Household-member identifier to target or filter by."
           in: query
           required: false
           schema:
@@ -2329,6 +2437,7 @@ paths:
             type: boolean
             default: false
         - name: reconciliation_status
+          description: "Filter by reconciled or unreconciled journal-record status."
           in: query
           required: false
           schema:
@@ -2366,6 +2475,7 @@ paths:
             pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
             maxLength: 20
         - name: initiated_date_from
+          description: "Minimum transaction initiated date in YYYY-MM-DD format."
           in: query
           required: false
           schema:
@@ -2373,6 +2483,7 @@ paths:
             pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             format: date
         - name: initiated_date_to
+          description: "Maximum transaction initiated date in YYYY-MM-DD format."
           in: query
           required: false
           schema:
@@ -2380,35 +2491,41 @@ paths:
             pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             format: date
         - name: pending_date_from
+          description: "Minimum pending timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: pending_date_to
+          description: "Maximum pending timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: posted_date_from
+          description: "Minimum posted timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: posted_date_to
+          description: "Maximum posted timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: memo_contains
+          description: "Memo substring filter for matching journal records."
           in: query
           required: false
           schema:
             type: string
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -2416,6 +2533,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -2433,6 +2551,7 @@ paths:
   /api/accounts/{account_id}/records:
     parameters:
       - name: account_id
+        description: "Account identifier to target or filter by."
         in: path
         required: true
         schema:
@@ -2446,6 +2565,7 @@ paths:
       summary: Search active journal records for one account.
       parameters:
         - name: category_id
+          description: "Category identifier to target or filter by."
           in: query
           required: false
           schema:
@@ -2453,6 +2573,7 @@ paths:
             format: int64
             minimum: 1
         - name: tag_id
+          description: "Tag identifier to target or filter by."
           in: query
           required: false
           schema:
@@ -2460,6 +2581,7 @@ paths:
             format: int64
             minimum: 1
         - name: member_id
+          description: "Household-member identifier to target or filter by."
           in: query
           required: false
           schema:
@@ -2480,6 +2602,7 @@ paths:
             type: boolean
             default: false
         - name: reconciliation_status
+          description: "Filter by reconciled or unreconciled journal-record status."
           in: query
           required: false
           schema:
@@ -2517,6 +2640,7 @@ paths:
             pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
             maxLength: 20
         - name: initiated_date_from
+          description: "Minimum transaction initiated date in YYYY-MM-DD format."
           in: query
           required: false
           schema:
@@ -2524,6 +2648,7 @@ paths:
             pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             format: date
         - name: initiated_date_to
+          description: "Maximum transaction initiated date in YYYY-MM-DD format."
           in: query
           required: false
           schema:
@@ -2531,30 +2656,35 @@ paths:
             pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
             format: date
         - name: pending_date_from
+          description: "Minimum pending timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: pending_date_to
+          description: "Maximum pending timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: posted_date_from
+          description: "Minimum posted timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: posted_date_to
+          description: "Maximum posted timestamp in ISO 8601 format."
           in: query
           required: false
           schema:
             type: string
             format: date-time
         - name: memo_contains
+          description: "Memo substring filter for matching journal records."
           in: query
           required: false
           schema:
@@ -2567,6 +2697,7 @@ paths:
             type: boolean
             default: false
         - name: limit
+          description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
           required: false
           schema:
@@ -2574,6 +2705,7 @@ paths:
             minimum: 1
             maximum: 500
         - name: offset
+          description: "Zero-based number of matching results to skip."
           in: query
           required: false
           schema:
@@ -2678,6 +2810,7 @@ paths:
   /api/transactions/{transaction_id}:
     parameters:
       - name: transaction_id
+        description: "Numeric identifier of the transaction."
         in: path
         required: true
         schema:
@@ -2738,6 +2871,7 @@ paths:
   /api/transactions/{transaction_id}/cancel:
     parameters:
       - name: transaction_id
+        description: "Numeric identifier of the transaction."
         in: path
         required: true
         schema:
@@ -2968,8 +3102,10 @@ components:
         - to_fqn
       properties:
         from_fqn:
+          description: "Existing leaf or implicit-group FQN prefix whose active subtree will move."
           type: string
         to_fqn:
+          description: "Destination FQN prefix for the moved active subtree."
           type: string
     RestructureResponse:
       type: object
@@ -2989,8 +3125,10 @@ components:
         - is_hidden
       properties:
         path_fqn:
+          description: "Leaf or implicit-group FQN path whose active descendants will be updated."
           type: string
         is_hidden:
+          description: "Whether the entity is excluded from default lists."
           type: boolean
     SetHiddenByPathResponse:
       type: object
@@ -3055,6 +3193,7 @@ components:
           items:
             $ref: "#/components/schemas/AccountBalance"
     AccountType:
+      description: "Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics."
       type: string
       enum:
         - balance
@@ -3241,6 +3380,7 @@ components:
           minimum: 0
           description: Count of matching categories before limit and offset are applied.
     CategoryEconomicIntent:
+      description: "Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment."
       type: string
       enum:
         - expense
@@ -3259,13 +3399,16 @@ components:
         - economic_intent
       properties:
         fqn:
+          description: "Colon-separated hierarchical FQN for the category leaf."
           type: string
         economic_intent:
           $ref: "#/components/schemas/CategoryEconomicIntent"
         is_hidden:
+          description: "Whether the entity is excluded from default lists."
           type: boolean
           default: false
         is_featured:
+          description: "Whether the entity is featured in prominent selection and display surfaces."
           type: boolean
           default: false
     CreateAccountRequest:
@@ -3276,23 +3419,29 @@ components:
         - account_type
       properties:
         fqn:
+          description: "Colon-separated hierarchical FQN for the account leaf."
           type: string
         account_type:
           $ref: "#/components/schemas/AccountType"
         is_hidden:
+          description: "Whether the entity is excluded from default lists."
           type: boolean
           default: false
         is_featured:
+          description: "Whether the entity is featured in prominent selection and display surfaces."
           type: boolean
           default: false
         currency:
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           nullable: true
           pattern: ^([A-Z]{3}|C::.+)$
         external_id:
+          description: "Optional identifier assigned by an external system."
           type: string
           nullable: true
         external_system:
+          description: "Optional namespace for `external_id`, such as a provider name."
           type: string
           nullable: true
     CreateCreditLimitHistoryRequest:
@@ -3308,6 +3457,7 @@ components:
           pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 19
         effective_date:
+          description: "ISO 8601 date or timestamp when the value starts applying."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
@@ -3321,9 +3471,11 @@ components:
         - effective_date
       properties:
         from_currency:
+          description: "Source currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         to_currency:
+          description: "Destination currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         rate:
@@ -3334,6 +3486,7 @@ components:
             pattern: ^0{1,10}(\.0{1,8})?$
           maxLength: 19
         effective_date:
+          description: "ISO 8601 date or timestamp when the value starts applying."
           type: string
           format: date-time
     CreateJournalRecordRequest:
@@ -3349,15 +3502,18 @@ components:
         - source
       properties:
         account_id:
+          description: "Account identifier for this journal record or request."
           type: integer
           format: int64
           minimum: 1
         member_id:
+          description: "Optional household-member identifier for the journal records."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         currency:
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -3372,16 +3528,19 @@ components:
           pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 20
         category_id:
+          description: "Category identifier for this journal record or shorthand transaction."
           type: integer
           format: int64
           minimum: 1
         tag_ids:
+          description: "Tag identifiers to assign to the journal records."
           type: array
           items:
             type: integer
             format: int64
             minimum: 1
         memo:
+          description: "Optional memo text for the journal records."
           type: string
           nullable: true
         pending_date:
@@ -3401,9 +3560,11 @@ components:
         source:
           $ref: "#/components/schemas/ManualSource"
         external_id:
+          description: "Optional identifier assigned by an external system."
           type: string
           nullable: true
         external_system:
+          description: "Optional namespace for `external_id`, such as a provider name."
           type: string
           nullable: true
     BulkCategorizeRecordsRequest:
@@ -3414,6 +3575,7 @@ components:
         - category_id
       properties:
         record_ids:
+          description: "Journal-record identifiers to update."
           type: array
           minItems: 1
           uniqueItems: true
@@ -3422,6 +3584,7 @@ components:
             format: int64
             minimum: 1
         category_id:
+          description: "Category identifier for this journal record or shorthand transaction."
           type: integer
           format: int64
           minimum: 1
@@ -3434,6 +3597,7 @@ components:
         - record_ids
       properties:
         record_ids:
+          description: "Journal-record identifiers to update."
           type: array
           minItems: 1
           uniqueItems: true
@@ -3442,6 +3606,7 @@ components:
             format: int64
             minimum: 1
         add_tag_ids:
+          description: "Tag identifiers to add to every selected journal record."
           type: array
           minItems: 1
           uniqueItems: true
@@ -3450,6 +3615,7 @@ components:
             format: int64
             minimum: 1
         remove_tag_ids:
+          description: "Tag identifiers to remove from every selected journal record."
           type: array
           minItems: 1
           uniqueItems: true
@@ -3465,6 +3631,7 @@ components:
         - account_id
       properties:
         record_ids:
+          description: "Journal-record identifiers to update."
           type: array
           minItems: 1
           uniqueItems: true
@@ -3473,6 +3640,7 @@ components:
             format: int64
             minimum: 1
         account_id:
+          description: "Account identifier for this journal record or request."
           type: integer
           format: int64
           minimum: 1
@@ -3485,6 +3653,7 @@ components:
         - record_ids
       properties:
         record_ids:
+          description: "Journal-record identifiers to update."
           type: array
           minItems: 1
           uniqueItems: true
@@ -3523,22 +3692,27 @@ components:
         - amount
       properties:
         initiated_date:
+          description: "Human-facing transaction date in YYYY-MM-DD format."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
         funding_account_id:
+          description: "Balance-account identifier that funds the spend."
           type: integer
           format: int64
           minimum: 1
         counterparty_account_id:
+          description: "Flow-account identifier for the spend or refund counterparty record."
           type: integer
           format: int64
           minimum: 1
         category_id:
+          description: "Category identifier for this journal record or shorthand transaction."
           type: integer
           format: int64
           minimum: 1
         currency:
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -3549,11 +3723,13 @@ components:
             pattern: ^0{1,10}(\.0{1,8})?$
           maxLength: 19
         member_id:
+          description: "Optional household-member identifier for the journal records."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         tag_ids:
+          description: "Tag identifiers to assign to the journal records."
           type: array
           uniqueItems: true
           items:
@@ -3561,6 +3737,7 @@ components:
             format: int64
             minimum: 1
         memo:
+          description: "Optional memo text for the journal records."
           type: string
           nullable: true
         pending_date:
@@ -3589,22 +3766,27 @@ components:
         - amount
       properties:
         initiated_date:
+          description: "Human-facing transaction date in YYYY-MM-DD format."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
         destination_account_id:
+          description: "Destination balance-account identifier for the income, refund, or transfer."
           type: integer
           format: int64
           minimum: 1
         source_account_id:
+          description: "Source account identifier for the income or transfer."
           type: integer
           format: int64
           minimum: 1
         category_id:
+          description: "Category identifier for this journal record or shorthand transaction."
           type: integer
           format: int64
           minimum: 1
         currency:
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -3615,11 +3797,13 @@ components:
             pattern: ^0{1,10}(\.0{1,8})?$
           maxLength: 19
         member_id:
+          description: "Optional household-member identifier for the journal records."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         tag_ids:
+          description: "Tag identifiers to assign to the journal records."
           type: array
           uniqueItems: true
           items:
@@ -3627,6 +3811,7 @@ components:
             format: int64
             minimum: 1
         memo:
+          description: "Optional memo text for the journal records."
           type: string
           nullable: true
         pending_date:
@@ -3655,22 +3840,27 @@ components:
         - amount
       properties:
         initiated_date:
+          description: "Human-facing transaction date in YYYY-MM-DD format."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
         destination_account_id:
+          description: "Destination balance-account identifier for the income, refund, or transfer."
           type: integer
           format: int64
           minimum: 1
         counterparty_account_id:
+          description: "Flow-account identifier for the spend or refund counterparty record."
           type: integer
           format: int64
           minimum: 1
         category_id:
+          description: "Category identifier for this journal record or shorthand transaction."
           type: integer
           format: int64
           minimum: 1
         currency:
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -3681,11 +3871,13 @@ components:
             pattern: ^0{1,10}(\.0{1,8})?$
           maxLength: 19
         member_id:
+          description: "Optional household-member identifier for the journal records."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         tag_ids:
+          description: "Tag identifiers to assign to the journal records."
           type: array
           uniqueItems: true
           items:
@@ -3693,6 +3885,7 @@ components:
             format: int64
             minimum: 1
         memo:
+          description: "Optional memo text for the journal records."
           type: string
           nullable: true
         pending_date:
@@ -3721,22 +3914,27 @@ components:
         - amount
       properties:
         initiated_date:
+          description: "Human-facing transaction date in YYYY-MM-DD format."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
         source_account_id:
+          description: "Source account identifier for the income or transfer."
           type: integer
           format: int64
           minimum: 1
         destination_account_id:
+          description: "Destination balance-account identifier for the income, refund, or transfer."
           type: integer
           format: int64
           minimum: 1
         category_id:
+          description: "Category identifier for this journal record or shorthand transaction."
           type: integer
           format: int64
           minimum: 1
         currency:
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -3747,11 +3945,13 @@ components:
             pattern: ^0{1,10}(\.0{1,8})?$
           maxLength: 19
         member_id:
+          description: "Optional household-member identifier for the journal records."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         tag_ids:
+          description: "Tag identifiers to assign to the journal records."
           type: array
           uniqueItems: true
           items:
@@ -3759,6 +3959,7 @@ components:
             format: int64
             minimum: 1
         memo:
+          description: "Optional memo text for the journal records."
           type: string
           nullable: true
         pending_date:
@@ -3783,10 +3984,12 @@ components:
         - records
       properties:
         initiated_date:
+          description: "Human-facing transaction date in YYYY-MM-DD format."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
         records:
+          description: "Complete journal-record set; active records must balance to zero within each currency."
           type: array
           minItems: 2
           items:
@@ -3870,10 +4073,12 @@ components:
         - records
       properties:
         initiated_date:
+          description: "Human-facing transaction date in YYYY-MM-DD format."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
         records:
+          description: "Complete journal-record set; active records must balance to zero within each currency."
           type: array
           minItems: 2
           items:
@@ -3886,8 +4091,10 @@ components:
         - records
       properties:
         fqn:
+          description: "Colon-separated hierarchical FQN for the transaction template leaf."
           type: string
         records:
+          description: "Partial date-free record defaults; template records do not need to balance."
           type: array
           minItems: 1
           items:
@@ -3899,20 +4106,24 @@ components:
         - category_id
       properties:
         category_id:
+          description: "Category identifier for this journal record or shorthand transaction."
           type: integer
           format: int64
           minimum: 1
         account_id:
+          description: "Account identifier for this journal record or request."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         member_id:
+          description: "Optional household-member identifier for the journal records."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         currency:
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           nullable: true
           pattern: ^([A-Z]{3}|C::.+)$
@@ -3923,6 +4134,7 @@ components:
           pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 20
         tag_ids:
+          description: "Tag identifiers to assign to the journal records."
           type: array
           uniqueItems: true
           items:
@@ -3930,13 +4142,16 @@ components:
             format: int64
             minimum: 1
         memo:
+          description: "Optional memo text for the journal records."
           type: string
           nullable: true
         posting_status:
+          description: "Posting-status value or optional template default for the journal record."
           allOf:
             - $ref: "#/components/schemas/NonExpectedPostingStatus"
           nullable: true
         reconciliation_status:
+          description: "Reconciliation-status value or optional template default for the journal record."
           allOf:
             - $ref: "#/components/schemas/ReconciliationStatus"
           nullable: true
@@ -3949,19 +4164,23 @@ components:
         - anchor_date
       properties:
         fqn:
+          description: "Colon-separated hierarchical FQN for the recurring definition leaf."
           type: string
         schedule_rule:
           $ref: "#/components/schemas/RecurringScheduleRule"
         anchor_date:
+          description: "Schedule anchor date in YYYY-MM-DD format."
           type: string
           pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
           format: date
         template_id:
+          description: "Optional template identifier whose record shape is copied once when creating the definition."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         records:
+          description: "Complete balanced record shape copied to each generated occurrence transaction."
           type: array
           items:
             $ref: "#/components/schemas/RecurringDefinitionRecordRequest"
@@ -3970,10 +4189,12 @@ components:
       additionalProperties: false
       properties:
         every:
+          description: "Positive number of cadence units by which to re-anchor the interval schedule."
           type: integer
           format: int64
           minimum: 1
         unit:
+          description: "Cadence unit used for the defer offset."
           type: string
           enum:
             - DAY
@@ -3989,11 +4210,13 @@ components:
       additionalProperties: false
       properties:
         account_id:
+          description: "Account identifier for this journal record or request."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         member_id:
+          description: "Optional household-member identifier for the journal records."
           type: integer
           format: int64
           minimum: 1
@@ -4003,6 +4226,7 @@ components:
           x-go-type-import:
             path: github.com/oapi-codegen/nullable
         currency:
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
           nullable: true
           pattern: ^([A-Z]{3}|C::.+)$
@@ -4013,11 +4237,13 @@ components:
           pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 20
         category_id:
+          description: "Category identifier for this journal record or shorthand transaction."
           type: integer
           format: int64
           minimum: 1
           nullable: true
         tag_ids:
+          description: "Tag identifiers to assign to the journal records."
           type: array
           uniqueItems: true
           items:
@@ -4025,6 +4251,7 @@ components:
             format: int64
             minimum: 1
         memo:
+          description: "Optional memo text for the journal records."
           type: string
           nullable: true
           x-go-type: nullable.Nullable[string]
@@ -4038,11 +4265,14 @@ components:
         - fqn
       properties:
         fqn:
+          description: "Colon-separated hierarchical FQN for the tag leaf."
           type: string
         is_hidden:
+          description: "Whether the entity is excluded from default lists."
           type: boolean
           default: false
         is_featured:
+          description: "Whether the entity is featured in prominent selection and display surfaces."
           type: boolean
           default: false
     CreateMemberRequest:
@@ -4052,6 +4282,7 @@ components:
         - name
       properties:
         name:
+          description: "Unique flat household-member name."
           type: string
     ErrorResponse:
       type: object
@@ -4483,6 +4714,7 @@ components:
           minimum: 0
           description: Count of matching journal records before limit and offset are applied.
     PostingStatus:
+      description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates."
       type: string
       enum:
         - expected
@@ -4490,17 +4722,20 @@ components:
         - posted
         - cancelled
     NonExpectedPostingStatus:
+      description: "Non-expected posting status accepted by bulk status updates."
       type: string
       enum:
         - pending
         - posted
         - cancelled
     ReconciliationStatus:
+      description: "Whether a journal record has been reconciled with its external or expected source."
       type: string
       enum:
         - reconciled
         - unreconciled
     ManualSource:
+      description: "Origin value accepted for manually created journal records."
       type: string
       enum:
         - manual
@@ -4534,8 +4769,10 @@ components:
         fqn:
           type: string
         is_hidden:
+          description: "Whether the entity is excluded from default lists."
           type: boolean
         is_featured:
+          description: "Whether the entity is featured in prominent selection and display surfaces."
           type: boolean
         deletable:
           type: boolean
@@ -5003,8 +5240,10 @@ components:
       additionalProperties: false
       properties:
         is_hidden:
+          description: "Whether the entity is excluded from default lists."
           type: boolean
         is_featured:
+          description: "Whether the entity is featured in prominent selection and display surfaces."
           type: boolean
     UpdateAccountRequest:
       type: object
@@ -5013,10 +5252,13 @@ components:
         account_type:
           $ref: "#/components/schemas/AccountType"
         is_hidden:
+          description: Whether the account is excluded from default lists.
           type: boolean
         is_featured:
+          description: Whether the account is featured in prominent selection and display surfaces.
           type: boolean
         external_id:
+          description: "Optional identifier assigned by an external system."
           type: string
           nullable: true
           x-go-type: nullable.Nullable[string]
@@ -5024,6 +5266,7 @@ components:
           x-go-type-import:
             path: github.com/oapi-codegen/nullable
         external_system:
+          description: "Optional namespace for `external_id`, such as a provider name."
           type: string
           nullable: true
           x-go-type: nullable.Nullable[string]
@@ -5048,8 +5291,10 @@ components:
       additionalProperties: false
       properties:
         is_hidden:
+          description: "Whether the entity is excluded from default lists."
           type: boolean
         is_featured:
+          description: "Whether the entity is featured in prominent selection and display surfaces."
           type: boolean
     UpdateMemberRequest:
       type: object
@@ -5058,6 +5303,7 @@ components:
         - name
       properties:
         name:
+          description: "Unique flat household-member name."
           type: string
     UpdateMemberHiddenRequest:
       type: object
@@ -5066,4 +5312,5 @@ components:
         - is_hidden
       properties:
         is_hidden:
+          description: "Whether the entity is excluded from default lists."
           type: boolean

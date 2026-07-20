@@ -903,7 +903,9 @@ type APIErrorCode string
 
 // Account defines model for Account.
 type Account struct {
-	AccountId   int64       `json:"account_id"`
+	AccountId int64 `json:"account_id"`
+
+	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
 	AccountType AccountType `json:"account_type"`
 	CreatedAt   time.Time   `json:"created_at"`
 	Currency    *string     `json:"currency,omitempty"`
@@ -956,7 +958,7 @@ type AccountListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// AccountType defines model for AccountType.
+// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
 type AccountType string
 
 // BackgroundOperationId defines model for BackgroundOperationId.
@@ -1008,13 +1010,19 @@ type BackgroundOperationSummary struct {
 
 // BulkCategorizeRecordsRequest defines model for BulkCategorizeRecordsRequest.
 type BulkCategorizeRecordsRequest struct {
-	CategoryId int64   `json:"category_id"`
-	RecordIds  []int64 `json:"record_ids"`
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
 }
 
 // BulkReassignRecordsAccountRequest defines model for BulkReassignRecordsAccountRequest.
 type BulkReassignRecordsAccountRequest struct {
-	AccountId int64   `json:"account_id"`
+	// AccountId Account identifier for this journal record or request.
+	AccountId int64 `json:"account_id"`
+
+	// RecordIds Journal-record identifiers to update.
 	RecordIds []int64 `json:"record_ids"`
 }
 
@@ -1026,16 +1034,26 @@ type BulkRecordOperationResponse struct {
 
 // BulkTagRecordsRequest Provide at least one non-empty add_tag_ids or remove_tag_ids array. The two arrays must not overlap.
 type BulkTagRecordsRequest struct {
-	AddTagIds    *[]int64 `json:"add_tag_ids,omitempty"`
-	RecordIds    []int64  `json:"record_ids"`
+	// AddTagIds Tag identifiers to add to every selected journal record.
+	AddTagIds *[]int64 `json:"add_tag_ids,omitempty"`
+
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
+
+	// RemoveTagIds Tag identifiers to remove from every selected journal record.
 	RemoveTagIds *[]int64 `json:"remove_tag_ids,omitempty"`
 }
 
 // BulkUpdateRecordStatusRequest Provide posting_status, reconciliation_status, or both.
 type BulkUpdateRecordStatusRequest struct {
-	PostingStatus        *NonExpectedPostingStatus `json:"posting_status,omitempty"`
-	ReconciliationStatus *ReconciliationStatus     `json:"reconciliation_status,omitempty"`
-	RecordIds            []int64                   `json:"record_ids"`
+	// PostingStatus Non-expected posting status accepted by bulk status updates.
+	PostingStatus *NonExpectedPostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
 }
 
 // Category defines model for Category.
@@ -1044,7 +1062,9 @@ type Category struct {
 	CreatedAt  time.Time `json:"created_at"`
 
 	// Deletable Populated in listCategories responses. True when the active category has no active dependent resources and can be tombstone-deleted.
-	Deletable      *bool                  `json:"deletable,omitempty"`
+	Deletable *bool `json:"deletable,omitempty"`
+
+	// EconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
 	Fqn            string                 `json:"fqn"`
 	IsFeatured     bool                   `json:"is_featured"`
@@ -1056,7 +1076,7 @@ type Category struct {
 	UpdatedAt      time.Time              `json:"updated_at"`
 }
 
-// CategoryEconomicIntent defines model for CategoryEconomicIntent.
+// CategoryEconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
 type CategoryEconomicIntent string
 
 // CategoryListResponse defines model for CategoryListResponse.
@@ -1069,171 +1089,308 @@ type CategoryListResponse struct {
 
 // CreateAccountRequest defines model for CreateAccountRequest.
 type CreateAccountRequest struct {
-	AccountType    AccountType `json:"account_type"`
-	Currency       *string     `json:"currency,omitempty"`
-	ExternalId     *string     `json:"external_id,omitempty"`
-	ExternalSystem *string     `json:"external_system,omitempty"`
-	Fqn            string      `json:"fqn"`
-	IsFeatured     *bool       `json:"is_featured,omitempty"`
-	IsHidden       *bool       `json:"is_hidden,omitempty"`
+	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+	AccountType AccountType `json:"account_type"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency *string `json:"currency,omitempty"`
+
+	// ExternalId Optional identifier assigned by an external system.
+	ExternalId *string `json:"external_id,omitempty"`
+
+	// ExternalSystem Optional namespace for `external_id`, such as a provider name.
+	ExternalSystem *string `json:"external_system,omitempty"`
+
+	// Fqn Colon-separated hierarchical FQN for the account leaf.
+	Fqn string `json:"fqn"`
+
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
+	IsFeatured *bool `json:"is_featured,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // CreateCategoryRequest defines model for CreateCategoryRequest.
 type CreateCategoryRequest struct {
+	// EconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
-	Fqn            string                 `json:"fqn"`
-	IsFeatured     *bool                  `json:"is_featured,omitempty"`
-	IsHidden       *bool                  `json:"is_hidden,omitempty"`
+
+	// Fqn Colon-separated hierarchical FQN for the category leaf.
+	Fqn string `json:"fqn"`
+
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
+	IsFeatured *bool `json:"is_featured,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // CreateCreditLimitHistoryRequest defines model for CreateCreditLimitHistoryRequest.
 type CreateCreditLimitHistoryRequest struct {
 	// CreditLimit JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	CreditLimit   string             `json:"credit_limit"`
+	CreditLimit string `json:"credit_limit"`
+
+	// EffectiveDate ISO 8601 date or timestamp when the value starts applying.
 	EffectiveDate openapi_types.Date `json:"effective_date"`
 }
 
 // CreateExchangeRateRequest defines model for CreateExchangeRateRequest.
 type CreateExchangeRateRequest struct {
+	// EffectiveDate ISO 8601 date or timestamp when the value starts applying.
 	EffectiveDate time.Time `json:"effective_date"`
-	FromCurrency  string    `json:"from_currency"`
+
+	// FromCurrency Source currency code using ISO 4217 or the `C::` crypto prefix.
+	FromCurrency string `json:"from_currency"`
 
 	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Rate       string `json:"rate"`
+	Rate string `json:"rate"`
+
+	// ToCurrency Destination currency code using ISO 4217 or the `C::` crypto prefix.
 	ToCurrency string `json:"to_currency"`
 }
 
 // CreateIncomeTransactionRequest defines model for CreateIncomeTransactionRequest.
 type CreateIncomeTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount               string             `json:"amount"`
-	CategoryId           int64              `json:"category_id"`
-	Currency             string             `json:"currency"`
-	DestinationAccountId int64              `json:"destination_account_id"`
-	InitiatedDate        openapi_types.Date `json:"initiated_date"`
-	MemberId             *int64             `json:"member_id,omitempty"`
-	Memo                 *string            `json:"memo,omitempty"`
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// DestinationAccountId Destination balance-account identifier for the income, refund, or transfer.
+	DestinationAccountId int64 `json:"destination_account_id"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the generated records posted.
-	PostedDate           *time.Time            `json:"posted_date,omitempty"`
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	SourceAccountId      int64                 `json:"source_account_id"`
-	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+
+	// SourceAccountId Source account identifier for the income or transfer.
+	SourceAccountId int64 `json:"source_account_id"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateJournalRecordRequest defines model for CreateJournalRecordRequest.
 type CreateJournalRecordRequest struct {
+	// AccountId Account identifier for this journal record or request.
 	AccountId int64 `json:"account_id"`
 
 	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount string `json:"amount"`
 
 	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsd      *string `json:"amount_usd,omitempty"`
-	CategoryId     int64   `json:"category_id"`
-	Currency       string  `json:"currency"`
-	ExternalId     *string `json:"external_id,omitempty"`
+	AmountUsd *string `json:"amount_usd,omitempty"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// ExternalId Optional identifier assigned by an external system.
+	ExternalId *string `json:"external_id,omitempty"`
+
+	// ExternalSystem Optional namespace for `external_id`, such as a provider name.
 	ExternalSystem *string `json:"external_system,omitempty"`
-	MemberId       *int64  `json:"member_id,omitempty"`
-	Memo           *string `json:"memo,omitempty"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp, such as a card hold; when omitted or null, defaults to initiated_date at 00:00:00Z for non-bank records.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the record posted; use pending_date for manual non-bank records and null until posted.
-	PostedDate           *time.Time           `json:"posted_date,omitempty"`
-	PostingStatus        PostingStatus        `json:"posting_status"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus PostingStatus `json:"posting_status"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
-	Source               ManualSource         `json:"source"`
-	TagIds               *[]int64             `json:"tag_ids,omitempty"`
+
+	// Source Origin value accepted for manually created journal records.
+	Source ManualSource `json:"source"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateMemberRequest defines model for CreateMemberRequest.
 type CreateMemberRequest struct {
+	// Name Unique flat household-member name.
 	Name string `json:"name"`
 }
 
 // CreateRefundTransactionRequest defines model for CreateRefundTransactionRequest.
 type CreateRefundTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount                string             `json:"amount"`
-	CategoryId            int64              `json:"category_id"`
-	CounterpartyAccountId int64              `json:"counterparty_account_id"`
-	Currency              string             `json:"currency"`
-	DestinationAccountId  int64              `json:"destination_account_id"`
-	InitiatedDate         openapi_types.Date `json:"initiated_date"`
-	MemberId              *int64             `json:"member_id,omitempty"`
-	Memo                  *string            `json:"memo,omitempty"`
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// CounterpartyAccountId Flow-account identifier for the spend or refund counterparty record.
+	CounterpartyAccountId int64 `json:"counterparty_account_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// DestinationAccountId Destination balance-account identifier for the income, refund, or transfer.
+	DestinationAccountId int64 `json:"destination_account_id"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the generated records posted.
-	PostedDate           *time.Time            `json:"posted_date,omitempty"`
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateSpendTransactionRequest defines model for CreateSpendTransactionRequest.
 type CreateSpendTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount                string             `json:"amount"`
-	CategoryId            int64              `json:"category_id"`
-	CounterpartyAccountId int64              `json:"counterparty_account_id"`
-	Currency              string             `json:"currency"`
-	FundingAccountId      int64              `json:"funding_account_id"`
-	InitiatedDate         openapi_types.Date `json:"initiated_date"`
-	MemberId              *int64             `json:"member_id,omitempty"`
-	Memo                  *string            `json:"memo,omitempty"`
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// CounterpartyAccountId Flow-account identifier for the spend or refund counterparty record.
+	CounterpartyAccountId int64 `json:"counterparty_account_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// FundingAccountId Balance-account identifier that funds the spend.
+	FundingAccountId int64 `json:"funding_account_id"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the generated records posted.
-	PostedDate           *time.Time            `json:"posted_date,omitempty"`
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateTagRequest defines model for CreateTagRequest.
 type CreateTagRequest struct {
-	Fqn        string `json:"fqn"`
-	IsFeatured *bool  `json:"is_featured,omitempty"`
-	IsHidden   *bool  `json:"is_hidden,omitempty"`
+	// Fqn Colon-separated hierarchical FQN for the tag leaf.
+	Fqn string `json:"fqn"`
+
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
+	IsFeatured *bool `json:"is_featured,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // CreateTransactionRequest defines model for CreateTransactionRequest.
 type CreateTransactionRequest struct {
-	InitiatedDate openapi_types.Date           `json:"initiated_date"`
-	Records       []CreateJournalRecordRequest `json:"records"`
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// Records Complete journal-record set; active records must balance to zero within each currency.
+	Records []CreateJournalRecordRequest `json:"records"`
 }
 
 // CreateTransferTransactionRequest defines model for CreateTransferTransactionRequest.
 type CreateTransferTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount               string             `json:"amount"`
-	CategoryId           int64              `json:"category_id"`
-	Currency             string             `json:"currency"`
-	DestinationAccountId int64              `json:"destination_account_id"`
-	InitiatedDate        openapi_types.Date `json:"initiated_date"`
-	MemberId             *int64             `json:"member_id,omitempty"`
-	Memo                 *string            `json:"memo,omitempty"`
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// DestinationAccountId Destination balance-account identifier for the income, refund, or transfer.
+	DestinationAccountId int64 `json:"destination_account_id"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the generated records posted.
-	PostedDate           *time.Time            `json:"posted_date,omitempty"`
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	SourceAccountId      int64                 `json:"source_account_id"`
-	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+
+	// SourceAccountId Source account identifier for the income or transfer.
+	SourceAccountId int64 `json:"source_account_id"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreditLimitHistory defines model for CreditLimitHistory.
@@ -1417,8 +1574,12 @@ type JournalRecord struct {
 	PendingDate time.Time `json:"pending_date"`
 
 	// PostedDate UTC timestamp when the record posted; equal to pending_date for manual non-bank records and null until posted.
-	PostedDate           *time.Time           `json:"posted_date,omitempty"`
-	PostingStatus        PostingStatus        `json:"posting_status"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus PostingStatus `json:"posting_status"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
 
@@ -1439,7 +1600,7 @@ type JournalRecordSearchResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// ManualSource defines model for ManualSource.
+// ManualSource Origin value accepted for manually created journal records.
 type ManualSource string
 
 // Member defines model for Member.
@@ -1463,7 +1624,7 @@ type MemberListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// NonExpectedPostingStatus defines model for NonExpectedPostingStatus.
+// NonExpectedPostingStatus Non-expected posting status accepted by bulk status updates.
 type NonExpectedPostingStatus string
 
 // OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
@@ -1476,10 +1637,10 @@ type OperationRunReferenceResponse struct {
 // OperationRunReferenceResponseOperationId defines model for OperationRunReferenceResponse.OperationId.
 type OperationRunReferenceResponseOperationId string
 
-// PostingStatus defines model for PostingStatus.
+// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
 type PostingStatus string
 
-// ReconciliationStatus defines model for ReconciliationStatus.
+// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 type ReconciliationStatus string
 
 // RecurringDefinition defines model for RecurringDefinition.
@@ -1507,11 +1668,14 @@ type RecurringDefinition struct {
 
 // RecurringDefinitionDeferRequest defines model for RecurringDefinitionDeferRequest.
 type RecurringDefinitionDeferRequest struct {
-	Every *int64                               `json:"every,omitempty"`
-	Unit  *RecurringDefinitionDeferRequestUnit `json:"unit,omitempty"`
+	// Every Positive number of cadence units by which to re-anchor the interval schedule.
+	Every *int64 `json:"every,omitempty"`
+
+	// Unit Cadence unit used for the defer offset.
+	Unit *RecurringDefinitionDeferRequestUnit `json:"unit,omitempty"`
 }
 
-// RecurringDefinitionDeferRequestUnit defines model for RecurringDefinitionDeferRequest.Unit.
+// RecurringDefinitionDeferRequestUnit Cadence unit used for the defer offset.
 type RecurringDefinitionDeferRequestUnit string
 
 // RecurringDefinitionListResponse defines model for RecurringDefinitionListResponse.
@@ -1542,26 +1706,44 @@ type RecurringDefinitionRecord struct {
 
 // RecurringDefinitionRecordRequest defines model for RecurringDefinitionRecordRequest.
 type RecurringDefinitionRecordRequest struct {
+	// AccountId Account identifier for this journal record or request.
 	AccountId *int64 `json:"account_id,omitempty"`
 
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount     *string                   `json:"amount,omitempty"`
-	CategoryId *int64                    `json:"category_id,omitempty"`
-	Currency   *string                   `json:"currency,omitempty"`
-	MemberId   nullable.Nullable[int64]  `json:"member_id,omitempty"`
-	Memo       nullable.Nullable[string] `json:"memo,omitempty"`
-	TagIds     *[]int64                  `json:"tag_ids,omitempty"`
+	Amount *string `json:"amount,omitempty"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId *int64 `json:"category_id,omitempty"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency *string `json:"currency,omitempty"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId nullable.Nullable[int64] `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo nullable.Nullable[string] `json:"memo,omitempty"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // RecurringDefinitionWriteRequest defines model for RecurringDefinitionWriteRequest.
 type RecurringDefinitionWriteRequest struct {
-	AnchorDate openapi_types.Date                  `json:"anchor_date"`
-	Fqn        string                              `json:"fqn"`
-	Records    *[]RecurringDefinitionRecordRequest `json:"records,omitempty"`
+	// AnchorDate Schedule anchor date in YYYY-MM-DD format.
+	AnchorDate openapi_types.Date `json:"anchor_date"`
+
+	// Fqn Colon-separated hierarchical FQN for the recurring definition leaf.
+	Fqn string `json:"fqn"`
+
+	// Records Complete balanced record shape copied to each generated occurrence transaction.
+	Records *[]RecurringDefinitionRecordRequest `json:"records,omitempty"`
 
 	// ScheduleRule Versioned recurring schedule payload validated by the recurring service.
 	ScheduleRule RecurringScheduleRule `json:"schedule_rule"`
-	TemplateId   *int64                `json:"template_id,omitempty"`
+
+	// TemplateId Optional template identifier whose record shape is copied once when creating the definition.
+	TemplateId *int64 `json:"template_id,omitempty"`
 }
 
 // RecurringOccurrence defines model for RecurringOccurrence.
@@ -1598,8 +1780,11 @@ type RecurringScheduleRule map[string]interface{}
 
 // RestructureRequest defines model for RestructureRequest.
 type RestructureRequest struct {
+	// FromFqn Existing leaf or implicit-group FQN prefix whose active subtree will move.
 	FromFqn string `json:"from_fqn"`
-	ToFqn   string `json:"to_fqn"`
+
+	// ToFqn Destination FQN prefix for the moved active subtree.
+	ToFqn string `json:"to_fqn"`
 }
 
 // RestructureResponse defines model for RestructureResponse.
@@ -1609,8 +1794,11 @@ type RestructureResponse struct {
 
 // SetHiddenByPathRequest defines model for SetHiddenByPathRequest.
 type SetHiddenByPathRequest struct {
-	IsHidden bool   `json:"is_hidden"`
-	PathFqn  string `json:"path_fqn"`
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden bool `json:"is_hidden"`
+
+	// PathFqn Leaf or implicit-group FQN path whose active descendants will be updated.
+	PathFqn string `json:"path_fqn"`
 }
 
 // SetHiddenByPathResponse defines model for SetHiddenByPathResponse.
@@ -1626,9 +1814,13 @@ type Tag struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// Deletable Populated in listTags responses. True when the active tag has no active dependent resources and can be tombstone-deleted.
-	Deletable    *bool      `json:"deletable,omitempty"`
-	Fqn          string     `json:"fqn"`
-	IsFeatured   bool       `json:"is_featured"`
+	Deletable *bool  `json:"deletable,omitempty"`
+	Fqn       string `json:"fqn"`
+
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
+	IsFeatured bool `json:"is_featured"`
+
+	// IsHidden Whether the entity is excluded from default lists.
 	IsHidden     bool       `json:"is_hidden"`
 	Level        int        `json:"level"`
 	Name         string     `json:"name"`
@@ -1669,8 +1861,10 @@ type TransactionClass string
 
 // TransactionComponent defines model for TransactionComponent.
 type TransactionComponent struct {
-	Amounts []DisplayAmount        `json:"amounts"`
-	Intent  CategoryEconomicIntent `json:"intent"`
+	Amounts []DisplayAmount `json:"amounts"`
+
+	// Intent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+	Intent CategoryEconomicIntent `json:"intent"`
 }
 
 // TransactionListResponse defines model for TransactionListResponse.
@@ -1741,38 +1935,68 @@ type TransactionTemplateRecord struct {
 
 // TransactionTemplateRecordRequest defines model for TransactionTemplateRecordRequest.
 type TransactionTemplateRecordRequest struct {
+	// AccountId Account identifier for this journal record or request.
 	AccountId *int64 `json:"account_id,omitempty"`
 
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount               *string                   `json:"amount,omitempty"`
-	CategoryId           int64                     `json:"category_id"`
-	Currency             *string                   `json:"currency,omitempty"`
-	MemberId             *int64                    `json:"member_id,omitempty"`
-	Memo                 *string                   `json:"memo,omitempty"`
-	PostingStatus        *NonExpectedPostingStatus `json:"posting_status,omitempty"`
-	ReconciliationStatus *ReconciliationStatus     `json:"reconciliation_status,omitempty"`
-	TagIds               *[]int64                  `json:"tag_ids,omitempty"`
+	Amount *string `json:"amount,omitempty"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency *string `json:"currency,omitempty"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
+
+	// PostingStatus Posting-status value or optional template default for the journal record.
+	PostingStatus *NonExpectedPostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Reconciliation-status value or optional template default for the journal record.
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // TransactionTemplateWriteRequest defines model for TransactionTemplateWriteRequest.
 type TransactionTemplateWriteRequest struct {
-	Fqn     string                             `json:"fqn"`
+	// Fqn Colon-separated hierarchical FQN for the transaction template leaf.
+	Fqn string `json:"fqn"`
+
+	// Records Partial date-free record defaults; template records do not need to balance.
 	Records []TransactionTemplateRecordRequest `json:"records"`
 }
 
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
-	AccountType    *AccountType              `json:"account_type,omitempty"`
-	ExternalId     nullable.Nullable[string] `json:"external_id,omitempty"`
+	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+	AccountType *AccountType `json:"account_type,omitempty"`
+
+	// ExternalId Optional identifier assigned by an external system.
+	ExternalId nullable.Nullable[string] `json:"external_id,omitempty"`
+
+	// ExternalSystem Optional namespace for `external_id`, such as a provider name.
 	ExternalSystem nullable.Nullable[string] `json:"external_system,omitempty"`
-	IsFeatured     *bool                     `json:"is_featured,omitempty"`
-	IsHidden       *bool                     `json:"is_hidden,omitempty"`
+
+	// IsFeatured Whether the account is featured in prominent selection and display surfaces.
+	IsFeatured *bool `json:"is_featured,omitempty"`
+
+	// IsHidden Whether the account is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // UpdateCategoryRequest defines model for UpdateCategoryRequest.
 type UpdateCategoryRequest struct {
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
 	IsFeatured *bool `json:"is_featured,omitempty"`
-	IsHidden   *bool `json:"is_hidden,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // UpdateExchangeRateRequest defines model for UpdateExchangeRateRequest.
@@ -1783,24 +2007,32 @@ type UpdateExchangeRateRequest struct {
 
 // UpdateMemberHiddenRequest defines model for UpdateMemberHiddenRequest.
 type UpdateMemberHiddenRequest struct {
+	// IsHidden Whether the entity is excluded from default lists.
 	IsHidden bool `json:"is_hidden"`
 }
 
 // UpdateMemberRequest defines model for UpdateMemberRequest.
 type UpdateMemberRequest struct {
+	// Name Unique flat household-member name.
 	Name string `json:"name"`
 }
 
 // UpdateTagRequest defines model for UpdateTagRequest.
 type UpdateTagRequest struct {
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
 	IsFeatured *bool `json:"is_featured,omitempty"`
-	IsHidden   *bool `json:"is_hidden,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // UpdateTransactionRequest defines model for UpdateTransactionRequest.
 type UpdateTransactionRequest struct {
-	InitiatedDate openapi_types.Date           `json:"initiated_date"`
-	Records       []CreateJournalRecordRequest `json:"records"`
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// Records Complete journal-record set; active records must balance to zero within each currency.
+	Records []CreateJournalRecordRequest `json:"records"`
 }
 
 // AccountFQNConflict defines model for AccountFQNConflict.
@@ -1832,14 +2064,29 @@ type TransactionTemplateFQNConflict = ErrorResponse
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
-	IncludeHidden     *bool                      `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool                      `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	AccountType       *AccountType               `form:"account_type,omitempty" json:"account_type,omitempty"`
-	IsFeatured        *bool                      `form:"is_featured,omitempty" json:"is_featured,omitempty"`
-	Sort              *ListAccountsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListAccountsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                       `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                       `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// AccountType Filter by balance, flow, or system account type.
+	AccountType *AccountType `form:"account_type,omitempty" json:"account_type,omitempty"`
+
+	// IsFeatured Filter by featured state when provided.
+	IsFeatured *bool `form:"is_featured,omitempty" json:"is_featured,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListAccountsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListAccountsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListAccountsParamsSort defines parameters for ListAccounts.
@@ -1850,27 +2097,41 @@ type ListAccountsParamsSortDir string
 
 // ListAccountBalancesParams defines parameters for ListAccountBalances.
 type ListAccountBalancesParams struct {
-	IncludeHidden *bool    `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	AccountIds    *[]int64 `form:"account_ids,omitempty" json:"account_ids,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// AccountIds Account identifiers to include; omit to return all eligible active balance accounts.
+	AccountIds *[]int64 `form:"account_ids,omitempty" json:"account_ids,omitempty"`
 }
 
 // ListAccountGroupsParams defines parameters for ListAccountGroups.
 type ListAccountGroupsParams struct {
+	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 }
 
 // GetAccountParams defines parameters for GetAccount.
 type GetAccountParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // ListCreditLimitHistoryParams defines parameters for ListCreditLimitHistory.
 type ListCreditLimitHistoryParams struct {
-	IncludeTombstoned *bool                                `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	Sort              *ListCreditLimitHistoryParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListCreditLimitHistoryParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                                 `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                                 `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `effective_date`.
+	Sort *ListCreditLimitHistoryParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListCreditLimitHistoryParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListCreditLimitHistoryParamsSort defines parameters for ListCreditLimitHistory.
@@ -1881,15 +2142,22 @@ type ListCreditLimitHistoryParamsSortDir string
 
 // SearchAccountJournalRecordsParams defines parameters for SearchAccountJournalRecords.
 type SearchAccountJournalRecordsParams struct {
+	// CategoryId Category identifier to target or filter by.
 	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
-	TagId      *int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
-	MemberId   *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
+
+	// TagId Tag identifier to target or filter by.
+	TagId *int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+
+	// MemberId Household-member identifier to target or filter by.
+	MemberId *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
 	// PostingStatus Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
 	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 
 	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
-	IncludeExpected      *bool                 `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+	IncludeExpected *bool `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+
+	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -1902,38 +2170,76 @@ type SearchAccountJournalRecordsParams struct {
 	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
 
 	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	AmountUsdMax *string `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+
+	// InitiatedDateFrom Minimum transaction initiated date in YYYY-MM-DD format.
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
-	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+
+	// InitiatedDateTo Maximum transaction initiated date in YYYY-MM-DD format.
+	InitiatedDateTo *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+
+	// PendingDateFrom Minimum pending timestamp in ISO 8601 format.
+	PendingDateFrom *time.Time `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+
+	// PendingDateTo Maximum pending timestamp in ISO 8601 format.
+	PendingDateTo *time.Time `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+
+	// PostedDateFrom Minimum posted timestamp in ISO 8601 format.
+	PostedDateFrom *time.Time `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+
+	// PostedDateTo Maximum posted timestamp in ISO 8601 format.
+	PostedDateTo *time.Time `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+
+	// MemoContains Memo substring filter for matching journal records.
+	MemoContains *string `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 
 	// IncludeRunningBalance When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.
 	IncludeRunningBalance *bool `form:"include_running_balance,omitempty" json:"include_running_balance,omitempty"`
-	Limit                 *int  `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset                *int  `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListBackgroundOperationRunEnvelopesParams defines parameters for ListBackgroundOperationRunEnvelopes.
 type ListBackgroundOperationRunEnvelopesParams struct {
+	// OperationId Filter run history to one registered background-operation type.
 	OperationId *BackgroundOperationId `form:"operation_id,omitempty" json:"operation_id,omitempty"`
-	Limit       *int                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset      *int                   `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
-	IncludeHidden     *bool                        `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool                        `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	IsFeatured        *bool                        `form:"is_featured,omitempty" json:"is_featured,omitempty"`
-	EconomicIntent    *[]CategoryEconomicIntent    `form:"economic_intent,omitempty" json:"economic_intent,omitempty"`
-	Sort              *ListCategoriesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListCategoriesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                         `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                         `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// IsFeatured Filter by featured state when provided.
+	IsFeatured *bool `form:"is_featured,omitempty" json:"is_featured,omitempty"`
+
+	// EconomicIntent Filter by one or more category economic intents.
+	EconomicIntent *[]CategoryEconomicIntent `form:"economic_intent,omitempty" json:"economic_intent,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListCategoriesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListCategoriesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListCategoriesParamsSort defines parameters for ListCategories.
@@ -1944,29 +2250,47 @@ type ListCategoriesParamsSortDir string
 
 // ListCategoryGroupsParams defines parameters for ListCategoryGroups.
 type ListCategoryGroupsParams struct {
+	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 }
 
 // GetCategoryParams defines parameters for GetCategory.
 type GetCategoryParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // GetCreditLimitHistoryParams defines parameters for GetCreditLimitHistory.
 type GetCreditLimitHistoryParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // ListExchangeRatesParams defines parameters for ListExchangeRates.
 type ListExchangeRatesParams struct {
-	FromCurrency      *string                         `form:"from_currency,omitempty" json:"from_currency,omitempty"`
-	ToCurrency        *string                         `form:"to_currency,omitempty" json:"to_currency,omitempty"`
-	EffectiveDate     *time.Time                      `form:"effective_date,omitempty" json:"effective_date,omitempty"`
-	IncludeTombstoned *bool                           `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	Sort              *ListExchangeRatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListExchangeRatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                            `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                            `form:"offset,omitempty" json:"offset,omitempty"`
+	// FromCurrency Source currency code filter, using ISO 4217 or the `C::` crypto prefix.
+	FromCurrency *string `form:"from_currency,omitempty" json:"from_currency,omitempty"`
+
+	// ToCurrency Destination currency code filter, using ISO 4217 or the `C::` crypto prefix.
+	ToCurrency *string `form:"to_currency,omitempty" json:"to_currency,omitempty"`
+
+	// EffectiveDate Exact ISO 8601 effective timestamp filter.
+	EffectiveDate *time.Time `form:"effective_date,omitempty" json:"effective_date,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `currency_pair`.
+	Sort *ListExchangeRatesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListExchangeRatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListExchangeRatesParamsSort defines parameters for ListExchangeRates.
@@ -1977,17 +2301,29 @@ type ListExchangeRatesParamsSortDir string
 
 // GetExchangeRateParams defines parameters for GetExchangeRate.
 type GetExchangeRateParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
-	IncludeHidden     *bool                     `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool                     `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	Sort              *ListMembersParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListMembersParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                      `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                      `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `name`.
+	Sort *ListMembersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListMembersParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListMembersParamsSort defines parameters for ListMembers.
@@ -1998,24 +2334,34 @@ type ListMembersParamsSortDir string
 
 // GetMemberParams defines parameters for GetMember.
 type GetMemberParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // SearchJournalRecordsParams defines parameters for SearchJournalRecords.
 type SearchJournalRecordsParams struct {
+	// AccountId Account identifier to target or filter by.
 	AccountId *int64 `form:"account_id,omitempty" json:"account_id,omitempty"`
 
 	// AccountFqnPrefix Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.
 	AccountFqnPrefix *string `form:"account_fqn_prefix,omitempty" json:"account_fqn_prefix,omitempty"`
-	CategoryId       *int64  `form:"category_id,omitempty" json:"category_id,omitempty"`
-	TagId            *int64  `form:"tag_id,omitempty" json:"tag_id,omitempty"`
-	MemberId         *int64  `form:"member_id,omitempty" json:"member_id,omitempty"`
+
+	// CategoryId Category identifier to target or filter by.
+	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
+
+	// TagId Tag identifier to target or filter by.
+	TagId *int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+
+	// MemberId Household-member identifier to target or filter by.
+	MemberId *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
 	// PostingStatus Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
 	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 
 	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
-	IncludeExpected      *bool                 `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+	IncludeExpected *bool `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+
+	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -2028,24 +2374,49 @@ type SearchJournalRecordsParams struct {
 	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
 
 	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	AmountUsdMax *string `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+
+	// InitiatedDateFrom Minimum transaction initiated date in YYYY-MM-DD format.
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
-	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
-	Limit             *int                `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// InitiatedDateTo Maximum transaction initiated date in YYYY-MM-DD format.
+	InitiatedDateTo *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+
+	// PendingDateFrom Minimum pending timestamp in ISO 8601 format.
+	PendingDateFrom *time.Time `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+
+	// PendingDateTo Maximum pending timestamp in ISO 8601 format.
+	PendingDateTo *time.Time `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+
+	// PostedDateFrom Minimum posted timestamp in ISO 8601 format.
+	PostedDateFrom *time.Time `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+
+	// PostedDateTo Maximum posted timestamp in ISO 8601 format.
+	PostedDateTo *time.Time `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+
+	// MemoContains Memo substring filter for matching journal records.
+	MemoContains *string `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListRecurringDefinitionsParams defines parameters for ListRecurringDefinitions.
 type ListRecurringDefinitionsParams struct {
-	Sort    *ListRecurringDefinitionsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListRecurringDefinitionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
 	SortDir *ListRecurringDefinitionsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit   *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset  *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListRecurringDefinitionsParamsSort defines parameters for ListRecurringDefinitions.
@@ -2056,12 +2427,23 @@ type ListRecurringDefinitionsParamsSortDir string
 
 // ListRecurringOccurrencesParams defines parameters for ListRecurringOccurrences.
 type ListRecurringOccurrencesParams struct {
-	RecurringDefinitionId *int64                                 `form:"recurring_definition_id,omitempty" json:"recurring_definition_id,omitempty"`
-	Status                *[]RecurringOccurrenceStatus           `form:"status,omitempty" json:"status,omitempty"`
-	Sort                  *ListRecurringOccurrencesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir               *ListRecurringOccurrencesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit                 *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset                *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+	// RecurringDefinitionId Numeric identifier of the recurring definition to target or filter by.
+	RecurringDefinitionId *int64 `form:"recurring_definition_id,omitempty" json:"recurring_definition_id,omitempty"`
+
+	// Status Filter by one or more recurring-occurrence lifecycle statuses.
+	Status *[]RecurringOccurrenceStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `scheduled_date`.
+	Sort *ListRecurringOccurrencesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListRecurringOccurrencesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListRecurringOccurrencesParamsSort defines parameters for ListRecurringOccurrences.
@@ -2072,13 +2454,26 @@ type ListRecurringOccurrencesParamsSortDir string
 
 // ListTagsParams defines parameters for ListTags.
 type ListTagsParams struct {
-	IncludeHidden     *bool                  `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool                  `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	IsFeatured        *bool                  `form:"is_featured,omitempty" json:"is_featured,omitempty"`
-	Sort              *ListTagsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListTagsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                   `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// IsFeatured Filter by featured state when provided.
+	IsFeatured *bool `form:"is_featured,omitempty" json:"is_featured,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListTagsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListTagsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListTagsParamsSort defines parameters for ListTags.
@@ -2089,20 +2484,29 @@ type ListTagsParamsSortDir string
 
 // ListTagGroupsParams defines parameters for ListTagGroups.
 type ListTagGroupsParams struct {
+	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 }
 
 // GetTagParams defines parameters for GetTag.
 type GetTagParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // ListTransactionTemplatesParams defines parameters for ListTransactionTemplates.
 type ListTransactionTemplatesParams struct {
-	Sort    *ListTransactionTemplatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListTransactionTemplatesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
 	SortDir *ListTransactionTemplatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit   *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset  *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListTransactionTemplatesParamsSort defines parameters for ListTransactionTemplates.
@@ -2113,20 +2517,37 @@ type ListTransactionTemplatesParamsSortDir string
 
 // ListTransactionsParams defines parameters for ListTransactions.
 type ListTransactionsParams struct {
-	Sort    *ListTransactionsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	// Sort Field used to sort matching results; defaults to `initiated_date`.
+	Sort *ListTransactionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `desc`.
 	SortDir *ListTransactionsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit   *int                           `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset  *int                           `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 
 	// AnchorDate Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.
 	AnchorDate *openapi_types.Date `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
-	AccountId  *[]int64            `form:"account_id,omitempty" json:"account_id,omitempty"`
-	CategoryId *[]int64            `form:"category_id,omitempty" json:"category_id,omitempty"`
-	TagId      *[]int64            `form:"tag_id,omitempty" json:"tag_id,omitempty"`
-	MemberId   *[]int64            `form:"member_id,omitempty" json:"member_id,omitempty"`
+
+	// AccountId Account identifier to target or filter by.
+	AccountId *[]int64 `form:"account_id,omitempty" json:"account_id,omitempty"`
+
+	// CategoryId Category identifier to target or filter by.
+	CategoryId *[]int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
+
+	// TagId Tag identifier to target or filter by.
+	TagId *[]int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+
+	// MemberId Household-member identifier to target or filter by.
+	MemberId *[]int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
 	// PostingStatus Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
-	PostingStatus    *[]PostingStatus    `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	PostingStatus *[]PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+
+	// TransactionClass Filter by one or more server-derived transaction classes.
 	TransactionClass *[]TransactionClass `form:"transaction_class,omitempty" json:"transaction_class,omitempty"`
 
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
@@ -2139,13 +2560,25 @@ type ListTransactionsParams struct {
 	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
 
 	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.
-	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	AmountUsdMax *string `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+
+	// InitiatedDateFrom Minimum transaction initiated date in YYYY-MM-DD format.
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+
+	// InitiatedDateTo Maximum transaction initiated date in YYYY-MM-DD format.
+	InitiatedDateTo *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+
+	// PendingDateFrom Minimum pending timestamp in ISO 8601 format.
+	PendingDateFrom *time.Time `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+
+	// PendingDateTo Maximum pending timestamp in ISO 8601 format.
+	PendingDateTo *time.Time `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+
+	// PostedDateFrom Minimum posted timestamp in ISO 8601 format.
+	PostedDateFrom *time.Time `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+
+	// PostedDateTo Maximum posted timestamp in ISO 8601 format.
+	PostedDateTo *time.Time `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 
 	// Search Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.
 	Search *string `form:"search,omitempty" json:"search,omitempty"`
@@ -2159,6 +2592,7 @@ type ListTransactionsParamsSortDir string
 
 // GetTransactionMonthTotalsParams defines parameters for GetTransactionMonthTotals.
 type GetTransactionMonthTotalsParams struct {
+	// Month Civil month to aggregate in YYYY-MM format.
 	Month string `form:"month" json:"month"`
 }
 
@@ -13710,190 +14144,222 @@ func (sh *strictHandler) CancelTransaction(w http.ResponseWriter, r *http.Reques
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"d3gC7HDaHHbUtZ6e/jsAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

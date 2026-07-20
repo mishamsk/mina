@@ -39,6 +39,7 @@
   - `mina client --db PATH` runs the same REST-backed command tree against a one-shot in-process app with no listener or automatic operations, waiting for manual exchange-rate loading and database backup runs to finish.
   - `mina mcp stdio --server URL` exposes the configured MCP surface through the official SDK against a running Mina REST server.
   - `mina serve` exposes the same MCP registry over Streamable HTTP at `/mcp`, backed by an in-process generated REST client against the isolated REST handler.
+  - Both MCP transports declare shared agent instructions for Mina's accounting model, preferred workflows, and mutation safety.
 - Implemented web UI behavior:
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.

@@ -14,18 +14,21 @@ operations:
     mcp:
       state: exposed
       name: list
+      description: Use to discover the finite set of registered operation types and their status and run links. This registry has no limit parameter; use operations_list_runs for paged run history.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   listBackgroundOperationRunEnvelopes:
     cli: {state: exposed, name: list-runs}
     mcp:
       state: exposed
       name: list_runs
+      description: Use for newest-first run history across background operations. Filter by operation_id when possible and supply limit (1-500) plus offset; use a typed get-run tool for one known run.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   getExchangeRateLoadingStatus:
     cli: {state: exposed, name: exchange-rate-loading-status}
     mcp:
       state: exposed
       name: exchange_rate_loading_status
+      description: Use for exchange-rate-loading operation state and links; this does not start work or return one specific run. Use operations_get_exchange_rate_loading_run with a known run ID.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   startExchangeRateLoadingRun:
     cli:
@@ -41,18 +44,21 @@ operations:
     mcp:
       state: exposed
       name: start_exchange_rate_loading
+      description: Starts one manual exchange-rate-loading run and returns its run ID. Use the typed get-run tool to poll that run; do not confuse this trigger with status or history tools.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getExchangeRateLoadingRun:
     cli: {state: exposed, name: get-exchange-rate-loading-run}
     mcp:
       state: exposed
       name: get_exchange_rate_loading_run
+      description: Use with an exact exchange-rate-loading run ID, normally returned by the start tool. This returns one typed run; use operations_list_runs to discover historical IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   getDatabaseBackupStatus:
     cli: {state: exposed, name: database-backup-status}
     mcp:
       state: exposed
       name: database_backup_status
+      description: Use for database-backup operation state and links; this does not start a backup or return one specific run. Use operations_get_database_backup_run with a known run ID.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   startDatabaseBackupRun:
     cli:
@@ -68,12 +74,14 @@ operations:
     mcp:
       state: exposed
       name: start_database_backup
+      description: Starts one manual database backup and returns its run ID. Use the typed get-run tool to poll that run; call only when the user intends to create a backup.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getDatabaseBackupRun:
     cli: {state: exposed, name: get-database-backup-run}
     mcp:
       state: exposed
       name: get_database_backup_run
+      description: Use with an exact database-backup run ID, normally returned by the start tool. This returns one typed run; use operations_list_runs to discover historical IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
 
   listCategories:
@@ -81,48 +89,56 @@ operations:
     mcp:
       state: exposed
       name: list
+      description: Use to discover categories or resolve category IDs before transaction work. Keep results bounded with limit (1-500), offset, and economic_intent, featured, hidden, or tombstoned filters; defaults sort by FQN ascending and exclude hidden and tombstoned rows.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createCategory:
     cli: {state: exposed, name: create}
     mcp:
       state: exposed
       name: create
+      description: Create one category leaf after categories_list confirms the FQN and intent do not already exist. FQNs are colon-separated hierarchy paths; economic intent controls transaction semantics.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   restructureCategories:
     cli: {state: exposed, name: restructure}
     mcp:
       state: exposed
       name: restructure
+      description: Rename or move a category leaf or implicit group by FQN prefix, atomically moving its active subtree and matching budget paths. This is a bulk hierarchy mutation; use only with explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: false, open_world: false}
   listCategoryGroups:
     cli: {state: exposed, name: list-groups}
     mcp:
       state: exposed
       name: list_groups
+      description: Lists every implicit active category group; groups are derived FQN prefixes rather than stored entities. There is no limit parameter, so use include_hidden=false (the default) unless hidden groups are required.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   setCategoryHiddenByPath:
     cli: {state: exposed, name: set-hidden}
     mcp:
       state: exposed
       name: set_hidden
+      description: Bulk-set hidden state on every active category leaf at or below one leaf or group FQN path. Use categories_update for one known leaf and require explicit intent for group-wide changes.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   getCategory:
     cli: {state: exposed, name: get}
     mcp:
       state: exposed
       name: get
+      description: Use when you already have an exact category ID and need one leaf, optionally tombstoned. Use categories_list to discover IDs or filter by economic intent.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   updateCategory:
     cli: {state: exposed, name: update}
     mcp:
       state: exposed
       name: update
+      description: Update hidden or featured metadata for one category ID; it does not rename the FQN or change economic intent. Use categories_restructure for rename or move operations.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteCategory:
     cli: {state: exposed, name: delete}
     mcp:
       state: exposed
       name: delete
+      description: Tombstone one category leaf by exact ID; referenced categories cannot be deleted. This is destructive and requires explicit user intent; use categories_get first when identity is uncertain.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
   listTags:
@@ -130,48 +146,56 @@ operations:
     mcp:
       state: exposed
       name: list
+      description: Use to discover tags or resolve tag IDs before assigning them. Keep results bounded with limit (1-500), offset, and featured, hidden, or tombstoned filters; defaults sort by FQN ascending and exclude hidden and tombstoned rows.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createTag:
     cli: {state: exposed, name: create}
     mcp:
       state: exposed
       name: create
+      description: Create one tag leaf after tags_list confirms the colon-separated FQN does not already exist. Use tags_restructure to rename or move an existing leaf or subtree.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   restructureTags:
     cli: {state: exposed, name: restructure}
     mcp:
       state: exposed
       name: restructure
+      description: Rename or move a tag leaf or implicit group by FQN prefix, atomically moving its active subtree. This is a bulk hierarchy mutation; use only with explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: false, open_world: false}
   listTagGroups:
     cli: {state: exposed, name: list-groups}
     mcp:
       state: exposed
       name: list_groups
+      description: Lists every implicit active tag group; groups are derived FQN prefixes rather than stored entities. There is no limit parameter, so use include_hidden=false (the default) unless hidden groups are required.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   setTagHiddenByPath:
     cli: {state: exposed, name: set-hidden}
     mcp:
       state: exposed
       name: set_hidden
+      description: Bulk-set hidden state on every active tag leaf at or below one leaf or group FQN path. Use tags_update for one known leaf and require explicit intent for group-wide changes.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   getTag:
     cli: {state: exposed, name: get}
     mcp:
       state: exposed
       name: get
+      description: Use when you already have an exact tag ID and need one leaf, optionally tombstoned. Use tags_list to discover IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   updateTag:
     cli: {state: exposed, name: update}
     mcp:
       state: exposed
       name: update
+      description: Update hidden or featured metadata for one tag ID; it does not rename the FQN. Use tags_restructure for rename or move operations.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteTag:
     cli: {state: exposed, name: delete}
     mcp:
       state: exposed
       name: delete
+      description: Tombstone one tag leaf by exact ID; referenced tags cannot be deleted. This is destructive and requires explicit user intent; use tags_get first when identity is uncertain.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
   listMembers:
@@ -179,36 +203,42 @@ operations:
     mcp:
       state: exposed
       name: list
+      description: Use to discover household members or resolve member IDs. Members are a flat name list, not an FQN hierarchy; keep results bounded with limit (1-500) and offset, with name-ascending and hidden/tombstoned exclusion defaults.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createMember:
     cli: {state: exposed, name: create}
     mcp:
       state: exposed
       name: create
+      description: Create one flat household-member name after members_list confirms it does not already exist. Members may be attached to journal records.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getMember:
     cli: {state: exposed, name: get}
     mcp:
       state: exposed
       name: get
+      description: Use when you already have an exact member ID and need one member, optionally tombstoned. Use members_list to discover IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   updateMember:
     cli: {state: exposed, name: update}
     mcp:
       state: exposed
       name: update
+      description: Rename one household member by exact ID. This does not alter journal-record references to that member.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteMember:
     cli: {state: exposed, name: delete}
     mcp:
       state: exposed
       name: delete
+      description: Tombstone one household member by exact ID; referenced members cannot be deleted. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   updateMemberHidden:
     cli: {state: exposed, name: set-hidden}
     mcp:
       state: exposed
       name: set_hidden
+      description: Set hidden state for one household member by exact ID. Hidden members are excluded from default lists but remain addressable when explicitly included.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
 
   listAccounts:
@@ -216,78 +246,91 @@ operations:
     mcp:
       state: exposed
       name: list
+      description: Use to discover account leaves or resolve account IDs. Keep results bounded with limit (1-500), offset, and type, featured, hidden, or tombstoned filters; defaults sort by FQN ascending and exclude hidden and tombstoned rows.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createAccount:
     cli: {state: exposed, name: create}
     mcp:
       state: exposed
       name: create
+      description: Create one account leaf after accounts_list confirms the colon-separated FQN does not already exist. Choose balance, flow, or system type from accounting meaning, not the FQN text.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   restructureAccounts:
     cli: {state: exposed, name: restructure}
     mcp:
       state: exposed
       name: restructure
+      description: Rename or move an account leaf or implicit group by FQN prefix, atomically moving its active subtree. This is a bulk hierarchy mutation; use only with explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: false, open_world: false}
   listAccountGroups:
     cli: {state: exposed, name: list-groups}
     mcp:
       state: exposed
       name: list_groups
+      description: Lists every implicit active account group across balance, flow, and system leaves. There is no limit parameter, so use include_hidden=false (the default) unless hidden groups are required.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   setAccountHiddenByPath:
     cli: {state: exposed, name: set-hidden}
     mcp:
       state: exposed
       name: set_hidden
+      description: Bulk-set hidden state on every active account leaf at or below one leaf or group FQN path. Use accounts_update for one known leaf and require explicit intent for group-wide changes.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   listAccountBalances:
     cli: {state: exposed, name: list-balances}
     mcp:
       state: exposed
       name: list_balances
+      description: Use this server-computed balance surface instead of summing journal records. It returns all active balance-account currencies with no limit parameter; constrain with account_ids when possible, while hidden accounts stay excluded by default.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   getAccount:
     cli: {state: exposed, name: get}
     mcp:
       state: exposed
       name: get
+      description: Use when you already have an exact account ID and need one leaf, optionally tombstoned. Use accounts_list to discover IDs; use accounts_list_balances for computed balances.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   updateAccount:
     cli: {state: exposed, name: update}
     mcp:
       state: exposed
       name: update
+      description: Update mutable metadata for one account ID; it does not rename the FQN or change currency. Use accounts_restructure for rename or move operations.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteAccount:
     cli: {state: exposed, name: delete}
     mcp:
       state: exposed
       name: delete
+      description: Tombstone one account leaf by exact ID; accounts with active references cannot be deleted. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   listCreditLimitHistory:
     cli: {state: exposed, name: list-credit-limits}
     mcp:
       state: exposed
       name: list_credit_limits
+      description: List dated credit limits for one exact account. Keep results bounded with limit (1-500) and offset; defaults sort by effective date ascending and exclude tombstoned entries.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createCreditLimitHistory:
     cli: {state: exposed, name: create-credit-limit}
     mcp:
       state: exposed
       name: create_credit_limit
+      description: Add a dated credit limit for one balance account after reviewing its existing credit-limit history. The server selects the effective limit by date.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getCreditLimitHistory:
     cli: {state: exposed, name: get-credit-limit}
     mcp:
       state: exposed
       name: get_credit_limit
+      description: Use when you already have an exact credit-limit-history ID and need one entry, optionally tombstoned. Use accounts_list_credit_limits to discover IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   deleteCreditLimitHistory:
     cli: {state: exposed, name: delete-credit-limit}
     mcp:
       state: exposed
       name: delete_credit_limit
+      description: Tombstone one credit-limit-history entry by exact ID. This is destructive and requires explicit user intent; it does not delete the account.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
   listExchangeRates:
@@ -295,30 +338,35 @@ operations:
     mcp:
       state: exposed
       name: list
+      description: Use to discover stored currency-pair rates or resolve rate IDs. Keep results bounded with limit (1-500), offset, pair/date filters, and tombstone exclusion; defaults sort by currency pair ascending.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createExchangeRate:
     cli: {state: exposed, name: create}
     mcp:
       state: exposed
       name: create
+      description: Create one dated exchange-rate entry after exchange_rates_list confirms the pair and effective timestamp. Rate amounts are decimal strings.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getExchangeRate:
     cli: {state: exposed, name: get}
     mcp:
       state: exposed
       name: get
+      description: Use when you already have an exact exchange-rate ID and need one entry, optionally tombstoned. Use exchange_rates_list to discover IDs or filter by pair and date.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   updateExchangeRate:
     cli: {state: exposed, name: update}
     mcp:
       state: exposed
       name: update
+      description: Update only the decimal rate value for one exact exchange-rate ID. Pair currencies and effective timestamp remain unchanged.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteExchangeRate:
     cli: {state: exposed, name: delete}
     mcp:
       state: exposed
       name: delete
+      description: Tombstone one exchange-rate entry by exact ID. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
   listTransactionTemplates:
@@ -326,36 +374,42 @@ operations:
     mcp:
       state: exposed
       name: list
+      description: Use to discover date-free reusable partial entry defaults or resolve template IDs. Supply limit (1-500) and offset; defaults sort by FQN ascending. Templates have no schedule and need not balance; recurring definitions are scheduled and complete.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createTransactionTemplate:
     cli: {state: exposed, name: create}
     mcp:
       state: exposed
       name: create
+      description: Create date-free reusable partial record defaults under a hierarchical FQN. Templates need not balance and have no schedule; use recurring_create_definition for a scheduled complete transaction shape or transactions_create for an actual entry.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   restructureTransactionTemplates:
     cli: {state: exposed, name: restructure}
     mcp:
       state: exposed
       name: restructure
+      description: Rename or move a template leaf or implicit group by FQN prefix. This bulk hierarchy mutation preserves template record defaults and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: false, open_world: false}
   getTransactionTemplate:
     cli: {state: exposed, name: get}
     mcp:
       state: exposed
       name: get
+      description: Use when you already have an exact template ID and need its partial date-free record defaults. Use transaction_templates_list to discover IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   replaceTransactionTemplate:
     cli: {state: exposed, name: replace}
     mcp:
       state: exposed
       name: replace
+      description: Replace all partial record defaults for one template while preserving its ID and FQN. Use transaction_templates_restructure to rename or move the hierarchy path.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteTransactionTemplate:
     cli: {state: exposed, name: delete}
     mcp:
       state: exposed
       name: delete
+      description: Tombstone one transaction template and its record defaults without touching transactions already created from it. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
   listRecurringDefinitions:
@@ -363,72 +417,84 @@ operations:
     mcp:
       state: exposed
       name: list_definitions
+      description: Use to discover scheduled complete transaction definitions or resolve definition IDs. Supply limit (1-500) and offset; defaults sort by FQN ascending. Use transaction_templates_list for unscheduled partial defaults.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createRecurringDefinition:
     cli: {state: exposed, name: create-definition}
     mcp:
       state: exposed
       name: create_definition
+      description: Create a scheduled hierarchical definition with a complete balanced record set, optionally copied once from a template. Use transactions_create for an actual unscheduled transaction.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getRecurringDefinition:
     cli: {state: exposed, name: get-definition}
     mcp:
       state: exposed
       name: get_definition
+      description: Use when you already have an exact recurring-definition ID and need its schedule and complete record shape. Use recurring_list_definitions to discover IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   replaceRecurringDefinition:
     cli: {state: exposed, name: replace-definition}
     mcp:
       state: exposed
       name: replace_definition
+      description: Replace the schedule and complete balanced record set for one definition while preserving its ID. Already materialized occurrences are unchanged.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteRecurringDefinition:
     cli: {state: exposed, name: delete-definition}
     mcp:
       state: exposed
       name: delete_definition
+      description: Cancel and tombstone one recurring definition while retaining generated transaction history and queued occurrences. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   confirmNextRecurringDefinition:
     cli: {state: exposed, name: confirm-next}
     mcp:
       state: exposed
       name: confirm_next
+      description: Confirm the next occurrence early for one definition, materializing it as a normal transaction dated today. This mutates household transaction state and requires explicit user intent.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   deferRecurringDefinition:
     cli: {state: exposed, name: defer}
     mcp:
       state: exposed
       name: defer
+      description: Re-anchor the next non-materialized interval occurrence and all later ones; date-rule definitions cannot be deferred. Existing materialized occurrences remain in the review queue.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   pauseRecurringDefinition:
     cli: {state: exposed, name: pause}
     mcp:
       state: exposed
       name: pause
+      description: Pause one definition so no occurrences accrue and no backlog forms. Existing review-queue occurrences remain; this mutation requires explicit user intent.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   resumeRecurringDefinition:
     cli: {state: exposed, name: resume}
     mcp:
       state: exposed
       name: resume
+      description: Resume one paused definition, re-anchoring interval schedules at resume or using the next natural date-rule date. This mutation requires explicit user intent.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   listRecurringOccurrences:
     cli: {state: exposed, name: list-occurrences}
     mcp:
       state: exposed
       name: list_occurrences
+      description: Use as the recurring review queue; it materializes due occurrences through the current civil date before returning them. Supply limit (1-500), offset, definition/status filters; defaults sort scheduled date ascending.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   confirmRecurringOccurrence:
     cli: {state: exposed, name: confirm-occurrence}
     mcp:
       state: exposed
       name: confirm_occurrence
+      description: Confirm one expected review-queue occurrence as a normal transaction. If values differ, confirm then edit the transaction; this mutation requires explicit user intent.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   dismissRecurringOccurrence:
     cli: {state: exposed, name: dismiss-occurrence}
     mcp:
       state: exposed
       name: dismiss_occurrence
+      description: Durably dismiss one review-queue occurrence without moving the schedule anchor; it will not reappear. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
   listTransactions:
@@ -436,66 +502,77 @@ operations:
     mcp:
       state: exposed
       name: list
+      description: Use for transaction-level results with nested balanced journal records, including free-text, class, entity, status, and date filters. Supply limit (1-500); defaults sort by initiated date descending. Use records_search for individual record matches or register queries.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createTransaction:
     cli: {state: exposed, name: create}
     mcp:
       state: exposed
       name: create
+      description: Use for advanced transaction creation with a complete journal that balances to zero within each currency. Prefer the spend, income, refund, or transfer shorthand tools for simple same-currency entries.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getTransactionMonthTotals:
     cli: {state: exposed, name: month-totals}
     mcp:
       state: exposed
       name: month_totals
+      description: Use this server-computed civil-month spend and income aggregate instead of client-side record summation. It excludes expected/cancelled and non-spend/non-income intents and reports unconverted-record counts.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createSpendTransaction:
     cli: {state: exposed, name: create-spend}
     mcp:
       state: exposed
       name: create_spend
+      description: Preferred shortcut for a simple same-currency spend with funding and counterparty records. Use transactions_create for split, fee-support, exchange, adjustment, mixed, or other multi-record journals.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   createIncomeTransaction:
     cli: {state: exposed, name: create-income}
     mcp:
       state: exposed
       name: create_income
+      description: Preferred shortcut for a simple same-currency income with source and destination records. Use transactions_create for exchange support, splits, mixed intent, or other multi-record journals.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   createRefundTransaction:
     cli: {state: exposed, name: create-refund}
     mcp:
       state: exposed
       name: create_refund
+      description: Preferred shortcut for a simple same-currency refund with counterparty and destination records. Use transactions_create for complex settlements, splits, exchange support, or other multi-record journals.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   createTransferTransaction:
     cli: {state: exposed, name: create-transfer}
     mcp:
       state: exposed
       name: create_transfer
+      description: Preferred shortcut for a simple same-currency balance-account transfer. Use transactions_create for attached fees, currency exchange, adjustments, or other multi-record journals.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getTransaction:
     cli: {state: exposed, name: get}
     mcp:
       state: exposed
       name: get
+      description: Use when you already have an exact transaction ID and need the transaction plus all active journal records. Use transactions_list to discover IDs or filter at transaction level.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   replaceTransaction:
     cli: {state: exposed, name: replace}
     mcp:
       state: exposed
       name: replace
+      description: Replace one transaction with a full balanced journal while preserving its transaction ID. This tombstones prior active records; use only when the user intends a complete edit.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteTransaction:
     cli: {state: exposed, name: delete}
     mcp:
       state: exposed
       name: delete
+      description: Tombstone one transaction and all its journal records. This is destructive and requires explicit user intent; use transactions_cancel when history should remain active but excluded from balances and aggregates.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   cancelTransaction:
     cli: {state: exposed, name: cancel}
     mcp:
       state: exposed
       name: cancel
+      description: Mark every active record in one transaction cancelled without tombstoning it. This is destructive, excludes it from aggregates, and requires explicit user intent; use transactions_delete for tombstoning.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
 
   searchJournalRecords:
@@ -503,34 +580,40 @@ operations:
     mcp:
       state: exposed
       name: search
+      description: Use for bounded individual journal-record matches across accounts with amount, entity, status, memo, and date filters. Supply limit (1-500); use transactions_list for transaction-level groupings or records_search_account for one-account register semantics.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   searchAccountJournalRecords:
     cli: {state: exposed, name: search-account}
     mcp:
       state: exposed
       name: search_account
+      description: Use for a bounded register of individual records for one exact account, optionally with running balances and record filters. Supply limit (1-500); use records_search for cross-account record queries or transactions_list for transaction groupings.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   bulkCategorizeJournalRecords:
     cli: {state: exposed, name: bulk-categorize}
     mcp:
       state: exposed
       name: bulk_categorize
+      description: Assign one category to selected record IDs. This is a bulk mutation that can change transaction classification; require explicit user intent and inspect records first.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   bulkUpdateJournalRecordTags:
     cli: {state: exposed, name: bulk-update-tags}
     mcp:
       state: exposed
       name: bulk_update_tags
+      description: Add and remove tag IDs on selected record IDs in one request. This is a bulk mutation; require explicit user intent and inspect records first.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   bulkReassignJournalRecordAccount:
     cli: {state: exposed, name: bulk-reassign-account}
     mcp:
       state: exposed
       name: bulk_reassign_account
+      description: Assign one account to selected record IDs. This can alter balances and transaction semantic validity; require explicit user intent and inspect records first.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   bulkUpdateJournalRecordStatuses:
     cli: {state: exposed, name: bulk-update-statuses}
     mcp:
       state: exposed
       name: bulk_update_statuses
+      description: Update posting and/or reconciliation status on selected record IDs while preserving transaction-wide expected/cancelled invariants. This is a bulk mutation and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}

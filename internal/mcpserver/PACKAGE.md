@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Owns its generated MCP operation catalog and wrapping invokers.
+- Owns the top-level agent instructions shared by stdio and Streamable HTTP initialize results.
 - Wrapping invokers call only generated REST operations owned by `internal/httpclient`.
 - Builds generated tools exclusively from its package-local catalog, including generated schemas and all four configured annotations.
 - Maps 2xx REST results to structured `{status, body}` content and non-2xx Mina envelopes to visible MCP tool errors.

@@ -185,6 +185,9 @@ func connectMCPSession(
 	if initialized == nil || initialized.ServerInfo == nil || initialized.ServerInfo.Name != "mina" {
 		ts.Fatalf("unexpected MCP initialize result: %+v", initialized)
 	}
+	if !strings.Contains(initialized.Instructions, "Prefer read and list tools before mutating household state.") {
+		ts.Fatalf("MCP initialize result is missing Mina agent instructions: %+v", initialized)
+	}
 	return session
 }
 

@@ -223,9 +223,14 @@ func convertMCPJSONSchema(schema *openapi3.Schema) (map[string]any, error) {
 	if !schema.Nullable {
 		return converted, nil
 	}
-	return map[string]any{
+	nullable := map[string]any{
 		"anyOf": []any{converted, map[string]any{"type": "null"}},
-	}, nil
+	}
+	if description, ok := converted["description"]; ok {
+		nullable["description"] = description
+		delete(converted, "description")
+	}
+	return nullable, nil
 }
 
 func effectiveOpenAPIType(schema *openapi3.Schema) (string, error) {

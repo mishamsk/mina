@@ -897,7 +897,9 @@ type APIErrorCode string
 
 // Account defines model for Account.
 type Account struct {
-	AccountId   int64       `json:"account_id"`
+	AccountId int64 `json:"account_id"`
+
+	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
 	AccountType AccountType `json:"account_type"`
 	CreatedAt   time.Time   `json:"created_at"`
 	Currency    *string     `json:"currency,omitempty"`
@@ -950,7 +952,7 @@ type AccountListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// AccountType defines model for AccountType.
+// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
 type AccountType string
 
 // BackgroundOperationId defines model for BackgroundOperationId.
@@ -1002,13 +1004,19 @@ type BackgroundOperationSummary struct {
 
 // BulkCategorizeRecordsRequest defines model for BulkCategorizeRecordsRequest.
 type BulkCategorizeRecordsRequest struct {
-	CategoryId int64   `json:"category_id"`
-	RecordIds  []int64 `json:"record_ids"`
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
 }
 
 // BulkReassignRecordsAccountRequest defines model for BulkReassignRecordsAccountRequest.
 type BulkReassignRecordsAccountRequest struct {
-	AccountId int64   `json:"account_id"`
+	// AccountId Account identifier for this journal record or request.
+	AccountId int64 `json:"account_id"`
+
+	// RecordIds Journal-record identifiers to update.
 	RecordIds []int64 `json:"record_ids"`
 }
 
@@ -1020,16 +1028,26 @@ type BulkRecordOperationResponse struct {
 
 // BulkTagRecordsRequest Provide at least one non-empty add_tag_ids or remove_tag_ids array. The two arrays must not overlap.
 type BulkTagRecordsRequest struct {
-	AddTagIds    *[]int64 `json:"add_tag_ids,omitempty"`
-	RecordIds    []int64  `json:"record_ids"`
+	// AddTagIds Tag identifiers to add to every selected journal record.
+	AddTagIds *[]int64 `json:"add_tag_ids,omitempty"`
+
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
+
+	// RemoveTagIds Tag identifiers to remove from every selected journal record.
 	RemoveTagIds *[]int64 `json:"remove_tag_ids,omitempty"`
 }
 
 // BulkUpdateRecordStatusRequest Provide posting_status, reconciliation_status, or both.
 type BulkUpdateRecordStatusRequest struct {
-	PostingStatus        *NonExpectedPostingStatus `json:"posting_status,omitempty"`
-	ReconciliationStatus *ReconciliationStatus     `json:"reconciliation_status,omitempty"`
-	RecordIds            []int64                   `json:"record_ids"`
+	// PostingStatus Non-expected posting status accepted by bulk status updates.
+	PostingStatus *NonExpectedPostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+
+	// RecordIds Journal-record identifiers to update.
+	RecordIds []int64 `json:"record_ids"`
 }
 
 // Category defines model for Category.
@@ -1038,7 +1056,9 @@ type Category struct {
 	CreatedAt  time.Time `json:"created_at"`
 
 	// Deletable Populated in listCategories responses. True when the active category has no active dependent resources and can be tombstone-deleted.
-	Deletable      *bool                  `json:"deletable,omitempty"`
+	Deletable *bool `json:"deletable,omitempty"`
+
+	// EconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
 	Fqn            string                 `json:"fqn"`
 	IsFeatured     bool                   `json:"is_featured"`
@@ -1050,7 +1070,7 @@ type Category struct {
 	UpdatedAt      time.Time              `json:"updated_at"`
 }
 
-// CategoryEconomicIntent defines model for CategoryEconomicIntent.
+// CategoryEconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
 type CategoryEconomicIntent string
 
 // CategoryListResponse defines model for CategoryListResponse.
@@ -1063,171 +1083,308 @@ type CategoryListResponse struct {
 
 // CreateAccountRequest defines model for CreateAccountRequest.
 type CreateAccountRequest struct {
-	AccountType    AccountType `json:"account_type"`
-	Currency       *string     `json:"currency,omitempty"`
-	ExternalId     *string     `json:"external_id,omitempty"`
-	ExternalSystem *string     `json:"external_system,omitempty"`
-	Fqn            string      `json:"fqn"`
-	IsFeatured     *bool       `json:"is_featured,omitempty"`
-	IsHidden       *bool       `json:"is_hidden,omitempty"`
+	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+	AccountType AccountType `json:"account_type"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency *string `json:"currency,omitempty"`
+
+	// ExternalId Optional identifier assigned by an external system.
+	ExternalId *string `json:"external_id,omitempty"`
+
+	// ExternalSystem Optional namespace for `external_id`, such as a provider name.
+	ExternalSystem *string `json:"external_system,omitempty"`
+
+	// Fqn Colon-separated hierarchical FQN for the account leaf.
+	Fqn string `json:"fqn"`
+
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
+	IsFeatured *bool `json:"is_featured,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // CreateCategoryRequest defines model for CreateCategoryRequest.
 type CreateCategoryRequest struct {
+	// EconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
-	Fqn            string                 `json:"fqn"`
-	IsFeatured     *bool                  `json:"is_featured,omitempty"`
-	IsHidden       *bool                  `json:"is_hidden,omitempty"`
+
+	// Fqn Colon-separated hierarchical FQN for the category leaf.
+	Fqn string `json:"fqn"`
+
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
+	IsFeatured *bool `json:"is_featured,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // CreateCreditLimitHistoryRequest defines model for CreateCreditLimitHistoryRequest.
 type CreateCreditLimitHistoryRequest struct {
 	// CreditLimit JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	CreditLimit   string             `json:"credit_limit"`
+	CreditLimit string `json:"credit_limit"`
+
+	// EffectiveDate ISO 8601 date or timestamp when the value starts applying.
 	EffectiveDate openapi_types.Date `json:"effective_date"`
 }
 
 // CreateExchangeRateRequest defines model for CreateExchangeRateRequest.
 type CreateExchangeRateRequest struct {
+	// EffectiveDate ISO 8601 date or timestamp when the value starts applying.
 	EffectiveDate time.Time `json:"effective_date"`
-	FromCurrency  string    `json:"from_currency"`
+
+	// FromCurrency Source currency code using ISO 4217 or the `C::` crypto prefix.
+	FromCurrency string `json:"from_currency"`
 
 	// Rate JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Rate       string `json:"rate"`
+	Rate string `json:"rate"`
+
+	// ToCurrency Destination currency code using ISO 4217 or the `C::` crypto prefix.
 	ToCurrency string `json:"to_currency"`
 }
 
 // CreateIncomeTransactionRequest defines model for CreateIncomeTransactionRequest.
 type CreateIncomeTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount               string             `json:"amount"`
-	CategoryId           int64              `json:"category_id"`
-	Currency             string             `json:"currency"`
-	DestinationAccountId int64              `json:"destination_account_id"`
-	InitiatedDate        openapi_types.Date `json:"initiated_date"`
-	MemberId             *int64             `json:"member_id,omitempty"`
-	Memo                 *string            `json:"memo,omitempty"`
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// DestinationAccountId Destination balance-account identifier for the income, refund, or transfer.
+	DestinationAccountId int64 `json:"destination_account_id"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the generated records posted.
-	PostedDate           *time.Time            `json:"posted_date,omitempty"`
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	SourceAccountId      int64                 `json:"source_account_id"`
-	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+
+	// SourceAccountId Source account identifier for the income or transfer.
+	SourceAccountId int64 `json:"source_account_id"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateJournalRecordRequest defines model for CreateJournalRecordRequest.
 type CreateJournalRecordRequest struct {
+	// AccountId Account identifier for this journal record or request.
 	AccountId int64 `json:"account_id"`
 
 	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount string `json:"amount"`
 
 	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsd      *string `json:"amount_usd,omitempty"`
-	CategoryId     int64   `json:"category_id"`
-	Currency       string  `json:"currency"`
-	ExternalId     *string `json:"external_id,omitempty"`
+	AmountUsd *string `json:"amount_usd,omitempty"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// ExternalId Optional identifier assigned by an external system.
+	ExternalId *string `json:"external_id,omitempty"`
+
+	// ExternalSystem Optional namespace for `external_id`, such as a provider name.
 	ExternalSystem *string `json:"external_system,omitempty"`
-	MemberId       *int64  `json:"member_id,omitempty"`
-	Memo           *string `json:"memo,omitempty"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp, such as a card hold; when omitted or null, defaults to initiated_date at 00:00:00Z for non-bank records.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the record posted; use pending_date for manual non-bank records and null until posted.
-	PostedDate           *time.Time           `json:"posted_date,omitempty"`
-	PostingStatus        PostingStatus        `json:"posting_status"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus PostingStatus `json:"posting_status"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
-	Source               ManualSource         `json:"source"`
-	TagIds               *[]int64             `json:"tag_ids,omitempty"`
+
+	// Source Origin value accepted for manually created journal records.
+	Source ManualSource `json:"source"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateMemberRequest defines model for CreateMemberRequest.
 type CreateMemberRequest struct {
+	// Name Unique flat household-member name.
 	Name string `json:"name"`
 }
 
 // CreateRefundTransactionRequest defines model for CreateRefundTransactionRequest.
 type CreateRefundTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount                string             `json:"amount"`
-	CategoryId            int64              `json:"category_id"`
-	CounterpartyAccountId int64              `json:"counterparty_account_id"`
-	Currency              string             `json:"currency"`
-	DestinationAccountId  int64              `json:"destination_account_id"`
-	InitiatedDate         openapi_types.Date `json:"initiated_date"`
-	MemberId              *int64             `json:"member_id,omitempty"`
-	Memo                  *string            `json:"memo,omitempty"`
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// CounterpartyAccountId Flow-account identifier for the spend or refund counterparty record.
+	CounterpartyAccountId int64 `json:"counterparty_account_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// DestinationAccountId Destination balance-account identifier for the income, refund, or transfer.
+	DestinationAccountId int64 `json:"destination_account_id"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the generated records posted.
-	PostedDate           *time.Time            `json:"posted_date,omitempty"`
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateSpendTransactionRequest defines model for CreateSpendTransactionRequest.
 type CreateSpendTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount                string             `json:"amount"`
-	CategoryId            int64              `json:"category_id"`
-	CounterpartyAccountId int64              `json:"counterparty_account_id"`
-	Currency              string             `json:"currency"`
-	FundingAccountId      int64              `json:"funding_account_id"`
-	InitiatedDate         openapi_types.Date `json:"initiated_date"`
-	MemberId              *int64             `json:"member_id,omitempty"`
-	Memo                  *string            `json:"memo,omitempty"`
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// CounterpartyAccountId Flow-account identifier for the spend or refund counterparty record.
+	CounterpartyAccountId int64 `json:"counterparty_account_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// FundingAccountId Balance-account identifier that funds the spend.
+	FundingAccountId int64 `json:"funding_account_id"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the generated records posted.
-	PostedDate           *time.Time            `json:"posted_date,omitempty"`
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateTagRequest defines model for CreateTagRequest.
 type CreateTagRequest struct {
-	Fqn        string `json:"fqn"`
-	IsFeatured *bool  `json:"is_featured,omitempty"`
-	IsHidden   *bool  `json:"is_hidden,omitempty"`
+	// Fqn Colon-separated hierarchical FQN for the tag leaf.
+	Fqn string `json:"fqn"`
+
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
+	IsFeatured *bool `json:"is_featured,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // CreateTransactionRequest defines model for CreateTransactionRequest.
 type CreateTransactionRequest struct {
-	InitiatedDate openapi_types.Date           `json:"initiated_date"`
-	Records       []CreateJournalRecordRequest `json:"records"`
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// Records Complete journal-record set; active records must balance to zero within each currency.
+	Records []CreateJournalRecordRequest `json:"records"`
 }
 
 // CreateTransferTransactionRequest defines model for CreateTransferTransactionRequest.
 type CreateTransferTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount               string             `json:"amount"`
-	CategoryId           int64              `json:"category_id"`
-	Currency             string             `json:"currency"`
-	DestinationAccountId int64              `json:"destination_account_id"`
-	InitiatedDate        openapi_types.Date `json:"initiated_date"`
-	MemberId             *int64             `json:"member_id,omitempty"`
-	Memo                 *string            `json:"memo,omitempty"`
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+
+	// DestinationAccountId Destination balance-account identifier for the income, refund, or transfer.
+	DestinationAccountId int64 `json:"destination_account_id"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
 
 	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
 	// PostedDate UTC timestamp when the generated records posted.
-	PostedDate           *time.Time            `json:"posted_date,omitempty"`
-	PostingStatus        *PostingStatus        `json:"posting_status,omitempty"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
-	SourceAccountId      int64                 `json:"source_account_id"`
-	TagIds               *[]int64              `json:"tag_ids,omitempty"`
+
+	// SourceAccountId Source account identifier for the income or transfer.
+	SourceAccountId int64 `json:"source_account_id"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreditLimitHistory defines model for CreditLimitHistory.
@@ -1411,8 +1568,12 @@ type JournalRecord struct {
 	PendingDate time.Time `json:"pending_date"`
 
 	// PostedDate UTC timestamp when the record posted; equal to pending_date for manual non-bank records and null until posted.
-	PostedDate           *time.Time           `json:"posted_date,omitempty"`
-	PostingStatus        PostingStatus        `json:"posting_status"`
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus PostingStatus `json:"posting_status"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
 
@@ -1433,7 +1594,7 @@ type JournalRecordSearchResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// ManualSource defines model for ManualSource.
+// ManualSource Origin value accepted for manually created journal records.
 type ManualSource string
 
 // Member defines model for Member.
@@ -1457,7 +1618,7 @@ type MemberListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// NonExpectedPostingStatus defines model for NonExpectedPostingStatus.
+// NonExpectedPostingStatus Non-expected posting status accepted by bulk status updates.
 type NonExpectedPostingStatus string
 
 // OperationRunReferenceResponse defines model for OperationRunReferenceResponse.
@@ -1470,10 +1631,10 @@ type OperationRunReferenceResponse struct {
 // OperationRunReferenceResponseOperationId defines model for OperationRunReferenceResponse.OperationId.
 type OperationRunReferenceResponseOperationId string
 
-// PostingStatus defines model for PostingStatus.
+// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
 type PostingStatus string
 
-// ReconciliationStatus defines model for ReconciliationStatus.
+// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 type ReconciliationStatus string
 
 // RecurringDefinition defines model for RecurringDefinition.
@@ -1501,11 +1662,14 @@ type RecurringDefinition struct {
 
 // RecurringDefinitionDeferRequest defines model for RecurringDefinitionDeferRequest.
 type RecurringDefinitionDeferRequest struct {
-	Every *int64                               `json:"every,omitempty"`
-	Unit  *RecurringDefinitionDeferRequestUnit `json:"unit,omitempty"`
+	// Every Positive number of cadence units by which to re-anchor the interval schedule.
+	Every *int64 `json:"every,omitempty"`
+
+	// Unit Cadence unit used for the defer offset.
+	Unit *RecurringDefinitionDeferRequestUnit `json:"unit,omitempty"`
 }
 
-// RecurringDefinitionDeferRequestUnit defines model for RecurringDefinitionDeferRequest.Unit.
+// RecurringDefinitionDeferRequestUnit Cadence unit used for the defer offset.
 type RecurringDefinitionDeferRequestUnit string
 
 // RecurringDefinitionListResponse defines model for RecurringDefinitionListResponse.
@@ -1536,26 +1700,44 @@ type RecurringDefinitionRecord struct {
 
 // RecurringDefinitionRecordRequest defines model for RecurringDefinitionRecordRequest.
 type RecurringDefinitionRecordRequest struct {
+	// AccountId Account identifier for this journal record or request.
 	AccountId *int64 `json:"account_id,omitempty"`
 
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount     *string                   `json:"amount,omitempty"`
-	CategoryId *int64                    `json:"category_id,omitempty"`
-	Currency   *string                   `json:"currency,omitempty"`
-	MemberId   nullable.Nullable[int64]  `json:"member_id,omitempty"`
-	Memo       nullable.Nullable[string] `json:"memo,omitempty"`
-	TagIds     *[]int64                  `json:"tag_ids,omitempty"`
+	Amount *string `json:"amount,omitempty"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId *int64 `json:"category_id,omitempty"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency *string `json:"currency,omitempty"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId nullable.Nullable[int64] `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo nullable.Nullable[string] `json:"memo,omitempty"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // RecurringDefinitionWriteRequest defines model for RecurringDefinitionWriteRequest.
 type RecurringDefinitionWriteRequest struct {
-	AnchorDate openapi_types.Date                  `json:"anchor_date"`
-	Fqn        string                              `json:"fqn"`
-	Records    *[]RecurringDefinitionRecordRequest `json:"records,omitempty"`
+	// AnchorDate Schedule anchor date in YYYY-MM-DD format.
+	AnchorDate openapi_types.Date `json:"anchor_date"`
+
+	// Fqn Colon-separated hierarchical FQN for the recurring definition leaf.
+	Fqn string `json:"fqn"`
+
+	// Records Complete balanced record shape copied to each generated occurrence transaction.
+	Records *[]RecurringDefinitionRecordRequest `json:"records,omitempty"`
 
 	// ScheduleRule Versioned recurring schedule payload validated by the recurring service.
 	ScheduleRule RecurringScheduleRule `json:"schedule_rule"`
-	TemplateId   *int64                `json:"template_id,omitempty"`
+
+	// TemplateId Optional template identifier whose record shape is copied once when creating the definition.
+	TemplateId *int64 `json:"template_id,omitempty"`
 }
 
 // RecurringOccurrence defines model for RecurringOccurrence.
@@ -1592,8 +1774,11 @@ type RecurringScheduleRule map[string]interface{}
 
 // RestructureRequest defines model for RestructureRequest.
 type RestructureRequest struct {
+	// FromFqn Existing leaf or implicit-group FQN prefix whose active subtree will move.
 	FromFqn string `json:"from_fqn"`
-	ToFqn   string `json:"to_fqn"`
+
+	// ToFqn Destination FQN prefix for the moved active subtree.
+	ToFqn string `json:"to_fqn"`
 }
 
 // RestructureResponse defines model for RestructureResponse.
@@ -1603,8 +1788,11 @@ type RestructureResponse struct {
 
 // SetHiddenByPathRequest defines model for SetHiddenByPathRequest.
 type SetHiddenByPathRequest struct {
-	IsHidden bool   `json:"is_hidden"`
-	PathFqn  string `json:"path_fqn"`
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden bool `json:"is_hidden"`
+
+	// PathFqn Leaf or implicit-group FQN path whose active descendants will be updated.
+	PathFqn string `json:"path_fqn"`
 }
 
 // SetHiddenByPathResponse defines model for SetHiddenByPathResponse.
@@ -1620,9 +1808,13 @@ type Tag struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// Deletable Populated in listTags responses. True when the active tag has no active dependent resources and can be tombstone-deleted.
-	Deletable    *bool      `json:"deletable,omitempty"`
-	Fqn          string     `json:"fqn"`
-	IsFeatured   bool       `json:"is_featured"`
+	Deletable *bool  `json:"deletable,omitempty"`
+	Fqn       string `json:"fqn"`
+
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
+	IsFeatured bool `json:"is_featured"`
+
+	// IsHidden Whether the entity is excluded from default lists.
 	IsHidden     bool       `json:"is_hidden"`
 	Level        int        `json:"level"`
 	Name         string     `json:"name"`
@@ -1663,8 +1855,10 @@ type TransactionClass string
 
 // TransactionComponent defines model for TransactionComponent.
 type TransactionComponent struct {
-	Amounts []DisplayAmount        `json:"amounts"`
-	Intent  CategoryEconomicIntent `json:"intent"`
+	Amounts []DisplayAmount `json:"amounts"`
+
+	// Intent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+	Intent CategoryEconomicIntent `json:"intent"`
 }
 
 // TransactionListResponse defines model for TransactionListResponse.
@@ -1735,38 +1929,68 @@ type TransactionTemplateRecord struct {
 
 // TransactionTemplateRecordRequest defines model for TransactionTemplateRecordRequest.
 type TransactionTemplateRecordRequest struct {
+	// AccountId Account identifier for this journal record or request.
 	AccountId *int64 `json:"account_id,omitempty"`
 
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount               *string                   `json:"amount,omitempty"`
-	CategoryId           int64                     `json:"category_id"`
-	Currency             *string                   `json:"currency,omitempty"`
-	MemberId             *int64                    `json:"member_id,omitempty"`
-	Memo                 *string                   `json:"memo,omitempty"`
-	PostingStatus        *NonExpectedPostingStatus `json:"posting_status,omitempty"`
-	ReconciliationStatus *ReconciliationStatus     `json:"reconciliation_status,omitempty"`
-	TagIds               *[]int64                  `json:"tag_ids,omitempty"`
+	Amount *string `json:"amount,omitempty"`
+
+	// CategoryId Category identifier for this journal record or shorthand transaction.
+	CategoryId int64 `json:"category_id"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency *string `json:"currency,omitempty"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
+
+	// PostingStatus Posting-status value or optional template default for the journal record.
+	PostingStatus *NonExpectedPostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Reconciliation-status value or optional template default for the journal record.
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // TransactionTemplateWriteRequest defines model for TransactionTemplateWriteRequest.
 type TransactionTemplateWriteRequest struct {
-	Fqn     string                             `json:"fqn"`
+	// Fqn Colon-separated hierarchical FQN for the transaction template leaf.
+	Fqn string `json:"fqn"`
+
+	// Records Partial date-free record defaults; template records do not need to balance.
 	Records []TransactionTemplateRecordRequest `json:"records"`
 }
 
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
-	AccountType    *AccountType              `json:"account_type,omitempty"`
-	ExternalId     nullable.Nullable[string] `json:"external_id,omitempty"`
+	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+	AccountType *AccountType `json:"account_type,omitempty"`
+
+	// ExternalId Optional identifier assigned by an external system.
+	ExternalId nullable.Nullable[string] `json:"external_id,omitempty"`
+
+	// ExternalSystem Optional namespace for `external_id`, such as a provider name.
 	ExternalSystem nullable.Nullable[string] `json:"external_system,omitempty"`
-	IsFeatured     *bool                     `json:"is_featured,omitempty"`
-	IsHidden       *bool                     `json:"is_hidden,omitempty"`
+
+	// IsFeatured Whether the account is featured in prominent selection and display surfaces.
+	IsFeatured *bool `json:"is_featured,omitempty"`
+
+	// IsHidden Whether the account is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // UpdateCategoryRequest defines model for UpdateCategoryRequest.
 type UpdateCategoryRequest struct {
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
 	IsFeatured *bool `json:"is_featured,omitempty"`
-	IsHidden   *bool `json:"is_hidden,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // UpdateExchangeRateRequest defines model for UpdateExchangeRateRequest.
@@ -1777,24 +2001,32 @@ type UpdateExchangeRateRequest struct {
 
 // UpdateMemberHiddenRequest defines model for UpdateMemberHiddenRequest.
 type UpdateMemberHiddenRequest struct {
+	// IsHidden Whether the entity is excluded from default lists.
 	IsHidden bool `json:"is_hidden"`
 }
 
 // UpdateMemberRequest defines model for UpdateMemberRequest.
 type UpdateMemberRequest struct {
+	// Name Unique flat household-member name.
 	Name string `json:"name"`
 }
 
 // UpdateTagRequest defines model for UpdateTagRequest.
 type UpdateTagRequest struct {
+	// IsFeatured Whether the entity is featured in prominent selection and display surfaces.
 	IsFeatured *bool `json:"is_featured,omitempty"`
-	IsHidden   *bool `json:"is_hidden,omitempty"`
+
+	// IsHidden Whether the entity is excluded from default lists.
+	IsHidden *bool `json:"is_hidden,omitempty"`
 }
 
 // UpdateTransactionRequest defines model for UpdateTransactionRequest.
 type UpdateTransactionRequest struct {
-	InitiatedDate openapi_types.Date           `json:"initiated_date"`
-	Records       []CreateJournalRecordRequest `json:"records"`
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// Records Complete journal-record set; active records must balance to zero within each currency.
+	Records []CreateJournalRecordRequest `json:"records"`
 }
 
 // AccountFQNConflict defines model for AccountFQNConflict.
@@ -1826,14 +2058,29 @@ type TransactionTemplateFQNConflict = ErrorResponse
 
 // ListAccountsParams defines parameters for ListAccounts.
 type ListAccountsParams struct {
-	IncludeHidden     *bool                      `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool                      `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	AccountType       *AccountType               `form:"account_type,omitempty" json:"account_type,omitempty"`
-	IsFeatured        *bool                      `form:"is_featured,omitempty" json:"is_featured,omitempty"`
-	Sort              *ListAccountsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListAccountsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                       `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                       `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// AccountType Filter by balance, flow, or system account type.
+	AccountType *AccountType `form:"account_type,omitempty" json:"account_type,omitempty"`
+
+	// IsFeatured Filter by featured state when provided.
+	IsFeatured *bool `form:"is_featured,omitempty" json:"is_featured,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListAccountsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListAccountsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListAccountsParamsSort defines parameters for ListAccounts.
@@ -1844,27 +2091,41 @@ type ListAccountsParamsSortDir string
 
 // ListAccountBalancesParams defines parameters for ListAccountBalances.
 type ListAccountBalancesParams struct {
-	IncludeHidden *bool    `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	AccountIds    *[]int64 `form:"account_ids,omitempty" json:"account_ids,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// AccountIds Account identifiers to include; omit to return all eligible active balance accounts.
+	AccountIds *[]int64 `form:"account_ids,omitempty" json:"account_ids,omitempty"`
 }
 
 // ListAccountGroupsParams defines parameters for ListAccountGroups.
 type ListAccountGroupsParams struct {
+	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 }
 
 // GetAccountParams defines parameters for GetAccount.
 type GetAccountParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // ListCreditLimitHistoryParams defines parameters for ListCreditLimitHistory.
 type ListCreditLimitHistoryParams struct {
-	IncludeTombstoned *bool                                `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	Sort              *ListCreditLimitHistoryParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListCreditLimitHistoryParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                                 `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                                 `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `effective_date`.
+	Sort *ListCreditLimitHistoryParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListCreditLimitHistoryParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListCreditLimitHistoryParamsSort defines parameters for ListCreditLimitHistory.
@@ -1875,15 +2136,22 @@ type ListCreditLimitHistoryParamsSortDir string
 
 // SearchAccountJournalRecordsParams defines parameters for SearchAccountJournalRecords.
 type SearchAccountJournalRecordsParams struct {
+	// CategoryId Category identifier to target or filter by.
 	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
-	TagId      *int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
-	MemberId   *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
+
+	// TagId Tag identifier to target or filter by.
+	TagId *int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+
+	// MemberId Household-member identifier to target or filter by.
+	MemberId *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
 	// PostingStatus Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
 	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 
 	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
-	IncludeExpected      *bool                 `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+	IncludeExpected *bool `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+
+	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -1896,38 +2164,76 @@ type SearchAccountJournalRecordsParams struct {
 	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
 
 	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	AmountUsdMax *string `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+
+	// InitiatedDateFrom Minimum transaction initiated date in YYYY-MM-DD format.
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
-	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+
+	// InitiatedDateTo Maximum transaction initiated date in YYYY-MM-DD format.
+	InitiatedDateTo *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+
+	// PendingDateFrom Minimum pending timestamp in ISO 8601 format.
+	PendingDateFrom *time.Time `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+
+	// PendingDateTo Maximum pending timestamp in ISO 8601 format.
+	PendingDateTo *time.Time `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+
+	// PostedDateFrom Minimum posted timestamp in ISO 8601 format.
+	PostedDateFrom *time.Time `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+
+	// PostedDateTo Maximum posted timestamp in ISO 8601 format.
+	PostedDateTo *time.Time `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+
+	// MemoContains Memo substring filter for matching journal records.
+	MemoContains *string `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 
 	// IncludeRunningBalance When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.
 	IncludeRunningBalance *bool `form:"include_running_balance,omitempty" json:"include_running_balance,omitempty"`
-	Limit                 *int  `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset                *int  `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListBackgroundOperationRunEnvelopesParams defines parameters for ListBackgroundOperationRunEnvelopes.
 type ListBackgroundOperationRunEnvelopesParams struct {
+	// OperationId Filter run history to one registered background-operation type.
 	OperationId *BackgroundOperationId `form:"operation_id,omitempty" json:"operation_id,omitempty"`
-	Limit       *int                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset      *int                   `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListCategoriesParams defines parameters for ListCategories.
 type ListCategoriesParams struct {
-	IncludeHidden     *bool                        `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool                        `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	IsFeatured        *bool                        `form:"is_featured,omitempty" json:"is_featured,omitempty"`
-	EconomicIntent    *[]CategoryEconomicIntent    `form:"economic_intent,omitempty" json:"economic_intent,omitempty"`
-	Sort              *ListCategoriesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListCategoriesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                         `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                         `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// IsFeatured Filter by featured state when provided.
+	IsFeatured *bool `form:"is_featured,omitempty" json:"is_featured,omitempty"`
+
+	// EconomicIntent Filter by one or more category economic intents.
+	EconomicIntent *[]CategoryEconomicIntent `form:"economic_intent,omitempty" json:"economic_intent,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListCategoriesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListCategoriesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListCategoriesParamsSort defines parameters for ListCategories.
@@ -1938,29 +2244,47 @@ type ListCategoriesParamsSortDir string
 
 // ListCategoryGroupsParams defines parameters for ListCategoryGroups.
 type ListCategoryGroupsParams struct {
+	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 }
 
 // GetCategoryParams defines parameters for GetCategory.
 type GetCategoryParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // GetCreditLimitHistoryParams defines parameters for GetCreditLimitHistory.
 type GetCreditLimitHistoryParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // ListExchangeRatesParams defines parameters for ListExchangeRates.
 type ListExchangeRatesParams struct {
-	FromCurrency      *string                         `form:"from_currency,omitempty" json:"from_currency,omitempty"`
-	ToCurrency        *string                         `form:"to_currency,omitempty" json:"to_currency,omitempty"`
-	EffectiveDate     *time.Time                      `form:"effective_date,omitempty" json:"effective_date,omitempty"`
-	IncludeTombstoned *bool                           `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	Sort              *ListExchangeRatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListExchangeRatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                            `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                            `form:"offset,omitempty" json:"offset,omitempty"`
+	// FromCurrency Source currency code filter, using ISO 4217 or the `C::` crypto prefix.
+	FromCurrency *string `form:"from_currency,omitempty" json:"from_currency,omitempty"`
+
+	// ToCurrency Destination currency code filter, using ISO 4217 or the `C::` crypto prefix.
+	ToCurrency *string `form:"to_currency,omitempty" json:"to_currency,omitempty"`
+
+	// EffectiveDate Exact ISO 8601 effective timestamp filter.
+	EffectiveDate *time.Time `form:"effective_date,omitempty" json:"effective_date,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `currency_pair`.
+	Sort *ListExchangeRatesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListExchangeRatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListExchangeRatesParamsSort defines parameters for ListExchangeRates.
@@ -1971,17 +2295,29 @@ type ListExchangeRatesParamsSortDir string
 
 // GetExchangeRateParams defines parameters for GetExchangeRate.
 type GetExchangeRateParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
-	IncludeHidden     *bool                     `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool                     `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	Sort              *ListMembersParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListMembersParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                      `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                      `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `name`.
+	Sort *ListMembersParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListMembersParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListMembersParamsSort defines parameters for ListMembers.
@@ -1992,24 +2328,34 @@ type ListMembersParamsSortDir string
 
 // GetMemberParams defines parameters for GetMember.
 type GetMemberParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // SearchJournalRecordsParams defines parameters for SearchJournalRecords.
 type SearchJournalRecordsParams struct {
+	// AccountId Account identifier to target or filter by.
 	AccountId *int64 `form:"account_id,omitempty" json:"account_id,omitempty"`
 
 	// AccountFqnPrefix Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.
 	AccountFqnPrefix *string `form:"account_fqn_prefix,omitempty" json:"account_fqn_prefix,omitempty"`
-	CategoryId       *int64  `form:"category_id,omitempty" json:"category_id,omitempty"`
-	TagId            *int64  `form:"tag_id,omitempty" json:"tag_id,omitempty"`
-	MemberId         *int64  `form:"member_id,omitempty" json:"member_id,omitempty"`
+
+	// CategoryId Category identifier to target or filter by.
+	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
+
+	// TagId Tag identifier to target or filter by.
+	TagId *int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+
+	// MemberId Household-member identifier to target or filter by.
+	MemberId *int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
 	// PostingStatus Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.
 	PostingStatus *PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
 
 	// IncludeExpected Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.
-	IncludeExpected      *bool                 `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+	IncludeExpected *bool `form:"include_expected,omitempty" json:"include_expected,omitempty"`
+
+	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -2022,24 +2368,49 @@ type SearchJournalRecordsParams struct {
 	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
 
 	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	AmountUsdMax *string `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+
+	// InitiatedDateFrom Minimum transaction initiated date in YYYY-MM-DD format.
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
-	MemoContains      *string             `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
-	Limit             *int                `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// InitiatedDateTo Maximum transaction initiated date in YYYY-MM-DD format.
+	InitiatedDateTo *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+
+	// PendingDateFrom Minimum pending timestamp in ISO 8601 format.
+	PendingDateFrom *time.Time `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+
+	// PendingDateTo Maximum pending timestamp in ISO 8601 format.
+	PendingDateTo *time.Time `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+
+	// PostedDateFrom Minimum posted timestamp in ISO 8601 format.
+	PostedDateFrom *time.Time `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+
+	// PostedDateTo Maximum posted timestamp in ISO 8601 format.
+	PostedDateTo *time.Time `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+
+	// MemoContains Memo substring filter for matching journal records.
+	MemoContains *string `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListRecurringDefinitionsParams defines parameters for ListRecurringDefinitions.
 type ListRecurringDefinitionsParams struct {
-	Sort    *ListRecurringDefinitionsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListRecurringDefinitionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
 	SortDir *ListRecurringDefinitionsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit   *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset  *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListRecurringDefinitionsParamsSort defines parameters for ListRecurringDefinitions.
@@ -2050,12 +2421,23 @@ type ListRecurringDefinitionsParamsSortDir string
 
 // ListRecurringOccurrencesParams defines parameters for ListRecurringOccurrences.
 type ListRecurringOccurrencesParams struct {
-	RecurringDefinitionId *int64                                 `form:"recurring_definition_id,omitempty" json:"recurring_definition_id,omitempty"`
-	Status                *[]RecurringOccurrenceStatus           `form:"status,omitempty" json:"status,omitempty"`
-	Sort                  *ListRecurringOccurrencesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir               *ListRecurringOccurrencesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit                 *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset                *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+	// RecurringDefinitionId Numeric identifier of the recurring definition to target or filter by.
+	RecurringDefinitionId *int64 `form:"recurring_definition_id,omitempty" json:"recurring_definition_id,omitempty"`
+
+	// Status Filter by one or more recurring-occurrence lifecycle statuses.
+	Status *[]RecurringOccurrenceStatus `form:"status,omitempty" json:"status,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `scheduled_date`.
+	Sort *ListRecurringOccurrencesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListRecurringOccurrencesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListRecurringOccurrencesParamsSort defines parameters for ListRecurringOccurrences.
@@ -2066,13 +2448,26 @@ type ListRecurringOccurrencesParamsSortDir string
 
 // ListTagsParams defines parameters for ListTags.
 type ListTagsParams struct {
-	IncludeHidden     *bool                  `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
-	IncludeTombstoned *bool                  `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
-	IsFeatured        *bool                  `form:"is_featured,omitempty" json:"is_featured,omitempty"`
-	Sort              *ListTagsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
-	SortDir           *ListTagsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit             *int                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset            *int                   `form:"offset,omitempty" json:"offset,omitempty"`
+	// IncludeHidden Include hidden active entities; defaults to false.
+	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
+
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
+	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
+
+	// IsFeatured Filter by featured state when provided.
+	IsFeatured *bool `form:"is_featured,omitempty" json:"is_featured,omitempty"`
+
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListTagsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *ListTagsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListTagsParamsSort defines parameters for ListTags.
@@ -2083,20 +2478,29 @@ type ListTagsParamsSortDir string
 
 // ListTagGroupsParams defines parameters for ListTagGroups.
 type ListTagGroupsParams struct {
+	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 }
 
 // GetTagParams defines parameters for GetTag.
 type GetTagParams struct {
+	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 }
 
 // ListTransactionTemplatesParams defines parameters for ListTransactionTemplates.
 type ListTransactionTemplatesParams struct {
-	Sort    *ListTransactionTemplatesParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	// Sort Field used to sort matching results; defaults to `fqn`.
+	Sort *ListTransactionTemplatesParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
 	SortDir *ListTransactionTemplatesParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit   *int                                   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset  *int                                   `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListTransactionTemplatesParamsSort defines parameters for ListTransactionTemplates.
@@ -2107,20 +2511,37 @@ type ListTransactionTemplatesParamsSortDir string
 
 // ListTransactionsParams defines parameters for ListTransactions.
 type ListTransactionsParams struct {
-	Sort    *ListTransactionsParamsSort    `form:"sort,omitempty" json:"sort,omitempty"`
+	// Sort Field used to sort matching results; defaults to `initiated_date`.
+	Sort *ListTransactionsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `desc`.
 	SortDir *ListTransactionsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
-	Limit   *int                           `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset  *int                           `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based number of matching results to skip.
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 
 	// AnchorDate Date-only anchor that returns the page containing the first transaction at or before this initiated date. If the anchor is older than every transaction, the page clamps to the oldest transaction page. Valid only with initiated_date descending ordering and overrides offset when present.
 	AnchorDate *openapi_types.Date `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
-	AccountId  *[]int64            `form:"account_id,omitempty" json:"account_id,omitempty"`
-	CategoryId *[]int64            `form:"category_id,omitempty" json:"category_id,omitempty"`
-	TagId      *[]int64            `form:"tag_id,omitempty" json:"tag_id,omitempty"`
-	MemberId   *[]int64            `form:"member_id,omitempty" json:"member_id,omitempty"`
+
+	// AccountId Account identifier to target or filter by.
+	AccountId *[]int64 `form:"account_id,omitempty" json:"account_id,omitempty"`
+
+	// CategoryId Category identifier to target or filter by.
+	CategoryId *[]int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
+
+	// TagId Tag identifier to target or filter by.
+	TagId *[]int64 `form:"tag_id,omitempty" json:"tag_id,omitempty"`
+
+	// MemberId Household-member identifier to target or filter by.
+	MemberId *[]int64 `form:"member_id,omitempty" json:"member_id,omitempty"`
 
 	// PostingStatus Filters transactions by active record posting status. Expected transactions are excluded by default and returned only when this filter explicitly includes `expected`.
-	PostingStatus    *[]PostingStatus    `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+	PostingStatus *[]PostingStatus `form:"posting_status,omitempty" json:"posting_status,omitempty"`
+
+	// TransactionClass Filter by one or more server-derived transaction classes.
 	TransactionClass *[]TransactionClass `form:"transaction_class,omitempty" json:"transaction_class,omitempty"`
 
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
@@ -2133,13 +2554,25 @@ type ListTransactionsParams struct {
 	AmountUsdMin *string `form:"amount_usd_min,omitempty" json:"amount_usd_min,omitempty"`
 
 	// AmountUsdMax JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits.
-	AmountUsdMax      *string             `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+	AmountUsdMax *string `form:"amount_usd_max,omitempty" json:"amount_usd_max,omitempty"`
+
+	// InitiatedDateFrom Minimum transaction initiated date in YYYY-MM-DD format.
 	InitiatedDateFrom *openapi_types.Date `form:"initiated_date_from,omitempty" json:"initiated_date_from,omitempty"`
-	InitiatedDateTo   *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
-	PendingDateFrom   *time.Time          `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
-	PendingDateTo     *time.Time          `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
-	PostedDateFrom    *time.Time          `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
-	PostedDateTo      *time.Time          `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
+
+	// InitiatedDateTo Maximum transaction initiated date in YYYY-MM-DD format.
+	InitiatedDateTo *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
+
+	// PendingDateFrom Minimum pending timestamp in ISO 8601 format.
+	PendingDateFrom *time.Time `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
+
+	// PendingDateTo Maximum pending timestamp in ISO 8601 format.
+	PendingDateTo *time.Time `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
+
+	// PostedDateFrom Minimum posted timestamp in ISO 8601 format.
+	PostedDateFrom *time.Time `form:"posted_date_from,omitempty" json:"posted_date_from,omitempty"`
+
+	// PostedDateTo Maximum posted timestamp in ISO 8601 format.
+	PostedDateTo *time.Time `form:"posted_date_to,omitempty" json:"posted_date_to,omitempty"`
 
 	// Search Case-insensitive search over active journal records. Contains-match fields are record memo, counterparty account name, account FQN, category FQN, tag FQN, member name, and account external_id. Record currency matches by exact case-insensitive code equality. Account external_system is intentionally excluded to avoid broad system-label matches.
 	Search *string `form:"search,omitempty" json:"search,omitempty"`
@@ -2153,6 +2586,7 @@ type ListTransactionsParamsSortDir string
 
 // GetTransactionMonthTotalsParams defines parameters for GetTransactionMonthTotals.
 type GetTransactionMonthTotalsParams struct {
+	// Month Civil month to aggregate in YYYY-MM format.
 	Month string `form:"month" json:"month"`
 }
 

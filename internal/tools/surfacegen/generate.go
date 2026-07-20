@@ -255,12 +255,19 @@ func writeCatalog(output *bytes.Buffer, surface string, operations []generatedOp
 
 func writeOperation(output *bytes.Buffer, surface string, generated generatedOperation) {
 	operation := generated.info.operation
+	description := operation.Description
+	if surface == "CLI" && generated.decisions.CLI.Description != nil {
+		description = *generated.decisions.CLI.Description
+	}
+	if surface == "MCP" && generated.decisions.MCP.Description != nil {
+		description = *generated.decisions.MCP.Description
+	}
 	fmt.Fprintln(output, "\t\t{")
 	fmt.Fprintf(output, "\t\t\tID: %q,\n", generated.id)
 	fmt.Fprintf(output, "\t\t\tMethod: %q,\n", generated.info.method)
 	fmt.Fprintf(output, "\t\t\tPath: %q,\n", generated.info.path)
 	fmt.Fprintf(output, "\t\t\tSummary: %q,\n", operation.Summary)
-	fmt.Fprintf(output, "\t\t\tDescription: %q,\n", operation.Description)
+	fmt.Fprintf(output, "\t\t\tDescription: %q,\n", description)
 	if decision := generated.decisions.CLI; surface == "CLI" && decision != nil && decision.State == "exposed" {
 		area, _ := resolveCLI("", generated.id, operation, decision)
 		if decision.RunWait == nil {

@@ -98,7 +98,10 @@ func newServer(
 	extensions []Extension,
 ) (*Server, error) {
 
-	serverOptions := &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}}
+	serverOptions := &mcp.ServerOptions{
+		Capabilities: &mcp.ServerCapabilities{},
+		Instructions: serverInstructions,
+	}
 	if options.Diagnostics != nil {
 		serverOptions.Logger = slog.New(slog.NewTextHandler(options.Diagnostics, &slog.HandlerOptions{
 			Level: slog.LevelWarn,
