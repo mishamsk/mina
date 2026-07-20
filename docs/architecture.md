@@ -27,9 +27,9 @@ Mina is a local-first personal finance system for one household.
 Imports and runtime knowledge flow inward toward app-owned service packages. Composition may import every layer.
 
 - `cmd/mina`: one binary, process composition, and top-level Cobra command tree. It delegates client, MCP, serving, and runtime behavior to their owning packages.
-- `internal/httpclient`: generated REST client code, generated operation catalog and invokers, and remote or in-process client session construction and lifecycle.
-- `internal/clientcli`: REST-backed client command tree, request input and output rendering, and hand-written composite client commands.
-- `internal/mcpserver`: REST-backed MCP tool registry, MCP result mapping, stdio and Streamable HTTP protocol handling, and hand-written composite tools.
+- `internal/httpclient`: generated REST client code and remote or in-process client session construction and lifecycle. It carries no CLI or MCP surface knowledge, catalogs, or wrapping invokers.
+- `internal/clientcli`: REST-backed client command tree, generated CLI operation catalog and wrapping invokers, request input and output rendering, and hand-written composite client commands.
+- `internal/mcpserver`: REST-backed MCP tool registry, generated MCP operation catalog and wrapping invokers, MCP result mapping, stdio and Streamable HTTP protocol handling, and hand-written composite tools.
 - `internal/webui`: embedded web UI assets and root browser routing boundary.
 - `internal/appconfig`: local app config source loading, config-file discovery, env parsing, explicit overrides, source precedence, defaults, and source metadata.
 - `internal/runtime`: database lifecycle policy, runtime option handling, and manual composition root.
@@ -49,7 +49,8 @@ Rules:
 - `internal/store` owns DB-facing row types, migrations, transactions, DuckDB-specific error mapping, and app-to-DB type conversion.
 - `internal/store` does not know HTTP, OpenAPI, Cobra, or runtime composition.
 - `internal/webui` serves embedded frontend assets and does not own REST handlers, database access, or domain behavior.
-- `internal/clientcli` and `internal/mcpserver` invoke Mina behavior only through generated REST operations owned by `internal/httpclient`; they do not call services, stores, SQL, or runtime application methods.
+- `internal/clientcli` and `internal/mcpserver` invoke Mina behavior only through the generated REST client owned by `internal/httpclient`; they do not call services, stores, SQL, or runtime application methods.
+- `internal/clientcli` and `internal/mcpserver` are imported only by composition (`cmd/mina`, and `internal/runtime` for the embedded MCP handler); their generated catalogs are private to their surface.
 - `internal/mcpserver` owns MCP protocol behavior; `internal/httpapi` remains the REST protocol and application transport boundary.
 - `internal/runtime` wires concrete implementations and owns explicit one-shot and long-running execution profiles. Avoid hidden global state for database handles, config, clocks, listeners, or services.
 - `internal/appconfig` does not import runtime, store, HTTP, OpenAPI, background, provider, service, Cobra, or pflag packages.

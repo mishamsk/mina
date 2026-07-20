@@ -75,19 +75,19 @@ operations:
 - A Mina-owned build-time generator reads the OpenAPI document and surface config together.
 - The generator uses `kin-openapi` for OpenAPI loading and validation.
 - The existing `oapi-codegen` client remains the only generated REST client.
-- The generator emits one shared operation catalog plus typed per-operation invokers.
-- Each invoker calls the matching `httpclient.ClientWithResponsesInterface` method.
+- The generator emits a per-surface operation catalog with typed wrapping invokers into each surface package; `internal/httpclient` receives no generated surface output.
+- Each wrapping invoker calls the matching `httpclient.ClientWithResponsesInterface` method.
 - Body operations use generated arbitrary-body client methods so JSON nulls and unknown fields reach REST validation unchanged.
-- Generated invokers normalize status, headers, and raw response bodies into one transport-neutral result.
-- Generic CLI and MCP registrars build their surfaces from the generated catalog.
-- An operation excluded from both surfaces does not need a generated invoker.
+- Generated wrapping invokers normalize status, headers, and raw response bodies into one transport-neutral result.
+- Generic CLI and MCP registrars build their surfaces from their own package's generated catalog.
+- A surface's catalog contains exactly its exposed operations; an operation excluded from a surface has no entry or wrapping invoker there.
 - Unsupported OpenAPI shapes fail generation when the operation is exposed; they are never silently omitted.
 
 ## Package Boundaries
 
-- `internal/httpclient`: generated REST client types and methods, shared generated operation metadata and invokers, and remote or in-process sessions.
-- `internal/clientcli`: generated-catalog Cobra registration, CLI rendering, and hand-written command registration.
-- `internal/mcpserver`: generated-catalog MCP registration, MCP result mapping, and hand-written tool registration.
+- `internal/httpclient`: generated REST client types and methods and remote or in-process sessions; no surface metadata, catalogs, or wrapping invokers.
+- `internal/clientcli`: generated CLI operation catalog and wrapping invokers, Cobra registration, CLI rendering, and hand-written command registration.
+- `internal/mcpserver`: generated MCP operation catalog and wrapping invokers, MCP registration, MCP result mapping, and hand-written tool registration.
 - `internal/tools/surfacegen`: build-time generator; it contains no product behavior.
 - `internal/runtime`: database lifecycle, application composition, REST handler construction, and operation execution policy.
 - `cmd/mina`: Cobra parsing, process I/O, signals, and delegation to the owning packages.
