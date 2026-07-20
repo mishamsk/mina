@@ -21,13 +21,13 @@ type Operation struct {
 
 // CLIOperation describes the resolved CLI exposure of an operation.
 type CLIOperation struct {
-	Area       string
-	Name       string
-	Completion *CLICompletion
+	Area    string
+	Name    string
+	RunWait *RunWait
 }
 
-// CLICompletion describes REST polling metadata for an asynchronous CLI operation.
-type CLICompletion struct {
+// RunWait describes REST polling metadata for an asynchronous CLI operation.
+type RunWait struct {
 	StatusOperationID   string
 	RunIDResponseField  string
 	StatusPathParameter string

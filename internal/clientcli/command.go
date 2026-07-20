@@ -24,12 +24,12 @@ import (
 )
 
 const (
-	clientCommandName      = "client"
-	serverFlagName         = "server"
-	databaseFlagName       = "db"
-	yesFlagName            = "yes"
-	jsonFlagName           = "json"
-	completionPollInterval = 25 * time.Millisecond
+	clientCommandName   = "client"
+	serverFlagName      = "server"
+	databaseFlagName    = "db"
+	yesFlagName         = "yes"
+	jsonFlagName        = "json"
+	runWaitPollInterval = 25 * time.Millisecond
 )
 
 var reservedBodyFlagNames = map[string]struct{}{
@@ -66,12 +66,6 @@ type Session struct {
 // Client returns the generated REST client owned by the session.
 func (s *Session) Client() httpclient.ClientWithResponsesInterface {
 	return s.client
-}
-
-// Operations returns a copy of the generated operation catalog available to
-// the session.
-func (s *Session) Operations() []Operation {
-	return Operations()
 }
 
 // Close releases lifecycle resources owned by the session.
@@ -261,8 +255,8 @@ func newOperationCommand(operation Operation, sessionFactory SessionFactory) *co
 		if result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
 			return reportHTTPFailure(cmd, result)
 		}
-		if session.local && operation.CLI.Completion != nil {
-			return waitForLocalCompletion(cmd, session.Client(), operation.CLI.Completion, result.Body)
+		if session.local && operation.CLI.RunWait != nil {
+			return waitForLocalRun(cmd, session.Client(), operation.CLI.RunWait, result.Body)
 		}
 		if len(result.Body) == 0 {
 			return nil
@@ -347,21 +341,21 @@ func openSession(command *cobra.Command, options CommandOptions) (*Session, erro
 	return &Session{client: client, close: local.Close, local: true}, nil
 }
 
-func waitForLocalCompletion(
+func waitForLocalRun(
 	command *cobra.Command,
 	client httpclient.ClientWithResponsesInterface,
-	completion *CLICompletion,
+	runWait *RunWait,
 	triggerBody []byte,
 ) error {
-	runID, err := responseFieldString(triggerBody, completion.RunIDResponseField)
+	runID, err := responseFieldString(triggerBody, runWait.RunIDResponseField)
 	if err != nil {
-		return reportError(command, fmt.Errorf("read completion run identifier: %w", err))
+		return reportError(command, fmt.Errorf("read run-wait run identifier: %w", err))
 	}
-	statusOperation, err := operationByID(completion.StatusOperationID)
+	statusOperation, err := operationByID(runWait.StatusOperationID)
 	if err != nil {
 		return reportError(command, err)
 	}
-	statusInput, err := completionStatusInput(statusOperation, completion.StatusPathParameter, runID)
+	statusInput, err := runWaitStatusInput(statusOperation, runWait.StatusPathParameter, runID)
 	if err != nil {
 		return reportError(command, err)
 	}
@@ -374,12 +368,12 @@ func waitForLocalCompletion(
 		if result.StatusCode < http.StatusOK || result.StatusCode >= http.StatusMultipleChoices {
 			return reportHTTPFailure(command, result)
 		}
-		outcome, fieldErr := responseFieldString(result.Body, completion.TerminalField)
+		outcome, fieldErr := responseFieldString(result.Body, runWait.TerminalField)
 		if fieldErr != nil {
-			return reportError(command, fmt.Errorf("read completion terminal state: %w", fieldErr))
+			return reportError(command, fmt.Errorf("read run-wait terminal state: %w", fieldErr))
 		}
-		if slices.Contains(completion.TerminalValues, outcome) {
-			if slices.Contains(completion.FailureValues, outcome) {
+		if slices.Contains(runWait.TerminalValues, outcome) {
+			if slices.Contains(runWait.FailureValues, outcome) {
 				if writeErr := writeLine(command.ErrOrStderr(), result.Body); writeErr != nil {
 					return &ReportedError{err: writeErr}
 				}
@@ -390,7 +384,7 @@ func waitForLocalCompletion(
 			}
 			return nil
 		}
-		if err := waitForCompletionPoll(command.Context()); err != nil {
+		if err := waitForRunWaitPoll(command.Context()); err != nil {
 			return reportError(command, err)
 		}
 	}
@@ -402,10 +396,10 @@ func operationByID(operationID string) (Operation, error) {
 			return operation, nil
 		}
 	}
-	return Operation{}, fmt.Errorf("completion status operation %q is unavailable", operationID)
+	return Operation{}, fmt.Errorf("run-wait status operation %q is unavailable", operationID)
 }
 
-func completionStatusInput(
+func runWaitStatusInput(
 	operation Operation,
 	pathParameter string,
 	runID string,
@@ -423,7 +417,7 @@ func completionStatusInput(
 	}
 	if !found {
 		return InvocationInput{}, fmt.Errorf(
-			"completion status operation %q has no path parameter %q",
+			"run-wait status operation %q has no path parameter %q",
 			operation.ID,
 			pathParameter,
 		)
@@ -460,8 +454,8 @@ func responseFieldString(body []byte, field string) (string, error) {
 	}
 }
 
-func waitForCompletionPoll(ctx context.Context) error {
-	timer := time.NewTimer(completionPollInterval)
+func waitForRunWaitPoll(ctx context.Context) error {
+	timer := time.NewTimer(runWaitPollInterval)
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():

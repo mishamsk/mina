@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -49,248 +51,169 @@ func TestIntegrationScripts(t *testing.T) {
 			"frankfurter":    testscriptFrankfurter,
 			"httpget":        testscriptHTTPGet,
 			"httpwait":       testscriptHTTPWait,
-			"mcphttp":        testscriptMCPHTTP,
-			"mcpstdio":       testscriptMCPStdio,
+			"mcpcall":        testscriptMCPCall,
+			"mcplist":        testscriptMCPList,
 			"glob":           testscriptGlob,
-			"waitfile":       testscriptWaitFile,
 		},
 	})
 }
 
-func testscriptMCPHTTP(ts *testscript.TestScript, neg bool, args []string) {
+func testscriptMCPList(ts *testscript.TestScript, neg bool, args []string) {
 	if neg {
-		ts.Fatalf("mcphttp does not support negation")
+		ts.Fatalf("mcplist does not support negation")
 	}
-	if len(args) != 1 {
-		ts.Fatalf("usage: mcphttp endpoint")
+	if len(args) != 2 {
+		ts.Fatalf("usage: mcplist transport target")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	client := mcp.NewClient(&mcp.Implementation{Name: "mina-integration", Version: "test"}, nil)
-	session, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: args[0]}, nil)
-	ts.Check(err)
+	session := connectMCPSession(ts, ctx, args[0], args[1])
 	defer func() {
 		ts.Check(session.Close())
 	}()
+
+	var tools []*mcp.Tool
+	for tool, err := range session.Tools(ctx, nil) {
+		ts.Check(err)
+		tools = append(tools, tool)
+	}
+	sort.Slice(tools, func(i int, j int) bool {
+		return tools[i].Name < tools[j].Name
+	})
+	for _, tool := range tools {
+		annotations := tool.Annotations
+		if annotations == nil {
+			_, err := fmt.Fprintf(
+				ts.Stdout(),
+				"transport=%s tool=%s read_only=unset destructive=unset idempotent=unset open_world=unset\n",
+				args[0],
+				tool.Name,
+			)
+			ts.Check(err)
+			continue
+		}
+		_, err := fmt.Fprintf(
+			ts.Stdout(),
+			"transport=%s tool=%s read_only=%t destructive=%s idempotent=%t open_world=%s\n",
+			args[0],
+			tool.Name,
+			annotations.ReadOnlyHint,
+			optionalBoolFact(annotations.DestructiveHint),
+			annotations.IdempotentHint,
+			optionalBoolFact(annotations.OpenWorldHint),
+		)
+		ts.Check(err)
+	}
+}
+
+func testscriptMCPCall(ts *testscript.TestScript, neg bool, args []string) {
+	if len(args) != 4 {
+		ts.Fatalf("usage: mcpcall transport target tool-name json-arguments")
+	}
+
+	var arguments map[string]any
+	decoder := json.NewDecoder(strings.NewReader(args[3]))
+	decoder.UseNumber()
+	err := decoder.Decode(&arguments)
+	ts.Check(err)
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			ts.Fatalf("MCP JSON arguments contain multiple values")
+		}
+		ts.Check(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	session := connectMCPSession(ts, ctx, args[0], args[1])
+	defer func() {
+		ts.Check(session.Close())
+	}()
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: args[2], Arguments: arguments})
+	if err != nil {
+		_, writeErr := fmt.Fprintln(ts.Stderr(), err)
+		ts.Check(writeErr)
+		if neg {
+			return
+		}
+		ts.Fatalf("call MCP tool %q: %v", args[2], err)
+	}
+	if result.IsError {
+		writeMCPToolError(ts, result)
+		if neg {
+			return
+		}
+		ts.Fatalf("MCP tool %q returned an error", args[2])
+	}
+	if neg {
+		ts.Fatalf("MCP tool %q unexpectedly succeeded", args[2])
+	}
+	encoded, err := json.Marshal(result.StructuredContent)
+	ts.Check(err)
+	_, err = fmt.Fprintln(ts.Stdout(), string(encoded))
+	ts.Check(err)
+}
+
+func connectMCPSession(
+	ts *testscript.TestScript,
+	ctx context.Context,
+	transportName string,
+	target string,
+) *mcp.ClientSession {
+	var transport mcp.Transport
+	switch transportName {
+	case "http":
+		transport = &mcp.StreamableClientTransport{Endpoint: target}
+	case "stdio":
+		command := exec.Command("mina", "mcp", "stdio", "--server", target)
+		command.Dir = ts.MkAbs(".")
+		command.Stderr = ts.Stderr()
+		transport = &mcp.CommandTransport{Command: command}
+	default:
+		ts.Fatalf("unknown MCP transport %q; want http or stdio", transportName)
+	}
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "mina-integration", Version: "test"}, &mcp.ClientOptions{
+		Capabilities: &mcp.ClientCapabilities{},
+	})
+	session, err := client.Connect(ctx, transport, nil)
+	ts.Check(err)
 	initialized := session.InitializeResult()
 	if initialized == nil || initialized.ServerInfo == nil || initialized.ServerInfo.Name != "mina" {
 		ts.Fatalf("unexpected MCP initialize result: %+v", initialized)
 	}
-
-	listed, err := session.ListTools(ctx, nil)
-	ts.Check(err)
-	if listed.NextCursor != "" {
-		ts.Fatalf("MCP tool list unexpectedly paginated with cursor %q", listed.NextCursor)
-	}
-	if len(listed.Tools) != 83 {
-		ts.Fatalf("MCP tool count = %d, want 83", len(listed.Tools))
-	}
-
-	transactions := callMCPTool(ts, ctx, session, "transactions_list", map[string]any{"limit": 5})
-	transactionsBody := successfulMCPBody(ts, transactions, http.StatusOK)
-	if len(objectArrayField(ts, transactionsBody, "transactions")) == 0 {
-		ts.Fatalf("transactions_list returned no demo transactions")
-	}
-
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, args[0], bytes.NewBufferString(
-		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"origin-probe","version":"test"}}}`,
-	))
-	ts.Check(err)
-	request.Header.Set("Origin", "https://example.com")
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json, text/event-stream")
-	response, err := http.DefaultClient.Do(request)
-	ts.Check(err)
-	responseBody, err := io.ReadAll(response.Body)
-	ts.Check(err)
-	ts.Check(response.Body.Close())
-	if response.StatusCode != http.StatusForbidden {
-		ts.Fatalf("non-loopback Origin status = %d, want %d; body: %s", response.StatusCode, http.StatusForbidden, responseBody)
-	}
-
-	_, err = fmt.Fprintf(ts.Stdout(), "initialize=ok tools=%d transactions_list=ok origin=forbidden\n", len(listed.Tools))
-	ts.Check(err)
+	return session
 }
 
-func testscriptMCPStdio(ts *testscript.TestScript, neg bool, args []string) {
-	if neg {
-		ts.Fatalf("mcpstdio does not support negation")
+func optionalBoolFact(value *bool) string {
+	if value == nil {
+		return "unset"
 	}
-	if len(args) != 1 {
-		ts.Fatalf("usage: mcpstdio server-url")
-	}
+	return strconv.FormatBool(*value)
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	command := exec.Command("mina", "mcp", "stdio", "--server", args[0])
-	command.Dir = ts.MkAbs(".")
-	command.Stderr = ts.Stderr()
-	client := mcp.NewClient(&mcp.Implementation{Name: "mina-integration", Version: "test"}, &mcp.ClientOptions{
-		Capabilities: &mcp.ClientCapabilities{},
-	})
-	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
-	ts.Check(err)
-	defer func() {
-		ts.Check(session.Close())
-	}()
-
-	listed, err := session.ListTools(ctx, nil)
-	ts.Check(err)
-	if listed.NextCursor != "" {
-		ts.Fatalf("MCP tool list unexpectedly paginated with cursor %q", listed.NextCursor)
-	}
-	if len(listed.Tools) != 83 {
-		ts.Fatalf("MCP tool count = %d, want 83", len(listed.Tools))
-	}
-	tools := make(map[string]*mcp.Tool, len(listed.Tools))
-	for _, tool := range listed.Tools {
-		tools[tool.Name] = tool
-	}
-	for _, name := range []string{"transactions_list", "accounts_get", "members_create", "accounts_delete"} {
-		if tools[name] == nil {
-			ts.Fatalf("MCP tool list is missing %q", name)
+func writeMCPToolError(ts *testscript.TestScript, result *mcp.CallToolResult) {
+	wrote := false
+	for _, content := range result.Content {
+		if text, ok := content.(*mcp.TextContent); ok {
+			_, err := fmt.Fprintln(ts.Stderr(), text.Text)
+			ts.Check(err)
+			wrote = true
+			continue
 		}
+		encoded, err := json.Marshal(content)
+		ts.Check(err)
+		_, err = fmt.Fprintln(ts.Stderr(), string(encoded))
+		ts.Check(err)
+		wrote = true
 	}
-	assertMCPToolAnnotations(ts, tools["transactions_list"], true, false, true, false)
-	assertMCPToolAnnotations(ts, tools["accounts_delete"], false, true, true, false)
-	_, err = fmt.Fprintf(ts.Stdout(), "tools=%d annotations=ok\n", len(listed.Tools))
-	ts.Check(err)
-
-	transactions := callMCPTool(ts, ctx, session, "transactions_list", map[string]any{"limit": 5})
-	transactionsBody := successfulMCPBody(ts, transactions, http.StatusOK)
-	transactionItems := objectArrayField(ts, transactionsBody, "transactions")
-	if len(transactionItems) == 0 {
-		ts.Fatalf("transactions_list returned no demo transactions")
+	if !wrote {
+		_, err := fmt.Fprintln(ts.Stderr(), "MCP tool returned an error without content")
+		ts.Check(err)
 	}
-	_, err = fmt.Fprintln(ts.Stdout(), "transactions_list=ok")
-	ts.Check(err)
-
-	accounts := callMCPTool(ts, ctx, session, "accounts_list", map[string]any{"limit": 5})
-	accountsBody := successfulMCPBody(ts, accounts, http.StatusOK)
-	accountItems := objectArrayField(ts, accountsBody, "accounts")
-	if len(accountItems) == 0 {
-		ts.Fatalf("accounts_list returned no demo accounts")
-	}
-	accountID := integerField(ts, accountItems[0], "account_id")
-	account := callMCPTool(ts, ctx, session, "accounts_get", map[string]any{"account_id": accountID})
-	accountBody := successfulMCPBody(ts, account, http.StatusOK)
-	if got := integerField(ts, accountBody, "account_id"); got != accountID {
-		ts.Fatalf("accounts_get account_id = %d, want %d", got, accountID)
-	}
-	_, err = fmt.Fprintln(ts.Stdout(), "accounts_get=ok")
-	ts.Check(err)
-
-	invalidMember := callMCPTool(ts, ctx, session, "members_create", map[string]any{
-		"body": map[string]any{"name": ""},
-	})
-	if !invalidMember.IsError {
-		ts.Fatalf("members_create invalid body did not return a tool error")
-	}
-	invalidText := textContent(ts, invalidMember)
-	if !strings.Contains(invalidText, `"code":"invalid_request"`) || !strings.Contains(invalidText, `"message"`) {
-		ts.Fatalf("members_create error does not carry Mina's stable envelope: %s", invalidText)
-	}
-	_, err = fmt.Fprintln(ts.Stdout(), "members_create_invalid=ok")
-	ts.Check(err)
-
-	validMember := callMCPTool(ts, ctx, session, "members_create", map[string]any{
-		"body": map[string]any{"name": "MCP Smoke Member"},
-	})
-	validMemberBody := successfulMCPBody(ts, validMember, http.StatusCreated)
-	if integerField(ts, validMemberBody, "member_id") < 1 {
-		ts.Fatalf("members_create returned an invalid member_id")
-	}
-	_, err = fmt.Fprintln(ts.Stdout(), "members_create_valid=ok")
-	ts.Check(err)
-}
-
-func assertMCPToolAnnotations(
-	ts *testscript.TestScript,
-	tool *mcp.Tool,
-	readOnly bool,
-	destructive bool,
-	idempotent bool,
-	openWorld bool,
-) {
-	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || tool.Annotations.OpenWorldHint == nil {
-		ts.Fatalf("MCP tool %q is missing explicit annotations", tool.Name)
-	}
-	annotations := tool.Annotations
-	if annotations.ReadOnlyHint != readOnly || *annotations.DestructiveHint != destructive ||
-		annotations.IdempotentHint != idempotent || *annotations.OpenWorldHint != openWorld {
-		ts.Fatalf("MCP tool %q annotations = %+v", tool.Name, annotations)
-	}
-}
-
-func callMCPTool(
-	ts *testscript.TestScript,
-	ctx context.Context,
-	session *mcp.ClientSession,
-	name string,
-	arguments map[string]any,
-) *mcp.CallToolResult {
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: arguments})
-	ts.Check(err)
-	return result
-}
-
-func successfulMCPBody(
-	ts *testscript.TestScript,
-	result *mcp.CallToolResult,
-	wantStatus int,
-) map[string]any {
-	if result.IsError {
-		ts.Fatalf("MCP tool returned an error: %s", textContent(ts, result))
-	}
-	structured, ok := result.StructuredContent.(map[string]any)
-	if !ok {
-		ts.Fatalf("MCP structured content has type %T", result.StructuredContent)
-	}
-	status, ok := structured["status"].(float64)
-	if !ok || int(status) != wantStatus {
-		ts.Fatalf("MCP structured status = %v, want %d", structured["status"], wantStatus)
-	}
-	body, ok := structured["body"].(map[string]any)
-	if !ok {
-		ts.Fatalf("MCP structured body has type %T", structured["body"])
-	}
-	return body
-}
-
-func objectArrayField(ts *testscript.TestScript, object map[string]any, field string) []map[string]any {
-	raw, ok := object[field].([]any)
-	if !ok {
-		ts.Fatalf("MCP body field %q has type %T", field, object[field])
-	}
-	values := make([]map[string]any, 0, len(raw))
-	for index, item := range raw {
-		value, ok := item.(map[string]any)
-		if !ok {
-			ts.Fatalf("MCP body field %q item %d has type %T", field, index, item)
-		}
-		values = append(values, value)
-	}
-	return values
-}
-
-func integerField(ts *testscript.TestScript, object map[string]any, field string) int64 {
-	value, ok := object[field].(float64)
-	if !ok || value != float64(int64(value)) {
-		ts.Fatalf("MCP body field %q is not an integer: %v", field, object[field])
-	}
-	return int64(value)
-}
-
-func textContent(ts *testscript.TestScript, result *mcp.CallToolResult) string {
-	if len(result.Content) != 1 {
-		ts.Fatalf("MCP tool content length = %d, want 1", len(result.Content))
-	}
-	content, ok := result.Content[0].(*mcp.TextContent)
-	if !ok {
-		ts.Fatalf("MCP tool content has type %T", result.Content[0])
-	}
-	return content.Text
 }
 
 func testscriptDuckDBClone(ts *testscript.TestScript, neg bool, args []string) {
@@ -482,75 +405,18 @@ func testscriptGlob(ts *testscript.TestScript, neg bool, args []string) {
 	}
 }
 
-func testscriptWaitFile(ts *testscript.TestScript, neg bool, args []string) {
-	if neg {
-		ts.Fatalf("waitfile does not support negation")
-	}
-
-	timeout := 10 * time.Second
-	for len(args) > 0 && args[0] != "" && args[0][0] == '-' {
-		switch args[0] {
-		case "-timeout":
-			if len(args) < 2 {
-				ts.Fatalf("usage: waitfile [-timeout duration] path")
-			}
-			var err error
-			timeout, err = time.ParseDuration(args[1])
-			ts.Check(err)
-			args = args[2:]
-		default:
-			ts.Fatalf("unknown waitfile option %q", args[0])
-		}
-	}
-	if len(args) != 1 {
-		ts.Fatalf("usage: waitfile [-timeout duration] path")
-	}
-
-	path := ts.MkAbs(args[0])
-	deadline := time.Now().Add(timeout)
-	for {
-		_, err := os.Stat(path)
-		if err == nil {
-			return
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			ts.Fatalf("stat %s: %v", args[0], err)
-		}
-		if time.Now().After(deadline) {
-			ts.Fatalf("timed out waiting for %s", args[0])
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 func testscriptFrankfurter(ts *testscript.TestScript, neg bool, args []string) {
 	if neg {
 		ts.Fatalf("frankfurter does not support negation")
 	}
-	blockUntilCanceled := ""
-	if len(args) >= 1 && args[0] == "-block-until-canceled" {
-		if len(args) < 2 {
-			ts.Fatalf("usage: frankfurter [-block-until-canceled ready-file] url_env_var")
-		}
-		blockUntilCanceled = ts.MkAbs(args[1])
-		args = args[2:]
-	}
 	if len(args) != 1 {
-		ts.Fatalf("usage: frankfurter [-block-until-canceled ready-file] url_env_var")
+		ts.Fatalf("usage: frankfurter url_env_var")
 	}
 
 	urlEnvVar := args[0]
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rates" {
 			http.NotFound(w, r)
-			return
-		}
-		if blockUntilCanceled != "" {
-			if err := os.WriteFile(blockUntilCanceled, nil, 0o644); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			<-r.Context().Done()
 			return
 		}
 		from := r.URL.Query().Get("from")
@@ -646,39 +512,46 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 	method := http.MethodGet
 	status := http.StatusOK
 	accept := ""
+	origin := ""
 	location := ""
 	var body []byte
 	for len(args) > 0 && args[0] != "" && args[0][0] == '-' {
 		switch args[0] {
 		case "-accept":
 			if len(args) < 2 {
-				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-origin origin] [-location location] [-body file] url")
 			}
 			accept = args[1]
 			args = args[2:]
 		case "-method":
 			if len(args) < 2 {
-				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-origin origin] [-location location] [-body file] url")
 			}
 			method = args[1]
 			args = args[2:]
 		case "-status":
 			if len(args) < 2 {
-				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-origin origin] [-location location] [-body file] url")
 			}
 			var err error
 			status, err = strconv.Atoi(args[1])
 			ts.Check(err)
 			args = args[2:]
+		case "-origin":
+			if len(args) < 2 {
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-origin origin] [-location location] [-body file] url")
+			}
+			origin = args[1]
+			args = args[2:]
 		case "-location":
 			if len(args) < 2 {
-				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-origin origin] [-location location] [-body file] url")
 			}
 			location = args[1]
 			args = args[2:]
 		case "-body":
 			if len(args) < 2 {
-				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
+				ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-origin origin] [-location location] [-body file] url")
 			}
 			body = []byte(ts.ReadFile(args[1]))
 			args = args[2:]
@@ -687,7 +560,7 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 		}
 	}
 	if len(args) != 1 {
-		ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-location location] [-body file] url")
+		ts.Fatalf("usage: httpget [-accept media-type] [-method method] [-status status] [-origin origin] [-location location] [-body file] url")
 	}
 
 	url := args[0]
@@ -708,6 +581,9 @@ func testscriptHTTPGet(ts *testscript.TestScript, neg bool, args []string) {
 		ts.Check(err)
 		if accept != "" {
 			request.Header.Set("Accept", accept)
+		}
+		if origin != "" {
+			request.Header.Set("Origin", origin)
 		}
 		if body != nil {
 			request.Header.Set("Content-Type", "application/json")

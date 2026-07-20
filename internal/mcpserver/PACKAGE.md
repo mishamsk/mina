@@ -11,7 +11,9 @@
 - Builds generated tools exclusively from its package-local catalog, including generated schemas and all four configured annotations.
 - Maps 2xx REST results to structured `{status, body}` content and non-2xx Mina envelopes to visible MCP tool errors.
 - Validates composed generated and hand-written tool names as one collision domain before registration.
-- Hand-written extensions receive only the REST session and generated REST operations; none ship by default.
+- No hand-written extensions ship today.
+- A future extension implements `Extension`, uses only its supplied session for Mina behavior, and reads generated metadata through package-level `Operations()`.
+- Future extensions are supplied to the MCP constructors by `cmd/mina` composition; registry construction rejects names used by generated or earlier extension tools.
 - Standalone stdio mode is remote-only and never constructs a Mina runtime or in-process transport.
 - Embedded Streamable HTTP uses an in-process generated REST client targeting the isolated REST handler supplied by runtime composition.
 - Stdio and Streamable HTTP share one registry, handler, result-mapping, and extension implementation.

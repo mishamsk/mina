@@ -3032,7 +3032,7 @@ func Operations() []Operation {
 			Description: "",
 			CLI: CLIOperation{
 				Area: "operations", Name: "start-database-backup",
-				Completion: &CLICompletion{
+				RunWait: &RunWait{
 					StatusOperationID:   "getDatabaseBackupRun",
 					RunIDResponseField:  "operation_run_id",
 					StatusPathParameter: "operation_run_id",
@@ -3052,7 +3052,7 @@ func Operations() []Operation {
 			Description: "",
 			CLI: CLIOperation{
 				Area: "operations", Name: "start-exchange-rate-loading",
-				Completion: &CLICompletion{
+				RunWait: &RunWait{
 					StatusOperationID:   "getExchangeRateLoadingRun",
 					RunIDResponseField:  "operation_run_id",
 					StatusPathParameter: "operation_run_id",

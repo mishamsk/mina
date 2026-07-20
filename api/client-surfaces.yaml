@@ -31,7 +31,7 @@ operations:
     cli:
       state: exposed
       name: start-exchange-rate-loading
-      completion:
+      run_wait:
         status_operation_id: getExchangeRateLoadingRun
         run_id_response_field: operation_run_id
         status_path_parameter: operation_run_id
@@ -58,7 +58,7 @@ operations:
     cli:
       state: exposed
       name: start-database-backup
-      completion:
+      run_wait:
         status_operation_id: getDatabaseBackupRun
         run_id_response_field: operation_run_id
         status_path_parameter: operation_run_id

@@ -55,8 +55,7 @@ openapi:
 # Validate OpenAPI client-surface exposure decisions.
 [group('codegen')]
 surface-check:
-    go run ./internal/tools/surfacegen -check
-    tmpdir="$(mktemp -d)"; trap 'rm -rf "$tmpdir"' EXIT; mkdir -p "$tmpdir/clientcli" "$tmpdir/mcpserver"; go run ./internal/tools/surfacegen -cli-output "$tmpdir/clientcli/surface.gen.go" -mcp-output "$tmpdir/mcpserver/surface.gen.go"; cmp -s "$tmpdir/clientcli/surface.gen.go" internal/clientcli/surface.gen.go || { echo 'generated CLI surface output is stale; run `just openapi`' >&2; diff -u internal/clientcli/surface.gen.go "$tmpdir/clientcli/surface.gen.go" >&2; exit 1; }; cmp -s "$tmpdir/mcpserver/surface.gen.go" internal/mcpserver/surface.gen.go || { echo 'generated MCP surface output is stale; run `just openapi`' >&2; diff -u internal/mcpserver/surface.gen.go "$tmpdir/mcpserver/surface.gen.go" >&2; exit 1; }
+    go run ./internal/tools/surfacegen -verify
 
 # Validate OpenAPI and generated code freshness.
 [group('codegen')]

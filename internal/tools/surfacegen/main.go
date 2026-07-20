@@ -35,14 +35,14 @@ type operationConfig struct {
 }
 
 type cliDecision struct {
-	State      string         `yaml:"state"`
-	Area       string         `yaml:"area,omitempty"`
-	Name       string         `yaml:"name,omitempty"`
-	Reason     string         `yaml:"reason,omitempty"`
-	Completion *cliCompletion `yaml:"completion,omitempty"`
+	State   string      `yaml:"state"`
+	Area    string      `yaml:"area,omitempty"`
+	Name    string      `yaml:"name,omitempty"`
+	Reason  string      `yaml:"reason,omitempty"`
+	RunWait *cliRunWait `yaml:"run_wait,omitempty"`
 }
 
-type cliCompletion struct {
+type cliRunWait struct {
 	StatusOperationID   string   `yaml:"status_operation_id"`
 	RunIDResponseField  string   `yaml:"run_id_response_field"`
 	StatusPathParameter string   `yaml:"status_path_parameter"`
@@ -81,6 +81,7 @@ type finding struct {
 
 func main() {
 	check := flag.Bool("check", false, "validate the OpenAPI and client-surface contracts")
+	verify := flag.Bool("verify", false, "verify that generated surface outputs are current")
 	openAPIPath := flag.String("openapi", defaultOpenAPIPath, "OpenAPI document path")
 	configPath := flag.String("config", defaultConfigPath, "client-surface configuration path")
 	cliOutputPath := flag.String("cli-output", defaultCLIOutputPath, "generated CLI Go output path")
@@ -88,7 +89,7 @@ func main() {
 	flag.Parse()
 
 	if flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: surfacegen [-check] [-openapi path] [-config path] [-cli-output path] [-mcp-output path]")
+		fmt.Fprintln(os.Stderr, "usage: surfacegen [-check] [-verify] [-openapi path] [-config path] [-cli-output path] [-mcp-output path]")
 		os.Exit(2)
 	}
 
@@ -101,7 +102,23 @@ func main() {
 		printFindings(findings)
 		os.Exit(1)
 	}
-	if *check {
+	if *check && !*verify {
+		return
+	}
+	if *verify {
+		stalePaths, err := verifyGeneratedOutputs(
+			*cliOutputPath, *mcpOutputPath, document, config, operations,
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "surfacegen: %v\n", err)
+			os.Exit(2)
+		}
+		if len(stalePaths) > 0 {
+			for _, path := range stalePaths {
+				fmt.Fprintf(os.Stderr, "surfacegen: %s is stale; run `just openapi`\n", path)
+			}
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -241,7 +258,7 @@ func validateContracts(
 		decisions := config.Operations[operationID]
 		findings = append(findings, validateCLIDecision(configPath, operationID, decisions.CLI)...)
 		findings = append(findings, validateMCPDecision(configPath, operationID, decisions.MCP)...)
-		findings = append(findings, validateCLICompletion(
+		findings = append(findings, validateCLIRunWait(
 			configPath, operationID, decisions.CLI, operations, config,
 		)...)
 
@@ -317,22 +334,22 @@ func validateCLIDecision(path string, operationID string, decision *cliDecision)
 	return validateDecision(path, operationID, "CLI", decision.State, decision.Name, decision.Reason)
 }
 
-func validateCLICompletion(
+func validateCLIRunWait(
 	path string,
 	operationID string,
 	decision *cliDecision,
 	operations map[string]operationInfo,
 	config surfaceConfig,
 ) []finding {
-	if decision == nil || decision.Completion == nil {
+	if decision == nil || decision.RunWait == nil {
 		return nil
 	}
-	completion := decision.Completion
+	runWait := decision.RunWait
 	if decision.State != "exposed" {
 		return []finding{{
 			path:      path,
 			operation: operationID,
-			message:   "CLI completion metadata requires an exposed CLI operation",
+			message:   "CLI run-wait metadata requires an exposed CLI operation",
 		}}
 	}
 
@@ -341,100 +358,100 @@ func validateCLICompletion(
 		name  string
 		value string
 	}{
-		{name: "status_operation_id", value: completion.StatusOperationID},
-		{name: "run_id_response_field", value: completion.RunIDResponseField},
-		{name: "status_path_parameter", value: completion.StatusPathParameter},
-		{name: "terminal_field", value: completion.TerminalField},
+		{name: "status_operation_id", value: runWait.StatusOperationID},
+		{name: "run_id_response_field", value: runWait.RunIDResponseField},
+		{name: "status_path_parameter", value: runWait.StatusPathParameter},
+		{name: "terminal_field", value: runWait.TerminalField},
 	}
 	for _, field := range stringFields {
 		if strings.TrimSpace(field.value) == "" {
 			findings = append(findings, finding{
 				path:      path,
 				operation: operationID,
-				message:   fmt.Sprintf("CLI completion field %q must not be empty", field.name),
+				message:   fmt.Sprintf("CLI run-wait field %q must not be empty", field.name),
 			})
 		}
 	}
-	if len(completion.TerminalValues) == 0 {
+	if len(runWait.TerminalValues) == 0 {
 		findings = append(findings, finding{
 			path:      path,
 			operation: operationID,
-			message:   "CLI completion terminal_values must not be empty",
+			message:   "CLI run-wait terminal_values must not be empty",
 		})
 	}
-	findings = append(findings, validateCompletionValues(
-		path, operationID, "terminal_values", completion.TerminalValues,
+	findings = append(findings, validateRunWaitValues(
+		path, operationID, "terminal_values", runWait.TerminalValues,
 	)...)
-	findings = append(findings, validateCompletionValues(
-		path, operationID, "failure_values", completion.FailureValues,
+	findings = append(findings, validateRunWaitValues(
+		path, operationID, "failure_values", runWait.FailureValues,
 	)...)
-	findings = append(findings, validateCompletionResponseField(
+	findings = append(findings, validateRunWaitResponseField(
 		path,
 		operationID,
 		"run_id_response_field",
-		completion.RunIDResponseField,
+		runWait.RunIDResponseField,
 		"trigger operation",
 		operations[operationID],
 	)...)
 
-	statusInfo, statusExists := operations[completion.StatusOperationID]
-	if strings.TrimSpace(completion.StatusOperationID) != "" {
+	statusInfo, statusExists := operations[runWait.StatusOperationID]
+	if strings.TrimSpace(runWait.StatusOperationID) != "" {
 		if !statusExists {
 			findings = append(findings, finding{
 				path:      path,
 				operation: operationID,
 				message: fmt.Sprintf(
-					"CLI completion status operation %q does not match an OpenAPI operation",
-					completion.StatusOperationID,
+					"CLI run-wait status operation %q does not match an OpenAPI operation",
+					runWait.StatusOperationID,
 				),
 			})
-		} else if !isExposed(config.Operations[completion.StatusOperationID]) {
+		} else if !isExposed(config.Operations[runWait.StatusOperationID]) {
 			findings = append(findings, finding{
 				path:      path,
 				operation: operationID,
 				message: fmt.Sprintf(
-					"CLI completion status operation %q has no generated invoker",
-					completion.StatusOperationID,
+					"CLI run-wait status operation %q has no generated invoker",
+					runWait.StatusOperationID,
 				),
 			})
 		}
 	}
 	if statusExists {
-		findings = append(findings, validateCompletionResponseField(
+		findings = append(findings, validateRunWaitResponseField(
 			path,
 			operationID,
 			"terminal_field",
-			completion.TerminalField,
-			fmt.Sprintf("status operation %q", completion.StatusOperationID),
+			runWait.TerminalField,
+			fmt.Sprintf("status operation %q", runWait.StatusOperationID),
 			statusInfo,
 		)...)
-		findings = append(findings, validateCompletionEnumValues(
-			path, operationID, completion, statusInfo,
+		findings = append(findings, validateRunWaitEnumValues(
+			path, operationID, runWait, statusInfo,
 		)...)
 	}
-	if statusExists && strings.TrimSpace(completion.StatusPathParameter) != "" &&
-		!operationHasPathParameter(statusInfo, completion.StatusPathParameter) {
+	if statusExists && strings.TrimSpace(runWait.StatusPathParameter) != "" &&
+		!operationHasPathParameter(statusInfo, runWait.StatusPathParameter) {
 		findings = append(findings, finding{
 			path:      path,
 			operation: operationID,
 			message: fmt.Sprintf(
-				"CLI completion status path parameter %q is not declared by operation %q",
-				completion.StatusPathParameter, completion.StatusOperationID,
+				"CLI run-wait status path parameter %q is not declared by operation %q",
+				runWait.StatusPathParameter, runWait.StatusOperationID,
 			),
 		})
 	}
 
-	terminalValues := make(map[string]struct{}, len(completion.TerminalValues))
-	for _, value := range completion.TerminalValues {
+	terminalValues := make(map[string]struct{}, len(runWait.TerminalValues))
+	for _, value := range runWait.TerminalValues {
 		terminalValues[value] = struct{}{}
 	}
-	for _, value := range completion.FailureValues {
+	for _, value := range runWait.FailureValues {
 		if _, ok := terminalValues[value]; !ok {
 			findings = append(findings, finding{
 				path:      path,
 				operation: operationID,
 				message: fmt.Sprintf(
-					"CLI completion failure value %q is not a terminal value", value,
+					"CLI run-wait failure value %q is not a terminal value", value,
 				),
 			})
 		}
@@ -442,7 +459,7 @@ func validateCLICompletion(
 	return findings
 }
 
-func validateCompletionResponseField(
+func validateRunWaitResponseField(
 	path string,
 	operationID string,
 	metadataName string,
@@ -479,7 +496,7 @@ func validateCompletionResponseField(
 						path:      path,
 						operation: operationID,
 						message: fmt.Sprintf(
-							"CLI completion %s %q is not declared by %s response %s",
+							"CLI run-wait %s %q is not declared by %s response %s",
 							metadataName, field, responseSource, status,
 						),
 					})
@@ -492,7 +509,7 @@ func validateCompletionResponseField(
 			path:      path,
 			operation: operationID,
 			message: fmt.Sprintf(
-				"CLI completion %s %q cannot be validated because %s has no successful JSON response schema",
+				"CLI run-wait %s %q cannot be validated because %s has no successful JSON response schema",
 				metadataName, field, responseSource,
 			),
 		})
@@ -500,13 +517,13 @@ func validateCompletionResponseField(
 	return findings
 }
 
-func validateCompletionEnumValues(
+func validateRunWaitEnumValues(
 	path string,
 	operationID string,
-	completion *cliCompletion,
+	runWait *cliRunWait,
 	info operationInfo,
 ) []finding {
-	if strings.TrimSpace(completion.TerminalField) == "" {
+	if strings.TrimSpace(runWait.TerminalField) == "" {
 		return nil
 	}
 
@@ -529,7 +546,7 @@ func validateCompletionEnumValues(
 					continue
 				}
 				for _, fieldSchema := range schemasForProperty(
-					media.Schema, completion.TerminalField, make(map[*openapi3.Schema]struct{}),
+					media.Schema, runWait.TerminalField, make(map[*openapi3.Schema]struct{}),
 				) {
 					enumValues = append(enumValues, resolvedSchemaEnum(fieldSchema, make(map[*openapi3.Schema]struct{}))...)
 				}
@@ -550,8 +567,8 @@ func validateCompletionEnumValues(
 	}
 	var findings []finding
 	for field, values := range map[string][]string{
-		"terminal_values": completion.TerminalValues,
-		"failure_values":  completion.FailureValues,
+		"terminal_values": runWait.TerminalValues,
+		"failure_values":  runWait.FailureValues,
 	} {
 		for _, value := range values {
 			if _, ok := allowed[value]; ok {
@@ -561,8 +578,8 @@ func validateCompletionEnumValues(
 				path:      path,
 				operation: operationID,
 				message: fmt.Sprintf(
-					"CLI completion %s value %q is not declared by terminal field %q enum",
-					field, value, completion.TerminalField,
+					"CLI run-wait %s value %q is not declared by terminal field %q enum",
+					field, value, runWait.TerminalField,
 				),
 			})
 		}
@@ -640,7 +657,7 @@ func schemaDeclaresProperty(
 	return false
 }
 
-func validateCompletionValues(path string, operationID string, field string, values []string) []finding {
+func validateRunWaitValues(path string, operationID string, field string, values []string) []finding {
 	var findings []finding
 	seen := make(map[string]struct{}, len(values))
 	for _, value := range values {
@@ -648,7 +665,7 @@ func validateCompletionValues(path string, operationID string, field string, val
 			findings = append(findings, finding{
 				path:      path,
 				operation: operationID,
-				message:   fmt.Sprintf("CLI completion %s contains an empty value", field),
+				message:   fmt.Sprintf("CLI run-wait %s contains an empty value", field),
 			})
 			continue
 		}
@@ -656,7 +673,7 @@ func validateCompletionValues(path string, operationID string, field string, val
 			findings = append(findings, finding{
 				path:      path,
 				operation: operationID,
-				message:   fmt.Sprintf("CLI completion %s contains duplicate value %q", field, value),
+				message:   fmt.Sprintf("CLI run-wait %s contains duplicate value %q", field, value),
 			})
 		}
 		seen[value] = struct{}{}

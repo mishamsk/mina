@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/format"
 	"os"
@@ -21,6 +22,11 @@ type generatedOperation struct {
 	mcpInputSchema []byte
 }
 
+type generatedOutput struct {
+	path    string
+	content []byte
+}
+
 func generate(
 	cliOutputPath string,
 	mcpOutputPath string,
@@ -28,12 +34,59 @@ func generate(
 	config surfaceConfig,
 	operations map[string]operationInfo,
 ) error {
-	if err := initializeCodegen(document); err != nil {
+	outputs, err := generateOutputs(cliOutputPath, mcpOutputPath, document, config, operations)
+	if err != nil {
 		return err
+	}
+	for _, output := range outputs {
+		if err := os.WriteFile(output.path, output.content, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", output.path, err)
+		}
+	}
+	return nil
+}
+
+func verifyGeneratedOutputs(
+	cliOutputPath string,
+	mcpOutputPath string,
+	document *openapi3.T,
+	config surfaceConfig,
+	operations map[string]operationInfo,
+) ([]string, error) {
+	outputs, err := generateOutputs(cliOutputPath, mcpOutputPath, document, config, operations)
+	if err != nil {
+		return nil, err
+	}
+	var stalePaths []string
+	for _, output := range outputs {
+		committed, err := os.ReadFile(output.path)
+		if errors.Is(err, os.ErrNotExist) {
+			stalePaths = append(stalePaths, output.path)
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", output.path, err)
+		}
+		if !bytes.Equal(committed, output.content) {
+			stalePaths = append(stalePaths, output.path)
+		}
+	}
+	return stalePaths, nil
+}
+
+func generateOutputs(
+	cliOutputPath string,
+	mcpOutputPath string,
+	document *openapi3.T,
+	config surfaceConfig,
+	operations map[string]operationInfo,
+) ([]generatedOutput, error) {
+	if err := initializeCodegen(document); err != nil {
+		return nil, err
 	}
 	definitions, err := codegen.OperationDefinitions(document)
 	if err != nil {
-		return fmt.Errorf("describe generated client operations: %w", err)
+		return nil, fmt.Errorf("describe generated client operations: %w", err)
 	}
 	definitionsByID := make(map[string]codegen.OperationDefinition, len(definitions))
 	for _, definition := range definitions {
@@ -47,7 +100,7 @@ func generate(
 		}
 		definition, ok := definitionsByID[operationID]
 		if !ok {
-			return fmt.Errorf("OpenAPI operation %s has no generated client definition", operationID)
+			return nil, fmt.Errorf("OpenAPI operation %s has no generated client definition", operationID)
 		}
 		item := generatedOperation{
 			id:         operationID,
@@ -58,13 +111,14 @@ func generate(
 		if decision := item.decisions.MCP; decision != nil && decision.State == "exposed" {
 			item.mcpInputSchema, err = buildMCPInputSchema(definition)
 			if err != nil {
-				return fmt.Errorf("build MCP input schema for %s: %w", operationID, err)
+				return nil, fmt.Errorf("build MCP input schema for %s: %w", operationID, err)
 			}
 		}
 		generated = append(generated, item)
 	}
 	sort.Slice(generated, func(i, j int) bool { return generated[i].id < generated[j].id })
 
+	var outputs []generatedOutput
 	for _, target := range []struct {
 		surface     string
 		packageName string
@@ -90,14 +144,16 @@ func generate(
 				surfaceOperations = append(surfaceOperations, operation)
 			}
 		}
-		if err := generateSurface(target.outputPath, target.packageName, target.surface, surfaceOperations); err != nil {
-			return err
+		content, err := generateSurface(target.packageName, target.surface, surfaceOperations)
+		if err != nil {
+			return nil, err
 		}
+		outputs = append(outputs, generatedOutput{path: target.outputPath, content: content})
 	}
-	return nil
+	return outputs, nil
 }
 
-func generateSurface(outputPath string, packageName string, surface string, operations []generatedOperation) error {
+func generateSurface(packageName string, surface string, operations []generatedOperation) ([]byte, error) {
 	var output bytes.Buffer
 	writeHeader(&output, packageName, operations)
 	writeCatalog(&output, surface, operations)
@@ -107,12 +163,9 @@ func generateSurface(outputPath string, packageName string, surface string, oper
 	}
 	formatted, err := format.Source(output.Bytes())
 	if err != nil {
-		return fmt.Errorf("format generated output: %w", err)
+		return nil, fmt.Errorf("format generated output: %w", err)
 	}
-	if err := os.WriteFile(outputPath, formatted, 0o644); err != nil {
-		return fmt.Errorf("write %s: %w", outputPath, err)
-	}
-	return nil
+	return formatted, nil
 }
 
 func initializeCodegen(document *openapi3.T) error {
@@ -210,19 +263,19 @@ func writeOperation(output *bytes.Buffer, surface string, generated generatedOpe
 	fmt.Fprintf(output, "\t\t\tDescription: %q,\n", operation.Description)
 	if decision := generated.decisions.CLI; surface == "CLI" && decision != nil && decision.State == "exposed" {
 		area, _ := resolveCLI("", generated.id, operation, decision)
-		if decision.Completion == nil {
+		if decision.RunWait == nil {
 			fmt.Fprintf(output, "\t\t\tCLI: CLIOperation{Area: %q, Name: %q},\n", area, decision.Name)
 		} else {
-			completion := decision.Completion
+			runWait := decision.RunWait
 			fmt.Fprintln(output, "\t\t\tCLI: CLIOperation{")
 			fmt.Fprintf(output, "\t\t\t\tArea: %q, Name: %q,\n", area, decision.Name)
-			fmt.Fprintln(output, "\t\t\t\tCompletion: &CLICompletion{")
-			fmt.Fprintf(output, "\t\t\t\t\tStatusOperationID: %q,\n", completion.StatusOperationID)
-			fmt.Fprintf(output, "\t\t\t\t\tRunIDResponseField: %q,\n", completion.RunIDResponseField)
-			fmt.Fprintf(output, "\t\t\t\t\tStatusPathParameter: %q,\n", completion.StatusPathParameter)
-			fmt.Fprintf(output, "\t\t\t\t\tTerminalField: %q,\n", completion.TerminalField)
-			writeStringSliceField(output, "\t\t\t\t\t", "TerminalValues", completion.TerminalValues)
-			writeStringSliceField(output, "\t\t\t\t\t", "FailureValues", completion.FailureValues)
+			fmt.Fprintln(output, "\t\t\t\tRunWait: &RunWait{")
+			fmt.Fprintf(output, "\t\t\t\t\tStatusOperationID: %q,\n", runWait.StatusOperationID)
+			fmt.Fprintf(output, "\t\t\t\t\tRunIDResponseField: %q,\n", runWait.RunIDResponseField)
+			fmt.Fprintf(output, "\t\t\t\t\tStatusPathParameter: %q,\n", runWait.StatusPathParameter)
+			fmt.Fprintf(output, "\t\t\t\t\tTerminalField: %q,\n", runWait.TerminalField)
+			writeStringSliceField(output, "\t\t\t\t\t", "TerminalValues", runWait.TerminalValues)
+			writeStringSliceField(output, "\t\t\t\t\t", "FailureValues", runWait.FailureValues)
 			fmt.Fprintln(output, "\t\t\t\t},")
 			fmt.Fprintln(output, "\t\t\t},")
 		}

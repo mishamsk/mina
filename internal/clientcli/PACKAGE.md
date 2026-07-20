@@ -12,11 +12,13 @@
 - Follows the argument, flag, body, output, and error rendering rules owned by `docs/cli-mcp-architecture.md`.
 - Selects remote mode from explicit `--server` or local mode from explicit or source-loaded `--db`; simultaneous explicit selector flags are mutually exclusive.
 - Local mode refuses ephemeral state, owns command-lifetime cleanup, and uses only a process-injected handler factory.
-- Local mode uses generated completion metadata to poll asynchronous manual triggers through generated REST operations, renders the terminal run, and propagates configured failure outcomes.
-- Remote mode returns the trigger response without completion polling.
-- Canceling local completion polling closes the session once; runtime-owned close cancels active work and waits for it.
+- Local mode uses generated run-wait metadata to poll asynchronous manual triggers through generated REST operations, renders the terminal run, and propagates configured failure outcomes.
+- Remote mode returns the trigger response without run-wait polling.
+- Canceling local run-wait polling closes the session once; runtime-owned close cancels active work and waits for it.
 - Local database lock failures direct callers to the owning server through `--server`.
-- Hand-written extensions receive only a local-or-remote session factory and generated catalog access; registration rejects names used by generated areas, generated commands, or earlier extensions.
+- No hand-written extensions ship today.
+- A future extension implements `Extension`, uses only a `SessionFactory`-opened session for Mina behavior, and reads generated metadata through package-level `Operations()`.
+- `cmd/mina` composition registers future extensions with `RegisterExtensions`, which rejects names used by generated areas, generated commands, or earlier extensions.
 - Imported only by `cmd/mina` composition.
 - Must not import runtime, HTTP server adapters, services, stores, SQL, or `internal/mcpserver`.
 

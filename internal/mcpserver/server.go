@@ -36,12 +36,6 @@ func (s *Session) Client() httpclient.ClientWithResponsesInterface {
 	return s.client
 }
 
-// Operations returns a copy of the generated operation catalog available to
-// the MCP session.
-func (s *Session) Operations() []Operation {
-	return Operations()
-}
-
 // ToolHandler handles validated MCP arguments for a hand-written extension.
 type ToolHandler func(
 	context.Context,

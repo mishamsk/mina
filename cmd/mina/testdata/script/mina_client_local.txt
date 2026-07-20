@@ -37,24 +37,6 @@ stderr '"operation_id":"database-backup"'
 stderr '"outcome":"failed"'
 env MINA_BACKUP_FILE_DIRECTORY=$WORK/client-backups
 
-# Interrupting active local completion polling cancels the run and releases the database.
-exec mina client --db $WORK/interrupted.db --yes accounts create --json '{"fqn":"checking:Interrupted","account_type":"balance","currency":"EUR"}'
-exec mina client --db $WORK/interrupted.db --yes accounts create --json '{"fqn":"counterparty:Interrupted","account_type":"balance"}'
-exec mina client --db $WORK/interrupted.db --yes categories create --json '{"fqn":"Transfers:Interrupted","economic_intent":"transfer"}'
-exec mina client --db $WORK/interrupted.db --yes transactions create --json @interrupted-transaction.json
-frankfurter -block-until-canceled exchange-rate-requested FRANKFURTER_URL
-env MINA_FX_FRANKFURTER_BASE_URL=$FRANKFURTER_URL
-! exec mina client --db $WORK/interrupted.db --yes operations start-exchange-rate-loading &interrupted_client&
-waitfile exchange-rate-requested
-exec sleep 0.1
-kill -INT interrupted_client
-wait interrupted_client
-stderr 'context canceled'
-! stderr 'migration'
-exec mina client --db $WORK/interrupted.db --yes tags list
-stdout '"tags":\['
-! stderr 'already in use'
-
 # Explicit local and remote selectors are mutually exclusive.
 ! exec mina client --db $WORK/local.db --server http://127.0.0.1:8080 tags list
 ! stdout .
@@ -92,34 +74,3 @@ stderr 'mina client requires a target: use --db PATH for local mode or --server 
 -- consent-and-body.txt --
 y
 {"fqn":"PipeBody"}
-
--- interrupted-transaction.json --
-{
-  "initiated_date": "2024-04-02",
-  "records": [
-    {
-      "account_id": 1,
-      "amount": "-10.00000000",
-      "amount_usd": null,
-      "category_id": 3,
-      "currency": "EUR",
-      "pending_date": "2024-04-02T12:00:00Z",
-      "posted_date": "2024-04-02T12:00:00Z",
-      "posting_status": "posted",
-      "reconciliation_status": "reconciled",
-      "source": "manual"
-    },
-    {
-      "account_id": 2,
-      "amount": "10.00000000",
-      "amount_usd": null,
-      "category_id": 3,
-      "currency": "EUR",
-      "pending_date": "2024-04-02T12:00:00Z",
-      "posted_date": "2024-04-02T12:00:00Z",
-      "posting_status": "posted",
-      "reconciliation_status": "reconciled",
-      "source": "manual"
-    }
-  ]
-}

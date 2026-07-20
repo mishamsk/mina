@@ -1,0 +1,50 @@
+# Stdio and Streamable HTTP expose one shared MCP registry beside REST and the web UI.
+env MINA_FX_AUTO_LOAD_ENABLED=false
+freeport
+exec mina serve --demo --db $WORK/mcp.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpwait -timeout 15s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+
+# Stdio lists representative tools and leaves annotation assertions to the script.
+mcplist stdio http://127.0.0.1:$PORT
+stdout '^transport=stdio tool=transactions_list read_only=true destructive=false idempotent=true open_world=false$'
+stdout '^transport=stdio tool=accounts_delete read_only=false destructive=true idempotent=true open_world=false$'
+stdout '^transport=stdio tool=accounts_get '
+stdout '^transport=stdio tool=members_create '
+
+mcpcall stdio http://127.0.0.1:$PORT transactions_list '{"limit":5}'
+stdout '"status":200'
+stdout '"transactions":\['
+
+# Streamable HTTP lists and calls tools through the same listener.
+mcplist http http://127.0.0.1:$PORT/mcp
+stdout '^transport=http tool=transactions_list read_only=true destructive=false idempotent=true open_world=false$'
+stdout '^transport=http tool=accounts_delete read_only=false destructive=true idempotent=true open_world=false$'
+
+mcpcall http http://127.0.0.1:$PORT/mcp accounts_get '{"account_id":4}'
+stdout '"status":200'
+stdout '"account_id":4'
+stdout '"fqn":"checking:Chase:Joint"'
+
+! mcpcall http http://127.0.0.1:$PORT/mcp members_create '{"body":{"name":""}}'
+stderr '"code":"invalid_request"'
+stderr '"message"'
+
+mcpcall http http://127.0.0.1:$PORT/mcp members_create '{"body":{"name":"MCP Smoke Member"}}'
+stdout '"status":201'
+stdout '"member_id":'
+
+# Non-loopback origins stay forbidden on Streamable HTTP.
+httpget -method POST -status 403 -accept 'application/json, text/event-stream' -origin https://example.com -body initialize.json http://127.0.0.1:$PORT/mcp
+stdout 'Forbidden: Origin must be loopback'
+
+# REST and the web UI remain reachable on the same listener.
+httpget http://127.0.0.1:$PORT/api/health
+stdout '"status":"ok"'
+httpget -accept text/html http://127.0.0.1:$PORT/
+stdout '<div id="root"></div>'
+
+kill -INT server
+wait server
+
+-- initialize.json --
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"origin-probe","version":"test"}}}
