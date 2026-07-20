@@ -383,3 +383,29 @@ linters:
               desc: production REST client use is limited to the approved client surfaces
             - pkg: github.com/mishamsk/mina/internal/runtime
               desc: runtime composition may only be imported by cmd/mina and app-test helpers
+        clientcli-composition-only:
+          list-mode: lax
+          files:
+            - $all
+            - "!cmd/mina/*.go"
+            - "!cmd/mina/**/*.go"
+            - "!**/cmd/mina/*.go"
+            - "!**/cmd/mina/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/clientcli
+              desc: client CLI may only be imported by cmd/mina composition
+        mcpserver-composition-only:
+          list-mode: lax
+          files:
+            - $all
+            - "!cmd/mina/*.go"
+            - "!cmd/mina/**/*.go"
+            - "!**/cmd/mina/*.go"
+            - "!**/cmd/mina/**/*.go"
+            - "!internal/runtime/*.go"
+            - "!internal/runtime/**/*.go"
+            - "!**/internal/runtime/*.go"
+            - "!**/internal/runtime/**/*.go"
+          deny:
+            - pkg: github.com/mishamsk/mina/internal/mcpserver
+              desc: MCP server may only be imported by cmd/mina and internal/runtime composition

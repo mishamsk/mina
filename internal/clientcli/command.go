@@ -70,8 +70,8 @@ func (s *Session) Client() httpclient.ClientWithResponsesInterface {
 
 // Operations returns a copy of the generated operation catalog available to
 // the session.
-func (s *Session) Operations() []httpclient.Operation {
-	return httpclient.CLIOperations()
+func (s *Session) Operations() []Operation {
+	return Operations()
 }
 
 // Close releases lifecycle resources owned by the session.
@@ -140,7 +140,7 @@ func NewCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, options Com
 	sessionFactory := newSessionFactory(options)
 
 	areas := make(map[string]*cobra.Command)
-	for _, operation := range httpclient.CLIOperations() {
+	for _, operation := range Operations() {
 		areaName := operation.CLI.Area
 		area, ok := areas[areaName]
 		if !ok {
@@ -209,7 +209,7 @@ func RegisterExtensions(client *cobra.Command, options CommandOptions, extension
 	return nil
 }
 
-func newOperationCommand(operation httpclient.Operation, sessionFactory SessionFactory) *cobra.Command {
+func newOperationCommand(operation Operation, sessionFactory SessionFactory) *cobra.Command {
 	pathNames := make([]string, 0, len(operation.Input.Path))
 	for _, parameter := range operation.Input.Path {
 		pathNames = append(pathNames, "<"+parameter.Name+">")
@@ -231,7 +231,7 @@ func newOperationCommand(operation httpclient.Operation, sessionFactory SessionF
 		addTypedFlag(cmd.Flags(), parameter.Name, parameter.Type, parameter.ItemType, parameter.Array, parameter.Description, parameter.Enum)
 	}
 
-	bodyFieldFlags := make(map[string]httpclient.BodyPropertyDescriptor)
+	bodyFieldFlags := make(map[string]BodyPropertyDescriptor)
 	if operation.Input.Body.Present {
 		cmd.Flags().String(jsonFlagName, "", "raw JSON body, @file, or - for standard input")
 		if bodySupportsFieldFlags(operation.Input) {
@@ -350,7 +350,7 @@ func openSession(command *cobra.Command, options CommandOptions) (*Session, erro
 func waitForLocalCompletion(
 	command *cobra.Command,
 	client httpclient.ClientWithResponsesInterface,
-	completion *httpclient.CLICompletion,
+	completion *CLICompletion,
 	triggerBody []byte,
 ) error {
 	runID, err := responseFieldString(triggerBody, completion.RunIDResponseField)
@@ -396,21 +396,21 @@ func waitForLocalCompletion(
 	}
 }
 
-func operationByID(operationID string) (httpclient.Operation, error) {
-	for _, operation := range httpclient.Operations() {
+func operationByID(operationID string) (Operation, error) {
+	for _, operation := range Operations() {
 		if operation.ID == operationID {
 			return operation, nil
 		}
 	}
-	return httpclient.Operation{}, fmt.Errorf("completion status operation %q is unavailable", operationID)
+	return Operation{}, fmt.Errorf("completion status operation %q is unavailable", operationID)
 }
 
 func completionStatusInput(
-	operation httpclient.Operation,
+	operation Operation,
 	pathParameter string,
 	runID string,
-) (httpclient.InvocationInput, error) {
-	input := httpclient.InvocationInput{
+) (InvocationInput, error) {
+	input := InvocationInput{
 		Path:  make([]string, len(operation.Input.Path)),
 		Query: make(map[string][]string),
 	}
@@ -422,7 +422,7 @@ func completionStatusInput(
 		}
 	}
 	if !found {
-		return httpclient.InvocationInput{}, fmt.Errorf(
+		return InvocationInput{}, fmt.Errorf(
 			"completion status operation %q has no path parameter %q",
 			operation.ID,
 			pathParameter,
@@ -471,7 +471,7 @@ func waitForCompletionPoll(ctx context.Context) error {
 	}
 }
 
-func reportHTTPFailure(command *cobra.Command, result httpclient.InvocationResult) error {
+func reportHTTPFailure(command *cobra.Command, result InvocationResult) error {
 	failure := fmt.Errorf("request failed with HTTP status %d", result.StatusCode)
 	if len(result.Body) > 0 {
 		if err := writeLine(command.ErrOrStderr(), result.Body); err != nil {
@@ -525,10 +525,10 @@ func validateServerURL(raw string) error {
 func composeInvocationInput(
 	cmd *cobra.Command,
 	args []string,
-	operation httpclient.Operation,
-	bodyFields map[string]httpclient.BodyPropertyDescriptor,
-) (httpclient.InvocationInput, error) {
-	input := httpclient.InvocationInput{
+	operation Operation,
+	bodyFields map[string]BodyPropertyDescriptor,
+) (InvocationInput, error) {
+	input := InvocationInput{
 		Path:  append([]string(nil), args...),
 		Query: make(map[string][]string),
 	}
@@ -538,7 +538,7 @@ func composeInvocationInput(
 		}
 		values, err := typedFlagStrings(cmd.Flags(), parameter.Name, parameter.Type, parameter.ItemType, parameter.Array)
 		if err != nil {
-			return httpclient.InvocationInput{}, err
+			return InvocationInput{}, err
 		}
 		input.Query[parameter.Name] = values
 	}
@@ -555,12 +555,12 @@ func composeInvocationInput(
 	}
 	sort.Strings(changedFields)
 	if jsonChanged && len(changedFields) > 0 {
-		return httpclient.InvocationInput{}, errors.New("--json and request body field flags are mutually exclusive")
+		return InvocationInput{}, errors.New("--json and request body field flags are mutually exclusive")
 	}
 	if jsonChanged {
 		body, err := readRawBody(cmd)
 		if err != nil {
-			return httpclient.InvocationInput{}, err
+			return InvocationInput{}, err
 		}
 		input.Body = body
 		return input, nil
@@ -571,7 +571,7 @@ func composeInvocationInput(
 	}
 	for _, required := range operation.Input.Body.RequiredProperties {
 		if !cmd.Flags().Changed(required) {
-			return httpclient.InvocationInput{}, fmt.Errorf("request body field --%s is required when composing the body from flags", required)
+			return InvocationInput{}, fmt.Errorf("request body field --%s is required when composing the body from flags", required)
 		}
 	}
 	if len(changedFields) == 0 && !operation.Input.Body.Required {
@@ -582,13 +582,13 @@ func composeInvocationInput(
 		property := bodyFields[name]
 		value, err := typedFlagJSONValue(cmd.Flags(), name, property.Type, property.ItemType, property.Array)
 		if err != nil {
-			return httpclient.InvocationInput{}, err
+			return InvocationInput{}, err
 		}
 		values[name] = value
 	}
 	body, err := json.Marshal(values)
 	if err != nil {
-		return httpclient.InvocationInput{}, fmt.Errorf("compose request body: %w", err)
+		return InvocationInput{}, fmt.Errorf("compose request body: %w", err)
 	}
 	input.Body = body
 	return input, nil
@@ -620,7 +620,7 @@ func readRawBody(cmd *cobra.Command) ([]byte, error) {
 	}
 }
 
-func bodySupportsFieldFlags(input httpclient.InputDescriptor) bool {
+func bodySupportsFieldFlags(input InputDescriptor) bool {
 	if !input.Body.Simple {
 		return false
 	}
@@ -759,7 +759,7 @@ func scalarString(value any) string {
 
 func generatedNames() map[string]struct{} {
 	names := make(map[string]struct{})
-	for _, operation := range httpclient.CLIOperations() {
+	for _, operation := range Operations() {
 		names[operation.CLI.Area] = struct{}{}
 		names[operation.CLI.Name] = struct{}{}
 	}

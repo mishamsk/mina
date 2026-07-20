@@ -38,8 +38,8 @@ func (s *Session) Client() httpclient.ClientWithResponsesInterface {
 
 // Operations returns a copy of the generated operation catalog available to
 // the MCP session.
-func (s *Session) Operations() []httpclient.Operation {
-	return httpclient.MCPOperations()
+func (s *Session) Operations() []Operation {
+	return Operations()
 }
 
 // ToolHandler handles validated MCP arguments for a hand-written extension.
@@ -179,7 +179,7 @@ type registry struct {
 }
 
 func (r *registry) registerGenerated() error {
-	for _, operation := range httpclient.MCPOperations() {
+	for _, operation := range Operations() {
 		name := operation.MCP.Group + "_" + operation.MCP.Name
 		registration := ToolRegistration{
 			Tool: &mcp.Tool{
@@ -244,7 +244,7 @@ func (r *registry) register(registration ToolRegistration, source string) error 
 	return nil
 }
 
-func generatedHandler(session *Session, operation httpclient.Operation) ToolHandler {
+func generatedHandler(session *Session, operation Operation) ToolHandler {
 	return func(
 		ctx context.Context,
 		_ *mcp.CallToolRequest,
@@ -263,17 +263,17 @@ func generatedHandler(session *Session, operation httpclient.Operation) ToolHand
 }
 
 func invocationInput(
-	operation httpclient.Operation,
+	operation Operation,
 	arguments map[string]json.RawMessage,
-) (httpclient.InvocationInput, error) {
-	input := httpclient.InvocationInput{
+) (InvocationInput, error) {
+	input := InvocationInput{
 		Path:  make([]string, len(operation.Input.Path)),
 		Query: make(map[string][]string),
 	}
 	for index, parameter := range operation.Input.Path {
 		value, err := scalarArgument(arguments[parameter.Name])
 		if err != nil {
-			return httpclient.InvocationInput{}, fmt.Errorf("path argument %q: %w", parameter.Name, err)
+			return InvocationInput{}, fmt.Errorf("path argument %q: %w", parameter.Name, err)
 		}
 		input.Path[index] = value
 	}
@@ -284,14 +284,14 @@ func invocationInput(
 		}
 		values, err := queryArgument(raw, parameter.Array)
 		if err != nil {
-			return httpclient.InvocationInput{}, fmt.Errorf("query argument %q: %w", parameter.Name, err)
+			return InvocationInput{}, fmt.Errorf("query argument %q: %w", parameter.Name, err)
 		}
 		input.Query[parameter.Name] = values
 	}
 	if raw, supplied := arguments["body"]; supplied {
 		body, err := json.Marshal(raw)
 		if err != nil {
-			return httpclient.InvocationInput{}, fmt.Errorf("body argument: %w", err)
+			return InvocationInput{}, fmt.Errorf("body argument: %w", err)
 		}
 		input.Body = body
 	}
@@ -359,7 +359,7 @@ type structuredRESTResult struct {
 	Body   any `json:"body"`
 }
 
-func callToolResult(result httpclient.InvocationResult) (*mcp.CallToolResult, error) {
+func callToolResult(result InvocationResult) (*mcp.CallToolResult, error) {
 	body, err := decodedJSONBody(result.Body)
 	if err != nil {
 		return nil, fmt.Errorf("decode Mina REST response body: %w", err)
@@ -399,7 +399,7 @@ func decodedJSONBody(body []byte) (any, error) {
 	return value, nil
 }
 
-func toolDescription(operation httpclient.Operation) string {
+func toolDescription(operation Operation) string {
 	parts := []string{strings.TrimSpace(operation.Summary), strings.TrimSpace(operation.Description)}
 	parts = slicesWithoutEmptyDuplicates(parts)
 	return strings.Join(parts, "\n\n")

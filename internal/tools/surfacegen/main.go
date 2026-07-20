@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	defaultOpenAPIPath = "api/openapi.yaml"
-	defaultConfigPath  = "api/client-surfaces.yaml"
-	defaultOutputPath  = "internal/httpclient/surfaces.gen.go"
+	defaultOpenAPIPath   = "api/openapi.yaml"
+	defaultConfigPath    = "api/client-surfaces.yaml"
+	defaultCLIOutputPath = "internal/clientcli/surface.gen.go"
+	defaultMCPOutputPath = "internal/mcpserver/surface.gen.go"
 )
 
 type surfaceConfig struct {
@@ -82,11 +83,12 @@ func main() {
 	check := flag.Bool("check", false, "validate the OpenAPI and client-surface contracts")
 	openAPIPath := flag.String("openapi", defaultOpenAPIPath, "OpenAPI document path")
 	configPath := flag.String("config", defaultConfigPath, "client-surface configuration path")
-	outputPath := flag.String("output", defaultOutputPath, "generated Go output path")
+	cliOutputPath := flag.String("cli-output", defaultCLIOutputPath, "generated CLI Go output path")
+	mcpOutputPath := flag.String("mcp-output", defaultMCPOutputPath, "generated MCP Go output path")
 	flag.Parse()
 
 	if flag.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, "usage: surfacegen [-check] [-openapi path] [-config path] [-output path]")
+		fmt.Fprintln(os.Stderr, "usage: surfacegen [-check] [-openapi path] [-config path] [-cli-output path] [-mcp-output path]")
 		os.Exit(2)
 	}
 
@@ -103,7 +105,7 @@ func main() {
 		return
 	}
 
-	if err := generate(*outputPath, document, config, operations); err != nil {
+	if err := generate(*cliOutputPath, *mcpOutputPath, document, config, operations); err != nil {
 		fmt.Fprintf(os.Stderr, "surfacegen: %v\n", err)
 		os.Exit(2)
 	}
