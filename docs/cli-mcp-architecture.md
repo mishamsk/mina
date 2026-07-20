@@ -44,7 +44,7 @@ operations:
       state: exposed
       area: <optional-area-override>
       name: <command>
-      completion: # optional; local asynchronous triggers only
+      run_wait: # optional; local asynchronous triggers only
         status_operation_id: <OpenAPI-operationId>
         run_id_response_field: <trigger-response-field>
         status_path_parameter: <status-operation-path-parameter>
@@ -108,8 +108,8 @@ operations:
 - Manual operation triggers remain available without starting automatic operations.
 - A local client runs a manual operation only when its selected REST operation explicitly triggers one.
 - A local client that triggers asynchronous manual work keeps the runtime open until that run is terminal.
-- CLI completion config identifies the trigger response's run-ID field, generated status operation and path parameter, status response's terminal field and values, and the terminal values treated as failures.
-- The CLI polls completion only through generated REST client operations.
+- CLI run-wait config identifies the trigger response's run-ID field, generated status operation and path parameter, status response's terminal field and values, and the terminal values treated as failures.
+- The CLI polls run status only through generated REST client operations; the run-wait concept is distinct from shell completion, which Cobra owns.
 - Canceling the command cancels any active manual run before the local session closes.
 - Reading operation status or invoking unrelated commands never starts operation execution.
 - Opening a local session skips every database-validation pass, including shallow validation.
@@ -129,7 +129,7 @@ operations:
 - `--json` and body field flags are mutually exclusive; bodies outside the simple-object rule use `--json` only.
 - A body/query/reserved flag-name collision makes that body JSON-only instead of introducing implicit prefixes.
 - Successful response bodies are written to stdout as JSON.
-- A configured local-completion failure is the exception: its HTTP-success terminal body is written to stderr and the command exits non-zero.
+- A configured local run-wait failure is the exception: its HTTP-success terminal body is written to stderr and the command exits non-zero.
 - REST error envelopes are written to stderr and produce a non-zero exit status.
 - Empty successful responses produce no body output.
 - Base generated commands favor stable JSON over operation-specific tables.
@@ -155,6 +155,10 @@ mina client --db ./mina.db transactions create --json @transaction.json
 - REST failures are returned as MCP tool errors with Mina's stable error envelope available to the model.
 - MCP annotations are explicit config decisions and are not security enforcement.
 - Hand-written tools may compose generated operations but do not bypass the generated REST client.
+- The server declares top-level MCP instructions covering Mina's accounting model, preferred agent workflows, and safety rules; the opening summary is self-contained for clients that truncate.
+- Tool names and descriptions are curated for agent discovery: domain-prefixed unique names, natural-language descriptions with clear use-when distinctions, and meaningful parameter descriptions.
+- List and search tools steer agents toward bounded, server-side filtered queries; REST pagination defaults remain the bounding mechanism.
+- Typed per-operation tools are the only generated MCP surface; a generic operation-router tool is out of scope.
 
 ## MCP Transports
 
