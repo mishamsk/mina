@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
@@ -41,7 +42,14 @@ func openAppDBWithAttach(
 		return nil, err
 	}
 
-	appDB, err := openAppDB(ctx, db, request, attach, func(*AppDB) error { return db.Close() })
+	appDB, err := openAppDB(ctx, db, request, attach, func(appDB *AppDB) error {
+		var detachErr error
+		if request.Path != "" {
+			detachErr = detachDatabase(context.Background(), appDB)
+		}
+
+		return errors.Join(detachErr, db.Close())
+	})
 	if err != nil {
 		if closeErr := db.Close(); closeErr != nil {
 			return nil, fmt.Errorf("%w; close database: %w", err, closeErr)

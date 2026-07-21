@@ -6,6 +6,7 @@ httpget http://127.0.0.1:$PORT/api/health
 stdout '"status":"ok"'
 kill -INT server
 wait server
+! exists $WORK/demo.db.wal
 
 duckdbsnapshot $WORK/demo.db $WORK/demo.snapshot
 

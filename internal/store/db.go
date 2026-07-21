@@ -39,14 +39,16 @@ func attachDatabaseWithOptions(ctx context.Context, appDB *AppDB, path string, o
 }
 
 func detachDatabase(ctx context.Context, appDB *AppDB) error {
-	if _, err := appDB.db.ExecContext(ctx, "USE memory.main"); err != nil {
-		return fmt.Errorf("select memory database before detach: %w", err)
-	}
-	if _, err := appDB.db.ExecContext(ctx, "DETACH "+QuoteIdentifier(appDB.accountingDatabaseName())); err != nil {
-		return fmt.Errorf("detach accounting database %s: %w", appDB.accountingDatabaseName(), err)
-	}
+	return appDB.withConn(ctx, func(conn sqlQueryer) error {
+		if _, err := conn.ExecContext(ctx, "USE memory.main"); err != nil {
+			return fmt.Errorf("select memory database before detach: %w", err)
+		}
+		if _, err := conn.ExecContext(ctx, "DETACH "+QuoteIdentifier(appDB.accountingDatabaseName())); err != nil {
+			return fmt.Errorf("detach accounting database %s: %w", appDB.accountingDatabaseName(), err)
+		}
 
-	return nil
+		return nil
+	})
 }
 
 func prepareAccountingLocation(ctx context.Context, appDB *AppDB) error {
