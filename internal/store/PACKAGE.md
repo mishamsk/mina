@@ -15,7 +15,7 @@
 - Operation runs use numeric IDs from a `_mina_internal` sequence and a store-owned DuckDB status enum.
 - AppDB open helpers perform DuckDB-specific process DB open/reuse and one-time file attach lifecycle.
 - Backup sources perform DuckDB attach/copy/detach mechanics and reject in-memory accounting sources.
-- Closing an owned `AppDB` closes its DuckDB process handle; closing a borrowed process DB detaches any attached accounting file and leaves the caller's process handle open.
+- Closing an owned `AppDB` detaches file-backed accounting state before closing its DuckDB process handle; closing a borrowed process DB detaches any attached accounting file and leaves the caller's process handle open.
 - Accounting locations cache rendered database and schema identifiers resolved with DuckDB keyword metadata at open time.
 - Schema-existence checks report the selected accounting schema before migration creates missing schemas.
 - Repository constructors receive `AppDB` and qualify accounting objects through `AppDB` helpers.
