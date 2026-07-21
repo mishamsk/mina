@@ -1311,7 +1311,11 @@ func singleValidationResult(message string) (string, error) {
 
 func runReviewerAgent(cfg config, label string, prompt string, useClaude bool) (string, error) {
 	if useClaude {
-		return runClaude(cfg.root, label, prompt, cfg.claudeModel)
+		message, err := runClaude(cfg.root, label, prompt, cfg.claudeModel)
+		if err == nil {
+			return message, nil
+		}
+		writeProgressLine("%s failed with claude; falling back to codex: %v", label, err)
 	}
 	return runCodex(cfg, label, prompt, cfg.codexReviewer)
 }
