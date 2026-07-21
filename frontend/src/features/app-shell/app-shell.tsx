@@ -52,11 +52,11 @@ const referenceNavItems: readonly NavItem[] = [
 
 const utilityNavItems: readonly NavItem[] = [
   { icon: Chart, label: "Status", to: "/status" },
-  { disabled: true, icon: SettingsCog2, label: "Settings", to: "/settings" },
+  { icon: SettingsCog2, label: "Settings", to: "/settings" },
 ];
 
 const modalOverlaySelector =
-  "[role='alertdialog'], [role='dialog'][aria-modal='true'], [data-slot='popover-content']";
+  "[role='alertdialog'], [role='dialog'][aria-modal='true'], [data-page-help-content], [data-slot='popover-content'], [data-slot='select-content'][data-state='open']";
 
 const isVisibleOverlay = (element: Element): boolean =>
   element instanceof HTMLElement && element.getClientRects().length > 0;

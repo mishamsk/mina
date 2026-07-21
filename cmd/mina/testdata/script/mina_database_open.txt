@@ -4,16 +4,12 @@ stderr 'does not exist; create it?'
 stderr 'database creation not confirmed'
 ! exists $WORK/missing.db
 
-# --yes creates and migrates missing databases without another prompt.
+# A bind failure does not create or migrate a confirmed missing database.
 ! exec mina serve --db $WORK/created.db --yes --host 192.0.2.1 --port 0
 stderr 'listen error:'
-exists $WORK/created.db
+! exists $WORK/created.db
 
-# Existing databases are migrated before listener startup.
-! exec mina serve --db $WORK/created.db --yes --host 192.0.2.1 --port 0
-stderr 'listen error:'
-
-# Omitting --db serves from an ephemeral in-memory accounting schema with a warning.
+# Omitting --db warns before attempting to listen.
 ! exec mina serve --host 192.0.2.1 --port 0
 stderr 'warning: no --db provided; using ephemeral in-memory accounting state'
 stderr 'listen error:'

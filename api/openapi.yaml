@@ -39,6 +39,21 @@ paths:
                 $ref: "#/components/schemas/HealthResponse"
         "405":
           $ref: "#/components/responses/MethodNotAllowed"
+  /api/settings:
+    get:
+      operationId: getSettings
+      tags:
+        - settings
+      summary: Get the immutable settings snapshot for this process.
+      responses:
+        "200":
+          description: Backend-owned groups with active values and effective sources.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingsResponse"
+        "405":
+          $ref: "#/components/responses/MethodNotAllowed"
   /api/background-operations:
     get:
       operationId: listBackgroundOperations
@@ -4557,6 +4572,87 @@ components:
           type: integer
           format: int64
           minimum: 0
+    SettingKey:
+      type: string
+      minLength: 1
+      description: Opaque setting identifier supplied by the settings snapshot.
+    SettingControlKind:
+      type: string
+      enum:
+        - text
+        - integer
+        - boolean
+        - select
+    SettingSource:
+      type: string
+      enum:
+        - default
+        - config_file
+        - environment
+        - cli_override
+    SettingField:
+      type: object
+      additionalProperties: false
+      required:
+        - setting_key
+        - label
+        - help
+        - order
+        - control
+        - value
+        - source
+      properties:
+        setting_key:
+          $ref: "#/components/schemas/SettingKey"
+        label:
+          type: string
+        help:
+          type: string
+        order:
+          type: integer
+          minimum: 1
+        control:
+          $ref: "#/components/schemas/SettingControlKind"
+        value:
+          type: string
+        source:
+          $ref: "#/components/schemas/SettingSource"
+    SettingGroup:
+      type: object
+      additionalProperties: false
+      required:
+        - group_key
+        - label
+        - order
+        - fields
+      properties:
+        group_key:
+          type: string
+        label:
+          type: string
+        order:
+          type: integer
+          minimum: 1
+        fields:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SettingField"
+    SettingsResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - config_file_path
+        - groups
+      properties:
+        config_file_path:
+          type: string
+          description: Resolved config file path; an empty string means the platform config directory could not be resolved.
+        groups:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/SettingGroup"
     Member:
       type: object
       additionalProperties: false

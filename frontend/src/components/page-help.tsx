@@ -46,7 +46,7 @@ export const PageHelp = ({ children, label }: PageHelpProps) => {
   }, [open]);
 
   return (
-    <div ref={containerRef} className="relative inline-flex">
+    <div ref={containerRef} className="inline-flex">
       <Tooltip label={label} asChild>
         <Button
           type="button"

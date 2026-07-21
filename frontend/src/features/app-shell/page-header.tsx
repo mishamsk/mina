@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -9,6 +9,8 @@ interface PageHeaderProps {
   readonly title: ReactNode;
   readonly titleClassName?: string;
   readonly titleId?: string;
+  readonly titleRef?: Ref<HTMLHeadingElement>;
+  readonly titleTabIndex?: number;
   readonly toolbar?: ReactNode;
 }
 
@@ -19,6 +21,8 @@ export const PageHeader = ({
   title,
   titleClassName,
   titleId,
+  titleRef,
+  titleTabIndex = -1,
   toolbar,
 }: PageHeaderProps) => (
   <header className="flex flex-col gap-4 border-b-2 border-[var(--border-ink)] pb-5 text-[var(--frame-foreground)]">
@@ -29,9 +33,11 @@ export const PageHeader = ({
             {eyebrow}
           </p>
         ) : null}
-        <div className="mt-1 flex items-center gap-2">
+        <div className="relative mt-1 flex items-center gap-2">
           <h1
             id={titleId}
+            ref={titleRef}
+            tabIndex={titleTabIndex}
             className={cn("text-pixel min-w-0 text-2xl", titleClassName)}
           >
             {title}

@@ -467,6 +467,15 @@ func serve(
 			return err
 		}
 	}
+	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Serve.Host, strconv.Itoa(cfg.Serve.Port)))
+	if err != nil {
+		return fmt.Errorf("listen error: %w", err)
+	}
+	defer func() {
+		_ = listener.Close()
+	}()
+	cfg.Serve.Port = listener.Addr().(*net.TCPAddr).Port
+
 	appInstance, err := runtime.New(ctx, cfg, runtimeOpts)
 	if err != nil {
 		return fmt.Errorf("startup error: %w", err)
@@ -486,10 +495,6 @@ func serve(
 		}
 	}
 
-	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Serve.Host, strconv.Itoa(cfg.Serve.Port)))
-	if err != nil {
-		return fmt.Errorf("listen error: %w", err)
-	}
 	appInstance.StartOperations()
 
 	server := &http.Server{

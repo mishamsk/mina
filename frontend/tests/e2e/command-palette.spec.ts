@@ -166,6 +166,7 @@ test("command palette opens globally, filters, navigates, and restores focus", a
 
 test("command palette opens from the transactions page", async ({ page }) => {
   await page.goto("/transactions");
+  await expect(page.locator("body")).toBeFocused();
   await page.getByRole("searchbox", { name: "Search" }).focus();
   await openPalette(page);
   const dialog = page.getByRole("dialog", { name: "Command Palette" });
@@ -180,6 +181,100 @@ test("command palette opens from the transactions page", async ({ page }) => {
   await expect(overviewOption).toBeFocused();
   await page.keyboard.press("KeyN");
   await expect(page.getByRole("heading", { name: "New spend" })).toHaveCount(0);
+});
+
+test("current Settings command restores focus to the sidebar link", async ({
+  page,
+}) => {
+  await page.goto("/settings/");
+  const settingsLink = page
+    .getByLabel("Primary")
+    .getByRole("link", { exact: true, name: "Settings" });
+  await settingsLink.focus();
+
+  await openPalette(page);
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  await page.getByRole("combobox", { name: "Command search" }).fill("settings");
+  await expect(dialog.getByRole("option", { name: /Settings/ })).toContainText(
+    "Current",
+  );
+  await page.keyboard.press("Enter");
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(/\/settings\/$/);
+  await expect(settingsLink).toBeFocused();
+});
+
+test("Settings navigation keeps palette focus trapped during history", async ({
+  page,
+}) => {
+  await page.goto("/overview");
+  await page
+    .getByLabel("Primary")
+    .getByRole("link", { exact: true, name: "Overview" })
+    .focus();
+  await openPalette(page);
+
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  await page.getByRole("combobox", { name: "Command search" }).fill("settings");
+  await page.keyboard.press("Enter");
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Settings" }),
+  ).toBeFocused();
+
+  await page
+    .getByLabel("Primary")
+    .getByRole("link", { exact: true, name: "Overview" })
+    .click();
+  await page.locator("header").getByRole("link", { name: "View all" }).focus();
+  await openPalette(page);
+  await page.goBack();
+
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(dialog).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Command search" }),
+  ).toBeFocused();
+  const lastOption = dialog.getByRole("option").last();
+  await page.keyboard.press("Shift+Tab");
+  await expect(lastOption).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("combobox", { name: "Command search" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Settings" }),
+  ).toBeFocused();
+});
+
+test("palette restores focus when history detaches the Settings opener", async ({
+  page,
+}) => {
+  await page.goto("/status");
+  await page
+    .getByLabel("Primary")
+    .getByRole("link", { exact: true, name: "Settings" })
+    .click();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Settings" }),
+  ).toBeFocused();
+
+  await openPalette(page);
+  await page.goBack();
+
+  await expect(page).toHaveURL(/\/status$/);
+  await expect(
+    page.getByRole("combobox", { name: "Command search" }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Status" }),
+  ).toBeFocused();
 });
 
 test("command palette transaction search renders results and opens off-page detail", async ({

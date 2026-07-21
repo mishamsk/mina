@@ -7,6 +7,7 @@ import {
   Home,
   ListBox,
   Plus,
+  SettingsCog2,
   User,
   Wallet,
 } from "pixelarticons/react";
@@ -17,6 +18,7 @@ import {
   type SVGProps,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -147,6 +149,9 @@ const transactionOptionId = (transactionId: number): string =>
 
 const normalizeSearch = (value: string): string =>
   value.trim().toLocaleLowerCase();
+
+const normalizePathname = (pathname: string): string =>
+  pathname === "/" ? pathname : pathname.replace(/\/+$/, "");
 
 const commandMatches = (command: CommandItem, query: string): boolean => {
   if (!query) {
@@ -540,6 +545,14 @@ export const CommandPalette = () => {
         label: "Status",
         to: "/status",
       },
+      {
+        group: "Navigation",
+        icon: SettingsCog2,
+        id: "page-settings",
+        keywords: ["configuration", "preferences"],
+        label: "Settings",
+        to: "/settings",
+      },
     ];
 
     const entryCommands: readonly CommandItem[] = [
@@ -730,11 +743,15 @@ export const CommandPalette = () => {
   const commandIsCurrent = useCallback(
     (to: To): boolean => {
       if (typeof to === "string") {
-        return location.pathname === to && location.search === "";
+        return (
+          normalizePathname(location.pathname) === normalizePathname(to) &&
+          location.search === ""
+        );
       }
 
       return (
-        location.pathname === (to.pathname ?? location.pathname) &&
+        normalizePathname(location.pathname) ===
+          normalizePathname(to.pathname ?? location.pathname) &&
         location.search === (to.search ?? "")
       );
     },
@@ -753,14 +770,19 @@ export const CommandPalette = () => {
         return;
       }
       if (command.to) {
-        restoreFocusRef.current = null;
+        const isCurrent = commandIsCurrent(command.to);
+        if (!isCurrent) {
+          restoreFocusRef.current = null;
+        }
         closeCommandPalette();
-        void navigate(command.to);
+        if (!isCurrent) {
+          void navigate(command.to);
+        }
         return;
       }
       closeCommandPalette();
     },
-    [navigate],
+    [commandIsCurrent, navigate],
   );
 
   const activateTransaction = useCallback(
@@ -944,20 +966,24 @@ export const CommandPalette = () => {
     });
   }, [open]);
 
-  useEffect(() => {
-    if (open) {
+  useLayoutEffect(() => {
+    if (open || openCycleRef.current === 0) {
       return;
     }
 
     const restoreTarget = restoreFocusRef.current;
     restoreFocusRef.current = null;
-    if (!restoreTarget || !document.contains(restoreTarget)) {
+    const focusTarget =
+      restoreTarget &&
+      restoreTarget !== document.body &&
+      document.contains(restoreTarget)
+        ? restoreTarget
+        : document.querySelector<HTMLElement>("main h1[tabindex='-1']");
+    if (!focusTarget) {
       return;
     }
 
-    window.requestAnimationFrame(() => {
-      focusWithoutTooltip(restoreTarget, { preventScroll: true });
-    });
+    focusWithoutTooltip(focusTarget, { preventScroll: true });
   }, [open]);
 
   useEffect(() => {
@@ -995,22 +1021,18 @@ export const CommandPalette = () => {
       return;
     }
 
-    const first = focusableElements[0];
-    const last = focusableElements[focusableElements.length - 1];
-    if (!first || !last) {
-      return;
-    }
-    const activeElement = document.activeElement;
-    if (event.shiftKey && activeElement === first) {
-      event.preventDefault();
-      last.focus();
-      return;
-    }
-
-    if (!event.shiftKey && activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    event.preventDefault();
+    const activeIndex = focusableElements.findIndex(
+      (element) => element === document.activeElement,
+    );
+    const nextIndex = event.shiftKey
+      ? activeIndex <= 0
+        ? focusableElements.length - 1
+        : activeIndex - 1
+      : activeIndex < 0 || activeIndex === focusableElements.length - 1
+        ? 0
+        : activeIndex + 1;
+    focusableElements[nextIndex]?.focus();
   };
 
   const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {

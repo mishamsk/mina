@@ -9,6 +9,13 @@ operations:
     mcp:
       state: excluded
       reason: Transport liveness is a deployment diagnostic and provides no household accounting value to an agent.
+  getSettings:
+    cli: {state: exposed, name: get}
+    mcp:
+      state: exposed
+      name: get
+      description: Use to inspect the configuration selected for this running Mina process, including backend-owned groups, active values, effective sources, and the resolved config-file location. This operation is read-only and does not predict or apply future configuration.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   listBackgroundOperations:
     cli: {state: exposed, name: list}
     mcp:

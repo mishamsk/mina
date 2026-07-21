@@ -1468,6 +1468,16 @@ func Operations() []Operation {
 			Invoke: invokeGetRecurringDefinition,
 		},
 		{
+			ID:          "getSettings",
+			Method:      "GET",
+			Path:        "/api/settings",
+			Summary:     "Get the immutable settings snapshot for this process.",
+			Description: "",
+			CLI:         CLIOperation{Area: "settings", Name: "get"},
+			Input:       InputDescriptor{},
+			Invoke:      invokeGetSettings,
+		},
+		{
 			ID:          "getTag",
 			Method:      "GET",
 			Path:        "/api/tags/{tag_id}",
@@ -4261,6 +4271,20 @@ func invokeGetRecurringDefinition(ctx context.Context, client httpclient.ClientW
 		}
 	}
 	response, err := client.GetRecurringDefinitionWithResponse(ctx, pathValue0)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetSettings(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.GetSettingsWithResponse(ctx)
 	if err != nil {
 		return InvocationResult{}, err
 	}

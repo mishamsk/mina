@@ -31,6 +31,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/operationruns"
 	"github.com/mishamsk/mina/internal/services/recurring"
+	settingservice "github.com/mishamsk/mina/internal/services/settings"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/transactiontemplates"
@@ -78,6 +79,7 @@ func newApp(
 	if err := opts.validateExecutionProfile(); err != nil {
 		return nil, err
 	}
+	cfg = resolveRuntimeDefaults(cfg)
 	if err := Validate(cfg, opts.automaticOperationsEnabled()); err != nil {
 		return nil, err
 	}
@@ -101,7 +103,7 @@ func newApp(
 		}
 	}
 
-	app, err := NewWithAppDB(ctx, appDB, cfg, opts)
+	app, err := newWithAppDB(ctx, appDB, cfg, opts)
 	if err != nil {
 		return nil, closeAppDBAfterError(appDB, err)
 	}
@@ -234,6 +236,10 @@ func NewWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config,
 	if err := opts.validateExecutionProfile(); err != nil {
 		return nil, err
 	}
+	return newWithAppDB(ctx, appDB, resolveRuntimeDefaults(cfg), opts)
+}
+
+func newWithAppDB(ctx context.Context, appDB *store.AppDB, cfg appconfig.Config, opts Options) (*App, error) {
 	operationRepo, err := store.NewOperationRunRepository(ctx, appDB)
 	if err != nil {
 		return nil, err
@@ -283,6 +289,11 @@ func newAppServices(appDB *store.AppDB, cfg appconfig.Config, opts Options, oper
 	if err != nil {
 		return appServices{}, err
 	}
+	settingsService, err := newSettingsService(cfg)
+	if err != nil {
+		return appServices{}, err
+	}
+	services.Settings = settingsService
 	services.Demo = newDemoService(appDB, cfg, opts, services)
 
 	return services, nil
@@ -421,6 +432,14 @@ func newAccountingServices(
 		StartupExchangeRateLoading: startupExchangeRateLoading,
 		ReferenceSerializer:        referenceSerializer,
 	}, nil
+}
+
+func newSettingsService(cfg appconfig.Config) (*settingservice.Service, error) {
+	snapshot, err := appconfig.NewSettingsSnapshot(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return settingservice.NewService(newSettingsSnapshot(snapshot)), nil
 }
 
 func fileBackupProvider(cfg appconfig.Config, opts Options) (backups.Provider, error) {

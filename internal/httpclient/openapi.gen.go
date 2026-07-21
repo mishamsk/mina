@@ -442,6 +442,54 @@ func (e RecurringScheduleClass) Valid() bool {
 	}
 }
 
+// Defines values for SettingControlKind.
+const (
+	Boolean SettingControlKind = "boolean"
+	Integer SettingControlKind = "integer"
+	Select  SettingControlKind = "select"
+	Text    SettingControlKind = "text"
+)
+
+// Valid indicates whether the value is a known member of the SettingControlKind enum.
+func (e SettingControlKind) Valid() bool {
+	switch e {
+	case Boolean:
+		return true
+	case Integer:
+		return true
+	case Select:
+		return true
+	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SettingSource.
+const (
+	CliOverride SettingSource = "cli_override"
+	ConfigFile  SettingSource = "config_file"
+	Default     SettingSource = "default"
+	Environment SettingSource = "environment"
+)
+
+// Valid indicates whether the value is a known member of the SettingSource enum.
+func (e SettingSource) Valid() bool {
+	switch e {
+	case CliOverride:
+		return true
+	case ConfigFile:
+		return true
+	case Default:
+		return true
+	case Environment:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Source.
 const (
 	Manual            Source = "manual"
@@ -1800,6 +1848,43 @@ type SetHiddenByPathResponse struct {
 	UpdatedCount int64 `json:"updated_count"`
 }
 
+// SettingControlKind defines model for SettingControlKind.
+type SettingControlKind string
+
+// SettingField defines model for SettingField.
+type SettingField struct {
+	Control SettingControlKind `json:"control"`
+	Help    string             `json:"help"`
+	Label   string             `json:"label"`
+	Order   int                `json:"order"`
+
+	// SettingKey Opaque setting identifier supplied by the settings snapshot.
+	SettingKey SettingKey    `json:"setting_key"`
+	Source     SettingSource `json:"source"`
+	Value      string        `json:"value"`
+}
+
+// SettingGroup defines model for SettingGroup.
+type SettingGroup struct {
+	Fields   []SettingField `json:"fields"`
+	GroupKey string         `json:"group_key"`
+	Label    string         `json:"label"`
+	Order    int            `json:"order"`
+}
+
+// SettingKey Opaque setting identifier supplied by the settings snapshot.
+type SettingKey = string
+
+// SettingSource defines model for SettingSource.
+type SettingSource string
+
+// SettingsResponse defines model for SettingsResponse.
+type SettingsResponse struct {
+	// ConfigFilePath Resolved config file path; an empty string means the platform config directory could not be resolved.
+	ConfigFilePath string         `json:"config_file_path"`
+	Groups         []SettingGroup `json:"groups"`
+}
+
 // Source defines model for Source.
 type Source string
 
@@ -2987,6 +3072,9 @@ type ClientInterface interface {
 	// DismissRecurringOccurrence request
 	DismissRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetSettings request
+	GetSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListTags request
 	ListTags(ctx context.Context, params *ListTagsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -4051,6 +4139,18 @@ func (c *Client) ConfirmRecurringOccurrence(ctx context.Context, recurringOccurr
 
 func (c *Client) DismissRecurringOccurrence(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDismissRecurringOccurrenceRequest(c.Server, recurringOccurrenceId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetSettings(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSettingsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -8059,6 +8159,33 @@ func NewDismissRecurringOccurrenceRequest(server string, recurringOccurrenceId i
 	return req, nil
 }
 
+// NewGetSettingsRequest generates requests for GetSettings
+func NewGetSettingsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/settings")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListTagsRequest generates requests for ListTags
 func NewListTagsRequest(server string, params *ListTagsParams) (*http.Request, error) {
 	var err error
@@ -9755,6 +9882,9 @@ type ClientWithResponsesInterface interface {
 
 	// DismissRecurringOccurrenceWithResponse request
 	DismissRecurringOccurrenceWithResponse(ctx context.Context, recurringOccurrenceId int64, reqEditors ...RequestEditorFn) (*DismissRecurringOccurrenceResponse, error)
+
+	// GetSettingsWithResponse request
+	GetSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error)
 
 	// ListTagsWithResponse request
 	ListTagsWithResponse(ctx context.Context, params *ListTagsParams, reqEditors ...RequestEditorFn) (*ListTagsResponse, error)
@@ -11768,6 +11898,37 @@ func (r DismissRecurringOccurrenceResponse) ContentType() string {
 	return ""
 }
 
+type GetSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *SettingsResponse
+	JSON405      *MethodNotAllowed
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListTagsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13264,6 +13425,15 @@ func (c *ClientWithResponses) DismissRecurringOccurrenceWithResponse(ctx context
 		return nil, err
 	}
 	return ParseDismissRecurringOccurrenceResponse(rsp)
+}
+
+// GetSettingsWithResponse request returning *GetSettingsResponse
+func (c *ClientWithResponses) GetSettingsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSettingsResponse, error) {
+	rsp, err := c.GetSettings(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSettingsResponse(rsp)
 }
 
 // ListTagsWithResponse request returning *ListTagsResponse
@@ -15919,6 +16089,39 @@ func ParseDismissRecurringOccurrenceResponse(rsp *http.Response) (*DismissRecurr
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSettingsResponse parses an HTTP response from a GetSettingsWithResponse call
+func ParseGetSettingsResponse(rsp *http.Response) (*GetSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SettingsResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest MethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON405 = &dest
 
 	}
 

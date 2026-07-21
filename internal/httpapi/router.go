@@ -18,6 +18,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/members"
 	"github.com/mishamsk/mina/internal/services/operationruns"
 	"github.com/mishamsk/mina/internal/services/recurring"
+	settingservice "github.com/mishamsk/mina/internal/services/settings"
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/transactiontemplates"
@@ -27,6 +28,7 @@ const defaultLocalAPITimeout = 30 * time.Second
 
 // Dependencies are router inputs owned by higher-level composition.
 type Dependencies struct {
+	Settings      *settingservice.Service
 	Health        *health.Service
 	Operations    *operationruns.Service
 	Categories    *categories.Service

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -68,14 +69,107 @@ func (c *FakeClock) Advance(duration time.Duration) {
 type Option func(*clientOptions)
 
 type clientOptions struct {
-	config         appconfig.Config
-	runtimeOptions runtime.Options
-	processDB      *ProcessDB
+	config                    appconfig.Config
+	accountingSchemaSpecified bool
+	runtimeOptions            runtime.Options
+	processDB                 *ProcessDB
 }
 
 // ProcessDB is a reusable in-memory DuckDB process handle for app tests.
 type ProcessDB struct {
 	db *sql.DB
+}
+
+// SettingsSourceValues describes representative settings values by effective source.
+type SettingsSourceValues struct {
+	ConfigFile                  string
+	ConfigFileMissing           bool
+	EnvironmentBackupDirectory  string
+	CLIOverrideAccountingSchema *string
+	CLIOverrideServePort        *int
+}
+
+// WithSettingsSources creates a test-owned settings source scenario.
+func WithSettingsSources(
+	t *testing.T,
+	values SettingsSourceValues,
+) (Option, string) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if !values.ConfigFileMissing {
+		if err := os.WriteFile(path, []byte(values.ConfigFile), 0o600); err != nil {
+			t.Fatalf("write settings config fixture: %v", err)
+		}
+	}
+	environment := map[string]string{}
+	if values.EnvironmentBackupDirectory != "" {
+		environment["MINA_BACKUP_FILE_DIRECTORY"] = values.EnvironmentBackupDirectory
+	}
+	restoreEnvironment := isolateSettingsEnvironment(t, environment)
+	defer restoreEnvironment()
+
+	overrides := appconfig.Overrides{CacheDir: appconfig.Set(filepath.Join(t.TempDir(), "cache"))}
+	if values.CLIOverrideAccountingSchema != nil {
+		overrides.AccountingSchema = appconfig.Set(*values.CLIOverrideAccountingSchema)
+	}
+	if values.CLIOverrideServePort != nil {
+		overrides.Serve.Port = appconfig.Set(*values.CLIOverrideServePort)
+	}
+	cfg, err := appconfig.Load(
+		appconfig.LoadOptions{ConfigFilePath: path},
+		overrides,
+	)
+	if err != nil {
+		t.Fatalf("load test app config: %v", err)
+	}
+
+	return func(opts *clientOptions) {
+		opts.config = cfg
+		opts.accountingSchemaSpecified = values.CLIOverrideAccountingSchema != nil
+	}, path
+}
+
+func isolateSettingsEnvironment(
+	t *testing.T,
+	environment map[string]string,
+) func() {
+	t.Helper()
+	type originalValue struct {
+		value string
+		set   bool
+	}
+	original := make(map[string]originalValue)
+	for _, source := range appconfig.Sources() {
+		if source.EnvVar == "" {
+			continue
+		}
+		value, set := os.LookupEnv(source.EnvVar)
+		original[source.EnvVar] = originalValue{value: value, set: set}
+		requested, exists := environment[source.EnvVar]
+		var err error
+		if exists {
+			err = os.Setenv(source.EnvVar, requested)
+		} else {
+			err = os.Unsetenv(source.EnvVar)
+		}
+		if err != nil {
+			t.Fatalf("isolate test environment variable %s: %v", source.EnvVar, err)
+		}
+	}
+
+	return func() {
+		for name, value := range original {
+			var err error
+			if value.set {
+				err = os.Setenv(name, value.value)
+			} else {
+				err = os.Unsetenv(name)
+			}
+			if err != nil {
+				t.Fatalf("restore test environment variable %s: %v", name, err)
+			}
+		}
+	}
 }
 
 // OpenProcessDB opens a reusable in-memory DuckDB process handle for app tests.
@@ -116,6 +210,7 @@ func WithDatabasePath(path string) Option {
 func WithAccountingSchema(schema string) Option {
 	return func(opts *clientOptions) {
 		opts.config.AccountingSchema = schema
+		opts.accountingSchemaSpecified = true
 	}
 }
 
@@ -240,7 +335,9 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 	schema := testSchemaName(t)
 	cfg := appconfig.DefaultConfig()
 	cfg.AccountingSchema = schema
-	cfg.CacheDir = filepath.Join(t.TempDir(), "mina")
+	operationalDir := t.TempDir()
+	cfg.CacheDir = filepath.Join(operationalDir, "cache")
+	cfg.ConfigFilePath = filepath.Join(operationalDir, "config.toml")
 	cfg.ExchangeRates.AutomaticLoadingEnabled = false
 	opts := clientOptions{
 		config: cfg,
@@ -251,7 +348,7 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 	for _, option := range options {
 		option(&opts)
 	}
-	if opts.config.AccountingSchema == "" {
+	if opts.config.AccountingSchema == "" && !opts.accountingSchemaSpecified {
 		opts.config.AccountingSchema = schema
 	}
 

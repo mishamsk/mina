@@ -11,6 +11,7 @@ export const OverviewPage = () => (
     <PageHeader
       title="Overview"
       titleId="overview-title"
+      titleTabIndex={-1}
       eyebrow="Household pulse"
       help={
         <PageHelp label="Overview help">

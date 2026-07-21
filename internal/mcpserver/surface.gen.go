@@ -1622,6 +1622,20 @@ func Operations() []Operation {
 			Invoke: invokeGetRecurringDefinition,
 		},
 		{
+			ID:          "getSettings",
+			Method:      "GET",
+			Path:        "/api/settings",
+			Summary:     "Get the immutable settings snapshot for this process.",
+			Description: "Use to inspect the configuration selected for this running Mina process, including backend-owned groups, active values, effective sources, and the resolved config-file location. This operation is read-only and does not predict or apply future configuration.",
+			MCP: MCPOperation{
+				Group: "settings", Name: "get",
+				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}"),
+			},
+			Input:  InputDescriptor{},
+			Invoke: invokeGetSettings,
+		},
+		{
 			ID:          "getTag",
 			Method:      "GET",
 			Path:        "/api/tags/{tag_id}",
@@ -4539,6 +4553,20 @@ func invokeGetRecurringDefinition(ctx context.Context, client httpclient.ClientW
 		}
 	}
 	response, err := client.GetRecurringDefinitionWithResponse(ctx, pathValue0)
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeGetSettings(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.GetSettingsWithResponse(ctx)
 	if err != nil {
 		return InvocationResult{}, err
 	}

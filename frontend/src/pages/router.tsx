@@ -11,6 +11,7 @@ import { MemberPage } from "./member-page";
 import { MembersPage } from "./members-page";
 import { OverviewPage } from "./overview-page";
 import { RecurringPage } from "./recurring-page";
+import { SettingsPage } from "./settings-page";
 import { StatusPage } from "./status-page";
 import { TagPage } from "./tag-page";
 import { TagsPage } from "./tags-page";
@@ -33,6 +34,7 @@ export const AppRoutes = () => (
       <Route path="/members" element={<MembersPage />} />
       <Route path="/members/:memberId" element={<MemberPage />} />
       <Route path="/status" element={<StatusPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
       <Route path="*" element={<Navigate to="/overview" replace />} />
     </Routes>
   </AppShell>

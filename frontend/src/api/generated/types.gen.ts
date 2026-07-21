@@ -868,6 +868,40 @@ export type HealthResponse = {
     schema_version: number;
 };
 
+/**
+ * Opaque setting identifier supplied by the settings snapshot.
+ */
+export type SettingKey = string;
+
+export type SettingControlKind = 'text' | 'integer' | 'boolean' | 'select';
+
+export type SettingSource = 'default' | 'config_file' | 'environment' | 'cli_override';
+
+export type SettingField = {
+    setting_key: SettingKey;
+    label: string;
+    help: string;
+    order: number;
+    control: SettingControlKind;
+    value: string;
+    source: SettingSource;
+};
+
+export type SettingGroup = {
+    group_key: string;
+    label: string;
+    order: number;
+    fields: Array<SettingField>;
+};
+
+export type SettingsResponse = {
+    /**
+     * Resolved config file path; an empty string means the platform config directory could not be resolved.
+     */
+    config_file_path: string;
+    groups: Array<SettingGroup>;
+};
+
 export type Member = {
     member_id: number;
     name: string;
@@ -1256,6 +1290,31 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type GetSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/settings';
+};
+
+export type GetSettingsErrors = {
+    /**
+     * The route does not support the requested method.
+     */
+    405: ErrorResponse;
+};
+
+export type GetSettingsError = GetSettingsErrors[keyof GetSettingsErrors];
+
+export type GetSettingsResponses = {
+    /**
+     * Backend-owned groups with active values and effective sources.
+     */
+    200: SettingsResponse;
+};
+
+export type GetSettingsResponse = GetSettingsResponses[keyof GetSettingsResponses];
 
 export type ListBackgroundOperationsData = {
     body?: never;

@@ -2,16 +2,16 @@
 
 ## Purpose
 
-- Owns generated REST client configuration and REST error-message normalization.
+- Owns generated REST client configuration and REST error normalization.
 
 ## Implicit Contracts
 
 - Generated endpoint paths and DTOs must not be handwritten here.
-- Network failure and REST error-message normalization belong only at this boundary.
+- Network failure and REST error normalization belong only at this boundary.
 
 ## Boundaries
 
-- Owns: generated client setup for browser calls, network failure normalization, and API error-message extraction.
+- Owns: generated client setup for browser calls, network failure normalization, and API error extraction.
 - Does not own: generated REST output, page behavior, or domain validation.
 
 ## Testing Notes

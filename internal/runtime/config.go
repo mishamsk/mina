@@ -55,6 +55,23 @@ func (opts Options) automaticOperationsEnabled() bool {
 	return opts.ExecutionProfile == ExecutionProfileLongRunning && opts.Operations.Enabled
 }
 
+func resolveRuntimeDefaults(cfg appconfig.Config) appconfig.Config {
+	if cfg.AccountingSchema == "" {
+		cfg.SettingSources[appconfig.SourceAccountingSchema] = appconfig.SettingSourceDefault
+	}
+	cfg.AccountingSchema = AccountingLocationConfig(cfg).Schema
+	if cfg.StartupValidation == "" {
+		cfg.SettingSources[appconfig.SourceStartupValidation] = appconfig.SettingSourceDefault
+		cfg.StartupValidation = "shallow"
+	}
+	if cfg.ExchangeRates.StartupProvider == "" {
+		cfg.SettingSources[appconfig.SourceExchangeRateStartupProvider] = appconfig.SettingSourceDefault
+	}
+	cfg.ExchangeRates.StartupProvider = exchangeRateStartupProvider(cfg)
+
+	return cfg
+}
+
 // HTTPConfig controls process-local HTTP adapter behavior.
 type HTTPConfig struct {
 	AccessLog  io.Writer

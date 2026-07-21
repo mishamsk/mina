@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -28,10 +29,14 @@ const (
 )
 
 // ConfigFileHelp documents the local config file path used by the loader.
-const ConfigFileHelp = "$XDG_CONFIG_HOME/mina/config.toml"
+const ConfigFileHelp = "$XDG_CONFIG_HOME/mina/config.toml when set; otherwise ~/.config/mina/config.toml on macOS or mina/config.toml under the OS config directory"
 
 // Config contains source-loaded process settings.
 type Config struct {
+	// ConfigFilePath is the resolved config file location.
+	ConfigFilePath string
+	// SettingSources identifies the effective source of each persistent setting.
+	SettingSources    map[SourceKey]SettingSource
 	DatabasePath      string
 	AccountingSchema  string
 	CacheDir          string
@@ -151,6 +156,20 @@ type Source struct {
 // SourceKey identifies a config field's file and environment source metadata.
 type SourceKey string
 
+// SettingSource identifies the effective source of one persistent setting.
+type SettingSource string
+
+const (
+	// SettingSourceDefault means the active value comes from Mina's built-in default.
+	SettingSourceDefault SettingSource = "default"
+	// SettingSourceConfigFile means the active value comes from the resolved TOML file.
+	SettingSourceConfigFile SettingSource = "config_file"
+	// SettingSourceEnvironment means the active value comes from an environment variable.
+	SettingSourceEnvironment SettingSource = "environment"
+	// SettingSourceCLIOverride means the active value comes from an explicit caller override.
+	SettingSourceCLIOverride SettingSource = "cli_override"
+)
+
 const (
 	// SourceDatabasePath identifies the database path config source.
 	SourceDatabasePath SourceKey = "db"
@@ -227,6 +246,7 @@ func DefaultServeConfig() ServeConfig {
 // DefaultConfig returns Mina's process config defaults.
 func DefaultConfig() Config {
 	return Config{
+		SettingSources:    defaultSettingSources(),
 		StartupValidation: defaultStartupValidation,
 		Serve:             DefaultServeConfig(),
 		ExchangeRates:     DefaultExchangeRateConfig(),
@@ -280,6 +300,8 @@ func Sources() map[SourceKey]Source {
 // Load returns process config using Mina's source precedence.
 func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	cfg := DefaultConfig()
+	configFilePath := resolveConfigFilePath(opts)
+	cfg.ConfigFilePath = configFilePath
 	if !overrides.CacheDir.IsSet {
 		cacheDir, err := DefaultCacheDir()
 		if err != nil {
@@ -288,7 +310,7 @@ func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 		cfg.CacheDir = cacheDir
 	}
 
-	fileCfg, err := loadFileConfig(opts)
+	fileCfg, err := loadFileConfig(configFilePath)
 	if err != nil {
 		return Config{}, err
 	}
@@ -296,6 +318,7 @@ func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	applyServeFile(&cfg, fileCfg)
 	applyExchangeRateFile(&cfg, fileCfg)
 	applyBackupFile(&cfg, fileCfg)
+	markSettingSources(cfg.SettingSources, fileCfg, SettingSourceConfigFile)
 
 	envCfg, err := loadEnvConfig()
 	if err != nil {
@@ -305,6 +328,7 @@ func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	applyServeFile(&cfg, envCfg)
 	applyExchangeRateFile(&cfg, envCfg)
 	applyBackupFile(&cfg, envCfg)
+	markSettingSources(cfg.SettingSources, envCfg, SettingSourceEnvironment)
 
 	applyOverrides(&cfg, overrides)
 	applyServeOverrides(&cfg, overrides.Serve)
@@ -312,6 +336,25 @@ func Load(opts LoadOptions, overrides Overrides) (Config, error) {
 	applyBackupOverrides(&cfg, overrides.Backups)
 
 	return cfg, nil
+}
+
+func defaultSettingSources() map[SourceKey]SettingSource {
+	sources := make(map[SourceKey]SettingSource)
+	_ = walkConfigFields(fileConfig{}, func(field configField) error {
+		sources[SourceKey(field.configPath())] = SettingSourceDefault
+		return nil
+	})
+
+	return sources
+}
+
+func markSettingSources(sources map[SourceKey]SettingSource, cfg fileConfig, source SettingSource) {
+	_ = walkConfigFields(cfg, func(field configField) error {
+		if !field.value.IsNil() {
+			sources[SourceKey(field.configPath())] = source
+		}
+		return nil
+	})
 }
 
 func applyBackupFile(cfg *Config, fileCfg fileConfig) {
@@ -341,21 +384,12 @@ func applyExchangeRateFile(cfg *Config, fileCfg fileConfig) {
 	}
 }
 
-func loadFileConfig(opts LoadOptions) (fileConfig, error) {
+func loadFileConfig(path string) (fileConfig, error) {
 	var cfg fileConfig
-	path := configFilePath(opts)
-	if path == "" {
-		return cfg, nil
-	}
-
-	_, err := os.Stat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return cfg, nil
-	}
-	if err != nil {
-		return cfg, fmt.Errorf("stat config file %s: %w", path, err)
-	}
 	meta, err := toml.DecodeFile(path, &cfg)
+	if errors.Is(err, os.ErrNotExist) {
+		return fileConfig{}, nil
+	}
 	if err != nil {
 		return cfg, fmt.Errorf("read config file %s: %w", path, err)
 	}
@@ -366,13 +400,28 @@ func loadFileConfig(opts LoadOptions) (fileConfig, error) {
 	return cfg, nil
 }
 
-func configFilePath(opts LoadOptions) string {
+func resolveConfigFilePath(opts LoadOptions) string {
 	if opts.ConfigFilePath != "" {
 		return opts.ConfigFilePath
 	}
 
-	configHome := os.Getenv(configHomeEnv)
-	if configHome == "" {
+	if configHome := os.Getenv(configHomeEnv); configHome != "" {
+		return filepath.Join(configHome, configRelPath)
+	}
+
+	var (
+		configHome string
+		err        error
+	)
+	if runtime.GOOS == "darwin" {
+		configHome, err = os.UserHomeDir()
+		if err == nil {
+			configHome = filepath.Join(configHome, ".config")
+		}
+	} else {
+		configHome, err = os.UserConfigDir()
+	}
+	if err != nil {
 		return ""
 	}
 
@@ -433,56 +482,37 @@ func applyServeFile(cfg *Config, fileCfg fileConfig) {
 }
 
 func applyOverrides(cfg *Config, overrides Overrides) {
-	if overrides.DatabasePath.IsSet {
-		cfg.DatabasePath = overrides.DatabasePath.Val
-	}
-	if overrides.AccountingSchema.IsSet {
-		cfg.AccountingSchema = overrides.AccountingSchema.Val
-	}
+	applyOverride(&cfg.DatabasePath, overrides.DatabasePath, cfg.SettingSources, SourceDatabasePath)
+	applyOverride(&cfg.AccountingSchema, overrides.AccountingSchema, cfg.SettingSources, SourceAccountingSchema)
 	if overrides.CacheDir.IsSet {
 		cfg.CacheDir = overrides.CacheDir.Val
 	}
-	if overrides.StartupValidation.IsSet {
-		cfg.StartupValidation = overrides.StartupValidation.Val
-	}
+	applyOverride(&cfg.StartupValidation, overrides.StartupValidation, cfg.SettingSources, SourceStartupValidation)
 }
 
 func applyServeOverrides(cfg *Config, overrides ServeOverrides) {
-	if overrides.Host.IsSet {
-		cfg.Serve.Host = overrides.Host.Val
-	}
-	if overrides.Port.IsSet {
-		cfg.Serve.Port = overrides.Port.Val
-	}
-	if overrides.AccessLogPath.IsSet {
-		cfg.Serve.AccessLogPath = overrides.AccessLogPath.Val
-	}
+	applyOverride(&cfg.Serve.Host, overrides.Host, cfg.SettingSources, SourceServeHost)
+	applyOverride(&cfg.Serve.Port, overrides.Port, cfg.SettingSources, SourceServePort)
+	applyOverride(&cfg.Serve.AccessLogPath, overrides.AccessLogPath, cfg.SettingSources, SourceServeAccessLogPath)
 }
 
 func applyExchangeRateOverrides(cfg *Config, overrides ExchangeRateOverrides) {
-	if overrides.AutomaticLoadingEnabled.IsSet {
-		cfg.ExchangeRates.AutomaticLoadingEnabled = overrides.AutomaticLoadingEnabled.Val
-	}
-	if overrides.LoadScheduleUTC.IsSet {
-		cfg.ExchangeRates.LoadScheduleUTC = overrides.LoadScheduleUTC.Val
-	}
-	if overrides.StartupProvider.IsSet {
-		cfg.ExchangeRates.StartupProvider = overrides.StartupProvider.Val
-	}
-	if overrides.Frankfurter.BaseURL.IsSet {
-		cfg.ExchangeRates.Frankfurter.BaseURL = overrides.Frankfurter.BaseURL.Val
-	}
+	applyOverride(&cfg.ExchangeRates.AutomaticLoadingEnabled, overrides.AutomaticLoadingEnabled, cfg.SettingSources, SourceExchangeRateAutomaticLoadingEnabled)
+	applyOverride(&cfg.ExchangeRates.LoadScheduleUTC, overrides.LoadScheduleUTC, cfg.SettingSources, SourceExchangeRateLoadScheduleUTC)
+	applyOverride(&cfg.ExchangeRates.StartupProvider, overrides.StartupProvider, cfg.SettingSources, SourceExchangeRateStartupProvider)
+	applyOverride(&cfg.ExchangeRates.Frankfurter.BaseURL, overrides.Frankfurter.BaseURL, cfg.SettingSources, SourceExchangeRateFrankfurterBaseURL)
 }
 
 func applyBackupOverrides(cfg *Config, overrides BackupOverrides) {
-	if overrides.File.Directory.IsSet {
-		cfg.Backups.File.Directory = overrides.File.Directory.Val
-	}
-	if overrides.File.RetentionCount.IsSet {
-		cfg.Backups.File.RetentionCount = overrides.File.RetentionCount.Val
-	}
-	if overrides.File.ScheduleUTC.IsSet {
-		cfg.Backups.File.ScheduleUTC = overrides.File.ScheduleUTC.Val
+	applyOverride(&cfg.Backups.File.Directory, overrides.File.Directory, cfg.SettingSources, SourceBackupFileDirectory)
+	applyOverride(&cfg.Backups.File.RetentionCount, overrides.File.RetentionCount, cfg.SettingSources, SourceBackupFileRetentionCount)
+	applyOverride(&cfg.Backups.File.ScheduleUTC, overrides.File.ScheduleUTC, cfg.SettingSources, SourceBackupFileScheduleUTC)
+}
+
+func applyOverride[T any](target *T, override Override[T], sources map[SourceKey]SettingSource, key SourceKey) {
+	if override.IsSet {
+		*target = override.Val
+		sources[key] = SettingSourceCLIOverride
 	}
 }
 

@@ -260,7 +260,7 @@ duckdbexec $WORK/startup_broken_schema.db startup_broken_schema.sql
 ! exec mina migrate --db $WORK/startup_broken_schema.db --schema demo --yes
 stderr 'database validation failed'
 stderr 'error: schema: missing column journal_record.memo'
-! exec mina serve --db $WORK/startup_broken_schema.db --schema demo --yes --host 192.0.2.1 --port 0 --quiet
+! exec mina serve --db $WORK/startup_broken_schema.db --schema demo --yes --host 127.0.0.1 --port 0 --quiet
 stderr 'database validation failed'
 stderr 'error: schema: missing column journal_record.memo'
 
@@ -270,17 +270,23 @@ exec mina client --db $WORK/startup_broken_schema.db --yes tags list
 stdout '"total_count":8'
 env MINA_SCHEMA=
 
-! exec mina serve --config-file startup-validation-none.toml --db $WORK/startup_broken_schema.db --schema demo --yes --host 192.0.2.1 --port 0 --quiet
-stderr 'listen error:'
+freeport
+exec mina serve --config-file startup-validation-none.toml --db $WORK/startup_broken_schema.db --schema demo --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpget http://127.0.0.1:$PORT/api/health
+kill -INT server
+wait server
 
 env MINA_STARTUP_VALIDATION=full
-! exec mina serve --db $WORK/ref_dangling_account.db --schema demo --yes --host 192.0.2.1 --port 0 --quiet
+! exec mina serve --db $WORK/ref_dangling_account.db --schema demo --yes --host 127.0.0.1 --port 0 --quiet
 stderr 'database validation failed'
 stderr 'error: referential: active journal_record.account_id references missing account'
 
 env MINA_STARTUP_VALIDATION=none
-! exec mina serve --db $WORK/startup_broken_schema.db --schema demo --yes --host 192.0.2.1 --port 0 --quiet
-stderr 'listen error:'
+freeport
+exec mina serve --db $WORK/startup_broken_schema.db --schema demo --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpget http://127.0.0.1:$PORT/api/health
+kill -INT server
+wait server
 
 duckdbsnapshot $WORK/demo.db $WORK/demo.snapshot
 

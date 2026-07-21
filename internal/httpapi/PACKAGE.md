@@ -29,7 +29,7 @@
 ## Boundaries
 
 - Owns: HTTP status mapping, transport DTO conversion, REST query validation/mapping, adapter-owned value parsing, router middleware, and generated OpenAPI server code.
-- Does not own: database opening, CLI parsing, SQL execution, or service-layer decisions.
+- Does not own: database opening, CLI parsing, SQL execution, appconfig access, or service-layer decisions.
 
 ## Testing Notes
 

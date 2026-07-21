@@ -20,6 +20,7 @@
 - `ValidateDatabase` opens the selected file-backed accounting state read-only and never writes to the target.
 - Runtime derives accounting database and schema defaults from `appconfig.Config`.
 - Runtime consumes source-loaded app settings from `internal/appconfig`.
+- Runtime resolves mode-ready config values once, adapts appconfig's immutable settings snapshot, and composes the settings service; see `docs/settings-architecture.md`.
 - Runtime consumes the cache directory resolved by `internal/appconfig`.
 - Automatic operation execution requires both the long-running profile and enabled runtime operations.
 - Runtime dependencies carry only true side-effect seams such as clocks, network provider factories, and cache HTTP clients.

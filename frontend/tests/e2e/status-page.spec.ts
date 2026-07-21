@@ -299,7 +299,9 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await expect(
     primaryNav.getByRole("link", { name: "Transactions" }),
   ).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("button", { name: "Settings" })).toBeDisabled();
+  await expect(
+    primaryNav.getByRole("link", { name: "Settings" }),
+  ).toHaveAttribute("href", "/settings");
   await expect(balanceStrip.getByTestId("featured-balance-row")).toHaveCount(0);
   const featuredIcon = balanceStrip.locator("svg").first();
   await expect(featuredIcon).toBeVisible();
@@ -315,8 +317,8 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
     .getByRole("link", { name: "Status" })
     .locator("svg")
     .first();
-  const settingsIcon = page
-    .getByRole("button", { name: "Settings" })
+  const settingsIcon = primaryNav
+    .getByRole("link", { name: "Settings" })
     .locator("svg")
     .first();
   await expect(statusIcon).toBeVisible();

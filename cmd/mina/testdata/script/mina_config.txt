@@ -2,7 +2,7 @@
 exec mina help serve
 stdout 'Serve the REST API'
 stdout '--config-file'
-stdout 'XDG_CONFIG_HOME/mina/config.toml'
+stdout 'XDG_CONFIG_HOME/mina/config.toml when set; otherwise ~/.config/mina/config.toml on macOS or mina/config.toml under the OS config directory'
 stdout '--host'
 stdout 'config: serve.host; env: MINA_HOST'
 stdout 'env: MINA_YES'
@@ -24,12 +24,12 @@ stderr 'unsupported key unsupported'
 env MINA_DB=env-serve.db MINA_HOST=192.0.2.2 MINA_PORT=32002
 ! exec mina serve
 stderr '192\.0\.2\.2:32002'
-exists env-serve.db
+! exists env-serve.db
 
 # CLI flags override both environment values and the config file.
 ! exec mina serve --db cli-serve.db --host 192.0.2.3 --port 32003 --yes
 stderr '192\.0\.2\.3:32003'
-exists cli-serve.db
+! exists cli-serve.db
 
 -- config.toml --
 db = "cfg-serve.db"

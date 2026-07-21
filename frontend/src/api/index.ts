@@ -1,5 +1,5 @@
 import { client } from "./generated/client.gen";
-export { apiErrorMessage } from "./error-message";
+export { apiErrorDetails, apiErrorMessage } from "./error-message";
 export * from "./generated";
 export * from "./ledger";
 
