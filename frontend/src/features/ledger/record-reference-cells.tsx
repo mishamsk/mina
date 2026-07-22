@@ -1,6 +1,9 @@
 import { Close, Pencil } from "pixelarticons/react";
 import {
+  type CSSProperties,
   type ReactNode,
+  type RefObject,
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -113,6 +116,118 @@ interface ReferenceEditorProps {
   readonly saving: boolean;
 }
 
+const editorViewportInset = 8;
+const editorAnchorGap = 6;
+const editorPreferredWidth = 352;
+const editorPreferredHeight = 320;
+const editorMinimumHeight = 256;
+
+interface FloatingEditorPosition {
+  readonly bottom?: number;
+  readonly left: number;
+  readonly maxHeight: number;
+  readonly top?: number;
+  readonly width: number;
+}
+
+const useFloatingEditorPosition = (
+  anchorRef: RefObject<HTMLElement | null>,
+  editorRef: RefObject<HTMLElement | null>,
+  active: boolean,
+): CSSProperties => {
+  const [position, setPosition] = useState<FloatingEditorPosition>();
+
+  const updatePosition = useCallback(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) {
+      return;
+    }
+
+    const anchorBounds = anchor.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const width = Math.min(
+      editorPreferredWidth,
+      viewportWidth - editorViewportInset * 2,
+    );
+    const left = Math.min(
+      Math.max(anchorBounds.left, editorViewportInset),
+      viewportWidth - width - editorViewportInset,
+    );
+    const availableBelow = Math.max(
+      0,
+      viewportHeight -
+        anchorBounds.bottom -
+        editorAnchorGap -
+        editorViewportInset,
+    );
+    const availableAbove = Math.max(
+      0,
+      anchorBounds.top - editorAnchorGap - editorViewportInset,
+    );
+    const placeBelow =
+      availableBelow >= editorPreferredHeight ||
+      availableBelow >= availableAbove;
+    const anchorLeavesUsableSpace =
+      availableBelow >= editorMinimumHeight ||
+      availableAbove >= editorMinimumHeight;
+
+    if (!anchorLeavesUsableSpace) {
+      setPosition({
+        left,
+        maxHeight: viewportHeight - editorViewportInset * 2,
+        top: editorViewportInset,
+        width,
+      });
+      return;
+    }
+
+    setPosition({
+      bottom: placeBelow
+        ? undefined
+        : viewportHeight - anchorBounds.top + editorAnchorGap,
+      left,
+      maxHeight: Math.max(0, placeBelow ? availableBelow : availableAbove),
+      top: placeBelow ? anchorBounds.bottom + editorAnchorGap : undefined,
+      width,
+    });
+  }, [anchorRef, editorRef]);
+
+  useLayoutEffect(() => {
+    if (!active) {
+      return;
+    }
+
+    updatePosition();
+    const frame = window.requestAnimationFrame(updatePosition);
+    const resizeObserver = new ResizeObserver(updatePosition);
+    if (anchorRef.current) {
+      resizeObserver.observe(anchorRef.current);
+    }
+    if (editorRef.current) {
+      resizeObserver.observe(editorRef.current);
+    }
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [active, anchorRef, editorRef, updatePosition]);
+
+  return position
+    ? {
+        bottom: position.bottom,
+        left: position.left,
+        maxHeight: position.maxHeight,
+        top: position.top,
+        width: position.width,
+      }
+    : { visibility: "hidden" };
+};
+
 const CategoryReferenceEditor = ({
   maps,
   onCancel,
@@ -128,8 +243,8 @@ const CategoryReferenceEditor = ({
   return (
     <>
       <EntityPicker
-        autoFocus
         id={`record-${record.record_id}-category`}
+        inlineOptions
         label="Category"
         options={categoryReferenceOptions(maps, record.category_id, false)}
         value={categoryId}
@@ -164,8 +279,8 @@ const TagsReferenceEditor = ({
   return (
     <>
       <EntityMultiPicker
-        autoFocus
         id={`record-${record.record_id}-tags`}
+        inlineOptions
         label="Tags"
         options={tagReferenceOptions(maps, record.tag_ids, false)}
         value={tagIds}
@@ -203,8 +318,8 @@ const MemberReferenceEditor = ({
     <>
       <EntityPicker
         key={pickerResetVersion}
-        autoFocus={pickerResetVersion === 0}
         id={`record-${record.record_id}-member`}
+        inlineOptions
         label="Member"
         options={memberReferenceOptions(maps, record.member_id)}
         value={memberId}
@@ -268,11 +383,28 @@ export const RecordReferenceCells = ({
   const [entityPickerOpen, setEntityPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const displayCellRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const restoreDisplayFocusRef = useRef(false);
   const { activeEditorId, finish, requestStart } = useInlineEdit();
   const instanceId = useId();
   const editorId = `${testIdPrefix}-${field}-${instanceId}`;
   const editing = activeEditorId === editorId;
+  const editorStyle = useFloatingEditorPosition(
+    displayCellRef,
+    editorRef,
+    editing,
+  );
+  const editorPositioned = editorStyle.visibility !== "hidden";
+
+  useLayoutEffect(() => {
+    if (!editing || !editorPositioned) {
+      return;
+    }
+
+    editorRef.current
+      ?.querySelector<HTMLInputElement>('[role="combobox"]')
+      ?.focus();
+  }, [editing, editorPositioned]);
 
   const restoreDisplayFocus = () => {
     restoreDisplayFocusRef.current = true;
@@ -327,11 +459,12 @@ export const RecordReferenceCells = ({
     }
   };
 
-  if (!editing) {
-    return (
+  return (
+    <div className="relative min-w-0">
       <div
         ref={displayCellRef}
-        tabIndex={0}
+        inert={editing ? true : undefined}
+        tabIndex={editing ? -1 : 0}
         className="group relative flex min-h-6 min-w-0 items-start"
         data-testid={`${testIdPrefix}-${field}-cell`}
         onKeyDown={(event) => {
@@ -342,7 +475,7 @@ export const RecordReferenceCells = ({
         }}
       >
         <span className="min-w-0 flex-1 break-words">{value}</span>
-        {editable ? (
+        {editable && !editing ? (
           <Tooltip label={`Edit ${fieldLabel[field]}`} asChild>
             <Button
               type="button"
@@ -359,61 +492,63 @@ export const RecordReferenceCells = ({
           </Tooltip>
         ) : null}
       </div>
-    );
-  }
+      {editing ? (
+        <div
+          ref={editorRef}
+          className="bg-card fixed z-80 flex min-h-0 flex-col gap-2 overflow-hidden border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)]"
+          data-inline-editor-content={editorId}
+          data-inline-editor-id={editorId}
+          data-inline-editor-pending={saving ? "true" : undefined}
+          data-testid={`${testIdPrefix}-${field}-editor`}
+          style={editorStyle}
+          onKeyDownCapture={(event) => {
+            if (event.key === "Escape") {
+              if (entityPickerOpen) {
+                return;
+              }
 
-  return (
-    <div
-      className="flex min-w-0 flex-col gap-2"
-      data-inline-editor-id={editorId}
-      data-inline-editor-pending={saving ? "true" : undefined}
-      data-testid={`${testIdPrefix}-${field}-editor`}
-      onKeyDownCapture={(event) => {
-        if (event.key === "Escape") {
-          if (entityPickerOpen) {
-            return;
-          }
-
-          event.preventDefault();
-          event.stopPropagation();
-          cancel();
-        }
-      }}
-    >
-      {field === "category" ? (
-        <CategoryReferenceEditor
-          maps={maps}
-          onCancel={cancel}
-          onPickerOpenChange={setEntityPickerOpen}
-          onSave={(update) => void save(update)}
-          record={record}
-          saving={saving}
-        />
-      ) : null}
-      {field === "tags" ? (
-        <TagsReferenceEditor
-          maps={maps}
-          onCancel={cancel}
-          onPickerOpenChange={setEntityPickerOpen}
-          onSave={(update) => void save(update)}
-          record={record}
-          saving={saving}
-        />
-      ) : null}
-      {field === "member" ? (
-        <MemberReferenceEditor
-          maps={maps}
-          onCancel={cancel}
-          onPickerOpenChange={setEntityPickerOpen}
-          onSave={(update) => void save(update)}
-          record={record}
-          saving={saving}
-        />
-      ) : null}
-      {errorMessage ? (
-        <p className="text-destructive text-xs" role="alert">
-          {errorMessage}
-        </p>
+              event.preventDefault();
+              event.stopPropagation();
+              cancel();
+            }
+          }}
+        >
+          {field === "category" ? (
+            <CategoryReferenceEditor
+              maps={maps}
+              onCancel={cancel}
+              onPickerOpenChange={setEntityPickerOpen}
+              onSave={(update) => void save(update)}
+              record={record}
+              saving={saving}
+            />
+          ) : null}
+          {field === "tags" ? (
+            <TagsReferenceEditor
+              maps={maps}
+              onCancel={cancel}
+              onPickerOpenChange={setEntityPickerOpen}
+              onSave={(update) => void save(update)}
+              record={record}
+              saving={saving}
+            />
+          ) : null}
+          {field === "member" ? (
+            <MemberReferenceEditor
+              maps={maps}
+              onCancel={cancel}
+              onPickerOpenChange={setEntityPickerOpen}
+              onSave={(update) => void save(update)}
+              record={record}
+              saving={saving}
+            />
+          ) : null}
+          {errorMessage ? (
+            <p className="text-destructive shrink-0 text-xs" role="alert">
+              {errorMessage}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

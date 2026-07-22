@@ -1509,7 +1509,7 @@ test("accounts tree restructure handles conflicts and cancel focus", async ({
   await conflictDialog.getByRole("button", { name: "Cancel" }).click();
   await expect(conflictDialog).toBeHidden();
 
-  await page.getByLabel("Search").fill(cancelSource);
+  await fillAndExpectValue(page.getByLabel("Search"), cancelSource);
   const cancelRow = page
     .getByTestId("accounts-tree-row")
     .filter({ hasText: "Cancel" })

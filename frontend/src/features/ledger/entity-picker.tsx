@@ -18,6 +18,7 @@ interface EntityPickerProps {
   readonly disabled?: boolean;
   readonly exactMatchOptions?: readonly EntityOption[];
   readonly id: string;
+  readonly inlineOptions?: boolean;
   readonly label: string;
   readonly labelClassName?: string;
   readonly onChange: (id: number | undefined) => void;
@@ -36,6 +37,7 @@ export const EntityPicker = ({
   disabled = false,
   exactMatchOptions = [],
   id,
+  inlineOptions = false,
   label,
   labelClassName,
   onChange,
@@ -75,7 +77,12 @@ export const EntityPicker = ({
   };
 
   return (
-    <div className="relative flex flex-col gap-1">
+    <div
+      className={cn(
+        "relative flex flex-col gap-1",
+        inlineOptions && "min-h-0 flex-1",
+      )}
+    >
       <label
         htmlFor={id}
         className={cn("text-sm font-semibold", labelClassName)}
@@ -90,7 +97,7 @@ export const EntityPicker = ({
         aria-expanded={open && !disabled}
         aria-autocomplete="list"
         aria-activedescendant={activeOptionId}
-        className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+        className="bg-card h-9 shrink-0 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
         disabled={disabled}
         placeholder={placeholder}
         value={query}
@@ -175,7 +182,12 @@ export const EntityPicker = ({
         <div
           id={`${id}-options`}
           role="listbox"
-          className="bg-card absolute top-full right-0 left-0 z-30 mt-1 max-h-56 overflow-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+          className={cn(
+            "bg-card z-30 overflow-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
+            inlineOptions
+              ? "relative mt-1 min-h-0 flex-1"
+              : "absolute top-full right-0 left-0 mt-1 max-h-56",
+          )}
         >
           {filteredOptions.length > 0 ? (
             filteredOptions.map((option, optionIndex) => (
@@ -224,6 +236,7 @@ export const EntityPicker = ({
 interface EntityMultiPickerProps {
   readonly autoFocus?: boolean;
   readonly id: string;
+  readonly inlineOptions?: boolean;
   readonly label: string;
   readonly labelClassName?: string;
   readonly onChange: (ids: readonly number[]) => void;
@@ -236,6 +249,7 @@ interface EntityMultiPickerProps {
 export const EntityMultiPicker = ({
   autoFocus = false,
   id,
+  inlineOptions = false,
   label,
   labelClassName,
   onChange,
@@ -250,11 +264,14 @@ export const EntityMultiPicker = ({
   );
 
   return (
-    <div className="flex flex-col gap-2">
+    <div
+      className={cn("flex flex-col gap-2", inlineOptions && "min-h-0 flex-1")}
+    >
       <EntityPicker
         autoFocus={autoFocus}
         clearOnSelect
         id={id}
+        inlineOptions={inlineOptions}
         label={label}
         labelClassName={labelClassName}
         onOpenChange={onOpenChange}
@@ -268,7 +285,13 @@ export const EntityMultiPicker = ({
         }}
       />
       {selectedOptions.length > 0 ? (
-        <div className="relative z-40 flex flex-wrap gap-1">
+        <div
+          className={cn(
+            "relative z-40 flex flex-wrap gap-1 p-0.5",
+            inlineOptions && "max-h-28 shrink-0 overflow-y-auto",
+          )}
+          data-testid="entity-multi-picker-selected"
+        >
           {selectedOptions.map((option) => (
             <span
               key={option.id}

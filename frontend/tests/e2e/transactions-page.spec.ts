@@ -397,19 +397,37 @@ const getTransactionDetail = async (
   return (await response.json()) as TransactionDetailFixture;
 };
 
-const editorActionsFitCell = (cell: Locator) =>
-  cell.evaluate((element) => {
-    const cellRect = element.getBoundingClientRect();
+const editorButtonsFitContainer = (container: Locator) =>
+  container.evaluate((element) => {
+    const containerRect = element.getBoundingClientRect();
     return Array.from(
       element.querySelectorAll<HTMLElement>("[data-slot='button']"),
     ).every((button) => {
       const buttonRect = button.getBoundingClientRect();
       return (
-        buttonRect.left >= cellRect.left - 0.5 &&
-        buttonRect.right <= cellRect.right + 0.5
+        buttonRect.left >= containerRect.left - 0.5 &&
+        buttonRect.right <= containerRect.right + 0.5
       );
     });
   });
+
+const requiredBoundingBox = async (locator: Locator) => {
+  const bounds = await locator.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (!bounds) {
+    throw new Error("expected visible element bounds");
+  }
+  return bounds;
+};
+
+const boundingBoxesOverlap = (
+  first: Awaited<ReturnType<typeof requiredBoundingBox>>,
+  second: Awaited<ReturnType<typeof requiredBoundingBox>>,
+): boolean =>
+  first.x < second.x + second.width - 0.5 &&
+  first.x + first.width > second.x + 0.5 &&
+  first.y < second.y + second.height - 0.5 &&
+  first.y + first.height > second.y + 0.5;
 
 const expectInlineSaveKeepsTransactionTableStable = async (
   page: Page,
@@ -934,9 +952,11 @@ test("expanded records edit per-record values and escalate structural changes", 
   await categoryCell.focus();
   await categoryCell.press("F2");
   const categoryEditor = records.getByTestId("record-category-editor").first();
-  await categoryEditor
-    .getByRole("combobox", { name: "Category" })
-    .fill(nextCategory.fqn);
+  const categoryInput = categoryEditor.getByRole("combobox", {
+    name: "Category",
+  });
+  await expect(categoryInput).toBeFocused();
+  await categoryInput.fill(nextCategory.fqn);
   await categoryEditor.getByRole("button", { name: "Save category" }).click();
   await expect(categoryCell).toContainText(nextCategory.fqn);
   await expect(transactionRow.locator("td").nth(5)).toContainText("Mixed");
@@ -945,8 +965,10 @@ test("expanded records edit per-record values and escalate structural changes", 
   await tagCell.hover();
   await tagCell.getByRole("button", { name: "Edit Tags" }).click();
   const tagEditor = records.getByTestId("record-tags-editor").first();
-  await tagEditor.getByRole("combobox", { name: "Tags" }).fill(addedTag.fqn);
-  await tagEditor.getByRole("combobox", { name: "Tags" }).press("Enter");
+  const tagInput = tagEditor.getByRole("combobox", { name: "Tags" });
+  await expect(tagInput).toBeFocused();
+  await tagInput.fill(addedTag.fqn);
+  await tagInput.press("Enter");
   await tagEditor.getByRole("button", { name: "Save tags" }).click();
   await expect(tagCell).toContainText(addedTag.name);
 
@@ -954,9 +976,11 @@ test("expanded records edit per-record values and escalate structural changes", 
   await memberCell.hover();
   await memberCell.getByRole("button", { name: "Edit Member" }).click();
   let memberEditor = records.getByTestId("record-member-editor").first();
-  await memberEditor
-    .getByRole("combobox", { name: "Member" })
-    .fill(member.name);
+  const initialMemberInput = memberEditor.getByRole("combobox", {
+    name: "Member",
+  });
+  await expect(initialMemberInput).toBeFocused();
+  await initialMemberInput.fill(member.name);
   await memberEditor.getByRole("button", { name: "Save member" }).click();
   await expect(memberCell).toContainText(member.name);
   await memberCell.hover();
@@ -1033,6 +1057,232 @@ test("expanded records edit per-record values and escalate structural changes", 
     page.getByRole("heading", { name: "Edit journal" }),
   ).toBeVisible();
   await deleteTransaction(page, transaction);
+});
+
+test("tag editor keeps many assignments and controls separate in a narrow viewport", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  await page.setViewportSize({ width: 1024, height: 480 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const assignedTags = await Promise.all(
+    Array.from({ length: 40 }, (_, index) =>
+      createTag(
+        page,
+        `E2E:TagEditor:${unique}:Assigned${String(index + 1).padStart(2, "0")}`,
+      ),
+    ),
+  );
+  const suggestion = await createTag(
+    page,
+    `E2E:TagEditor:${unique}:Suggestion${unique}`,
+  );
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E tag editor overlap ${unique}`;
+  const createResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-10",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-23.45000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: assignedTags.map((tag) => tag.tag_id),
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "23.45000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [assignedTags[0]!.tag_id],
+        },
+      ],
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionDetailFixture;
+
+  await page.goto("/transactions?page=1&pageSize=100&hideExpected=true");
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await expect(row).toBeVisible();
+  await row.locator("td").nth(4).click();
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+
+  const tableScroll = page.getByTestId("transactions-table-scroll");
+  const tagCell = page
+    .getByTestId("expanded-records")
+    .getByTestId("record-tags-cell")
+    .first();
+  await tableScroll.evaluate((container, transactionId) => {
+    const target = container.querySelector<HTMLElement>(
+      `[data-transaction-id="${transactionId}"] + tr [data-testid="record-tags-cell"]`,
+    );
+    if (!target) {
+      return;
+    }
+    const containerBounds = container.getBoundingClientRect();
+    const targetBounds = target.getBoundingClientRect();
+    container.scrollTop += targetBounds.bottom - containerBounds.bottom + 12;
+  }, transaction.transaction_id);
+
+  await tagCell.focus();
+  await tagCell.press("F2");
+  const tagEditor = page
+    .getByTestId("expanded-records")
+    .getByTestId("record-tags-editor")
+    .first();
+  await expect(tagEditor).toBeVisible();
+  const searchInput = tagEditor.getByRole("combobox", { name: "Tags" });
+  await searchInput.fill(`Suggestion${unique}`);
+  const suggestionList = tagEditor.getByRole("listbox");
+  await expect(
+    suggestionList.getByRole("option", { name: suggestion.name }),
+  ).toBeVisible();
+
+  const selectedTags = tagEditor.getByTestId("entity-multi-picker-selected");
+  const saveButton = tagEditor.getByRole("button", { name: "Save tags" });
+  const cancelButton = tagEditor.getByRole("button", {
+    name: "Cancel tags edit",
+  });
+  await expect(
+    selectedTags.getByRole("button", { name: /^Remove / }),
+  ).toHaveCount(assignedTags.length);
+  await expect(saveButton).toBeVisible();
+  await expect(cancelButton).toBeVisible();
+
+  const editorBounds = await requiredBoundingBox(tagEditor);
+  const inputBounds = await requiredBoundingBox(searchInput);
+  const listBounds = await requiredBoundingBox(suggestionList);
+  const selectedBounds = await requiredBoundingBox(selectedTags);
+  const saveBounds = await requiredBoundingBox(saveButton);
+  const cancelBounds = await requiredBoundingBox(cancelButton);
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  expect(editorBounds.x).toBeGreaterThanOrEqual(7.5);
+  expect(editorBounds.y).toBeGreaterThanOrEqual(7.5);
+  expect(editorBounds.x + editorBounds.width).toBeLessThanOrEqual(
+    (viewport?.width ?? 0) - 7.5,
+  );
+  expect(editorBounds.y + editorBounds.height).toBeLessThanOrEqual(
+    (viewport?.height ?? 0) - 7.5,
+  );
+  expect(boundingBoxesOverlap(inputBounds, listBounds)).toBe(false);
+  expect(boundingBoxesOverlap(listBounds, selectedBounds)).toBe(false);
+  expect(boundingBoxesOverlap(selectedBounds, saveBounds)).toBe(false);
+  expect(boundingBoxesOverlap(selectedBounds, cancelBounds)).toBe(false);
+  expect(boundingBoxesOverlap(listBounds, saveBounds)).toBe(false);
+  expect(boundingBoxesOverlap(listBounds, cancelBounds)).toBe(false);
+  await expect
+    .poll(() =>
+      selectedTags.evaluate(
+        (element) => element.scrollHeight > element.clientHeight,
+      ),
+    )
+    .toBe(true);
+
+  await selectedTags
+    .getByRole("button", {
+      name: `Remove ${assignedTags.at(-1)?.name ?? "missing tag"}`,
+    })
+    .click();
+  await expect(
+    selectedTags.getByRole("button", { name: /^Remove / }),
+  ).toHaveCount(assignedTags.length - 1);
+  await cancelButton.click();
+  await expect(tagEditor).toHaveCount(0);
+
+  const bottomEdgeTagCell = page
+    .getByTestId("expanded-records")
+    .getByTestId("record-tags-cell")
+    .nth(1);
+  await tableScroll.evaluate((container, transactionId) => {
+    const target = container.querySelectorAll<HTMLElement>(
+      `[data-transaction-id="${transactionId}"] + tr [data-testid="record-tags-cell"]`,
+    )[1];
+    if (!target) {
+      return;
+    }
+    const targetBounds = target.getBoundingClientRect();
+    container.scrollTop += targetBounds.bottom - 500;
+  }, transaction.transaction_id);
+
+  await bottomEdgeTagCell.focus();
+  await bottomEdgeTagCell.press("F2");
+  const bottomEdgeEditor = page
+    .getByTestId("expanded-records")
+    .getByTestId("record-tags-editor")
+    .first();
+  const bottomEdgeSearchInput = bottomEdgeEditor.getByRole("combobox", {
+    name: "Tags",
+  });
+  const bottomEdgeSelectedTags = bottomEdgeEditor.getByTestId(
+    "entity-multi-picker-selected",
+  );
+  await bottomEdgeSelectedTags
+    .getByRole("button", { name: `Remove ${assignedTags[0]!.name}` })
+    .click();
+  await expect(bottomEdgeSelectedTags).toHaveCount(0);
+  await expect(bottomEdgeEditor.getByRole("listbox")).toHaveCount(0);
+
+  await bottomEdgeSearchInput.focus();
+  await bottomEdgeSearchInput.fill(`Suggestion${unique}`);
+  const bottomEdgeSuggestionList = bottomEdgeEditor.getByRole("listbox");
+  await expect(
+    bottomEdgeSuggestionList.getByRole("option", { name: suggestion.name }),
+  ).toBeVisible();
+  const refocusedListBounds = await requiredBoundingBox(
+    bottomEdgeSuggestionList,
+  );
+  const refocusedSaveBounds = await requiredBoundingBox(
+    bottomEdgeEditor.getByRole("button", { name: "Save tags" }),
+  );
+  const refocusedCancelBounds = await requiredBoundingBox(
+    bottomEdgeEditor.getByRole("button", { name: "Cancel tags edit" }),
+  );
+  expect(refocusedListBounds.height).toBeGreaterThan(4);
+  expect(boundingBoxesOverlap(refocusedListBounds, refocusedSaveBounds)).toBe(
+    false,
+  );
+  expect(boundingBoxesOverlap(refocusedListBounds, refocusedCancelBounds)).toBe(
+    false,
+  );
+  await bottomEdgeEditor
+    .getByRole("button", { name: "Cancel tags edit" })
+    .click();
+  await expect(bottomEdgeEditor).toHaveCount(0);
+
+  await tagCell.focus();
+  await tagCell.press("F2");
+  const reopenedEditor = page
+    .getByTestId("expanded-records")
+    .getByTestId("record-tags-editor")
+    .first();
+  await reopenedEditor.getByRole("button", { name: "Save tags" }).click();
+  await expect(reopenedEditor).toHaveCount(0);
+  const savedResponse = await page.request.get(
+    `/api/transactions/${transaction.transaction_id}`,
+  );
+  expect(savedResponse.ok(), await savedResponse.text()).toBe(true);
+  const saved = (await savedResponse.json()) as TransactionDetailFixture;
+  expect(saved.records[0]?.tag_ids).toHaveLength(assignedTags.length);
 });
 
 test("inline category tag member and amount saves keep the transaction table stable", async ({
@@ -1315,8 +1565,19 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   await tagCell.hover();
   await tagCell.getByRole("button", { name: "Edit Tags" }).click();
   const tagEditor = row.getByTestId(`${rowPrefix}-tags-editor`);
-  await tagEditor.getByRole("combobox", { name: "Tags" }).fill(nextTag.fqn);
-  await tagEditor.getByRole("combobox", { name: "Tags" }).press("Enter");
+  const tagInput = tagEditor.getByRole("combobox", { name: "Tags" });
+  await expect(tagCell.getByRole("button", { name: "Edit Tags" })).toHaveCount(
+    0,
+  );
+  await tagInput.press("Shift+Tab");
+  await expect
+    .poll(() =>
+      tagCell.evaluate((cell) => cell.contains(document.activeElement)),
+    )
+    .toBe(false);
+  await expect(tagEditor).toBeVisible();
+  await tagInput.fill(nextTag.fqn);
+  await tagInput.press("Enter");
   await tagEditor.getByRole("button", { name: "Save tags" }).click();
   await expect(
     expandedRecords.getByText(nextTag.fqn, { exact: true }),
@@ -1600,9 +1861,9 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
       .getByRole("button", { name: "Cancel category edit" })
       .locator("svg"),
   ).toHaveCSS("width", "16px");
-  await expect(
-    editorActionsFitCell(firstRow.locator("td").nth(5)),
-  ).resolves.toBe(true);
+  await expect(editorButtonsFitContainer(firstCategoryEditor)).resolves.toBe(
+    true,
+  );
   await firstCategoryEditor
     .getByRole("button", { name: "Save category" })
     .focus();
@@ -1644,9 +1905,9 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   const firstMemberEditor = firstRow.getByTestId(
     `${firstPrefix}-member-editor`,
   );
-  await expect(
-    editorActionsFitCell(firstRow.locator("td").nth(7)),
-  ).resolves.toBe(true);
+  await expect(editorButtonsFitContainer(firstMemberEditor)).resolves.toBe(
+    true,
+  );
   const cancelMember = firstMemberEditor.getByRole("button", {
     name: "Cancel member edit",
   });
@@ -4585,9 +4846,9 @@ test("transaction detail panel reuses inline editors and keeps expected occurren
   const detailMemberEditor = panel
     .getByTestId("transaction-detail-record-member-editor")
     .first();
-  await expect(
-    editorActionsFitCell(detailMemberCell.locator("..")),
-  ).resolves.toBe(true);
+  await expect(editorButtonsFitContainer(detailMemberEditor)).resolves.toBe(
+    true,
+  );
   await detailMemberEditor
     .getByRole("button", { name: "Cancel member edit" })
     .click();
