@@ -5661,13 +5661,18 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   ).toBeFocused();
 });
 
-test("transactions resolve hidden referenced tags but exclude them from pickers", async ({
+test("inline editors hide hidden controls and results while broader pickers retain the control", async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const hiddenTagFqn = `E2E:Hidden:${unique}:QuietTag`;
-  const hiddenTag = await createTag(page, hiddenTagFqn);
+  const hiddenCategoryFqn = `E2E:Hidden:${unique}:QuietCategory`;
+  const [hiddenTag, hiddenCategory] = await Promise.all([
+    createTag(page, hiddenTagFqn),
+    createCategory(page, hiddenCategoryFqn, "expense"),
+  ]);
 
   const [accounts, categories] = await Promise.all([
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
@@ -5691,7 +5696,11 @@ test("transactions resolve hidden referenced tags but exclude them from pickers"
     },
   });
   expect(spendResponse.ok()).toBe(true);
-  await hideTag(page, hiddenTag);
+  const transaction = (await spendResponse.json()) as TransactionDetailFixture;
+  await Promise.all([
+    hideTag(page, hiddenTag),
+    hideCategory(page, hiddenCategory),
+  ]);
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
@@ -5701,6 +5710,68 @@ test("transactions resolve hidden referenced tags but exclude them from pickers"
   await expect(
     hiddenTagRow.locator("td").nth(6).getByText("QuietTag", { exact: true }),
   ).toBeVisible();
+
+  const rowPrefix = `transaction-${transaction.transaction_id}`;
+  const categoryCell = hiddenTagRow.getByTestId(`${rowPrefix}-category-cell`);
+  await categoryCell.hover();
+  await categoryCell.getByRole("button", { name: "Edit Category" }).click();
+  const categoryEditor = hiddenTagRow.getByTestId(
+    `${rowPrefix}-category-editor`,
+  );
+  await expect(
+    categoryEditor.getByText("Include hidden", { exact: true }),
+  ).toHaveCount(0);
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(hiddenCategoryFqn);
+  await expect(categoryEditor.getByRole("listbox")).toContainText("No matches");
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .press("Escape");
+  await categoryEditor
+    .getByRole("button", { name: "Cancel category edit" })
+    .click();
+
+  const tagsCell = hiddenTagRow.getByTestId(`${rowPrefix}-tags-cell`);
+  await tagsCell.hover();
+  await tagsCell.getByRole("button", { name: "Edit Tags" }).click();
+  const tagsEditor = hiddenTagRow.getByTestId(`${rowPrefix}-tags-editor`);
+  await expect(
+    tagsEditor.getByText("Include hidden", { exact: true }),
+  ).toHaveCount(0);
+  await tagsEditor.getByRole("combobox", { name: "Tags" }).press("Escape");
+  await tagsEditor.getByRole("button", { name: "Cancel tags edit" }).click();
+
+  const memberCell = hiddenTagRow.getByTestId(`${rowPrefix}-member-cell`);
+  await memberCell.hover();
+  await memberCell.getByRole("button", { name: "Edit Member" }).click();
+  const memberEditor = hiddenTagRow.getByTestId(`${rowPrefix}-member-editor`);
+  await expect(
+    memberEditor.getByText("Include hidden", { exact: true }),
+  ).toHaveCount(0);
+  await memberEditor.getByRole("combobox", { name: "Member" }).press("Escape");
+  await memberEditor
+    .getByRole("button", { name: "Cancel member edit" })
+    .click();
+
+  await page.getByRole("button", { name: "Open filters" }).click();
+  await page.getByRole("button", { name: "Add filter" }).click();
+  await page.getByRole("button", { exact: true, name: "Tag" }).click();
+  const filterTagsPicker = page.getByRole("combobox", { name: "Tags" });
+  await filterTagsPicker.fill(hiddenTagFqn);
+  await expect(page.locator("#transactions-filter-tag-options")).toContainText(
+    "No matches",
+  );
+  const includeHiddenToggle = page.getByText("Include hidden", {
+    exact: true,
+  });
+  await expect(includeHiddenToggle).toBeVisible();
+  await includeHiddenToggle.click();
+  await expect(page.locator("#transactions-filter-tag-options")).toContainText(
+    "QuietTag",
+  );
+  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Close filters" }).click();
 
   await page
     .locator("header")

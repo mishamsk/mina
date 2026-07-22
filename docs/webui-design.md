@@ -142,7 +142,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 ### Hidden entities and members
 
-- Hidden accounts, categories, and tags are excluded from pickers and default lists everywhere. Pickers and filter menus offer an explicit "Include hidden" toggle; hidden items render with an eye-off icon.
+- Hidden accounts, categories, and tags are excluded from pickers and default lists everywhere. Broader pickers and filter menus offer an explicit "Include hidden" toggle; inline transaction editors omit the toggle and keep hidden entities excluded. Hidden items render with an eye-off icon.
 - No member attribution means whole-household and renders as nothing. Attributed records show a small member initials chip.
 
 ## Interaction Rules
@@ -313,7 +313,7 @@ Mina-specific building blocks every screen composes (names indicative; placement
 - `ClassIcon` / `StatusIcon` — narrow icon-encoded class and status indicators with tooltips; `ClassBadge` chip form remains for detail headers.
 - `CategoryChip`, `TagChip`, `MemberChip` — entity chips that add their entity to the active filters; `AccountTypeBadge`, `IntentBadge` — descriptive indicators.
 - `RowActions` — the trailing per-row actions cluster: always-visible icon-button actions plus persistent flat toggle icons, collapsing into a single overflow (⋯) button with a floating panel when the actions cell cannot fit the row's full action cluster.
-- `EntityPicker` — hierarchical type-ahead combobox with include-hidden, inline-create, and context-aware account-type filtering variants.
+- `EntityPicker` — hierarchical type-ahead combobox with variants for include-hidden on broader surfaces, hidden-excluding inline transaction editing, inline-create, and context-aware account-type filtering.
 - `FilterBar` / `FilterChip` — URL-backed typed filters.
 - `PageHelp` — header help icon button revealing a hidden-by-default explanation paragraph.
 - `DataTable` — server-driven table shell: sticky header, skeletons, selection, pagination, keyboard row focus.

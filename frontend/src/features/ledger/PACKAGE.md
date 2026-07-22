@@ -19,7 +19,7 @@
 - Transaction browsing requests expected recurring transactions by default and triggers one occurrence catch-up read per browser mount.
 - Expected recurring rows replace normal transaction actions with confirm and named-dismiss occurrence actions; successful lifecycle actions use the standard transaction-mutation refresh fan-out.
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.
-- Lookup-backed pickers use bounded REST lists and exclude hidden entities upstream.
+- Lookup-backed inline pickers use bounded REST lists, exclude hidden entities upstream, and do not offer an include-hidden control; broader picker surfaces own their include-hidden controls.
 - Expanded-record and detail-panel record editors own only their per-cell transient state; successful saves delegate to the browser page for API-owned validation and the standard transaction-mutation refresh fan-out.
 - Category, tags, and posting status use their narrow record bulk APIs; member, memo, dates, and simple row amounts use atomic transaction replacement built from the displayed transaction shape.
 - Structural record fields remain non-inline; transaction pages with an entry panel expose a direct escalation action to the full journal editor.

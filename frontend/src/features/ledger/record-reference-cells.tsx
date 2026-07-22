@@ -11,7 +11,6 @@ import {
 import type { JournalRecord, Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 
 import {
   EntityMultiPicker,
@@ -122,31 +121,17 @@ const CategoryReferenceEditor = ({
   record,
   saving,
 }: ReferenceEditorProps) => {
-  const [includeHidden, setIncludeHidden] = useState(false);
   const [categoryId, setCategoryId] = useState<number | undefined>(
     record.category_id,
   );
 
   return (
     <>
-      <label className="flex items-center gap-2">
-        <Checkbox
-          checked={includeHidden}
-          onCheckedChange={(checked) => {
-            setIncludeHidden(checked === true);
-          }}
-        />
-        <span className="font-mono text-sm">Include hidden</span>
-      </label>
       <EntityPicker
         autoFocus
         id={`record-${record.record_id}-category`}
         label="Category"
-        options={categoryReferenceOptions(
-          maps,
-          record.category_id,
-          includeHidden,
-        )}
+        options={categoryReferenceOptions(maps, record.category_id, false)}
         value={categoryId}
         onChange={setCategoryId}
         onOpenChange={onPickerOpenChange}
@@ -174,25 +159,15 @@ const TagsReferenceEditor = ({
   record,
   saving,
 }: ReferenceEditorProps) => {
-  const [includeHidden, setIncludeHidden] = useState(false);
   const [tagIds, setTagIds] = useState<readonly number[]>(record.tag_ids);
 
   return (
     <>
-      <label className="flex items-center gap-2">
-        <Checkbox
-          checked={includeHidden}
-          onCheckedChange={(checked) => {
-            setIncludeHidden(checked === true);
-          }}
-        />
-        <span className="font-mono text-sm">Include hidden</span>
-      </label>
       <EntityMultiPicker
         autoFocus
         id={`record-${record.record_id}-tags`}
         label="Tags"
-        options={tagReferenceOptions(maps, record.tag_ids, includeHidden)}
+        options={tagReferenceOptions(maps, record.tag_ids, false)}
         value={tagIds}
         onChange={setTagIds}
         onOpenChange={onPickerOpenChange}
