@@ -1,9 +1,12 @@
 import { Pencil } from "pixelarticons/react";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import type { JournalRecord, Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
+
+import { useInlineEdit } from "./inline-editing";
+import { InlineEditorActions } from "./inline-editor-actions";
 
 const amountPattern = /^\d+(\.\d{1,8})?$/;
 
@@ -48,7 +51,6 @@ export const TransactionAmountCell = ({
   testIdPrefix,
   transaction,
 }: TransactionAmountCellProps) => {
-  const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState(() =>
     compactAmount(records[0].amount, records[0].currency),
   );
@@ -56,6 +58,10 @@ export const TransactionAmountCell = ({
   const [saving, setSaving] = useState(false);
   const displayCellRef = useRef<HTMLDivElement>(null);
   const savingRef = useRef(false);
+  const { activeEditorId, finish, requestStart } = useInlineEdit();
+  const instanceId = useId();
+  const editorId = `${testIdPrefix}-amount-${instanceId}`;
+  const editing = activeEditorId === editorId;
   const amountFromRecords = compactAmount(
     records[0].amount,
     records[0].currency,
@@ -73,15 +79,21 @@ export const TransactionAmountCell = ({
     }
     setAmount(amountFromRecords);
     setErrorMessage(undefined);
-    setEditing(false);
-    restoreDisplayFocus();
+    finish(editorId, true);
   };
 
   const startEditing = () => {
     setAmount(amountFromRecords);
     setErrorMessage(undefined);
-    setEditing(true);
+    requestStart(editorId, restoreDisplayFocus);
   };
+
+  useEffect(
+    () => () => {
+      finish(editorId);
+    },
+    [editorId, finish],
+  );
 
   const save = async () => {
     if (savingRef.current) {
@@ -101,8 +113,7 @@ export const TransactionAmountCell = ({
     setErrorMessage(undefined);
     try {
       await onSave(transaction, records, normalizedAmount);
-      setEditing(false);
-      restoreDisplayFocus();
+      finish(editorId, true);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",
@@ -148,6 +159,8 @@ export const TransactionAmountCell = ({
   return (
     <div
       className="flex min-w-0 flex-col items-end gap-2"
+      data-inline-editor-id={editorId}
+      data-inline-editor-pending={saving ? "true" : undefined}
       data-testid={`${testIdPrefix}-amount-editor`}
       onKeyDown={(event) => {
         if (event.key === "Escape" && !event.defaultPrevented) {
@@ -167,32 +180,13 @@ export const TransactionAmountCell = ({
         disabled={saving}
         className="bg-card h-8 w-full min-w-24 border-2 border-[var(--border-ink)] px-2 text-right font-mono text-sm shadow-[var(--shadow-chip)]"
         onChange={(event) => setAmount(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            void save();
-          }
-        }}
       />
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          disabled={saving}
-          onClick={() => void save()}
-        >
-          Save
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={saving}
-          onClick={cancel}
-        >
-          Cancel
-        </Button>
-      </div>
+      <InlineEditorActions
+        disabled={saving}
+        fieldLabel="amount"
+        onCancel={cancel}
+        onSave={() => void save()}
+      />
       {errorMessage ? (
         <p className="text-destructive text-xs" role="alert">
           {errorMessage}

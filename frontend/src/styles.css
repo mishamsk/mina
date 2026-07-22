@@ -780,7 +780,7 @@
   }
 
   .transaction-detail-records-table .detail-records-account-column {
-    width: 18%;
+    width: 14%;
   }
 
   .transaction-detail-records-table .detail-records-amount-column {
@@ -796,7 +796,7 @@
   }
 
   .transaction-detail-records-table .detail-records-member-column {
-    width: 10%;
+    width: 14%;
   }
 
   .transaction-detail-records-table .detail-records-status-column {

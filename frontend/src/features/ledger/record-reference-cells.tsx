@@ -1,5 +1,5 @@
-import { Pencil } from "pixelarticons/react";
-import { type ReactNode, useRef, useState } from "react";
+import { Close, Pencil } from "pixelarticons/react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import type { JournalRecord, Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
@@ -12,6 +12,8 @@ import {
   EntityPicker,
 } from "./entity-picker";
 import type { LookupMaps } from "./format";
+import { useInlineEdit } from "./inline-editing";
+import { InlineEditorActions } from "./inline-editor-actions";
 import type { RecordReferenceUpdate } from "./record-editing";
 
 export type { RecordReferenceUpdate } from "./record-editing";
@@ -99,6 +101,7 @@ const fieldLabel: Record<RecordReferenceField, string> = {
 interface ReferenceEditorProps {
   readonly maps: LookupMaps;
   readonly onCancel: () => void;
+  readonly onPickerOpenChange: (open: boolean) => void;
   readonly onSave: (update: RecordReferenceUpdate) => void;
   readonly record: JournalRecord;
   readonly saving: boolean;
@@ -106,10 +109,16 @@ interface ReferenceEditorProps {
 
 const CategoryReferenceEditor = ({
   maps,
+  onCancel,
+  onPickerOpenChange,
   onSave,
   record,
+  saving,
 }: ReferenceEditorProps) => {
   const [includeHidden, setIncludeHidden] = useState(false);
+  const [categoryId, setCategoryId] = useState<number | undefined>(
+    record.category_id,
+  );
 
   return (
     <>
@@ -131,12 +140,20 @@ const CategoryReferenceEditor = ({
           record.category_id,
           includeHidden,
         )}
-        value={record.category_id}
-        onChange={(categoryId) => {
+        value={categoryId}
+        onChange={setCategoryId}
+        onOpenChange={onPickerOpenChange}
+      />
+      <InlineEditorActions
+        disabled={saving}
+        fieldLabel="category"
+        onCancel={onCancel}
+        onSave={() => {
           if (categoryId !== undefined) {
             onSave({ categoryId, kind: "category" });
           }
         }}
+        saveDisabled={categoryId === undefined}
       />
     </>
   );
@@ -145,6 +162,7 @@ const CategoryReferenceEditor = ({
 const TagsReferenceEditor = ({
   maps,
   onCancel,
+  onPickerOpenChange,
   onSave,
   record,
   saving,
@@ -170,61 +188,89 @@ const TagsReferenceEditor = ({
         options={tagReferenceOptions(maps, record.tag_ids, includeHidden)}
         value={tagIds}
         onChange={setTagIds}
+        onOpenChange={onPickerOpenChange}
       />
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          disabled={saving}
-          onClick={() => {
-            onSave({ kind: "tags", tagIds });
-          }}
-        >
-          Save
-        </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
+      <InlineEditorActions
+        disabled={saving}
+        fieldLabel="tags"
+        onCancel={onCancel}
+        onSave={() => {
+          onSave({ kind: "tags", tagIds });
+        }}
+      />
     </>
   );
 };
 
 const MemberReferenceEditor = ({
   maps,
+  onCancel,
+  onPickerOpenChange,
   onSave,
   record,
   saving,
-}: ReferenceEditorProps) => (
-  <>
-    <EntityPicker
-      autoFocus
-      id={`record-${record.record_id}-member`}
-      label="Member"
-      options={memberReferenceOptions(maps, record.member_id)}
-      value={record.member_id ?? undefined}
-      onChange={(memberId) => {
-        if (memberId !== undefined) {
-          onSave({ kind: "member", memberId });
-        }
-      }}
-    />
-    {record.member_id !== null ? (
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="relative z-40 self-start"
-        disabled={saving}
-        onClick={() => {
-          onSave({ kind: "member", memberId: undefined });
+}: ReferenceEditorProps) => {
+  const [memberId, setMemberId] = useState<number | undefined>(
+    record.member_id ?? undefined,
+  );
+  const [memberSelectionValid, setMemberSelectionValid] = useState(true);
+  const [pickerResetVersion, setPickerResetVersion] = useState(0);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <>
+      <EntityPicker
+        key={pickerResetVersion}
+        autoFocus={pickerResetVersion === 0}
+        id={`record-${record.record_id}-member`}
+        label="Member"
+        options={memberReferenceOptions(maps, record.member_id)}
+        value={memberId}
+        onOpenChange={onPickerOpenChange}
+        onChange={(nextMemberId) => {
+          if (nextMemberId === undefined) {
+            setMemberSelectionValid(false);
+            return;
+          }
+          setMemberId(nextMemberId);
+          setMemberSelectionValid(true);
         }}
-      >
-        Clear member
-      </Button>
-    ) : null}
-  </>
-);
+      />
+      {memberId !== undefined ? (
+        <Tooltip label="Clear member" asChild>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="outline"
+            className="relative z-40 self-start"
+            aria-label="Clear member"
+            disabled={saving}
+            onClick={() => {
+              setMemberId(undefined);
+              setMemberSelectionValid(true);
+              setPickerResetVersion((current) => current + 1);
+              window.requestAnimationFrame(() => {
+                saveButtonRef.current?.focus();
+              });
+            }}
+          >
+            <Close aria-hidden="true" className="size-4" />
+          </Button>
+        </Tooltip>
+      ) : null}
+      <InlineEditorActions
+        disabled={saving}
+        fieldLabel="member"
+        onCancel={onCancel}
+        onSave={() => {
+          onSave({ kind: "member", memberId });
+        }}
+        saveButtonRef={saveButtonRef}
+        saveDisabled={!memberSelectionValid}
+      />
+    </>
+  );
+};
 
 export const RecordReferenceCells = ({
   editable = true,
@@ -236,10 +282,14 @@ export const RecordReferenceCells = ({
   transaction,
   value,
 }: RecordReferenceCellsProps) => {
-  const [editing, setEditing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>();
+  const [entityPickerOpen, setEntityPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const displayCellRef = useRef<HTMLDivElement>(null);
+  const { activeEditorId, finish, requestStart } = useInlineEdit();
+  const instanceId = useId();
+  const editorId = `${testIdPrefix}-${record.record_id}-${field}-${instanceId}`;
+  const editing = activeEditorId === editorId;
 
   const restoreDisplayFocus = () => {
     window.requestAnimationFrame(() => {
@@ -252,19 +302,27 @@ export const RecordReferenceCells = ({
       return;
     }
     setErrorMessage(undefined);
-    setEditing(false);
-    restoreDisplayFocus();
+    finish(editorId, true);
   };
+
+  const startEditing = () => {
+    setErrorMessage(undefined);
+    requestStart(editorId, restoreDisplayFocus);
+  };
+
+  useEffect(
+    () => () => {
+      finish(editorId);
+    },
+    [editorId, finish],
+  );
 
   const save = async (update: RecordReferenceUpdate) => {
     setSaving(true);
     setErrorMessage(undefined);
     try {
       const rowRemainsVisible = await onSave(transaction, record, update);
-      setEditing(false);
-      if (rowRemainsVisible !== false) {
-        restoreDisplayFocus();
-      }
+      finish(editorId, rowRemainsVisible !== false);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",
@@ -284,7 +342,7 @@ export const RecordReferenceCells = ({
         onKeyDown={(event) => {
           if (editable && event.key === "F2") {
             event.preventDefault();
-            setEditing(true);
+            startEditing();
           }
         }}
       >
@@ -298,7 +356,7 @@ export const RecordReferenceCells = ({
               className="pointer-events-none absolute top-0 right-0 opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
               aria-label={`Edit ${fieldLabel[field]}`}
               onClick={() => {
-                setEditing(true);
+                startEditing();
               }}
             >
               <Pencil aria-hidden="true" />
@@ -312,10 +370,17 @@ export const RecordReferenceCells = ({
   return (
     <div
       className="flex min-w-0 flex-col gap-2"
+      data-inline-editor-id={editorId}
+      data-inline-editor-pending={saving ? "true" : undefined}
       data-testid={`${testIdPrefix}-${field}-editor`}
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && !event.defaultPrevented) {
+      onKeyDownCapture={(event) => {
+        if (event.key === "Escape") {
+          if (entityPickerOpen) {
+            return;
+          }
+
           event.preventDefault();
+          event.stopPropagation();
           cancel();
         }
       }}
@@ -324,6 +389,7 @@ export const RecordReferenceCells = ({
         <CategoryReferenceEditor
           maps={maps}
           onCancel={cancel}
+          onPickerOpenChange={setEntityPickerOpen}
           onSave={(update) => void save(update)}
           record={record}
           saving={saving}
@@ -333,6 +399,7 @@ export const RecordReferenceCells = ({
         <TagsReferenceEditor
           maps={maps}
           onCancel={cancel}
+          onPickerOpenChange={setEntityPickerOpen}
           onSave={(update) => void save(update)}
           record={record}
           saving={saving}
@@ -342,6 +409,7 @@ export const RecordReferenceCells = ({
         <MemberReferenceEditor
           maps={maps}
           onCancel={cancel}
+          onPickerOpenChange={setEntityPickerOpen}
           onSave={(update) => void save(update)}
           record={record}
           saving={saving}

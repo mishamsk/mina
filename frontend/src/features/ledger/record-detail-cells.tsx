@@ -1,6 +1,6 @@
 import { Pencil } from "pixelarticons/react";
 import type { ReactNode } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import type { JournalRecord, Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { localCivilDateStartISO, localTimestampDateValue } from "@/utils/date";
 
+import { useInlineEdit } from "./inline-editing";
 import type { RecordUpdate } from "./record-editing";
 
 type DetailField = "dates" | "memo" | "postingStatus";
@@ -68,8 +69,8 @@ export const RecordDetailCells = ({
   transaction,
   value,
 }: RecordDetailCellsProps) => {
-  const [editing, setEditing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>();
+  const [saving, setSaving] = useState(false);
   const [memo, setMemo] = useState(record.memo ?? "");
   const [initiatedDate, setInitiatedDate] = useState(
     transaction.initiated_date,
@@ -82,6 +83,10 @@ export const RecordDetailCells = ({
   );
   const [postingStatusSelectOpen, setPostingStatusSelectOpen] = useState(false);
   const displayCellRef = useRef<HTMLDivElement>(null);
+  const { activeEditorId, finish, requestStart } = useInlineEdit();
+  const instanceId = useId();
+  const editorId = `record-${record.record_id}-${field}-${instanceId}`;
+  const editing = activeEditorId === editorId;
 
   const restoreDisplayFocus = () => {
     window.requestAnimationFrame(() => {
@@ -90,24 +95,44 @@ export const RecordDetailCells = ({
   };
 
   const cancel = () => {
+    if (saving) {
+      return;
+    }
     setMemo(record.memo ?? "");
     setInitiatedDate(transaction.initiated_date);
     setPendingDate(inputDateValue(record.pending_date));
     setPostedDate(inputDateValue(record.posted_date));
     setErrorMessage(undefined);
-    setEditing(false);
-    restoreDisplayFocus();
+    finish(editorId, true);
   };
+  const startEditing = () => {
+    setMemo(record.memo ?? "");
+    setInitiatedDate(transaction.initiated_date);
+    setPendingDate(inputDateValue(record.pending_date));
+    setPostedDate(inputDateValue(record.posted_date));
+    setErrorMessage(undefined);
+    requestStart(editorId, restoreDisplayFocus);
+  };
+
+  useEffect(
+    () => () => {
+      finish(editorId);
+    },
+    [editorId, finish],
+  );
+
   const save = async (update: RecordUpdate) => {
+    setSaving(true);
     setErrorMessage(undefined);
     try {
       await onSave(transaction, record, update);
-      setEditing(false);
-      restoreDisplayFocus();
+      finish(editorId, true);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",
       );
+    } finally {
+      setSaving(false);
     }
   };
   const saveDates = () => {
@@ -134,7 +159,7 @@ export const RecordDetailCells = ({
         onKeyDown={(event) => {
           if (editable && event.key === "F2") {
             event.preventDefault();
-            setEditing(true);
+            startEditing();
           }
         }}
       >
@@ -147,7 +172,7 @@ export const RecordDetailCells = ({
               size="icon-xs"
               className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
               aria-label={`Edit ${fieldLabel[field]}`}
-              onClick={() => setEditing(true)}
+              onClick={startEditing}
             >
               <Pencil aria-hidden="true" />
             </Button>
@@ -160,6 +185,8 @@ export const RecordDetailCells = ({
   return (
     <div
       className="flex min-w-0 flex-col gap-2"
+      data-inline-editor-id={editorId}
+      data-inline-editor-pending={saving ? "true" : undefined}
       data-testid={`record-${field}-editor`}
       onKeyDownCapture={(event) => {
         if (event.key === "Escape") {
@@ -219,10 +246,21 @@ export const RecordDetailCells = ({
             />
           </label>
           <div className="flex gap-2">
-            <Button type="button" size="sm" onClick={saveDates}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving}
+              onClick={saveDates}
+            >
               Save
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={cancel}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={saving}
+              onClick={cancel}
+            >
               Cancel
             </Button>
           </div>
@@ -246,6 +284,7 @@ export const RecordDetailCells = ({
           </>
         ) : (
           <Select
+            disabled={saving}
             open={postingStatusSelectOpen}
             onOpenChange={setPostingStatusSelectOpen}
             value={record.posting_status}
@@ -260,7 +299,7 @@ export const RecordDetailCells = ({
             <SelectTrigger autoFocus aria-label="Posting status">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent data-inline-editor-content={editorId}>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="posted">Posted</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>

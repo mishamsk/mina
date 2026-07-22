@@ -386,6 +386,31 @@ const deleteTransaction = async (
   expect(response.ok()).toBe(true);
 };
 
+const getTransactionDetail = async (
+  page: Page,
+  transaction: TransactionFixture,
+): Promise<TransactionDetailFixture> => {
+  const response = await page.request.get(
+    `/api/transactions/${transaction.transaction_id}`,
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  return (await response.json()) as TransactionDetailFixture;
+};
+
+const editorActionsFitCell = (cell: Locator) =>
+  cell.evaluate((element) => {
+    const cellRect = element.getBoundingClientRect();
+    return Array.from(
+      element.querySelectorAll<HTMLElement>("[data-slot='button']"),
+    ).every((button) => {
+      const buttonRect = button.getBoundingClientRect();
+      return (
+        buttonRect.left >= cellRect.left - 0.5 &&
+        buttonRect.right <= cellRect.right + 0.5
+      );
+    });
+  });
+
 const comparableRecords = (records: readonly JournalRecordFixture[]) =>
   records
     .map((record) => ({
@@ -805,6 +830,7 @@ test("expanded records edit per-record values and escalate structural changes", 
   await categoryEditor
     .getByRole("combobox", { name: "Category" })
     .fill(nextCategory.fqn);
+  await categoryEditor.getByRole("button", { name: "Save category" }).click();
   await expect(categoryCell).toContainText(nextCategory.fqn);
   await expect(transactionRow.locator("td").nth(5)).toContainText("Mixed");
 
@@ -814,7 +840,7 @@ test("expanded records edit per-record values and escalate structural changes", 
   const tagEditor = records.getByTestId("record-tags-editor").first();
   await tagEditor.getByRole("combobox", { name: "Tags" }).fill(addedTag.fqn);
   await tagEditor.getByRole("combobox", { name: "Tags" }).press("Enter");
-  await tagEditor.getByRole("button", { name: "Save" }).click();
+  await tagEditor.getByRole("button", { name: "Save tags" }).click();
   await expect(tagCell).toContainText(addedTag.name);
 
   const memberCell = records.getByTestId("record-member-cell").first();
@@ -824,12 +850,30 @@ test("expanded records edit per-record values and escalate structural changes", 
   await memberEditor
     .getByRole("combobox", { name: "Member" })
     .fill(member.name);
+  await memberEditor.getByRole("button", { name: "Save member" }).click();
   await expect(memberCell).toContainText(member.name);
   await memberCell.hover();
   await memberCell.getByRole("button", { name: "Edit Member" }).click();
   memberEditor = records.getByTestId("record-member-editor").first();
-  await memberEditor.getByRole("combobox", { name: "Member" }).press("Escape");
+  const memberInput = memberEditor.getByRole("combobox", { name: "Member" });
+  await memberInput.fill(`${member.name} typo`);
+  const saveMember = memberEditor.getByRole("button", { name: "Save member" });
+  await expect(saveMember).toBeDisabled();
+  await memberEditor
+    .getByRole("button", { name: "Cancel member edit" })
+    .click();
+  await expect(memberCell).toContainText(member.name);
+  await memberCell.hover();
+  await memberCell.getByRole("button", { name: "Edit Member" }).click();
+  memberEditor = records.getByTestId("record-member-editor").first();
   await memberEditor.getByRole("button", { name: "Clear member" }).click();
+  await expect(
+    memberEditor.getByRole("combobox", { name: "Member" }),
+  ).toHaveValue("");
+  await expect(
+    memberEditor.getByRole("button", { name: "Save member" }),
+  ).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(memberCell).not.toContainText(member.name);
 
   const memoCell = records.getByTestId("record-memo-cell").first();
@@ -868,10 +912,15 @@ test("expanded records edit per-record values and escalate structural changes", 
 
   await expect(records.getByTestId("record-account-editor")).toHaveCount(0);
   await expect(records.getByTestId("record-amount-editor")).toHaveCount(0);
-  await records
+  const editAccountInJournal = records
     .getByRole("button", { name: "Edit account in journal" })
-    .first()
-    .click();
+    .first();
+  await editAccountInJournal.click();
+  await expect(statusEditor).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Edit journal" })).toHaveCount(
+    0,
+  );
+  await editAccountInJournal.click();
   await expect(
     page.getByRole("heading", { name: "Edit journal" }),
   ).toBeVisible();
@@ -882,7 +931,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   page,
 }, testInfo) => {
   test.slow();
-  await page.setViewportSize({ width: 1920, height: 900 });
+  await page.setViewportSize({ width: 1600, height: 900 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const [accounts, categories] = await Promise.all([
@@ -969,6 +1018,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   await categoryEditor
     .getByRole("combobox", { name: "Category" })
     .fill(nextCategory.fqn);
+  await categoryEditor.getByRole("button", { name: "Save category" }).click();
   await row.locator("td").nth(4).click();
   const expandedRecords = page.getByTestId("expanded-records");
   await expect(
@@ -981,7 +1031,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   const tagEditor = row.getByTestId(`${rowPrefix}-tags-editor`);
   await tagEditor.getByRole("combobox", { name: "Tags" }).fill(nextTag.fqn);
   await tagEditor.getByRole("combobox", { name: "Tags" }).press("Enter");
-  await tagEditor.getByRole("button", { name: "Save" }).click();
+  await tagEditor.getByRole("button", { name: "Save tags" }).click();
   await expect(
     expandedRecords.getByText(nextTag.fqn, { exact: true }),
   ).toHaveCount(2);
@@ -994,6 +1044,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
     .getByRole("combobox", { name: "Member" })
     .fill(member.name);
   await memberEditor.getByRole("combobox", { name: "Member" }).press("Enter");
+  await memberEditor.getByRole("button", { name: "Save member" }).click();
   await expect(
     expandedRecords.getByText(member.name, { exact: true }),
   ).toHaveCount(2);
@@ -1002,8 +1053,8 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   await amountCell.hover();
   await amountCell.getByRole("button", { name: "Edit row value" }).click();
   const amountEditor = row.getByTestId(`${rowPrefix}-amount-editor`);
-  await amountEditor.getByLabel("Amount").fill("29.87");
-  await amountEditor.getByRole("button", { name: "Save" }).click();
+  await amountEditor.getByRole("textbox", { name: "Amount" }).fill("29.87");
+  await amountEditor.getByRole("button", { name: "Save amount" }).click();
   await expect(expandedRecords).toContainText("-29.87 $");
   await expect(expandedRecords).toContainText("+29.87 $");
 
@@ -1127,6 +1178,449 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   await expect(
     expectedRow.getByRole("button", { name: "Edit row value" }),
   ).toHaveCount(0);
+});
+
+test("inline editing keeps one explicit-commit draft across transaction rows", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  await page.setViewportSize({ width: 1920, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const initialCategory = findByFqn(categories, "Entertainment:Books");
+  const [draftCategory, savedCategory] = await Promise.all([
+    createCategory(page, `E2E:ExplicitCommit:${unique}:Draft`, "expense"),
+    createCategory(page, `E2E:ExplicitCommit:${unique}:Saved`, "expense"),
+  ]);
+  const memoPrefix = `E2E explicit commit ${unique}`;
+  const firstMemo = `${memoPrefix} first`;
+  const secondMemo = `${memoPrefix} second`;
+
+  const firstCreateResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-11",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-17.43000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo: firstMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "17.43000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo: firstMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(firstCreateResponse.ok(), await firstCreateResponse.text()).toBe(true);
+  const firstTransaction =
+    (await firstCreateResponse.json()) as TransactionDetailFixture;
+
+  const secondCreateResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-12",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-23.58000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo: secondMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "23.58000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo: secondMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(secondCreateResponse.ok(), await secondCreateResponse.text()).toBe(
+    true,
+  );
+  const secondTransaction =
+    (await secondCreateResponse.json()) as TransactionDetailFixture;
+
+  await page.goto(
+    `/transactions?q=${encodeURIComponent(memoPrefix)}&page=1&pageSize=50&hideExpected=true`,
+  );
+  const firstRow = page.getByRole("row").filter({ hasText: firstMemo }).first();
+  const secondRow = page
+    .getByRole("row")
+    .filter({ hasText: secondMemo })
+    .first();
+  await expect(firstRow).toBeVisible();
+  await expect(secondRow).toBeVisible();
+
+  const firstPrefix = `transaction-${firstTransaction.transaction_id}`;
+  const secondPrefix = `transaction-${secondTransaction.transaction_id}`;
+  const firstCategoryCell = firstRow.getByTestId(
+    `${firstPrefix}-category-cell`,
+  );
+  const firstCategoryEditor = firstRow.getByTestId(
+    `${firstPrefix}-category-editor`,
+  );
+  const secondCategoryCell = secondRow.getByTestId(
+    `${secondPrefix}-category-cell`,
+  );
+  const secondCategoryEditor = secondRow.getByTestId(
+    `${secondPrefix}-category-editor`,
+  );
+  const firstAmountCell = firstRow.getByTestId(`${firstPrefix}-amount-cell`);
+  const firstAmountEditor = firstRow.getByTestId(
+    `${firstPrefix}-amount-editor`,
+  );
+  await firstCategoryCell.focus();
+  await firstCategoryCell.press("F2");
+  await firstCategoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(draftCategory.fqn);
+  await expect(
+    firstCategoryEditor
+      .getByRole("button", { name: "Save category" })
+      .locator("svg"),
+  ).toHaveCSS("width", "16px");
+  await expect(
+    firstCategoryEditor
+      .getByRole("button", { name: "Cancel category edit" })
+      .locator("svg"),
+  ).toHaveCSS("width", "16px");
+  await expect(
+    editorActionsFitCell(firstRow.locator("td").nth(5)),
+  ).resolves.toBe(true);
+  await firstCategoryEditor
+    .getByRole("button", { name: "Save category" })
+    .focus();
+  await page.keyboard.press("n");
+  await expect(
+    page.locator("aside[aria-labelledby='entry-panel-title']"),
+  ).toHaveCount(0);
+  await expect(firstCategoryEditor).toBeVisible();
+
+  await firstRow.locator("td").nth(4).dispatchEvent("pointerdown", {
+    button: 2,
+    buttons: 2,
+    pointerType: "mouse",
+  });
+  await expect(firstCategoryEditor).toHaveCount(0);
+  await secondRow.locator("td").nth(4).click();
+  await expect(secondRow).toHaveAttribute("aria-expanded", "true");
+  await secondRow.locator("td").nth(4).click();
+  await expect(secondRow).toHaveAttribute("aria-expanded", "false");
+
+  await firstCategoryCell.focus();
+  await firstCategoryCell.press("F2");
+  await firstCategoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(draftCategory.fqn);
+  await firstAmountCell.hover();
+  await firstAmountCell.getByRole("button", { name: "Edit row value" }).click();
+  await expect(firstCategoryEditor).toHaveCount(0);
+  await expect(firstAmountEditor).toHaveCount(0);
+  let storedFirst = await getTransactionDetail(page, firstTransaction);
+  expect(storedFirst.records.map((record) => record.category_id)).toEqual([
+    initialCategory.category_id,
+    initialCategory.category_id,
+  ]);
+
+  const firstMemberCell = firstRow.getByTestId(`${firstPrefix}-member-cell`);
+  await firstMemberCell.focus();
+  await firstMemberCell.press("F2");
+  const firstMemberEditor = firstRow.getByTestId(
+    `${firstPrefix}-member-editor`,
+  );
+  await expect(
+    editorActionsFitCell(firstRow.locator("td").nth(7)),
+  ).resolves.toBe(true);
+  const cancelMember = firstMemberEditor.getByRole("button", {
+    name: "Cancel member edit",
+  });
+  await cancelMember.focus();
+  await page.keyboard.press("Enter");
+
+  await firstAmountCell.focus();
+  await firstAmountCell.press("F2");
+  const amountInput = firstAmountEditor.getByRole("textbox", {
+    name: "Amount",
+  });
+  let releaseFailedSave: (() => void) | undefined;
+  const failedSaveStarted = new Promise<void>((resolve) => {
+    void page.route(
+      `**/api/transactions/${firstTransaction.transaction_id}`,
+      async (route) => {
+        if (route.request().method() !== "PUT") {
+          await route.continue();
+          return;
+        }
+        resolve();
+        await new Promise<void>((release) => {
+          releaseFailedSave = release;
+        });
+        await route.fulfill({
+          contentType: "application/json",
+          json: { message: "Inline save failed" },
+          status: 500,
+        });
+      },
+    );
+  });
+  await amountInput.fill("99.12");
+  await firstAmountEditor.getByRole("button", { name: "Save amount" }).click();
+  await failedSaveStarted;
+  await page.keyboard.press("Escape");
+  await expect(firstAmountEditor).toBeVisible();
+  await expect(amountInput).toHaveValue("99.12");
+  await page.getByRole("heading", { name: "Transactions" }).click();
+  await expect(firstAmountEditor).toBeVisible();
+  await expect(amountInput).toHaveValue("99.12");
+  releaseFailedSave?.();
+  await expect(firstAmountEditor.getByRole("alert")).toBeVisible();
+  await expect(amountInput).toHaveValue("99.12");
+  await page.unroute(`**/api/transactions/${firstTransaction.transaction_id}`);
+  await firstAmountEditor
+    .getByRole("button", { name: "Cancel amount edit" })
+    .click();
+
+  await firstCategoryCell.focus();
+  await firstCategoryCell.press("F2");
+  await firstCategoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(draftCategory.fqn);
+  await secondCategoryCell.focus();
+  await secondCategoryCell.press("F2");
+  await expect(firstCategoryEditor).toHaveCount(0);
+  await expect(secondCategoryEditor).toHaveCount(0);
+  storedFirst = await getTransactionDetail(page, firstTransaction);
+  expect(storedFirst.records.map((record) => record.category_id)).toEqual([
+    initialCategory.category_id,
+    initialCategory.category_id,
+  ]);
+
+  await firstCategoryCell.focus();
+  await firstCategoryCell.press("F2");
+  await firstCategoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(draftCategory.fqn);
+  await page.getByRole("heading", { name: "Transactions" }).click();
+  await expect(firstCategoryEditor).toHaveCount(0);
+  storedFirst = await getTransactionDetail(page, firstTransaction);
+  expect(storedFirst.records.map((record) => record.category_id)).toEqual([
+    initialCategory.category_id,
+    initialCategory.category_id,
+  ]);
+
+  await firstCategoryCell.focus();
+  await firstCategoryCell.press("F2");
+  await firstCategoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(draftCategory.fqn);
+  await page.keyboard.press("Escape");
+  await expect(firstCategoryEditor).toHaveCount(0);
+  await expect(firstCategoryCell).toBeFocused();
+  storedFirst = await getTransactionDetail(page, firstTransaction);
+  expect(storedFirst.records.map((record) => record.category_id)).toEqual([
+    initialCategory.category_id,
+    initialCategory.category_id,
+  ]);
+
+  await firstCategoryCell.press("F2");
+  await firstCategoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(`${draftCategory.fqn}:typo`);
+  const invalidSaveCategory = firstCategoryEditor.getByRole("button", {
+    name: "Save category",
+  });
+  const invalidCancelCategory = firstCategoryEditor.getByRole("button", {
+    name: "Cancel category edit",
+  });
+  await expect(invalidSaveCategory).toBeDisabled();
+  await expect(invalidCancelCategory).toBeEnabled();
+  await invalidCancelCategory.focus();
+  await expect(invalidCancelCategory).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(firstCategoryEditor).toHaveCount(0);
+  await expect(firstCategoryCell).toBeFocused();
+  storedFirst = await getTransactionDetail(page, firstTransaction);
+  expect(storedFirst.records.map((record) => record.category_id)).toEqual([
+    initialCategory.category_id,
+    initialCategory.category_id,
+  ]);
+
+  await firstCategoryCell.press("F2");
+  const categoryInput = firstCategoryEditor.getByRole("combobox", {
+    name: "Category",
+  });
+  const saveCategory = firstCategoryEditor.getByRole("button", {
+    name: "Save category",
+  });
+  const cancelCategory = firstCategoryEditor.getByRole("button", {
+    name: "Cancel category edit",
+  });
+  await categoryInput.fill(savedCategory.fqn);
+  if (testInfo.project.name === "chromium") {
+    await page.keyboard.press("Tab");
+    await expect(saveCategory).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(cancelCategory).toBeFocused();
+  }
+  await saveCategory.click();
+  await expect(firstCategoryEditor).toHaveCount(0);
+  await expect(firstCategoryCell).toContainText(savedCategory.name);
+  storedFirst = await getTransactionDetail(page, firstTransaction);
+  expect(storedFirst.records.map((record) => record.category_id)).toEqual([
+    savedCategory.category_id,
+    savedCategory.category_id,
+  ]);
+
+  await firstRow.locator("td").nth(4).click();
+  const expandedRecords = page.getByTestId("expanded-records");
+  await expect(
+    expandedRecords.getByText(savedCategory.fqn, { exact: true }),
+  ).toHaveCount(2);
+
+  await Promise.all([
+    deleteTransaction(page, firstTransaction),
+    deleteTransaction(page, secondTransaction),
+  ]);
+});
+
+test("inline editing coordinates one draft between the list and detail panel", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  await page.setViewportSize({ width: 1920, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const initialCategory = findByFqn(categories, "Entertainment:Books");
+  const draftCategory = await createCategory(
+    page,
+    `E2E:CrossSurfaceDraft:${unique}`,
+    "expense",
+  );
+  const memo = `E2E cross-surface inline editing ${unique}`;
+  const createResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-13",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-41.25000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "41.25000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionDetailFixture;
+
+  await page.goto(
+    `/transactions?q=${encodeURIComponent(memo)}&page=1&pageSize=50&hideExpected=true&transaction=${transaction.transaction_id}`,
+  );
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  const panel = page.getByRole("dialog", { name: transaction.display_title });
+  await expect(row).toBeVisible();
+  await expect(panel).toBeVisible();
+
+  const rowPrefix = `transaction-${transaction.transaction_id}`;
+  const rowCategoryCell = row.getByTestId(`${rowPrefix}-category-cell`);
+  const rowCategoryEditor = row.getByTestId(`${rowPrefix}-category-editor`);
+  const panelCategoryCell = panel.getByTestId(
+    "transaction-detail-category-cell",
+  );
+  const panelCategoryEditor = panel.getByTestId(
+    "transaction-detail-category-editor",
+  );
+
+  await rowCategoryCell.focus();
+  await rowCategoryCell.press("F2");
+  await rowCategoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(draftCategory.fqn);
+  await expect(
+    rowCategoryEditor.getByRole("combobox", { name: "Category" }),
+  ).toHaveValue(draftCategory.fqn);
+
+  await panelCategoryCell.focus();
+  await panelCategoryCell.press("F2");
+  await expect(rowCategoryEditor).toHaveCount(0);
+  await expect(panelCategoryEditor).toHaveCount(0);
+  await expect(rowCategoryCell).toContainText(initialCategory.name);
+  await expect(panel).toBeVisible();
+
+  await panelCategoryCell.press("F2");
+  await panelCategoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(draftCategory.fqn);
+  await expect(
+    panelCategoryEditor.getByRole("combobox", { name: "Category" }),
+  ).toHaveValue(draftCategory.fqn);
+
+  await rowCategoryCell.focus();
+  await rowCategoryCell.press("F2");
+  await expect(panelCategoryEditor).toHaveCount(0);
+  await expect(rowCategoryEditor).toHaveCount(0);
+  await expect(panelCategoryCell).toContainText(initialCategory.fqn);
+  await expect(panel).toBeVisible();
+
+  await rowCategoryCell.press("F2");
+  await expect(rowCategoryEditor).toBeVisible();
+  await rowCategoryEditor
+    .getByRole("button", { name: "Cancel category edit" })
+    .click();
+
+  await deleteTransaction(page, transaction);
 });
 
 test("transactions page uses server pagination controls", async ({ page }) => {
@@ -3726,6 +4220,7 @@ test("transaction detail panel reuses inline editors and keeps expected occurren
     createMember(page, `Detail editor ${unique}`),
   ]);
   const memo = `E2E detail editing ${unique}`;
+  const failedMemo = `E2E detail editing failed ${unique}`;
   const updatedMemo = `E2E detail editing updated ${unique}`;
   const createResponse = await page.request.post("/api/transactions", {
     data: {
@@ -3778,6 +4273,7 @@ test("transaction detail panel reuses inline editors and keeps expected occurren
   await categoryEditor
     .getByRole("combobox", { name: "Category" })
     .fill(nextCategory.fqn);
+  await categoryEditor.getByRole("button", { name: "Save category" }).click();
   await expect(categoryCell).toContainText(nextCategory.fqn);
   await expect(row).toContainText(nextCategory.name);
 
@@ -3789,15 +4285,72 @@ test("transaction detail panel reuses inline editors and keeps expected occurren
   const amountEditor = panel.getByTestId(
     `transaction-detail-${transaction.transaction_id}-amount-editor`,
   );
-  await amountEditor.getByLabel("Amount").fill("29.87");
-  await amountEditor.getByRole("button", { name: "Save" }).click();
+  await amountEditor.getByRole("textbox", { name: "Amount" }).fill("29.87");
+  await amountEditor.getByRole("button", { name: "Save amount" }).click();
   await expect(amountCell).toContainText("-29.87 $");
   await expect(row).toContainText("-29.87 $");
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const detailMemberCell = panel
+    .getByTestId("transaction-detail-record-member-cell")
+    .first();
+  await detailMemberCell.focus();
+  await detailMemberCell.press("F2");
+  const detailMemberEditor = panel
+    .getByTestId("transaction-detail-record-member-editor")
+    .first();
+  await expect(
+    editorActionsFitCell(detailMemberCell.locator("..")),
+  ).resolves.toBe(true);
+  await detailMemberEditor
+    .getByRole("button", { name: "Cancel member edit" })
+    .click();
+  await page.setViewportSize({ width: 1920, height: 900 });
 
   const memoCell = panel.getByTestId("record-memo-cell").first();
   await memoCell.hover();
   await memoCell.getByRole("button", { name: "Edit memo" }).click();
-  const memoEditor = panel.getByTestId("record-memo-editor").first();
+  let memoEditor = panel.getByTestId("record-memo-editor").first();
+  let releaseFailedSave: (() => void) | undefined;
+  const failedSaveStarted = new Promise<void>((resolve) => {
+    void page.route(
+      `**/api/transactions/${transaction.transaction_id}`,
+      async (route) => {
+        if (route.request().method() !== "PUT") {
+          await route.continue();
+          return;
+        }
+        resolve();
+        await new Promise<void>((release) => {
+          releaseFailedSave = release;
+        });
+        await route.fulfill({
+          contentType: "application/json",
+          json: { message: "Detail save failed" },
+          status: 500,
+        });
+      },
+    );
+  });
+  await memoEditor.getByLabel("Memo").fill(failedMemo);
+  await memoEditor.getByLabel("Memo").press("Enter");
+  await failedSaveStarted;
+  await page.keyboard.press("Escape");
+  await expect(memoEditor).toBeVisible();
+  await expect(panel).toBeVisible();
+  await page.getByRole("heading", { name: "Transactions" }).click();
+  await expect(memoEditor).toBeVisible();
+  releaseFailedSave?.();
+  await expect(memoEditor.getByRole("alert")).toBeVisible();
+  await expect(memoEditor.getByLabel("Memo")).toHaveValue(failedMemo);
+  await page.unroute(`**/api/transactions/${transaction.transaction_id}`);
+  await page.keyboard.press("Escape");
+  await expect(memoEditor).toHaveCount(0);
+  await expect(panel).toBeVisible();
+
+  await memoCell.hover();
+  await memoCell.getByRole("button", { name: "Edit memo" }).click();
+  memoEditor = panel.getByTestId("record-memo-editor").first();
   await memoEditor.getByLabel("Memo").fill(updatedMemo);
   await memoEditor.getByLabel("Memo").press("Enter");
   await expect(memoCell).toContainText(updatedMemo);
@@ -5328,7 +5881,9 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
     .click();
   await page.keyboard.press("KeyN");
   await expect(page.getByRole("heading", { name: "New spend" })).toBeVisible();
-  await expect(page.getByLabel("Date")).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { exact: true, name: "Date" }),
+  ).toBeFocused();
   await expect(page.evaluate(() => window.scrollY)).resolves.toBe(0);
   await expect(
     page.evaluate(
@@ -5369,7 +5924,9 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
     (amountHeaderBox?.y ?? 0) + (amountHeaderBox?.height ?? 0),
   ).toBeLessThanOrEqual(viewport?.height ?? 0);
 
-  await page.getByLabel("Date").fill("2026-05-31");
+  await page
+    .getByRole("textbox", { exact: true, name: "Date" })
+    .fill("2026-05-31");
   await page.getByLabel("Amount").fill(amount);
   await chooseOptionByKeyboard(
     page,
@@ -5391,7 +5948,9 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await page.keyboard.press("Meta+Enter");
 
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
-  await expect(page.getByLabel("Date")).toHaveValue("2026-05-31");
+  await expect(
+    page.getByRole("textbox", { exact: true, name: "Date" }),
+  ).toHaveValue("2026-05-31");
   await expect(
     page.getByRole("combobox", { name: "Funding account" }),
   ).toHaveValue("credit_card:Chase:Sapphire");
@@ -5607,7 +6166,9 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
   await expect(firstRecord.getByLabel("Amount")).toHaveValue("-10.00");
   await expect(firstRecord.getByLabel("Memo")).toHaveValue(memo);
 
-  await page.getByLabel("Date").fill("2026-05-31");
+  await page
+    .getByRole("textbox", { exact: true, name: "Date" })
+    .fill("2026-05-31");
   await chooseOptionByKeyboard(page, "Account", "Wallet", "cash:Wallet", {
     scope: firstRecord,
   });

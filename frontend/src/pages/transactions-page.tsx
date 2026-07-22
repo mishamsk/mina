@@ -212,6 +212,7 @@ export const TransactionsPage = () => {
         getCommandPaletteSnapshot().open ||
         quickDeleteDialogOpen ||
         rowActionsOverflowOpen ||
+        browser.inlineEdit.activeEditorId ||
         event.key.toLowerCase() !== "n" ||
         event.metaKey ||
         event.ctrlKey ||
@@ -234,6 +235,7 @@ export const TransactionsPage = () => {
   }, [
     entryPanelOpen,
     browser.detail.selectedTransactionId,
+    browser.inlineEdit.activeEditorId,
     filterPopoverOpen,
     openEntryPanel,
     quickDeleteDialogOpen,
@@ -308,6 +310,7 @@ export const TransactionsPage = () => {
                   : browser.page * browser.pageSize < browser.totalCount
                 : false
             }
+            inlineEdit={browser.inlineEdit}
             loading={browser.loading}
             lookups={browser.lookups.snapshot}
             onConfirmRecurringOccurrence={
@@ -396,6 +399,7 @@ export const TransactionsPage = () => {
         {browser.detail.selectedTransactionId ? (
           <TransactionDetailPanel
             errorMessage={browser.detail.errorMessage}
+            inlineEdit={browser.inlineEdit}
             loading={browser.detail.loading}
             lookups={browser.lookups.snapshot}
             onClose={browser.detail.closeTransactionDetail}

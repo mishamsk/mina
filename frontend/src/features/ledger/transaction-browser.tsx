@@ -58,6 +58,7 @@ import {
   simpleTransactionAmountRecords,
 } from "./format";
 import { FqnPath } from "./fqn-path";
+import { type InlineEditCoordinator, InlineEditScope } from "./inline-editing";
 import { ClassIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { MixedSentinel } from "./mixed-sentinel";
@@ -79,6 +80,7 @@ interface TransactionBrowserProps {
   };
   readonly errorMessage: string | undefined;
   readonly hasNextPage: boolean;
+  readonly inlineEdit: InlineEditCoordinator;
   readonly loading: boolean;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onConfirmRecurringOccurrence: (
@@ -628,6 +630,7 @@ export const TransactionBrowser = ({
   dateJumpAnchor,
   errorMessage,
   hasNextPage,
+  inlineEdit,
   loading,
   lookups,
   onConfirmRecurringOccurrence,
@@ -1013,8 +1016,9 @@ export const TransactionBrowser = ({
   }
 
   return (
-    <div
+    <InlineEditScope
       ref={rootRef}
+      coordinator={inlineEdit}
       className="flex h-full min-h-0 flex-col gap-3"
       aria-busy={loading ? "true" : undefined}
     >
@@ -1700,6 +1704,6 @@ export const TransactionBrowser = ({
         </p>
         <p>This skips only this scheduled occurrence.</p>
       </ConfirmationDialog>
-    </div>
+    </InlineEditScope>
   );
 };

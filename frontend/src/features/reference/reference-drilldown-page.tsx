@@ -497,6 +497,7 @@ export const ReferenceDrilldownPage = ({
                 : browser.page * browser.pageSize < browser.totalCount
               : false
           }
+          inlineEdit={browser.inlineEdit}
           loading={browser.loading}
           lookups={browser.lookups.snapshot}
           onConfirmRecurringOccurrence={
@@ -555,6 +556,7 @@ export const ReferenceDrilldownPage = ({
       {browser.detail.selectedTransactionId ? (
         <TransactionDetailPanel
           errorMessage={browser.detail.errorMessage}
+          inlineEdit={browser.inlineEdit}
           loading={browser.detail.loading}
           lookups={browser.lookups.snapshot}
           onClose={browser.detail.closeTransactionDetail}

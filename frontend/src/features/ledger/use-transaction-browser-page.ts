@@ -19,6 +19,7 @@ import {
 import type { TransactionFilters } from "@/models/transaction-filters";
 
 import { activeTransactionRecords } from "./format";
+import { useInlineEditCoordinator } from "./inline-editing";
 import { type RecordUpdate, recordUpdateBody } from "./record-editing";
 import {
   defaultTransactionPage,
@@ -84,6 +85,7 @@ export const useTransactionBrowserPage = ({
   searchParams,
   setSearchParams,
 }: UseTransactionBrowserPageOptions) => {
+  const inlineEdit = useInlineEditCoordinator();
   const [notice, setNotice] = useState<Notice | undefined>();
   const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
   const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
@@ -569,6 +571,7 @@ export const useTransactionBrowserPage = ({
     jumpToNextDate,
     jumpToCurrentDate,
     jumpToPreviousDate,
+    inlineEdit,
     loading,
     lookups,
     notice,

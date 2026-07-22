@@ -36,6 +36,10 @@ import {
   transactionClassLabel,
 } from "./format";
 import { FqnPath } from "./fqn-path";
+import {
+  InlineEditAsideScope,
+  type InlineEditCoordinator,
+} from "./inline-editing";
 import { StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { RecordDetailCells } from "./record-detail-cells";
@@ -50,6 +54,7 @@ import { TransactionDeleteDescription } from "./transaction-delete-description";
 
 interface TransactionDetailPanelProps {
   readonly errorMessage: string | undefined;
+  readonly inlineEdit: InlineEditCoordinator;
   readonly loading: boolean;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
@@ -730,6 +735,7 @@ export const TransactionDetailContent = ({
 
 export const TransactionDetailPanel = ({
   errorMessage,
+  inlineEdit,
   loading,
   lookups,
   onClose,
@@ -781,6 +787,11 @@ export const TransactionDetailPanel = ({
     enabled: !confirmDeleteOpen && !confirmDismissOpen,
     floatingOverlaySelectors,
     onOutsideClose: () => {
+      if (
+        panelRef.current?.querySelector("[data-inline-editor-pending='true']")
+      ) {
+        return;
+      }
       restoreFocusOnCloseRef.current = false;
       closePanel();
     },
@@ -832,6 +843,9 @@ export const TransactionDetailPanel = ({
         if (document.querySelector("[role='alertdialog']")) {
           return;
         }
+        if (inlineEdit.activeEditorId) {
+          return;
+        }
 
         const target = event.target;
         if (
@@ -853,7 +867,7 @@ export const TransactionDetailPanel = ({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [closePanel]);
+  }, [closePanel, inlineEdit.activeEditorId]);
 
   const openDeleteConfirmation = () => {
     setDeleteErrorMessage(undefined);
@@ -934,8 +948,9 @@ export const TransactionDetailPanel = ({
       : undefined;
 
   return (
-    <aside
+    <InlineEditAsideScope
       ref={panelRef}
+      coordinator={inlineEdit}
       role="dialog"
       aria-labelledby="transaction-detail-title"
       className="bg-card fixed top-4 right-4 bottom-4 z-50 flex w-[min(760px,calc(100vw-2rem))] max-w-full flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
@@ -1134,6 +1149,6 @@ export const TransactionDetailPanel = ({
           This occurrence will be skipped. The recurring schedule will continue.
         </p>
       </ConfirmationDialog>
-    </aside>
+    </InlineEditAsideScope>
   );
 };
