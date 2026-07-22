@@ -1,5 +1,12 @@
 import { Close, Pencil } from "pixelarticons/react";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { JournalRecord, Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
@@ -286,16 +293,29 @@ export const RecordReferenceCells = ({
   const [entityPickerOpen, setEntityPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const displayCellRef = useRef<HTMLDivElement>(null);
+  const restoreDisplayFocusRef = useRef(false);
   const { activeEditorId, finish, requestStart } = useInlineEdit();
   const instanceId = useId();
-  const editorId = `${testIdPrefix}-${record.record_id}-${field}-${instanceId}`;
+  const editorId = `${testIdPrefix}-${field}-${instanceId}`;
   const editing = activeEditorId === editorId;
 
   const restoreDisplayFocus = () => {
-    window.requestAnimationFrame(() => {
+    restoreDisplayFocusRef.current = true;
+  };
+
+  useLayoutEffect(() => {
+    if (editing || !restoreDisplayFocusRef.current) {
+      return;
+    }
+
+    restoreDisplayFocusRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
       displayCellRef.current?.focus();
     });
-  };
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [editing]);
 
   const cancel = () => {
     if (saving) {

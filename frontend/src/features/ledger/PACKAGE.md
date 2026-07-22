@@ -24,9 +24,12 @@
 - Category, tags, and posting status use their narrow record bulk APIs; member, memo, dates, and simple row amounts use atomic transaction replacement built from the displayed transaction shape.
 - Structural record fields remain non-inline; transaction pages with an entry panel expose a direct escalation action to the full journal editor.
 - Entry supports the spend, income, refund, and transfer shorthand endpoints.
-- Saved-transaction Edit/Split saves are full replacements owned by the entry panel; page routes own the post-save refresh fan-out and notices.
+- Saved-transaction Edit/Split saves are full replacements owned by the entry panel; page routes select the blocking post-save refresh mode and own notices.
 - Saved-transaction Duplicate reuses entry-panel prefill mapping but stays on the create path.
 - Successful transaction mutations trigger shared invalidation for account, category, tag, and member page snapshots so REST-provided `deletable` flags refetch without a reload.
+- Successful inline transaction and record saves update the displayed page, invalidate sibling page snapshots, release the editor, and refresh that displayed page, balances, and overview in the background; category saves fetch the complete server-derived transaction before publishing the row update.
+- A background page response replaces only its unchanged source snapshot and is discarded when a newer source exists; failure preserves the displayed snapshot, marks it stale, and lets the mounted resource retry without a table loading state.
+- Entry-panel saves retain the blocking page refresh so stale displayed rows cannot start a conflicting full-replacement edit while the saved transaction refetches.
 - Successful bulk mutations use the same transaction, balance, overview, register, detail, and reference-page refresh fan-out as other transaction edits.
 - Transaction-entry drafts are per tab and store UI form values only.
 - The active entry tab is a persisted UI preference.
@@ -34,9 +37,9 @@
 
 ## Boundaries
 
-- Owns: ledger display atoms, transaction browser, transaction detail panel rendering, record tables, tombstone confirmation UI, bounded lookup pickers, and entry-panel UI mapping.
-- Does not own: REST endpoint generation, accounting validation, durable accounting persistence, route URL state, missing-detail fetches, transaction delete calls, or page snapshot refreshes beyond shared transaction-mutation invalidation.
-- Page routes own URL filter semantics, URL-addressed detail state, page-specific detail actions, and REST mutation refresh rules beyond shared transaction-mutation invalidation and row tombstones.
+- Owns: ledger display atoms, transaction browser, transaction detail panel rendering, record tables, tombstone confirmation UI, bounded lookup pickers, entry-panel UI mapping, and shared transaction-mutation refresh and page-cache behavior.
+- Does not own: REST endpoint generation, accounting validation, durable accounting persistence, route URL state, missing-detail fetches, or route-specific transaction mutation calls and notices.
+- Page routes own URL filter semantics, URL-addressed detail state, page-specific detail actions, and entry-panel save refresh mode and notices.
 
 ## Testing Notes
 

@@ -383,6 +383,7 @@ export const TransactionsPage = () => {
               transaction.transaction_id,
               transaction,
               context.previousTransaction,
+              { pageRefreshMode: "blocking" },
             );
             setEntryLaunch(undefined);
             if (context.operation === "updated") {

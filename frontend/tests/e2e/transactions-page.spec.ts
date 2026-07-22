@@ -411,6 +411,113 @@ const editorActionsFitCell = (cell: Locator) =>
     });
   });
 
+const expectInlineSaveKeepsTransactionTableStable = async (
+  page: Page,
+  transactionId: number,
+  focusTarget: Locator,
+  save: () => Promise<void>,
+  expectUpdatedValue: () => Promise<void>,
+): Promise<void> => {
+  const transactionListPattern = "**/api/transactions**";
+  const tableScroll = page.getByTestId("transactions-table-scroll");
+  const table = tableScroll.locator("table.transactions-table");
+  const stabilityMarker = `save-${transactionId}-${Date.now()}`;
+  await table.evaluate((element, marker) => {
+    element.dataset.e2eStabilityMarker = marker;
+  }, stabilityMarker);
+  const scrollTop = await tableScroll.evaluate((element) => element.scrollTop);
+  expect(scrollTop).toBeGreaterThan(0);
+  const visibleTransactionIds = await tableScroll.evaluate((element) => {
+    const containerBounds = element.getBoundingClientRect();
+    return Array.from(
+      element.querySelectorAll<HTMLElement>("[data-transaction-row='true']"),
+    )
+      .filter((row) => {
+        const rowBounds = row.getBoundingClientRect();
+        return (
+          rowBounds.bottom > containerBounds.top &&
+          rowBounds.top < containerBounds.bottom
+        );
+      })
+      .map((row) => row.dataset.transactionId ?? "");
+  });
+  expect(visibleTransactionIds.length).toBeGreaterThan(0);
+
+  let releaseRefetch: (() => void) | undefined;
+  let markRefetchStarted: (() => void) | undefined;
+  const refetchStarted = new Promise<void>((resolve) => {
+    markRefetchStarted = resolve;
+  });
+  const refetchResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "GET" &&
+      url.pathname === "/api/transactions"
+    );
+  });
+  const holdRefetch = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+
+    markRefetchStarted?.();
+    await new Promise<void>((resolve) => {
+      releaseRefetch = resolve;
+    });
+    await route.continue();
+  };
+  await page.route(transactionListPattern, holdRefetch);
+
+  try {
+    await save();
+    await refetchStarted;
+    await expectUpdatedValue();
+
+    await expect(tableScroll).toBeVisible();
+    await expect(page.locator("[data-slot='skeleton']")).toHaveCount(0);
+    await expect(page.getByTestId("transactions-page-busy")).toHaveCount(0);
+    await expect(table).toHaveAttribute(
+      "data-e2e-stability-marker",
+      stabilityMarker,
+    );
+    await expect(
+      page.locator(`[data-transaction-id="${transactionId}"]`),
+    ).toHaveAttribute("aria-expanded", "true");
+    for (const visibleTransactionId of visibleTransactionIds) {
+      await expect(
+        page.locator(`[data-transaction-id="${visibleTransactionId}"]`),
+      ).toBeVisible();
+    }
+    expect(await tableScroll.evaluate((element) => element.scrollTop)).toBe(
+      scrollTop,
+    );
+  } finally {
+    releaseRefetch?.();
+    await refetchResponse;
+    await page.unroute(transactionListPattern, holdRefetch);
+  }
+
+  await expect(tableScroll).toBeVisible();
+  await expect(page.locator("[data-slot='skeleton']")).toHaveCount(0);
+  await expect(page.getByTestId("transactions-page-busy")).toHaveCount(0);
+  await expect(table).toHaveAttribute(
+    "data-e2e-stability-marker",
+    stabilityMarker,
+  );
+  await expect(
+    page.locator(`[data-transaction-id="${transactionId}"]`),
+  ).toHaveAttribute("aria-expanded", "true");
+  await expect(focusTarget).toBeFocused();
+  expect(await tableScroll.evaluate((element) => element.scrollTop)).toBe(
+    scrollTop,
+  );
+};
+
 const comparableRecords = (records: readonly JournalRecordFixture[]) =>
   records
     .map((record) => ({
@@ -874,6 +981,7 @@ test("expanded records edit per-record values and escalate structural changes", 
     memberEditor.getByRole("button", { name: "Save member" }),
   ).toBeFocused();
   await page.keyboard.press("Enter");
+  await expect(memberEditor).toHaveCount(0);
   await expect(memberCell).not.toContainText(member.name);
 
   const memoCell = records.getByTestId("record-memo-cell").first();
@@ -924,6 +1032,183 @@ test("expanded records edit per-record values and escalate structural changes", 
   await expect(
     page.getByRole("heading", { name: "Edit journal" }),
   ).toBeVisible();
+  await deleteTransaction(page, transaction);
+});
+
+test("inline category tag member and amount saves keep the transaction table stable", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  await page.setViewportSize({ width: 1600, height: 800 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const initialCategory = findByFqn(categories, "Income:Salary");
+  const [nextCategory, nextTag, nextMember] = await Promise.all([
+    createCategory(page, `E2E:ResponsiveSave:${unique}:Category`, "refund"),
+    createTag(page, `E2E:ResponsiveSave:${unique}:Tag`),
+    createMember(page, `Responsive save ${unique}`),
+  ]);
+  const memo = `E2E responsive inline save ${unique}`;
+  const createResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-21",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "17.43000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "-17.43000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionDetailFixture;
+
+  await page.goto("/transactions?page=1&pageSize=100&hideExpected=true");
+  const tableScroll = page.getByTestId("transactions-table-scroll");
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await expect(row).toBeVisible();
+  await row.getByRole("checkbox").click();
+  await expect(row.getByRole("checkbox")).toBeChecked();
+  await row.locator("td").nth(4).click();
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+  await tableScroll.evaluate((element, transactionId) => {
+    const transactionRow = element.querySelector<HTMLElement>(
+      `[data-transaction-id="${transactionId}"]`,
+    );
+    const header = element.querySelector<HTMLElement>("thead");
+    if (!transactionRow) {
+      return;
+    }
+    const containerBounds = element.getBoundingClientRect();
+    const rowBounds = transactionRow.getBoundingClientRect();
+    element.scrollTop +=
+      rowBounds.top -
+      containerBounds.top -
+      (header?.getBoundingClientRect().height ?? 0) -
+      8;
+    element.scrollTop = Math.max(element.scrollTop, 16);
+  }, transaction.transaction_id);
+  const expandedRecords = page.getByTestId("expanded-records");
+  await expect(expandedRecords).toBeVisible();
+
+  const rowPrefix = `transaction-${transaction.transaction_id}`;
+  const categoryCell = row.getByTestId(`${rowPrefix}-category-cell`);
+  await categoryCell.focus();
+  await categoryCell.press("F2");
+  const categoryEditor = row.getByTestId(`${rowPrefix}-category-editor`);
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(nextCategory.fqn);
+  await expectInlineSaveKeepsTransactionTableStable(
+    page,
+    transaction.transaction_id,
+    categoryCell,
+    () => categoryEditor.getByRole("button", { name: "Save category" }).click(),
+    async () => {
+      await expect(row.getByRole("img", { name: "REFUND" })).toBeVisible();
+      await expect(
+        expandedRecords.getByText(nextCategory.fqn, { exact: true }),
+      ).toHaveCount(2);
+    },
+  );
+  await expect(categoryEditor).toHaveCount(0);
+  await expect(
+    expandedRecords.getByText(nextCategory.fqn, { exact: true }),
+  ).toHaveCount(2);
+  await expect(row.getByRole("img", { name: "REFUND" })).toBeVisible();
+
+  const tagCell = row.getByTestId(`${rowPrefix}-tags-cell`);
+  await tagCell.focus();
+  await tagCell.press("F2");
+  const tagEditor = row.getByTestId(`${rowPrefix}-tags-editor`);
+  await tagEditor.getByRole("combobox", { name: "Tags" }).fill(nextTag.fqn);
+  await tagEditor.getByRole("combobox", { name: "Tags" }).press("Enter");
+  await expectInlineSaveKeepsTransactionTableStable(
+    page,
+    transaction.transaction_id,
+    tagCell,
+    () => tagEditor.getByRole("button", { name: "Save tags" }).click(),
+    async () => {
+      await expect(
+        expandedRecords.getByText(nextTag.fqn, { exact: true }),
+      ).toHaveCount(2);
+    },
+  );
+  await expect(tagEditor).toHaveCount(0);
+  await expect(
+    expandedRecords.getByText(nextTag.fqn, { exact: true }),
+  ).toHaveCount(2);
+
+  const memberCell = row.getByTestId(`${rowPrefix}-member-cell`);
+  await memberCell.focus();
+  await memberCell.press("F2");
+  const memberEditor = row.getByTestId(`${rowPrefix}-member-editor`);
+  await memberEditor
+    .getByRole("combobox", { name: "Member" })
+    .fill(nextMember.name);
+  await memberEditor.getByRole("combobox", { name: "Member" }).press("Enter");
+  await expectInlineSaveKeepsTransactionTableStable(
+    page,
+    transaction.transaction_id,
+    memberCell,
+    () => memberEditor.getByRole("button", { name: "Save member" }).click(),
+    async () => {
+      await expect(
+        expandedRecords.getByText(nextMember.name, { exact: true }),
+      ).toHaveCount(2);
+    },
+  );
+  await expect(memberEditor).toHaveCount(0);
+  await expect(
+    expandedRecords.getByText(nextMember.name, { exact: true }),
+  ).toHaveCount(2);
+
+  const amountCell = row.getByTestId(`${rowPrefix}-amount-cell`);
+  await amountCell.focus();
+  await amountCell.press("F2");
+  const amountEditor = row.getByTestId(`${rowPrefix}-amount-editor`);
+  await amountEditor.getByRole("textbox", { name: "Amount" }).fill("29.87");
+  await expectInlineSaveKeepsTransactionTableStable(
+    page,
+    transaction.transaction_id,
+    amountCell,
+    () => amountEditor.getByRole("button", { name: "Save amount" }).click(),
+    async () => {
+      await expect(expandedRecords).toContainText("-29.87 $");
+      await expect(expandedRecords).toContainText("+29.87 $");
+    },
+  );
+  await expect(amountEditor).toHaveCount(0);
+  await expect(expandedRecords).toContainText("-29.87 $");
+  await expect(expandedRecords).toContainText("+29.87 $");
+  await expect(row.getByRole("checkbox")).toBeChecked();
+
   await deleteTransaction(page, transaction);
 });
 
@@ -1019,6 +1304,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
     .getByRole("combobox", { name: "Category" })
     .fill(nextCategory.fqn);
   await categoryEditor.getByRole("button", { name: "Save category" }).click();
+  await expect(categoryEditor).toHaveCount(0);
   await row.locator("td").nth(4).click();
   const expandedRecords = page.getByTestId("expanded-records");
   await expect(

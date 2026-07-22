@@ -84,6 +84,7 @@ interface TransactionsState {
   readonly featuredBalancesLoading: boolean;
   readonly lastTransactionsPageSearch: string;
   readonly lastLoadedPageKey: string | undefined;
+  readonly loadingPageGeneration: number | undefined;
   readonly loadingPageKey: string | undefined;
   readonly lookupErrorMessage: string | undefined;
   readonly lookups: LedgerLookupsSnapshot | undefined;
@@ -91,7 +92,9 @@ interface TransactionsState {
   readonly overview: OverviewSnapshot | undefined;
   readonly overviewErrorMessage: string | undefined;
   readonly overviewLoading: boolean;
+  readonly pageGeneration: number;
   readonly pages: Readonly<Record<string, TransactionPageSnapshot>>;
+  readonly stalePageKeys: Readonly<Record<string, boolean>>;
 }
 
 const initialTransactionsState: TransactionsState = {
@@ -105,6 +108,7 @@ const initialTransactionsState: TransactionsState = {
   featuredBalancesLoading: false,
   lastTransactionsPageSearch: "",
   lastLoadedPageKey: undefined,
+  loadingPageGeneration: undefined,
   loadingPageKey: undefined,
   lookupErrorMessage: undefined,
   lookups: undefined,
@@ -112,7 +116,9 @@ const initialTransactionsState: TransactionsState = {
   overview: undefined,
   overviewErrorMessage: undefined,
   overviewLoading: false,
+  pageGeneration: 0,
   pages: {},
+  stalePageKeys: {},
 };
 
 const transactionsStore = create<TransactionsState>()(
@@ -155,8 +161,10 @@ export const useTransactionPageView = (params: TransactionsPageParams) => {
       return {
         displayedSnapshot: snapshot ?? fallbackSnapshot,
         errorMessage: state.errorMessage,
+        generation: state.pageGeneration,
         loading: state.loadingPageKey === requestKey,
         snapshot,
+        stale: state.stalePageKeys[key] ?? false,
       };
     }),
   );
@@ -223,10 +231,11 @@ export const setTransactionPageLoading = (
   params: TransactionsPageParams,
 ): void => {
   useTransactionsStore.setState(
-    {
+    (state) => ({
       errorMessage: undefined,
+      loadingPageGeneration: state.pageGeneration,
       loadingPageKey: transactionPageRequestKey(params),
-    },
+    }),
     false,
     "TransactionsStore/setTransactionPageLoading",
   );
@@ -234,13 +243,22 @@ export const setTransactionPageLoading = (
 
 export const clearTransactionPageLoading = (
   params: TransactionsPageParams,
+  expectedGeneration?: number,
 ): void => {
   const key = transactionPageRequestKey(params);
   useTransactionsStore.setState(
-    (state) => ({
-      loadingPageKey:
-        state.loadingPageKey === key ? undefined : state.loadingPageKey,
-    }),
+    (state) => {
+      const matches =
+        state.loadingPageKey === key &&
+        (expectedGeneration === undefined ||
+          state.loadingPageGeneration === expectedGeneration);
+      return {
+        loadingPageGeneration: matches
+          ? undefined
+          : state.loadingPageGeneration,
+        loadingPageKey: matches ? undefined : state.loadingPageKey,
+      };
+    },
     false,
     "TransactionsStore/clearTransactionPageLoading",
   );
@@ -258,23 +276,131 @@ export const setTransactionPage = (
   });
   const loadingKey = transactionPageRequestKey(loadingParams);
   useTransactionsStore.setState(
-    (state) => ({
-      errorMessage: undefined,
-      lastLoadedPageKey: key,
-      loadingPageKey:
-        state.loadingPageKey === loadingKey ? undefined : state.loadingPageKey,
-      pages: {
-        ...state.pages,
-        [key]: {
-          loadedAt: new Date().toISOString(),
-          params,
-          totalCount,
-          transactions,
+    (state) => {
+      const stalePageKeys = { ...state.stalePageKeys };
+      delete stalePageKeys[key];
+      return {
+        errorMessage: undefined,
+        lastLoadedPageKey: key,
+        loadingPageGeneration:
+          state.loadingPageKey === loadingKey
+            ? undefined
+            : state.loadingPageGeneration,
+        loadingPageKey:
+          state.loadingPageKey === loadingKey
+            ? undefined
+            : state.loadingPageKey,
+        pages: {
+          ...state.pages,
+          [key]: {
+            loadedAt: new Date().toISOString(),
+            params,
+            totalCount,
+            transactions,
+          },
         },
-      },
-    }),
+        stalePageKeys,
+      };
+    },
     false,
     "TransactionsStore/setTransactionPage",
+  );
+};
+
+export const updateDisplayedTransactionPage = (
+  params: TransactionsPageParams,
+  transaction: Transaction,
+): void => {
+  const key = transactionPageKey(params);
+  useTransactionsStore.setState(
+    (state) => {
+      const page = state.pages[key];
+      if (!page) {
+        return state;
+      }
+
+      return {
+        errorMessage: undefined,
+        lastLoadedPageKey: key,
+        pageGeneration: state.pageGeneration + 1,
+        pages: {
+          [key]: {
+            ...page,
+            transactions: page.transactions.map((current) =>
+              current.transaction_id === transaction.transaction_id
+                ? transaction
+                : current,
+            ),
+          },
+        },
+        stalePageKeys: {},
+      };
+    },
+    false,
+    "TransactionsStore/updateDisplayedTransactionPage",
+  );
+};
+
+export const setRefreshedTransactionPage = (
+  params: TransactionsPageParams,
+  totalCount: number | undefined,
+  transactions: readonly Transaction[],
+  pageAtRefreshStart: TransactionPageSnapshot | undefined,
+): void => {
+  const normalizedParams = {
+    ...params,
+    filters: normalizeTransactionFilters(params.filters),
+  };
+  const key = transactionPageKey(normalizedParams);
+  useTransactionsStore.setState(
+    (state) => {
+      if (state.pages[key] !== pageAtRefreshStart) {
+        return state;
+      }
+
+      const stalePageKeys = { ...state.stalePageKeys };
+      delete stalePageKeys[key];
+      const lastLoadedPageKey = state.lastLoadedPageKey ?? key;
+
+      return {
+        errorMessage: undefined,
+        lastLoadedPageKey,
+        pages: {
+          ...state.pages,
+          [key]: {
+            loadedAt: new Date().toISOString(),
+            params: normalizedParams,
+            totalCount,
+            transactions,
+          },
+        },
+        stalePageKeys,
+      };
+    },
+    false,
+    "TransactionsStore/setRefreshedTransactionPage",
+  );
+};
+
+export const markTransactionPageStale = (
+  params: TransactionsPageParams,
+  expectedPage: TransactionPageSnapshot | undefined,
+): void => {
+  const key = transactionPageKey(params);
+  useTransactionsStore.setState(
+    (state) => {
+      if (state.pages[key] !== expectedPage) {
+        return state;
+      }
+      return {
+        stalePageKeys: {
+          ...state.stalePageKeys,
+          [key]: true,
+        },
+      };
+    },
+    false,
+    "TransactionsStore/markTransactionPageStale",
   );
 };
 
@@ -286,6 +412,8 @@ export const setTransactionPageError = (
   useTransactionsStore.setState(
     (state) => ({
       errorMessage,
+      loadingPageGeneration:
+        state.loadingPageKey === key ? undefined : state.loadingPageGeneration,
       loadingPageKey:
         state.loadingPageKey === key ? undefined : state.loadingPageKey,
     }),
@@ -528,12 +656,15 @@ export const invalidateCategoryPickerCategories = (): void => {
 
 export const invalidateTransactionPages = (): void => {
   useTransactionsStore.setState(
-    {
+    (state) => ({
       errorMessage: undefined,
       lastLoadedPageKey: undefined,
+      loadingPageGeneration: undefined,
       loadingPageKey: undefined,
+      pageGeneration: state.pageGeneration + 1,
       pages: {},
-    },
+      stalePageKeys: {},
+    }),
     false,
     "TransactionsStore/invalidateTransactionPages",
   );

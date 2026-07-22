@@ -6,6 +6,7 @@ import {
   confirmRecurringOccurrenceById,
   deleteTransactionById,
   dismissRecurringOccurrenceById,
+  fetchTransactionById,
   type JournalRecord,
   replaceLedgerTransaction,
   type Transaction,
@@ -20,7 +21,11 @@ import type { TransactionFilters } from "@/models/transaction-filters";
 
 import { activeTransactionRecords } from "./format";
 import { useInlineEditCoordinator } from "./inline-editing";
-import { type RecordUpdate, recordUpdateBody } from "./record-editing";
+import {
+  type RecordUpdate,
+  recordUpdateBody,
+  transactionWithRecordUpdate,
+} from "./record-editing";
 import {
   defaultTransactionPage,
   readTransactionPageFromSearchParams,
@@ -115,6 +120,7 @@ export const useTransactionBrowserPage = ({
   });
   const { lookups, page: pageResource } = useTransactionsResource(params);
   const displayedSnapshot = pageResource.displayedSnapshot;
+  const displayedPageParams = displayedSnapshot?.params ?? params;
   const transactions = displayedSnapshot?.transactions;
   const totalCount = displayedSnapshot?.totalCount;
   const loading =
@@ -164,13 +170,15 @@ export const useTransactionBrowserPage = ({
         detail.closeTransactionDetail();
       }
       await refreshTransactionPageAfterSave(
-        params,
+        displayedPageParams,
         transaction.transaction_id,
         transaction,
+        undefined,
+        { pageRefreshMode: "blocking" },
       );
       showNotice("Transaction deleted.");
     },
-    [detail, params, showNotice],
+    [detail, displayedPageParams, showNotice],
   );
 
   const confirmRecurringOccurrenceFromRow = useCallback(
@@ -189,14 +197,16 @@ export const useTransactionBrowserPage = ({
       }
 
       await refreshTransactionPageAfterSave(
-        params,
+        displayedPageParams,
         transaction.transaction_id,
         transaction,
+        undefined,
+        { pageRefreshMode: "blocking" },
       );
       await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
       showNotice("Occurrence confirmed.");
     },
-    [detail, params, showNotice],
+    [detail, displayedPageParams, showNotice],
   );
 
   const dismissRecurringOccurrenceFromRow = useCallback(
@@ -218,13 +228,15 @@ export const useTransactionBrowserPage = ({
         detail.closeTransactionDetail();
       }
       await refreshTransactionPageAfterSave(
-        params,
+        displayedPageParams,
         transaction.transaction_id,
         transaction,
+        undefined,
+        { pageRefreshMode: "blocking" },
       );
       showNotice("Occurrence dismissed.");
     },
-    [detail, params, showNotice],
+    [detail, displayedPageParams, showNotice],
   );
 
   const updateRecord = useCallback(
@@ -233,6 +245,8 @@ export const useTransactionBrowserPage = ({
       record: JournalRecord,
       update: RecordUpdate,
     ) => {
+      let nextTransaction: Transaction;
+      let nextDetailTransaction: Transaction | undefined;
       if (update.kind === "category") {
         const result = await updateJournalRecordCategory(
           record.record_id,
@@ -241,6 +255,14 @@ export const useTransactionBrowserPage = ({
         if (result.error) {
           throw new Error(apiErrorMessage(result.error));
         }
+        const refreshed = await fetchTransactionById(
+          transaction.transaction_id,
+        );
+        if (!refreshed.data) {
+          throw new Error(apiErrorMessage(refreshed.error));
+        }
+        nextTransaction = refreshed.data;
+        nextDetailTransaction = refreshed.data;
       } else if (update.kind === "tags") {
         if (
           record.tag_ids.length === update.tagIds.length &&
@@ -256,6 +278,11 @@ export const useTransactionBrowserPage = ({
         if (result.error) {
           throw new Error(apiErrorMessage(result.error));
         }
+        nextTransaction = transactionWithRecordUpdate(
+          transaction,
+          [record.record_id],
+          update,
+        );
       } else if (update.kind === "postingStatus") {
         const result = await updateJournalRecordPostingStatus(
           record.record_id,
@@ -264,6 +291,11 @@ export const useTransactionBrowserPage = ({
         if (result.error) {
           throw new Error(apiErrorMessage(result.error));
         }
+        nextTransaction = transactionWithRecordUpdate(
+          transaction,
+          [record.record_id],
+          update,
+        );
       } else {
         const result = await replaceLedgerTransaction(
           transaction.transaction_id,
@@ -273,7 +305,7 @@ export const useTransactionBrowserPage = ({
           throw new Error(apiErrorMessage(result.error));
         }
         await refreshTransactionPageAfterSave(
-          params,
+          displayedPageParams,
           transaction.transaction_id,
           result.data,
           transaction,
@@ -286,13 +318,17 @@ export const useTransactionBrowserPage = ({
       }
 
       await refreshTransactionPageAfterSave(
-        params,
+        displayedPageParams,
         transaction.transaction_id,
+        nextTransaction,
         transaction,
       );
-      await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
+      await detail.refreshSelectedTransactionDetail(
+        transaction.transaction_id,
+        nextDetailTransaction,
+      );
     },
-    [detail, params],
+    [detail, displayedPageParams],
   );
 
   const updateTransactionRecordReferences = useCallback(
@@ -309,6 +345,8 @@ export const useTransactionBrowserPage = ({
         return true;
       }
 
+      let nextTransaction: Transaction;
+      let nextDetailTransaction: Transaction | undefined;
       if (update.kind === "category") {
         const result = await updateJournalRecordsCategory(
           recordIds,
@@ -317,6 +355,14 @@ export const useTransactionBrowserPage = ({
         if (result.error) {
           throw new Error(apiErrorMessage(result.error));
         }
+        const refreshed = await fetchTransactionById(
+          transaction.transaction_id,
+        );
+        if (!refreshed.data) {
+          throw new Error(apiErrorMessage(refreshed.error));
+        }
+        nextTransaction = refreshed.data;
+        nextDetailTransaction = refreshed.data;
       } else if (update.kind === "tags") {
         const currentTagIds = records[0]?.tag_ids ?? [];
         if (
@@ -333,6 +379,11 @@ export const useTransactionBrowserPage = ({
         if (result.error) {
           throw new Error(apiErrorMessage(result.error));
         }
+        nextTransaction = transactionWithRecordUpdate(
+          transaction,
+          recordIds,
+          update,
+        );
       } else {
         const result = await replaceLedgerTransaction(
           transaction.transaction_id,
@@ -342,7 +393,7 @@ export const useTransactionBrowserPage = ({
           throw new Error(apiErrorMessage(result.error));
         }
         const rowRemainsVisible = await refreshTransactionPageAfterSave(
-          params,
+          displayedPageParams,
           transaction.transaction_id,
           result.data,
           transaction,
@@ -355,14 +406,18 @@ export const useTransactionBrowserPage = ({
       }
 
       const rowRemainsVisible = await refreshTransactionPageAfterSave(
-        params,
+        displayedPageParams,
         transaction.transaction_id,
+        nextTransaction,
         transaction,
       );
-      await detail.refreshSelectedTransactionDetail(transaction.transaction_id);
+      await detail.refreshSelectedTransactionDetail(
+        transaction.transaction_id,
+        nextDetailTransaction,
+      );
       return rowRemainsVisible;
     },
-    [detail, params],
+    [detail, displayedPageParams],
   );
 
   const updateTransactionAmount = useCallback(
@@ -384,7 +439,7 @@ export const useTransactionBrowserPage = ({
       }
 
       await refreshTransactionPageAfterSave(
-        params,
+        displayedPageParams,
         transaction.transaction_id,
         result.data,
         transaction,
@@ -394,7 +449,7 @@ export const useTransactionBrowserPage = ({
         result.data,
       );
     },
-    [detail, params],
+    [detail, displayedPageParams],
   );
 
   const updateTransactionsBulkReferences = useCallback(
@@ -479,7 +534,7 @@ export const useTransactionBrowserPage = ({
 
       if (qualifyingTransactions.length > 0) {
         await refreshTransactionPageAfterBulkSave(
-          params,
+          displayedPageParams,
           qualifyingTransactions,
         );
         await Promise.all(
@@ -495,7 +550,7 @@ export const useTransactionBrowserPage = ({
         }.`,
       );
     },
-    [detail, params, showNotice],
+    [detail, displayedPageParams, showNotice],
   );
 
   const setPage = useCallback(

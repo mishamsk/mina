@@ -25,6 +25,7 @@ import {
   invalidateMembersPage,
   invalidateTagsPage,
   invalidateTransactionPages,
+  markTransactionPageStale,
   normalizedCategoryPickerIntents,
   setCategoryPickerCategories,
   setCategoryPickerCategoriesError,
@@ -32,11 +33,13 @@ import {
   setLedgerLookups,
   setLedgerLookupsError,
   setLedgerLookupsLoading,
+  setRefreshedTransactionPage,
   setTransactionPage,
   setTransactionPageError,
   setTransactionPageLoading,
   transactionPageKey,
   transactionPageRequestKey,
+  updateDisplayedTransactionPage,
   useCategoryPickerCategoriesView,
   useLedgerLookupsView,
   useTransactionPageView,
@@ -101,12 +104,20 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
     const snapshot = getTransactionsSnapshot();
     const key = transactionPageKey(params);
     const requestKey = transactionPageRequestKey(params);
-    if (snapshot.pages[key] || snapshot.loadingPageKey === requestKey) {
+    const pageAtLoadStart = snapshot.pages[key];
+    const pageGenerationAtLoadStart = snapshot.pageGeneration;
+    if (
+      (pageAtLoadStart && !snapshot.stalePageKeys[key]) ||
+      (snapshot.loadingPageKey === requestKey &&
+        snapshot.loadingPageGeneration === pageGenerationAtLoadStart)
+    ) {
       return;
     }
 
     let active = true;
-    setTransactionPageLoading(params);
+    if (!pageAtLoadStart) {
+      setTransactionPageLoading(params);
+    }
 
     catchupPromiseRef.current ??= triggerRecurringOccurrenceCatchup().catch(
       () => undefined,
@@ -116,27 +127,54 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
       .then(() => fetchTransactionPage(params))
       .then((result) => {
         if (!active) {
-          clearTransactionPageLoading(params);
+          if (!pageAtLoadStart) {
+            clearTransactionPageLoading(params, pageGenerationAtLoadStart);
+          }
+          return;
+        }
+        if (
+          getTransactionsSnapshot().pageGeneration !== pageGenerationAtLoadStart
+        ) {
+          if (!pageAtLoadStart) {
+            clearTransactionPageLoading(params, pageGenerationAtLoadStart);
+          }
           return;
         }
 
         if (result.data) {
-          setTransactionPage(
-            effectivePageParams(params, result.data.offset),
-            result.data.total_count,
-            result.data.transactions,
+          const effectiveParams = effectivePageParams(
             params,
+            result.data.offset,
           );
+          if (pageAtLoadStart) {
+            setRefreshedTransactionPage(
+              effectiveParams,
+              result.data.total_count,
+              result.data.transactions,
+              pageAtLoadStart,
+            );
+          } else {
+            setTransactionPage(
+              effectiveParams,
+              result.data.total_count,
+              result.data.transactions,
+              params,
+            );
+          }
           return;
         }
 
-        setTransactionPageError(params, apiErrorMessage(result.error));
+        if (pageAtLoadStart) {
+          markTransactionPageStale(params, pageAtLoadStart);
+        } else {
+          setTransactionPageError(params, apiErrorMessage(result.error));
+        }
       });
 
     return () => {
       active = false;
     };
-  }, [page.snapshot, params]);
+  }, [page.generation, page.snapshot, page.stale, params]);
 
   useEffect(() => {
     const snapshot = getTransactionsSnapshot();
@@ -243,6 +281,25 @@ export const refreshTransactionPage = async (
   return [];
 };
 
+const refreshTransactionPageInBackground = async (
+  params: TransactionPageParams,
+): Promise<void> => {
+  const key = transactionPageKey(params);
+  const pageAtRefreshStart = getTransactionsSnapshot().pages[key];
+  const result = await fetchTransactionPage(params);
+  if (!result.data) {
+    markTransactionPageStale(params, pageAtRefreshStart);
+    return;
+  }
+
+  setRefreshedTransactionPage(
+    effectivePageParams(params, result.data.offset),
+    result.data.total_count,
+    result.data.transactions,
+    pageAtRefreshStart,
+  );
+};
+
 export const refreshLedgerLookups = async (): Promise<void> => {
   await loadLedgerLookups();
 };
@@ -278,10 +335,32 @@ export const refreshTransactionPageAfterSave = async (
   transactionId: number,
   transaction?: Transaction,
   previousTransaction?: Transaction,
+  options: {
+    readonly pageRefreshMode?: "background" | "blocking";
+  } = {},
 ): Promise<boolean> => {
   invalidateReferencePagesAfterTransactionMutation();
   if (transaction) {
     invalidateAccountRegistersForTransaction(transaction, previousTransaction);
+  }
+
+  if (options.pageRefreshMode !== "blocking") {
+    if (transaction) {
+      updateDisplayedTransactionPage(params, transaction);
+    }
+    const rowWasVisible = Boolean(
+      getTransactionsSnapshot().pages[
+        transactionPageKey(params)
+      ]?.transactions.some(
+        (current) => current.transaction_id === transactionId,
+      ),
+    );
+    void Promise.all([
+      refreshTransactionPageInBackground(params),
+      refreshFeaturedBalances(),
+      refreshOverview(),
+    ]);
+    return rowWasVisible;
   }
 
   const [transactions] = await Promise.all([
@@ -290,7 +369,7 @@ export const refreshTransactionPageAfterSave = async (
     refreshOverview(),
   ]);
   return transactions.some(
-    (transaction) => transaction.transaction_id === transactionId,
+    (current) => current.transaction_id === transactionId,
   );
 };
 

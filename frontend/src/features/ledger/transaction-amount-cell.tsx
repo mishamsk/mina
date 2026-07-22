@@ -1,5 +1,12 @@
 import { Pencil } from "pixelarticons/react";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { JournalRecord, Transaction } from "@/api";
 import { Tooltip } from "@/components/tooltip";
@@ -57,6 +64,7 @@ export const TransactionAmountCell = ({
   const [errorMessage, setErrorMessage] = useState<string>();
   const [saving, setSaving] = useState(false);
   const displayCellRef = useRef<HTMLDivElement>(null);
+  const restoreDisplayFocusRef = useRef(false);
   const savingRef = useRef(false);
   const { activeEditorId, finish, requestStart } = useInlineEdit();
   const instanceId = useId();
@@ -68,10 +76,22 @@ export const TransactionAmountCell = ({
   );
 
   const restoreDisplayFocus = () => {
-    window.requestAnimationFrame(() => {
+    restoreDisplayFocusRef.current = true;
+  };
+
+  useLayoutEffect(() => {
+    if (editing || !restoreDisplayFocusRef.current) {
+      return;
+    }
+
+    restoreDisplayFocusRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
       displayCellRef.current?.focus();
     });
-  };
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [editing]);
 
   const cancel = () => {
     if (saving) {

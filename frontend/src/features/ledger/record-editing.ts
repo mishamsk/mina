@@ -32,6 +32,29 @@ type RecordReplacementUpdate =
     >
   | { readonly amount: string; readonly kind: "amount" };
 
+type RecordSnapshotUpdate = Extract<
+  RecordUpdate,
+  { readonly kind: "postingStatus" } | { readonly kind: "tags" }
+>;
+
+export const transactionWithRecordUpdate = (
+  transaction: Transaction,
+  recordIds: readonly number[],
+  update: RecordSnapshotUpdate,
+): Transaction => ({
+  ...transaction,
+  records: transaction.records.map((record) => {
+    if (!recordIds.includes(record.record_id)) {
+      return record;
+    }
+
+    if (update.kind === "tags") {
+      return { ...record, tag_ids: [...update.tagIds] };
+    }
+    return { ...record, posting_status: update.postingStatus };
+  }),
+});
+
 const amountWithRecordSign = (record: JournalRecord, amount: string): string =>
   `${record.amount.startsWith("-") ? "-" : ""}${amount}`;
 
