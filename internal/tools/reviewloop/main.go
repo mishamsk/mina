@@ -25,7 +25,7 @@ import (
 const (
 	modulePath                           = "github.com/mishamsk/mina"
 	defaultMaxIterations                 = 4
-	defaultClaudeReviewPercent           = 50
+	defaultClaudeReviewPercent           = 25
 	reviewLoopActiveEnvName              = "MINA_REVIEW_LOOP_ACTIVE"
 	reviewLoopBaseEnvName                = "MINA_REVIEWLOOP_BASE"
 	reviewLoopMaxIterationsEnvName       = "MINA_REVIEWLOOP_MAX_ITERATIONS"
