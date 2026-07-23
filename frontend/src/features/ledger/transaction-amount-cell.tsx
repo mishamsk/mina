@@ -159,7 +159,6 @@ export const TransactionAmountCell = ({
           }
         }}
       >
-        <span className="min-w-0 flex-1 text-right">{children}</span>
         <Tooltip label="Edit amount" asChild>
           <Button
             type="button"
@@ -172,6 +171,7 @@ export const TransactionAmountCell = ({
             <Pencil aria-hidden="true" />
           </Button>
         </Tooltip>
+        <span className="min-w-0 flex-1 text-right">{children}</span>
       </div>
     );
   }

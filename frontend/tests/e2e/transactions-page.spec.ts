@@ -428,6 +428,27 @@ const requiredBoundingBox = async (locator: Locator) => {
   return bounds;
 };
 
+const expectAmountChipRightEdgesAligned = async (
+  rows: readonly Locator[],
+  tolerance = 1,
+): Promise<void> => {
+  const bounds = await Promise.all(
+    rows.map(async (row) => {
+      await expect(row).toBeVisible();
+      const trailingChip = row.getByTestId("amount-chip").last();
+      await expect(trailingChip).toBeVisible();
+      return requiredBoundingBox(trailingChip);
+    }),
+  );
+  const referenceRight = bounds[0]!.x + bounds[0]!.width;
+
+  for (const box of bounds.slice(1)) {
+    expect(Math.abs(box.x + box.width - referenceRight)).toBeLessThanOrEqual(
+      tolerance,
+    );
+  }
+};
+
 const boundingBoxesOverlap = (
   first: Awaited<ReturnType<typeof requiredBoundingBox>>,
   second: Awaited<ReturnType<typeof requiredBoundingBox>>,
@@ -2996,6 +3017,145 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
   await expect(dueRow).toHaveCount(0);
   await page.reload();
   await expect(dueRow).toHaveCount(0);
+});
+
+test("transaction amount chips share one right edge across row variants", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const overdueFixture = await createExpectedRecurringFixture(
+    page,
+    `${unique}AmountAlignment`,
+    {
+      anchorDate: shiftLocalDate(formatLocalDate(new Date()), -1),
+    },
+  );
+  const incomeAccount = await createAccount(
+    page,
+    `e2e:amount-alignment:${unique}:income`,
+    "balance",
+    "USD",
+  );
+  const incomeSource = await createAccount(
+    page,
+    `e2e:amount-alignment:${unique}:source`,
+    "flow",
+  );
+  const incomeCategory = await createCategory(
+    page,
+    `E2E:AmountAlignment:${unique}:Income`,
+    "income",
+  );
+  const ordinaryMemo = `E2E amount alignment ${unique} ordinary memo`;
+  const mixedMemo = `E2E amount alignment ${unique} mixed`;
+  let ordinaryTransaction: TransactionFixture | undefined;
+  let mixedTransaction: TransactionFixture | undefined;
+
+  try {
+    const ordinaryResponse = await page.request.post(
+      "/api/transactions/spend",
+      {
+        data: {
+          amount: "34.56",
+          category_id: overdueFixture.category.category_id,
+          counterparty_account_id: overdueFixture.merchant.account_id,
+          currency: "USD",
+          funding_account_id: overdueFixture.checking.account_id,
+          initiated_date: formatLocalDate(new Date()),
+          memo: ordinaryMemo,
+        },
+      },
+    );
+    expect(ordinaryResponse.ok(), await ordinaryResponse.text()).toBe(true);
+    ordinaryTransaction = (await ordinaryResponse.json()) as TransactionFixture;
+
+    const mixedResponse = await page.request.post("/api/transactions", {
+      data: {
+        initiated_date: formatLocalDate(new Date()),
+        records: [
+          {
+            account_id: overdueFixture.checking.account_id,
+            amount: "-5.00",
+            category_id: overdueFixture.category.category_id,
+            currency: "USD",
+            memo: mixedMemo,
+            posting_status: "posted",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+          },
+          {
+            account_id: overdueFixture.merchant.account_id,
+            amount: "5.00",
+            category_id: overdueFixture.category.category_id,
+            currency: "USD",
+            memo: mixedMemo,
+            posting_status: "posted",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+          },
+          {
+            account_id: incomeAccount.account_id,
+            amount: "100.00",
+            category_id: incomeCategory.category_id,
+            currency: "USD",
+            memo: mixedMemo,
+            posting_status: "posted",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+          },
+          {
+            account_id: incomeSource.account_id,
+            amount: "-100.00",
+            category_id: incomeCategory.category_id,
+            currency: "USD",
+            memo: mixedMemo,
+            posting_status: "posted",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+          },
+        ],
+      },
+    });
+    expect(mixedResponse.ok(), await mixedResponse.text()).toBe(true);
+    mixedTransaction = (await mixedResponse.json()) as TransactionFixture;
+
+    await page.goto(
+      `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+    );
+    const ordinaryRow = page.getByRole("row").filter({ hasText: ordinaryMemo });
+    const overdueRow = page
+      .getByRole("row")
+      .filter({
+        hasText:
+          overdueFixture.merchantFqn.split(":").at(-1) ?? "AmountAlignment",
+      })
+      .filter({ has: page.getByRole("img", { name: "Expected" }) });
+    const mixedRow = page.getByRole("row").filter({ hasText: mixedMemo });
+
+    await expect(
+      overdueRow.getByRole("img", { name: "Overdue" }),
+    ).toBeVisible();
+    await expect(mixedRow.getByTestId("amount-chip")).toContainText(
+      "-5.00 / +100.00 $",
+    );
+
+    for (const width of [1440, 700]) {
+      await page.setViewportSize({ width, height: 720 });
+      await expectAmountChipRightEdgesAligned([
+        ordinaryRow,
+        overdueRow,
+        mixedRow,
+      ]);
+    }
+  } finally {
+    if (ordinaryTransaction) {
+      await deleteTransaction(page, ordinaryTransaction);
+    }
+    if (mixedTransaction) {
+      await deleteTransaction(page, mixedTransaction);
+    }
+  }
 });
 
 test("transactions class toolbar filter owns class URL state", async ({
