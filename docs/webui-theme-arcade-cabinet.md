@@ -90,6 +90,7 @@ Rules:
 - Hard shadows, never blurred: `--shadow-pixel: 4px 4px 0 var(--border-ink)` on raised landmarks (cards, dialogs, panels, primary buttons); `--shadow-chip: 2px 2px 0 var(--border-ink)` on chips and small controls — including in-table markers.
 - Press feedback: active buttons translate by their shadow offset and drop the shadow — the control physically presses in. Signature interaction, unchanged.
 - Banded tables: row separation comes from alternating `--card`/`--band` rows; the header row is a sky-bright band with ink uppercase mono labels. Hairlines are optional and only for group boundaries.
+- Bulk-edit tables: selected rows gain a sky/interactivity tint while the checked square checkbox carries the selection meaning; unavailable rows keep their normal content opacity. Bulk checkboxes use the standard ink outline and chip shadow, then translate by the chip-shadow offset and drop the shadow when pressed. Read-only category, tag, amount, and member markers keep their normal chip shadows without hover or press feedback.
 - In-table markers: in transaction lines, category, tags, and member render as square chips (ink outline + `--shadow-chip`); amounts render as chips too — white with ink text for all classes; tag chips drop to the micro size on a single ellipsis-truncated line. Records subtables in the transaction detail and peek panels render category and tags as standard entity chips (ink outline + `--shadow-chip`, never clipped); their remaining columns are plain table text. The inline expanded records subtable in the transactions list renders plain undecorated table text for all columns (no chips, badges, or shadows) for now.
 - Dark-frame navigation: nav items are chip-shaped rows on `--frame` with `--frame-muted` text; the active item is an ink-filled chip with white text and a visible outline; hover lightens one step, instantly.
 - Focus: 2px solid `--ring` outline with 2px offset, on everything focusable. Never removed, never restyled per component.
@@ -111,6 +112,7 @@ Sprite motion: stepped, instant, purposeful. No easing curves that imply physica
 - Table row hover: instant fill change (one step beyond the band color), no transition.
 - Skeletons: checkerboard dither blocks stepping through 2 frames — shaped like final content per webui-design rules.
 - Signature moment: in batched entry, a saved transaction "stamps" into the list (single-step appear) and the session tally increments like a score counter (mono digits, stepped roll).
+- Bulk-edit selection counts roll like a score counter over 150ms with two steps.
 - `prefers-reduced-motion`: all stepped animations collapse to state changes with no intermediate frames; the score counter updates instantly.
 
 ## Component Notes

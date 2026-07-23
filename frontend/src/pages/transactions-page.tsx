@@ -73,6 +73,7 @@ export const TransactionsPage = () => {
   }, [location.search]);
 
   const openEntryPanel = useCallback(() => {
+    browser.setBulkEditMode(false);
     setEntryLaunch(undefined);
     openTransactionEntryPanel();
     browser.dismissNotice();
@@ -266,6 +267,7 @@ export const TransactionsPage = () => {
         }
         toolbar={
           <TransactionBrowserToolbar
+            bulkEditMode={browser.bulkEditMode}
             dateJumpLoading={browser.dateJumpLoading}
             dateJumpValue={browser.dateJumpValue}
             onDateJumpToday={browser.jumpToCurrentDate}
@@ -281,6 +283,7 @@ export const TransactionsPage = () => {
             filters={filters}
             idPrefix="transactions"
             onClearFilterChips={clearFilterChips}
+            onClearSelection={browser.clearTransactionSelection}
             onFilterBarClose={() => {
               setFilterPopoverOpen(false);
             }}
@@ -288,8 +291,12 @@ export const TransactionsPage = () => {
             onDateJumpPrevious={browser.jumpToPreviousDate}
             onDateJumpValueChange={browser.changeDateJumpValue}
             onHideExpectedChange={setHideExpected}
+            onSelectPage={browser.selectPageTransactions}
             onSearchChange={setSearchFilter}
+            onSetBulkEditMode={browser.setBulkEditMode}
             onTransactionClassChange={setTransactionClassFilter}
+            selectableCount={browser.selectableTransactionCount}
+            selectedCount={browser.selectedTransactionIds.size}
           />
         }
       />
@@ -301,6 +308,7 @@ export const TransactionsPage = () => {
       >
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <TransactionBrowser
+            bulkEditMode={browser.bulkEditMode}
             dateJumpAnchor={browser.dateJumpAnchor}
             errorMessage={browser.errorMessage}
             hasNextPage={
@@ -316,6 +324,7 @@ export const TransactionsPage = () => {
             onConfirmRecurringOccurrence={
               browser.confirmRecurringOccurrenceFromRow
             }
+            onClearSelection={browser.clearTransactionSelection}
             onFilterCategory={(categoryId) => {
               addEntityFilter("category", categoryId);
             }}
@@ -341,6 +350,10 @@ export const TransactionsPage = () => {
                 Math.max(defaultTransactionPage, browser.page - 1),
               );
             }}
+            onSetBulkEditMode={browser.setBulkEditMode}
+            onSelectRange={browser.selectTransactionRange}
+            onTogglePageSelection={browser.togglePageTransactionSelection}
+            onToggleSelection={browser.toggleTransactionSelection}
             onUpdateRecord={browser.updateRecord}
             onUpdateTransactionRecordReferences={
               browser.updateTransactionRecordReferences
@@ -353,14 +366,22 @@ export const TransactionsPage = () => {
             onRowActionsOverflowOpenChange={setRowActionsOverflowOpen}
             page={browser.page}
             pageSize={browser.pageSize}
-            selectionScope={location.search}
+            selectedTransactionIds={browser.selectedTransactionIds}
+            selectedTransactions={browser.selectedTransactions}
             totalCount={browser.totalCount}
             transactions={browser.transactions}
           />
         </div>
         <Toast
           key={browser.notice?.id ?? "empty"}
-          className="text-[var(--color-money-in)]"
+          className={
+            browser.notice?.kind === "warning"
+              ? "text-[var(--color-class-adjustment-ink)]"
+              : "text-[var(--color-money-in)]"
+          }
+          containerClassName={
+            browser.bulkEditMode ? "bottom-40 sm:bottom-28" : undefined
+          }
           durationMs={toastDurationMs}
           message={browser.notice?.message}
           onDismiss={browser.dismissNotice}
@@ -385,6 +406,7 @@ export const TransactionsPage = () => {
               context.previousTransaction,
               { pageRefreshMode: "blocking" },
             );
+            browser.updateSelectedTransactionSnapshot(transaction);
             setEntryLaunch(undefined);
             if (context.operation === "updated") {
               browser.showNotice("Transaction updated.");
@@ -397,7 +419,7 @@ export const TransactionsPage = () => {
             }
           }}
         />
-        {browser.detail.selectedTransactionId ? (
+        {!browser.bulkEditMode && browser.detail.selectedTransactionId ? (
           <TransactionDetailPanel
             errorMessage={browser.detail.errorMessage}
             inlineEdit={browser.inlineEdit}

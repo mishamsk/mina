@@ -404,6 +404,23 @@ export const markTransactionPageStale = (
   );
 };
 
+export const markOtherTransactionPagesStale = (
+  currentParams: TransactionsPageParams,
+): void => {
+  const currentKey = transactionPageKey(currentParams);
+  useTransactionsStore.setState(
+    (state) => ({
+      stalePageKeys: Object.fromEntries(
+        Object.keys(state.pages)
+          .filter((key) => key !== currentKey)
+          .map((key) => [key, true]),
+      ),
+    }),
+    false,
+    "TransactionsStore/markOtherTransactionPagesStale",
+  );
+};
+
 export const setTransactionPageError = (
   params: TransactionsPageParams,
   errorMessage: string,

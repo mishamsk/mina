@@ -2,7 +2,6 @@ import { Tooltip } from "@/components/tooltip";
 import { cn } from "@/lib/utils";
 
 interface TagChipProps {
-  readonly className?: string;
   readonly label: string;
   readonly micro?: boolean;
   readonly onActivate?: () => void;
@@ -12,7 +11,6 @@ interface TagChipProps {
 export const tagChipMicroHeightClass = "[--tag-chip-micro-height:1rem]";
 
 export const TagChip = ({
-  className,
   label,
   micro = false,
   onActivate,
@@ -28,7 +26,6 @@ export const TagChip = ({
       : "h-5 max-w-36 px-1.5 text-xs",
     onActivate &&
       "hover:bg-[color-mix(in_srgb,var(--muted),var(--table-header)_35%)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
-    className,
   );
   const content = <span className="truncate">{label}</span>;
 

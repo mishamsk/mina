@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 
 import type { DisplayAmount, TransactionClass } from "@/api";
+import { Tooltip } from "@/components/tooltip";
 import { cn } from "@/lib/utils";
 import { currencyDisplayMarker } from "@/utils/currency";
 
@@ -13,6 +14,7 @@ interface AmountTextProps {
   readonly positiveSign?: boolean;
   readonly tone?: "class-aware" | "neutral";
   readonly transactionClass?: TransactionClass;
+  readonly overflowTooltip?: boolean;
 }
 
 interface ApproximateUsdAmountProps {
@@ -36,6 +38,7 @@ export const AmountText = ({
   amount,
   chip = false,
   className,
+  overflowTooltip = false,
   positiveSign = true,
   tone = "class-aware",
   transactionClass,
@@ -44,8 +47,17 @@ export const AmountText = ({
     positiveSign,
   });
   const marker = currencyDisplayMarker(amount.currency);
+  const label = `${formattedAmount} ${marker}`;
+  const amountContent = (
+    <>
+      <span>{formattedAmount}</span>
+      <span className="text-muted-foreground whitespace-pre">
+        {` ${marker}`}
+      </span>
+    </>
+  );
 
-  return (
+  const content = (
     <span
       data-testid={chip ? "amount-chip" : "amount-text"}
       className={cn(
@@ -59,11 +71,16 @@ export const AmountText = ({
         className,
       )}
     >
-      <span>{formattedAmount}</span>
-      <span className="text-muted-foreground whitespace-pre">
-        {` ${marker}`}
-      </span>
+      {amountContent}
     </span>
+  );
+
+  return chip && overflowTooltip ? (
+    <Tooltip label={label} className="justify-end">
+      {content}
+    </Tooltip>
+  ) : (
+    content
   );
 };
 
@@ -108,14 +125,41 @@ const CompactAmounts = ({
   ));
 };
 
+const compactAmountsLabel = (amounts: readonly DisplayAmount[]): string => {
+  const [first] = amounts;
+  if (!first) {
+    return "";
+  }
+  const oneCurrency = amounts.every(
+    (amount) => amount.currency === first.currency,
+  );
+  if (oneCurrency) {
+    return `${amounts
+      .map((amount) => formatDecimalAmount(amount.amount, amount.currency))
+      .join(" / ")} ${currencyDisplayMarker(first.currency)}`;
+  }
+  return amounts
+    .map(
+      (amount) =>
+        `${formatDecimalAmount(amount.amount, amount.currency)} ${currencyDisplayMarker(amount.currency)}`,
+    )
+    .join(" / ");
+};
+
 export const MixedAmounts = ({
   amounts,
   className,
+  overflowTooltip = false,
 }: {
   readonly amounts: readonly DisplayAmount[];
   readonly className?: string;
+  readonly overflowTooltip?: boolean;
 }) => {
-  return amounts.length > 0 ? (
+  if (amounts.length === 0) {
+    return null;
+  }
+
+  const content = (
     <span
       className={cn(
         "bg-card inline-flex h-7 max-w-full items-center justify-end overflow-visible border border-[var(--border-ink)] px-2 text-right font-mono font-medium whitespace-nowrap tabular-nums shadow-[var(--shadow-chip)]",
@@ -125,7 +169,15 @@ export const MixedAmounts = ({
     >
       <CompactAmounts amounts={amounts} />
     </span>
-  ) : null;
+  );
+
+  return overflowTooltip ? (
+    <Tooltip label={compactAmountsLabel(amounts)} className="justify-end">
+      {content}
+    </Tooltip>
+  ) : (
+    content
+  );
 };
 
 export const ApproximateUsdAmount = ({

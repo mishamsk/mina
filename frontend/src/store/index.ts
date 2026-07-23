@@ -111,6 +111,14 @@ export {
   useTagsStore,
 } from "./tags";
 export {
+  getTransactionBulkEditSnapshot,
+  setTransactionBulkEditAvailable,
+  setTransactionBulkEditEnabled,
+  toggleTransactionBulkEdit,
+  useTransactionBulkEditStore,
+  useTransactionBulkEditView,
+} from "./transaction-bulk-edit";
+export {
   closeTransactionEntryPanel,
   getTransactionEntryPanelSnapshot,
   openTransactionEntryPanel,
@@ -134,6 +142,7 @@ export {
   getTransactionsSnapshot,
   invalidateCategoryPickerCategories,
   invalidateTransactionPages,
+  markOtherTransactionPagesStale,
   markTransactionPageStale,
   normalizedCategoryPickerIntents,
   setCategoryPickerCategories,

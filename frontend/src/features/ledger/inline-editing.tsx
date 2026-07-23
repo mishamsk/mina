@@ -42,6 +42,7 @@ interface SuppressedPointerDown {
 
 export interface InlineEditCoordinator {
   readonly activeEditorId: string | undefined;
+  readonly discardActive: (restoreFocus?: boolean) => void;
   readonly finish: (editorId: string, restoreFocus?: boolean) => void;
   readonly requestStart: (editorId: string, restoreFocus: () => void) => void;
 }
@@ -53,7 +54,7 @@ export const useInlineEditCoordinator = (): InlineEditCoordinator => {
     undefined,
   );
 
-  const discardActive = useCallback((restoreFocus: boolean) => {
+  const discardActive = useCallback((restoreFocus = false) => {
     const activeEditor = activeEditorRef.current;
     if (!activeEditor) {
       return;
@@ -261,8 +262,8 @@ export const useInlineEditCoordinator = (): InlineEditCoordinator => {
   }, [discardActive]);
 
   return useMemo(
-    () => ({ activeEditorId, finish, requestStart }),
-    [activeEditorId, finish, requestStart],
+    () => ({ activeEditorId, discardActive, finish, requestStart }),
+    [activeEditorId, discardActive, finish, requestStart],
   );
 };
 

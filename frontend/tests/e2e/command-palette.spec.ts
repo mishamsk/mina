@@ -183,6 +183,56 @@ test("command palette opens from the transactions page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "New spend" })).toHaveCount(0);
 });
 
+test("command palette toggles transaction bulk-edit mode", async ({ page }) => {
+  await page.goto("/transactions");
+  await expect(page.getByText("Description")).toBeVisible();
+  await page.getByRole("searchbox", { name: "Search" }).focus();
+
+  await openPalette(page);
+  const search = page.getByRole("combobox", { name: "Command search" });
+  await search.fill("bulk edit");
+  await page
+    .getByRole("dialog", { name: "Command Palette" })
+    .getByRole("option", { name: /Toggle bulk edit/ })
+    .click();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("0 selected");
+
+  await openPalette(page);
+  const doneButton = page
+    .getByTestId("transaction-browser-bulk-mode-bar")
+    .getByRole("button", { name: "Done" });
+  const doneBounds = await doneButton.boundingBox();
+  expect(doneBounds).not.toBeNull();
+  await page.mouse.click(
+    doneBounds!.x + doneBounds!.width / 2,
+    doneBounds!.y + doneBounds!.height / 2,
+  );
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "Command Palette" }),
+  ).toHaveCount(0);
+
+  await openPalette(page);
+  await page
+    .getByRole("combobox", { name: "Command search" })
+    .fill("bulk edit");
+  await page
+    .getByRole("dialog", { name: "Command Palette" })
+    .getByRole("option", { name: /Toggle bulk edit/ })
+    .click();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
+});
+
 test("current Settings command restores focus to the sidebar link", async ({
   page,
 }) => {
@@ -280,6 +330,7 @@ test("palette restores focus when history detaches the Settings opener", async (
 test("command palette transaction search renders results and opens off-page detail", async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 600, height: 720 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const member = await createMember(page, `zzPaletteTxn ${unique}`);
@@ -290,7 +341,7 @@ test("command palette transaction search renders results and opens off-page deta
   );
   const memo = `E2E palette transaction search ${unique}`;
   const transaction = await createSearchFixtureTransaction(page, {
-    amount: "19.87",
+    amount: "9999999999.87",
     category,
     initiatedDate: "2026-01-09",
     member,
@@ -325,7 +376,11 @@ test("command palette transaction search renders results and opens off-page deta
   await expect(option).toContainText(transaction.display_title);
   await expect(option).toContainText(memo);
   await expect(option.getByRole("img", { name: "Spend" })).toBeVisible();
-  await expect(option.getByTestId("amount-chip")).toContainText("-19.87 $");
+  const amountChip = option.getByTestId("amount-chip");
+  await expect(amountChip).toContainText("-9,999,999,999.87 $");
+  await expect
+    .poll(async () => (await amountChip.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(28);
 
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(

@@ -318,6 +318,39 @@ test("category drill-down direct navigation, view-all, refresh, not-found, and d
   ).toHaveAttribute("href", "/categories");
 });
 
+test("reference transaction drill-downs share the bulk-mode lifecycle", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const category = await createCategory(page, `E2EBulkDrill:${unique}`);
+  const memo = `E2E bulk drilldown ${unique}`;
+  await createSpend(page, { category, memo });
+
+  await page.goto(`/categories/${category.category_id}`);
+  const row = page.getByRole("row").filter({ hasText: memo });
+  await expect(row).toBeVisible();
+  await expect(row.getByRole("checkbox")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  const modeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
+  await expect(modeBar).toContainText("0 selected");
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveCount(0);
+  await expect(
+    modeBar.getByRole("button", { name: "Select page" }),
+  ).toBeFocused();
+  await row.focus();
+  await expect(row).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(modeBar).toContainText("1 selected");
+  await expect(page.getByTestId("bulk-action-bar")).toBeVisible();
+
+  await page.getByRole("link", { name: "View all transactions" }).click();
+  await expect(page).toHaveURL(/\/transactions\?/);
+  await expect(modeBar).toHaveCount(0);
+  await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
+  await expect(page.getByRole("searchbox", { name: "Search" })).toBeVisible();
+});
+
 test("drill-down transaction row quick-delete confirms, tombstones, and refreshes", async ({
   page,
 }, testInfo) => {

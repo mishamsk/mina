@@ -1,6 +1,7 @@
 import {
   Archive,
   Chart,
+  Check,
   EyeOff,
   Folder,
   Hash,
@@ -61,9 +62,12 @@ import type { TransactionEntryType } from "@/models/ui-state";
 import {
   closeCommandPalette,
   openTransactionEntryPanel,
+  setTransactionBulkEditEnabled,
+  toggleTransactionBulkEdit,
   useCommandPaletteView,
   useLastTransactionsPageSearch,
   useLedgerLookupsView,
+  useTransactionBulkEditView,
 } from "@/store";
 import { currencyDisplayMarker } from "@/utils/currency";
 
@@ -387,6 +391,7 @@ export const CommandPalette = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { open } = useCommandPaletteView();
+  const transactionBulkEdit = useTransactionBulkEditView();
   const lookups = useLedgerLookupsView();
   const lookupMaps = useMemo(
     () => buildLookupMaps(lookups.snapshot),
@@ -441,6 +446,7 @@ export const CommandPalette = () => {
 
   const openEntryCommand = useCallback(
     (entryType: TransactionEntryType) => {
+      setTransactionBulkEditEnabled(false);
       openTransactionEntryPanel(entryType);
       void navigate({
         pathname: "/transactions",
@@ -599,6 +605,18 @@ export const CommandPalette = () => {
     ];
 
     const actionCommands: readonly CommandItem[] = [
+      ...(transactionBulkEdit.available
+        ? [
+            {
+              action: toggleTransactionBulkEdit,
+              group: "Actions" as const,
+              icon: Check,
+              id: "action-toggle-bulk-edit",
+              keywords: ["transactions", "selection"],
+              label: "Toggle bulk edit",
+            },
+          ]
+        : []),
       {
         action: () => {
           void runDatabaseBackup();
@@ -681,6 +699,7 @@ export const CommandPalette = () => {
     runDatabaseBackup,
     runExchangeRateLoading,
     transactionSearchMode,
+    transactionBulkEdit.available,
   ]);
 
   const visibleCommands = useMemo(() => {
@@ -773,6 +792,7 @@ export const CommandPalette = () => {
         const isCurrent = commandIsCurrent(command.to);
         if (!isCurrent) {
           restoreFocusRef.current = null;
+          setTransactionBulkEditEnabled(false);
         }
         closeCommandPalette();
         if (!isCurrent) {
@@ -793,6 +813,7 @@ export const CommandPalette = () => {
 
       restoreFocusRef.current = null;
       closeCommandPalette();
+      setTransactionBulkEditEnabled(false);
       const detailBaseSearch =
         location.pathname === "/transactions"
           ? location.search

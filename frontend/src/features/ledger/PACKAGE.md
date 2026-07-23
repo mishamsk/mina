@@ -10,7 +10,7 @@
 - Transaction-row and detail-panel transaction-level inline editing follow the uniformity rule owned by `docs/webui-design.md`.
 - The shared transaction-browser controller permits one active inline editor across the list, expanded records, and detail panel; a conflicting browser interaction discards the draft without performing its action, outside click discards, and Escape discards then restores focus to the originating cell.
 - Category, tags, member, and amount inline editors keep selections as drafts and mutate accounting state only through their checkmark Save controls; Cancel and Escape discard identically.
-- The shared browser keeps bulk selection page-local; expected rows are not selectable, and `BulkActionBar` applies category, add-tags, and member changes only to transactions uniform for that field while reporting skipped mixed records.
+- Shared browser bulk-edit interaction follows the owning [Bulk operations specification](../../../../docs/webui-design.md#bulk-operations).
 - Transaction-row lifted member display ignores unattributed records.
 - Transaction detail panel renders a transaction snapshot passed by the owning page; expected occurrences stay read-only, and successful edits use the same refresh fan-out as the browser.
 - Transaction detail panel owns the tombstone confirmation UI and delegates delete execution to the owning page.

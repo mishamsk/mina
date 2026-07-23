@@ -443,6 +443,7 @@ export const ReferenceDrilldownPage = ({
         </div>
       </div>
       <TransactionBrowserToolbar
+        bulkEditMode={browser.bulkEditMode}
         dateJumpLoading={browser.dateJumpLoading}
         dateJumpValue={browser.dateJumpValue}
         onDateJumpToday={browser.jumpToCurrentDate}
@@ -475,12 +476,17 @@ export const ReferenceDrilldownPage = ({
         filters={pageFilters}
         idPrefix="reference-transactions"
         onClearFilterChips={clearFilterChips}
+        onClearSelection={browser.clearTransactionSelection}
         onDateJumpNext={browser.jumpToNextDate}
         onDateJumpPrevious={browser.jumpToPreviousDate}
         onDateJumpValueChange={browser.changeDateJumpValue}
         onHideExpectedChange={setHideExpected}
+        onSelectPage={browser.selectPageTransactions}
         onSearchChange={setSearchFilter}
+        onSetBulkEditMode={browser.setBulkEditMode}
         onTransactionClassChange={setTransactionClassFilter}
+        selectableCount={browser.selectableTransactionCount}
+        selectedCount={browser.selectedTransactionIds.size}
       />
       <div
         className="min-h-0 flex-1"
@@ -488,6 +494,7 @@ export const ReferenceDrilldownPage = ({
         tabIndex={-1}
       >
         <TransactionBrowser
+          bulkEditMode={browser.bulkEditMode}
           dateJumpAnchor={browser.dateJumpAnchor}
           errorMessage={browser.errorMessage}
           hasNextPage={
@@ -503,6 +510,7 @@ export const ReferenceDrilldownPage = ({
           onConfirmRecurringOccurrence={
             browser.confirmRecurringOccurrenceFromRow
           }
+          onClearSelection={browser.clearTransactionSelection}
           onFilterCategory={(categoryId) => {
             addEntityFilter("category", categoryId);
           }}
@@ -532,6 +540,10 @@ export const ReferenceDrilldownPage = ({
           onPreviousPage={() => {
             browser.setPage(Math.max(defaultTransactionPage, browser.page - 1));
           }}
+          onSetBulkEditMode={browser.setBulkEditMode}
+          onSelectRange={browser.selectTransactionRange}
+          onTogglePageSelection={browser.togglePageTransactionSelection}
+          onToggleSelection={browser.toggleTransactionSelection}
           onUpdateRecord={browser.updateRecord}
           onUpdateTransactionRecordReferences={
             browser.updateTransactionRecordReferences
@@ -542,18 +554,27 @@ export const ReferenceDrilldownPage = ({
           }
           page={browser.page}
           pageSize={browser.pageSize}
+          selectedTransactionIds={browser.selectedTransactionIds}
+          selectedTransactions={browser.selectedTransactions}
           totalCount={browser.totalCount}
           transactions={browser.transactions}
         />
       </div>
       <Toast
         key={browser.notice?.id ?? "empty"}
-        className="text-[var(--color-money-in)]"
+        className={
+          browser.notice?.kind === "warning"
+            ? "text-[var(--color-class-adjustment-ink)]"
+            : "text-[var(--color-money-in)]"
+        }
+        containerClassName={
+          browser.bulkEditMode ? "bottom-40 sm:bottom-28" : undefined
+        }
         durationMs={toastDurationMs}
         message={browser.notice?.message}
         onDismiss={browser.dismissNotice}
       />
-      {browser.detail.selectedTransactionId ? (
+      {!browser.bulkEditMode && browser.detail.selectedTransactionId ? (
         <TransactionDetailPanel
           errorMessage={browser.detail.errorMessage}
           inlineEdit={browser.inlineEdit}

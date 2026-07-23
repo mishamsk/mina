@@ -1,209 +1,380 @@
 import { Bookmark, Close, User } from "pixelarticons/react";
-import { useState } from "react";
+import { type KeyboardEvent, useRef, useState } from "react";
 
+import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import { EntityMultiPicker, EntityPicker } from "./entity-picker";
 import type { LookupMaps } from "./format";
+import type { RecordReferenceUpdate } from "./record-reference-cells";
 import {
   categoryReferenceOptions,
   memberReferenceOptions,
   tagReferenceOptions,
 } from "./record-reference-cells";
 
-type BulkAction = "category" | "member" | "tags";
+export type BulkReferenceAction = "category" | "member" | "tags";
 
-interface BulkActionBarProps {
+export interface ActiveBulkEditor {
+  readonly action: BulkReferenceAction;
+  readonly source: "bar" | "row";
+  readonly transactionId?: number;
+}
+
+interface BulkReferenceEditorProps {
+  readonly action: BulkReferenceAction;
+  readonly allowIncludeHidden: boolean;
+  readonly initialCategoryId?: number;
+  readonly initialMemberId?: number;
+  readonly inlineOptions?: boolean;
   readonly maps: LookupMaps;
-  readonly onCategorize: (categoryId: number) => Promise<void>;
-  readonly onClear: () => void;
-  readonly onMember: (memberId: number) => Promise<void>;
-  readonly onTags: (tagIds: readonly number[]) => Promise<void>;
+  readonly mixedCount: number;
+  readonly onApply: (update: RecordReferenceUpdate) => Promise<void>;
+  readonly onCancel: () => void;
+  readonly onSavingChange?: (saving: boolean) => void;
   readonly selectedCount: number;
 }
 
-const actionTitle: Record<BulkAction, string> = {
+const actionTitle: Record<BulkReferenceAction, string> = {
   category: "Categorize selected transactions",
   member: "Set member for selected transactions",
   tags: "Add tags to selected transactions",
 };
 
-export const BulkActionBar = ({
+const applyLabel: Record<BulkReferenceAction, string> = {
+  category: "Apply category",
+  member: "Set member",
+  tags: "Add tags",
+};
+
+const applyRemedy: Record<BulkReferenceAction, string> = {
+  category: "Choose a category first",
+  member: "Choose a member first",
+  tags: "Choose at least one tag first",
+};
+
+export const BulkReferenceEditor = ({
+  action,
+  allowIncludeHidden,
+  initialCategoryId,
+  initialMemberId,
+  inlineOptions = false,
   maps,
-  onCategorize,
-  onClear,
-  onMember,
-  onTags,
+  mixedCount,
+  onApply,
+  onCancel,
+  onSavingChange,
   selectedCount,
-}: BulkActionBarProps) => {
-  const [activeAction, setActiveAction] = useState<BulkAction>();
+}: BulkReferenceEditorProps) => {
+  const [categoryId, setCategoryId] = useState<number | undefined>(
+    initialCategoryId,
+  );
   const [includeHidden, setIncludeHidden] = useState(false);
+  const [memberId, setMemberId] = useState<number | undefined>(initialMemberId);
   const [tagIds, setTagIds] = useState<readonly number[]>([]);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>();
 
-  const closePicker = () => {
-    if (saving) {
+  const update: RecordReferenceUpdate | undefined =
+    action === "category"
+      ? categoryId === undefined
+        ? undefined
+        : { categoryId, kind: "category" }
+      : action === "member"
+        ? memberId === undefined
+          ? undefined
+          : { kind: "member", memberId }
+        : tagIds.length === 0
+          ? undefined
+          : { kind: "tags", tagIds };
+
+  const apply = async () => {
+    if (!update || saving) {
       return;
     }
-    setActiveAction(undefined);
-    setErrorMessage(undefined);
-  };
-  const apply = async (action: () => Promise<void>) => {
     setSaving(true);
+    onSavingChange?.(true);
     setErrorMessage(undefined);
     try {
-      await action();
-      setActiveAction(undefined);
-      setTagIds([]);
+      await onApply(update);
+      onCancel();
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",
       );
     } finally {
       setSaving(false);
+      onSavingChange?.(false);
     }
   };
-  const openPicker = (action: BulkAction) => {
-    setActiveAction(action);
-    setErrorMessage(undefined);
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.defaultPrevented) {
+      event.stopPropagation();
+      return;
+    }
+    if (
+      event.key.toLowerCase() === "n" &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      event.target instanceof HTMLElement &&
+      !event.target.matches("input, textarea, select, [contenteditable='true']")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (
+      event.key === "Enter" &&
+      (event.metaKey || event.ctrlKey) &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      void apply();
+      return;
+    }
+    if (event.key !== "Escape") {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (!saving) {
+      onCancel();
+    }
+  };
+
+  return (
+    <section
+      aria-label={actionTitle[action]}
+      className="flex min-h-0 flex-col gap-3"
+      data-testid="bulk-action-picker"
+      onKeyDown={handleKeyDown}
+    >
+      <div className="flex items-center justify-between gap-3 bg-[var(--table-header)] px-2 py-1">
+        <h2 className="font-heading text-sm font-semibold uppercase">
+          Apply to {selectedCount} selected
+        </h2>
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          aria-label="Close bulk action picker"
+          disabled={saving}
+          onClick={onCancel}
+        >
+          <Close aria-hidden="true" />
+        </Button>
+      </div>
+      {mixedCount > 0 ? (
+        <p className="font-mono text-xs text-[var(--color-class-adjustment-ink)]">
+          {mixedCount} mixed {mixedCount === 1 ? "row" : "rows"} will be skipped
+        </p>
+      ) : null}
+      {allowIncludeHidden && (action === "category" || action === "tags") ? (
+        <label className="flex items-center gap-2">
+          <Checkbox
+            checked={includeHidden}
+            disabled={saving}
+            onCheckedChange={(checked) => {
+              setIncludeHidden(checked === true);
+            }}
+          />
+          <span className="font-mono text-sm">Include hidden</span>
+        </label>
+      ) : null}
+      {action === "category" ? (
+        <EntityPicker
+          autoFocus
+          disabled={saving}
+          id="bulk-category"
+          inlineOptions={inlineOptions}
+          label="Category"
+          options={categoryReferenceOptions(
+            maps,
+            initialCategoryId ?? 0,
+            allowIncludeHidden && includeHidden,
+          )}
+          value={categoryId}
+          onChange={setCategoryId}
+        />
+      ) : null}
+      {action === "tags" ? (
+        <EntityMultiPicker
+          autoFocus
+          disabled={saving}
+          id="bulk-tags"
+          inlineOptions={inlineOptions}
+          label="Tags to add"
+          options={tagReferenceOptions(
+            maps,
+            [],
+            allowIncludeHidden && includeHidden,
+          )}
+          value={tagIds}
+          onChange={setTagIds}
+        />
+      ) : null}
+      {action === "member" ? (
+        <EntityPicker
+          autoFocus
+          disabled={saving}
+          id="bulk-member"
+          inlineOptions={inlineOptions}
+          label="Member"
+          options={memberReferenceOptions(maps, initialMemberId)}
+          value={memberId}
+          onChange={setMemberId}
+        />
+      ) : null}
+      <div className="flex gap-2">
+        <Tooltip
+          label={saving ? "Wait for the update to finish" : applyRemedy[action]}
+          disabled={!saving && Boolean(update)}
+          focusable={saving || !update}
+        >
+          <Button
+            type="button"
+            size="sm"
+            disabled={saving || !update}
+            onClick={() => void apply()}
+          >
+            {applyLabel[action]}
+          </Button>
+        </Tooltip>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={saving}
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+      </div>
+      {errorMessage ? (
+        <p className="text-destructive text-xs" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+    </section>
+  );
+};
+
+interface BulkActionBarProps {
+  readonly activeEditor: ActiveBulkEditor | undefined;
+  readonly maps: LookupMaps;
+  readonly mixedCount: number;
+  readonly onApply: (update: RecordReferenceUpdate) => Promise<void>;
+  readonly onEditorChange: (editor: ActiveBulkEditor | undefined) => void;
+  readonly selectedCount: number;
+}
+
+export const BulkActionBar = ({
+  activeEditor,
+  maps,
+  mixedCount,
+  onApply,
+  onEditorChange,
+  selectedCount,
+}: BulkActionBarProps) => {
+  const categoryButtonRef = useRef<HTMLButtonElement>(null);
+  const memberButtonRef = useRef<HTMLButtonElement>(null);
+  const tagsButtonRef = useRef<HTMLButtonElement>(null);
+  const activeAction =
+    activeEditor?.source === "bar" ? activeEditor.action : undefined;
+  const openEditor = (action: BulkReferenceAction) => {
+    onEditorChange({ action, source: "bar" });
+  };
+  const closeEditor = () => {
+    const closingAction = activeAction;
+    onEditorChange(undefined);
+    window.requestAnimationFrame(() => {
+      const target =
+        closingAction === "category"
+          ? categoryButtonRef.current
+          : closingAction === "tags"
+            ? tagsButtonRef.current
+            : memberButtonRef.current;
+      focusWithoutTooltip(target, { preventScroll: true });
+    });
   };
 
   return (
     <section
       aria-label="Bulk actions"
-      className="bg-card fixed inset-x-4 bottom-4 z-[60] mx-auto flex w-fit max-w-[calc(100vw-2rem)] flex-wrap items-center justify-center gap-2 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)]"
+      className="bg-card fixed inset-x-2 bottom-4 z-40 mx-auto flex w-fit max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-2 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)] sm:inset-x-4 sm:max-w-[calc(100vw-2rem)]"
       data-testid="bulk-action-bar"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && activeAction && !saving) {
-          event.preventDefault();
-          closePicker();
-        }
-      }}
     >
       {activeAction ? (
-        <section
-          aria-label={actionTitle[activeAction]}
-          className="bg-card absolute bottom-full left-0 z-[61] mb-3 flex min-w-72 flex-col gap-3 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)]"
-          data-testid="bulk-action-picker"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-heading text-sm font-semibold uppercase">
-              {actionTitle[activeAction]}
-            </h2>
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="ghost"
-              aria-label="Close bulk action picker"
-              disabled={saving}
-              onClick={closePicker}
-            >
-              <Close aria-hidden="true" />
-            </Button>
-          </div>
-          {activeAction === "category" || activeAction === "tags" ? (
-            <label className="flex items-center gap-2">
-              <Checkbox
-                checked={includeHidden}
-                disabled={saving}
-                onCheckedChange={(checked) => {
-                  setIncludeHidden(checked === true);
-                }}
-              />
-              <span className="font-mono text-sm">Include hidden</span>
-            </label>
-          ) : null}
-          {activeAction === "category" ? (
-            <EntityPicker
-              autoFocus
-              disabled={saving}
-              id="bulk-category"
-              label="Category"
-              options={categoryReferenceOptions(maps, 0, includeHidden)}
-              value={undefined}
-              onChange={(categoryId) => {
-                if (categoryId !== undefined) {
-                  void apply(() => onCategorize(categoryId));
-                }
-              }}
-            />
-          ) : null}
-          {activeAction === "tags" ? (
-            <>
-              <EntityMultiPicker
-                autoFocus
-                id="bulk-tags"
-                label="Tags to add"
-                options={tagReferenceOptions(maps, [], includeHidden)}
-                value={tagIds}
-                onChange={setTagIds}
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={saving || tagIds.length === 0}
-                  onClick={() => {
-                    void apply(() => onTags(tagIds));
-                  }}
-                >
-                  Add tags
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={saving}
-                  onClick={closePicker}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </>
-          ) : null}
-          {activeAction === "member" ? (
-            <EntityPicker
-              autoFocus
-              disabled={saving}
-              id="bulk-member"
-              label="Member"
-              options={memberReferenceOptions(maps, undefined)}
-              value={undefined}
-              onChange={(memberId) => {
-                if (memberId !== undefined) {
-                  void apply(() => onMember(memberId));
-                }
-              }}
-            />
-          ) : null}
-          {errorMessage ? (
-            <p className="text-destructive text-xs" role="alert">
-              {errorMessage}
-            </p>
-          ) : null}
-        </section>
+        <div className="bg-card absolute bottom-full left-0 z-[41] mb-3 min-w-72 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)]">
+          <BulkReferenceEditor
+            key={activeAction}
+            action={activeAction}
+            allowIncludeHidden
+            maps={maps}
+            mixedCount={mixedCount}
+            onApply={onApply}
+            onCancel={closeEditor}
+            selectedCount={selectedCount}
+          />
+        </div>
       ) : null}
-      <span className="font-heading px-2 text-sm font-semibold uppercase">
-        {selectedCount} selected
-      </span>
-      <Button type="button" size="sm" onClick={() => openPicker("category")}>
-        <Bookmark aria-hidden="true" />
-        Categorize
-      </Button>
-      <Button type="button" size="sm" onClick={() => openPicker("tags")}>
-        <Bookmark aria-hidden="true" />
-        Tag
-      </Button>
-      <Button type="button" size="sm" onClick={() => openPicker("member")}>
-        <User aria-hidden="true" />
-        Member
-      </Button>
-      <Button type="button" size="icon" variant="outline" onClick={onClear}>
-        <Close aria-hidden="true" />
-        <span className="sr-only">Clear selection</span>
-      </Button>
+      <Tooltip
+        label="Select transactions first"
+        className={selectedCount === 0 ? "cursor-not-allowed" : undefined}
+        disabled={selectedCount > 0}
+        focusable={selectedCount === 0}
+      >
+        <Button
+          ref={categoryButtonRef}
+          type="button"
+          size="sm"
+          data-bulk-action="category"
+          disabled={selectedCount === 0}
+          onClick={() => openEditor("category")}
+        >
+          <Bookmark aria-hidden="true" />
+          Categorize
+        </Button>
+      </Tooltip>
+      <Tooltip
+        label="Select transactions first"
+        className={selectedCount === 0 ? "cursor-not-allowed" : undefined}
+        disabled={selectedCount > 0}
+        focusable={selectedCount === 0}
+      >
+        <Button
+          ref={tagsButtonRef}
+          type="button"
+          size="sm"
+          data-bulk-action="tags"
+          disabled={selectedCount === 0}
+          onClick={() => openEditor("tags")}
+        >
+          <Bookmark aria-hidden="true" />
+          Tag
+        </Button>
+      </Tooltip>
+      <Tooltip
+        label="Select transactions first"
+        className={selectedCount === 0 ? "cursor-not-allowed" : undefined}
+        disabled={selectedCount > 0}
+        focusable={selectedCount === 0}
+      >
+        <Button
+          ref={memberButtonRef}
+          type="button"
+          size="sm"
+          data-bulk-action="member"
+          disabled={selectedCount === 0}
+          onClick={() => openEditor("member")}
+        >
+          <User aria-hidden="true" />
+          Member
+        </Button>
+      </Tooltip>
     </section>
   );
 };

@@ -198,6 +198,15 @@
   }
 }
 
+@keyframes toolbar-mode-swap {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 @keyframes toast-auto-hide {
   100% {
     visibility: hidden;
@@ -226,7 +235,7 @@
   }
 
   .transactions-table .transactions-selection-column {
-    width: 3%;
+    width: 2.25rem;
   }
 
   .transactions-table .transactions-class-column {
@@ -242,7 +251,11 @@
   }
 
   .transactions-table .transactions-description-column {
-    width: 23%;
+    width: 26%;
+  }
+
+  .transactions-table--bulk-edit .transactions-description-column {
+    width: calc(26% - 2.25rem);
   }
 
   .transactions-table .transactions-category-column {
@@ -265,6 +278,15 @@
     width: 8%;
   }
 
+  .transactions-table--bulk-edit .transactions-actions-column {
+    display: none;
+  }
+
+  .transactions-table--bulk-edit :is(th, td).transactions-actions-column {
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+  }
+
   @container transactions-table (max-width: 1120px) {
     .transactions-table .transactions-member-column {
       visibility: collapse;
@@ -282,7 +304,11 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 24%;
+      width: 27%;
+    }
+
+    .transactions-table--bulk-edit .transactions-description-column {
+      width: calc(27% - 2.25rem);
     }
 
     .transactions-table .transactions-category-column {
@@ -319,7 +345,11 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 24%;
+      width: 27%;
+    }
+
+    .transactions-table--bulk-edit .transactions-description-column {
+      width: calc(27% - 2.25rem);
     }
 
     .transactions-table .transactions-category-column {
@@ -374,7 +404,11 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 21%;
+      width: 24%;
+    }
+
+    .transactions-table--bulk-edit .transactions-description-column {
+      width: calc(24% - 2.25rem);
     }
 
     .transactions-table .transactions-category-column {
@@ -415,11 +449,28 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 17%;
+      width: 20%;
+    }
+
+    .transactions-table--bulk-edit .transactions-selection-column {
+      width: 1.5rem;
+    }
+
+    .transactions-table--bulk-edit :is(th, td).transactions-selection-column {
+      padding-right: 0.25rem !important;
+      padding-left: 0.25rem !important;
+    }
+
+    .transactions-table--bulk-edit .transactions-description-column {
+      width: auto;
     }
 
     .transactions-table .transactions-amount-column {
       width: 47%;
+    }
+
+    .transactions-table--bulk-edit .transactions-amount-column {
+      width: 37%;
     }
 
     .transactions-table .transactions-actions-column {

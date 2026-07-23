@@ -25,6 +25,7 @@ import {
   invalidateMembersPage,
   invalidateTagsPage,
   invalidateTransactionPages,
+  markOtherTransactionPagesStale,
   markTransactionPageStale,
   normalizedCategoryPickerIntents,
   setCategoryPickerCategories,
@@ -378,12 +379,13 @@ export const refreshTransactionPageAfterBulkSave = async (
   transactions: readonly Transaction[],
 ): Promise<void> => {
   invalidateReferencePagesAfterTransactionMutation();
+  markOtherTransactionPagesStale(params);
   for (const transaction of transactions) {
     invalidateAccountRegistersForTransaction(transaction);
   }
 
   await Promise.all([
-    refreshTransactionPage(params),
+    refreshTransactionPageInBackground(params),
     refreshFeaturedBalances(),
     refreshOverview(),
   ]);

@@ -586,7 +586,7 @@ const hideAccount = async (
 const amountChipsFitCell = async (row: Locator): Promise<boolean> =>
   row
     .locator("td")
-    .nth(8)
+    .nth(7)
     .evaluate((cell) => {
       const cellRect = cell.getBoundingClientRect();
       const chips = Array.from(
@@ -656,8 +656,8 @@ const mixedAmountChipGeometry = async (row: Locator) =>
     };
 
     const cells = rowElement.querySelectorAll("td");
-    const memberCell = cells[7];
-    const amountCell = cells[8];
+    const memberCell = cells[6];
+    const amountCell = cells[7];
     const amountCellRect = rectFor(amountCell);
     const memberCellRect = rectFor(memberCell);
     const chip = amountCell?.querySelector<HTMLElement>(
@@ -759,7 +759,7 @@ const chipShadowFitsClippingAncestors = async (
 const tagChipLineState = async (row: Locator) =>
   row
     .locator("td")
-    .nth(6)
+    .nth(5)
     .evaluate((cell) => {
       const list = cell.querySelector<HTMLElement>(
         "[data-testid='transaction-tag-chips-list']",
@@ -848,7 +848,7 @@ test("transactions page renders demo transaction lines and expands records", asy
     .evaluate((element) => getComputedStyle(element).backgroundColor);
   expect(firstRowBackgroundBefore).not.toBe(secondRowBackgroundBefore);
 
-  await transferRow.locator("td").nth(4).click();
+  await transferRow.locator("td").nth(3).click();
   await expect(transferRow).toHaveAttribute("aria-expanded", "true");
   await expect(
     page.getByRole("columnheader", { exact: true, name: "Memo" }),
@@ -944,7 +944,7 @@ test("expanded records edit per-record values and escalate structural changes", 
     .filter({ hasText: memo })
     .first();
   await expect(transactionRow).toBeVisible();
-  await transactionRow.locator("td").nth(4).click();
+  await transactionRow.locator("td").nth(3).click();
   await expect(transactionRow).toHaveAttribute("aria-expanded", "true");
   const records = page.getByTestId("expanded-records");
 
@@ -959,7 +959,7 @@ test("expanded records edit per-record values and escalate structural changes", 
   await categoryInput.fill(nextCategory.fqn);
   await categoryEditor.getByRole("button", { name: "Save category" }).click();
   await expect(categoryCell).toContainText(nextCategory.fqn);
-  await expect(transactionRow.locator("td").nth(5)).toContainText("Mixed");
+  await expect(transactionRow.locator("td").nth(4)).toContainText("Mixed");
 
   const tagCell = records.getByTestId("record-tags-cell").first();
   await tagCell.hover();
@@ -1123,7 +1123,7 @@ test("tag editor keeps many assignments and controls separate in a narrow viewpo
     `[data-transaction-id="${transaction.transaction_id}"]`,
   );
   await expect(row).toBeVisible();
-  await row.locator("td").nth(4).click();
+  await row.getByTestId("transaction-line-title").click();
   await expect(row).toHaveAttribute("aria-expanded", "true");
 
   const tableScroll = page.getByTestId("transactions-table-scroll");
@@ -1343,9 +1343,8 @@ test("inline category tag member and amount saves keep the transaction table sta
     `[data-transaction-id="${transaction.transaction_id}"]`,
   );
   await expect(row).toBeVisible();
-  await row.getByRole("checkbox").click();
-  await expect(row.getByRole("checkbox")).toBeChecked();
-  await row.locator("td").nth(4).click();
+  await expect(row.getByRole("checkbox")).toHaveCount(0);
+  await row.getByTestId("transaction-line-title").click();
   await expect(row).toHaveAttribute("aria-expanded", "true");
   await tableScroll.evaluate((element, transactionId) => {
     const transactionRow = element.querySelector<HTMLElement>(
@@ -1457,7 +1456,7 @@ test("inline category tag member and amount saves keep the transaction table sta
   await expect(amountEditor).toHaveCount(0);
   await expect(expandedRecords).toContainText("-29.87 $");
   await expect(expandedRecords).toContainText("+29.87 $");
-  await expect(row.getByRole("checkbox")).toBeChecked();
+  await expect(row.getByRole("checkbox")).toHaveCount(0);
 
   await deleteTransaction(page, transaction);
 });
@@ -1545,6 +1544,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   });
   await page.getByRole("button", { name: "Close filters" }).click();
   await expectTransactionFilterUrl(page, { hideExpected: true, q: memo });
+  await page.reload();
   await expect(row).toBeVisible();
   const categoryCell = row.getByTestId(`${rowPrefix}-category-cell`);
   await categoryCell.focus();
@@ -1555,7 +1555,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
     .fill(nextCategory.fqn);
   await categoryEditor.getByRole("button", { name: "Save category" }).click();
   await expect(categoryEditor).toHaveCount(0);
-  await row.locator("td").nth(4).click();
+  await row.locator("td").nth(3).click();
   const expandedRecords = page.getByTestId("expanded-records");
   await expect(
     expandedRecords.getByText(nextCategory.fqn, { exact: true }),
@@ -1873,15 +1873,15 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   ).toHaveCount(0);
   await expect(firstCategoryEditor).toBeVisible();
 
-  await firstRow.locator("td").nth(4).dispatchEvent("pointerdown", {
+  await firstRow.locator("td").nth(3).dispatchEvent("pointerdown", {
     button: 2,
     buttons: 2,
     pointerType: "mouse",
   });
   await expect(firstCategoryEditor).toHaveCount(0);
-  await secondRow.locator("td").nth(4).click();
+  await secondRow.locator("td").nth(3).click();
   await expect(secondRow).toHaveAttribute("aria-expanded", "true");
-  await secondRow.locator("td").nth(4).click();
+  await secondRow.locator("td").nth(3).click();
   await expect(secondRow).toHaveAttribute("aria-expanded", "false");
 
   await firstCategoryCell.focus();
@@ -2048,7 +2048,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
     savedCategory.category_id,
   ]);
 
-  await firstRow.locator("td").nth(4).click();
+  await firstRow.locator("td").nth(3).click();
   const expandedRecords = page.getByTestId("expanded-records");
   await expect(
     expandedRecords.getByText(savedCategory.fqn, { exact: true }),
@@ -2217,14 +2217,14 @@ test("transactions page uses server pagination controls", async ({ page }) => {
       .locator("tbody > tr[aria-expanded]")
       .first()
       .locator("td")
-      .nth(4)
+      .nth(3)
       .innerText()
   ).split("\n")[0];
   const firstPageFirstDate = await page
     .locator("tbody > tr[aria-expanded]")
     .first()
     .locator("td")
-    .nth(2)
+    .nth(1)
     .innerText();
   expect(firstPageFirstDate).toMatch(/^[A-Z][a-z]{2} \d{1,2}\n\d{4}$/);
 
@@ -2280,6 +2280,49 @@ test("transactions page uses server pagination controls", async ({ page }) => {
 
   await expect(page).toHaveURL(/page=1/);
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
+});
+
+test("bulk mode keyboard ranges stay page-local across pagination", async ({
+  page,
+}) => {
+  await page.goto("/transactions?page=1&pageSize=25&hideExpected=true");
+  await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
+  const selectableRows = page.locator(
+    "tbody tr[data-transaction-id]:not([aria-disabled='true'])",
+  );
+  await expect(selectableRows.nth(1)).toBeVisible();
+  const selectableCount = await selectableRows.count();
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  const modeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveCount(0);
+
+  await selectableRows.first().focus();
+  await page.keyboard.press("Space");
+  await expect(modeBar).toContainText("1 selected");
+  await selectableRows.nth(1).focus();
+  await page.keyboard.press("Shift+Space");
+  await expect(modeBar).toContainText("2 selected");
+  await selectableRows.first().focus();
+  await page.keyboard.press("Shift+Space");
+  await expect(modeBar).toContainText("1 selected");
+  await page.keyboard.press("Shift+ArrowDown");
+  await expect(modeBar).toContainText("2 selected");
+
+  await modeBar.getByRole("button", { name: "Clear" }).click();
+  await selectableRows.first().focus();
+  await page.keyboard.press("Control+A");
+  await expect(modeBar).toContainText(`${selectableCount} selected`);
+  await expect(
+    page.getByRole("checkbox", { name: "Select page transactions" }),
+  ).toBeChecked();
+
+  await page.getByRole("button", { exact: true, name: "Next" }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await expect(page.getByText(/Page 2 of \d+/)).toBeVisible();
+  await expect(modeBar).toContainText("0 selected");
+  await expect(page.getByTestId("bulk-action-bar")).toBeVisible();
+  await expect(page.getByTestId("bulk-action-picker")).toHaveCount(0);
 });
 
 test("transactions page search filters server-side and deep-links", async ({
@@ -2938,6 +2981,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   const hideExpectedToggle = page.getByRole("checkbox", {
     name: "Hide expected",
   });
+  const bulkEditButton = page.getByRole("button", { name: "Bulk edit" });
   const filterToggle = page.getByRole("button", { name: "Open filters" });
   const filterTooltip = page
     .getByRole("tooltip")
@@ -2980,6 +3024,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await tabTo(todayButton);
   await tabTo(classFilter);
   await tabTo(hideExpectedToggle);
+  await tabTo(bulkEditButton);
   await tabTo(filterToggle);
   await page.keyboard.press("Enter");
 
@@ -3228,7 +3273,9 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   const olderThanEverything = "2020-01-01";
 
   await page.goto("/transactions?page=1&pageSize=25");
-  const firstTransactionRow = page.locator("tbody > tr[aria-expanded]").first();
+  const firstTransactionRow = page
+    .locator("tbody > tr[data-transaction-id]")
+    .first();
   await expect(firstTransactionRow).toBeVisible();
   const normalizedFirstTransactionRowText = async () =>
     firstTransactionRow.evaluate(
@@ -3237,10 +3284,15 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
   const retainedFirstPageRow = await normalizedFirstTransactionRowText();
 
   let releaseDateJumpResponse: (() => void) | undefined;
+  let delayDateJumpResponse = true;
   const dateJumpRequestStarted = new Promise<void>((resolve) => {
     void page.route("**/api/transactions**", async (route) => {
       const url = new URL(route.request().url());
-      if (url.searchParams.get("anchor_date") === jumpDate) {
+      if (
+        delayDateJumpResponse &&
+        url.searchParams.get("anchor_date") === jumpDate
+      ) {
+        delayDateJumpResponse = false;
         resolve();
         await new Promise<void>((release) => {
           releaseDateJumpResponse = release;
@@ -3272,14 +3324,48 @@ test("transactions page jumps to a date-anchored page", async ({ page }) => {
     await expect
       .poll(normalizedFirstTransactionRowText)
       .toBe(retainedFirstPageRow);
+    await page.getByRole("button", { name: "Bulk edit" }).click();
+    await page
+      .locator("tbody > tr[data-transaction-id]:not([aria-disabled='true'])")
+      .first()
+      .click();
+    await expect(
+      page.getByTestId("transaction-browser-bulk-mode-bar"),
+    ).toContainText("1 selected");
   } finally {
     releaseDateJumpResponse?.();
   }
 
-  const dateJumpBody = (await (
+  const cancelledDateJumpBody = (await (
     await dateJumpResponse
   ).json()) as TransactionListFixture;
+  await expectTransactionsPageUrl(page, 1, 25);
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("1 selected");
+  await expect(
+    page.locator(`[data-date-jump-anchor="${jumpDate}"]`),
+  ).toHaveCount(0);
+  await page
+    .getByTestId("transaction-browser-bulk-mode-bar")
+    .getByRole("button", { name: "Done" })
+    .click();
+
+  await page.unroute("**/api/transactions**");
+  const retryDateJumpResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("anchor_date") === jumpDate
+    );
+  });
+  await page.getByLabel("Go to day").fill("");
+  await page.getByLabel("Go to day").fill(jumpDate);
+  const dateJumpBody = (await (
+    await retryDateJumpResponse
+  ).json()) as TransactionListFixture;
   const landedPage = Math.floor(dateJumpBody.offset / 25) + 1;
+  expect(cancelledDateJumpBody.offset).toBe(dateJumpBody.offset);
   expect(dateJumpBody.total_count).toBeGreaterThan(landedPage * 25);
   const landedTransaction = dateJumpBody.transactions[0]!;
   await expectTransactionsPageUrl(page, landedPage, 25);
@@ -3575,14 +3661,14 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           rect.width < 1
         );
       };
-      const amountCell = cells?.[8];
+      const amountCell = cells?.[7];
       const amountRect = rectFor(amountCell);
-      const actionsCell = cells?.[9];
+      const actionsCell = cells?.[8];
       const actionsRect = rectFor(actionsCell);
       const containerRect = container.getBoundingClientRect();
-      const memberRect = rectFor(cells?.[7]);
+      const memberRect = rectFor(cells?.[6]);
       const memberContentRects = Array.from(
-        cells?.[7]?.querySelectorAll("*") ?? [],
+        cells?.[6]?.querySelectorAll("*") ?? [],
       )
         .map((element) => element.getBoundingClientRect())
         .filter((rect) => rect.width > 0 && rect.height > 0);
@@ -3616,7 +3702,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
         return rects;
       };
       const amountChips = rows.flatMap((visibleRow) => {
-        const cell = visibleRow.querySelectorAll("td")[8];
+        const cell = visibleRow.querySelectorAll("td")[7];
         if (!cell || isCollapsed(cell)) {
           return [];
         }
@@ -3648,11 +3734,11 @@ test("transactions page collapses low-priority columns instead of scrolling hori
         };
       });
       const visibleAmountCells = rows
-        .map((visibleRow) => visibleRow.querySelectorAll("td")[8])
+        .map((visibleRow) => visibleRow.querySelectorAll("td")[7])
         .filter((cell): cell is HTMLTableCellElement => !isCollapsed(cell));
       const contentOverlappingAmount = amountRect
         ? Array.from(cells ?? [])
-            .slice(0, 8)
+            .slice(0, 7)
             .filter((cell) => !isCollapsed(cell))
             .flatMap((cell) => [
               cell,
@@ -3681,8 +3767,8 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           getComputedStyle(
             actionsCell?.querySelector(".row-actions-overflow") ?? container,
           ).display !== "none",
-        categoryCollapsed: isCollapsed(cells?.[5]),
-        categoryHeaderCollapsed: isCollapsed(headerCells[5]),
+        categoryCollapsed: isCollapsed(cells?.[4]),
+        categoryHeaderCollapsed: isCollapsed(headerCells[4]),
         containerWidth: container.getBoundingClientRect().width,
         hasHorizontalOverflow:
           container.scrollWidth > container.clientWidth + 1,
@@ -3706,9 +3792,9 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           cell.innerText.replace(/\s+/g, " ").trim(),
         ),
         amountText: amountCell?.innerText.replace(/\s+/g, " ").trim(),
-        memberCollapsed: isCollapsed(cells?.[7]),
+        memberCollapsed: isCollapsed(cells?.[6]),
         memberFullyVisible:
-          isCollapsed(cells?.[7]) ||
+          isCollapsed(cells?.[6]) ||
           (Boolean(memberRect) &&
             memberContentRects.every(
               (rect) =>
@@ -3716,11 +3802,11 @@ test("transactions page collapses low-priority columns instead of scrolling hori
                 rect.right <= (memberRect?.right ?? 0) + 0.5 &&
                 (!amountRect || rect.right <= amountRect.left + 0.5),
             )),
-        memberHeaderCollapsed: isCollapsed(headerCells[7]),
-        statusCollapsed: isCollapsed(cells?.[3]),
-        statusHeaderCollapsed: isCollapsed(headerCells[3]),
-        tagsCollapsed: isCollapsed(cells?.[6]),
-        tagsHeaderCollapsed: isCollapsed(headerCells[6]),
+        memberHeaderCollapsed: isCollapsed(headerCells[6]),
+        statusCollapsed: isCollapsed(cells?.[2]),
+        statusHeaderCollapsed: isCollapsed(headerCells[2]),
+        tagsCollapsed: isCollapsed(cells?.[5]),
+        tagsHeaderCollapsed: isCollapsed(headerCells[5]),
         visibleContentOverlapsAmount: contentOverlappingAmount,
       };
     });
@@ -4036,28 +4122,68 @@ test("transactions contain long amount chips and align the pagination footer", a
     ),
   ).toBeLessThanOrEqual(1);
 
-  for (const width of [1600, 1000, 700]) {
+  for (const width of [1600, 1000, 700, 390]) {
     await page.setViewportSize({ width, height: 720 });
     const longAmountRow = page.getByRole("row").filter({ hasText: memo });
     await expect(longAmountRow).toBeVisible();
-    await expect(longAmountRow.locator("td").nth(8)).toContainText(
+    await expect(longAmountRow.locator("td").nth(7)).toContainText(
       "-9,999,999,999.99 $",
     );
     const mixedLongAmountRow = page
       .getByRole("row")
       .filter({ hasText: mixedMemo });
     await expect(mixedLongAmountRow).toBeVisible();
-    await expect(mixedLongAmountRow.locator("td").nth(8)).toContainText(
+    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText(
       "-9,999,999,999.99",
     );
-    await expect(mixedLongAmountRow.locator("td").nth(8)).toContainText(
+    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText(
       "+8,888,888,888.88",
     );
-    await expect(mixedLongAmountRow.locator("td").nth(8)).toContainText("$");
+    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText("$");
 
     await expect(amountChipsFitCell(longAmountRow)).resolves.toBe(true);
     await expect(amountChipsFitCell(mixedLongAmountRow)).resolves.toBe(true);
   }
+
+  const fullAmountLabel = "-9,999,999,999.99 $";
+  const longAmountRow = page.getByRole("row").filter({ hasText: memo });
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  const longAmountChip = longAmountRow.getByTestId("amount-chip");
+  await expect(longAmountChip.locator(".truncate")).toHaveCount(0);
+  await expect(longAmountChip).toHaveCSS("overflow", "visible");
+  await longAmountChip.hover();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: fullAmountLabel }),
+  ).toBeVisible();
+
+  await page.setViewportSize({ width: 1000, height: 720 });
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  const bulkFooterBox = await page
+    .getByTestId("transactions-pagination-footer")
+    .boundingBox();
+  const sidebarControlBox = await page
+    .getByRole("button", { name: "Expand sidebar" })
+    .boundingBox();
+  expect(bulkFooterBox).not.toBeNull();
+  expect(sidebarControlBox).not.toBeNull();
+  expect(
+    Math.abs(
+      (bulkFooterBox?.y ?? 0) +
+        (bulkFooterBox?.height ?? 0) -
+        ((sidebarControlBox?.y ?? 0) + (sidebarControlBox?.height ?? 0)),
+    ),
+  ).toBeLessThanOrEqual(1);
+  const bulkModeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
+  await longAmountRow.click();
+  await expect(bulkModeBar).toContainText("1 selected");
+  await longAmountRow.getByTestId("amount-chip").hover();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: fullAmountLabel }),
+  ).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(bulkModeBar).toContainText("0 selected");
+  await page.keyboard.press("Escape");
+  await expect(bulkModeBar).toHaveCount(0);
 });
 
 test("transactions display currency symbols with code fallback", async ({
@@ -4103,10 +4229,10 @@ test("transactions display currency symbols with code fallback", async ({
       .filter({ hasText: "BlueCash → Target" })
       .first()
       .locator("td")
-      .nth(8),
+      .nth(7),
   ).toContainText("-43.98 $");
   await expect(
-    page.getByRole("row").filter({ hasText: memo }).locator("td").nth(8),
+    page.getByRole("row").filter({ hasText: memo }).locator("td").nth(7),
   ).toContainText("-3.21 XDR");
 });
 
@@ -4202,12 +4328,12 @@ test("transactions page help and leaf category chips", async ({
     .filter({ hasText: "BlueCash → Target" })
     .first();
   await expect(simpleSpendRow).toBeVisible();
-  await expect(simpleSpendRow.locator("td").nth(7)).not.toContainText("Mixed");
-  await expect(simpleSpendRow.locator("td").nth(8)).toContainText(/-43\.98 \$/);
+  await expect(simpleSpendRow.locator("td").nth(6)).not.toContainText("Mixed");
+  await expect(simpleSpendRow.locator("td").nth(7)).toContainText(/-43\.98 \$/);
   await expect(
     simpleSpendRow
       .locator("td")
-      .nth(4)
+      .nth(3)
       .getByRole("button", { name: "Open transaction detail" }),
   ).toHaveCount(0);
 
@@ -4217,9 +4343,9 @@ test("transactions page help and leaf category chips", async ({
     .first();
   await expect(mixedRow).toBeVisible();
   await expect(
-    mixedRow.locator("td").nth(5).getByText("Mixed", { exact: true }),
+    mixedRow.locator("td").nth(4).getByText("Mixed", { exact: true }),
   ).toBeVisible();
-  await expect(mixedRow.locator("td").nth(8)).toContainText(
+  await expect(mixedRow.locator("td").nth(7)).toContainText(
     "-5.00 / +100.00 $",
   );
   const rowHeights = await page
@@ -4424,7 +4550,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
   expect(fitTagState.hiddenLabels).toEqual([]);
   expect(fitTagState.visibleRowCount).toBeLessThanOrEqual(2);
   await expect(
-    fitTagRow.locator("td").nth(6).getByTestId("transaction-tags-overflow"),
+    fitTagRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
   ).toHaveCount(0);
 
   const overflowTagRow = page
@@ -4433,11 +4559,11 @@ test("transactions line composition uses compact dates and single-line leaf tags
     .first();
   await expect(overflowTagRow).toBeVisible();
 
-  const dateCell = overflowTagRow.locator("td").nth(2);
+  const dateCell = overflowTagRow.locator("td").nth(1);
   await expect(dateCell.locator("div").nth(0)).toHaveText("May 31");
   await expect(dateCell.locator("div").nth(1)).toHaveText("2026");
 
-  const statusCell = overflowTagRow.locator("td").nth(3);
+  const statusCell = overflowTagRow.locator("td").nth(2);
   await expect(statusCell).toHaveText("");
 
   const overflowTagState = await tagChipLineState(overflowTagRow);
@@ -4447,17 +4573,17 @@ test("transactions line composition uses compact dates and single-line leaf tags
 
   const visibleOverflowTag = overflowTagRow
     .locator("td")
-    .nth(6)
+    .nth(5)
     .getByText(createdOverflowTags[0]?.name ?? "", { exact: true });
   await expect(visibleOverflowTag).toBeVisible();
   const overflowChip = overflowTagRow
     .locator("td")
-    .nth(6)
+    .nth(5)
     .getByTestId("transaction-tags-overflow");
   await expect(overflowChip).toBeVisible();
   const renderedOverflowTagLabels = await overflowTagRow
     .locator("td")
-    .nth(6)
+    .nth(5)
     .getByTestId("transaction-tag-chips-list")
     .evaluate((list) =>
       Array.from(list.children)
@@ -4477,7 +4603,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
 
   const memberChip = overflowTagRow
     .locator("td")
-    .nth(7)
+    .nth(6)
     .getByText(memberName.slice(0, 2), { exact: true });
   await expect(memberChip).toBeVisible();
   expect(await chipShadowFitsClippingAncestors(memberChip)).toBe(true);
@@ -4495,7 +4621,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
   expect(noMemoTagState.visibleRowCount).toBe(2);
   const noMemoTitleCenterOffset = await noMemoRow
     .locator("td")
-    .nth(4)
+    .nth(3)
     .evaluate((descriptionCell) => {
       const title = descriptionCell.querySelector<HTMLElement>(
         "[data-testid='transaction-line-title']",
@@ -4613,7 +4739,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(detailRow).toBeVisible();
   await expect(alternateDetailRow).toBeVisible();
   await expect(
-    detailRow.locator("td").nth(6).getByTestId("transaction-tags-overflow"),
+    detailRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
   ).toBeVisible();
 
   await page
@@ -4682,11 +4808,11 @@ test("transaction detail panel shows full records and supports deep links", asyn
     )
     .toBe("visible");
 
-  await alternateDetailRow.locator("td").nth(4).click();
+  await alternateDetailRow.locator("td").nth(3).click();
   await expect(panel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
   await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "true");
-  await alternateDetailRow.locator("td").nth(4).click();
+  await alternateDetailRow.locator("td").nth(3).click();
   await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "false");
 
   await detailRow
@@ -5143,7 +5269,14 @@ test("focused transaction row opens detail with Enter and restores focus on Esca
   await expect(detailRow).toBeFocused();
 
   await page.keyboard.press("Space");
-  await expect(page.getByTestId("bulk-action-bar")).toContainText("1 selected");
+  await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await detailRow.focus();
+  await page.keyboard.press("Space");
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("1 selected");
 });
 
 test("transaction detail delete confirms, tombstones, and refreshes the row", async ({
@@ -5969,7 +6102,7 @@ test("inline editors hide hidden controls and results while broader pickers reta
   const hiddenTagRow = page.getByRole("row").filter({ hasText: memo }).first();
   await expect(hiddenTagRow).toBeVisible();
   await expect(
-    hiddenTagRow.locator("td").nth(6).getByText("QuietTag", { exact: true }),
+    hiddenTagRow.locator("td").nth(5).getByText("QuietTag", { exact: true }),
   ).toBeVisible();
 
   const rowPrefix = `transaction-${transaction.transaction_id}`;
@@ -6136,10 +6269,9 @@ test("entry category picker requests spend intents and excludes hidden categorie
   );
 });
 
-test("bulk selection updates uniform transactions and skips mixed records", async ({
+test("bulk mode updates uniform fields and skips mixed rows", async ({
   page,
 }, testInfo) => {
-  test.slow();
   await page.setViewportSize({ width: 1440, height: 900 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
@@ -6150,10 +6282,10 @@ test("bulk selection updates uniform transactions and skips mixed records", asyn
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:Books");
   const initialCategory = findByFqn(categories, "Entertainment:Books");
-  const [targetCategory, tag, member] = await Promise.all([
+  const [targetCategory, initialMember, targetMember] = await Promise.all([
     createCategory(page, `E2E:Bulk:${unique}:Category`, "expense"),
-    createTag(page, `E2E:Bulk:${unique}:Tag`),
-    createMember(page, `Bulk member ${unique}`),
+    createMember(page, `Initial bulk member ${unique}`),
+    createMember(page, `Target bulk member ${unique}`),
   ]);
   const uniformMemo = `E2E bulk uniform ${unique}`;
   const mixedMemo = `E2E bulk mixed ${unique}`;
@@ -6166,6 +6298,7 @@ test("bulk selection updates uniform transactions and skips mixed records", asyn
           amount: "-11.00000000",
           category_id: initialCategory.category_id,
           currency: "USD",
+          member_id: initialMember.member_id,
           memo: uniformMemo,
           posting_status: "posted",
           reconciliation_status: "unreconciled",
@@ -6218,6 +6351,7 @@ test("bulk selection updates uniform transactions and skips mixed records", asyn
     },
   });
   expect(mixedResponse.ok(), await mixedResponse.text()).toBe(true);
+  const mixed = (await mixedResponse.json()) as TransactionDetailFixture;
   const expectedFixture = await createExpectedRecurringFixture(page, unique);
 
   await page.goto(
@@ -6237,62 +6371,595 @@ test("bulk selection updates uniform transactions and skips mixed records", asyn
   await expect(uniformRow).toBeVisible();
   await expect(mixedRow).toBeVisible();
   await expect(expectedRow).toBeVisible();
-  await expect(expectedRow.getByRole("checkbox")).toHaveCount(0);
+  await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
 
-  await uniformRow.focus();
-  await page.keyboard.press("Space");
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  const modeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
   const bulkActionBar = page.getByTestId("bulk-action-bar");
-  await expect(bulkActionBar).toContainText("1 selected");
-  await mixedRow.getByRole("checkbox", { name: /^Select / }).click();
-  await expect(bulkActionBar).toContainText("2 selected");
+  await expect(modeBar).toBeVisible();
+  await expect(modeBar).toContainText("0 selected");
+  await expect(expectedRow.getByRole("checkbox")).toHaveCount(0);
+  await expect(expectedRow).toHaveAttribute("aria-disabled", "true");
+  await uniformRow.click();
+  await expect(modeBar).toContainText("1 selected");
+  await mixedRow.click();
+  await expect(modeBar).toContainText("2 selected");
+  await expect(uniformRow).toHaveAttribute("aria-selected", "true");
+  await expect(mixedRow).toHaveAttribute("aria-selected", "true");
 
   await bulkActionBar.getByRole("button", { name: "Categorize" }).click();
   const categoryPicker = page.getByTestId("bulk-action-picker");
+  await expect(categoryPicker).toContainText("1 mixed row will be skipped");
   await categoryPicker
     .getByRole("combobox", { name: "Category" })
     .fill(targetCategory.fqn);
   await categoryPicker
     .getByRole("combobox", { name: "Category" })
     .press("Enter");
+  let releaseRefresh: (() => void) | undefined;
+  let markRefreshStarted: (() => void) | undefined;
+  const refreshStarted = new Promise<void>((resolve) => {
+    markRefreshStarted = resolve;
+  });
+  let transactionReadbackCount = 0;
+  const holdRefresh = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() === "GET" &&
+      url.pathname === `/api/transactions/${uniform.transaction_id}`
+    ) {
+      transactionReadbackCount += 1;
+    }
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+    markRefreshStarted?.();
+    await new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    await route.continue();
+  };
+  await page.route("**/api/transactions**", holdRefresh);
+  await categoryPicker.getByRole("button", { name: "Apply category" }).click();
+  await refreshStarted;
+  expect(transactionReadbackCount).toBe(0);
+  await expect(categoryPicker).toBeVisible();
+  await expect(
+    categoryPicker.getByRole("combobox", { name: "Category" }),
+  ).toHaveValue(targetCategory.fqn);
+  await expect(
+    categoryPicker.getByRole("button", { name: "Cancel" }),
+  ).toBeDisabled();
+  releaseRefresh?.();
   await expect(
     page
       .getByRole("status")
       .filter({ hasText: "1 updated, 1 skipped: mixed records." }),
   ).toBeVisible();
+  await page.unroute("**/api/transactions**", holdRefresh);
   await expect(uniformRow).toContainText(targetCategory.name);
   await expect(mixedRow).toContainText("Mixed");
-  await expect(bulkActionBar).toHaveCount(0);
+  await expect(modeBar).toContainText("2 selected");
 
-  await uniformRow.getByRole("checkbox", { name: /^Select / }).click();
+  await bulkActionBar.getByRole("button", { name: "Member" }).click();
+  const memberPicker = page.getByTestId("bulk-action-picker");
+  await memberPicker
+    .getByRole("combobox", { name: "Member" })
+    .fill(targetMember.name);
+  await memberPicker.getByRole("combobox", { name: "Member" }).press("Enter");
+  await memberPicker.getByRole("button", { name: "Set member" }).click();
+  await expect(memberPicker).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "1 updated, 1 skipped: mixed records." }),
+  ).toBeVisible();
+
+  const [partialMemberResponse, updatedMemberResponse] = await Promise.all([
+    page.request.get(`/api/transactions/${uniform.transaction_id}`),
+    page.request.get(`/api/transactions/${mixed.transaction_id}`),
+  ]);
+  expect(partialMemberResponse.ok(), await partialMemberResponse.text()).toBe(
+    true,
+  );
+  expect(updatedMemberResponse.ok(), await updatedMemberResponse.text()).toBe(
+    true,
+  );
+  const partialMemberTransaction =
+    (await partialMemberResponse.json()) as TransactionDetailFixture;
+  const updatedMemberTransaction =
+    (await updatedMemberResponse.json()) as TransactionDetailFixture;
+  expect(
+    partialMemberTransaction.records.map((record) => record.member_id ?? null),
+  ).toEqual([initialMember.member_id, null]);
+  expect(
+    updatedMemberTransaction.records.map((record) => record.member_id ?? null),
+  ).toEqual([targetMember.member_id, targetMember.member_id]);
+
+  const tagButton = bulkActionBar.getByRole("button", { name: "Tag" });
+  await tagButton.click();
+  const tagCombobox = page
+    .getByTestId("bulk-action-picker")
+    .getByRole("combobox", { name: "Tags to add" });
+  await expect(tagCombobox).toHaveAttribute("aria-expanded", "true");
+  await tagCombobox.press("Escape");
+  await tagCombobox.press("Escape");
+  await expect(tagButton).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(modeBar).toContainText("0 selected");
+  await expect(mixedRow).toBeFocused();
+  await modeBar.getByRole("button", { name: "Select page" }).click();
+  await bulkActionBar.getByRole("button", { name: "Tag" }).click();
+  const pageTagCombobox = page
+    .getByTestId("bulk-action-picker")
+    .getByRole("combobox", { name: "Tags to add" });
+  await expect(pageTagCombobox).toHaveAttribute("aria-expanded", "true");
+  await pageTagCombobox.press("Escape");
+  await pageTagCombobox.press("Escape");
+  await expect(tagButton).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(modeBar).toContainText("0 selected");
+  await expect(modeBar.getByRole("button", { name: "Done" })).toBeFocused();
+  await uniformRow.click();
+  await mixedRow.click();
+  await expect(modeBar).toContainText("2 selected");
+
+  const rowCategoryCell = uniformRow.getByTestId(
+    `transaction-${uniform.transaction_id}-category-bulk-cell`,
+  );
+  await rowCategoryCell.hover();
+  await uniformRow.getByRole("button", { name: "Bulk edit category" }).click();
+  const rowCategoryPicker = page.getByTestId(
+    `transaction-${uniform.transaction_id}-category-bulk-editor`,
+  );
+  const rowCategoryCombobox = rowCategoryPicker.getByRole("combobox", {
+    name: "Category",
+  });
+  await expect(rowCategoryCombobox).toHaveAttribute("aria-expanded", "true");
+  await rowCategoryCombobox.press("Escape");
+  await expect(rowCategoryCombobox).toHaveAttribute("aria-expanded", "false");
+  await expect(rowCategoryPicker).toBeVisible();
+  await rowCategoryCombobox.press("Escape");
+  await expect(rowCategoryPicker).toHaveCount(0);
+  await expect(rowCategoryCell).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(modeBar).toContainText("1 selected");
+  await expect(uniformRow).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(modeBar).toContainText("0 selected");
+  await expect(uniformRow).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(modeBar).toHaveCount(0);
+  await expect(bulkActionBar).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Bulk edit" })).toBeFocused();
+  await expect(uniformRow.getByRole("checkbox")).toHaveCount(0);
+});
+
+test("bulk selection keeps mutation targets after an edit changes the active filter", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const initialCategory = findByFqn(categories, "Entertainment:Books");
+  const [targetCategory, tag] = await Promise.all([
+    createCategory(page, `E2E:BulkFilter:${unique}:Category`, "expense"),
+    createTag(page, `E2E:BulkFilter:${unique}:Tag`),
+  ]);
+  const selectedMemo = `E2E bulk filter ${unique} selected`;
+  const guardMemo = `E2E bulk filter ${unique} guard`;
+  const createSpend = async (memo: string, amount: string) => {
+    const response = await page.request.post("/api/transactions/spend", {
+      data: {
+        amount,
+        category_id: initialCategory.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-07-12",
+        memo,
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return (await response.json()) as TransactionDetailFixture;
+  };
+  const [selectedTransaction] = await Promise.all([
+    createSpend(selectedMemo, "13.00"),
+    createSpend(guardMemo, "17.00"),
+  ]);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(`E2E bulk filter ${unique}`)}&category=${initialCategory.category_id}`,
+  );
+  const selectedRow = page
+    .getByRole("row")
+    .filter({ hasText: selectedMemo })
+    .first();
+  const guardRow = page.getByRole("row").filter({ hasText: guardMemo }).first();
+  await expect(selectedRow).toBeVisible();
+  await expect(guardRow).toBeVisible();
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await selectedRow.click();
+  const bulkActionBar = page.getByTestId("bulk-action-bar");
+  await selectedRow
+    .getByTestId(
+      `transaction-${selectedTransaction.transaction_id}-category-bulk-cell`,
+    )
+    .hover();
+  await selectedRow.getByRole("button", { name: "Bulk edit category" }).click();
+  const categoryPicker = page.getByTestId(
+    `transaction-${selectedTransaction.transaction_id}-category-bulk-editor`,
+  );
+  await categoryPicker
+    .getByRole("combobox", { name: "Category" })
+    .fill(targetCategory.fqn);
+  await categoryPicker
+    .getByRole("combobox", { name: "Category" })
+    .press("Enter");
+  await categoryPicker.getByRole("button", { name: "Apply category" }).click();
+
+  await expect(selectedRow).toHaveCount(0);
+  await expect(guardRow).toBeVisible();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("1 selected");
+  await expect(
+    bulkActionBar.getByRole("button", { name: "Categorize" }),
+  ).toBeFocused();
   await bulkActionBar.getByRole("button", { name: "Tag" }).click();
   const tagPicker = page.getByTestId("bulk-action-picker");
   await tagPicker.getByRole("combobox", { name: "Tags to add" }).fill(tag.fqn);
   await tagPicker.getByRole("combobox", { name: "Tags to add" }).press("Enter");
   await tagPicker.getByRole("button", { name: "Add tags" }).click();
-  await expect(uniformRow).toContainText(tag.name);
 
-  await uniformRow.getByRole("checkbox", { name: /^Select / }).click();
-  await bulkActionBar.getByRole("button", { name: "Member" }).click();
-  const memberPicker = page.getByTestId("bulk-action-picker");
-  await memberPicker
-    .getByRole("combobox", { name: "Member" })
-    .fill(member.name);
-  await memberPicker.getByRole("combobox", { name: "Member" }).press("Enter");
-  await expect(bulkActionBar).toHaveCount(0);
+  await expect(tagPicker).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: "1 updated, 0 skipped." }),
+  ).toBeVisible();
   const updatedResponse = await page.request.get(
-    `/api/transactions/${uniform.transaction_id}`,
+    `/api/transactions/${selectedTransaction.transaction_id}`,
   );
   expect(updatedResponse.ok(), await updatedResponse.text()).toBe(true);
   const updated = (await updatedResponse.json()) as TransactionDetailFixture;
-  expect(updated.records.map((record) => record.member_id)).toEqual([
-    member.member_id,
-    member.member_id,
-  ]);
+  expect(
+    updated.records.every((record) => record.tag_ids.includes(tag.tag_id)),
+  ).toBe(true);
+});
 
-  await uniformRow.getByRole("checkbox", { name: /^Select / }).click();
+test("browser history navigation exits bulk mode before restoring transaction detail", async ({
+  page,
+}) => {
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+  const row = page
+    .locator("tbody tr[data-transaction-id]")
+    .filter({
+      has: page.getByRole("button", { name: "Open transaction detail" }),
+      hasNot: page.getByRole("button", { name: "Confirm occurrence" }),
+    })
+    .first();
+  await row.getByRole("button", { name: "Open transaction detail" }).click();
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(detailPanel).toBeVisible();
+  const detailUrl = page.url();
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await expect(detailPanel).toHaveCount(0);
+  const bulkActionBar = page.getByTestId("bulk-action-bar");
   await expect(bulkActionBar).toBeVisible();
-  await bulkActionBar.getByRole("button", { name: "Clear selection" }).click();
+  await page
+    .locator("tbody tr[data-transaction-id]:not([aria-disabled='true'])")
+    .first()
+    .click();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("1 selected");
+
+  await page.goBack();
   await expect(bulkActionBar).toHaveCount(0);
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toHaveCount(0);
+  for (let attempt = 0; attempt < 5 && page.url() !== detailUrl; attempt += 1) {
+    await page.goBack();
+  }
+  await expect(page).toHaveURL(detailUrl);
+  await expect(detailPanel).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { name: "Delete", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator("tbody tr").first().getByRole("checkbox"),
+  ).toHaveCount(0);
+});
+
+test("active Transactions navigation exits bulk mode", async ({ page }) => {
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  const bulkActionBar = page.getByTestId("bulk-action-bar");
+  await page
+    .locator("tbody tr[data-transaction-id]:not([aria-disabled='true'])")
+    .first()
+    .click();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("1 selected");
+
+  await page.getByRole("link", { name: "Transactions" }).click();
+
+  await expect(bulkActionBar).toHaveCount(0);
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toHaveCount(0);
+  await expect(
+    page.locator("tbody tr").first().getByRole("checkbox"),
+  ).toHaveCount(0);
+});
+
+test("narrow row bulk shortcuts use the visible bulk bar editor", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/transactions?page=1&pageSize=50");
+  await expect(page.getByText("Description")).toBeVisible();
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  const row = page
+    .locator("tbody tr[data-transaction-id]:not([aria-disabled='true'])")
+    .first();
+  const transactionId = await row.getAttribute("data-transaction-id");
+  expect(transactionId).not.toBeNull();
+  await row.click();
+  const bulkActionBar = page.getByTestId("bulk-action-bar");
+  const bulkActionBarBounds = await bulkActionBar.boundingBox();
+  expect(bulkActionBarBounds).not.toBeNull();
+  expect(bulkActionBarBounds!.x).toBeGreaterThanOrEqual(0);
+  expect(
+    bulkActionBarBounds!.x + bulkActionBarBounds!.width,
+  ).toBeLessThanOrEqual(390);
+
+  const shortcuts = [
+    { action: "category", combobox: "Category", key: "c" },
+    { action: "tags", combobox: "Tags to add", key: "t" },
+    { action: "member", combobox: "Member", key: "m" },
+  ] as const;
+  for (const shortcut of shortcuts) {
+    await row.focus();
+    await page.keyboard.press(shortcut.key);
+    const picker = bulkActionBar.getByTestId("bulk-action-picker");
+    await expect(picker).toBeVisible();
+    await expect(
+      picker.getByRole("combobox", { name: shortcut.combobox }),
+    ).toBeFocused();
+    await expect(
+      page.getByTestId(
+        `transaction-${transactionId}-${shortcut.action}-bulk-editor`,
+      ),
+    ).toHaveCount(0);
+    await picker
+      .getByRole("button", { name: "Close bulk action picker" })
+      .click();
+    await expect(picker).toHaveCount(0);
+  }
+});
+
+test("bulk action surface remains visible for an empty transaction result", async ({
+  page,
+}, testInfo) => {
+  const missing = `no-bulk-results-${testInfo.project.name}-${Date.now()}`;
+  await page.goto(`/transactions?q=${encodeURIComponent(missing)}`);
+  await expect(
+    page.getByRole("heading", { name: "No transactions" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("0 selected");
+  await expect(page.getByTestId("bulk-action-bar")).not.toContainText(
+    "selected",
+  );
+  await expect(page.getByRole("button", { name: "Select page" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("button", { name: "Clear" })).toHaveCount(0);
+  await expect(
+    page
+      .getByTestId("transaction-browser-bulk-mode-bar")
+      .getByRole("button", { name: "Done" }),
+  ).toBeFocused();
+  const bulkActionBar = page.getByTestId("bulk-action-bar");
+  const categorizeRemedy = bulkActionBar
+    .getByRole("button", { name: "Categorize" })
+    .locator("..");
+  const tagRemedy = bulkActionBar
+    .getByRole("button", { name: "Tag" })
+    .locator("..");
+  const memberRemedy = bulkActionBar
+    .getByRole("button", { name: "Member" })
+    .locator("..");
+  await expect(categorizeRemedy).toHaveAttribute("tabindex", "0");
+  await expect(tagRemedy).toHaveAttribute("tabindex", "0");
+  await expect(memberRemedy).toHaveAttribute("tabindex", "0");
+  await categorizeRemedy.focus();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Select transactions first",
+  );
+});
+
+test("bulk mode removes the empty actions column at wide widths", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  await page.goto("/transactions?page=1&pageSize=50");
+  const table = page.locator("table.transactions-table");
+  await expect(table).toBeVisible();
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+
+  await expect(table.locator("col.transactions-actions-column")).toBeHidden();
+  await expect(
+    table.locator("thead .transactions-actions-column"),
+  ).toBeHidden();
+  await expect(
+    table.locator("tbody .transactions-actions-column").first(),
+  ).toBeHidden();
+});
+
+test("bulk mode leaves amount chip shadows unclipped", async ({ page }) => {
+  await page.goto("/transactions?page=1&pageSize=50");
+  const row = page.locator("tbody tr[data-transaction-id]").first();
+  const amountContainer = row.locator("td.transactions-amount-column > div");
+  await expect(amountContainer).toBeVisible();
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+
+  await expect(amountContainer).toHaveCSS("overflow", "visible");
+});
+
+test("bulk action surface remains visible during initial loading and errors", async ({
+  page,
+}) => {
+  let releaseTransactions: (() => void) | undefined;
+  const transactionRequestStarted = new Promise<void>((resolve) => {
+    void page.route("**/api/transactions**", async (route) => {
+      const url = new URL(route.request().url());
+      if (
+        route.request().method() !== "GET" ||
+        url.pathname !== "/api/transactions"
+      ) {
+        await route.continue();
+        return;
+      }
+      resolve();
+      await new Promise<void>((release) => {
+        releaseTransactions = release;
+      });
+      await route.fulfill({
+        contentType: "application/json",
+        json: { message: "Transaction loading failed" },
+        status: 500,
+      });
+    });
+  });
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await transactionRequestStarted;
+  await expect(page.locator("[data-slot='skeleton']").first()).toBeVisible();
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("0 selected");
+
+  releaseTransactions?.();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "Transactions could not be loaded" }),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("0 selected");
+});
+
+test("bulk selection clears when a filtered snapshot replaces retained rows", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/transactions?page=1&pageSize=50");
+  const retainedRow = page
+    .locator("tbody tr[data-transaction-id]:not([aria-disabled='true'])")
+    .first();
+  await expect(retainedRow).toBeVisible();
+
+  const missing = `no-filter-results-${testInfo.project.name}-${Date.now()}`;
+  let releaseFilteredResponse: (() => void) | undefined;
+  const filteredRequestStarted = new Promise<void>((resolve) => {
+    void page.route("**/api/transactions**", async (route) => {
+      const url = new URL(route.request().url());
+      if (
+        route.request().method() !== "GET" ||
+        url.pathname !== "/api/transactions" ||
+        url.searchParams.get("search") !== missing
+      ) {
+        await route.continue();
+        return;
+      }
+
+      resolve();
+      await new Promise<void>((release) => {
+        releaseFilteredResponse = release;
+      });
+      await route.fulfill({
+        contentType: "application/json",
+        json: { offset: 0, total_count: 0, transactions: [] },
+      });
+    });
+  });
+
+  await page.getByRole("searchbox", { name: "Search" }).fill(missing);
+  await filteredRequestStarted;
+
+  try {
+    await page.getByRole("button", { name: "Bulk edit" }).click();
+    await retainedRow.click();
+    await expect(
+      page.getByTestId("transaction-browser-bulk-mode-bar"),
+    ).toContainText("1 selected");
+  } finally {
+    releaseFilteredResponse?.();
+  }
+
+  await expect(
+    page.getByRole("heading", { name: "No transactions" }),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toContainText("0 selected");
+});
+
+test("switching bulk edit mode preserves the transaction list scroll", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await page.goto("/transactions?page=1&pageSize=50");
+  const tableScroll = page.getByTestId("transactions-table-scroll");
+  await expect(tableScroll).toBeVisible();
+  await tableScroll.evaluate((element) => {
+    element.scrollTop = Math.min(
+      160,
+      element.scrollHeight - element.clientHeight,
+    );
+  });
+  const initialScrollTop = await tableScroll.evaluate(
+    (element) => element.scrollTop,
+  );
+  expect(initialScrollTop).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await expect(tableScroll).toBeVisible();
+  expect(await tableScroll.evaluate((element) => element.scrollTop)).toBe(
+    initialScrollTop,
+  );
+
+  await page
+    .getByTestId("transaction-browser-bulk-mode-bar")
+    .getByRole("button", { name: "Done" })
+    .click();
+  expect(await tableScroll.evaluate((element) => element.scrollTop)).toBe(
+    initialScrollTop,
+  );
 });
 
 const chooseOptionByKeyboard = async (

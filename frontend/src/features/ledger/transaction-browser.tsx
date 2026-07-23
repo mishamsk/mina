@@ -12,6 +12,7 @@ import {
 import {
   type FocusEvent,
   Fragment,
+  type KeyboardEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -41,7 +42,12 @@ import type { LedgerLookupsSnapshot } from "@/store";
 import { localTimestampDateValue, localTodayISODate } from "@/utils/date";
 
 import { AmountText, MixedAmounts } from "./amount-text";
-import { BulkActionBar } from "./bulk-action-bar";
+import {
+  type ActiveBulkEditor,
+  BulkActionBar,
+  type BulkReferenceAction,
+} from "./bulk-action-bar";
+import { BulkReferenceCell } from "./bulk-reference-cell";
 import {
   activeTransactionRecords,
   buildLookupMaps,
@@ -74,6 +80,7 @@ import { TransactionDeleteDescription } from "./transaction-delete-description";
 import { transactionPageSizeOptions } from "./transaction-page-position";
 
 interface TransactionBrowserProps {
+  readonly bulkEditMode: boolean;
   readonly dateJumpAnchor?: {
     readonly date: string;
     readonly page: number;
@@ -89,6 +96,7 @@ interface TransactionBrowserProps {
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
+  readonly onClearSelection: () => void;
   readonly onNewTransaction: () => void;
   readonly onDeleteTransaction: (transaction: Transaction) => Promise<void>;
   readonly onDismissRecurringOccurrence: (
@@ -102,6 +110,10 @@ interface TransactionBrowserProps {
   readonly onEditTransactionAsJournal?: (transaction: Transaction) => void;
   readonly onPageSizeChange: (pageSize: number) => void;
   readonly onPreviousPage: () => void;
+  readonly onSetBulkEditMode: (enabled: boolean) => void;
+  readonly onSelectRange: (transactionIds: readonly number[]) => void;
+  readonly onTogglePageSelection: () => void;
+  readonly onToggleSelection: (transactionId: number) => void;
   readonly onUpdateRecord: (
     transaction: Transaction,
     record: JournalRecord,
@@ -125,7 +137,8 @@ interface TransactionBrowserProps {
   readonly onRowActionsOverflowOpenChange?: (open: boolean) => void;
   readonly page: number;
   readonly pageSize: number;
-  readonly selectionScope?: string;
+  readonly selectedTransactionIds: ReadonlySet<number>;
+  readonly selectedTransactions: readonly Transaction[];
   readonly totalCount: number | undefined;
   readonly transactions: readonly Transaction[] | undefined;
 }
@@ -627,6 +640,7 @@ const StructuralRecordCell = ({
 );
 
 export const TransactionBrowser = ({
+  bulkEditMode,
   dateJumpAnchor,
   errorMessage,
   hasNextPage,
@@ -634,6 +648,7 @@ export const TransactionBrowser = ({
   loading,
   lookups,
   onConfirmRecurringOccurrence,
+  onClearSelection,
   onFilterCategory,
   onFilterMember,
   onFilterTag,
@@ -645,6 +660,10 @@ export const TransactionBrowser = ({
   onEditTransactionAsJournal,
   onPageSizeChange,
   onPreviousPage,
+  onSetBulkEditMode,
+  onSelectRange,
+  onTogglePageSelection,
+  onToggleSelection,
   onUpdateRecord,
   onUpdateTransactionRecordReferences,
   onUpdateTransactionAmount,
@@ -653,7 +672,8 @@ export const TransactionBrowser = ({
   onRowActionsOverflowOpenChange,
   page,
   pageSize,
-  selectionScope,
+  selectedTransactionIds,
+  selectedTransactions,
   totalCount,
   transactions,
 }: TransactionBrowserProps) => {
@@ -687,25 +707,23 @@ export const TransactionBrowser = ({
     readonly date: string;
     readonly transactionId: number;
   }>();
+  const [activeBulkEditor, setActiveBulkEditor] = useState<ActiveBulkEditor>();
+  const [renderedBulkEditMode, setRenderedBulkEditMode] =
+    useState(bulkEditMode);
+  if (renderedBulkEditMode !== bulkEditMode) {
+    setRenderedBulkEditMode(bulkEditMode);
+    setActiveBulkEditor(undefined);
+    if (bulkEditMode) {
+      setExpandedTransactionIds(new Set());
+    }
+  }
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const selectionAnchorIdRef = useRef<number | null>(null);
   const deletedRowFocusIndexRef = useRef<number | undefined>(undefined);
   const consumedDateJumpAnchorRef =
     useRef<TransactionBrowserProps["dateJumpAnchor"]>(undefined);
   const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const today = localTodayISODate();
-  const [selection, setSelection] = useState<{
-    readonly scope: string;
-    readonly transactionIds: ReadonlySet<number>;
-  }>();
-  const currentSelectionScope =
-    selectionScope ??
-    `${page}:${(transactions ?? []).map((transaction) => transaction.transaction_id).join(",")}`;
-  const emptySelection = useMemo(() => new Set<number>(), []);
-  const selectedTransactionIds =
-    selection?.scope === currentSelectionScope
-      ? selection.transactionIds
-      : emptySelection;
-
   const selectableTransactions = useMemo(
     () =>
       (transactions ?? []).filter(
@@ -714,12 +732,35 @@ export const TransactionBrowser = ({
     [transactions],
   );
   const selectedCount = selectedTransactionIds.size;
-  const selectedTransactions = useMemo(
-    () =>
-      (transactions ?? []).filter((transaction) =>
-        selectedTransactionIds.has(transaction.transaction_id),
-      ),
-    [selectedTransactionIds, transactions],
+  const mixedCountByAction = useMemo<
+    Record<BulkReferenceAction, number>
+  >(() => {
+    const counts: Record<BulkReferenceAction, number> = {
+      category: 0,
+      member: 0,
+      tags: 0,
+    };
+    for (const transaction of selectedTransactions) {
+      if (lineCategory(transaction, maps) === "mixed") {
+        counts.category += 1;
+      }
+      if (lineTags(transaction, maps) === "mixed") {
+        counts.tags += 1;
+      }
+      if (lineMember(transaction, maps) === "mixed") {
+        counts.member += 1;
+      }
+    }
+    return counts;
+  }, [maps, selectedTransactions]);
+  const applyBulkUpdate = useCallback(
+    async (update: RecordReferenceUpdate) => {
+      if (!onUpdateTransactionsBulkReferences) {
+        throw new Error("Bulk editing is unavailable in this view.");
+      }
+      await onUpdateTransactionsBulkReferences(selectedTransactions, update);
+    },
+    [onUpdateTransactionsBulkReferences, selectedTransactions],
   );
   const allSelectableTransactionsSelected =
     selectableTransactions.length > 0 &&
@@ -731,56 +772,136 @@ export const TransactionBrowser = ({
     : selectedCount > 0
       ? "indeterminate"
       : false;
-  const toggleSelection = useCallback(
-    (transactionId: number) => {
-      setSelection((current) => {
-        const currentIds =
-          current?.scope === currentSelectionScope
-            ? current.transactionIds
-            : new Set<number>();
-        const next = new Set(currentIds);
-        if (next.has(transactionId)) {
-          next.delete(transactionId);
-        } else {
-          next.add(transactionId);
-        }
-        return { scope: currentSelectionScope, transactionIds: next };
-      });
+
+  const rangeTransactionIds = useCallback(
+    (targetTransactionId: number): readonly number[] => {
+      const anchorTransactionId = selectionAnchorIdRef.current;
+      const anchorIndex = (transactions ?? []).findIndex(
+        (transaction) => transaction.transaction_id === anchorTransactionId,
+      );
+      const targetIndex = (transactions ?? []).findIndex(
+        (transaction) => transaction.transaction_id === targetTransactionId,
+      );
+      if (targetIndex < 0) {
+        return [];
+      }
+      if (anchorIndex < 0) {
+        selectionAnchorIdRef.current = targetTransactionId;
+        return [targetTransactionId];
+      }
+
+      const start = Math.min(anchorIndex, targetIndex);
+      const end = Math.max(anchorIndex, targetIndex);
+      return (transactions ?? [])
+        .slice(start, end + 1)
+        .filter((transaction) => linePostingStatus(transaction) !== "expected")
+        .map((transaction) => transaction.transaction_id);
     },
-    [currentSelectionScope],
+    [transactions],
   );
-  const togglePageSelection = useCallback(() => {
-    setSelection((current) => {
-      const currentIds =
-        current?.scope === currentSelectionScope
-          ? current.transactionIds
-          : new Set<number>();
-      const transactionIds = selectableTransactions.every((transaction) =>
-        currentIds.has(transaction.transaction_id),
-      )
-        ? new Set<number>()
-        : new Set(
-            selectableTransactions.map(
-              (transaction) => transaction.transaction_id,
-            ),
-          );
-      return { scope: currentSelectionScope, transactionIds };
-    });
-  }, [currentSelectionScope, selectableTransactions]);
+
+  const toggleRowSelection = useCallback(
+    (transactionId: number) => {
+      selectionAnchorIdRef.current = transactionId;
+      onToggleSelection(transactionId);
+    },
+    [onToggleSelection],
+  );
+
+  const selectRowRange = useCallback(
+    (transactionId: number) => {
+      onSelectRange(rangeTransactionIds(transactionId));
+    },
+    [onSelectRange, rangeTransactionIds],
+  );
 
   useEffect(() => {
-    if (selectedCount === 0) {
+    if (!bulkEditMode) {
       return;
     }
-    const onKeyDown = (event: KeyboardEvent) => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      const bulkControlsFocused =
+        activeElement instanceof HTMLElement &&
+        Boolean(
+          activeElement.closest("[data-transaction-browser-bulk-controls]"),
+        );
+      const textEntryTarget =
+        event.target instanceof HTMLElement &&
+        event.target.matches(
+          "input, textarea, select, [contenteditable='true']",
+        );
+      if (
+        event.key.toLowerCase() === "a" &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !textEntryTarget &&
+        activeElement instanceof HTMLElement &&
+        (rootRef.current?.contains(activeElement) || bulkControlsFocused)
+      ) {
+        event.preventDefault();
+        onSelectRange(
+          selectableTransactions.map(
+            (transaction) => transaction.transaction_id,
+          ),
+        );
+        return;
+      }
       if (event.key === "Escape" && !event.defaultPrevented) {
-        setSelection(undefined);
+        event.preventDefault();
+        if (activeBulkEditor) {
+          setActiveBulkEditor(undefined);
+        } else if (selectedCount > 0) {
+          if (activeElement instanceof HTMLElement) {
+            const activeRow = activeElement.closest<HTMLTableRowElement>(
+              transactionRowSelector,
+            );
+            const selectionAnchorRow =
+              selectionAnchorIdRef.current === null
+                ? null
+                : rootRef.current?.querySelector<HTMLTableRowElement>(
+                    `[data-transaction-id="${selectionAnchorIdRef.current}"]`,
+                  );
+            const focusTarget =
+              activeRow ??
+              selectionAnchorRow ??
+              document.querySelector<HTMLElement>("[data-bulk-done]");
+            focusTarget?.focus({ preventScroll: true });
+          }
+          onClearSelection();
+        } else {
+          onSetBulkEditMode(false);
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
+  }, [
+    bulkEditMode,
+    activeBulkEditor,
+    onClearSelection,
+    onSetBulkEditMode,
+    onSelectRange,
+    selectableTransactions,
+    selectedCount,
+  ]);
+
+  useEffect(() => {
+    selectionAnchorIdRef.current = null;
+  }, [page, pageSize]);
+
+  useEffect(() => {
+    if (selectedCount === 0) {
+      selectionAnchorIdRef.current = null;
+      const frame = window.requestAnimationFrame(() => {
+        setActiveBulkEditor(undefined);
+      });
+      return () => {
+        window.cancelAnimationFrame(frame);
+      };
+    }
   }, [selectedCount]);
 
   useEffect(() => {
@@ -968,49 +1089,70 @@ export const TransactionBrowser = ({
     };
   }, [dateJumpAnchor, page, transactions]);
 
+  const bulkActionSurface = bulkEditMode ? (
+    <BulkActionBar
+      activeEditor={activeBulkEditor}
+      maps={maps}
+      mixedCount={
+        activeBulkEditor ? mixedCountByAction[activeBulkEditor.action] : 0
+      }
+      onApply={applyBulkUpdate}
+      onEditorChange={setActiveBulkEditor}
+      selectedCount={selectedCount}
+    />
+  ) : null;
+
   if (loading && !transactions) {
-    return <LoadingRows />;
+    return (
+      <>
+        <LoadingRows />
+        {bulkActionSurface}
+      </>
+    );
   }
 
   if (errorMessage) {
     return (
-      <div className="border-destructive bg-card border-2 p-4" role="alert">
-        <p className="text-destructive font-semibold">
-          Transactions could not be loaded.
-        </p>
-        <details className="text-muted-foreground mt-3 text-sm">
-          <summary className="text-foreground cursor-pointer">
-            API error
-          </summary>
-          <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
-            {errorMessage}
-          </pre>
-        </details>
-      </div>
+      <>
+        <div className="border-destructive bg-card border-2 p-4" role="alert">
+          <p className="text-destructive font-semibold">
+            Transactions could not be loaded.
+          </p>
+          <details className="text-muted-foreground mt-3 text-sm">
+            <summary className="text-foreground cursor-pointer">
+              API error
+            </summary>
+            <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
+              {errorMessage}
+            </pre>
+          </details>
+        </div>
+        {bulkActionSurface}
+      </>
     );
   }
 
   if (!transactions || transactions.length === 0) {
     return (
-      <div
-        ref={rootRef}
-        className="border-border bg-card border p-10 text-center"
-      >
-        <EmptyStateSprite />
-        <h2 className="text-pixel mt-4 text-base">No transactions</h2>
-        <p className="text-muted-foreground mx-auto mt-2 max-w-md text-sm">
-          Transaction lines appear here after activity is created or demo data
-          is seeded.
-        </p>
-        <Button
-          type="button"
-          className="mt-5"
-          data-transaction-empty-action
-          onClick={onNewTransaction}
-        >
-          <Plus aria-hidden="true" />
-          New transaction
-        </Button>
+      <div ref={rootRef} className="flex h-full min-h-0 flex-col">
+        <div className="border-border bg-card flex-1 border p-10 text-center">
+          <EmptyStateSprite />
+          <h2 className="text-pixel mt-4 text-base">No transactions</h2>
+          <p className="text-muted-foreground mx-auto mt-2 max-w-md text-sm">
+            Transaction lines appear here after activity is created or demo data
+            is seeded.
+          </p>
+          <Button
+            type="button"
+            className="mt-5"
+            data-transaction-empty-action
+            onClick={onNewTransaction}
+          >
+            <Plus aria-hidden="true" />
+            New transaction
+          </Button>
+        </div>
+        {bulkActionSurface}
       </div>
     );
   }
@@ -1026,9 +1168,17 @@ export const TransactionBrowser = ({
         className="transactions-table-scroll bg-card min-h-0 flex-1 overflow-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
         data-testid="transactions-table-scroll"
       >
-        <table className="transactions-table w-full table-fixed border-collapse text-sm">
+        <table
+          aria-multiselectable={bulkEditMode ? true : undefined}
+          className={cn(
+            "transactions-table w-full table-fixed border-collapse text-sm",
+            bulkEditMode && "transactions-table--bulk-edit",
+          )}
+        >
           <colgroup>
-            <col className="transactions-selection-column" />
+            {bulkEditMode ? (
+              <col className="transactions-selection-column" />
+            ) : null}
             <col className="transactions-class-column" />
             <col className="transactions-date-column" />
             <col className="transactions-status-column" />
@@ -1041,14 +1191,17 @@ export const TransactionBrowser = ({
           </colgroup>
           <thead className="sticky top-0 z-10 bg-[var(--table-header)]">
             <tr className="font-heading text-foreground border-b-2 border-[var(--border-ink)] text-left text-xs font-semibold uppercase">
-              <th className="transactions-selection-column px-3 py-2">
-                <Checkbox
-                  aria-label="Select page transactions"
-                  checked={headerSelectionState}
-                  disabled={selectableTransactions.length === 0}
-                  onCheckedChange={togglePageSelection}
-                />
-              </th>
+              {bulkEditMode ? (
+                <th className="transactions-selection-column px-3 py-2">
+                  {selectableTransactions.length > 0 ? (
+                    <Checkbox
+                      aria-label="Select page transactions"
+                      checked={headerSelectionState}
+                      onCheckedChange={onTogglePageSelection}
+                    />
+                  ) : null}
+                </th>
+              ) : null}
               <th className="transactions-class-column px-3 py-2">
                 <span className="sr-only min-[1920px]:not-sr-only">Class</span>
               </th>
@@ -1072,9 +1225,9 @@ export const TransactionBrowser = ({
           </thead>
           <tbody>
             {transactions.map((transaction, transactionIndex) => {
-              const expanded = expandedTransactionIds.has(
-                transaction.transaction_id,
-              );
+              const expanded =
+                !bulkEditMode &&
+                expandedTransactionIds.has(transaction.transaction_id);
               const title = transaction.display_title;
               const initiatedDate = formatInitiatedDateParts(
                 transaction.initiated_date,
@@ -1100,6 +1253,9 @@ export const TransactionBrowser = ({
                 postingStatus === "expected" &&
                 transaction.recurring_occurrence_id !== null;
               const selectable = postingStatus !== "expected";
+              const selected = selectedTransactionIds.has(
+                transaction.transaction_id,
+              );
               const canEditReferences =
                 postingStatus !== "expected" &&
                 postingStatus !== "cancelled" &&
@@ -1137,21 +1293,130 @@ export const TransactionBrowser = ({
                   return next;
                 });
               };
+              const walkRowFocus = (
+                event: KeyboardEvent<HTMLTableRowElement>,
+                direction: -1 | 1,
+              ) => {
+                const nextTransaction =
+                  transactions[transactionIndex + direction];
+                if (!nextTransaction) {
+                  return;
+                }
+                event.preventDefault();
+                const rows = Array.from(
+                  event.currentTarget
+                    .closest("tbody")
+                    ?.querySelectorAll<HTMLTableRowElement>(
+                      transactionRowSelector,
+                    ) ?? [],
+                );
+                const nextRow = rows[transactionIndex + direction];
+                nextRow?.scrollIntoView({ block: "nearest" });
+                nextRow?.focus({ preventScroll: true });
+
+                if (!bulkEditMode || !event.shiftKey) {
+                  return;
+                }
+                if (selectionAnchorIdRef.current === null && selectable) {
+                  selectionAnchorIdRef.current = transaction.transaction_id;
+                }
+                if (linePostingStatus(nextTransaction) !== "expected") {
+                  selectRowRange(nextTransaction.transaction_id);
+                }
+              };
+              const openRowBulkEditor = (action: BulkReferenceAction) => {
+                setActiveBulkEditor({
+                  action,
+                  source: "row",
+                  transactionId: transaction.transaction_id,
+                });
+              };
+              const openBulkEditorFromRowShortcut = (
+                action: BulkReferenceAction,
+                row: HTMLTableRowElement,
+              ) => {
+                const column = row.querySelector(
+                  `.transactions-${action === "tags" ? "tags" : action}-column`,
+                );
+                const columnBounds = column?.getBoundingClientRect();
+                const rowCellVisible = Boolean(
+                  columnBounds &&
+                  columnBounds.width > 0 &&
+                  columnBounds.height > 0 &&
+                  column &&
+                  getComputedStyle(column).visibility !== "collapse",
+                );
+                if (rowCellVisible) {
+                  openRowBulkEditor(action);
+                } else {
+                  setActiveBulkEditor({ action, source: "bar" });
+                }
+              };
+              const rowBulkEditorActive = (action: BulkReferenceAction) =>
+                activeBulkEditor?.source === "row" &&
+                activeBulkEditor.action === action &&
+                activeBulkEditor.transactionId === transaction.transaction_id;
+              const setRowBulkEditorOpen = (
+                action: BulkReferenceAction,
+                open: boolean,
+              ) => {
+                if (open) {
+                  openRowBulkEditor(action);
+                  return;
+                }
+                setActiveBulkEditor((current) =>
+                  current?.source === "row" &&
+                  current.action === action &&
+                  current.transactionId === transaction.transaction_id
+                    ? undefined
+                    : current,
+                );
+              };
+              const categoryBulkValue =
+                category === "mixed" ? (
+                  <MixedSentinel />
+                ) : category ? (
+                  <FqnPath value={category.fqn} variant="leaf-chip" />
+                ) : null;
+              const tagsBulkValue =
+                tags === "mixed" ? (
+                  <MixedSentinel />
+                ) : (
+                  <TagChipsLine tags={tags} />
+                );
+              const memberBulkValue =
+                member === "mixed" ? (
+                  <MixedSentinel />
+                ) : member ? (
+                  <MemberChip name={member.name} />
+                ) : null;
 
               return (
                 <Fragment key={transaction.transaction_id}>
                   <tr
                     className={cn(
-                      "cursor-pointer border-b border-[var(--hairline)] align-middle hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",
+                      "border-b border-[var(--hairline)] align-middle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",
                       transactionIndex % 2 === 0
                         ? "bg-card"
                         : "bg-[var(--band)]",
+                      bulkEditMode
+                        ? selectable
+                          ? "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]"
+                          : "cursor-default"
+                        : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
+                      bulkEditMode &&
+                        selected &&
+                        "bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_12%)] hover:bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_15%)]",
                       dateJumpHighlight?.transactionId ===
                         transaction.transaction_id &&
                         "outline-2 outline-offset-[-2px] outline-[var(--ring)]",
                       lineInactive && "text-muted-foreground line-through",
                     )}
-                    aria-expanded={expanded}
+                    aria-disabled={
+                      bulkEditMode && !selectable ? true : undefined
+                    }
+                    aria-expanded={bulkEditMode ? undefined : expanded}
+                    aria-selected={bulkEditMode ? selected : undefined}
                     data-date-jump-anchor={
                       dateJumpHighlight?.transactionId ===
                       transaction.transaction_id
@@ -1167,6 +1432,17 @@ export const TransactionBrowser = ({
                       ) {
                         return;
                       }
+                      if (bulkEditMode) {
+                        if (!selectable) {
+                          return;
+                        }
+                        if (event.shiftKey) {
+                          selectRowRange(transaction.transaction_id);
+                        } else {
+                          toggleRowSelection(transaction.transaction_id);
+                        }
+                        return;
+                      }
                       toggleExpanded();
                     }}
                     onKeyDown={(event) => {
@@ -1176,9 +1452,47 @@ export const TransactionBrowser = ({
                         return;
                       }
 
+                      const bulkShortcut = {
+                        c: "category",
+                        m: "member",
+                        t: "tags",
+                      }[event.key.toLowerCase()] as
+                        BulkReferenceAction | undefined;
+                      if (
+                        bulkEditMode &&
+                        selected &&
+                        bulkShortcut &&
+                        !event.metaKey &&
+                        !event.ctrlKey &&
+                        !event.altKey
+                      ) {
+                        event.preventDefault();
+                        openBulkEditorFromRowShortcut(
+                          bulkShortcut,
+                          event.currentTarget,
+                        );
+                        return;
+                      }
+
+                      if (event.key === "ArrowDown") {
+                        walkRowFocus(event, 1);
+                        return;
+                      }
+
+                      if (event.key === "ArrowUp") {
+                        walkRowFocus(event, -1);
+                        return;
+                      }
+
                       if (event.key === "Enter") {
                         event.preventDefault();
-                        onOpenTransaction(transaction, event.currentTarget);
+                        if (bulkEditMode) {
+                          if (selectable) {
+                            toggleRowSelection(transaction.transaction_id);
+                          }
+                        } else {
+                          onOpenTransaction(transaction, event.currentTarget);
+                        }
                         return;
                       }
 
@@ -1187,27 +1501,35 @@ export const TransactionBrowser = ({
                       }
 
                       event.preventDefault();
-                      if (selectable) {
-                        toggleSelection(transaction.transaction_id);
+                      if (bulkEditMode && selectable) {
+                        if (event.shiftKey) {
+                          selectRowRange(transaction.transaction_id);
+                        } else {
+                          toggleRowSelection(transaction.transaction_id);
+                        }
                       }
                     }}
                   >
-                    <td className="transactions-selection-column px-3 py-2">
-                      {selectable ? (
-                        <Checkbox
-                          aria-label={`Select ${title}`}
-                          checked={selectedTransactionIds.has(
-                            transaction.transaction_id,
-                          )}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                          }}
-                          onCheckedChange={() => {
-                            toggleSelection(transaction.transaction_id);
-                          }}
-                        />
-                      ) : null}
-                    </td>
+                    {bulkEditMode ? (
+                      <td className="transactions-selection-column px-3 py-2">
+                        {selectable ? (
+                          <Checkbox
+                            aria-label={`Select ${title}`}
+                            checked={selectedTransactionIds.has(
+                              transaction.transaction_id,
+                            )}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (event.shiftKey) {
+                                selectRowRange(transaction.transaction_id);
+                              } else {
+                                toggleRowSelection(transaction.transaction_id);
+                              }
+                            }}
+                          />
+                        ) : null}
+                      </td>
+                    ) : null}
                     <td className="transactions-class-column px-3 py-2">
                       <ClassIcon
                         transactionClass={transaction.transaction_class}
@@ -1253,25 +1575,27 @@ export const TransactionBrowser = ({
                           memo ? "items-start" : "items-center",
                         )}
                       >
-                        <span
-                          className={cn(
-                            "grid size-6 shrink-0 place-items-center",
-                            memo && "mt-0.5",
-                          )}
-                          aria-hidden="true"
-                        >
-                          {expanded ? (
-                            <ChevronDown
-                              className="size-4"
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            <ChevronRight
-                              className="size-4"
-                              aria-hidden="true"
-                            />
-                          )}
-                        </span>
+                        {bulkEditMode ? null : (
+                          <span
+                            className={cn(
+                              "grid size-6 shrink-0 place-items-center",
+                              memo && "mt-0.5",
+                            )}
+                            aria-hidden="true"
+                          >
+                            {expanded ? (
+                              <ChevronDown
+                                className="size-4"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <ChevronRight
+                                className="size-4"
+                                aria-hidden="true"
+                              />
+                            )}
+                          </span>
+                        )}
                         <div
                           className={cn(
                             "grid min-w-0 flex-1",
@@ -1302,7 +1626,31 @@ export const TransactionBrowser = ({
                       </div>
                     </td>
                     <td className="transactions-category-column px-3 py-2">
-                      {category === "mixed" ? (
+                      {bulkEditMode ? (
+                        selected ? (
+                          <BulkReferenceCell
+                            action="category"
+                            active={rowBulkEditorActive("category")}
+                            initialCategoryId={
+                              category === "mixed"
+                                ? undefined
+                                : category?.category_id
+                            }
+                            maps={maps}
+                            mixedCount={mixedCountByAction.category}
+                            onApply={applyBulkUpdate}
+                            onOpenChange={(open) =>
+                              setRowBulkEditorOpen("category", open)
+                            }
+                            selectedCount={selectedCount}
+                            testIdPrefix={`transaction-${transaction.transaction_id}`}
+                          >
+                            {categoryBulkValue}
+                          </BulkReferenceCell>
+                        ) : (
+                          categoryBulkValue
+                        )
+                      ) : category === "mixed" ? (
                         <MixedSentinel />
                       ) : categoryEditable ? (
                         <RecordReferenceCells
@@ -1344,7 +1692,26 @@ export const TransactionBrowser = ({
                     </td>
                     <td className="transactions-tags-column px-3 py-1">
                       <div className="min-w-0 overflow-visible pb-0.5">
-                        {tags === "mixed" ? (
+                        {bulkEditMode ? (
+                          selected ? (
+                            <BulkReferenceCell
+                              action="tags"
+                              active={rowBulkEditorActive("tags")}
+                              maps={maps}
+                              mixedCount={mixedCountByAction.tags}
+                              onApply={applyBulkUpdate}
+                              onOpenChange={(open) =>
+                                setRowBulkEditorOpen("tags", open)
+                              }
+                              selectedCount={selectedCount}
+                              testIdPrefix={`transaction-${transaction.transaction_id}`}
+                            >
+                              {tagsBulkValue}
+                            </BulkReferenceCell>
+                          ) : (
+                            tagsBulkValue
+                          )
+                        ) : tags === "mixed" ? (
                           <MixedSentinel />
                         ) : tagsEditable ? (
                           <RecordReferenceCells
@@ -1368,7 +1735,31 @@ export const TransactionBrowser = ({
                     </td>
                     <td className="transactions-member-column px-3 py-2">
                       <div className="overflow-visible pb-0.5">
-                        {member === "mixed" ? (
+                        {bulkEditMode ? (
+                          selected ? (
+                            <BulkReferenceCell
+                              action="member"
+                              active={rowBulkEditorActive("member")}
+                              initialMemberId={
+                                member === "mixed"
+                                  ? undefined
+                                  : member?.member_id
+                              }
+                              maps={maps}
+                              mixedCount={mixedCountByAction.member}
+                              onApply={applyBulkUpdate}
+                              onOpenChange={(open) =>
+                                setRowBulkEditorOpen("member", open)
+                              }
+                              selectedCount={selectedCount}
+                              testIdPrefix={`transaction-${transaction.transaction_id}`}
+                            >
+                              {memberBulkValue}
+                            </BulkReferenceCell>
+                          ) : (
+                            memberBulkValue
+                          )
+                        ) : member === "mixed" ? (
                           <MixedSentinel />
                         ) : memberEditable ? (
                           <RecordReferenceCells
@@ -1409,7 +1800,7 @@ export const TransactionBrowser = ({
                     </td>
                     <td className="transactions-amount-column px-3 py-2 text-right align-middle">
                       <div className="flex min-w-0 flex-row flex-nowrap items-center justify-end gap-1 overflow-visible">
-                        {amountEditable ? (
+                        {!bulkEditMode && amountEditable ? (
                           <TransactionAmountCell
                             records={simpleAmountRecords}
                             testIdPrefix={`transaction-${transaction.transaction_id}`}
@@ -1419,6 +1810,7 @@ export const TransactionBrowser = ({
                             <AmountText
                               amount={amounts[0]!}
                               chip
+                              overflowTooltip
                               className={cn(
                                 "max-w-full",
                                 amountDeemphasized &&
@@ -1431,13 +1823,17 @@ export const TransactionBrowser = ({
                             />
                           </TransactionAmountCell>
                         ) : transaction.transaction_class === "mixed" ? (
-                          <MixedAmounts amounts={amounts} />
+                          <MixedAmounts
+                            amounts={amounts}
+                            overflowTooltip={!bulkEditMode}
+                          />
                         ) : (
                           amounts.map((amount) => (
                             <AmountText
                               key={displayAmountKey(amount)}
                               amount={amount}
                               chip
+                              overflowTooltip={!bulkEditMode}
                               className={cn(
                                 "max-w-full",
                                 amountDeemphasized &&
@@ -1455,81 +1851,85 @@ export const TransactionBrowser = ({
                       </div>
                     </td>
                     <td className="transactions-actions-column px-3 py-2 text-right align-middle">
-                      <RowActions
-                        foldable
-                        onOverflowOpenChange={onRowActionsOverflowOpenChange}
-                        actions={
-                          expectedOccurrence
-                            ? [
-                                {
-                                  icon: <Open aria-hidden="true" />,
-                                  label: "Open transaction detail",
-                                  onSelect: (opener) => {
-                                    onOpenTransaction(transaction, opener);
+                      {bulkEditMode ? null : (
+                        <RowActions
+                          foldable
+                          onOverflowOpenChange={onRowActionsOverflowOpenChange}
+                          actions={
+                            expectedOccurrence
+                              ? [
+                                  {
+                                    icon: <Open aria-hidden="true" />,
+                                    label: "Open transaction detail",
+                                    onSelect: (opener) => {
+                                      onOpenTransaction(transaction, opener);
+                                    },
                                   },
-                                },
-                                {
-                                  disabled: occurrenceActionBusy,
-                                  disabledReason: occurrenceActionBusy
-                                    ? "Occurrence action in progress."
-                                    : undefined,
-                                  icon: <Check aria-hidden="true" />,
-                                  label: occurrenceActionBusy
-                                    ? "Confirming"
-                                    : "Confirm occurrence",
-                                  onSelect: () => {
-                                    void confirmOccurrence(
-                                      transaction,
-                                      transactionIndex,
-                                    );
+                                  {
+                                    disabled: occurrenceActionBusy,
+                                    disabledReason: occurrenceActionBusy
+                                      ? "Occurrence action in progress."
+                                      : undefined,
+                                    icon: <Check aria-hidden="true" />,
+                                    label: occurrenceActionBusy
+                                      ? "Confirming"
+                                      : "Confirm occurrence",
+                                    onSelect: () => {
+                                      void confirmOccurrence(
+                                        transaction,
+                                        transactionIndex,
+                                      );
+                                    },
                                   },
-                                },
-                                {
-                                  disabled: occurrenceActionBusy,
-                                  disabledReason: occurrenceActionBusy
-                                    ? "Occurrence action in progress."
-                                    : undefined,
-                                  icon: <Close aria-hidden="true" />,
-                                  label: "Dismiss occurrence",
-                                  onSelect: (opener) => {
-                                    setOccurrenceActionErrorMessage(undefined);
-                                    setDismissErrorMessage(undefined);
-                                    setDismissDialog({
-                                      opener,
-                                      rowIndex: transactionIndex,
-                                      transaction,
-                                    });
+                                  {
+                                    disabled: occurrenceActionBusy,
+                                    disabledReason: occurrenceActionBusy
+                                      ? "Occurrence action in progress."
+                                      : undefined,
+                                    icon: <Close aria-hidden="true" />,
+                                    label: "Dismiss occurrence",
+                                    onSelect: (opener) => {
+                                      setOccurrenceActionErrorMessage(
+                                        undefined,
+                                      );
+                                      setDismissErrorMessage(undefined);
+                                      setDismissDialog({
+                                        opener,
+                                        rowIndex: transactionIndex,
+                                        transaction,
+                                      });
+                                    },
                                   },
-                                },
-                              ]
-                            : [
-                                {
-                                  icon: <Open aria-hidden="true" />,
-                                  label: "Open transaction detail",
-                                  onSelect: (opener) => {
-                                    onOpenTransaction(transaction, opener);
+                                ]
+                              : [
+                                  {
+                                    icon: <Open aria-hidden="true" />,
+                                    label: "Open transaction detail",
+                                    onSelect: (opener) => {
+                                      onOpenTransaction(transaction, opener);
+                                    },
                                   },
-                                },
-                                {
-                                  icon: <Trash aria-hidden="true" />,
-                                  label: "Delete transaction",
-                                  onSelect: (opener) => {
-                                    setDeleteErrorMessage(undefined);
-                                    setDeleteDialog({
-                                      opener,
-                                      rowIndex: transactionIndex,
-                                      transaction,
-                                    });
+                                  {
+                                    icon: <Trash aria-hidden="true" />,
+                                    label: "Delete transaction",
+                                    onSelect: (opener) => {
+                                      setDeleteErrorMessage(undefined);
+                                      setDeleteDialog({
+                                        opener,
+                                        rowIndex: transactionIndex,
+                                        transaction,
+                                      });
+                                    },
                                   },
-                                },
-                              ]
-                        }
-                      />
+                                ]
+                          }
+                        />
+                      )}
                     </td>
                   </tr>
                   {expanded ? (
                     <tr className="border-b border-[var(--border-ink)]">
-                      <td colSpan={10} className="max-w-0 overflow-hidden p-0">
+                      <td colSpan={9} className="max-w-0 overflow-hidden p-0">
                         <RecordsTable
                           records={transaction.records}
                           maps={maps}
@@ -1548,36 +1948,7 @@ export const TransactionBrowser = ({
           </tbody>
         </table>
       </div>
-      {selectedCount > 0 ? (
-        <BulkActionBar
-          maps={maps}
-          selectedCount={selectedCount}
-          onCategorize={async (categoryId) => {
-            await onUpdateTransactionsBulkReferences?.(selectedTransactions, {
-              categoryId,
-              kind: "category",
-            });
-            setSelection(undefined);
-          }}
-          onClear={() => {
-            setSelection(undefined);
-          }}
-          onMember={async (memberId) => {
-            await onUpdateTransactionsBulkReferences?.(selectedTransactions, {
-              kind: "member",
-              memberId,
-            });
-            setSelection(undefined);
-          }}
-          onTags={async (tagIds) => {
-            await onUpdateTransactionsBulkReferences?.(selectedTransactions, {
-              kind: "tags",
-              tagIds,
-            });
-            setSelection(undefined);
-          }}
-        />
-      ) : null}
+      {bulkActionSurface}
       {occurrenceActionErrorMessage ? (
         <div
           className="border-destructive bg-card border-2 p-3 text-sm shadow-[var(--shadow-pixel)]"

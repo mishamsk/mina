@@ -359,6 +359,7 @@ test("categories row actions hide groups and move renamed paths into transaction
     page.locator("#transactions-filter-category-options"),
   ).toContainText(`${moveDestination}:Alpha`);
   await refreshedCategoryPicker.fill(moveSource);
+  await refreshedCategoryPicker.press("ArrowDown");
   await expect(
     page.locator("#transactions-filter-category-options"),
   ).toContainText("No matches");

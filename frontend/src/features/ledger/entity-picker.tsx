@@ -235,6 +235,7 @@ export const EntityPicker = ({
 
 interface EntityMultiPickerProps {
   readonly autoFocus?: boolean;
+  readonly disabled?: boolean;
   readonly id: string;
   readonly inlineOptions?: boolean;
   readonly label: string;
@@ -248,6 +249,7 @@ interface EntityMultiPickerProps {
 
 export const EntityMultiPicker = ({
   autoFocus = false,
+  disabled = false,
   id,
   inlineOptions = false,
   label,
@@ -270,6 +272,7 @@ export const EntityMultiPicker = ({
       <EntityPicker
         autoFocus={autoFocus}
         clearOnSelect
+        disabled={disabled}
         id={id}
         inlineOptions={inlineOptions}
         label={label}
@@ -306,6 +309,7 @@ export const EntityMultiPicker = ({
                 variant="ghost"
                 size="icon-xs"
                 aria-label={`Remove ${option.label}`}
+                disabled={disabled}
                 onClick={() => {
                   onChange(value.filter((idValue) => idValue !== option.id));
                 }}

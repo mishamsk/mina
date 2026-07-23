@@ -1,5 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SetURLSearchParams } from "react-router";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  NavigationType,
+  type SetURLSearchParams,
+  useLocation,
+  useNavigationType,
+} from "react-router";
 
 import {
   apiErrorMessage,
@@ -18,8 +30,14 @@ import {
   updateJournalRecordTags,
 } from "@/api";
 import type { TransactionFilters } from "@/models/transaction-filters";
+import {
+  setTransactionBulkEditAvailable,
+  setTransactionBulkEditEnabled,
+  transactionPageKey,
+  useTransactionBulkEditView,
+} from "@/store";
 
-import { activeTransactionRecords } from "./format";
+import { activeTransactionRecords, linePostingStatus } from "./format";
 import { useInlineEditCoordinator } from "./inline-editing";
 import {
   type RecordUpdate,
@@ -41,6 +59,7 @@ import {
 
 interface Notice {
   readonly id: number;
+  readonly kind: "success" | "warning";
   readonly message: string;
 }
 
@@ -91,7 +110,35 @@ export const useTransactionBrowserPage = ({
   setSearchParams,
 }: UseTransactionBrowserPageOptions) => {
   const inlineEdit = useInlineEditCoordinator();
+  const { enabled: bulkEditMode } = useTransactionBulkEditView();
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const previousLocationKeyRef = useRef(location.key);
+  const historyNavigationRef = useRef(false);
   const [notice, setNotice] = useState<Notice | undefined>();
+  const [selectedTransactionsById, setSelectedTransactionsById] = useState<
+    ReadonlyMap<number, Transaction>
+  >(() => new Map());
+  const selectedTransactionIds = useMemo(
+    () => new Set(selectedTransactionsById.keys()),
+    [selectedTransactionsById],
+  );
+  const clearTransactionSelection = useCallback(() => {
+    setSelectedTransactionsById(new Map());
+  }, []);
+  const updateSelectedTransactionSnapshot = useCallback(
+    (transaction: Transaction) => {
+      setSelectedTransactionsById((current) => {
+        if (!current.has(transaction.transaction_id)) {
+          return current;
+        }
+        const next = new Map(current);
+        next.set(transaction.transaction_id, transaction);
+        return next;
+      });
+    },
+    [],
+  );
   const dateJumpFocusRestoreRef = useRef<HTMLButtonElement | null>(null);
   const { page, pageSize } = readTransactionPageFromSearchParams(searchParams);
   const params: TransactionPageParams = useMemo(
@@ -123,6 +170,19 @@ export const useTransactionBrowserPage = ({
   const displayedPageParams = displayedSnapshot?.params ?? params;
   const transactions = displayedSnapshot?.transactions;
   const totalCount = displayedSnapshot?.totalCount;
+  const displayedPageKey = transactionPageKey(displayedPageParams);
+  const displayedPageKeyRef = useRef(displayedPageKey);
+  useLayoutEffect(() => {
+    const previousPageKey = displayedPageKeyRef.current;
+    displayedPageKeyRef.current = displayedPageKey;
+    if (previousPageKey !== displayedPageKey) {
+      clearTransactionSelection();
+    }
+  }, [clearTransactionSelection, displayedPageKey]);
+  const selectedTransactions = useMemo(
+    () => Array.from(selectedTransactionsById.values()),
+    [selectedTransactionsById],
+  );
   const loading =
     pageResource.loading ||
     dateJumpLoading ||
@@ -130,12 +190,16 @@ export const useTransactionBrowserPage = ({
     (Boolean(transactions) && !lookups.snapshot);
   const errorMessage = pageResource.errorMessage ?? lookups.errorMessage;
 
-  const showNotice = useCallback((message: string) => {
-    setNotice((current) => ({
-      id: (current?.id ?? 0) + 1,
-      message,
-    }));
-  }, []);
+  const showNotice = useCallback(
+    (message: string, kind: Notice["kind"] = "success") => {
+      setNotice((current) => ({
+        id: (current?.id ?? 0) + 1,
+        kind,
+        message,
+      }));
+    },
+    [],
+  );
 
   const dismissNotice = useCallback(() => {
     setNotice(undefined);
@@ -158,6 +222,129 @@ export const useTransactionBrowserPage = ({
     setSearchParams,
     transactions,
   });
+  const { closeTransactionDetail, selectedTransactionId } = detail;
+  const { discardActive: discardActiveInlineEdit } = inlineEdit;
+
+  useEffect(() => {
+    setTransactionBulkEditAvailable(true);
+    return () => {
+      setTransactionBulkEditAvailable(false);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const locationChanged = previousLocationKeyRef.current !== location.key;
+    const historyNavigation =
+      locationChanged && navigationType === NavigationType.Pop;
+    historyNavigationRef.current = historyNavigation;
+    previousLocationKeyRef.current = location.key;
+    if (
+      locationChanged &&
+      navigationType !== NavigationType.Push &&
+      bulkEditMode
+    ) {
+      setTransactionBulkEditEnabled(false);
+    }
+  }, [bulkEditMode, location.key, navigationType]);
+
+  useEffect(() => {
+    if (bulkEditMode) {
+      cancelDateJump();
+    }
+    discardActiveInlineEdit();
+    if (
+      bulkEditMode &&
+      selectedTransactionId &&
+      !historyNavigationRef.current
+    ) {
+      closeTransactionDetail();
+    }
+    const frame = window.requestAnimationFrame(() => {
+      setSelectedTransactionsById(new Map());
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [
+    bulkEditMode,
+    cancelDateJump,
+    closeTransactionDetail,
+    discardActiveInlineEdit,
+    selectedTransactionId,
+  ]);
+
+  const selectableTransactions = useMemo(
+    () =>
+      (transactions ?? []).filter(
+        (transaction) => linePostingStatus(transaction) !== "expected",
+      ),
+    [transactions],
+  );
+
+  const toggleTransactionSelection = useCallback(
+    (transactionId: number) => {
+      setSelectedTransactionsById((current) => {
+        const next = new Map(current);
+        if (next.has(transactionId)) {
+          next.delete(transactionId);
+        } else {
+          const transaction = transactions?.find(
+            (candidate) => candidate.transaction_id === transactionId,
+          );
+          if (transaction) {
+            next.set(transactionId, transaction);
+          }
+        }
+        return next;
+      });
+    },
+    [transactions],
+  );
+
+  const selectPageTransactions = useCallback(() => {
+    setSelectedTransactionsById(
+      new Map(
+        selectableTransactions.map((transaction) => [
+          transaction.transaction_id,
+          transaction,
+        ]),
+      ),
+    );
+  }, [selectableTransactions]);
+
+  const selectTransactionRange = useCallback(
+    (transactionIds: readonly number[]) => {
+      setSelectedTransactionsById(() => {
+        const next = new Map<number, Transaction>();
+        for (const transactionId of transactionIds) {
+          const transaction = transactions?.find(
+            (candidate) => candidate.transaction_id === transactionId,
+          );
+          if (transaction) {
+            next.set(transactionId, transaction);
+          }
+        }
+        return next;
+      });
+    },
+    [transactions],
+  );
+
+  const togglePageTransactionSelection = useCallback(() => {
+    setSelectedTransactionsById((current) =>
+      selectableTransactions.length > 0 &&
+      selectableTransactions.every((transaction) =>
+        current.has(transaction.transaction_id),
+      )
+        ? new Map()
+        : new Map(
+            selectableTransactions.map((transaction) => [
+              transaction.transaction_id,
+              transaction,
+            ]),
+          ),
+    );
+  }, [selectableTransactions]);
 
   const deleteTransactionFromRow = useCallback(
     async (transaction: Transaction) => {
@@ -464,6 +651,7 @@ export const useTransactionBrowserPage = ({
         isUniformBulkField(transaction, update.kind),
       );
       const skippedCount = transactions.length - qualifyingTransactions.length;
+      const updatedTransactions: Transaction[] = [];
 
       if (update.kind === "category") {
         const recordIds = qualifyingTransactions.flatMap((transaction) =>
@@ -479,6 +667,24 @@ export const useTransactionBrowserPage = ({
           if (result.error) {
             throw new Error(apiErrorMessage(result.error));
           }
+          const categoryUpdatedTransactions = qualifyingTransactions.map(
+            (transaction) => {
+              const categorizedRecordIds = new Set(
+                activeTransactionRecords(transaction).map(
+                  (record) => record.record_id,
+                ),
+              );
+              return {
+                ...transaction,
+                records: transaction.records.map((record) =>
+                  categorizedRecordIds.has(record.record_id)
+                    ? { ...record, category_id: update.categoryId }
+                    : record,
+                ),
+              };
+            },
+          );
+          updatedTransactions.push(...categoryUpdatedTransactions);
         }
       } else if (update.kind === "tags") {
         const groups = new Map<
@@ -512,35 +718,56 @@ export const useTransactionBrowserPage = ({
             throw new Error(apiErrorMessage(result.error));
           }
         }
+        for (const transaction of qualifyingTransactions) {
+          const records = activeTransactionRecords(transaction);
+          const currentTagIds = sortedTagIds(records[0]!.tag_ids);
+          const nextTagIds = Array.from(
+            new Set([...currentTagIds, ...update.tagIds]),
+          );
+          updatedTransactions.push(
+            transactionWithRecordUpdate(
+              transaction,
+              records.map((record) => record.record_id),
+              { kind: "tags", tagIds: nextTagIds },
+            ),
+          );
+        }
       } else {
-        await Promise.all(
-          qualifyingTransactions.map(async (transaction) => {
-            const result = await replaceLedgerTransaction(
-              transaction.transaction_id,
-              recordUpdateBody(
-                transaction,
-                activeTransactionRecords(transaction).map(
-                  (record) => record.record_id,
+        updatedTransactions.push(
+          ...(await Promise.all(
+            qualifyingTransactions.map(async (transaction) => {
+              const result = await replaceLedgerTransaction(
+                transaction.transaction_id,
+                recordUpdateBody(
+                  transaction,
+                  activeTransactionRecords(transaction).map(
+                    (record) => record.record_id,
+                  ),
+                  update,
                 ),
-                update,
-              ),
-            );
-            if (!result.data) {
-              throw new Error(apiErrorMessage(result.error));
-            }
-          }),
+              );
+              if (!result.data) {
+                throw new Error(apiErrorMessage(result.error));
+              }
+              return result.data;
+            }),
+          )),
         );
       }
 
       if (qualifyingTransactions.length > 0) {
+        setSelectedTransactionsById((current) => {
+          const next = new Map(current);
+          for (const transaction of updatedTransactions) {
+            if (next.has(transaction.transaction_id)) {
+              next.set(transaction.transaction_id, transaction);
+            }
+          }
+          return next;
+        });
         await refreshTransactionPageAfterBulkSave(
           displayedPageParams,
           qualifyingTransactions,
-        );
-        await Promise.all(
-          qualifyingTransactions.map((transaction) =>
-            detail.refreshSelectedTransactionDetail(transaction.transaction_id),
-          ),
         );
       }
 
@@ -548,14 +775,18 @@ export const useTransactionBrowserPage = ({
         `${qualifyingTransactions.length} updated, ${skippedCount} skipped${
           skippedCount > 0 ? ": mixed records" : ""
         }.`,
+        qualifyingTransactions.length === 0 && skippedCount > 0
+          ? "warning"
+          : "success",
       );
     },
-    [detail, displayedPageParams, showNotice],
+    [displayedPageParams, showNotice],
   );
 
   const setPage = useCallback(
     (nextPage: number) => {
       cancelDateJump();
+      clearTransactionSelection();
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set("page", String(nextPage));
@@ -563,12 +794,13 @@ export const useTransactionBrowserPage = ({
         return next;
       });
     },
-    [cancelDateJump, pageSize, setSearchParams],
+    [cancelDateJump, clearTransactionSelection, pageSize, setSearchParams],
   );
 
   const setPageSize = useCallback(
     (nextPageSize: number) => {
       cancelDateJump();
+      clearTransactionSelection();
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.set("page", String(defaultTransactionPage));
@@ -576,7 +808,7 @@ export const useTransactionBrowserPage = ({
         return next;
       });
     },
-    [cancelDateJump, setSearchParams],
+    [cancelDateJump, clearTransactionSelection, setSearchParams],
   );
 
   const jumpToPreviousDate = useCallback(
@@ -612,8 +844,10 @@ export const useTransactionBrowserPage = ({
   );
 
   return {
+    bulkEditMode,
     cancelDateJump,
     changeDateJumpValue,
+    clearTransactionSelection,
     confirmRecurringOccurrenceFromRow,
     dateJumpAnchor,
     dateJumpLoading,
@@ -633,10 +867,19 @@ export const useTransactionBrowserPage = ({
     page,
     pageSize,
     params,
+    selectPageTransactions,
+    selectTransactionRange,
+    selectedTransactionIds,
+    selectedTransactions,
+    selectableTransactionCount: selectableTransactions.length,
     setPage,
     setPageSize,
+    setBulkEditMode: setTransactionBulkEditEnabled,
     showNotice,
     totalCount,
+    togglePageTransactionSelection,
+    toggleTransactionSelection,
+    updateSelectedTransactionSnapshot,
     transactions,
     updateRecord,
     updateTransactionAmount,

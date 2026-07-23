@@ -151,10 +151,11 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 - Keyboard-complete tables: up/down moves row focus, expand/collapse, open peek, start inline edit, toggle selection — batch review sessions never need the mouse.
 - Global shortcuts: open command palette, new transaction, focus list search, `Esc` closes overlays, `Cmd+Enter` submits forms, arrows + `Enter` drive pickers.
+- Toggling bulk-edit mode is available from the toolbar and the command palette; in-mode selection keys per Bulk operations.
 
 ### Tables and filtering
 
-- Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, whole-row affordances for expand/peek (a plain disclosure indicator, not a per-row button), leading checkbox column only once bulk actions exist.
+- Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, whole-row affordances for expand/peek (a plain disclosure indicator, not a per-row button), leading checkbox column only in bulk-edit mode (see Bulk operations).
 - Per-row actions live in one narrow trailing actions column — always the rightmost column, in every table — never mid-row. Button-class actions render as compact icon buttons with tooltips and are always visible: no hover- or focus-reveal semantics anywhere. State toggles stay persistently visible because they carry state. Fit decides presentation, never count: when the actions cell fits the full action cluster it shows all buttons; when it cannot, the cluster collapses into a single overflow (⋯) button that opens a floating panel with all actions — by the column-collapse priority in the transactions browser, and per row in reference tables.
 - Tables render no Actions column header; the actions column is right-padded so its trailing margin matches the table's leading padding.
 - Reference/dictionary row activation (click, Enter, or Space on a leaf row) opens the entity's read-only detail/register page: accounts open their register, account groups the group register, categories/tags/members their drill-down pages. Edit is a compact trailing row action with a tooltip; all action buttons stop row-activation propagation. The transactions browser is the explicit exception: row activation expands journal records and its detail action stays explicit.
@@ -183,8 +184,18 @@ Transaction-level values are editable in place only when the edit maps mechanica
 
 ### Bulk operations
 
-- Selection happens at the transaction level in the shared browser; selecting rows raises a floating action bar (categorize, tag, member) mapped to the record bulk endpoints.
-- The uniformity rule applies: a bulk edit targets only transactions whose records are uniform for that field. Non-qualifying selected transactions are skipped and reported in the result toast ("12 updated, 2 skipped: mixed records"). Complex transactions that cannot be mapped mechanically to a uniform record edit are skipped.
+- Bulk selection is gated behind an explicit bulk-edit mode; during normal browsing the shared browser renders no selection controls.
+- A toolbar action enters the mode: entering swaps the toolbar row for a bulk-mode bar (mode indicator, live selection count, select-page/clear, Done) and reveals the leading checkbox column and a persistent bulk action surface, visible from 0 selected.
+- Entering collapses expanded rows, closes detail/peek panels, and discards any inline-editor draft.
+- Exiting (Done, the Esc ladder, or any route navigation) clears selection and all draft bulk state and restores the normal toolbar. Bulk-edit mode is transient UI state — never in the URL, never restored by deep links.
+- While the mode is active, row expansion, detail opening, row actions, chip filter-activation, occurrence confirm/dismiss, and ordinary inline editing are unavailable; unavailable affordances are removed, not grayed. Only the bulk surface's own buttons use the disabled treatment, with tooltips naming the remedy.
+- Filters, search, and sort are frozen while in mode; pagination stays live.
+- Selection mechanics: the whole row is the selection target (click, Space, or Enter toggles); Shift+Click / Shift+Space / Shift+Up/Down range-select from the anchor; the header checkbox and Cmd/Ctrl+A select the page. Expected occurrences are never selectable.
+- Selection is page-local: paging keeps the mode active, clears selection, and discards any open bulk-editor draft.
+- Bulk field edits — category (replace), tags (add), member (set) — launch from the bulk action surface or from any selected row's editable cell (the standard inline-edit trigger, or `c`/`t`/`m`); both entry points open the same editor (the bulk-surface variant may offer Include hidden; row-launched variants never do, per the hidden-entities rule) and apply to the entire selection through the owning save boundary (record bulk endpoints where supported, atomic transaction replacement for member).
+- The uniformity rule applies: a bulk edit targets only transactions whose records are uniform for that field. Non-qualifying selected transactions are skipped and reported in the result toast ("12 updated, 2 skipped: mixed records"); an all-skipped result uses warning treatment. Complex transactions that cannot be mapped mechanically to a uniform record edit are skipped.
+- Selection is retained after a successful apply so edits chain (categorize, then tag).
+- Esc ladder in-mode, one level per press: open bulk-editor draft → discard it; else selection > 0 → clear selection; else exit the mode.
 - Record-level bulk (account reassignment, status changes) is available in account registers where records are the row unit.
 
 ### Pickers
