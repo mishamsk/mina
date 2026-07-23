@@ -303,7 +303,6 @@ export const TransactionsPage = () => {
         {!browser.bulkEditMode && browser.detail.selectedTransactionId ? (
           <TransactionDetailPanel
             errorMessage={browser.detail.errorMessage}
-            inlineEdit={browser.inlineEdit}
             loading={browser.detail.loading}
             lookups={browser.lookups.snapshot}
             onClose={browser.detail.closeTransactionDetail}
@@ -323,11 +322,6 @@ export const TransactionsPage = () => {
               addEntityFilter("tag", tagId);
             }}
             onRestoreFocus={browser.detail.restoreDetailFocus}
-            onUpdateRecord={browser.updateRecord}
-            onUpdateTransactionAmount={browser.updateTransactionAmount}
-            onUpdateTransactionRecordReferences={
-              browser.updateTransactionRecordReferences
-            }
             transaction={browser.detail.transaction}
           />
         ) : null}

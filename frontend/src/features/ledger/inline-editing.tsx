@@ -302,18 +302,6 @@ export const InlineEditScope = forwardRef<
 ));
 InlineEditScope.displayName = "InlineEditScope";
 
-export const InlineEditAsideScope = forwardRef<
-  HTMLElement,
-  HTMLAttributes<HTMLElement> & {
-    readonly coordinator: InlineEditCoordinator;
-  }
->(({ coordinator, ...props }, ref) => (
-  <InlineEditProvider coordinator={coordinator}>
-    <aside ref={ref} data-inline-edit-scope="true" {...props} />
-  </InlineEditProvider>
-));
-InlineEditAsideScope.displayName = "InlineEditAsideScope";
-
 export const useInlineEdit = (): InlineEditCoordinator => {
   const coordinator = useContext(InlineEditContext);
   if (!coordinator) {

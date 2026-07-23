@@ -21,40 +21,23 @@ import { localTimestampDateValue } from "@/utils/date";
 import { AmountText } from "./amount-text";
 import { ClassBadge } from "./class-badge";
 import {
-  activeTransactionRecords,
   buildLookupMaps,
   displayAmountKey,
   formatInitiatedDate,
-  lineCategory,
-  lineMember,
   lineMemo,
   linePostingStatus,
-  lineTags,
   type LookupMaps,
   postingStatusLabel,
-  simpleTransactionAmountRecords,
   transactionClassLabel,
 } from "./format";
 import { FqnPath } from "./fqn-path";
-import {
-  InlineEditAsideScope,
-  type InlineEditCoordinator,
-} from "./inline-editing";
 import { StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
-import { RecordDetailCells } from "./record-detail-cells";
-import type { RecordUpdate } from "./record-editing";
-import {
-  RecordReferenceCells,
-  type RecordReferenceUpdate,
-} from "./record-reference-cells";
 import { TagChip } from "./tag-chip";
-import { TransactionAmountCell } from "./transaction-amount-cell";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
 
 interface TransactionDetailPanelProps {
   readonly errorMessage: string | undefined;
-  readonly inlineEdit: InlineEditCoordinator;
   readonly loading: boolean;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
@@ -71,21 +54,6 @@ interface TransactionDetailPanelProps {
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
   readonly onRestoreFocus: () => void;
-  readonly onUpdateRecord?: (
-    transaction: Transaction,
-    record: JournalRecord,
-    update: RecordUpdate,
-  ) => Promise<void>;
-  readonly onUpdateTransactionAmount?: (
-    transaction: Transaction,
-    records: readonly [JournalRecord, JournalRecord],
-    amount: string,
-  ) => Promise<void>;
-  readonly onUpdateTransactionRecordReferences?: (
-    transaction: Transaction,
-    records: readonly JournalRecord[],
-    update: RecordReferenceUpdate,
-  ) => Promise<boolean>;
   readonly transaction: Transaction | undefined;
 }
 
@@ -126,45 +94,11 @@ const uniqueRecordSources = (transaction: Transaction): string =>
   );
 
 const DetailAmountList = ({
-  editable,
-  onSave,
   transaction,
 }: {
-  readonly editable: boolean;
-  readonly onSave?: (
-    transaction: Transaction,
-    records: readonly [JournalRecord, JournalRecord],
-    amount: string,
-  ) => Promise<void>;
   readonly transaction: Transaction;
 }) => {
   const amounts = detailDisplayAmounts(transaction);
-  const simpleAmountRecords = simpleTransactionAmountRecords(transaction);
-  const amount = amounts[0];
-
-  if (
-    editable &&
-    onSave &&
-    simpleAmountRecords &&
-    amounts.length === 1 &&
-    amount
-  ) {
-    return (
-      <TransactionAmountCell
-        records={simpleAmountRecords}
-        testIdPrefix={`transaction-detail-${transaction.transaction_id}`}
-        transaction={transaction}
-        onSave={onSave}
-      >
-        <AmountText
-          amount={amount}
-          chip
-          positiveSign={transaction.transaction_class !== "transfer"}
-          transactionClass={transaction.transaction_class}
-        />
-      </TransactionAmountCell>
-    );
-  }
 
   return amounts.length > 0 ? (
     <div className="flex flex-wrap justify-end gap-2">
@@ -220,25 +154,17 @@ const RecordTagSet = ({
 };
 
 const DetailRecordsTable = ({
-  editable,
   maps,
   onFilterCategory,
   onFilterMember,
   onFilterTag,
-  onUpdateRecord,
   records,
   transaction,
 }: {
-  readonly editable: boolean;
   readonly maps: LookupMaps;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
-  readonly onUpdateRecord?: (
-    transaction: Transaction,
-    record: JournalRecord,
-    update: RecordUpdate,
-  ) => Promise<void>;
   readonly records: readonly JournalRecord[];
   readonly transaction: Transaction;
 }) => (
@@ -291,13 +217,13 @@ const DetailRecordsTable = ({
               )}
             >
               <td
-                className="detail-records-account-column min-w-0 px-2 py-2"
+                className="detail-records-account-column min-w-0 px-2 py-1.5"
                 data-label="Account"
               >
                 {account ? <FqnPath value={account.fqn} /> : "Unknown account"}
               </td>
               <td
-                className="detail-records-amount-column min-w-0 px-2 py-2 text-right"
+                className="detail-records-amount-column min-w-0 px-2 py-1.5 text-right"
                 data-label="Amount"
               >
                 <AmountText
@@ -306,36 +232,10 @@ const DetailRecordsTable = ({
                 />
               </td>
               <td
-                className="detail-records-category-column min-w-0 px-2 py-2 pb-2.5"
+                className="detail-records-category-column min-w-0 px-2 py-1.5"
                 data-label="Category"
               >
-                {editable && onUpdateRecord ? (
-                  <RecordReferenceCells
-                    field="category"
-                    maps={maps}
-                    record={record}
-                    testIdPrefix="transaction-detail-record"
-                    transaction={transaction}
-                    value={
-                      category ? (
-                        <FqnPath
-                          value={category.fqn}
-                          variant="full-chip"
-                          onActivate={
-                            onFilterCategory
-                              ? () => {
-                                  onFilterCategory(category.category_id);
-                                }
-                              : undefined
-                          }
-                        />
-                      ) : (
-                        "Uncategorized"
-                      )
-                    }
-                    onSave={onUpdateRecord}
-                  />
-                ) : category ? (
+                {category ? (
                   <FqnPath
                     value={category.fqn}
                     variant="full-chip"
@@ -352,65 +252,22 @@ const DetailRecordsTable = ({
                 )}
               </td>
               <td
-                className="detail-records-tags-column min-w-0 px-2 py-2 pb-2.5"
+                className="detail-records-tags-column min-w-0 px-2 py-1.5"
                 data-label="Tags"
               >
-                {editable && onUpdateRecord ? (
-                  <RecordReferenceCells
-                    field="tags"
+                <div className="max-w-full overflow-visible">
+                  <RecordTagSet
                     maps={maps}
+                    onFilterTag={onFilterTag}
                     record={record}
-                    testIdPrefix="transaction-detail-record"
-                    transaction={transaction}
-                    value={
-                      <span className="inline-block max-w-full overflow-visible">
-                        <RecordTagSet
-                          maps={maps}
-                          onFilterTag={onFilterTag}
-                          record={record}
-                        />
-                      </span>
-                    }
-                    onSave={onUpdateRecord}
                   />
-                ) : (
-                  <div className="max-w-full overflow-visible">
-                    <RecordTagSet
-                      maps={maps}
-                      onFilterTag={onFilterTag}
-                      record={record}
-                    />
-                  </div>
-                )}
+                </div>
               </td>
               <td
-                className="detail-records-member-column min-w-0 px-2 py-2"
+                className="detail-records-member-column min-w-0 px-2 py-1.5"
                 data-label="Member"
               >
-                {editable && onUpdateRecord ? (
-                  <RecordReferenceCells
-                    field="member"
-                    maps={maps}
-                    record={record}
-                    testIdPrefix="transaction-detail-record"
-                    transaction={transaction}
-                    value={
-                      member ? (
-                        <MemberChip
-                          name={member.name}
-                          onActivate={
-                            onFilterMember
-                              ? () => {
-                                  onFilterMember(member.member_id);
-                                }
-                              : undefined
-                          }
-                        />
-                      ) : null
-                    }
-                    onSave={onUpdateRecord}
-                  />
-                ) : member ? (
+                {member ? (
                   <MemberChip
                     name={member.name}
                     onActivate={
@@ -424,67 +281,32 @@ const DetailRecordsTable = ({
                 ) : null}
               </td>
               <td
-                className="detail-records-status-column min-w-0 px-2 py-2"
+                className="detail-records-status-column min-w-0 px-2 py-1.5"
                 data-label="Statuses"
               >
-                {editable && onUpdateRecord ? (
-                  <RecordDetailCells
-                    field="postingStatus"
-                    record={record}
-                    transaction={transaction}
-                    value={
-                      <span className="inline-flex min-w-0 items-center gap-1">
-                        <StatusIcon status={record.posting_status} />
-                        <span className="truncate">
-                          {postingStatusLabel(record.posting_status)}
-                        </span>
-                      </span>
-                    }
-                    onSave={onUpdateRecord}
-                  />
-                ) : (
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="inline-flex items-center gap-1">
-                      <StatusIcon status={record.posting_status} />
-                      <span className="truncate">
-                        {postingStatusLabel(record.posting_status)}
-                      </span>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="inline-flex items-center gap-1">
+                    <StatusIcon status={record.posting_status} />
+                    <span className="truncate">
+                      {postingStatusLabel(record.posting_status)}
                     </span>
-                  </div>
-                )}
+                  </span>
+                </div>
               </td>
               <td
-                className="detail-records-dates-column text-muted-foreground min-w-0 px-2 py-2"
+                className="detail-records-dates-column text-muted-foreground min-w-0 px-2 py-1.5"
                 data-label="Dates"
               >
-                {editable && onUpdateRecord ? (
-                  <RecordDetailCells
-                    field="dates"
-                    record={record}
-                    transaction={transaction}
-                    value={`Initiated ${transaction.initiated_date}; pending ${localTimestampDateValue(record.pending_date)}; posted ${localTimestampDateValue(record.posted_date)}`}
-                    onSave={onUpdateRecord}
-                  />
-                ) : (
-                  `Initiated ${formatInitiatedDate(transaction.initiated_date)}; pending ${localTimestampDateValue(record.pending_date)}; posted ${localTimestampDateValue(record.posted_date)}`
-                )}
+                {`Initiated ${formatInitiatedDate(transaction.initiated_date)}; pending ${localTimestampDateValue(record.pending_date)}; posted ${localTimestampDateValue(record.posted_date)}`}
               </td>
               <td
-                className="detail-records-memo-column text-muted-foreground min-w-0 px-2 py-2"
+                className="detail-records-memo-column text-muted-foreground min-w-0 px-2 py-1.5"
                 data-label="Memo"
               >
-                {editable && onUpdateRecord ? (
-                  <RecordDetailCells
-                    field="memo"
-                    record={record}
-                    transaction={transaction}
-                    value={record.memo ?? ""}
-                    onSave={onUpdateRecord}
-                  />
-                ) : record.memo ? (
-                  <Tooltip label={record.memo} className="block">
-                    <span className="block truncate">{record.memo}</span>
-                  </Tooltip>
+                {record.memo ? (
+                  <span className="block break-words whitespace-pre-wrap">
+                    {record.memo}
+                  </span>
                 ) : null}
               </td>
             </tr>
@@ -521,72 +343,15 @@ export const TransactionDetailContent = ({
   onFilterCategory,
   onFilterMember,
   onFilterTag,
-  onUpdateRecord,
-  onUpdateTransactionAmount,
-  onUpdateTransactionRecordReferences,
   transaction,
 }: {
   readonly maps: LookupMaps;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
-  readonly onUpdateRecord?: (
-    transaction: Transaction,
-    record: JournalRecord,
-    update: RecordUpdate,
-  ) => Promise<void>;
-  readonly onUpdateTransactionAmount?: (
-    transaction: Transaction,
-    records: readonly [JournalRecord, JournalRecord],
-    amount: string,
-  ) => Promise<void>;
-  readonly onUpdateTransactionRecordReferences?: (
-    transaction: Transaction,
-    records: readonly JournalRecord[],
-    update: RecordReferenceUpdate,
-  ) => Promise<boolean>;
   readonly transaction: Transaction;
 }) => {
   const summaryMemo = lineMemo(transaction);
-  const activeRecords = activeTransactionRecords(transaction);
-  const category = lineCategory(transaction, maps);
-  const tags = lineTags(transaction, maps);
-  const member = lineMember(transaction, maps);
-  const postingStatus = linePostingStatus(transaction);
-  const attributedMemberRecords = activeRecords.filter(
-    (record) => record.member_id !== null && record.member_id !== undefined,
-  );
-  const memberReferenceRecords =
-    attributedMemberRecords.length > 0
-      ? attributedMemberRecords
-      : activeRecords;
-  const expected = postingStatus === "expected";
-  const canEditReferences =
-    !expected &&
-    postingStatus !== "cancelled" &&
-    activeRecords.length > 0 &&
-    onUpdateTransactionRecordReferences !== undefined;
-  const memberEditable = canEditReferences && member !== "mixed";
-  const saveReferences = async (
-    update: RecordReferenceUpdate,
-  ): Promise<boolean> => {
-    await onUpdateTransactionRecordReferences!(
-      transaction,
-      activeRecords,
-      update,
-    );
-    return true;
-  };
-  const saveMemberReferences = async (
-    update: RecordReferenceUpdate,
-  ): Promise<boolean> => {
-    await onUpdateTransactionRecordReferences!(
-      transaction,
-      memberReferenceRecords,
-      update,
-    );
-    return true;
-  };
 
   return (
     <div className="space-y-5 p-4">
@@ -605,88 +370,8 @@ export const TransactionDetailContent = ({
             </p>
           ) : null}
         </div>
-        <DetailAmountList
-          editable={!expected && postingStatus !== "cancelled"}
-          transaction={transaction}
-          onSave={onUpdateTransactionAmount}
-        />
+        <DetailAmountList transaction={transaction} />
       </header>
-
-      {canEditReferences ? (
-        <section
-          className="grid gap-3 sm:grid-cols-3"
-          aria-label="Transaction values"
-        >
-          {category !== "mixed" ? (
-            <RecordReferenceCells
-              field="category"
-              maps={maps}
-              record={activeRecords[0]!}
-              testIdPrefix="transaction-detail"
-              transaction={transaction}
-              value={
-                category ? (
-                  <FqnPath
-                    value={category.fqn}
-                    variant="full-chip"
-                    onActivate={
-                      onFilterCategory
-                        ? () => {
-                            onFilterCategory(category.category_id);
-                          }
-                        : undefined
-                    }
-                  />
-                ) : (
-                  "Uncategorized"
-                )
-              }
-              onSave={(_, __, update) => saveReferences(update)}
-            />
-          ) : null}
-          {tags !== "mixed" ? (
-            <RecordReferenceCells
-              field="tags"
-              maps={maps}
-              record={activeRecords[0]!}
-              testIdPrefix="transaction-detail"
-              transaction={transaction}
-              value={
-                <RecordTagSet
-                  maps={maps}
-                  onFilterTag={onFilterTag}
-                  record={activeRecords[0]!}
-                />
-              }
-              onSave={(_, __, update) => saveReferences(update)}
-            />
-          ) : null}
-          {memberEditable ? (
-            <RecordReferenceCells
-              field="member"
-              maps={maps}
-              record={memberReferenceRecords[0]!}
-              testIdPrefix="transaction-detail"
-              transaction={transaction}
-              value={
-                member ? (
-                  <MemberChip
-                    name={member.name}
-                    onActivate={
-                      onFilterMember
-                        ? () => {
-                            onFilterMember(member.member_id);
-                          }
-                        : undefined
-                    }
-                  />
-                ) : null
-              }
-              onSave={(_, __, update) => saveMemberReferences(update)}
-            />
-          ) : null}
-        </section>
-      ) : null}
 
       <section aria-labelledby="transaction-detail-records">
         <h3
@@ -696,12 +381,10 @@ export const TransactionDetailContent = ({
           Journal records
         </h3>
         <DetailRecordsTable
-          editable={!expected}
           maps={maps}
           onFilterCategory={onFilterCategory}
           onFilterMember={onFilterMember}
           onFilterTag={onFilterTag}
-          onUpdateRecord={onUpdateRecord}
           records={transaction.records}
           transaction={transaction}
         />
@@ -738,7 +421,6 @@ export const TransactionDetailContent = ({
 
 export const TransactionDetailPanel = ({
   errorMessage,
-  inlineEdit,
   loading,
   lookups,
   onClose,
@@ -752,9 +434,6 @@ export const TransactionDetailPanel = ({
   onFilterMember,
   onFilterTag,
   onRestoreFocus,
-  onUpdateRecord,
-  onUpdateTransactionAmount,
-  onUpdateTransactionRecordReferences,
   transaction,
 }: TransactionDetailPanelProps) => {
   const panelRef = useRef<HTMLElement | null>(null);
@@ -790,11 +469,6 @@ export const TransactionDetailPanel = ({
     enabled: !confirmDeleteOpen && !confirmDismissOpen,
     floatingOverlaySelectors,
     onOutsideClose: () => {
-      if (
-        panelRef.current?.querySelector("[data-inline-editor-pending='true']")
-      ) {
-        return;
-      }
       restoreFocusOnCloseRef.current = false;
       closePanel();
     },
@@ -846,19 +520,6 @@ export const TransactionDetailPanel = ({
         if (document.querySelector("[role='alertdialog']")) {
           return;
         }
-        if (inlineEdit.activeEditorId) {
-          return;
-        }
-
-        const target = event.target;
-        if (
-          (target instanceof Element &&
-            target.closest("[data-slot='popover-content']")) ||
-          document.querySelector("[data-slot='popover-content']")
-        ) {
-          return;
-        }
-
         event.preventDefault();
         event.stopPropagation();
         closePanel();
@@ -870,7 +531,7 @@ export const TransactionDetailPanel = ({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [closePanel, inlineEdit.activeEditorId]);
+  }, [closePanel]);
 
   const openDeleteConfirmation = () => {
     setDeleteErrorMessage(undefined);
@@ -951,12 +612,12 @@ export const TransactionDetailPanel = ({
       : undefined;
 
   return (
-    <InlineEditAsideScope
+    <aside
       ref={panelRef}
-      coordinator={inlineEdit}
       role="dialog"
       aria-labelledby="transaction-detail-title"
       className="bg-card fixed top-4 right-4 bottom-4 z-50 flex w-[min(760px,calc(100vw-2rem))] max-w-full flex-col border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
+      data-inline-edit-scope="true"
       data-testid="transaction-detail-panel"
       tabIndex={-1}
     >
@@ -967,20 +628,34 @@ export const TransactionDetailPanel = ({
           </p>
           <h2
             id="transaction-detail-title"
-            className="font-heading text-xl font-bold"
+            className="font-heading text-xl font-bold [overflow-wrap:anywhere]"
           >
             {transaction?.display_title ?? "Loading transaction"}
           </h2>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon-sm"
-          aria-label="Close transaction detail"
-          onClick={closePanel}
-        >
-          <Close aria-hidden="true" />
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {transaction && !expectedOccurrence && onEdit ? (
+            <Button
+              type="button"
+              aria-label="Edit transaction"
+              onClick={(event) => {
+                onEdit(transaction, event.currentTarget);
+              }}
+            >
+              <MagicEdit aria-hidden="true" />
+              Edit
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label="Close transaction detail"
+            onClick={closePanel}
+          >
+            <Close aria-hidden="true" />
+          </Button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -994,11 +669,6 @@ export const TransactionDetailPanel = ({
             onFilterCategory={onFilterCategory}
             onFilterMember={onFilterMember}
             onFilterTag={onFilterTag}
-            onUpdateRecord={onUpdateRecord}
-            onUpdateTransactionAmount={onUpdateTransactionAmount}
-            onUpdateTransactionRecordReferences={
-              onUpdateTransactionRecordReferences
-            }
             transaction={transaction}
           />
         ) : null}
@@ -1056,18 +726,6 @@ export const TransactionDetailPanel = ({
             ) : null
           ) : (
             <>
-              {onEdit ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={(event) => {
-                    onEdit(transaction, event.currentTarget);
-                  }}
-                >
-                  <MagicEdit aria-hidden="true" />
-                  Edit
-                </Button>
-              ) : null}
               {onDuplicate ? (
                 <Button
                   type="button"
@@ -1152,6 +810,6 @@ export const TransactionDetailPanel = ({
           This occurrence will be skipped. The recurring schedule will continue.
         </p>
       </ConfirmationDialog>
-    </InlineEditAsideScope>
+    </aside>
   );
 };

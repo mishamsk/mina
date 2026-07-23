@@ -879,6 +879,10 @@
     .transaction-detail-records-table .detail-records-amount-column {
       text-align: left;
     }
+
+    .transaction-detail-records-table .detail-records-memo-column {
+      width: 100%;
+    }
   }
 
   .pixel-skeleton {
