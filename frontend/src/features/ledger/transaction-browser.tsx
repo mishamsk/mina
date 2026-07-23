@@ -1,9 +1,11 @@
 import {
   Check,
   Close,
+  Copy,
   Open,
   Pencil,
   Plus,
+  Scissors,
   Trash,
   WarningDiamond,
 } from "pixelarticons/react";
@@ -100,6 +102,14 @@ interface TransactionBrowserProps {
   readonly onDismissRecurringOccurrence: (
     transaction: Transaction,
   ) => Promise<void>;
+  readonly onDuplicateTransaction?: (
+    transaction: Transaction,
+    opener?: HTMLElement,
+  ) => void;
+  readonly onEditTransaction?: (
+    transaction: Transaction,
+    opener?: HTMLElement,
+  ) => void;
   readonly onNextPage: () => void;
   readonly onOpenTransaction: (
     transaction: Transaction,
@@ -109,6 +119,10 @@ interface TransactionBrowserProps {
   readonly onPageSizeChange: (pageSize: number) => void;
   readonly onPreviousPage: () => void;
   readonly onSetBulkEditMode: (enabled: boolean) => void;
+  readonly onSplitTransaction?: (
+    transaction: Transaction,
+    opener?: HTMLElement,
+  ) => void;
   readonly onSelectRange: (transactionIds: readonly number[]) => void;
   readonly onTogglePageSelection: () => void;
   readonly onToggleSelection: (transactionId: number) => void;
@@ -131,8 +145,6 @@ interface TransactionBrowserProps {
     transactions: readonly Transaction[],
     update: RecordReferenceUpdate,
   ) => Promise<void>;
-  readonly onDeleteConfirmationOpenChange?: (open: boolean) => void;
-  readonly onRowActionsOverflowOpenChange?: (open: boolean) => void;
   readonly page: number;
   readonly pageSize: number;
   readonly selectedTransactionIds: ReadonlySet<number>;
@@ -653,12 +665,15 @@ export const TransactionBrowser = ({
   onNewTransaction,
   onDeleteTransaction,
   onDismissRecurringOccurrence,
+  onDuplicateTransaction,
+  onEditTransaction,
   onNextPage,
   onOpenTransaction,
   onEditTransactionAsJournal,
   onPageSizeChange,
   onPreviousPage,
   onSetBulkEditMode,
+  onSplitTransaction,
   onSelectRange,
   onTogglePageSelection,
   onToggleSelection,
@@ -666,8 +681,6 @@ export const TransactionBrowser = ({
   onUpdateTransactionRecordReferences,
   onUpdateTransactionAmount,
   onUpdateTransactionsBulkReferences,
-  onDeleteConfirmationOpenChange,
-  onRowActionsOverflowOpenChange,
   page,
   pageSize,
   selectedTransactionIds,
@@ -901,16 +914,6 @@ export const TransactionBrowser = ({
       };
     }
   }, [selectedCount]);
-
-  useEffect(() => {
-    const open = Boolean(deleteDialog || dismissDialog);
-    onDeleteConfirmationOpenChange?.(open);
-    return () => {
-      if (open) {
-        onDeleteConfirmationOpenChange?.(false);
-      }
-    };
-  }, [deleteDialog, dismissDialog, onDeleteConfirmationOpenChange]);
 
   const closeDeleteConfirmation = () => {
     if (deleting) {
@@ -1851,7 +1854,6 @@ export const TransactionBrowser = ({
                       {bulkEditMode ? null : (
                         <RowActions
                           foldable
-                          onOverflowOpenChange={onRowActionsOverflowOpenChange}
                           actions={
                             expectedOccurrence
                               ? [
@@ -1906,6 +1908,48 @@ export const TransactionBrowser = ({
                                       onOpenTransaction(transaction, opener);
                                     },
                                   },
+                                  ...(onEditTransaction
+                                    ? [
+                                        {
+                                          icon: <Pencil aria-hidden="true" />,
+                                          label: "Edit transaction",
+                                          onSelect: (opener: HTMLElement) => {
+                                            onEditTransaction(
+                                              transaction,
+                                              opener,
+                                            );
+                                          },
+                                        },
+                                      ]
+                                    : []),
+                                  ...(onDuplicateTransaction
+                                    ? [
+                                        {
+                                          icon: <Copy aria-hidden="true" />,
+                                          label: "Duplicate transaction",
+                                          onSelect: (opener: HTMLElement) => {
+                                            onDuplicateTransaction(
+                                              transaction,
+                                              opener,
+                                            );
+                                          },
+                                        },
+                                      ]
+                                    : []),
+                                  ...(onSplitTransaction
+                                    ? [
+                                        {
+                                          icon: <Scissors aria-hidden="true" />,
+                                          label: "Split transaction",
+                                          onSelect: (opener: HTMLElement) => {
+                                            onSplitTransaction(
+                                              transaction,
+                                              opener,
+                                            );
+                                          },
+                                        },
+                                      ]
+                                    : []),
                                   {
                                     icon: <Trash aria-hidden="true" />,
                                     label: "Delete transaction",

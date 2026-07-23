@@ -1,6 +1,10 @@
+import { Plus } from "pixelarticons/react";
 import type { ReactNode, Ref } from "react";
 
+import { Button } from "@/components/ui/button";
+import { captureTransactionEntryLaunchContext } from "@/features/ledger";
 import { cn } from "@/lib/utils";
+import { openTransactionEntryPanel } from "@/store";
 
 interface PageHeaderProps {
   readonly actions?: ReactNode;
@@ -45,9 +49,21 @@ export const PageHeader = ({
           {help}
         </div>
       </div>
-      {actions ? (
-        <div className="flex flex-wrap items-center gap-3">{actions}</div>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          onClick={() => {
+            openTransactionEntryPanel(
+              undefined,
+              captureTransactionEntryLaunchContext(),
+            );
+          }}
+        >
+          <Plus aria-hidden="true" />
+          New transaction
+        </Button>
+        {actions}
+      </div>
     </div>
     <div
       className={cn(

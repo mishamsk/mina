@@ -1,9 +1,7 @@
-import { Plus } from "pixelarticons/react";
 import { useMemo } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 
 import { PageHelp } from "@/components/page-help";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
 import { FqnPath } from "@/features/ledger";
 import {
@@ -36,7 +34,6 @@ const tagDescendantIds = (
     .map((tag) => tag.tag_id);
 
 export const TagPage = () => {
-  const navigate = useNavigate();
   const { tagId: tagIdParam } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const tagsPage = useTagsResource();
@@ -95,17 +92,6 @@ export const TagPage = () => {
             Tag pages show matching transactions and include descendant tag
             paths unless limited to this level.
           </PageHelp>
-        }
-        actions={
-          <Button
-            type="button"
-            onClick={() => {
-              void navigate("/transactions");
-            }}
-          >
-            <Plus aria-hidden="true" />
-            New transaction
-          </Button>
         }
       />
 

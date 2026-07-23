@@ -146,7 +146,17 @@ const quickDeleteTransactionFromRow = async (
   page: Page,
   row: Locator,
 ): Promise<void> => {
-  await row.getByRole("button", { name: "Delete transaction" }).click();
+  const directDelete = row
+    .locator(".row-actions-buttons")
+    .getByRole("button", { name: "Delete transaction" });
+  if (await directDelete.isVisible()) {
+    await directDelete.click();
+  } else {
+    await row.getByRole("button", { name: "More row actions" }).click();
+    const menu = page.locator(".row-actions-menu:visible");
+    await expect(menu).toBeVisible();
+    await menu.getByRole("button", { name: "Delete transaction" }).click();
+  }
   const dialog = page.getByRole("alertdialog", {
     name: "Delete transaction",
   });

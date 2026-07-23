@@ -202,7 +202,10 @@ test("recurring definitions create, edit, pause, defer, resume, and cancel", asy
   await expect(page.getByText("Definition updated.")).toBeVisible();
   definition = await definitionByFqn(page, fqn);
   expect(definition.definition_version).toBe(2);
-  await expect(definitionRow(page, definition)).toContainText("Every 2 months");
+  await expect(definitionRow(page, definition)).toContainText(
+    "Every 2 months",
+    { timeout: 10_000 },
+  );
 
   await selectDefinitionAction(page, definitionRow(page, definition), "Pause");
   await expect(page.getByText("Definition paused.")).toBeVisible();

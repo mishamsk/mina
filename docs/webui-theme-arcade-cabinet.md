@@ -86,7 +86,7 @@ Rules:
 ## Shape & Depth
 
 - Radius `0` everywhere. Checkboxes, inputs, cards, dialogs, chips, avatars: all square. Member and merchant initial tiles are square neutral entity-chip tiles — white fill, ink outline, ink initials; yellow stays reserved for its semantic uses.
-- Ink outlines: 2px `--border-ink` on landmark components (cards, panels, dialogs, buttons, inputs, the entry panel); 1–2px on in-table chips.
+- Ink outlines: 2px `--border-ink` on landmark components (cards, panels, dialogs, buttons, inputs, the entry modal); 1–2px on in-table chips.
 - Hard shadows, never blurred: `--shadow-pixel: 4px 4px 0 var(--border-ink)` on raised landmarks (cards, dialogs, panels, primary buttons); `--shadow-chip: 2px 2px 0 var(--border-ink)` on chips and small controls — including in-table markers.
 - Press feedback: active buttons translate by their shadow offset and drop the shadow — the control physically presses in. Signature interaction, unchanged.
 - Banded tables: row separation comes from alternating `--card`/`--band` rows; the header row is a sky-bright band with ink uppercase mono labels. Hairlines are optional and only for group boundaries.
@@ -112,7 +112,7 @@ Sprite motion: stepped, instant, purposeful. No easing curves that imply physica
 - Timing function `steps(2)` or `steps(3)`, durations 100–150ms, for overlays and expansion where a transition exists at all.
 - Table row hover: instant fill change (one step beyond the band color), no transition.
 - Skeletons: checkerboard dither blocks stepping through 2 frames — shaped like final content per webui-design rules.
-- Signature moment: in batched entry, a saved transaction "stamps" into the list (single-step appear) and the session tally increments like a score counter (mono digits, stepped roll).
+- Signature moment: in batched entry, a saved transaction "stamps" into the entry modal's rail and into the visible list behind it (single-step appear), and the session tally in the modal footer increments like a score counter (mono digits, stepped roll).
 - Bulk-edit selection counts roll like a score counter over 150ms with two steps.
 - `prefers-reduced-motion`: all stepped animations collapse to state changes with no intermediate frames; the score counter updates instantly.
 
@@ -129,7 +129,8 @@ Theme treatments for the shared component inventory in `docs/webui-design.md`:
 - `AmountText`: IBM Plex Mono, tabular; color per domain color rules; in transaction lines wrapped as an amount chip (white fill, ink text for all classes).
 - `FqnPath`: de-emphasized ancestors + emphasized leaf in mono; dense-cell leaf-chip variant per webui-design display rules.
 - `BalanceMeter`: segmented block bar per currency — mint ink when balanced, yellow while unbalanced.
-- `EntryPanel` / dialogs / `CommandPalette`: landmark treatment — white surface, ink outline, pixel shadow, mono bold uppercase title; internal scrolling with the title and submit row always visible.
+- `EntryModal` / dialogs / `CommandPalette`: landmark treatment — white surface, ink outline, pixel shadow, mono bold uppercase title; internal scrolling with the title and submit row always visible.
+- `EntryModal` additionally: `--frame` scrim at ~65% (no blur); single-step appear per stepped motion; backdrop click flashes the modal outline one step; rail micro-rows in 12px mono with session rows stamping in (session-tick styling); footer general errors use destructive red, while the separate attention strip uses yellow ink; full-screen takeover below the narrow breakpoint.
 - `BalanceStrip`: mono amounts in `--frame-foreground` on the frame; no accent fills so the strip stays glanceable.
 - Toasts: landmark treatment, one-line, auto-dismiss; success uses mint ink text, not a mint fill.
 - Empty states: small pixel-art sprite (inline SVG, ≤ 4 colors from the accent palette), mono bold uppercase headline, sans explanation, primary action button.

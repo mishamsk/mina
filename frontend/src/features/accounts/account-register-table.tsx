@@ -530,6 +530,7 @@ export const AccountRegisterTable = ({
                 <tr
                   key={record.record_id}
                   data-record-id={record.record_id}
+                  data-transaction-id={record.transaction_id}
                   data-testid="account-register-row"
                   className={cn(
                     "border-b border-[var(--hairline)] align-middle focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--ring)]",

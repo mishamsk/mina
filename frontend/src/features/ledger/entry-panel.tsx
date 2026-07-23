@@ -1,5 +1,6 @@
 import { Check, Close, Plus, Trash } from "pixelarticons/react";
 import {
+  type MutableRefObject,
   type ReactNode,
   useCallback,
   useEffect,
@@ -24,10 +25,12 @@ import {
   createTransfer,
   type CreateTransferTransactionRequest,
   type JournalRecord,
+  listTransactionTemplates,
   type Member,
   replaceLedgerTransaction,
   type Tag,
   type Transaction,
+  type TransactionTemplate,
   type UpdateTransactionRequest,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
@@ -52,18 +55,28 @@ import {
   writeTransactionEntryDraft,
 } from "@/services/indexeddb";
 import type { LedgerLookupsSnapshot } from "@/store";
+import { openTransactionEntryLaunch, openTransactionEntryPanel } from "@/store";
 import { localTodayISODate } from "@/utils/date";
 
-import { AmountText } from "./amount-text";
+import { AmountText, MixedAmounts } from "./amount-text";
 import {
   EntityMultiPicker,
   type EntityOption,
   EntityPicker,
 } from "./entity-picker";
+import { captureTransactionEntryLaunchContext } from "./entry-launch-context";
+import {
+  displayAmountKey,
+  formatInitiatedDate,
+  lineDisplayAmounts,
+} from "./format";
+import { ClassIcon } from "./line-icons";
 import { useCategoryPickerCategoriesResource } from "./use-transactions-resource";
 
-interface EntryPanelProps {
+export interface EntryPanelProps {
+  readonly closeRequestRef?: MutableRefObject<(() => void) | null>;
   readonly initialTab?: TransactionEntryType;
+  readonly initialTemplateFqn?: string;
   readonly launch?: EntryPanelLaunch;
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onClose: () => void;
@@ -72,6 +85,7 @@ interface EntryPanelProps {
     context: EntryPanelSaveContext,
   ) => Promise<void>;
   readonly open: boolean;
+  readonly recentTransactions?: readonly Transaction[];
 }
 
 export type EntryPanelLaunch = {
@@ -761,7 +775,7 @@ const launchDraftFromTransaction = (
         activeTab: "advanced",
         advanced: advancedDraftFromTransaction(launch.transaction),
       },
-      persistence: "launch",
+      persistence: launch.type === "duplicate" ? "ordinary" : "launch",
       replacement:
         launch.type === "duplicate"
           ? undefined
@@ -781,7 +795,7 @@ const launchDraftFromTransaction = (
         [fit.entryType]: tabDraftFromShorthandFit(launch.transaction, fit),
       },
     },
-    persistence: "launch",
+    persistence: launch.type === "duplicate" ? "ordinary" : "launch",
     replacement:
       launch.type === "duplicate"
         ? undefined
@@ -1235,7 +1249,11 @@ const advancedFieldErrorsFromAPI = (
 };
 
 const FieldError = ({ message }: { readonly message: string | undefined }) =>
-  message ? <p className="text-destructive text-xs">{message}</p> : null;
+  message ? (
+    <p className="text-destructive text-xs" data-entry-field-error role="alert">
+      {message}
+    </p>
+  ) : null;
 
 const AdvancedRecordField = (props: {
   readonly children: ReactNode;
@@ -1436,13 +1454,89 @@ const accountTypesForCategoryIntent = (
   intent: Category["economic_intent"],
 ): readonly Account["account_type"][] => categoryIntentAccountTypes[intent];
 
+const EntryRailRow = ({
+  editable,
+  transaction,
+}: {
+  readonly editable: boolean;
+  readonly transaction: Transaction;
+}) => {
+  const amounts = lineDisplayAmounts(transaction);
+  const content = (
+    <>
+      <span className="text-muted-foreground shrink-0">
+        {formatInitiatedDate(transaction.initiated_date)}
+      </span>
+      <ClassIcon
+        transactionClass={transaction.transaction_class}
+        className="size-4 shrink-0"
+        focusable={false}
+      />
+      <Tooltip
+        label={transaction.display_title}
+        className="min-w-0 flex-1"
+        focusable={false}
+      >
+        <span className="block truncate">{transaction.display_title}</span>
+      </Tooltip>
+      {transaction.transaction_class === "mixed" ? (
+        <MixedAmounts
+          amounts={amounts}
+          className="h-auto shrink-0 border-0 bg-transparent p-0 text-xs shadow-none"
+        />
+      ) : amounts.length > 0 ? (
+        <span className="flex shrink-0 items-center gap-1">
+          {amounts.map((amount) => (
+            <AmountText
+              key={displayAmountKey(amount)}
+              amount={amount}
+              positiveSign={
+                transaction.transaction_class !== "transfer" &&
+                transaction.transaction_class !== "currency_exchange"
+              }
+              transactionClass={transaction.transaction_class}
+              className="text-xs"
+            />
+          ))}
+        </span>
+      ) : (
+        <span className="text-muted-foreground shrink-0">Mixed</span>
+      )}
+    </>
+  );
+
+  return editable ? (
+    <button
+      type="button"
+      tabIndex={-1}
+      className="session-tick flex w-full items-center gap-2 border-l-2 border-[var(--color-class-adjustment-ink)] bg-[var(--band)] px-2 py-1 text-left font-mono text-xs hover:bg-[var(--color-interactive-bright)]"
+      aria-label={`Edit saved transaction ${transaction.display_title}`}
+      onClick={() => {
+        openTransactionEntryLaunch(
+          { transaction, type: "edit" },
+          captureTransactionEntryLaunchContext(),
+        );
+      }}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className="flex items-center gap-2 px-2 py-1 font-mono text-xs">
+      {content}
+    </div>
+  );
+};
+
 export const EntryPanel = ({
+  closeRequestRef,
   initialTab,
+  initialTemplateFqn,
   launch,
   lookups,
   onClose,
   onSaved,
   open,
+  recentTransactions = [],
 }: EntryPanelProps) => {
   const [draft, setDraft] = useState<TransactionEntryDraft>(defaultDraft);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -1452,7 +1546,14 @@ export const EntryPanel = ({
   const [draftReady, setDraftReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
+  const [sessionTransactions, setSessionTransactions] = useState<
+    readonly Transaction[]
+  >([]);
   const [categoryRetryToken, setCategoryRetryToken] = useState(0);
+  const [templateQuery, setTemplateQuery] = useState("");
+  const [templates, setTemplates] = useState<readonly TransactionTemplate[]>(
+    [],
+  );
   const [replacement, setReplacement] = useState<
     ReplacementContext | undefined
   >();
@@ -1468,13 +1569,14 @@ export const EntryPanel = ({
   const [draftPersistence, setDraftPersistence] =
     useState<DraftPersistenceMode>("ordinary");
   const [confirmDiscardDraftOpen, setConfirmDiscardDraftOpen] = useState(false);
-  const [entryPanelMaxHeight, setEntryPanelMaxHeight] = useState<
-    number | undefined
-  >();
+  const [confirmCloseDiscardOpen, setConfirmCloseDiscardOpen] = useState(false);
+  const [attentionErrorCount, setAttentionErrorCount] = useState(0);
   const entryPanelRef = useRef<HTMLElement>(null);
+  const entryScrollRegionRef = useRef<HTMLDivElement>(null);
   const addAdvancedRecordButtonRef = useRef<HTMLButtonElement>(null);
   const advancedRemoveButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const templateInputRef = useRef<HTMLInputElement>(null);
   const rememberedActiveTabRef = useRef<TransactionEntryType>("spend");
   const initialTabOverrideRef = useRef<TransactionEntryType | undefined>(
     undefined,
@@ -1491,6 +1593,28 @@ export const EntryPanel = ({
     undefined,
   );
 
+  const requestClose = useCallback(() => {
+    const modifiedReplacement =
+      replacement !== undefined &&
+      launchDraftBaselineRef.current !== undefined &&
+      JSON.stringify(draft) !== JSON.stringify(launchDraftBaselineRef.current);
+    if (modifiedReplacement) {
+      setConfirmCloseDiscardOpen(true);
+      return;
+    }
+    onClose();
+  }, [draft, onClose, replacement]);
+
+  useEffect(() => {
+    if (!closeRequestRef) {
+      return;
+    }
+    closeRequestRef.current = requestClose;
+    return () => {
+      closeRequestRef.current = null;
+    };
+  }, [closeRequestRef, requestClose]);
+
   useEffect(() => {
     latestLookupsRef.current = lookups;
   }, [lookups]);
@@ -1498,6 +1622,7 @@ export const EntryPanel = ({
   useEffect(() => {
     if (open && !wasOpenRef.current) {
       setSessionCount(0);
+      setSessionTransactions([]);
     }
     wasOpenRef.current = open;
   }, [open]);
@@ -1547,6 +1672,10 @@ export const EntryPanel = ({
   const cancelPendingLaunch = useCallback(() => {
     setConfirmDiscardDraftOpen(false);
     setPendingLaunchDraft(undefined);
+    openTransactionEntryPanel(
+      undefined,
+      captureTransactionEntryLaunchContext(),
+    );
     window.requestAnimationFrame(() => {
       dateInputRef.current?.focus({ preventScroll: true });
     });
@@ -1666,54 +1795,11 @@ export const EntryPanel = ({
     }
 
     window.requestAnimationFrame(() => {
-      dateInputRef.current?.focus({ preventScroll: true });
+      (replacement ? dateInputRef.current : templateInputRef.current)?.focus({
+        preventScroll: true,
+      });
     });
-  }, [activeTab, currentDraftReady, open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) {
-        return;
-      }
-      if (confirmDiscardDraftOpen) {
-        return;
-      }
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [confirmDiscardDraftOpen, onClose, open]);
-
-  useLayoutEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const updateEntryPanelMaxHeight = () => {
-      const top = entryPanelRef.current?.getBoundingClientRect().top;
-      if (top === undefined) {
-        return;
-      }
-      const bottomGutter = 32;
-      setEntryPanelMaxHeight(
-        Math.max(320, window.innerHeight - top - bottomGutter),
-      );
-    };
-
-    updateEntryPanelMaxHeight();
-    window.addEventListener("resize", updateEntryPanelMaxHeight);
-    return () => {
-      window.removeEventListener("resize", updateEntryPanelMaxHeight);
-    };
-  }, [open]);
+  }, [activeTab, currentDraftReady, open, replacement]);
 
   const selectedEntityIds = useMemo(() => {
     const accountIds = new Set<number>();
@@ -1834,6 +1920,66 @@ export const EntryPanel = ({
     ) && allCurrenciesBalanced(balances);
   const submitDisabled =
     !canSubmit || (activeTab === "advanced" && !advancedCanSubmit);
+  const offscreenFieldErrors = useCallback((): readonly HTMLElement[] => {
+    const scrollRegion = entryScrollRegionRef.current;
+    if (!scrollRegion) {
+      return [];
+    }
+    const visibleBounds = scrollRegion.getBoundingClientRect();
+    return Array.from(
+      scrollRegion.querySelectorAll<HTMLElement>("[data-entry-field-error]"),
+    ).filter((error) => {
+      const errorBounds = error.getBoundingClientRect();
+      return (
+        errorBounds.top < visibleBounds.top ||
+        errorBounds.bottom > visibleBounds.bottom
+      );
+    });
+  }, []);
+
+  const measureAttentionErrors = useCallback(() => {
+    setAttentionErrorCount(offscreenFieldErrors().length);
+  }, [offscreenFieldErrors]);
+
+  useLayoutEffect(() => {
+    const scrollRegion = entryScrollRegionRef.current;
+    if (!scrollRegion) {
+      setAttentionErrorCount(0);
+      return;
+    }
+    measureAttentionErrors();
+    const resizeObserver = new ResizeObserver(measureAttentionErrors);
+    resizeObserver.observe(scrollRegion);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [activeTab, advancedFieldErrors, fieldErrors, measureAttentionErrors]);
+
+  const focusFirstError = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const error =
+        offscreenFieldErrors()[0] ??
+        entryScrollRegionRef.current?.querySelector<HTMLElement>(
+          "[data-entry-field-error]",
+        );
+      if (!error) {
+        return;
+      }
+      error.scrollIntoView({ block: "center" });
+      const fieldSelector = "input, textarea, button, [role='combobox']";
+      const previousElement = error.previousElementSibling;
+      const adjacentField =
+        previousElement instanceof HTMLElement
+          ? previousElement.matches(fieldSelector)
+            ? previousElement
+            : previousElement.querySelector<HTMLElement>(fieldSelector)
+          : null;
+      const field =
+        adjacentField ??
+        error.parentElement?.querySelector<HTMLElement>(fieldSelector);
+      focusWithoutTooltip(field, { preventScroll: true });
+    });
+  }, [offscreenFieldErrors]);
 
   const advancedAccountOptions = (
     categoryId: number | undefined,
@@ -2040,6 +2186,63 @@ export const EntryPanel = ({
     setGeneralError(undefined);
   };
 
+  const applyTemplate = useCallback((template: TransactionTemplate) => {
+    const records = template.records
+      .filter((record) => !record.tombstoned_at)
+      .map((record) => ({
+        ...blankRecordRowDraft(),
+        accountId: record.account_id ?? undefined,
+        amount: record.amount ?? "",
+        categoryId: record.category_id,
+        currency: record.currency ?? "USD",
+        memberId: record.member_id ?? undefined,
+        memo: record.memo ?? "",
+        postingStatus: record.posting_status ?? "posted",
+        reconciliationStatus: record.reconciliation_status ?? "unreconciled",
+        tagIds: [...record.tag_ids],
+      }));
+    userSelectedActiveTabRef.current = true;
+    rememberedActiveTabRef.current = "advanced";
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      activeTab: "advanced",
+      advanced: {
+        date: currentDraft.advanced.date || localTodayISODate(),
+        records: records.length > 0 ? records : blankAdvancedDraft().records,
+      },
+    }));
+    setTemplateQuery(template.fqn);
+    setFieldErrors({});
+    setAdvancedFieldErrors({});
+    setGeneralError(undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!open || replacement || templates.length > 0) {
+      return;
+    }
+    let active = true;
+    void listTransactionTemplates({
+      query: { limit: 500, offset: 0, sort: "fqn", sort_dir: "asc" },
+    }).then((result) => {
+      if (!active || !result.data) {
+        return;
+      }
+      setTemplates(result.data.transaction_templates);
+      const initialTemplate = initialTemplateFqn
+        ? result.data.transaction_templates.find(
+            (template) => template.fqn === initialTemplateFqn,
+          )
+        : undefined;
+      if (initialTemplate) {
+        applyTemplate(initialTemplate);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [applyTemplate, initialTemplateFqn, open, replacement, templates.length]);
+
   const validateField = useCallback(
     (field: FieldName) => {
       if (!activeShorthandTab || !activeTabDraft) {
@@ -2062,13 +2265,107 @@ export const EntryPanel = ({
     [activeShorthandTab, activeTabDraft],
   );
 
-  const submit = useCallback(async () => {
-    if (!canSubmit) {
-      return;
-    }
+  const submit = useCallback(
+    async (closeAfterSave = false) => {
+      if (!canSubmit) {
+        return;
+      }
 
-    if (replacement) {
-      let body: UpdateTransactionRequest | undefined;
+      if (replacement) {
+        let body: UpdateTransactionRequest | undefined;
+
+        if (activeTab === "advanced") {
+          const nextAdvancedErrors = validateAdvancedDraft(draft.advanced, {
+            allowExpectedPostingStatus: false,
+          });
+          setAdvancedFieldErrors(nextAdvancedErrors);
+          setFieldErrors({});
+          setGeneralError(undefined);
+          if (
+            hasAdvancedErrors(nextAdvancedErrors) ||
+            !allCurrenciesBalanced(advancedBalances(draft.advanced))
+          ) {
+            focusFirstError();
+            return;
+          }
+          body = updateBodyFromAdvancedDraft(draft.advanced);
+        } else {
+          if (
+            !activeShorthandTab ||
+            !activeTabDraft ||
+            replacement.fit?.entryType !== activeShorthandTab
+          ) {
+            setGeneralError(
+              "Use the matching shorthand tab or Advanced to update this transaction.",
+            );
+            return;
+          }
+          const nextFieldErrors = validateDraft(
+            activeTabDraft,
+            activeShorthandTab,
+          );
+          setFieldErrors(nextFieldErrors);
+          setGeneralError(undefined);
+          if (hasErrors(nextFieldErrors)) {
+            focusFirstError();
+            return;
+          }
+          body = updateBodyFromShorthandDraft(activeTabDraft, replacement.fit);
+        }
+
+        setSaving(true);
+        try {
+          const result = await replaceLedgerTransaction(
+            replacement.transaction.transaction_id,
+            body,
+          );
+
+          if (result.data) {
+            const clearedDraft = defaultDraft();
+            setDraft(clearedDraft);
+            setReplacement(undefined);
+            setDraftPersistence("ordinary");
+            launchDraftBaselineRef.current = undefined;
+            latestDraftRef.current = clearedDraft;
+            latestDraftPersistenceRef.current = "ordinary";
+            latestReplacementRef.current = undefined;
+            await writeTransactionEntryDraft(draftForStorage(clearedDraft));
+            await onSaved(result.data, {
+              operation: "updated",
+              previousTransaction: replacement.transaction,
+            });
+            setFieldErrors({});
+            setAdvancedFieldErrors({});
+            setGeneralError(undefined);
+            onClose();
+            return;
+          }
+
+          const message = apiErrorMessage(
+            result.error,
+            "Transaction could not be saved.",
+          );
+          if (activeTab === "advanced") {
+            const apiFieldErrors = advancedFieldErrorsFromAPI(
+              message,
+              draft.advanced,
+              lookups,
+            );
+            setAdvancedFieldErrors(apiFieldErrors);
+            setGeneralError(
+              hasAdvancedErrors(apiFieldErrors) ? undefined : message,
+            );
+          } else {
+            const apiFieldErrors = fieldErrorsFromAPI(message);
+            setFieldErrors(apiFieldErrors);
+            setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);
+          }
+          focusFirstError();
+          return;
+        } finally {
+          setSaving(false);
+        }
+      }
 
       if (activeTab === "advanced") {
         const nextAdvancedErrors = validateAdvancedDraft(draft.advanced, {
@@ -2081,65 +2378,66 @@ export const EntryPanel = ({
           hasAdvancedErrors(nextAdvancedErrors) ||
           !allCurrenciesBalanced(advancedBalances(draft.advanced))
         ) {
+          focusFirstError();
           return;
         }
-        body = updateBodyFromAdvancedDraft(draft.advanced);
-      } else {
-        if (
-          !activeShorthandTab ||
-          !activeTabDraft ||
-          replacement.fit?.entryType !== activeShorthandTab
-        ) {
-          setGeneralError(
-            "Use the matching shorthand tab or Advanced to update this transaction.",
+
+        const body = {
+          initiated_date: draft.advanced.date,
+          records: draft.advanced.records.map((row) => ({
+            account_id: row.accountId!,
+            amount: normalizeSignedAmount(row.amount)!,
+            category_id: row.categoryId!,
+            currency: normalizeCurrency(row.currency),
+            member_id: row.memberId ?? null,
+            memo: row.memo.trim() ? row.memo.trim() : null,
+            pending_date: dateTimeToISO(row.pendingDateTime),
+            posted_date: dateTimeToISO(row.postedDateTime),
+            posting_status: row.postingStatus,
+            reconciliation_status: "unreconciled" as const,
+            source: "manual" as const,
+            tag_ids: [...row.tagIds],
+          })),
+        } satisfies CreateTransactionRequest;
+
+        setSaving(true);
+        try {
+          const result = await createJournalTransaction(body);
+
+          if (result.data) {
+            const nextDraft = {
+              ...draft,
+              advanced: stickyNextAdvancedDraft(draft.advanced),
+            };
+            setDraft(nextDraft);
+            setAdvancedFieldErrors({});
+            setGeneralError(undefined);
+            setSessionCount((count) => count + 1);
+            setSessionTransactions((current) => [result.data, ...current]);
+            if (draftPersistence === "launch") {
+              setDraftPersistence("ordinary");
+            }
+            if (
+              draftPersistence === "ordinary" ||
+              draftPersistence === "launch"
+            ) {
+              await writeTransactionEntryDraft(draftForStorage(nextDraft));
+            }
+            await onSaved(result.data, { operation: "created" });
+            if (closeAfterSave) {
+              onClose();
+            } else {
+              window.requestAnimationFrame(() => {
+                dateInputRef.current?.focus({ preventScroll: true });
+              });
+            }
+            return;
+          }
+
+          const message = apiErrorMessage(
+            result.error,
+            "Transaction could not be saved.",
           );
-          return;
-        }
-        const nextFieldErrors = validateDraft(
-          activeTabDraft,
-          activeShorthandTab,
-        );
-        setFieldErrors(nextFieldErrors);
-        setGeneralError(undefined);
-        if (hasErrors(nextFieldErrors)) {
-          return;
-        }
-        body = updateBodyFromShorthandDraft(activeTabDraft, replacement.fit);
-      }
-
-      setSaving(true);
-      try {
-        const result = await replaceLedgerTransaction(
-          replacement.transaction.transaction_id,
-          body,
-        );
-
-        if (result.data) {
-          const clearedDraft = defaultDraft();
-          setDraft(clearedDraft);
-          setReplacement(undefined);
-          setDraftPersistence("ordinary");
-          launchDraftBaselineRef.current = undefined;
-          latestDraftRef.current = clearedDraft;
-          latestDraftPersistenceRef.current = "ordinary";
-          latestReplacementRef.current = undefined;
-          await writeTransactionEntryDraft(draftForStorage(clearedDraft));
-          await onSaved(result.data, {
-            operation: "updated",
-            previousTransaction: replacement.transaction,
-          });
-          setFieldErrors({});
-          setAdvancedFieldErrors({});
-          setGeneralError(undefined);
-          onClose();
-          return;
-        }
-
-        const message = apiErrorMessage(
-          result.error,
-          "Transaction could not be saved.",
-        );
-        if (activeTab === "advanced") {
           const apiFieldErrors = advancedFieldErrorsFromAPI(
             message,
             draft.advanced,
@@ -2149,62 +2447,92 @@ export const EntryPanel = ({
           setGeneralError(
             hasAdvancedErrors(apiFieldErrors) ? undefined : message,
           );
-        } else {
-          const apiFieldErrors = fieldErrorsFromAPI(message);
-          setFieldErrors(apiFieldErrors);
-          setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);
+          focusFirstError();
+          return;
+        } finally {
+          setSaving(false);
         }
-        return;
-      } finally {
-        setSaving(false);
       }
-    }
 
-    if (activeTab === "advanced") {
-      const nextAdvancedErrors = validateAdvancedDraft(draft.advanced, {
-        allowExpectedPostingStatus: false,
-      });
-      setAdvancedFieldErrors(nextAdvancedErrors);
-      setFieldErrors({});
+      if (!activeShorthandTab || !activeTabDraft) {
+        return;
+      }
+
+      const nextFieldErrors = validateDraft(activeTabDraft, activeShorthandTab);
+      setFieldErrors(nextFieldErrors);
       setGeneralError(undefined);
-      if (
-        hasAdvancedErrors(nextAdvancedErrors) ||
-        !allCurrenciesBalanced(advancedBalances(draft.advanced))
-      ) {
+      if (hasErrors(nextFieldErrors)) {
+        focusFirstError();
         return;
       }
 
-      const body = {
-        initiated_date: draft.advanced.date,
-        records: draft.advanced.records.map((row) => ({
-          account_id: row.accountId!,
-          amount: normalizeSignedAmount(row.amount)!,
-          category_id: row.categoryId!,
-          currency: normalizeCurrency(row.currency),
-          member_id: row.memberId ?? null,
-          memo: row.memo.trim() ? row.memo.trim() : null,
-          pending_date: dateTimeToISO(row.pendingDateTime),
-          posted_date: dateTimeToISO(row.postedDateTime),
-          posting_status: row.postingStatus,
-          reconciliation_status: "unreconciled" as const,
-          source: "manual" as const,
-          tag_ids: [...row.tagIds],
-        })),
-      } satisfies CreateTransactionRequest;
+      const amount = normalizeAmount(activeTabDraft.amount);
+      const currency = normalizeCurrency(activeTabDraft.currency);
+      if (!amount || !currency || !activeTabDraft.categoryId) {
+        return;
+      }
+
+      const common = {
+        amount,
+        category_id: activeTabDraft.categoryId,
+        currency,
+        initiated_date: activeTabDraft.date,
+        member_id: activeTabDraft.memberId ?? null,
+        memo: activeTabDraft.memo.trim() ? activeTabDraft.memo.trim() : null,
+        posting_status: "posted" as const,
+        reconciliation_status: "unreconciled" as const,
+        tag_ids: [...activeTabDraft.tagIds],
+      };
 
       setSaving(true);
       try {
-        const result = await createJournalTransaction(body);
+        const result =
+          activeShorthandTab === "spend"
+            ? await createSpend({
+                ...common,
+                counterparty_account_id: activeTabDraft.merchantAccountId ?? -1,
+                funding_account_id: activeTabDraft.fundingAccountId ?? -1,
+              } satisfies CreateSpendTransactionRequest)
+            : activeShorthandTab === "income"
+              ? await createIncome({
+                  ...common,
+                  destination_account_id:
+                    activeTabDraft.destinationAccountId ?? -1,
+                  source_account_id: activeTabDraft.sourceAccountId ?? -1,
+                } satisfies CreateIncomeTransactionRequest)
+              : activeShorthandTab === "refund"
+                ? await createRefund({
+                    ...common,
+                    counterparty_account_id:
+                      activeTabDraft.merchantAccountId ?? -1,
+                    destination_account_id:
+                      activeTabDraft.destinationAccountId ?? -1,
+                  } satisfies CreateRefundTransactionRequest)
+                : await createTransfer({
+                    ...common,
+                    destination_account_id:
+                      activeTabDraft.destinationAccountId ?? -1,
+                    source_account_id: activeTabDraft.sourceAccountId ?? -1,
+                  } satisfies CreateTransferTransactionRequest);
 
         if (result.data) {
+          const nextTabDraft = stickyNextTabDraft(
+            activeShorthandTab,
+            activeTabDraft,
+            currency,
+          );
           const nextDraft = {
             ...draft,
-            advanced: stickyNextAdvancedDraft(draft.advanced),
+            tabs: {
+              ...draft.tabs,
+              [activeShorthandTab]: nextTabDraft,
+            },
           };
           setDraft(nextDraft);
-          setAdvancedFieldErrors({});
+          setFieldErrors({});
           setGeneralError(undefined);
           setSessionCount((count) => count + 1);
+          setSessionTransactions((current) => [result.data, ...current]);
           if (draftPersistence === "launch") {
             setDraftPersistence("ordinary");
           }
@@ -2215,6 +2543,13 @@ export const EntryPanel = ({
             await writeTransactionEntryDraft(draftForStorage(nextDraft));
           }
           await onSaved(result.data, { operation: "created" });
+          if (closeAfterSave) {
+            onClose();
+          } else {
+            window.requestAnimationFrame(() => {
+              dateInputRef.current?.focus({ preventScroll: true });
+            });
+          }
           return;
         }
 
@@ -2222,131 +2557,29 @@ export const EntryPanel = ({
           result.error,
           "Transaction could not be saved.",
         );
-        const apiFieldErrors = advancedFieldErrorsFromAPI(
-          message,
-          draft.advanced,
-          lookups,
-        );
-        setAdvancedFieldErrors(apiFieldErrors);
-        setGeneralError(
-          hasAdvancedErrors(apiFieldErrors) ? undefined : message,
-        );
-        return;
+        const apiFieldErrors = fieldErrorsFromAPI(message);
+        setFieldErrors(apiFieldErrors);
+        setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);
+        focusFirstError();
       } finally {
         setSaving(false);
       }
-    }
-
-    if (!activeShorthandTab || !activeTabDraft) {
-      return;
-    }
-
-    const nextFieldErrors = validateDraft(activeTabDraft, activeShorthandTab);
-    setFieldErrors(nextFieldErrors);
-    setGeneralError(undefined);
-    if (hasErrors(nextFieldErrors)) {
-      return;
-    }
-
-    const amount = normalizeAmount(activeTabDraft.amount);
-    const currency = normalizeCurrency(activeTabDraft.currency);
-    if (!amount || !currency || !activeTabDraft.categoryId) {
-      return;
-    }
-
-    const common = {
-      amount,
-      category_id: activeTabDraft.categoryId,
-      currency,
-      initiated_date: activeTabDraft.date,
-      member_id: activeTabDraft.memberId ?? null,
-      memo: activeTabDraft.memo.trim() ? activeTabDraft.memo.trim() : null,
-      posting_status: "posted" as const,
-      reconciliation_status: "unreconciled" as const,
-      tag_ids: [...activeTabDraft.tagIds],
-    };
-
-    setSaving(true);
-    try {
-      const result =
-        activeShorthandTab === "spend"
-          ? await createSpend({
-              ...common,
-              counterparty_account_id: activeTabDraft.merchantAccountId ?? -1,
-              funding_account_id: activeTabDraft.fundingAccountId ?? -1,
-            } satisfies CreateSpendTransactionRequest)
-          : activeShorthandTab === "income"
-            ? await createIncome({
-                ...common,
-                destination_account_id:
-                  activeTabDraft.destinationAccountId ?? -1,
-                source_account_id: activeTabDraft.sourceAccountId ?? -1,
-              } satisfies CreateIncomeTransactionRequest)
-            : activeShorthandTab === "refund"
-              ? await createRefund({
-                  ...common,
-                  counterparty_account_id:
-                    activeTabDraft.merchantAccountId ?? -1,
-                  destination_account_id:
-                    activeTabDraft.destinationAccountId ?? -1,
-                } satisfies CreateRefundTransactionRequest)
-              : await createTransfer({
-                  ...common,
-                  destination_account_id:
-                    activeTabDraft.destinationAccountId ?? -1,
-                  source_account_id: activeTabDraft.sourceAccountId ?? -1,
-                } satisfies CreateTransferTransactionRequest);
-
-      if (result.data) {
-        const nextTabDraft = stickyNextTabDraft(
-          activeShorthandTab,
-          activeTabDraft,
-          currency,
-        );
-        const nextDraft = {
-          ...draft,
-          tabs: {
-            ...draft.tabs,
-            [activeShorthandTab]: nextTabDraft,
-          },
-        };
-        setDraft(nextDraft);
-        setFieldErrors({});
-        setGeneralError(undefined);
-        setSessionCount((count) => count + 1);
-        if (draftPersistence === "launch") {
-          setDraftPersistence("ordinary");
-        }
-        if (draftPersistence === "ordinary" || draftPersistence === "launch") {
-          await writeTransactionEntryDraft(draftForStorage(nextDraft));
-        }
-        await onSaved(result.data, { operation: "created" });
-        return;
-      }
-
-      const message = apiErrorMessage(
-        result.error,
-        "Transaction could not be saved.",
-      );
-      const apiFieldErrors = fieldErrorsFromAPI(message);
-      setFieldErrors(apiFieldErrors);
-      setGeneralError(hasErrors(apiFieldErrors) ? undefined : message);
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    activeTab,
-    activeShorthandTab,
-    activeTabDraft,
-    canSubmit,
-    draft,
-    draftForStorage,
-    draftPersistence,
-    lookups,
-    onClose,
-    onSaved,
-    replacement,
-  ]);
+    },
+    [
+      activeTab,
+      activeShorthandTab,
+      activeTabDraft,
+      canSubmit,
+      draft,
+      draftForStorage,
+      draftPersistence,
+      focusFirstError,
+      lookups,
+      onClose,
+      onSaved,
+      replacement,
+    ],
+  );
 
   const primaryAccountValue =
     activeTabDraft && activeConfig
@@ -2367,14 +2600,9 @@ export const EntryPanel = ({
     : (activeConfig?.title ?? "New journal");
 
   return (
-    <aside
+    <section
       ref={entryPanelRef}
-      className="bg-card flex min-w-0 flex-col self-start overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)] lg:sticky lg:top-7"
-      style={
-        entryPanelMaxHeight === undefined
-          ? undefined
-          : { maxHeight: `${entryPanelMaxHeight}px` }
-      }
+      className="bg-card flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
       aria-labelledby="entry-panel-title"
       onKeyDown={(event) => {
         if (confirmDiscardDraftOpen) {
@@ -2382,7 +2610,7 @@ export const EntryPanel = ({
         }
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
           event.preventDefault();
-          void submit();
+          void submit(event.shiftKey);
         }
       }}
     >
@@ -2399,8 +2627,8 @@ export const EntryPanel = ({
           type="button"
           variant="outline"
           size="icon"
-          aria-label="Close entry panel"
-          onClick={onClose}
+          aria-label="Close transaction editor"
+          onClick={requestClose}
         >
           <Close aria-hidden="true" />
         </Button>
@@ -2439,645 +2667,783 @@ export const EntryPanel = ({
         })}
       </div>
 
+      {!replacement ? (
+        <div className="border-b-2 border-[var(--border-ink)] bg-[var(--band)] px-4 py-3">
+          <div className="mx-auto flex w-full max-w-[560px] flex-col gap-1">
+            <label htmlFor="entry-template" className="text-sm font-semibold">
+              Start from a template
+            </label>
+            <input
+              id="entry-template"
+              ref={templateInputRef}
+              type="text"
+              list="entry-template-options"
+              autoComplete="off"
+              className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-chip)]"
+              placeholder="Type a template name or skip"
+              value={templateQuery}
+              onChange={(event) => {
+                const value = event.target.value;
+                setTemplateQuery(value);
+                const template = templates.find(
+                  (candidate) =>
+                    candidate.fqn === value || candidate.name === value,
+                );
+                if (template) {
+                  applyTemplate(template);
+                }
+              }}
+            />
+            <datalist id="entry-template-options">
+              {templates.map((template) => (
+                <option
+                  key={template.transaction_template_id}
+                  value={template.fqn}
+                />
+              ))}
+            </datalist>
+          </div>
+        </div>
+      ) : null}
+
       {!ready ? (
         <div className="flex flex-1 items-start p-4">
           <p className="text-muted-foreground text-sm">{loadingMessage}</p>
         </div>
       ) : null}
 
-      <form
-        id={`${activeTab}-entry-panel`}
-        role="tabpanel"
-        aria-labelledby={`${activeTab}-entry-tab`}
-        className={`flex min-h-0 flex-1 flex-col ${ready ? "" : "hidden"}`}
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
-      >
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
-          {activeTab === "advanced" ? (
-            <>
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor="advanced-date"
-                  className="text-sm font-semibold"
-                >
-                  Date
-                </label>
-                <input
-                  id="advanced-date"
-                  ref={dateInputRef}
-                  type="date"
-                  className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-                  value={draft.advanced.date}
-                  onBlur={() => {
-                    setAdvancedFieldErrors(
-                      validateAdvancedDraft(
-                        draft.advanced,
-                        advancedValidationOptions,
-                      ),
-                    );
-                  }}
-                  onChange={(event) => {
-                    updateAdvancedDraft({ date: event.target.value });
-                  }}
-                />
-                <FieldError message={advancedFieldErrors.date} />
-              </div>
-
-              <div
-                className="min-w-0 overflow-visible"
-                aria-label="Journal records"
-              >
-                <div className="flex min-w-0 flex-col gap-3">
-                  {draft.advanced.records.map((row, rowIndex) => (
-                    <section
-                      key={row.draftId}
-                      className="bg-card min-w-0 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)]"
-                      aria-label={`Journal record ${rowIndex + 1}`}
-                    >
-                      <div className="mb-3 flex min-w-0 items-center justify-between gap-2 border-b-2 border-[var(--border-ink)] pb-2">
-                        <h3 className="font-heading text-sm font-semibold uppercase">
-                          Record {rowIndex + 1}
-                        </h3>
-                        <Tooltip
-                          label={`Remove record ${rowIndex + 1}`}
-                          asChild
-                        >
-                          <Button
-                            ref={(element) => {
-                              advancedRemoveButtonRefs.current[rowIndex] =
-                                element;
-                            }}
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label={`Remove record ${rowIndex + 1}`}
-                            onClick={() => {
-                              updateAdvancedDraft({
-                                records: draft.advanced.records.filter(
-                                  (_record, index) => index !== rowIndex,
-                                ),
-                              });
-                              setAdvancedFieldErrors({});
-                              focusAfterAdvancedRecordRemoval(rowIndex);
-                            }}
-                          >
-                            <Trash aria-hidden="true" />
-                          </Button>
-                        </Tooltip>
-                      </div>
-
-                      <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-3">
-                        <AdvancedRecordField
-                          label="Account"
-                          className="col-span-full"
-                        >
-                          <EntityPicker
-                            key={`${lookupRevision}:advanced:${row.draftId}:account:${row.categoryId ?? ""}`}
-                            exactMatchOptions={exactMatchAccountOptions}
-                            id={`advanced-record-${rowIndex}-account`}
-                            label={`Record ${rowIndex + 1} account`}
-                            labelClassName="sr-only"
-                            options={advancedAccountOptions(row.categoryId)}
-                            value={row.accountId}
-                            onChange={(accountId) => {
-                              updateAdvancedRow(rowIndex, {
-                                accountId,
-                                currency:
-                                  accountCurrency(lookups, accountId) ??
-                                  row.currency,
-                              });
-                            }}
-                          />
-                          <FieldError
-                            message={advancedFieldError(
-                              advancedFieldErrors,
-                              rowIndex,
-                              "accountId",
-                            )}
-                          />
-                        </AdvancedRecordField>
-                        <AdvancedRecordField label="Amount">
-                          <label
-                            htmlFor={`advanced-record-${rowIndex}-amount`}
-                            className="sr-only"
-                          >
-                            Record {rowIndex + 1} amount
-                          </label>
-                          <input
-                            id={`advanced-record-${rowIndex}-amount`}
-                            inputMode="decimal"
-                            className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                            placeholder="-12.34"
-                            value={row.amount}
-                            onBlur={() => {
-                              setAdvancedFieldErrors(
-                                validateAdvancedDraft(
-                                  draft.advanced,
-                                  advancedValidationOptions,
-                                ),
-                              );
-                            }}
-                            onChange={(event) => {
-                              updateAdvancedRow(rowIndex, {
-                                amount: event.target.value,
-                              });
-                            }}
-                          />
-                          <FieldError
-                            message={advancedFieldError(
-                              advancedFieldErrors,
-                              rowIndex,
-                              "amount",
-                            )}
-                          />
-                        </AdvancedRecordField>
-                        <AdvancedRecordField label="Currency">
-                          <label
-                            htmlFor={`advanced-record-${rowIndex}-currency`}
-                            className="sr-only"
-                          >
-                            Record {rowIndex + 1} currency
-                          </label>
-                          <input
-                            id={`advanced-record-${rowIndex}-currency`}
-                            list="entry-currency-options"
-                            className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                            value={row.currency}
-                            onBlur={() => {
-                              setAdvancedFieldErrors(
-                                validateAdvancedDraft(
-                                  draft.advanced,
-                                  advancedValidationOptions,
-                                ),
-                              );
-                            }}
-                            onChange={(event) => {
-                              updateAdvancedRow(rowIndex, {
-                                currency: event.target.value.toUpperCase(),
-                              });
-                            }}
-                          />
-                          <FieldError
-                            message={advancedFieldError(
-                              advancedFieldErrors,
-                              rowIndex,
-                              "currency",
-                            )}
-                          />
-                        </AdvancedRecordField>
-                        <AdvancedRecordField
-                          label="Category"
-                          className="col-span-full"
-                        >
-                          <EntityPicker
-                            key={`${lookupRevision}:advanced:${row.draftId}:category`}
-                            id={`advanced-record-${rowIndex}-category`}
-                            label={`Record ${rowIndex + 1} category`}
-                            labelClassName="sr-only"
-                            options={options.allCategories}
-                            value={row.categoryId}
-                            onChange={(categoryId) => {
-                              const accountId = advancedAccountOptions(
-                                categoryId,
-                              ).some((option) => option.id === row.accountId)
-                                ? row.accountId
-                                : undefined;
-                              updateAdvancedRow(rowIndex, {
-                                accountId,
-                                categoryId,
-                              });
-                            }}
-                          />
-                          <FieldError
-                            message={advancedFieldError(
-                              advancedFieldErrors,
-                              rowIndex,
-                              "categoryId",
-                            )}
-                          />
-                        </AdvancedRecordField>
-                        <AdvancedRecordField
-                          label="Tags"
-                          className="col-span-full"
-                        >
-                          <EntityMultiPicker
-                            id={`advanced-record-${rowIndex}-tags`}
-                            label={`Record ${rowIndex + 1} tags`}
-                            labelClassName="sr-only"
-                            options={options.tags}
-                            value={row.tagIds}
-                            onChange={(tagIds) => {
-                              updateAdvancedRow(rowIndex, { tagIds });
-                            }}
-                          />
-                        </AdvancedRecordField>
-                        <AdvancedRecordField label="Member">
-                          <EntityPicker
-                            key={`${lookupRevision}:advanced:${row.draftId}:member`}
-                            id={`advanced-record-${rowIndex}-member`}
-                            label={`Record ${rowIndex + 1} member`}
-                            labelClassName="sr-only"
-                            options={options.members}
-                            placeholder="Whole household"
-                            value={row.memberId}
-                            onChange={(memberId) => {
-                              updateAdvancedRow(rowIndex, { memberId });
-                            }}
-                          />
-                        </AdvancedRecordField>
-                        <AdvancedRecordField label="Status">
-                          <div className="flex flex-col gap-2">
-                            <label
-                              htmlFor={`advanced-record-${rowIndex}-status`}
-                              className="sr-only"
-                            >
-                              Record {rowIndex + 1} posting status
-                            </label>
-                            <Select
-                              value={row.postingStatus}
-                              onValueChange={(value) => {
-                                updateAdvancedRow(rowIndex, {
-                                  postingStatus:
-                                    value as JournalRecordDraftPostingStatus,
-                                });
-                              }}
-                            >
-                              <SelectTrigger
-                                id={`advanced-record-${rowIndex}-status`}
-                                className="w-full"
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {allowExpectedPostingStatus ||
-                                row.postingStatus === "expected" ? (
-                                  <SelectItem
-                                    value="expected"
-                                    disabled={!allowExpectedPostingStatus}
-                                  >
-                                    Expected
-                                  </SelectItem>
-                                ) : null}
-                                <SelectItem value="posted">Posted</SelectItem>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="cancelled">
-                                  Cancelled
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FieldError
-                              message={advancedFieldError(
-                                advancedFieldErrors,
-                                rowIndex,
-                                "postingStatus",
-                              )}
-                            />
-                          </div>
-                        </AdvancedRecordField>
-                        <AdvancedRecordField
-                          label="Dates"
-                          className="col-span-full"
-                        >
-                          <div className="flex flex-col gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                updateAdvancedRow(rowIndex, {
-                                  showDates: !row.showDates,
-                                });
-                              }}
-                            >
-                              Dates
-                            </Button>
-                            {row.showDates ? (
-                              <>
-                                <label
-                                  htmlFor={`advanced-record-${rowIndex}-pending-date`}
-                                  className="sr-only"
-                                >
-                                  Record {rowIndex + 1} pending date
-                                </label>
-                                <input
-                                  id={`advanced-record-${rowIndex}-pending-date`}
-                                  type="datetime-local"
-                                  step="any"
-                                  className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-                                  value={row.pendingDateTime}
-                                  onChange={(event) => {
-                                    updateAdvancedRow(rowIndex, {
-                                      pendingDateTime: event.target.value,
-                                    });
-                                  }}
-                                />
-                                <label
-                                  htmlFor={`advanced-record-${rowIndex}-posted-date`}
-                                  className="sr-only"
-                                >
-                                  Record {rowIndex + 1} posted date
-                                </label>
-                                <input
-                                  id={`advanced-record-${rowIndex}-posted-date`}
-                                  type="datetime-local"
-                                  step="any"
-                                  className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-                                  value={row.postedDateTime}
-                                  onChange={(event) => {
-                                    updateAdvancedRow(rowIndex, {
-                                      postedDateTime: event.target.value,
-                                    });
-                                  }}
-                                />
-                              </>
-                            ) : null}
-                          </div>
-                        </AdvancedRecordField>
-                        <AdvancedRecordField
-                          label="Memo"
-                          className="col-span-full"
-                        >
-                          <label
-                            htmlFor={`advanced-record-${rowIndex}-memo`}
-                            className="sr-only"
-                          >
-                            Record {rowIndex + 1} memo
-                          </label>
-                          <textarea
-                            id={`advanced-record-${rowIndex}-memo`}
-                            className="bg-card min-h-16 w-full border-2 border-[var(--border-ink)] px-2 py-2 text-sm shadow-[var(--shadow-pixel)]"
-                            value={row.memo}
-                            onChange={(event) => {
-                              updateAdvancedRow(rowIndex, {
-                                memo: event.target.value,
-                              });
-                            }}
-                          />
-                        </AdvancedRecordField>
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </div>
-
-              <Button
-                ref={addAdvancedRecordButtonRef}
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  updateAdvancedDraft({
-                    records: [...draft.advanced.records, blankRecordRowDraft()],
-                  });
-                }}
-              >
-                <Plus aria-hidden="true" />
-                Add record
-              </Button>
-
-              <datalist id="entry-currency-options">
-                {options.currencies.map((currency) => (
-                  <option key={currency} value={currency} />
-                ))}
-              </datalist>
-            </>
-          ) : activeTabDraft && activeConfig ? (
-            <>
-              <div className="grid grid-cols-[1fr_130px] gap-3">
+      <div className="flex min-h-0 flex-1">
+        <form
+          id={`${activeTab}-entry-panel`}
+          role="tabpanel"
+          aria-labelledby={`${activeTab}-entry-tab`}
+          className={`flex min-h-0 min-w-0 flex-1 flex-col ${
+            ready ? "" : "hidden"
+          }`}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <div
+            ref={entryScrollRegionRef}
+            data-testid="entry-scroll-region"
+            className={`min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-4 ${
+              activeTab === "advanced"
+                ? "flex min-w-0 flex-col"
+                : "mx-auto flex w-full max-w-[560px] flex-col"
+            }`}
+            onScroll={measureAttentionErrors}
+          >
+            {activeTab === "advanced" ? (
+              <>
                 <div className="flex flex-col gap-1">
                   <label
-                    htmlFor={`${activeTab}-date`}
+                    htmlFor="advanced-date"
                     className="text-sm font-semibold"
                   >
                     Date
                   </label>
                   <input
-                    id={`${activeTab}-date`}
+                    id="advanced-date"
                     ref={dateInputRef}
                     type="date"
                     className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
-                    value={activeTabDraft.date}
+                    value={draft.advanced.date}
                     onBlur={() => {
-                      validateField("date");
+                      setAdvancedFieldErrors(
+                        validateAdvancedDraft(
+                          draft.advanced,
+                          advancedValidationOptions,
+                        ),
+                      );
                     }}
                     onChange={(event) => {
-                      updateActiveTabDraft({ date: event.target.value });
+                      updateAdvancedDraft({ date: event.target.value });
                     }}
                   />
-                  <FieldError message={fieldErrors.date} />
+                  <FieldError message={advancedFieldErrors.date} />
                 </div>
+
+                <div
+                  className="min-w-0 overflow-visible"
+                  aria-label="Journal records"
+                >
+                  <div className="flex min-w-0 flex-col gap-3">
+                    {draft.advanced.records.map((row, rowIndex) => (
+                      <section
+                        key={row.draftId}
+                        className="bg-card min-w-0 border-2 border-[var(--border-ink)] p-3 shadow-[var(--shadow-pixel)]"
+                        aria-label={`Journal record ${rowIndex + 1}`}
+                      >
+                        <div className="mb-3 flex min-w-0 items-center justify-between gap-2 border-b-2 border-[var(--border-ink)] pb-2">
+                          <h3 className="font-heading text-sm font-semibold uppercase">
+                            Record {rowIndex + 1}
+                          </h3>
+                          <Tooltip
+                            label={`Remove record ${rowIndex + 1}`}
+                            asChild
+                          >
+                            <Button
+                              ref={(element) => {
+                                advancedRemoveButtonRefs.current[rowIndex] =
+                                  element;
+                              }}
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              aria-label={`Remove record ${rowIndex + 1}`}
+                              onClick={() => {
+                                updateAdvancedDraft({
+                                  records: draft.advanced.records.filter(
+                                    (_record, index) => index !== rowIndex,
+                                  ),
+                                });
+                                setAdvancedFieldErrors({});
+                                focusAfterAdvancedRecordRemoval(rowIndex);
+                              }}
+                            >
+                              <Trash aria-hidden="true" />
+                            </Button>
+                          </Tooltip>
+                        </div>
+
+                        <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,9.5rem),1fr))] gap-3">
+                          <AdvancedRecordField
+                            label="Account"
+                            className="col-span-full"
+                          >
+                            <EntityPicker
+                              key={`${lookupRevision}:advanced:${row.draftId}:account:${row.categoryId ?? ""}`}
+                              exactMatchOptions={exactMatchAccountOptions}
+                              id={`advanced-record-${rowIndex}-account`}
+                              label={`Record ${rowIndex + 1} account`}
+                              labelClassName="sr-only"
+                              options={advancedAccountOptions(row.categoryId)}
+                              value={row.accountId}
+                              onChange={(accountId) => {
+                                updateAdvancedRow(rowIndex, {
+                                  accountId,
+                                  currency:
+                                    accountCurrency(lookups, accountId) ??
+                                    row.currency,
+                                });
+                              }}
+                            />
+                            <FieldError
+                              message={advancedFieldError(
+                                advancedFieldErrors,
+                                rowIndex,
+                                "accountId",
+                              )}
+                            />
+                          </AdvancedRecordField>
+                          <AdvancedRecordField label="Amount">
+                            <label
+                              htmlFor={`advanced-record-${rowIndex}-amount`}
+                              className="sr-only"
+                            >
+                              Record {rowIndex + 1} amount
+                            </label>
+                            <input
+                              id={`advanced-record-${rowIndex}-amount`}
+                              inputMode="decimal"
+                              className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                              placeholder="-12.34"
+                              value={row.amount}
+                              onBlur={() => {
+                                setAdvancedFieldErrors(
+                                  validateAdvancedDraft(
+                                    draft.advanced,
+                                    advancedValidationOptions,
+                                  ),
+                                );
+                              }}
+                              onChange={(event) => {
+                                updateAdvancedRow(rowIndex, {
+                                  amount: event.target.value,
+                                });
+                              }}
+                            />
+                            <FieldError
+                              message={advancedFieldError(
+                                advancedFieldErrors,
+                                rowIndex,
+                                "amount",
+                              )}
+                            />
+                          </AdvancedRecordField>
+                          <AdvancedRecordField label="Currency">
+                            <label
+                              htmlFor={`advanced-record-${rowIndex}-currency`}
+                              className="sr-only"
+                            >
+                              Record {rowIndex + 1} currency
+                            </label>
+                            <input
+                              id={`advanced-record-${rowIndex}-currency`}
+                              list="entry-currency-options"
+                              className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                              value={row.currency}
+                              onBlur={() => {
+                                setAdvancedFieldErrors(
+                                  validateAdvancedDraft(
+                                    draft.advanced,
+                                    advancedValidationOptions,
+                                  ),
+                                );
+                              }}
+                              onChange={(event) => {
+                                updateAdvancedRow(rowIndex, {
+                                  currency: event.target.value.toUpperCase(),
+                                });
+                              }}
+                            />
+                            <FieldError
+                              message={advancedFieldError(
+                                advancedFieldErrors,
+                                rowIndex,
+                                "currency",
+                              )}
+                            />
+                          </AdvancedRecordField>
+                          <AdvancedRecordField
+                            label="Category"
+                            className="col-span-full"
+                          >
+                            <EntityPicker
+                              key={`${lookupRevision}:advanced:${row.draftId}:category`}
+                              id={`advanced-record-${rowIndex}-category`}
+                              label={`Record ${rowIndex + 1} category`}
+                              labelClassName="sr-only"
+                              options={options.allCategories}
+                              value={row.categoryId}
+                              onChange={(categoryId) => {
+                                const accountId = advancedAccountOptions(
+                                  categoryId,
+                                ).some((option) => option.id === row.accountId)
+                                  ? row.accountId
+                                  : undefined;
+                                updateAdvancedRow(rowIndex, {
+                                  accountId,
+                                  categoryId,
+                                });
+                              }}
+                            />
+                            <FieldError
+                              message={advancedFieldError(
+                                advancedFieldErrors,
+                                rowIndex,
+                                "categoryId",
+                              )}
+                            />
+                          </AdvancedRecordField>
+                          <AdvancedRecordField
+                            label="Tags"
+                            className="col-span-full"
+                          >
+                            <EntityMultiPicker
+                              id={`advanced-record-${rowIndex}-tags`}
+                              label={`Record ${rowIndex + 1} tags`}
+                              labelClassName="sr-only"
+                              options={options.tags}
+                              value={row.tagIds}
+                              onChange={(tagIds) => {
+                                updateAdvancedRow(rowIndex, { tagIds });
+                              }}
+                            />
+                          </AdvancedRecordField>
+                          <AdvancedRecordField label="Member">
+                            <EntityPicker
+                              key={`${lookupRevision}:advanced:${row.draftId}:member`}
+                              id={`advanced-record-${rowIndex}-member`}
+                              label={`Record ${rowIndex + 1} member`}
+                              labelClassName="sr-only"
+                              options={options.members}
+                              placeholder="Whole household"
+                              value={row.memberId}
+                              onChange={(memberId) => {
+                                updateAdvancedRow(rowIndex, { memberId });
+                              }}
+                            />
+                          </AdvancedRecordField>
+                          <AdvancedRecordField label="Status">
+                            <div className="flex flex-col gap-2">
+                              <label
+                                htmlFor={`advanced-record-${rowIndex}-status`}
+                                className="sr-only"
+                              >
+                                Record {rowIndex + 1} posting status
+                              </label>
+                              <Select
+                                value={row.postingStatus}
+                                onValueChange={(value) => {
+                                  updateAdvancedRow(rowIndex, {
+                                    postingStatus:
+                                      value as JournalRecordDraftPostingStatus,
+                                  });
+                                }}
+                              >
+                                <SelectTrigger
+                                  id={`advanced-record-${rowIndex}-status`}
+                                  className="w-full"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {allowExpectedPostingStatus ||
+                                  row.postingStatus === "expected" ? (
+                                    <SelectItem
+                                      value="expected"
+                                      disabled={!allowExpectedPostingStatus}
+                                    >
+                                      Expected
+                                    </SelectItem>
+                                  ) : null}
+                                  <SelectItem value="posted">Posted</SelectItem>
+                                  <SelectItem value="pending">
+                                    Pending
+                                  </SelectItem>
+                                  <SelectItem value="cancelled">
+                                    Cancelled
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FieldError
+                                message={advancedFieldError(
+                                  advancedFieldErrors,
+                                  rowIndex,
+                                  "postingStatus",
+                                )}
+                              />
+                            </div>
+                          </AdvancedRecordField>
+                          <AdvancedRecordField
+                            label="Dates"
+                            className="col-span-full"
+                          >
+                            <div className="flex flex-col gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  updateAdvancedRow(rowIndex, {
+                                    showDates: !row.showDates,
+                                  });
+                                }}
+                              >
+                                Dates
+                              </Button>
+                              {row.showDates ? (
+                                <>
+                                  <label
+                                    htmlFor={`advanced-record-${rowIndex}-pending-date`}
+                                    className="sr-only"
+                                  >
+                                    Record {rowIndex + 1} pending date
+                                  </label>
+                                  <input
+                                    id={`advanced-record-${rowIndex}-pending-date`}
+                                    type="datetime-local"
+                                    step="any"
+                                    className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+                                    value={row.pendingDateTime}
+                                    onChange={(event) => {
+                                      updateAdvancedRow(rowIndex, {
+                                        pendingDateTime: event.target.value,
+                                      });
+                                    }}
+                                  />
+                                  <label
+                                    htmlFor={`advanced-record-${rowIndex}-posted-date`}
+                                    className="sr-only"
+                                  >
+                                    Record {rowIndex + 1} posted date
+                                  </label>
+                                  <input
+                                    id={`advanced-record-${rowIndex}-posted-date`}
+                                    type="datetime-local"
+                                    step="any"
+                                    className="bg-card h-9 w-full border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+                                    value={row.postedDateTime}
+                                    onChange={(event) => {
+                                      updateAdvancedRow(rowIndex, {
+                                        postedDateTime: event.target.value,
+                                      });
+                                    }}
+                                  />
+                                </>
+                              ) : null}
+                            </div>
+                          </AdvancedRecordField>
+                          <AdvancedRecordField
+                            label="Memo"
+                            className="col-span-full"
+                          >
+                            <label
+                              htmlFor={`advanced-record-${rowIndex}-memo`}
+                              className="sr-only"
+                            >
+                              Record {rowIndex + 1} memo
+                            </label>
+                            <textarea
+                              id={`advanced-record-${rowIndex}-memo`}
+                              className="bg-card min-h-16 w-full border-2 border-[var(--border-ink)] px-2 py-2 text-sm shadow-[var(--shadow-pixel)]"
+                              value={row.memo}
+                              onChange={(event) => {
+                                updateAdvancedRow(rowIndex, {
+                                  memo: event.target.value,
+                                });
+                              }}
+                            />
+                          </AdvancedRecordField>
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  ref={addAdvancedRecordButtonRef}
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    updateAdvancedDraft({
+                      records: [
+                        ...draft.advanced.records,
+                        blankRecordRowDraft(),
+                      ],
+                    });
+                  }}
+                >
+                  <Plus aria-hidden="true" />
+                  Add record
+                </Button>
+
+                <datalist id="entry-currency-options">
+                  {options.currencies.map((currency) => (
+                    <option key={currency} value={currency} />
+                  ))}
+                </datalist>
+              </>
+            ) : activeTabDraft && activeConfig ? (
+              <>
+                <div className="grid grid-cols-[1fr_130px] gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor={`${activeTab}-date`}
+                      className="text-sm font-semibold"
+                    >
+                      Date
+                    </label>
+                    <input
+                      id={`${activeTab}-date`}
+                      ref={dateInputRef}
+                      type="date"
+                      className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-pixel)]"
+                      value={activeTabDraft.date}
+                      onBlur={() => {
+                        validateField("date");
+                      }}
+                      onChange={(event) => {
+                        updateActiveTabDraft({ date: event.target.value });
+                      }}
+                    />
+                    <FieldError message={fieldErrors.date} />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor={`${activeTab}-currency`}
+                      className="text-sm font-semibold"
+                    >
+                      Currency
+                    </label>
+                    <input
+                      id={`${activeTab}-currency`}
+                      list="entry-currency-options"
+                      className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                      value={activeTabDraft.currency}
+                      onBlur={() => {
+                        validateField("currency");
+                      }}
+                      onChange={(event) => {
+                        updateActiveTabDraft({
+                          currency: event.target.value.toUpperCase(),
+                        });
+                      }}
+                    />
+                    <datalist id="entry-currency-options">
+                      {options.currencies.map((currency) => (
+                        <option key={currency} value={currency} />
+                      ))}
+                    </datalist>
+                    <FieldError message={fieldErrors.currency} />
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-1">
                   <label
-                    htmlFor={`${activeTab}-currency`}
+                    htmlFor={`${activeTab}-amount`}
                     className="text-sm font-semibold"
                   >
-                    Currency
+                    Amount
                   </label>
                   <input
-                    id={`${activeTab}-currency`}
-                    list="entry-currency-options"
+                    id={`${activeTab}-amount`}
+                    inputMode="decimal"
                     className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                    value={activeTabDraft.currency}
+                    placeholder="12.34"
+                    value={activeTabDraft.amount}
                     onBlur={() => {
-                      validateField("currency");
+                      validateField("amount");
                     }}
                     onChange={(event) => {
-                      updateActiveTabDraft({
-                        currency: event.target.value.toUpperCase(),
-                      });
+                      updateActiveTabDraft({ amount: event.target.value });
                     }}
                   />
-                  <datalist id="entry-currency-options">
-                    {options.currencies.map((currency) => (
-                      <option key={currency} value={currency} />
-                    ))}
-                  </datalist>
-                  <FieldError message={fieldErrors.currency} />
+                  <FieldError message={fieldErrors.amount} />
                 </div>
-              </div>
 
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor={`${activeTab}-amount`}
-                  className="text-sm font-semibold"
-                >
-                  Amount
-                </label>
-                <input
-                  id={`${activeTab}-amount`}
-                  inputMode="decimal"
-                  className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                  placeholder="12.34"
-                  value={activeTabDraft.amount}
-                  onBlur={() => {
-                    validateField("amount");
-                  }}
-                  onChange={(event) => {
-                    updateActiveTabDraft({ amount: event.target.value });
+                <EntityPicker
+                  key={`${lookupRevision}:${activeTab}:${activeConfig.primaryAccountField}:${primaryAccountValue ?? ""}`}
+                  id={`${activeTab}-${activeConfig.primaryAccountField}`}
+                  label={activeConfig.primaryAccountLabel}
+                  options={options[activeConfig.primaryAccountOptionSet]}
+                  value={primaryAccountValue}
+                  onChange={(accountId) => {
+                    updateActiveTabDraft({
+                      [activeConfig.primaryAccountField]: accountId,
+                      currency:
+                        accountCurrency(lookups, accountId) ??
+                        activeTabDraft.currency,
+                    });
                   }}
                 />
-                <FieldError message={fieldErrors.amount} />
-              </div>
+                <FieldError
+                  message={fieldErrors[activeConfig.primaryAccountField]}
+                />
 
-              <EntityPicker
-                key={`${lookupRevision}:${activeTab}:${activeConfig.primaryAccountField}:${primaryAccountValue ?? ""}`}
-                id={`${activeTab}-${activeConfig.primaryAccountField}`}
-                label={activeConfig.primaryAccountLabel}
-                options={options[activeConfig.primaryAccountOptionSet]}
-                value={primaryAccountValue}
-                onChange={(accountId) => {
-                  updateActiveTabDraft({
-                    [activeConfig.primaryAccountField]: accountId,
-                    currency:
-                      accountCurrency(lookups, accountId) ??
-                      activeTabDraft.currency,
-                  });
-                }}
-              />
-              <FieldError
-                message={fieldErrors[activeConfig.primaryAccountField]}
-              />
-
-              <EntityPicker
-                key={`${lookupRevision}:${activeTab}:${activeConfig.secondaryAccountField}:${secondaryAccountValue ?? ""}`}
-                id={`${activeTab}-${activeConfig.secondaryAccountField}`}
-                label={activeConfig.secondaryAccountLabel}
-                options={options[activeConfig.secondaryAccountOptionSet]}
-                value={secondaryAccountValue}
-                onChange={(accountId) => {
-                  updateActiveTabDraft({
-                    [activeConfig.secondaryAccountField]: accountId,
-                  });
-                }}
-              />
-              <FieldError
-                message={fieldErrors[activeConfig.secondaryAccountField]}
-              />
-
-              <EntityPicker
-                key={`${categoryLookupRevision}:${activeTab}:category:${activeTabDraft.categoryId ?? ""}`}
-                disabled={!categoryPickerReady}
-                id={`${activeTab}-category`}
-                label="Category"
-                options={options.categories}
-                placeholder={
-                  categoryPickerReady ? "Search" : "Loading categories"
-                }
-                value={activeTabDraft.categoryId}
-                onChange={(categoryId) => {
-                  updateActiveTabDraft({ categoryId });
-                }}
-              />
-              <FieldError message={fieldErrors.categoryId} />
-              <RetryableFieldError
-                message={categoryPicker.errorMessage}
-                onRetry={retryCategoryPicker}
-              />
-
-              <EntityMultiPicker
-                id={`${activeTab}-tags`}
-                label="Tags"
-                options={options.tags}
-                value={activeTabDraft.tagIds}
-                onChange={(tagIds) => {
-                  updateActiveTabDraft({ tagIds });
-                }}
-              />
-              <FieldError message={fieldErrors.tagIds} />
-
-              <EntityPicker
-                key={`${lookupRevision}:${activeTab}:member:${activeTabDraft.memberId ?? ""}`}
-                id={`${activeTab}-member`}
-                label="Member"
-                options={options.members}
-                placeholder="Whole household"
-                value={activeTabDraft.memberId}
-                onChange={(memberId) => {
-                  updateActiveTabDraft({ memberId });
-                }}
-              />
-              <FieldError message={fieldErrors.memberId} />
-
-              <div className="flex flex-col gap-1">
-                <label
-                  htmlFor={`${activeTab}-memo`}
-                  className="text-sm font-semibold"
-                >
-                  Memo
-                </label>
-                <textarea
-                  id={`${activeTab}-memo`}
-                  className="bg-card min-h-20 border-2 border-[var(--border-ink)] px-2 py-2 text-sm shadow-[var(--shadow-pixel)]"
-                  value={activeTabDraft.memo}
-                  onChange={(event) => {
-                    updateActiveTabDraft({ memo: event.target.value });
+                <EntityPicker
+                  key={`${lookupRevision}:${activeTab}:${activeConfig.secondaryAccountField}:${secondaryAccountValue ?? ""}`}
+                  id={`${activeTab}-${activeConfig.secondaryAccountField}`}
+                  label={activeConfig.secondaryAccountLabel}
+                  options={options[activeConfig.secondaryAccountOptionSet]}
+                  value={secondaryAccountValue}
+                  onChange={(accountId) => {
+                    updateActiveTabDraft({
+                      [activeConfig.secondaryAccountField]: accountId,
+                    });
                   }}
                 />
-                <FieldError message={fieldErrors.memo} />
-              </div>
+                <FieldError
+                  message={fieldErrors[activeConfig.secondaryAccountField]}
+                />
 
-              {activeTab === "transfer" ? (
-                <p className="text-muted-foreground font-body text-xs">
-                  Transfer fee rows are not exposed by the shorthand endpoint
-                  yet.
-                </p>
-              ) : null}
+                <EntityPicker
+                  key={`${categoryLookupRevision}:${activeTab}:category:${activeTabDraft.categoryId ?? ""}`}
+                  disabled={!categoryPickerReady}
+                  id={`${activeTab}-category`}
+                  label="Category"
+                  options={options.categories}
+                  placeholder={
+                    categoryPickerReady ? "Search" : "Loading categories"
+                  }
+                  value={activeTabDraft.categoryId}
+                  onChange={(categoryId) => {
+                    updateActiveTabDraft({ categoryId });
+                  }}
+                />
+                <FieldError message={fieldErrors.categoryId} />
+                <RetryableFieldError
+                  message={categoryPicker.errorMessage}
+                  onRetry={retryCategoryPicker}
+                />
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={editActiveTabAsJournal}
-              >
-                Edit as journal
-              </Button>
-            </>
-          ) : null}
-        </div>
+                <EntityMultiPicker
+                  id={`${activeTab}-tags`}
+                  label="Tags"
+                  options={options.tags}
+                  value={activeTabDraft.tagIds}
+                  onChange={(tagIds) => {
+                    updateActiveTabDraft({ tagIds });
+                  }}
+                />
+                <FieldError message={fieldErrors.tagIds} />
 
-        <div className="bg-card flex flex-col gap-3 border-t-2 border-[var(--border-ink)] p-4">
-          {activeTab === "advanced" ? (
-            <BalanceMeter balances={balances} />
-          ) : null}
-          {advancedFieldErrors.records ? (
-            <FieldError message={advancedFieldErrors.records} />
-          ) : null}
-          {generalError ? (
-            <p className="border-destructive bg-card text-destructive border-2 p-2 text-sm">
-              {generalError}
-            </p>
-          ) : null}
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-muted-foreground font-mono text-sm">
-              {replacement ? (
-                <span>
-                  Replacing transaction #
-                  {replacement.transaction.transaction_id}
-                </span>
-              ) : (
-                <>
-                  Entries this session:{" "}
-                  <span
-                    key={sessionCount}
-                    className="text-foreground inline-block animate-[score-pop_150ms_steps(2)]"
+                <EntityPicker
+                  key={`${lookupRevision}:${activeTab}:member:${activeTabDraft.memberId ?? ""}`}
+                  id={`${activeTab}-member`}
+                  label="Member"
+                  options={options.members}
+                  placeholder="Whole household"
+                  value={activeTabDraft.memberId}
+                  onChange={(memberId) => {
+                    updateActiveTabDraft({ memberId });
+                  }}
+                />
+                <FieldError message={fieldErrors.memberId} />
+
+                <div className="flex flex-col gap-1">
+                  <label
+                    htmlFor={`${activeTab}-memo`}
+                    className="text-sm font-semibold"
                   >
-                    {sessionCount}
-                  </span>
-                </>
-              )}
-            </div>
-            <Button type="submit" disabled={submitDisabled}>
-              <Check aria-hidden="true" />
-              {saving
-                ? "Saving"
-                : replacement
-                  ? "Update transaction"
-                  : "Save and add another"}
-            </Button>
+                    Memo
+                  </label>
+                  <textarea
+                    id={`${activeTab}-memo`}
+                    className="bg-card min-h-20 border-2 border-[var(--border-ink)] px-2 py-2 text-sm shadow-[var(--shadow-pixel)]"
+                    value={activeTabDraft.memo}
+                    onChange={(event) => {
+                      updateActiveTabDraft({ memo: event.target.value });
+                    }}
+                  />
+                  <FieldError message={fieldErrors.memo} />
+                </div>
+
+                {activeTab === "transfer" ? (
+                  <p className="text-muted-foreground font-body text-xs">
+                    Transfer fee rows are not exposed by the shorthand endpoint
+                    yet.
+                  </p>
+                ) : null}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={editActiveTabAsJournal}
+                >
+                  Edit as journal
+                </Button>
+              </>
+            ) : null}
           </div>
-        </div>
-      </form>
+
+          <div className="bg-card flex flex-col gap-3 border-t-2 border-[var(--border-ink)] p-4">
+            {activeTab === "advanced" ? (
+              <BalanceMeter balances={balances} />
+            ) : null}
+            {advancedFieldErrors.records ? (
+              <FieldError message={advancedFieldErrors.records} />
+            ) : null}
+            {generalError ? (
+              <p
+                className="border-destructive bg-card text-destructive border-2 p-2 text-sm"
+                role="alert"
+              >
+                {generalError}
+              </p>
+            ) : null}
+            {attentionErrorCount > 0 ? (
+              <button
+                type="button"
+                className="font-heading w-full border-2 border-[var(--color-class-adjustment-ink)] bg-[var(--color-class-adjustment-bright)] px-2 py-1 text-left text-xs font-semibold text-[var(--color-class-adjustment-ink)] uppercase"
+                onClick={focusFirstError}
+              >
+                {attentionErrorCount}{" "}
+                {attentionErrorCount === 1 ? "field needs" : "fields need"}{" "}
+                attention
+              </button>
+            ) : null}
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-muted-foreground flex min-w-0 flex-1 items-center font-mono text-sm">
+                {replacement ? (
+                  <span className="truncate">
+                    Replacing transaction #
+                    {replacement.transaction.transaction_id}
+                  </span>
+                ) : (
+                  <>
+                    <span className="shrink-0">
+                      Entries this session:{" "}
+                      <span
+                        key={sessionCount}
+                        className="text-foreground inline-block animate-[score-pop_150ms_steps(2)]"
+                      >
+                        {sessionCount}
+                      </span>
+                    </span>
+                    {sessionTransactions[0] ? (
+                      <Tooltip
+                        label={sessionTransactions[0].display_title}
+                        className="ml-2 min-w-0 xl:hidden"
+                        focusable={false}
+                      >
+                        <span className="block truncate">
+                          saved · {sessionTransactions[0].display_title}
+                        </span>
+                      </Tooltip>
+                    ) : null}
+                  </>
+                )}
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                {!replacement ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={submitDisabled}
+                    onClick={() => {
+                      void submit(true);
+                    }}
+                  >
+                    <Check aria-hidden="true" />
+                    {saving ? "Saving" : "Save and close"}
+                  </Button>
+                ) : null}
+                <Button type="submit" disabled={submitDisabled}>
+                  <Check aria-hidden="true" />
+                  {saving
+                    ? "Saving"
+                    : replacement
+                      ? "Update transaction"
+                      : "Save and add another"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </form>
+        {!replacement ? (
+          <aside
+            className="bg-card hidden min-h-0 w-[280px] shrink-0 flex-col overflow-y-auto border-l-2 border-[var(--border-ink)] xl:flex"
+            aria-label="Transaction entry context"
+          >
+            <section className="flex flex-col gap-1 p-3">
+              <h3 className="font-heading text-xs font-bold uppercase">
+                This session
+              </h3>
+              {sessionTransactions.length > 0 ? (
+                sessionTransactions.map((transaction) => (
+                  <EntryRailRow
+                    key={transaction.transaction_id}
+                    editable
+                    transaction={transaction}
+                  />
+                ))
+              ) : (
+                <p className="text-muted-foreground font-body text-xs">
+                  Saved entries stamp in here.
+                </p>
+              )}
+            </section>
+            {recentTransactions.length > 0 ? (
+              <section className="flex flex-col gap-1 border-t-2 border-[var(--border-ink)] p-3">
+                <h3 className="font-heading text-xs font-bold uppercase">
+                  Recent
+                </h3>
+                {recentTransactions.map((transaction) => (
+                  <EntryRailRow
+                    key={transaction.transaction_id}
+                    editable={false}
+                    transaction={transaction}
+                  />
+                ))}
+              </section>
+            ) : null}
+          </aside>
+        ) : null}
+      </div>
       <ConfirmationDialog
         cancelLabel="Keep draft"
         confirmIcon={<Trash aria-hidden="true" />}
@@ -3098,6 +3464,20 @@ export const EntryPanel = ({
           Opening this saved transaction will replace the current entry draft.
         </p>
       </ConfirmationDialog>
-    </aside>
+      <ConfirmationDialog
+        cancelLabel="Keep editing"
+        confirmIcon={<Trash aria-hidden="true" />}
+        confirmLabel="Discard changes"
+        errorMessage={undefined}
+        onConfirm={onClose}
+        onOpenChange={setConfirmCloseDiscardOpen}
+        open={confirmCloseDiscardOpen}
+        pending={false}
+        pendingLabel="Discarding"
+        title="Discard transaction changes?"
+      >
+        <p>Your unsaved edits will be lost.</p>
+      </ConfirmationDialog>
+    </section>
   );
 };

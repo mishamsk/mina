@@ -40,7 +40,6 @@ interface TransactionFilterControlsProps {
   readonly hiddenDimensions?: readonly TransactionFilterDimension[];
   readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly onChange: (filters: TransactionFilters) => void;
-  readonly onOpenChange?: (open: boolean) => void;
 }
 
 interface DimensionDefinition {
@@ -358,7 +357,6 @@ export const TransactionFilterControls = ({
   hiddenDimensions = [],
   lookups,
   onChange,
-  onOpenChange,
 }: TransactionFilterControlsProps) => {
   const addFilterTriggerRef = useRef<HTMLButtonElement>(null);
   const restoreAddFilterTriggerFocusRef = useRef(false);
@@ -724,7 +722,6 @@ export const TransactionFilterControls = ({
         open={open}
         onOpenChange={(nextOpen) => {
           setOpen(nextOpen);
-          onOpenChange?.(nextOpen);
           if (!nextOpen) {
             selectDimension(undefined);
           }
@@ -760,7 +757,6 @@ export const TransactionFilterControls = ({
             }
             restoreAddFilterTriggerFocusRef.current = true;
             setOpen(false);
-            onOpenChange?.(false);
             selectDimension(undefined);
           }}
           onKeyDown={(event) => {

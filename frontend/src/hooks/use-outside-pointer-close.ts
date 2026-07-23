@@ -3,6 +3,7 @@ import { type RefObject, useEffect } from "react";
 const defaultFloatingOverlaySelectors = [
   "[data-slot='popover-content']",
   "[data-slot='tooltip-content']",
+  "[data-modal-overlay]",
   "[role='dialog'][aria-modal='true']",
   "[role='alertdialog'][aria-modal='true']",
 ] as const;

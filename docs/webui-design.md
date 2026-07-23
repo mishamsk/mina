@@ -62,8 +62,8 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 - Content area is fluid; data tables may use the full content width.
 - Every page uses one header pattern: title (with optional breadcrumb for detail pages) on the left, primary actions on the right, filter/toolbar row beneath when applicable.
 - Pages carry no standing description text. Each page header includes a small help icon button that reveals a short explanatory paragraph on demand (popover or collapsible); the explanation is hidden by default.
-- Overlays: side peek panels for previews, the docked entry panel for transaction entry, centered dialogs only for confirmations.
-- Side peek/detail panels are non-modal: no backdrop, no focus trap, no modal semantics; the underlying list stays interactive so row navigation can drive the panel. `Esc` closes the panel and returns focus to the originating row, except while a panel inline editor is active, when the first `Esc` discards its draft, returns focus to the originating cell, and leaves the panel open. Clicking outside the panel also closes it — the click still performs its normal action on the underlying content (a click that opens another record simply moves the panel), except while a panel inline editor is active, when the interaction discards its draft, is suppressed, and leaves the panel open. The docked entry panel never closes on outside interaction. Centered dialogs are modal and trap focus.
+- Overlays: side peek panels for previews, the transaction editor modal for all transaction create/edit/split/duplicate, centered dialogs only for confirmations.
+- Side peek/detail panels are non-modal: no backdrop, no focus trap, no modal semantics; the underlying list stays interactive so row navigation can drive the panel. `Esc` closes the panel and returns focus to the originating row, except while a panel inline editor is active, when the first `Esc` discards its draft, returns focus to the originating cell, and leaves the panel open. Clicking outside the panel also closes it — the click still performs its normal action on the underlying content (a click that opens another record simply moves the panel), except while a panel inline editor is active, when the interaction discards its draft, is suppressed, and leaves the panel open. The transaction editor modal is a true modal: focus trap, restores focus to its invoker on close, and never closes on outside interaction — backdrop clicks are absorbed (with a one-step outline flash) and never activate underlying content. Centered dialogs remain modal and trap focus.
 - Table density (comfortable/compact) is a persisted UI preference.
 
 ## Command Palette
@@ -71,7 +71,7 @@ Structure and navigation only; how any of it looks is owned by the theme specifi
 A launcher-style command palette (VS Code / Spotlight pattern) is a core Phase 2 surface, available everywhere via a global shortcut. It serves:
 
 - Navigation: jump to any page and any entity page by typed name — accounts, groups, categories, tags, members, templates.
-- Entry: "new spend / income / refund / transfer" commands; typing a template name starts a prefilled entry.
+- Entry: "new spend / income / refund / transfer" commands; typing a template name starts a prefilled entry. Both open the transaction editor modal in place — no navigation.
 - Transaction search: free-text search across transactions/records following the `GET /api/transactions?search=` semantics owned by `api/openapi.yaml`; entered by typing a leading ASCII apostrophe (Space on an empty input inserts the apostrophe; later spaces stay part of the query); result rows show date, class, title/memo, and amount; selecting a result navigates to the URL-addressable transaction detail.
 - App actions: trigger backup, reload exchange rates, toggle density, open settings.
 
@@ -150,7 +150,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 ### Keyboard
 
 - Keyboard-complete tables: up/down moves row focus; in the transactions browser Space toggles inline expansion of the focused row and, outside bulk-edit mode, Enter opens the detail panel (in bulk-edit mode Space toggles selection per Bulk operations); open peek, start inline edit, and selection stay keyboard-driven — batch review sessions never need the mouse.
-- Global shortcuts: open command palette, new transaction, focus list search, `Esc` closes overlays, `Cmd+Enter` submits forms, arrows + `Enter` drive pickers.
+- Global shortcuts: open command palette, new transaction (opens the transaction editor modal in place on any screen), focus list search, `Esc` closes overlays, `Cmd+Enter` submits forms, `Cmd+Shift+Enter` saves and closes in the entry modal, arrows + `Enter` drive pickers.
 - Toggling bulk-edit mode is available from the toolbar and the command palette; in-mode selection keys per Bulk operations.
 
 ### Tables and filtering
@@ -223,28 +223,33 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 
 ### 2. Transactions — Phase 2 (core screen)
 
-- Purpose: scan, search, slice, and edit all activity; home of batched entry.
+- Purpose: scan, search, slice, and edit all activity.
 - One list: classified transaction lines from the shared browser — no separate records mode. Rows expand inline to the records subtable with per-record editing.
 - Scope: all-time, paginated, newest first (initiated date descending) by default. A date-jump control navigates to any point in history. The page remembers its last position (anchor, filters) and restores it on return.
 - Toolbar: search, go-to-day with icon-only day-step buttons, class dropdown, and the Filter toggle; typed filter chips accumulate in the filter bar beneath the toolbar row.
 - Inline quick fixes per the uniformity rule; bulk selection and the bulk action bar per Bulk operations.
-- Transaction detail (URL-addressable, side panel over the list): class badge, counterparty title, display amount, initiated date, full record table, metadata (source, created), actions: Edit, Duplicate, Delete, Split. The detail view shows everything the summary line truncates or hides: complete tag sets, full memos, and all per-record values.
+- Transaction detail (URL-addressable, side panel over the list): class badge, counterparty title, display amount, initiated date, full record table, metadata (source, created), actions: Edit, Duplicate, Delete, Split. Edit, Duplicate, and Split open the transaction editor modal over the panel; the panel stays open beneath it and refreshes after save. The detail view shows everything the summary line truncates or hides: complete tag sets, full memos, and all per-record values.
 
 ### 3. Transaction entry — Phase 2
 
-- Surface: a docked, non-modal entry panel — the transactions list stays visible and live-updates as entries save, because batched entry constantly references what is already entered. Opened from anywhere (global shortcut, palette, "New transaction"); its home context is the Transactions page.
-- Template type-ahead start: the panel opens with a smart field — type a template name to prefill everything, or skip past it to a blank form. The palette offers the same entry points.
-- Type tabs: Spend, Income, Refund, Transfer, Advanced.
+- Surface: one centered modal editor, app-shell-owned and route-independent — the single surface for create, edit, split, and duplicate, opened in place from every entry point with no navigation. Stable stage frame, wide enough for the full journal grid at near-full viewport height; header and submit footer always pinned; the body is the single scroll region; content growth and validation errors never resize or move the frame. The underlying page stays visible behind the scrim and live-updates as entries save.
+- Entry points (all open the same modal): page-header "New transaction" everywhere; the app-shell sidebar action; the global new-transaction shortcut; command-palette entry commands and template-name prefills; browser empty-state action; detail-panel and row Edit / Duplicate / Split; "Edit as journal" escalation from expanded records. Opening forces bulk-edit mode off; opening over an active inline-editor draft discards it per the inline-editing rules.
+- Template type-ahead start: the modal opens with a smart field — type a template name to prefill everything, or skip past it to a blank form. The palette offers the same entry points.
+- Type tabs: Spend, Income, Refund, Transfer, Advanced. Shorthand forms render in a centered narrow column; Advanced fills the body width; the frame never changes between tabs.
   - Spend: date, amount+currency, funding account (`balance`), merchant (`flow`, inline-creatable), category (expense/fee intent), optional tags/member/memo, optional friend-split rows (member or person balance account + share) that produce the transfer support records.
   - Income: date, amount, destination account, source (`flow`), category (income intent), optional extras.
   - Refund: like income with a merchant counterparty and refund-intent category.
   - Transfer: date, amount, from account, to account, optional attached fee row.
   - Each tab maps to its shorthand endpoint; when a form's options exceed what a shorthand payload expresses, either the shorthand API is extended or the UI composes the full balanced transaction payload — the user never sees the difference.
-- Batch ergonomics: "Save and add another" is the default submit; sticky fields (date, account, type) carry into the next entry; a running tally of this session's entries shows in the panel.
 - Currency fields are comboboxes over the currencies already present in the data, with free entry for a new code.
 - Advanced (full journal editor): a free record grid — account, signed amount, currency, category, tags, member, memo, dates, statuses per row — with a per-currency balance meter pinned to the footer. No client-side record-role inference: the split of an existing record is inherently ambiguous (merchant side vs. funding side), so the grid stays free-form. The only guidance is deterministic: account pickers filter to intent-valid account types once a row has a category. Save stays disabled until every currency sums to zero; API shape-validation errors map onto the offending rows.
 - Escalation: "Edit as journal" from any tab converts the current form contents into records with nothing lost.
-- Splitting: from a saved transaction, "Split" opens the journal editor with its records loaded, ready to divide across categories, counterparties, or member/person shares.
+- Create vs edit: create shows all five tabs, "Save and add another" as the default submit (`Cmd+Enter`) plus "Save and close" (`Cmd+Shift+Enter`), sticky fields (date, account, type) carrying into the next entry, the session tally, and the modal rail. Edit/split show "Update transaction" only (closes on success), the fitting shorthand tab plus Advanced, and a "Replacing transaction" footer note; the detail panel stays open beneath the modal and refreshes after save. Editing reopens the shorthand shape when records still fit; "Split" always opens the journal editor with the transaction's records loaded, ready to divide across categories, counterparties, or member/person shares. Duplicate opens the create path prefilled.
+- Batch ergonomics: batched entry works from any page. The modal rail (wide screens, create mode) shows THIS SESSION — this sitting's saved entries, each with an Edit action that relaunches it — and RECENT — the launch context's transaction rows captured at open. The rail is read-only and adds no tab stops. Below the rail breakpoint a one-line footer recap of the last save sits beside the session tally. Saves fan out immediately to the visible list behind the modal; deeper recall closes the modal (drafts persist), checks the list, and reopens.
+- Deep links: one `?entry=` param valid on every route — `new[:spend|income|refund|transfer|journal]` (`journal` opens Advanced), `edit:<id>`, `split:<id>`, `duplicate:<id>`. Opening pushes one history entry (browser Back closes); in-app close strips the param; composes with the transaction-detail param; missing ids show the standard error state in the modal body; `new` restores the persisted draft. Bulk-edit mode stays never-URL.
+- Close / Esc / drafts / focus: Esc ladder inside the modal — open picker → close it; confirmation dialog open → it handles Esc; otherwise close the modal. Create closes without prompting (per-tab drafts persist to IndexedDB and restore on reopen); edit/split with modifications require the discard confirmation. On close, focus restores to the invoking control, falling back first to the list-region restore target and then to the app-shell New transaction action; initial focus is the template type-ahead (create) or the first field of the active tab (edit).
+- Validation: inline on blur; API errors map onto the offending fields/rows; the pinned footer shows the general error strip and, when errors sit off-screen, a compact attention strip that scrolls to and focuses the first offending field. Advanced save stays disabled until every currency balances. Errors never close the modal or lose entered data.
+- Responsive: wide screens — centered stage with gutters and the rail; medium — stage without the rail (footer recap); narrow — full-screen takeover with header/footer pinned and the Advanced grid scrolling horizontally inside the body only.
 
 ### 4. Account and group pages — Phase 2
 
@@ -275,7 +280,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
   - Member pages show the transactions attributed to that member through the same shared-browser embedding.
   - Category, tag, and member pages include a `View all transactions` action that opens the Transactions page with the drill-down scope as URL filters.
 - Categories: economic-intent badge per row; the editor requires intent and explains its classification effect in one line.
-- Templates: template tree with record-default summaries; editor manages the partial record defaults (category required; account, member, currency, amount, tags, memo, statuses optional); primary row action "Use" opens the entry panel prefilled. Templates are reachable by type-ahead from the entry panel and the command palette.
+- Templates: template tree with record-default summaries; editor manages the partial record defaults (category required; account, member, currency, amount, tags, memo, statuses optional); primary row action "Use" opens the transaction editor modal prefilled. Templates are reachable by type-ahead from the entry modal and the command palette.
 
 ### 7. Status & Settings — Phase 2
 
@@ -294,6 +299,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Expected rows carry a distinct visual treatment inline; overdue occurrences (scheduled before today) additionally carry the warning-treatment missed marker per the theme.
 - The filter direction is hide-based: a standing toolbar icon toggle — same control family as the Filter toggle, sitting with the standing controls beside the class dropdown — lets the user HIDE expected/recurring rows; there is no opt-in Expected posting-status filter. It is a pressed-state toggle (constant accessible name "Hide expected", state via `aria-pressed`, tooltip naming state and action, glyph shape changing with state so meaning never relies on color) and never a chip-backed filter dimension: clearing the filter bar does not touch it.
 - Confirm and Dismiss are row actions on expected rows, per the affordance-class rules: Confirm materializes the transaction immediately with the standard toast; Dismiss sits behind the standard named confirmation dialog. Both surface API errors per the standard feedback rules.
+- Confirmed occurrences are ordinary transactions and edit through the transaction editor modal; expected occurrences stay read-only — Confirm and Dismiss are their only actions.
 - The `/recurring` page hosts recurring definitions management — the configuration surface for recurring transactions; occurrence review lives inline in Transactions per the rules above.
 
 Definitions management screen:
@@ -301,7 +307,7 @@ Definitions management screen:
 - Content: one compact table of recurring definitions (shared table rules) — columns: definition (hierarchical FQN path rendering), schedule (human-readable rule summary, e.g. "Every 2 weeks" / "Monthly on the 15th" / "Last day of month"), status (active/paused badge), next (next scheduled date computed from the schedule), amount (definition display amount per the amount rules), and the trailing actions column.
 - Row activation opens the definition editor panel — a deliberate management-surface exception to the reference row-activation rule, because a definition has no read-only detail page; the editor is its detail.
 - Row actions per the affordance-class rules: Confirm next (button; materializes and posts the next occurrence immediately with the standard toast), Pause/Resume (persistent state toggle), Defer (button, interval schedules only, opens a dialog with the offset defaulting to one cadence interval and user-editable), Edit, and Cancel (destructive, behind the standard named confirmation; tombstones the definition, generated history untouched).
-- Editor (side panel, create + edit): FQN, schedule class and fields (interval every-N + unit, or date rule day-of-month/last-day), anchor date, paused state, and the definition's complete balanced record grid reusing the advanced journal editor pieces — per-currency balance meter, intent-valid account pickers, no partial shapes. Save creates or fully replaces the definition (version increments; records replaced atomically); API shape errors map onto the offending rows.
+- Editor (side panel, create + edit): FQN, schedule class and fields (interval every-N + unit, or date rule day-of-month/last-day), anchor date, paused state, and the definition's complete balanced record grid reusing the transaction editor modal's journal editor pieces — per-currency balance meter, intent-valid account pickers, no partial shapes. Save creates or fully replaces the definition (version increments; records replaced atomically); API shape errors map onto the offending rows.
 - Empty state: a quiet "no recurring definitions" presentation with the New definition action.
 
 ### 9. Future screens — guidance only
@@ -316,7 +322,7 @@ Mina-specific building blocks every screen composes (names indicative; placement
 
 - `TransactionBrowser` — the shared browsing system: transaction shape (expandable transaction lines) and records shape (register rows + peek panel), with filtering, selection, inline editing, and keyboard driving.
 - `PeekPanel` — side panel previewing the full containing transaction from a record row.
-- `EntryPanel` — docked non-modal entry surface: template type-ahead, shorthand tabs, journal editor, session tally.
+- `EntryModal` — the centered modal transaction editor: template type-ahead, shorthand tabs, journal editor, session tally, modal rail (session + recent context), create/edit/split/duplicate launches, `?entry=` deep links.
 - `CommandPalette` — navigation, entry launcher, transaction search, app actions.
 - `BalanceStrip` — always-visible prominent-account balances.
 - `AmountText` — signed, tabular, currency-code-aware amount with class-aware emphasis.

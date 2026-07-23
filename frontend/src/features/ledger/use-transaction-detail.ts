@@ -28,6 +28,7 @@ const parseOptionalPositiveInteger = (
 };
 
 const restoreFallbackSelector = "[data-transaction-detail-restore-target]";
+export const transactionEntrySavedEvent = "mina:transaction-entry-saved";
 
 interface FetchedTransactionDetail {
   readonly errorMessage: string | undefined;
@@ -216,6 +217,24 @@ export const useTransactionDetail = ({
     selectedTransactionId,
     suppressedDetailFetchId,
   ]);
+
+  useEffect(() => {
+    const onEntrySaved = (event: Event) => {
+      const transaction = (event as CustomEvent<Transaction>).detail;
+      if (transaction.transaction_id !== selectedTransactionId) {
+        return;
+      }
+      setFetchedDetail({
+        errorMessage: undefined,
+        transaction,
+        transactionId: transaction.transaction_id,
+      });
+    };
+    window.addEventListener(transactionEntrySavedEvent, onEntrySaved);
+    return () => {
+      window.removeEventListener(transactionEntrySavedEvent, onEntrySaved);
+    };
+  }, [selectedTransactionId]);
 
   return {
     closeTransactionDetail,

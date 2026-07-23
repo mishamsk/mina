@@ -198,6 +198,28 @@
   }
 }
 
+@keyframes entry-stage-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes entry-attention-flash {
+  0%,
+  100% {
+    outline: 0 solid var(--ring);
+  }
+
+  50% {
+    outline: 4px solid var(--ring);
+    outline-offset: -6px;
+  }
+}
+
 @keyframes toolbar-mode-swap {
   0% {
     opacity: 0;
@@ -251,19 +273,19 @@
   }
 
   .transactions-table .transactions-description-column {
-    width: 26%;
+    width: 20%;
   }
 
   .transactions-table--bulk-edit .transactions-description-column {
-    width: calc(26% - 2.25rem);
+    width: calc(20% - 2.25rem);
   }
 
   .transactions-table .transactions-category-column {
-    width: 12%;
+    width: 10%;
   }
 
   .transactions-table .transactions-tags-column {
-    width: 15%;
+    width: 12%;
   }
 
   .transactions-table .transactions-member-column {
@@ -271,11 +293,11 @@
   }
 
   .transactions-table .transactions-amount-column {
-    width: 15%;
+    width: 17%;
   }
 
   .transactions-table .transactions-actions-column {
-    width: 8%;
+    width: 17%;
   }
 
   .transactions-table--bulk-edit .transactions-actions-column {
@@ -304,27 +326,27 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 27%;
+      width: 17%;
     }
 
     .transactions-table--bulk-edit .transactions-description-column {
-      width: calc(27% - 2.25rem);
+      width: calc(17% - 2.25rem);
     }
 
     .transactions-table .transactions-category-column {
-      width: 12%;
+      width: 11%;
     }
 
     .transactions-table .transactions-tags-column {
-      width: 14%;
+      width: 12%;
     }
 
     .transactions-table .transactions-amount-column {
-      width: 21%;
+      width: 23%;
     }
 
     .transactions-table .transactions-actions-column {
-      width: 9%;
+      width: 20%;
     }
   }
 

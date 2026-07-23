@@ -24,14 +24,16 @@
 - Lookup-backed inline pickers use bounded REST lists, exclude hidden entities upstream, and do not offer an include-hidden control; broader picker surfaces own their include-hidden controls.
 - Expanded-record and detail-panel record editors own only their per-cell transient state; successful saves delegate to the browser page for API-owned validation and the standard transaction-mutation refresh fan-out.
 - Category, tags, and posting status use their narrow record bulk APIs; member, memo, dates, and simple row amounts use atomic transaction replacement built from the displayed transaction shape.
-- Structural record fields remain non-inline; transaction pages with an entry panel expose a direct escalation action to the full journal editor.
+- Structural record fields remain non-inline; transaction browsers expose a direct escalation action to the modal's full journal editor.
 - Entry supports the spend, income, refund, and transfer shorthand endpoints.
-- Saved-transaction Edit/Split saves are full replacements owned by the entry panel; page routes select the blocking post-save refresh mode and own notices.
-- Saved-transaction Duplicate reuses entry-panel prefill mapping but stays on the create path.
+- The app-shell-owned `EntryModal` is the single create/edit/split/duplicate surface on every route; `?entry=` owns its shareable launch state and composes with page URL state.
+- Opening `EntryModal` exits bulk mode; active inline drafts follow the shared conflicting-interaction discard contract before a launcher proceeds.
+- Saved-transaction Edit/Split saves are full replacements owned by `EntryModal`; successful saves fan out to displayed transaction browsers, detail, balances, overview, registers, and reference snapshots.
+- Saved-transaction Duplicate reuses entry prefill mapping but stays on the create path.
 - Successful transaction mutations trigger shared invalidation for account, category, tag, and member page snapshots so REST-provided `deletable` flags refetch without a reload.
 - Successful inline transaction and record saves update the displayed page, invalidate sibling page snapshots, release the editor, and refresh that displayed page, balances, and overview in the background; category saves fetch the complete server-derived transaction before publishing the row update.
 - A background page response replaces only its unchanged source snapshot and is discarded when a newer source exists; failure preserves the displayed snapshot, marks it stale, and lets the mounted resource retry without a table loading state.
-- Entry-panel saves retain the blocking page refresh so stale displayed rows cannot start a conflicting full-replacement edit while the saved transaction refetches.
+- Entry-modal saves retain the blocking visible-page refresh so stale displayed rows cannot start a conflicting full-replacement edit while the saved transaction refetches.
 - Successful bulk mutations use the same transaction, balance, overview, register, detail, and reference-page refresh fan-out as other transaction edits.
 - Transaction-entry drafts are per tab and store UI form values only.
 - The active entry tab is a persisted UI preference.
@@ -39,10 +41,10 @@
 
 ## Boundaries
 
-- Owns: ledger display atoms, transaction browser, transaction detail panel rendering, record tables, tombstone confirmation UI, bounded lookup pickers, entry-panel UI mapping, and shared transaction-mutation refresh and page-cache behavior.
+- Owns: ledger display atoms, transaction browser, transaction detail panel rendering, record tables, tombstone confirmation UI, bounded lookup pickers, entry-modal UI mapping, and shared transaction-mutation refresh and page-cache behavior.
 - Does not own: REST endpoint generation, accounting validation, durable accounting persistence, route URL state, missing-detail fetches, or route-specific transaction mutation calls and notices.
-- Page routes own URL filter semantics, URL-addressed detail state, page-specific detail actions, and entry-panel save refresh mode and notices.
+- Page routes own URL filter semantics, URL-addressed detail state, and page-specific detail actions; the app shell owns modal launch URL state and entry save fan-out.
 
 ## Testing Notes
 
-- Frontend e2e tests cover transaction expansion, inline and bulk editing, detail deep links, pagination, multi-type entry, per-tab drafts, sticky entry fields, and picker keyboard submission.
+- Frontend e2e tests cover transaction expansion, inline and bulk editing, detail and entry deep links, pagination, modal create/edit/split/duplicate, per-tab drafts, sticky entry fields, and picker keyboard submission.

@@ -1,4 +1,3 @@
-import { Plus } from "pixelarticons/react";
 import { useCallback, useMemo, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
@@ -10,7 +9,6 @@ import {
 } from "@/api";
 import { apiErrorMessage } from "@/api";
 import { PageHelp } from "@/components/page-help";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AccountHeader,
@@ -24,13 +22,14 @@ import { PageHeader } from "@/features/app-shell";
 import { refreshFeaturedBalances } from "@/features/featured-balances";
 import {
   buildLookupMaps,
+  captureTransactionEntryLaunchContext,
   defaultTransactionPageSize,
   invalidateAccountRegistersForTransaction,
   refreshLedgerLookups,
   transactionPageSizeOptions,
 } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
-import { invalidateTransactionPages } from "@/store";
+import { invalidateTransactionPages, openTransactionEntryPanel } from "@/store";
 
 const pageSizes = transactionPageSizeOptions;
 const defaultPageSize = defaultTransactionPageSize;
@@ -277,17 +276,6 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
             running balances, and the containing transaction one action away.
           </PageHelp>
         }
-        actions={
-          <Button
-            type="button"
-            onClick={() => {
-              void navigate("/transactions");
-            }}
-          >
-            <Plus aria-hidden="true" />
-            New transaction
-          </Button>
-        }
       />
 
       {resource.header.loading && !resource.header.snapshot ? (
@@ -323,7 +311,10 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
             );
           }}
           onNewTransaction={() => {
-            void navigate("/transactions");
+            openTransactionEntryPanel(
+              undefined,
+              captureTransactionEntryLaunchContext(),
+            );
           }}
           onNextPage={() => {
             setSearchParams((current) =>

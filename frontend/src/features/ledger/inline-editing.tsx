@@ -11,6 +11,8 @@ import {
   useState,
 } from "react";
 
+import { transactionEntryWillOpenEvent } from "@/store";
+
 const inlineEditScopeSelector = "[data-inline-edit-scope='true']";
 const inlineEditorSelector = "[data-inline-editor-id]";
 const floatingEditorSelector = "[data-inline-editor-content]";
@@ -93,6 +95,9 @@ export const useInlineEditCoordinator = (): InlineEditCoordinator => {
   );
 
   useEffect(() => {
+    const onEntryOpen = () => {
+      discardActive(false);
+    };
     const activeEditorElement = (): Element | null => {
       const activeEditor = activeEditorRef.current;
       if (!activeEditor) {
@@ -236,6 +241,7 @@ export const useInlineEditCoordinator = (): InlineEditCoordinator => {
     };
 
     document.addEventListener("pointerdown", onPointerDown, { capture: true });
+    window.addEventListener(transactionEntryWillOpenEvent, onEntryOpen);
     document.addEventListener("pointerup", onPointerUp, { capture: true });
     document.addEventListener("pointercancel", onPointerCancel, {
       capture: true,
@@ -247,6 +253,7 @@ export const useInlineEditCoordinator = (): InlineEditCoordinator => {
       document.removeEventListener("pointerdown", onPointerDown, {
         capture: true,
       });
+      window.removeEventListener(transactionEntryWillOpenEvent, onEntryOpen);
       document.removeEventListener("pointerup", onPointerUp, {
         capture: true,
       });

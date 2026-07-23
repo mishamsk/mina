@@ -6,8 +6,9 @@ export {
   type EntityOption,
   EntityPicker,
 } from "./entity-picker";
+export { captureTransactionEntryLaunchContext } from "./entry-launch-context";
+export { EntryModal } from "./entry-modal";
 export {
-  EntryPanel,
   type EntryPanelLaunch,
   type EntryPanelSaveContext,
 } from "./entry-panel";
@@ -56,7 +57,10 @@ export {
 export { TransactionSearchInput } from "./transaction-search-input";
 export { useTransactionBrowserPage } from "./use-transaction-browser-page";
 export { useTransactionDateJump } from "./use-transaction-date-jump";
-export { useTransactionDetail } from "./use-transaction-detail";
+export {
+  transactionEntrySavedEvent,
+  useTransactionDetail,
+} from "./use-transaction-detail";
 export {
   invalidateAccountRegistersForTransaction,
   invalidateReferencePagesAfterTransactionMutation,
@@ -65,6 +69,7 @@ export {
   refreshTransactionPage,
   refreshTransactionPageAfterBulkSave,
   refreshTransactionPageAfterSave,
+  refreshViewsAfterEntrySave,
   useLedgerLookupsResource,
   useTransactionsResource,
 } from "./use-transactions-resource";

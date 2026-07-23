@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  captureTransactionEntryLaunchContext,
   defaultTransactionPage,
   defaultTransactionPageSize,
   FqnPath,
@@ -24,6 +25,7 @@ import {
   transactionClasses,
   type TransactionFilters,
 } from "@/models/transaction-filters";
+import { openTransactionEntryLaunch, openTransactionEntryPanel } from "@/store";
 
 export interface ReferenceDrilldownPageProps {
   readonly actionLabel: string;
@@ -522,26 +524,48 @@ export const ReferenceDrilldownPage = ({
             addEntityFilter("tag", tagId);
           }}
           onNewTransaction={() => {
-            void navigate("/transactions");
+            openTransactionEntryPanel(
+              undefined,
+              captureTransactionEntryLaunchContext(),
+            );
           }}
           onDeleteTransaction={browser.deleteTransactionFromRow}
           onDismissRecurringOccurrence={
             browser.dismissRecurringOccurrenceFromRow
           }
+          onDuplicateTransaction={(transaction) => {
+            openTransactionEntryLaunch(
+              { transaction, type: "duplicate" },
+              captureTransactionEntryLaunchContext(),
+            );
+          }}
+          onEditTransaction={(transaction) => {
+            openTransactionEntryLaunch(
+              { transaction, type: "edit" },
+              captureTransactionEntryLaunchContext(),
+            );
+          }}
           onNextPage={() => {
             browser.setPage(browser.page + 1);
           }}
           onOpenTransaction={browser.detail.openTransactionDetail}
           onEditTransactionAsJournal={(transaction) => {
-            void navigate("/transactions", {
-              state: { editTransactionAsJournal: transaction },
-            });
+            openTransactionEntryLaunch(
+              { transaction, type: "split" },
+              captureTransactionEntryLaunchContext(),
+            );
           }}
           onPageSizeChange={browser.setPageSize}
           onPreviousPage={() => {
             browser.setPage(Math.max(defaultTransactionPage, browser.page - 1));
           }}
           onSetBulkEditMode={browser.setBulkEditMode}
+          onSplitTransaction={(transaction) => {
+            openTransactionEntryLaunch(
+              { transaction, type: "split" },
+              captureTransactionEntryLaunchContext(),
+            );
+          }}
           onSelectRange={browser.selectTransactionRange}
           onTogglePageSelection={browser.togglePageTransactionSelection}
           onToggleSelection={browser.toggleTransactionSelection}
@@ -585,6 +609,18 @@ export const ReferenceDrilldownPage = ({
           onConfirmOccurrence={browser.confirmRecurringOccurrenceFromRow}
           onDelete={browser.detail.deleteSelectedTransaction}
           onDismissOccurrence={browser.dismissRecurringOccurrenceFromRow}
+          onDuplicate={(transaction) => {
+            openTransactionEntryLaunch(
+              { transaction, type: "duplicate" },
+              captureTransactionEntryLaunchContext(),
+            );
+          }}
+          onEdit={(transaction) => {
+            openTransactionEntryLaunch(
+              { transaction, type: "edit" },
+              captureTransactionEntryLaunchContext(),
+            );
+          }}
           onFilterCategory={(categoryId) => {
             addEntityFilter("category", categoryId);
           }}
@@ -595,6 +631,12 @@ export const ReferenceDrilldownPage = ({
             addEntityFilter("tag", tagId);
           }}
           onRestoreFocus={restoreTransactionDetailFocus}
+          onSplit={(transaction) => {
+            openTransactionEntryLaunch(
+              { transaction, type: "split" },
+              captureTransactionEntryLaunchContext(),
+            );
+          }}
           onUpdateRecord={browser.updateRecord}
           onUpdateTransactionAmount={browser.updateTransactionAmount}
           onUpdateTransactionRecordReferences={

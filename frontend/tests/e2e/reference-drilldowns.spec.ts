@@ -366,7 +366,17 @@ test("drill-down transaction row quick-delete confirms, tombstones, and refreshe
   });
   await expect(row).toBeVisible();
 
-  await row.getByRole("button", { name: "Delete transaction" }).click();
+  const directDelete = row
+    .locator(".row-actions-buttons")
+    .getByRole("button", { name: "Delete transaction" });
+  if (await directDelete.isVisible()) {
+    await directDelete.click();
+  } else {
+    await row.getByRole("button", { name: "More row actions" }).click();
+    const menu = page.locator(".row-actions-menu:visible");
+    await expect(menu).toBeVisible();
+    await menu.getByRole("button", { name: "Delete transaction" }).click();
+  }
   const confirmDialog = page.getByRole("alertdialog", {
     name: "Delete transaction",
   });

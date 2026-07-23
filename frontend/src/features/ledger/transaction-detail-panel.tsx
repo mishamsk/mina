@@ -61,9 +61,12 @@ interface TransactionDetailPanelProps {
   readonly onConfirmOccurrence?: (transaction: Transaction) => Promise<void>;
   readonly onDelete: (transaction: Transaction) => Promise<void>;
   readonly onDismissOccurrence?: (transaction: Transaction) => Promise<void>;
-  readonly onDuplicate?: (transaction: Transaction) => void;
-  readonly onEdit?: (transaction: Transaction) => void;
-  readonly onSplit?: (transaction: Transaction) => void;
+  readonly onDuplicate?: (
+    transaction: Transaction,
+    opener?: HTMLElement,
+  ) => void;
+  readonly onEdit?: (transaction: Transaction, opener?: HTMLElement) => void;
+  readonly onSplit?: (transaction: Transaction, opener?: HTMLElement) => void;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
@@ -1057,8 +1060,8 @@ export const TransactionDetailPanel = ({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    onEdit(transaction);
+                  onClick={(event) => {
+                    onEdit(transaction, event.currentTarget);
                   }}
                 >
                   <MagicEdit aria-hidden="true" />
@@ -1069,8 +1072,8 @@ export const TransactionDetailPanel = ({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    onDuplicate(transaction);
+                  onClick={(event) => {
+                    onDuplicate(transaction, event.currentTarget);
                   }}
                 >
                   <Copy aria-hidden="true" />
@@ -1081,8 +1084,8 @@ export const TransactionDetailPanel = ({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    onSplit(transaction);
+                  onClick={(event) => {
+                    onSplit(transaction, event.currentTarget);
                   }}
                 >
                   <Scissors aria-hidden="true" />

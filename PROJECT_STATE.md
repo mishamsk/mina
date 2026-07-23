@@ -59,8 +59,8 @@
   - Members page shows a searchable flat member list with create/rename/delete side-panel workflows and hover/focus-revealed Edit/Delete row actions; ineligible deletes are proactively disabled from the API deleteability signal.
   - Categories, Tags, and Members have URL-addressable drill-down pages with metadata and pre-filtered transaction previews.
   - Accounts, Categories, Tags, and Members retain full-height Arcade Cabinet table frames with internally scrolling data bodies.
-  - Transaction entry includes shorthand spend/income/refund/transfer tabs plus an Advanced journal editor with balanced multi-record saves, intent-guided account pickers, draft persistence, and edit-as-journal escalation from shorthand tabs.
-  - Saved transactions support detail-panel Edit, Duplicate, and Split actions with shorthand-fit edit detection, duplicate-as-new-entry prefill, and split-through-journal replacement.
+  - Transaction entry is one app-shell-owned, route-independent stage modal opened in place from page headers, the sidebar, global shortcut, command palette, empty states, rows, and detail panels; it includes shorthand spend/income/refund/transfer tabs, template prefill, an Advanced journal editor, persisted per-tab drafts, sticky batch fields, a session/context rail, and URL-addressable create/edit/split/duplicate launches.
+  - Saved transactions support row and detail-panel Edit, Duplicate, and Split actions with shorthand-fit edit detection, duplicate-as-new-entry prefill, split-through-journal replacement, discard protection, and live refresh while the detail panel remains open beneath the modal.
   - Transaction entry category pickers fetch API-filtered category lists by shorthand tab economic intent.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:

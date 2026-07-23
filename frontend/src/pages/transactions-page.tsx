@@ -1,20 +1,15 @@
-import { Plus } from "pixelarticons/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router";
+import { useCallback, useEffect, useMemo } from "react";
+import { useLocation, useSearchParams } from "react-router";
 
 import type { Transaction } from "@/api";
 import { PageHelp } from "@/components/page-help";
 import { Toast, toastDurationMs } from "@/components/toast";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
 import {
+  captureTransactionEntryLaunchContext,
   defaultTransactionPage,
-  EntryPanel,
-  type EntryPanelLaunch,
-  type EntryPanelSaveContext,
   hasActiveTransactionFilterChips,
   readTransactionFiltersFromSearchParams,
-  refreshTransactionPageAfterSave,
   TransactionBrowser,
   TransactionBrowserToolbar,
   TransactionDetailPanel,
@@ -22,40 +17,20 @@ import {
   useTransactionBrowserPage,
   writeTransactionFiltersToSearchParams,
 } from "@/features/ledger";
-import { cn } from "@/lib/utils";
 import {
   emptyTransactionFilters,
   transactionClasses,
   type TransactionFilters,
 } from "@/models/transaction-filters";
 import {
-  closeTransactionEntryPanel,
-  getCommandPaletteSnapshot,
+  openTransactionEntryLaunch,
   openTransactionEntryPanel,
   setLastTransactionsPageSearch,
-  useTransactionEntryPanelView,
 } from "@/store";
-
-interface TransactionsPageLocationState {
-  readonly editTransactionAsJournal?: Transaction;
-}
 
 export const TransactionsPage = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const routeState = location.state as TransactionsPageLocationState | null;
-  const routeJournalLaunch = routeState?.editTransactionAsJournal;
   const [searchParams, setSearchParams] = useSearchParams();
-  const entryPanel = useTransactionEntryPanelView();
-  const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
-  const [quickDeleteDialogOpen, setQuickDeleteDialogOpen] = useState(false);
-  const [rowActionsOverflowOpen, setRowActionsOverflowOpen] = useState(false);
-  const [entryLaunch, setEntryLaunch] = useState<EntryPanelLaunch | undefined>(
-    () =>
-      routeJournalLaunch
-        ? { transaction: routeJournalLaunch, type: "split" }
-        : undefined,
-  );
   const filters = useMemo(
     () => readTransactionFiltersFromSearchParams(searchParams),
     [searchParams],
@@ -65,8 +40,6 @@ export const TransactionsPage = () => {
     searchParams,
     setSearchParams,
   });
-  const entryPanelOpen = entryPanel.open || entryLaunch !== undefined;
-  const effectiveEntryLaunch = entryPanel.initialTab ? undefined : entryLaunch;
 
   useEffect(() => {
     setLastTransactionsPageSearch(location.search);
@@ -74,16 +47,19 @@ export const TransactionsPage = () => {
 
   const openEntryPanel = useCallback(() => {
     browser.setBulkEditMode(false);
-    setEntryLaunch(undefined);
-    openTransactionEntryPanel();
+    openTransactionEntryPanel(
+      undefined,
+      captureTransactionEntryLaunchContext(),
+    );
     browser.dismissNotice();
   }, [browser]);
 
   const editTransaction = useCallback(
     (transaction: Transaction) => {
-      setEntryLaunch({ transaction, type: "edit" });
-      browser.detail.closeTransactionDetail();
-      openTransactionEntryPanel();
+      openTransactionEntryLaunch(
+        { transaction, type: "edit" },
+        captureTransactionEntryLaunchContext(),
+      );
       browser.dismissNotice();
     },
     [browser],
@@ -91,9 +67,10 @@ export const TransactionsPage = () => {
 
   const duplicateTransaction = useCallback(
     (transaction: Transaction) => {
-      setEntryLaunch({ transaction, type: "duplicate" });
-      browser.detail.closeTransactionDetail();
-      openTransactionEntryPanel();
+      openTransactionEntryLaunch(
+        { transaction, type: "duplicate" },
+        captureTransactionEntryLaunchContext(),
+      );
       browser.dismissNotice();
     },
     [browser],
@@ -101,24 +78,14 @@ export const TransactionsPage = () => {
 
   const splitTransaction = useCallback(
     (transaction: Transaction) => {
-      setEntryLaunch({ transaction, type: "split" });
-      browser.detail.closeTransactionDetail();
-      openTransactionEntryPanel();
+      openTransactionEntryLaunch(
+        { transaction, type: "split" },
+        captureTransactionEntryLaunchContext(),
+      );
       browser.dismissNotice();
     },
     [browser],
   );
-
-  useEffect(() => {
-    if (!routeJournalLaunch) {
-      return;
-    }
-
-    void navigate(`${location.pathname}${location.search}`, {
-      replace: true,
-      state: null,
-    });
-  }, [location.pathname, location.search, navigate, routeJournalLaunch]);
 
   const setSearchFilter = useCallback(
     (normalizedSearch: string) => {
@@ -202,47 +169,6 @@ export const TransactionsPage = () => {
     [browser, setSearchParams],
   );
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target;
-      const targetElement = target instanceof HTMLElement ? target : undefined;
-      if (
-        browser.detail.selectedTransactionId ||
-        entryPanelOpen ||
-        filterPopoverOpen ||
-        getCommandPaletteSnapshot().open ||
-        quickDeleteDialogOpen ||
-        rowActionsOverflowOpen ||
-        browser.inlineEdit.activeEditorId ||
-        event.key.toLowerCase() !== "n" ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        targetElement?.matches(
-          "input, textarea, select, [contenteditable='true']",
-        )
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      openEntryPanel();
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [
-    entryPanelOpen,
-    browser.detail.selectedTransactionId,
-    browser.inlineEdit.activeEditorId,
-    filterPopoverOpen,
-    openEntryPanel,
-    quickDeleteDialogOpen,
-    rowActionsOverflowOpen,
-  ]);
-
   return (
     <section
       className="flex h-[calc(100svh-2.5rem)] min-h-0 flex-col gap-6"
@@ -260,12 +186,6 @@ export const TransactionsPage = () => {
             row (or press Space) to expand its journal records.
           </PageHelp>
         }
-        actions={
-          <Button type="button" onClick={openEntryPanel}>
-            <Plus aria-hidden="true" />
-            New transaction
-          </Button>
-        }
         toolbar={
           <TransactionBrowserToolbar
             bulkEditMode={browser.bulkEditMode}
@@ -278,7 +198,6 @@ export const TransactionsPage = () => {
                 filters={filters}
                 lookups={browser.lookups.snapshot}
                 onChange={setTransactionFilters}
-                onOpenChange={setFilterPopoverOpen}
               />
             }
             hasActiveFilterChips={hasActiveTransactionFilterChips(filters)}
@@ -286,9 +205,6 @@ export const TransactionsPage = () => {
             idPrefix="transactions"
             onClearFilterChips={clearFilterChips}
             onClearSelection={browser.clearTransactionSelection}
-            onFilterBarClose={() => {
-              setFilterPopoverOpen(false);
-            }}
             onDateJumpNext={browser.jumpToNextDate}
             onDateJumpPrevious={browser.jumpToPreviousDate}
             onDateJumpValueChange={browser.changeDateJumpValue}
@@ -302,12 +218,7 @@ export const TransactionsPage = () => {
           />
         }
       />
-      <div
-        className={cn(
-          "grid min-h-0 min-w-0 flex-1 gap-6",
-          entryPanelOpen && "lg:grid-cols-[minmax(0,1fr)_360px]",
-        )}
-      >
+      <div className="grid min-h-0 min-w-0 flex-1 gap-6">
         <div className="flex min-h-0 min-w-0 flex-col gap-3">
           <TransactionBrowser
             bulkEditMode={browser.bulkEditMode}
@@ -341,6 +252,8 @@ export const TransactionsPage = () => {
             onDismissRecurringOccurrence={
               browser.dismissRecurringOccurrenceFromRow
             }
+            onDuplicateTransaction={duplicateTransaction}
+            onEditTransaction={editTransaction}
             onNextPage={() => {
               browser.setPage(browser.page + 1);
             }}
@@ -353,6 +266,7 @@ export const TransactionsPage = () => {
               );
             }}
             onSetBulkEditMode={browser.setBulkEditMode}
+            onSplitTransaction={splitTransaction}
             onSelectRange={browser.selectTransactionRange}
             onTogglePageSelection={browser.togglePageTransactionSelection}
             onToggleSelection={browser.toggleTransactionSelection}
@@ -364,8 +278,6 @@ export const TransactionsPage = () => {
             onUpdateTransactionsBulkReferences={
               browser.updateTransactionsBulkReferences
             }
-            onDeleteConfirmationOpenChange={setQuickDeleteDialogOpen}
-            onRowActionsOverflowOpenChange={setRowActionsOverflowOpen}
             page={browser.page}
             pageSize={browser.pageSize}
             selectedTransactionIds={browser.selectedTransactionIds}
@@ -387,39 +299,6 @@ export const TransactionsPage = () => {
           durationMs={toastDurationMs}
           message={browser.notice?.message}
           onDismiss={browser.dismissNotice}
-        />
-        <EntryPanel
-          initialTab={entryPanel.initialTab}
-          launch={effectiveEntryLaunch}
-          lookups={browser.lookups.snapshot}
-          open={entryPanelOpen}
-          onClose={() => {
-            setEntryLaunch(undefined);
-            closeTransactionEntryPanel();
-          }}
-          onSaved={async (
-            transaction: Transaction,
-            context: EntryPanelSaveContext,
-          ) => {
-            const savedOnCurrentPage = await refreshTransactionPageAfterSave(
-              browser.params,
-              transaction.transaction_id,
-              transaction,
-              context.previousTransaction,
-              { pageRefreshMode: "blocking" },
-            );
-            browser.updateSelectedTransactionSnapshot(transaction);
-            setEntryLaunch(undefined);
-            if (context.operation === "updated") {
-              browser.showNotice("Transaction updated.");
-            } else {
-              browser.showNotice(
-                savedOnCurrentPage
-                  ? "Transaction saved."
-                  : "Transaction saved. It may appear on another page.",
-              );
-            }
-          }}
         />
         {!browser.bulkEditMode && browser.detail.selectedTransactionId ? (
           <TransactionDetailPanel

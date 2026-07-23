@@ -1,9 +1,7 @@
-import { Plus } from "pixelarticons/react";
 import { useMemo } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 
 import { PageHelp } from "@/components/page-help";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
 import {
   IntentBadge,
@@ -45,7 +43,6 @@ const categoryDescendantIds = (
     .map((category) => category.category_id);
 
 export const CategoryPage = () => {
-  const navigate = useNavigate();
   const { categoryId: categoryIdParam } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoriesPage = useCategoriesResource();
@@ -104,17 +101,6 @@ export const CategoryPage = () => {
             Category pages show matching transactions and include descendant
             category paths unless limited to this level.
           </PageHelp>
-        }
-        actions={
-          <Button
-            type="button"
-            onClick={() => {
-              void navigate("/transactions");
-            }}
-          >
-            <Plus aria-hidden="true" />
-            New transaction
-          </Button>
         }
       />
 

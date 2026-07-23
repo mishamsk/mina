@@ -260,10 +260,13 @@ test("categories row actions hide groups and move renamed paths into transaction
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Category" }).click();
   const categoryPicker = page.getByRole("combobox", { name: "Categories" });
+  await expect(
+    page.getByRole("checkbox", { name: "Include hidden" }),
+  ).toBeFocused();
   await categoryPicker.fill(moveSource);
   await expect(
     page.locator("#transactions-filter-category-options"),
-  ).toContainText(`${moveSource}:Alpha`);
+  ).toContainText(`${moveSource}:Alpha`, { timeout: 10_000 });
 
   await page.goto("/categories");
   await page.getByLabel("Search").fill(leafFqn);
@@ -354,6 +357,9 @@ test("categories row actions hide groups and move renamed paths into transaction
   const refreshedCategoryPicker = page.getByRole("combobox", {
     name: "Categories",
   });
+  await expect(
+    page.getByRole("checkbox", { name: "Include hidden" }),
+  ).toBeFocused();
   await refreshedCategoryPicker.fill(moveDestination);
   await expect(
     page.locator("#transactions-filter-category-options"),

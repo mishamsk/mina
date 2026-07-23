@@ -120,8 +120,18 @@ export {
 } from "./transaction-bulk-edit";
 export {
   closeTransactionEntryPanel,
+  failTransactionEntryRoute,
   getTransactionEntryPanelSnapshot,
+  loadTransactionEntryRoute,
+  openTransactionEntryLaunch,
   openTransactionEntryPanel,
+  openTransactionEntryRoute,
+  openTransactionEntryTemplate,
+  resolveTransactionEntryRoute,
+  type TransactionEntryLaunch,
+  type TransactionEntryLaunchContext,
+  type TransactionEntryLaunchType,
+  transactionEntryWillOpenEvent,
   useTransactionEntryPanelStore,
   useTransactionEntryPanelView,
 } from "./transaction-entry";

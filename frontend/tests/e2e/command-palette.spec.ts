@@ -575,35 +575,35 @@ test("command palette opens entry tabs from any page without clobbering plain op
   await openPalette(page);
   await page.getByRole("combobox", { name: "Command search" }).fill("transfer");
   await page.getByRole("option", { name: "New transfer" }).click();
-  await expect(page).toHaveURL(/\/transactions$/);
+  await expect(page).toHaveURL(/\/overview\?entry=new%3Atransfer$/);
   await expect(page.getByRole("tab", { name: "Transfer" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
 
-  const transactionsRegion = page.getByLabel("Transactions", { exact: true });
-  const pageNewTransactionButton = transactionsRegion.getByRole("button", {
-    name: "New transaction",
-  });
+  const pageNewTransactionButton = page
+    .locator("main")
+    .getByRole("button", { name: "New transaction" });
 
-  await page.getByRole("button", { name: "Close entry panel" }).click();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
   await pageNewTransactionButton.click();
   await expect(page.getByRole("tab", { name: "Spend" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
 
-  await page.getByRole("button", { name: "Close entry panel" }).click();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(pageNewTransactionButton).toBeFocused();
   await openPalette(page);
   await page.getByRole("combobox", { name: "Command search" }).fill("income");
   await page.getByRole("option", { name: "New income" }).click();
-  await expect(page).toHaveURL(/\/transactions$/);
+  await expect(page).toHaveURL(/\/overview\?entry=new%3Aincome$/);
   await expect(page.getByRole("tab", { name: "Income" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
 
-  await page.getByRole("button", { name: "Close entry panel" }).click();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
   await pageNewTransactionButton.click();
   await expect(page.getByRole("tab", { name: "Spend" })).toHaveAttribute(
     "aria-selected",

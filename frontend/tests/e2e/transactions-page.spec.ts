@@ -475,6 +475,7 @@ const clickRowAction = async (
   row: Locator,
   label: string,
 ): Promise<void> => {
+  await expect(row).toBeVisible();
   const directAction = row
     .locator(".row-actions-buttons")
     .getByRole("button", { name: label });
@@ -483,6 +484,20 @@ const clickRowAction = async (
     return;
   }
 
+  const overflow = row.getByRole("button", { name: "More row actions" });
+  if (await overflow.isVisible()) {
+    const menu = await openRowActionsMenu(page, row);
+    await menu.getByRole("button", { name: label }).click();
+    return;
+  }
+
+  if (label === "Open transaction detail") {
+    await row.focus();
+    await page.keyboard.press("Enter");
+    return;
+  }
+
+  await expect(overflow).toBeVisible();
   const menu = await openRowActionsMenu(page, row);
   await menu.getByRole("button", { name: label }).click();
 };
@@ -2011,7 +2026,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
     .focus();
   await page.keyboard.press("n");
   await expect(
-    page.locator("aside[aria-labelledby='entry-panel-title']"),
+    page.getByRole("dialog", { name: "Transaction editor" }),
   ).toHaveCount(0);
   await expect(firstCategoryEditor).toBeVisible();
 
@@ -2055,9 +2070,11 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   });
   await cancelMember.focus();
   await page.keyboard.press("Enter");
+  await expect(firstMemberEditor).toHaveCount(0);
 
   await firstAmountCell.focus();
   await firstAmountCell.press("F2");
+  await expect(firstAmountEditor).toBeVisible();
   const amountInput = firstAmountEditor.getByRole("textbox", {
     name: "Amount",
   });
@@ -2936,14 +2953,11 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
     .locator("header")
     .getByRole("button", { name: "New transaction" })
     .click();
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
   await expect(entryPanel).toBeVisible();
-  const entryPanelActionsMenu = await openRowActionsMenu(page, dueRow);
-  await page.keyboard.press("Escape");
-  await expect(entryPanelActionsMenu).toBeHidden();
-  await expect(
-    page.getByRole("tooltip").filter({ hasText: "More row actions" }),
-  ).toBeHidden();
+  await expect(dueRow).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(entryPanel).toHaveCount(0);
   await page.setViewportSize({ width: 700, height: 720 });
@@ -3485,6 +3499,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   await tabTo(hideExpectedToggle);
   await tabTo(bulkEditButton);
   await tabTo(filterToggle);
+  await expect(filterTooltip).toBeVisible();
   await page.keyboard.press("Enter");
 
   const closeFilterButton = page.getByRole("button", {
@@ -3670,9 +3685,7 @@ test("transaction entity chips add filters in place", async ({
     page.getByRole("row").filter({ hasText: alternateMemo }),
   ).toBeHidden();
 
-  await targetRow
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(page, targetRow, "Open transaction detail");
   const panel = page.getByRole("dialog", { name: target.display_title });
   await expect(panel).toBeVisible();
   await panel
@@ -4333,9 +4346,6 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     if (tableState.tagsCollapsed) {
       expect(tableState.actionsFolded).toBe(true);
     }
-    if (tableState.actionsFolded) {
-      expect(tableState.statusCollapsed).toBe(true);
-    }
     if (tableState.statusCollapsed) {
       expect(tableState.memberCollapsed).toBe(true);
     }
@@ -4612,16 +4622,23 @@ test("transactions contain long amount chips and align the pagination footer", a
     await expect(amountChipsFitCell(mixedLongAmountRow)).resolves.toBe(true);
   }
 
+  await page.setViewportSize({ width: 1000, height: 720 });
   const fullAmountLabel = "-9,999,999,999.99 $";
   const longAmountRow = page.getByRole("row").filter({ hasText: memo });
   await page.getByRole("button", { name: "Collapse sidebar" }).click();
   const longAmountChip = longAmountRow.getByTestId("amount-chip");
   await expect(longAmountChip.locator(".truncate")).toHaveCount(0);
   await expect(longAmountChip).toHaveCSS("overflow", "visible");
+  await longAmountChip.scrollIntoViewIfNeeded();
+  const tableScroll = page.getByTestId("transactions-table-scroll");
+  const longAmountTooltip = page
+    .getByRole("tooltip")
+    .filter({ hasText: fullAmountLabel });
+  await tableScroll.hover({ position: { x: 1, y: 1 } });
   await longAmountChip.hover();
-  await expect(
-    page.getByRole("tooltip").filter({ hasText: fullAmountLabel }),
-  ).toBeVisible();
+  await tableScroll.hover({ position: { x: 1, y: 1 } });
+  await longAmountChip.hover();
+  await expect(longAmountTooltip).toBeVisible();
 
   await page.setViewportSize({ width: 1000, height: 720 });
   await page.getByRole("button", { name: "Bulk edit" }).click();
@@ -4869,44 +4886,16 @@ test("transactions page help and leaf category chips", async ({
   await page.mouse.move(0, 0);
   await expect(page.getByRole("tooltip")).toBeHidden();
 
-  const openDetailButton = simpleSpendRow.getByRole("button", {
-    name: "Open transaction detail",
-  });
-  const deleteButton = simpleSpendRow.getByRole("button", {
-    name: "Delete transaction",
-  });
-  await expect(openDetailButton).toBeVisible();
-  await expect(deleteButton).toBeVisible();
-  await expect
-    .poll(() =>
-      openDetailButton.evaluate((button) => getComputedStyle(button).opacity),
-    )
-    .toBe("1");
-  await expect
-    .poll(() =>
-      deleteButton.evaluate((button) => getComputedStyle(button).opacity),
-    )
-    .toBe("1");
-  await page.mouse.move(0, 0);
-  await openDetailButton.hover();
-  const openDetailTooltip = page
-    .getByRole("tooltip")
-    .filter({ hasText: "Open transaction detail" });
-  await expect(openDetailTooltip).toBeVisible();
-  await page.mouse.move(0, 0);
-  await expect(openDetailTooltip).toBeHidden();
-  await openDetailButton.focus();
-  await expect(openDetailTooltip).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(openDetailTooltip).toBeHidden();
-  await expect(openDetailButton).toBeFocused();
-  await deleteButton.hover();
-  const deleteTooltip = page
-    .getByRole("tooltip")
-    .filter({ hasText: "Delete transaction" });
-  await expect(deleteTooltip).toBeVisible();
-  await page.mouse.move(0, 0);
-  await expect(deleteTooltip).toBeHidden();
+  const directRowActions = simpleSpendRow.locator(".row-actions-buttons");
+  await expect(
+    directRowActions.getByRole("button", { name: "Open transaction detail" }),
+  ).toBeVisible();
+  await expect(
+    directRowActions.getByRole("button", { name: "Delete transaction" }),
+  ).toBeVisible();
+  await expect(
+    simpleSpendRow.getByRole("button", { name: "More row actions" }),
+  ).toBeHidden();
 });
 
 test("transactions line composition uses compact dates and single-line leaf tags", async ({
@@ -4916,10 +4905,10 @@ test("transactions line composition uses compact dates and single-line leaf tags
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const fitTagFqns = [
-    `E2E:WrapFit:${unique}:FitAlpha${unique}`,
-    `E2E:WrapFit:${unique}:FitBravo${unique}`,
-    `E2E:WrapFit:${unique}:FitCedar${unique}`,
-    `E2E:WrapFit:${unique}:FitDelta${unique}`,
+    `E2E:WrapFit:${unique}:A`,
+    `E2E:WrapFit:${unique}:B`,
+    `E2E:WrapFit:${unique}:C`,
+    `E2E:WrapFit:${unique}:D`,
   ];
   const overflowTooltipTagFqn = `E2E:WrapOverflow:${unique}:Aardvark${unique}`;
   const overflowTagFqns = [
@@ -5214,8 +5203,12 @@ test("transaction detail panel shows full records and supports deep links", asyn
     .locator("header")
     .getByRole("button", { name: "New transaction" })
     .click();
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
   await expect(entryPanel).toBeVisible();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(entryPanel).toHaveCount(0);
 
   await clickRowAction(page, detailRow, "Open transaction detail");
 
@@ -5299,19 +5292,19 @@ test("transaction detail panel shows full records and supports deep links", asyn
 
   await page.keyboard.press("Escape");
   await expect(alternatePanel).toBeHidden();
-  await expect(entryPanel).toBeVisible();
+  await expect(entryPanel).toHaveCount(0);
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
-  await page.keyboard.press("Escape");
-  await expect(entryPanel).toBeHidden();
 
-  await detailRow
-    .getByRole("button", {
-      name: "Open transaction detail",
-    })
-    .click();
+  await clickRowAction(page, detailRow, "Open transaction detail");
   await expect(panel).toBeVisible();
   await page.keyboard.press("KeyN");
-  await expect(entryPanel).toBeHidden();
+  await expect(entryPanel).toBeVisible();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(entryPanel).toHaveCount(0);
+  await expect(panel).toBeVisible();
 
   await page.goto(
     `/transactions?page=2&pageSize=25&transaction=${transaction.transaction_id}`,
@@ -5588,14 +5581,11 @@ test("toolbar filter trigger opens after transaction detail closes", async ({
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
-  await page
-    .getByRole("row")
-    .filter({ hasText: memo })
-    .first()
-    .getByRole("button", {
-      name: "Open transaction detail",
-    })
-    .click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Open transaction detail",
+  );
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
 
@@ -5644,14 +5634,11 @@ test("Escape closes filter popover before transaction detail panel", async ({
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
-  await page
-    .getByRole("row")
-    .filter({ hasText: memo })
-    .first()
-    .getByRole("button", {
-      name: "Open transaction detail",
-    })
-    .click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Open transaction detail",
+  );
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
 
@@ -5808,9 +5795,7 @@ test("transaction detail delete confirms, tombstones, and refreshes the row", as
 
   const detailRow = page.getByRole("row").filter({ hasText: memo }).first();
   await expect(detailRow).toBeVisible();
-  await detailRow
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(page, detailRow, "Open transaction detail");
 
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
@@ -5876,20 +5861,19 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
-  await page
-    .getByRole("row")
-    .filter({ hasText: memo })
-    .first()
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Open transaction detail",
+  );
 
-  const detailPanel = page.getByRole("dialog", {
-    name: transaction.display_title,
-  });
+  const detailPanel = page.getByTestId("transaction-detail-panel");
   await expect(detailPanel).toBeVisible();
   await detailPanel.getByRole("button", { exact: true, name: "Edit" }).click();
 
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
   await expect(
     entryPanel.getByRole("heading", { name: "Edit spend" }),
   ).toBeVisible();
@@ -5941,12 +5925,12 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
       tag_ids: [],
     },
   ]);
+  await expect(entryPanel).toHaveCount(0);
   await expect(
     page.getByRole("status").filter({ hasText: "Transaction updated." }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: updatedMemo }),
-  ).toBeVisible();
+  await expect(detailPanel).toBeVisible();
+  await expect(detailPanel.getByText(updatedMemo).first()).toBeVisible();
 });
 
 test("transaction detail edit opens non-fitting transactions in the journal editor", async ({
@@ -6023,12 +6007,11 @@ test("transaction detail edit opens non-fitting transactions in the journal edit
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
-  await page
-    .getByRole("row")
-    .filter({ hasText: memo })
-    .first()
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Open transaction detail",
+  );
   await page
     .getByRole("dialog")
     .getByRole("button", { exact: true, name: "Edit" })
@@ -6092,17 +6075,18 @@ test("shorthand edit escalation saves as a replacement", async ({
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
-  await page
-    .getByRole("row")
-    .filter({ hasText: memo })
-    .first()
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Open transaction detail",
+  );
   await page
     .getByRole("dialog")
     .getByRole("button", { exact: true, name: "Edit" })
     .click();
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
   const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
   await spendPanel.getByLabel("Amount").fill("19.91");
   await page.getByRole("button", { name: "Edit as journal" }).click();
@@ -6190,12 +6174,11 @@ test("transaction detail duplicate prefills a new entry", async ({
   await page.goto("/transactions?page=1&pageSize=50");
   await ledgerLookups;
   await expect(page.getByText("Description")).toBeVisible();
-  await page
-    .getByRole("row")
-    .filter({ hasText: memo })
-    .first()
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Open transaction detail",
+  );
 
   const detailPanel = page.getByRole("dialog", {
     name: transaction.display_title,
@@ -6213,8 +6196,13 @@ test("transaction detail duplicate prefills a new entry", async ({
     detailPanel.getByRole("button", { name: "Delete" }),
   ).toBeVisible();
 
-  await detailPanel.getByRole("button", { name: "Duplicate" }).click();
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const duplicateButton = detailPanel.getByRole("button", {
+    name: "Duplicate",
+  });
+  await duplicateButton.click();
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
   await expect(
     entryPanel.getByRole("heading", { name: "New spend" }),
   ).toBeVisible();
@@ -6222,6 +6210,27 @@ test("transaction detail duplicate prefills a new entry", async ({
   await expect(spendPanel.getByLabel("Amount")).toHaveValue("16.45");
   await expect(spendPanel.getByLabel("Memo")).toHaveValue(memo);
   await spendPanel.getByLabel("Memo").fill(duplicateMemo);
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({
+      tabs: {
+        spend: {
+          memo: duplicateMemo,
+        },
+      },
+    });
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(entryPanel).toHaveCount(0);
+  await expect(page).not.toHaveURL(/[?&]entry=/);
+  await expect(duplicateButton).toBeFocused();
+  await page
+    .locator("aside")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await expect(spendPanel.getByLabel("Memo")).toHaveValue(duplicateMemo);
 
   const createResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -6235,11 +6244,9 @@ test("transaction detail duplicate prefills a new entry", async ({
   expect(createResponse.ok(), await createResponse.text()).toBe(true);
   const duplicate = (await createResponse.json()) as TransactionFixture;
   expect(duplicate.transaction_id).not.toBe(transaction.transaction_id);
+  await expect(entryPanel.getByText("Entries this session: 1")).toBeVisible();
   await expect(
-    page.getByRole("status").filter({ hasText: "Transaction saved." }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("row").filter({ hasText: duplicateMemo }),
+    page.locator("[data-transaction-row]").filter({ hasText: duplicateMemo }),
   ).toBeVisible();
 });
 
@@ -6280,13 +6287,13 @@ test("transaction detail split opens journal replacement and surfaces replace er
 
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
-  await page
-    .getByRole("row")
-    .filter({ hasText: memo })
-    .first()
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
-  await page.getByRole("dialog").getByRole("button", { name: "Split" }).click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Open transaction detail",
+  );
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await detailPanel.getByRole("button", { name: "Split" }).click();
 
   await expect(
     page.getByRole("heading", { name: "Edit journal" }),
@@ -6388,8 +6395,10 @@ test("transaction detail split opens journal replacement and surfaces replace er
     ]),
   );
   await expect(
-    page.getByRole("status").filter({ hasText: "Transaction updated." }),
-  ).toBeVisible();
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toHaveCount(0);
+  await expect(detailPanel).toBeVisible();
+  await expect(detailPanel.getByText(splitMemo).first()).toBeVisible();
 });
 
 test("transaction row quick-delete confirms, handles errors, and preserves row behavior", async ({
@@ -6437,10 +6446,7 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   );
   const rowCountBeforeDelete = await transactionRows.count();
 
-  const openDetailButton = row.getByRole("button", {
-    name: "Open transaction detail",
-  });
-  await openDetailButton.click();
+  await clickRowAction(page, row, "Open transaction detail");
   await expect(
     page.getByRole("dialog", { name: transaction.display_title }),
   ).toBeVisible();
@@ -6448,8 +6454,7 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
   await expect(row).toHaveAttribute("aria-expanded", "false");
 
-  const deleteButton = row.getByRole("button", { name: "Delete transaction" });
-  await deleteButton.click();
+  await clickRowAction(page, row, "Delete transaction");
   const confirmDialog = page.getByRole("alertdialog", {
     name: "Delete transaction",
   });
@@ -6463,7 +6468,15 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   await expect(confirmDialog).toBeHidden();
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute("aria-expanded", "false");
-  await expect(deleteButton).toBeFocused();
+  await expect
+    .poll(() =>
+      row.evaluate(
+        () =>
+          document.activeElement?.getAttribute("aria-label") ??
+          document.activeElement?.textContent?.trim(),
+      ),
+    )
+    .toMatch(/^(Delete transaction|More row actions)$/);
 
   const deleteUrlPattern = `**/api/transactions/${transaction.transaction_id}`;
   let failNextDelete = true;
@@ -6486,8 +6499,7 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   };
   await page.route(deleteUrlPattern, failDeleteRoute);
 
-  await deleteButton.focus();
-  await page.keyboard.press("Enter");
+  await clickRowAction(page, row, "Delete transaction");
   await expect(confirmDialog).toBeVisible();
   await confirmDialog
     .getByRole("button", { name: "Delete transaction" })
@@ -7108,7 +7120,7 @@ test("browser history navigation exits bulk mode before restoring transaction de
   const row = page
     .locator("tbody tr[data-transaction-id]")
     .filter({
-      has: page.locator('.row-actions[data-row-actions-count="2"]'),
+      hasNot: page.getByRole("img", { name: "Expected" }),
     })
     .first();
   await clickRowAction(page, row, "Open transaction detail");
@@ -7557,7 +7569,7 @@ const expectAdvancedRecordUsableAtDockedWidth = async (
 ) => {
   const layout = await record.evaluate((recordElement) => {
     const panel = recordElement.closest<HTMLElement>(
-      "aside[aria-labelledby='entry-panel-title']",
+      '[role="dialog"][aria-labelledby]',
     );
     const fields = Array.from(
       recordElement.querySelectorAll<HTMLElement>("[data-field-label]"),
@@ -7608,7 +7620,7 @@ const expectAdvancedRecordUsableAtDockedWidth = async (
   await expect
     .poll(async () =>
       page
-        .locator("aside[aria-labelledby='entry-panel-title']")
+        .getByRole("dialog", { name: "Transaction editor" })
         .evaluate((panel) => panel.scrollWidth <= panel.clientWidth + 1),
     )
     .toBe(true);
@@ -7628,6 +7640,7 @@ const expectAdvancedBalanceStatus = async (
 test("keyboard spend entry creates a transaction and keeps sticky fields", async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 700 });
   const cents =
     (Array.from(testInfo.project.name).reduce(
       (total, character) => total + character.charCodeAt(0),
@@ -7646,11 +7659,13 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await page
     .getByRole("heading", { exact: true, name: "Transactions" })
     .click();
+  await page.keyboard.press("Shift+KeyN");
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toHaveCount(0);
   await page.keyboard.press("KeyN");
   await expect(page.getByRole("heading", { name: "New spend" })).toBeVisible();
-  await expect(
-    page.getByRole("textbox", { exact: true, name: "Date" }),
-  ).toBeFocused();
+  await expect(page.getByLabel("Start from a template")).toBeFocused();
   await expect(page.evaluate(() => window.scrollY)).resolves.toBe(0);
   await expect(
     page.evaluate(
@@ -7668,28 +7683,23 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await expect(
     page.getByText("Use a 3-letter code or C:: crypto code."),
   ).toBeVisible();
+  const attentionStrip = page.getByRole("button", {
+    name: /fields? needs? attention/,
+  });
+  await expect(attentionStrip).toHaveCount(0);
+  await page.getByTestId("entry-scroll-region").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(attentionStrip).toBeVisible();
+  await attentionStrip.click();
+  await expect(currency).toBeFocused();
+  await expect(attentionStrip).toHaveCount(0);
   await currency.fill("ZZZ");
   await expect(currency).toHaveValue("ZZZ");
   await expect(
     page.getByText("Use a 3-letter code or C:: crypto code."),
   ).toBeHidden();
   await currency.fill("USD");
-
-  const amountHeaderBox = await page
-    .getByRole("columnheader", { name: "Amount" })
-    .first()
-    .boundingBox();
-  const viewport = page.viewportSize();
-  expect(amountHeaderBox).not.toBeNull();
-  expect(viewport).not.toBeNull();
-  expect(amountHeaderBox?.x ?? -1).toBeGreaterThanOrEqual(0);
-  expect(amountHeaderBox?.y ?? -1).toBeGreaterThanOrEqual(0);
-  expect(
-    (amountHeaderBox?.x ?? 0) + (amountHeaderBox?.width ?? 0),
-  ).toBeLessThanOrEqual(viewport?.width ?? 0);
-  expect(
-    (amountHeaderBox?.y ?? 0) + (amountHeaderBox?.height ?? 0),
-  ).toBeLessThanOrEqual(viewport?.height ?? 0);
 
   await page
     .getByRole("textbox", { exact: true, name: "Date" })
@@ -7711,10 +7721,34 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   );
   await page.getByLabel("Memo").fill("E2E arcade spend");
 
+  let generalFailureReturned = false;
+  await page.route("**/api/transactions/spend", async (route) => {
+    if (route.request().method() === "POST" && !generalFailureReturned) {
+      generalFailureReturned = true;
+      await route.fulfill({
+        contentType: "application/json",
+        json: { message: "Entry save failed" },
+        status: 500,
+      });
+      return;
+    }
+    await route.continue();
+  });
   await page.getByRole("combobox", { name: "Category" }).focus();
+  await page.keyboard.press("Meta+Enter");
+  await expect(
+    page.getByRole("alert").filter({
+      hasText: "Transaction could not be saved.",
+    }),
+  ).toBeVisible();
+  await expect(attentionStrip).toHaveCount(0);
+  await page.unroute("**/api/transactions/spend");
   await page.keyboard.press("Meta+Enter");
 
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Transaction saved." }),
+  ).toBeVisible();
   await expect(
     page.getByRole("textbox", { exact: true, name: "Date" }),
   ).toHaveValue("2026-05-31");
@@ -7723,12 +7757,12 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   ).toHaveValue("credit_card:Chase:Sapphire");
   await expect(page.getByLabel("Amount")).toHaveValue("");
 
-  await page.getByRole("button", { name: "Close entry panel" }).click();
-  const savedNotice = page.getByRole("status").filter({
-    hasText: "Transaction saved.",
-  });
-  await expect(savedNotice).toBeVisible();
-  await expect(savedNotice).toBeHidden({ timeout: 10000 });
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toHaveCount(0);
+  await page.getByLabel("Search").fill("E2E arcade spend");
+  await expect(page.getByText("E2E arcade spend").first()).toBeVisible();
 });
 
 test("entry panel creates each shorthand transaction type", async ({
@@ -7772,7 +7806,9 @@ test("entry panel creates each shorthand transaction type", async ({
     .getByRole("button", { name: "New transaction" })
     .click();
   await expect(page.getByRole("heading", { name: "New spend" })).toBeVisible();
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
 
   const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
   await spendPanel.getByLabel("Date").fill("2026-05-30");
@@ -7922,7 +7958,7 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
   await expectAdvancedBalanceStatus(page, "USD", "Balanced");
 
   await firstRecord.getByLabel("Memo").fill(memo);
-  await page.getByRole("button", { name: "Close entry panel" }).click();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
   await page
     .locator("header")
     .getByRole("button", { name: "New transaction" })
@@ -7983,6 +8019,10 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
   await saveButton.click();
 
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toHaveCount(0);
   await page.getByLabel("Search").fill(memo);
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
 });
@@ -8037,7 +8077,9 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
   await fillAndExpectValue(secondRecord.getByLabel("Amount"), "88.10");
 
   await page.getByRole("tab", { name: "Spend" }).click();
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
   const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
   await expect(
     entryPanel.getByRole("heading", { name: "New spend" }),
@@ -8072,14 +8114,13 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
         },
       },
     });
-  await page.getByRole("button", { name: "Close entry panel" }).click();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
 
-  await page
-    .getByRole("row")
-    .filter({ hasText: editMemo })
-    .first()
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: editMemo }).first(),
+    "Open transaction detail",
+  );
   const detailPanel = page.getByRole("dialog", {
     name: transaction.display_title,
   });
@@ -8098,7 +8139,7 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
   await expect(spendPanel.getByLabel("Memo")).toHaveValue(keptMemo);
 });
 
-test("launching another saved-transaction action protects an in-flight edit", async ({
+test("the modal protects an in-flight edit from underlying saved-transaction actions", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -8133,18 +8174,19 @@ test("launching another saved-transaction action protects an in-flight edit", as
   await page.goto(
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
   );
-  await page
-    .getByRole("row")
-    .filter({ hasText: initialMemo })
-    .first()
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: initialMemo }).first(),
+    "Open transaction detail",
+  );
   await page
     .getByRole("dialog")
     .getByRole("button", { exact: true, name: "Edit" })
     .click();
 
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
   const editPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
   await expect(
     entryPanel.getByRole("heading", { name: "Edit spend" }),
@@ -8152,19 +8194,14 @@ test("launching another saved-transaction action protects an in-flight edit", as
   await fillAndExpectValue(editPanel.getByLabel("Memo"), changedMemo);
 
   const nextRow = page.getByRole("row").filter({ hasText: nextMemo }).first();
-  await expect(nextRow).toBeVisible();
-  await nextRow.focus();
-  await page.keyboard.press("Enter");
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Duplicate" })
-    .click();
+  await expect(nextRow).toHaveCount(0);
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
 
   const discardDialog = page.getByRole("alertdialog", {
-    name: "Discard entry draft",
+    name: "Discard transaction changes?",
   });
   await expect(discardDialog).toBeVisible();
-  await discardDialog.getByRole("button", { name: "Keep draft" }).click();
+  await discardDialog.getByRole("button", { name: "Keep editing" }).click();
   await expect(discardDialog).toBeHidden();
   await expect(
     entryPanel.getByRole("heading", { name: "Edit spend" }),
@@ -8194,7 +8231,9 @@ test("spend entry escalates to matching journal records", async ({
     .getByRole("button", { name: "New transaction" })
     .click();
 
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
   const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
   await spendPanel.getByLabel("Date").fill("2026-05-31");
   await fillAndExpectValue(spendPanel.getByLabel("Amount"), amount);
@@ -8434,10 +8473,12 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
   ).toBeEnabled();
   await page.getByRole("button", { name: "Save and add another" }).click();
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
-  await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+  await expect(
+    page.locator("[data-transaction-row]").filter({ hasText: memo }),
+  ).toBeVisible();
 });
 
-test("command palette new spend supersedes an active edit launch", async ({
+test("the entry modal blocks the command palette while an edit is active", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 820 });
@@ -8466,18 +8507,19 @@ test("command palette new spend supersedes an active edit launch", async ({
   expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
 
   await page.goto("/transactions?page=1&pageSize=50");
-  await page
-    .getByRole("row")
-    .filter({ hasText: memo })
-    .first()
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Open transaction detail",
+  );
   await page
     .getByRole("dialog")
     .getByRole("button", { exact: true, name: "Edit" })
     .click();
 
-  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
   await expect(
     entryPanel.getByRole("heading", { name: "Edit spend" }),
   ).toBeVisible();
@@ -8487,18 +8529,109 @@ test("command palette new spend supersedes an active edit launch", async ({
   await page.keyboard.press("Control+K");
   await expect(
     page.getByRole("dialog", { name: "Command Palette" }),
-  ).toBeVisible();
-  await page.getByRole("combobox", { name: "Command search" }).fill("spend");
-  await page.getByRole("option", { name: "New spend" }).click();
-
+  ).toHaveCount(0);
   await expect(
-    entryPanel.getByRole("heading", { name: "New spend" }),
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
   ).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Spend" })).toHaveAttribute(
-    "aria-selected",
-    "true",
+  await expect(editSpendPanel.getByLabel("Amount")).toHaveValue("34.56");
+});
+
+test("entry modal deep links compose with history and report missing transactions", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 820 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E entry deep link ${unique}`;
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "18.75",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-10",
+      memo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+  const transaction = (await spendResponse.json()) as TransactionFixture;
+  const entryModal = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
+
+  await page.goto("/overview");
+  await page
+    .locator("main")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(page).toHaveURL(/[?&]entry=new(?:&|$)/);
+  await expect(entryModal).toBeVisible();
+  await page.goBack();
+  await expect(entryModal).toHaveCount(0);
+  await expect(page).toHaveURL(/\/overview$/);
+
+  await page.goto(`/settings?entry=edit:${transaction.transaction_id}`);
+  await expect(
+    entryModal.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await expect(entryModal.getByLabel("Memo")).toHaveValue(memo);
+
+  await page.goto(`/settings?entry=split:${transaction.transaction_id}`);
+  await expect(
+    entryModal.getByRole("heading", { name: "Edit journal" }),
+  ).toBeVisible();
+
+  await page.goto(`/settings?entry=duplicate:${transaction.transaction_id}`);
+  await expect(
+    entryModal.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await expect(entryModal.getByLabel("Memo")).toHaveValue(memo);
+
+  await page.goto("/settings?entry=edit:999999999");
+  await expect(
+    entryModal.getByRole("heading", { name: "Transaction unavailable" }),
+  ).toBeVisible();
+  await expect(entryModal.getByRole("alert")).toContainText(
+    "transaction not found",
   );
-  const newSpendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
-  await expect(newSpendPanel.getByLabel("Amount")).toHaveValue("");
-  await expect(newSpendPanel.getByLabel("Memo")).toHaveValue("");
+});
+
+test("opening the entry modal exits bulk mode and takes over a narrow viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 820 });
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toBeVisible();
+  await page
+    .locator("main")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(
+    page.getByTestId("transaction-browser-bulk-mode-bar"),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await page.setViewportSize({ width: 600, height: 700 });
+  await page.goto("/overview?entry=new");
+  const entryModal = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
+  await expect(entryModal).toBeVisible();
+  const bounds = await entryModal.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeCloseTo(0, 0);
+  expect(bounds!.y).toBeCloseTo(0, 0);
+  expect(bounds!.width).toBeCloseTo(600, 0);
+  expect(bounds!.height).toBeCloseTo(700, 0);
 });

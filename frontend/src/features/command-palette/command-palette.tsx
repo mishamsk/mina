@@ -32,9 +32,11 @@ import {
   fetchAccountGroupsForLookups,
   fetchTransactionPage,
   type GroupState,
+  listTransactionTemplates,
   startDatabaseBackupRun,
   startExchangeRateLoadingRun,
   type Transaction,
+  type TransactionTemplate,
 } from "@/api";
 import { Toast, toastDurationMs } from "@/components/toast";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
@@ -42,6 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   AmountText,
   buildLookupMaps,
+  captureTransactionEntryLaunchContext,
   ClassIcon,
   displayAmountKey,
   formatInitiatedDate,
@@ -62,6 +65,7 @@ import type { TransactionEntryType } from "@/models/ui-state";
 import {
   closeCommandPalette,
   openTransactionEntryPanel,
+  openTransactionEntryTemplate,
   setTransactionBulkEditEnabled,
   toggleTransactionBulkEdit,
   useCommandPaletteView,
@@ -169,13 +173,6 @@ const commandMatches = (command: CommandItem, query: string): boolean => {
 };
 
 const leafName = (fqn: string): string => fqn.split(":").at(-1) ?? fqn;
-
-const transactionsEntrySearch = (search: string): string => {
-  const params = new URLSearchParams(search);
-  params.delete("transaction");
-  const nextSearch = params.toString();
-  return nextSearch ? `?${nextSearch}` : "";
-};
 
 const transactionDetailSearch = (
   transactionId: number,
@@ -425,9 +422,29 @@ export const CommandPalette = () => {
       query: "",
       transactions: [],
     });
+  const [templates, setTemplates] = useState<readonly TransactionTemplate[]>(
+    [],
+  );
   const query = searchState.query;
   const transactionSearchMode = query.startsWith("'");
   const transactionQuery = transactionSearchMode ? query.slice(1) : "";
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    let active = true;
+    void listTransactionTemplates({
+      query: { limit: 500, offset: 0, sort: "fqn", sort_dir: "asc" },
+    }).then((result) => {
+      if (active && result.data) {
+        setTemplates(result.data.transaction_templates);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   const showNotice = useCallback(
     (message: string, kind: PaletteNotice["kind"]) => {
@@ -444,21 +461,12 @@ export const CommandPalette = () => {
     setNotice(undefined);
   }, []);
 
-  const openEntryCommand = useCallback(
-    (entryType: TransactionEntryType) => {
-      setTransactionBulkEditEnabled(false);
-      openTransactionEntryPanel(entryType);
-      void navigate({
-        pathname: "/transactions",
-        search: transactionsEntrySearch(
-          location.pathname === "/transactions"
-            ? location.search
-            : lastTransactionsPageSearch,
-        ),
-      });
-    },
-    [lastTransactionsPageSearch, location.pathname, location.search, navigate],
-  );
+  const openEntryCommand = useCallback((entryType: TransactionEntryType) => {
+    openTransactionEntryPanel(
+      entryType,
+      captureTransactionEntryLaunchContext(),
+    );
+  }, []);
 
   const runDatabaseBackup = useCallback(async () => {
     const result = await startDatabaseBackupRun();
@@ -603,6 +611,22 @@ export const CommandPalette = () => {
         label: "New transfer",
       },
     ];
+    const templateCommands: readonly CommandItem[] = templates.map(
+      (template) => ({
+        action: () => {
+          openTransactionEntryTemplate(
+            template.fqn,
+            captureTransactionEntryLaunchContext(),
+          );
+        },
+        detail: "Template",
+        group: "New transaction",
+        icon: Plus,
+        id: `entry-template-${template.transaction_template_id}`,
+        keywords: [template.fqn, template.name, "template"],
+        label: `Use ${template.fqn}`,
+      }),
+    );
 
     const actionCommands: readonly CommandItem[] = [
       ...(transactionBulkEdit.available
@@ -641,7 +665,12 @@ export const CommandPalette = () => {
 
     const normalizedQuery = normalizeSearch(query);
     if (!normalizedQuery || !lookups.snapshot) {
-      return [...pageCommands, ...entryCommands, ...actionCommands];
+      return [
+        ...pageCommands,
+        ...entryCommands,
+        ...templateCommands,
+        ...actionCommands,
+      ];
     }
 
     const accountCommands = sortFqnMatches<Account>(
@@ -686,6 +715,7 @@ export const CommandPalette = () => {
     return [
       ...pageCommands,
       ...entryCommands,
+      ...templateCommands,
       ...accountCommands,
       ...groupCommands,
       ...actionCommands,
@@ -700,6 +730,7 @@ export const CommandPalette = () => {
     runExchangeRateLoading,
     transactionSearchMode,
     transactionBulkEdit.available,
+    templates,
   ]);
 
   const visibleCommands = useMemo(() => {

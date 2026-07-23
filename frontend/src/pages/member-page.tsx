@@ -1,8 +1,6 @@
-import { Plus } from "pixelarticons/react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
 
 import { PageHelp } from "@/components/page-help";
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/features/app-shell";
 import { refreshMembersPage, useMembersResource } from "@/features/members";
 import {
@@ -21,7 +19,6 @@ const parsePositiveInteger = (
 };
 
 export const MemberPage = () => {
-  const navigate = useNavigate();
   const { memberId: memberIdParam } = useParams();
   const membersPage = useMembersResource(true);
   const memberId = parsePositiveInteger(memberIdParam);
@@ -45,17 +42,6 @@ export const MemberPage = () => {
           <PageHelp label="Member help">
             Member pages show transactions attributed to that household member.
           </PageHelp>
-        }
-        actions={
-          <Button
-            type="button"
-            onClick={() => {
-              void navigate("/transactions");
-            }}
-          >
-            <Plus aria-hidden="true" />
-            New transaction
-          </Button>
         }
       />
 

@@ -267,7 +267,7 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await expect(primaryNav).toBeVisible();
   await expect(
     primaryNav.getByRole("button", { name: "New transaction" }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await expect(
     primaryNav.getByRole("link", { name: "Overview" }),
   ).toBeVisible();

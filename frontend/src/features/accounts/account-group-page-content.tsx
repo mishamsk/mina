@@ -1,4 +1,4 @@
-import { Plus, Reload } from "pixelarticons/react";
+import { Reload } from "pixelarticons/react";
 import { useCallback, useMemo, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -21,6 +21,7 @@ import {
   AmountText,
   ApproximateUsdAmount,
   buildLookupMaps,
+  captureTransactionEntryLaunchContext,
   defaultTransactionPageSize,
   FqnPath,
   invalidateAccountRegistersForTransaction,
@@ -29,7 +30,7 @@ import {
   transactionPageSizeOptions,
 } from "@/features/ledger";
 import { refreshOverview } from "@/features/overview";
-import { invalidateTransactionPages } from "@/store";
+import { invalidateTransactionPages, openTransactionEntryPanel } from "@/store";
 
 import { AccountPeekPanel } from "./account-peek-panel";
 import { AccountRegisterTable } from "./account-register-table";
@@ -399,7 +400,10 @@ const GroupRegister = ({ prefix }: { readonly prefix: string }) => {
           );
         }}
         onNewTransaction={() => {
-          void navigate("/transactions");
+          openTransactionEntryPanel(
+            undefined,
+            captureTransactionEntryLaunchContext(),
+          );
         }}
         onNextPage={() => {
           setSearchParams((current) =>
@@ -466,7 +470,6 @@ export const AccountGroupPageContent = ({
 }: {
   readonly prefix: string;
 }) => {
-  const navigate = useNavigate();
   const accountsResource = useAccountsResource();
   const matchingAccounts = useMemo(
     () =>
@@ -509,17 +512,6 @@ export const AccountGroupPageContent = ({
             prefix, including balance and flow accounts, with account subtotals
             above the combined register.
           </PageHelp>
-        }
-        actions={
-          <Button
-            type="button"
-            onClick={() => {
-              void navigate("/transactions");
-            }}
-          >
-            <Plus aria-hidden="true" />
-            New transaction
-          </Button>
         }
       />
 

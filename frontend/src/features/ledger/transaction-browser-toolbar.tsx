@@ -40,7 +40,6 @@ interface TransactionBrowserToolbarProps {
   readonly idPrefix: string;
   readonly onClearFilterChips: () => void;
   readonly onClearSelection: () => void;
-  readonly onFilterBarClose?: () => void;
   readonly onDateJumpNext: (trigger: HTMLButtonElement) => void;
   readonly onDateJumpPrevious: (trigger: HTMLButtonElement) => void;
   readonly onDateJumpToday: (trigger: HTMLButtonElement) => void;
@@ -66,7 +65,6 @@ export const TransactionBrowserToolbar = ({
   idPrefix,
   onClearFilterChips,
   onClearSelection,
-  onFilterBarClose,
   onDateJumpNext,
   onDateJumpPrevious,
   onDateJumpToday,
@@ -354,7 +352,6 @@ export const TransactionBrowserToolbar = ({
                     if (hasActiveFilterChips) {
                       onClearFilterChips();
                     }
-                    onFilterBarClose?.();
                     setFilterBarOpen(false);
                     return;
                   }

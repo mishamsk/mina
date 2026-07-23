@@ -194,20 +194,19 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
   return { lookups, page };
 };
 
-export const useLedgerLookupsResource = () => {
+export const useLedgerLookupsResource = (enabled = true) => {
   const lookups = useLedgerLookupsView();
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
     const snapshot = getTransactionsSnapshot();
     if (snapshot.lookups || snapshot.lookupsLoading) {
       return;
     }
-    let active = true;
-    void loadLedgerLookups(() => active);
-    return () => {
-      active = false;
-    };
-  }, []);
+    void loadLedgerLookups();
+  }, [enabled]);
 
   return lookups;
 };
@@ -372,6 +371,31 @@ export const refreshTransactionPageAfterSave = async (
   return transactions.some(
     (current) => current.transaction_id === transactionId,
   );
+};
+
+export const refreshViewsAfterEntrySave = async (
+  transaction: Transaction,
+  previousTransaction?: Transaction,
+): Promise<boolean> => {
+  const snapshot = getTransactionsSnapshot();
+  const currentPage = snapshot.lastLoadedPageKey
+    ? snapshot.pages[snapshot.lastLoadedPageKey]
+    : undefined;
+  if (currentPage) {
+    return refreshTransactionPageAfterSave(
+      currentPage.params,
+      transaction.transaction_id,
+      transaction,
+      previousTransaction,
+      { pageRefreshMode: "blocking" },
+    );
+  }
+
+  invalidateReferencePagesAfterTransactionMutation();
+  invalidateAccountRegistersForTransaction(transaction, previousTransaction);
+  invalidateTransactionPages();
+  await Promise.all([refreshFeaturedBalances(), refreshOverview()]);
+  return false;
 };
 
 export const refreshTransactionPageAfterBulkSave = async (
