@@ -310,7 +310,9 @@ const createExpectedRecurringFixture = async (
     readonly featured?: boolean;
   } = {},
 ): Promise<{
+  readonly category: CategoryFixture;
   readonly checking: AccountFixture;
+  readonly merchant: AccountFixture;
   readonly merchantFqn: string;
   readonly memo: string;
 }> => {
@@ -373,7 +375,13 @@ const createExpectedRecurringFixture = async (
   );
   expect(materialized.ok(), await materialized.text()).toBe(true);
 
-  return { checking, merchantFqn: merchant.fqn, memo };
+  return {
+    category,
+    checking,
+    merchant,
+    merchantFqn: merchant.fqn,
+    memo,
+  };
 };
 
 const deleteTransaction = async (
@@ -2725,6 +2733,19 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
     },
   );
   const dueFixture = await createExpectedRecurringFixture(page, `${unique}Due`);
+  const ordinaryMemo = `E2E recurring layout ${unique} ordinary`;
+  const ordinaryResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "34.56",
+      category_id: dueFixture.category.category_id,
+      counterparty_account_id: dueFixture.merchant.account_id,
+      currency: "USD",
+      funding_account_id: dueFixture.checking.account_id,
+      initiated_date: formatLocalDate(new Date()),
+      memo: ordinaryMemo,
+    },
+  });
+  expect(ordinaryResponse.ok(), await ordinaryResponse.text()).toBe(true);
   const search = unique;
 
   const defaultRequest = page.waitForRequest((request) => {
@@ -2742,13 +2763,133 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
   const overdueRow = page.getByRole("row").filter({
     hasText: overdueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
   });
-  const dueRow = page.getByRole("row").filter({
-    hasText: dueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
-  });
+  const dueRow = page
+    .getByRole("row")
+    .filter({
+      hasText: dueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
+    })
+    .filter({ has: page.getByRole("img", { name: "Expected" }) });
+  const ordinaryRow = page.getByRole("row").filter({ hasText: ordinaryMemo });
   await expect(overdueRow).toBeVisible();
   await expect(dueRow).toBeVisible();
-  await expect(overdueRow.locator('[aria-label="Expected"]')).toHaveCount(1);
-  await expect(overdueRow.locator('[aria-label="Overdue"]')).toHaveCount(1);
+  await expect(ordinaryRow).toBeVisible();
+
+  for (const width of [1280, 700]) {
+    await page.setViewportSize({ width, height: 720 });
+
+    const overdueExpected = overdueRow.getByRole("img", { name: "Expected" });
+    const overdueMarker = overdueRow.getByRole("img", { name: "Overdue" });
+    const dueExpected = dueRow.getByRole("img", { name: "Expected" });
+    await expect(overdueExpected).toBeVisible();
+    await expect(overdueMarker).toBeVisible();
+    await expect(dueExpected).toBeVisible();
+    await expect(dueRow.getByRole("img", { name: "Overdue" })).toHaveCount(0);
+    await expect(ordinaryRow.getByTestId("recurring-indicators")).toHaveCount(
+      0,
+    );
+
+    const geometry = await Promise.all(
+      [overdueRow, dueRow, ordinaryRow].map((row) =>
+        row.evaluate((element) => {
+          const cell = element.querySelector<HTMLElement>(
+            ".transactions-description-column",
+          );
+          const text = element.querySelector<HTMLElement>(
+            "[data-testid='transaction-description-text']",
+          );
+          const indicators = element.querySelector<HTMLElement>(
+            "[data-testid='recurring-indicators']",
+          );
+          const title = element.querySelector<HTMLElement>(
+            "[data-testid='transaction-line-title']",
+          );
+          if (!cell || !text || !title) {
+            throw new Error("expected transaction description geometry");
+          }
+          const cellBounds = cell.getBoundingClientRect();
+          const textBounds = text.getBoundingClientRect();
+          const indicatorBounds = indicators?.getBoundingClientRect();
+          const rowBounds = element.getBoundingClientRect();
+          return {
+            cell: {
+              bottom: cellBounds.bottom,
+              left: cellBounds.left,
+              right: cellBounds.right,
+              top: cellBounds.top,
+            },
+            indicators: indicatorBounds
+              ? {
+                  bottom: indicatorBounds.bottom,
+                  left: indicatorBounds.left,
+                  right: indicatorBounds.right,
+                  top: indicatorBounds.top,
+                }
+              : undefined,
+            rowHeight: rowBounds.height,
+            text: {
+              right: textBounds.right,
+              width: textBounds.width,
+            },
+            titleOverflow: getComputedStyle(title).textOverflow,
+            titleWhiteSpace: getComputedStyle(title).whiteSpace,
+          };
+        }),
+      ),
+    );
+    const [overdueGeometry, dueGeometry, ordinaryGeometry] = geometry;
+    expect(overdueGeometry?.indicators).toBeDefined();
+    expect(dueGeometry?.indicators).toBeDefined();
+    expect(ordinaryGeometry?.indicators).toBeUndefined();
+
+    for (const recurringGeometry of [overdueGeometry, dueGeometry]) {
+      expect(
+        (recurringGeometry?.indicators?.left ?? 0) -
+          (recurringGeometry?.text.right ?? 0),
+      ).toBeGreaterThanOrEqual(-0.5);
+      expect(recurringGeometry?.indicators?.left ?? 0).toBeGreaterThanOrEqual(
+        (recurringGeometry?.cell.left ?? 0) - 0.5,
+      );
+      expect(recurringGeometry?.indicators?.right ?? 0).toBeLessThanOrEqual(
+        (recurringGeometry?.cell.right ?? 0) + 0.5,
+      );
+      expect(recurringGeometry?.indicators?.top ?? 0).toBeGreaterThanOrEqual(
+        (recurringGeometry?.cell.top ?? 0) - 0.5,
+      );
+      expect(recurringGeometry?.indicators?.bottom ?? 0).toBeLessThanOrEqual(
+        (recurringGeometry?.cell.bottom ?? 0) + 0.5,
+      );
+      expect(recurringGeometry?.titleOverflow).toBe("ellipsis");
+      expect(recurringGeometry?.titleWhiteSpace).toBe("nowrap");
+    }
+
+    expect(ordinaryGeometry?.text.width ?? 0).toBeGreaterThan(
+      (dueGeometry?.text.width ?? 0) + 20,
+    );
+    expect(dueGeometry?.text.width ?? 0).toBeGreaterThan(
+      (overdueGeometry?.text.width ?? 0) + 20,
+    );
+    expect(
+      Math.abs(
+        (ordinaryGeometry?.rowHeight ?? 0) -
+          (dueGeometry?.rowHeight ?? Number.POSITIVE_INFINITY),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        (ordinaryGeometry?.rowHeight ?? 0) -
+          (overdueGeometry?.rowHeight ?? Number.POSITIVE_INFINITY),
+      ),
+    ).toBeLessThanOrEqual(1);
+  }
+
+  await overdueRow.getByRole("img", { name: "Expected" }).hover();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Expected" }),
+  ).toBeVisible();
+  await overdueRow.getByRole("img", { name: "Overdue" }).hover();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Overdue occurrence" }),
+  ).toBeVisible();
   await expect(overdueRow.getByText("-23.45 $", { exact: true })).toHaveClass(
     /text-muted-foreground/,
   );

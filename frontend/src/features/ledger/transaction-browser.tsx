@@ -1557,26 +1557,9 @@ export const TransactionBrowser = ({
                       </div>
                     </td>
                     <td className="transactions-status-column px-1 py-2">
-                      <div className="flex items-center gap-1">
-                        {overdueExpected ? (
-                          <Tooltip
-                            label="Overdue occurrence"
-                            className="inline-flex size-6 shrink-0"
-                          >
-                            <span
-                              aria-label="Overdue"
-                              className="inline-flex size-6 items-center justify-center border border-[var(--border-ink)] bg-[var(--color-class-adjustment-bright)] text-[var(--color-class-adjustment-ink)] shadow-[var(--shadow-chip)]"
-                              data-testid="recurring-overdue-marker"
-                              role="img"
-                            >
-                              <WarningDiamond
-                                aria-hidden="true"
-                                className="size-4"
-                              />
-                            </span>
-                          </Tooltip>
-                        ) : null}
-                        {postingStatus === "mixed" ? (
+                      <div className="flex items-center">
+                        {postingStatus === "expected" ? null : postingStatus ===
+                          "mixed" ? (
                           <MixedSentinel />
                         ) : (
                           <StatusIcon status={postingStatus} />
@@ -1584,27 +1567,58 @@ export const TransactionBrowser = ({
                       </div>
                     </td>
                     <td className="transactions-description-column px-3 py-2">
-                      <div className="min-w-0">
-                        <Tooltip label={title} className="block min-w-0">
-                          <div
-                            className={cn(
-                              "truncate font-medium",
-                              expanded && "font-mono font-semibold",
-                            )}
-                            data-testid="transaction-line-title"
-                          >
-                            {title}
-                          </div>
-                        </Tooltip>
-                        {memo ? (
-                          <Tooltip label={memo} className="block min-w-0">
+                      <div className="flex min-w-0 items-center gap-1">
+                        <div
+                          className="min-w-0 flex-1"
+                          data-testid="transaction-description-text"
+                        >
+                          <Tooltip label={title} className="block min-w-0">
                             <div
-                              className="text-muted-foreground truncate text-xs"
-                              data-testid="transaction-line-memo"
+                              className={cn(
+                                "truncate font-medium",
+                                expanded && "font-mono font-semibold",
+                              )}
+                              data-testid="transaction-line-title"
                             >
-                              {memo}
+                              {title}
                             </div>
                           </Tooltip>
+                          {memo ? (
+                            <Tooltip label={memo} className="block min-w-0">
+                              <div
+                                className="text-muted-foreground truncate text-xs"
+                                data-testid="transaction-line-memo"
+                              >
+                                {memo}
+                              </div>
+                            </Tooltip>
+                          ) : null}
+                        </div>
+                        {postingStatus === "expected" ? (
+                          <div
+                            className="flex shrink-0 items-center gap-1 whitespace-nowrap"
+                            data-testid="recurring-indicators"
+                          >
+                            <StatusIcon status={postingStatus} />
+                            {overdueExpected ? (
+                              <Tooltip
+                                label="Overdue occurrence"
+                                className="inline-flex size-6 shrink-0"
+                              >
+                                <span
+                                  aria-label="Overdue"
+                                  className="inline-flex size-6 items-center justify-center border border-[var(--border-ink)] bg-[var(--color-class-adjustment-bright)] text-[var(--color-class-adjustment-ink)] shadow-[var(--shadow-chip)]"
+                                  data-testid="recurring-overdue-marker"
+                                  role="img"
+                                >
+                                  <WarningDiamond
+                                    aria-hidden="true"
+                                    className="size-4"
+                                  />
+                                </span>
+                              </Tooltip>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
                     </td>
