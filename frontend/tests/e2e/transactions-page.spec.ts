@@ -545,6 +545,61 @@ const expectKeyboardDisclosure = async (
   await expect(row).toHaveAttribute("aria-expanded", "false");
 };
 
+const expectFocusedAccountPathExpanded = async (
+  link: Locator,
+  value: string,
+): Promise<void> => {
+  const segments = value.split(":");
+  const collapsedAncestors = `${segments[0]}:…:`;
+  const fullAncestors = `${segments.slice(0, -1).join(":")}:`;
+  const visualAncestors = link.locator("span[aria-hidden='true']");
+  const collapsed = visualAncestors.filter({
+    hasText: collapsedAncestors,
+  });
+  const expanded = visualAncestors.filter({ hasText: fullAncestors });
+
+  await expect(collapsed).toBeVisible();
+  await expect(expanded).toBeHidden();
+  expect(await link.evaluate((element) => element.tabIndex)).toBe(0);
+  await link.focus();
+  await expect(link).toBeFocused();
+  await expect(collapsed).toBeHidden();
+  await expect(expanded).toBeVisible();
+};
+
+const expectFocusedTwoSegmentAccountPathWhole = async (
+  link: Locator,
+  value: string,
+): Promise<void> => {
+  const segments = value.split(":");
+  expect(segments).toHaveLength(2);
+  const ancestor = link.locator("span").filter({ hasText: `${segments[0]}:` });
+
+  await expect(ancestor).toBeVisible();
+  expect(await link.evaluate((element) => element.tabIndex)).toBe(0);
+  await link.focus();
+  await expect(link).toBeFocused();
+  await expect(ancestor).toBeVisible();
+};
+
+const expectAccountLinkNavigation = async (
+  page: Page,
+  account: AccountFixture,
+): Promise<void> => {
+  await expect
+    .poll(() => new URL(page.url()).pathname)
+    .toBe(`/accounts/${account.account_id}`);
+  await expect(page.getByTestId("account-header")).toBeVisible();
+  const searchParams = new URL(page.url()).searchParams;
+  for (const filter of ["account", "category", "member", "q", "tag"]) {
+    expect(searchParams.has(filter), `${filter} filter`).toBe(false);
+  }
+  expect(searchParams.has("entry"), "entry editor state").toBe(false);
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toHaveCount(0);
+};
+
 const editorButtonsFitContainer = (container: Locator) =>
   container.evaluate((element) => {
     const containerRect = element.getBoundingClientRect();
@@ -5350,6 +5405,96 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await page.keyboard.press("Escape");
   await expect(deepLinkPanel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=2&pageSize=25$/);
+});
+
+test("detail and peek account paths navigate without record-row side effects", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [account, merchant, categories] = await Promise.all([
+    createAccount(
+      page,
+      `e2e:DetailLinks:${unique}:Household:Checking`,
+      "balance",
+      "USD",
+    ),
+    createAccount(page, `e2eDetailLinks${unique}:LinkTarget`, "flow", "USD"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E detail account links ${unique}`;
+  const createResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "31.27",
+      category_id: category.category_id,
+      counterparty_account_id: merchant.account_id,
+      currency: "USD",
+      funding_account_id: account.account_id,
+      initiated_date: "2026-07-23",
+      memo,
+    },
+  });
+  expect(createResponse.ok()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionFixture;
+
+  let panel = await openUrlTransactionDetail(page, transaction.transaction_id);
+  let accountLink = panel.getByRole("link", {
+    exact: true,
+    name: account.fqn,
+  });
+  let recordRow = accountLink.locator("xpath=ancestor::tr");
+  await expect(accountLink).toHaveCount(1);
+  await expect(recordRow.getByRole("link")).toHaveCount(1);
+  await expect(recordRow).toHaveAttribute("aria-expanded", "false");
+  await expectFocusedTwoSegmentAccountPathWhole(
+    panel.locator(`a[href='/accounts/${merchant.account_id}']`),
+    merchant.fqn,
+  );
+  await accountLink.click();
+  await expectAccountLinkNavigation(page, account);
+
+  panel = await openUrlTransactionDetail(page, transaction.transaction_id);
+  accountLink = panel.getByRole("link", {
+    exact: true,
+    name: account.fqn,
+  });
+  recordRow = accountLink.locator("xpath=ancestor::tr");
+  await recordRow.focus();
+  await recordRow.press("Enter");
+  await expect(recordRow).toHaveAttribute("aria-expanded", "true");
+  await recordRow.press("Enter");
+  await expect(recordRow).toHaveAttribute("aria-expanded", "false");
+  await expectFocusedAccountPathExpanded(accountLink, account.fqn);
+  await accountLink.press("Enter");
+  await expectAccountLinkNavigation(page, account);
+
+  panel = await openAccountTransactionPeek(page, merchant, memo);
+  accountLink = panel.getByRole("link", {
+    exact: true,
+    name: account.fqn,
+  });
+  recordRow = accountLink.locator("xpath=ancestor::tr");
+  await expect(accountLink).toHaveCount(1);
+  await expect(recordRow.getByRole("link")).toHaveCount(1);
+  await expect(recordRow).toHaveAttribute("aria-expanded", "false");
+  await accountLink.click();
+  await expectAccountLinkNavigation(page, account);
+
+  panel = await openAccountTransactionPeek(page, merchant, memo);
+  accountLink = panel.getByRole("link", {
+    exact: true,
+    name: account.fqn,
+  });
+  recordRow = accountLink.locator("xpath=ancestor::tr");
+  await recordRow.focus();
+  await recordRow.press("Enter");
+  await expect(recordRow).toHaveAttribute("aria-expanded", "true");
+  await recordRow.press("Enter");
+  await expect(recordRow).toHaveAttribute("aria-expanded", "false");
+  await expectFocusedAccountPathExpanded(accountLink, account.fqn);
+  await accountLink.press("Enter");
+  await expectAccountLinkNavigation(page, account);
 });
 
 test("transaction detail panel is read-only while chips keep filtering", async ({

@@ -665,7 +665,10 @@ const DetailRecordsTable = ({
                     data-label="Account"
                   >
                     {account ? (
-                      <FqnPath value={account.fqn} />
+                      <FqnPath
+                        to={`/accounts/${account.account_id}`}
+                        value={account.fqn}
+                      />
                     ) : (
                       "Unknown account"
                     )}

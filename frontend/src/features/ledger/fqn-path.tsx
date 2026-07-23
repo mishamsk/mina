@@ -1,16 +1,34 @@
+import { Link } from "react-router";
+
 import { Tooltip } from "@/components/tooltip";
 import { cn } from "@/lib/utils";
 
-interface FqnPathProps {
+interface FqnPathBaseProps {
   readonly ancestorClassName?: string;
   readonly className?: string;
   readonly collapseAncestors?: boolean;
   readonly focusable?: boolean;
   readonly leafClassName?: string;
-  readonly onActivate?: () => void;
   readonly variant?: "full" | "full-chip" | "leaf-chip";
   readonly value: string;
 }
+
+type FqnPathProps = FqnPathBaseProps &
+  (
+    | {
+        readonly onActivate?: undefined;
+        readonly to?: undefined;
+      }
+    | {
+        readonly onActivate: () => void;
+        readonly to?: never;
+      }
+    | {
+        readonly onActivate?: never;
+        readonly to: string;
+        readonly variant?: "full";
+      }
+  );
 
 export const FqnPath = ({
   ancestorClassName,
@@ -19,16 +37,19 @@ export const FqnPath = ({
   focusable = true,
   leafClassName,
   onActivate,
+  to,
   value,
   variant = "full",
 }: FqnPathProps) => {
   const segments = value.split(":");
   const leaf = segments.at(-1) ?? value;
+  const fullAncestors =
+    segments.length > 1 ? `${segments.slice(0, -1).join(":")}:` : "";
   const ancestors =
     segments.length > 2
       ? collapseAncestors
         ? `${segments[0]}:…:`
-        : `${segments.slice(0, -1).join(":")}:`
+        : fullAncestors
       : segments.length > 1
         ? `${segments[0]}:`
         : "";
@@ -41,16 +62,30 @@ export const FqnPath = ({
           aria-hidden={hasCollapsedAncestors || undefined}
           className={cn(
             "text-muted-foreground max-w-full min-w-0 truncate",
+            to && "decoration-1 underline-offset-2 group-hover:underline",
+            hasCollapsedAncestors && to && "group-focus-visible:hidden",
             ancestorClassName,
           )}
         >
           {ancestors}
         </span>
       ) : null}
+      {hasCollapsedAncestors && to ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "text-muted-foreground hidden max-w-full min-w-0 truncate decoration-1 underline-offset-2 group-hover:underline group-focus-visible:inline",
+            ancestorClassName,
+          )}
+        >
+          {fullAncestors}
+        </span>
+      ) : null}
       <span
         aria-hidden={hasCollapsedAncestors || undefined}
         className={cn(
           "text-foreground max-w-full min-w-0 truncate font-medium",
+          to && "decoration-1 underline-offset-2 group-hover:underline",
           leafClassName,
         )}
       >
@@ -137,6 +172,25 @@ export const FqnPath = ({
       "focus-visible:outline-ring hover:bg-muted active:bg-muted cursor-pointer border-0 bg-transparent p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2",
     className,
   );
+
+  if (to) {
+    return (
+      <Tooltip label={value} asChild>
+        <Link
+          className={cn(
+            pathClassName,
+            "focus-visible:outline-ring group cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2",
+          )}
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          to={to}
+        >
+          {pathContent}
+        </Link>
+      </Tooltip>
+    );
+  }
 
   if (onActivate) {
     return (
