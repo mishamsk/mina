@@ -85,7 +85,7 @@ Rules every theme must satisfy:
 - Monetary amounts use tabular numerals and right-align in tables.
 - Loading uses skeletons shaped like the final content, never centered spinners; previous data stays visible while refetching; loading causes no layout shift.
 - Motion is functional, not decorative; `prefers-reduced-motion` is respected.
-- Icons accompany labels; controls are never icon-only except in the collapsed rail and table row actions with tooltips.
+- Icons accompany labels; controls are never icon-only except in the collapsed rail, table row actions with tooltips, and toolbar state toggles with accessible labels, tooltips, and icon-visible state.
 - Three affordance classes stay visually distinct in every theme, so a glance separates "describes", "filters", and "acts":
   - Indicators: descriptive marks — class icons, status markers, hidden markers, type/intent badges. Read-only; never interactive beyond a tooltip.
   - Entity chips: reference values (category, tags, member) rendered as chips; activating a chip adds that entity to the current view's filters.
@@ -292,7 +292,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Recurring occurrences — confirmed, overdue, and upcoming EXPECTED — render inline in the Transactions page (and register embeddings) by default. The UI explicitly requests expected occurrences even though API listings omit them by default; per `docs/recurring-transactions-semantics.md`, showing them never changes their exclusion from balances, aggregates, and reports.
 - Loading a transactions view runs the occurrence API's lazy catch-up materialization so the list always reflects occurrences through today.
 - Expected rows carry a distinct visual treatment inline; overdue occurrences (scheduled before today) additionally carry the warning-treatment missed marker per the theme.
-- The filter direction is hide-based: a standing control lets the user HIDE expected/recurring rows from the view; there is no opt-in Expected posting-status filter.
+- The filter direction is hide-based: a standing toolbar icon toggle — same control family as the Filter toggle, sitting with the standing controls beside the class dropdown — lets the user HIDE expected/recurring rows; there is no opt-in Expected posting-status filter. It is a pressed-state toggle (constant accessible name "Hide expected", state via `aria-pressed`, tooltip naming state and action, glyph shape changing with state so meaning never relies on color) and never a chip-backed filter dimension: clearing the filter bar does not touch it.
 - Confirm and Dismiss are row actions on expected rows, per the affordance-class rules: Confirm materializes the transaction immediately with the standard toast; Dismiss sits behind the standard named confirmation dialog. Both surface API errors per the standard feedback rules.
 - The `/recurring` page hosts recurring definitions management — the configuration surface for recurring transactions; occurrence review lives inline in Transactions per the rules above.
 

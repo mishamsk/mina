@@ -1,5 +1,6 @@
 import {
   Calendar,
+  CalendarWeeks,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -10,7 +11,6 @@ import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 
 import { Tooltip as AppTooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -18,18 +18,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import {
   transactionClasses,
   type TransactionFilters,
 } from "@/models/transaction-filters";
 
 import { transactionClassLabel } from "./format";
+import { CalendarWeeksOff } from "./line-icons";
 import { TransactionSearchInput } from "./transaction-search-input";
 
 interface TransactionBrowserToolbarProps {
   readonly bulkEditMode: boolean;
   readonly dateJumpLoading: boolean;
   readonly dateJumpValue: string;
+  readonly detailPanelOpen: boolean;
   readonly extraControls?: ReactNode;
   readonly filterControls: ReactNode;
   readonly hasActiveFilterChips: boolean;
@@ -55,6 +58,7 @@ export const TransactionBrowserToolbar = ({
   bulkEditMode,
   dateJumpLoading,
   dateJumpValue,
+  detailPanelOpen,
   extraControls,
   filterControls,
   hasActiveFilterChips,
@@ -284,17 +288,47 @@ export const TransactionBrowserToolbar = ({
               </SelectContent>
             </Select>
           </div>
-          <label className="font-heading mt-5 inline-flex min-h-9 items-center gap-2 text-xs font-semibold text-[var(--frame-foreground)] uppercase">
-            <Checkbox
-              checked={filters.hideExpected}
-              onCheckedChange={(checked) => {
-                onHideExpectedChange(checked === true);
-              }}
-            />
-            Hide expected
-          </label>
-          {extraControls}
           <div className="flex h-9 items-end">
+            <AppTooltip
+              asChild
+              label={
+                filters.hideExpected
+                  ? "Expected hidden — show"
+                  : "Hide expected transactions"
+              }
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-lg"
+                aria-label="Hide expected"
+                aria-pressed={filters.hideExpected}
+                className="aria-pressed:bg-[var(--table-header)]"
+                onClick={() => {
+                  onHideExpectedChange(!filters.hideExpected);
+                }}
+              >
+                {filters.hideExpected ? (
+                  <CalendarWeeksOff
+                    aria-hidden="true"
+                    data-icon="calendar-weeks-off"
+                  />
+                ) : (
+                  <CalendarWeeks
+                    aria-hidden="true"
+                    data-icon="calendar-weeks"
+                  />
+                )}
+              </Button>
+            </AppTooltip>
+          </div>
+          {extraControls}
+          <div
+            className={cn(
+              "flex h-9 items-end gap-3",
+              detailPanelOpen && "basis-full",
+            )}
+          >
             <Button
               ref={bulkEditButtonRef}
               type="button"
@@ -306,8 +340,6 @@ export const TransactionBrowserToolbar = ({
               <Check aria-hidden="true" />
               Bulk edit
             </Button>
-          </div>
-          <div className="flex h-9 items-end">
             <AppTooltip
               asChild
               label={showFilterBar ? "Close filters" : "Open filters"}

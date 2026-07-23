@@ -2948,6 +2948,14 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
   await expect(entryPanel).toHaveCount(0);
   await page.setViewportSize({ width: 700, height: 720 });
 
+  const hideExpectedToggle = page.getByRole("button", {
+    name: "Hide expected",
+  });
+  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "false");
+  await expect(
+    hideExpectedToggle.locator('[data-icon="calendar-weeks"]'),
+  ).toBeVisible();
+
   const hideRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return (
@@ -2959,7 +2967,7 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
       })
     );
   });
-  await page.getByRole("checkbox", { name: "Hide expected" }).click();
+  await hideExpectedToggle.click();
   await hideRequest;
 
   await expectTransactionFilterUrl(page, {
@@ -2967,11 +2975,16 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
     q: search,
     hideExpected: true,
   });
+  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    hideExpectedToggle.locator('[data-icon="calendar-weeks-off"]'),
+  ).toBeVisible();
   await expect(overdueRow).toHaveCount(0);
   await expect(dueRow).toHaveCount(0);
 
-  await page.getByRole("checkbox", { name: "Hide expected" }).click();
+  await hideExpectedToggle.click();
   await expectTransactionFilterUrl(page, { pageSize: "50", q: search });
+  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "false");
   await expect(overdueRow).toBeVisible();
 
   await page.goto(`/accounts/${overdueFixture.checking.account_id}`);
@@ -3422,7 +3435,7 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
   const nextDayButton = page.getByRole("button", { name: "Next day" });
   const todayButton = page.getByRole("button", { name: "Today" });
   const classFilter = page.getByLabel("Class");
-  const hideExpectedToggle = page.getByRole("checkbox", {
+  const hideExpectedToggle = page.getByRole("button", {
     name: "Hide expected",
   });
   const bulkEditButton = page.getByRole("button", { name: "Bulk edit" });
@@ -3434,6 +3447,8 @@ test("transactions filter toolbar suppresses open-control tooltips and supports 
     await page.keyboard.press("Tab");
     await expect(target).toBeFocused();
   };
+
+  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "true");
 
   await filterToggle.hover();
   await expect(filterTooltip).toBeVisible();
@@ -3512,7 +3527,7 @@ test("filter X dismiss clears chips while retaining standing search and class fi
   const search = "E2E X dismiss standing controls";
 
   await page.goto(
-    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}&class=spend&category=${category.category_id}`,
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}&class=spend&category=${category.category_id}&hideExpected=true`,
   );
 
   await expect(
@@ -3523,12 +3538,17 @@ test("filter X dismiss clears chips while retaining standing search and class fi
     search,
   );
   await expect(page.getByLabel("Class")).toHaveText("Spend");
+  const hideExpectedToggle = page.getByRole("button", {
+    name: "Hide expected",
+  });
+  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Close filters" }).click();
 
   await expect(page.getByTestId("transaction-browser-filter-bar")).toBeHidden();
   await expectTransactionFilterUrl(page, {
     classes: ["spend"],
+    hideExpected: true,
     pageSize: "50",
     q: search,
   });
@@ -3536,6 +3556,7 @@ test("filter X dismiss clears chips while retaining standing search and class fi
     search,
   );
   await expect(page.getByLabel("Class")).toHaveText("Spend");
+  await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "true");
   await expect(
     page.getByRole("button", { name: "Open filters" }),
   ).toBeVisible();

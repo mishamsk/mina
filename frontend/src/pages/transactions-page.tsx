@@ -271,6 +271,7 @@ export const TransactionsPage = () => {
             bulkEditMode={browser.bulkEditMode}
             dateJumpLoading={browser.dateJumpLoading}
             dateJumpValue={browser.dateJumpValue}
+            detailPanelOpen={Boolean(browser.detail.selectedTransactionId)}
             onDateJumpToday={browser.jumpToCurrentDate}
             filterControls={
               <TransactionFilterControls

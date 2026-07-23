@@ -446,6 +446,7 @@ export const ReferenceDrilldownPage = ({
         bulkEditMode={browser.bulkEditMode}
         dateJumpLoading={browser.dateJumpLoading}
         dateJumpValue={browser.dateJumpValue}
+        detailPanelOpen={Boolean(browser.detail.selectedTransactionId)}
         onDateJumpToday={browser.jumpToCurrentDate}
         extraControls={
           showExactOnlyToggle ? (
