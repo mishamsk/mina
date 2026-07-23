@@ -2,6 +2,9 @@ import { EyeOff, Reload } from "pixelarticons/react";
 import { type ReactNode, useMemo } from "react";
 
 import {
+  compactReferenceTableActionsColumnClassName,
+  compactReferenceTableFrameClassName,
+  compactReferenceTableGridClassName,
   referenceTableFrameClassName,
   referenceTableFrameTestId,
 } from "@/components/reference-table-frame";
@@ -127,7 +130,7 @@ const referenceTreeSkeletonGridClass = (
   hasBadgeColumn
     ? "grid grid-cols-[52%_24%_24%] sm:grid-cols-[minmax(0,1fr)_20%_11.25rem]"
     : compact
-      ? "grid grid-cols-[minmax(0,1fr)_clamp(5.5rem,17%,9.25rem)]"
+      ? `grid ${compactReferenceTableGridClassName}`
       : "grid grid-cols-[76%_24%] sm:grid-cols-[82%_18%]";
 
 const referenceTreeSkeletonColumnClasses = (hasBadgeColumn: boolean) =>
@@ -198,7 +201,7 @@ const actionsColumnWidthClass = (hasBadgeColumn: boolean, compact: boolean) =>
   hasBadgeColumn
     ? "w-[24%] px-3 py-2 text-center sm:w-[11.25rem]"
     : compact
-      ? "w-[clamp(5.5rem,17%,9.25rem)] px-3 py-2 text-right"
+      ? `${compactReferenceTableActionsColumnClassName} px-3 py-2 text-right`
       : "w-[24%] px-3 py-2 text-center sm:w-[18%]";
 
 interface ReferenceTreeProps<TLeaf extends ReferenceLeaf, TGroup> {
@@ -281,7 +284,9 @@ export const ReferenceTree = <
 
   if (loading && !leaves) {
     return (
-      <div className={compact ? "w-full max-w-[56rem]" : undefined}>
+      <div
+        className={compact ? compactReferenceTableFrameClassName : undefined}
+      >
         <ReferenceTreeSkeleton
           compact={compact}
           hasBadgeColumn={hasBadgeColumn}
@@ -292,7 +297,9 @@ export const ReferenceTree = <
 
   if (errorMessage) {
     return (
-      <div className={compact ? "w-full max-w-[56rem]" : undefined}>
+      <div
+        className={compact ? compactReferenceTableFrameClassName : undefined}
+      >
         <div
           className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
           role="alert"
@@ -328,7 +335,7 @@ export const ReferenceTree = <
       <div
         className={cn(
           "bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]",
-          compact && "w-full max-w-[56rem]",
+          compact && compactReferenceTableFrameClassName,
         )}
       >
         <div className="space-y-1">
@@ -348,7 +355,7 @@ export const ReferenceTree = <
     <div
       className={cn(
         referenceTableFrameClassName,
-        compact && "w-full max-w-[56rem]",
+        compact && compactReferenceTableFrameClassName,
       )}
       data-testid={referenceTableFrameTestId}
     >

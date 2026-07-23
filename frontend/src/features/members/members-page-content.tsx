@@ -8,6 +8,9 @@ import {
   updateLedgerMemberHidden,
 } from "@/api";
 import {
+  compactReferenceTableActionsColumnClassName,
+  compactReferenceTableFrameClassName,
+  compactReferenceTableGridClassName,
   referenceTableFrameClassName,
   referenceTableFrameTestId,
 } from "@/components/reference-table-frame";
@@ -78,7 +81,12 @@ const MembersListSkeleton = () => (
     className="bg-card border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
     aria-hidden="true"
   >
-    <div className="grid grid-cols-[minmax(0,1fr)_clamp(5.5rem,17%,9.25rem)] bg-[var(--table-header)] py-2">
+    <div
+      className={cn(
+        "grid bg-[var(--table-header)] py-2",
+        compactReferenceTableGridClassName,
+      )}
+    >
       <div className="px-3">
         <Skeleton className="h-5" />
       </div>
@@ -88,7 +96,8 @@ const MembersListSkeleton = () => (
       <div
         key={index}
         className={cn(
-          "grid grid-cols-[minmax(0,1fr)_clamp(5.5rem,17%,9.25rem)] py-3",
+          "grid py-3",
+          compactReferenceTableGridClassName,
           index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
         )}
       >
@@ -213,7 +222,7 @@ const MembersList = ({
 
   if (loading && !members) {
     return (
-      <div className="w-full max-w-[48rem]">
+      <div className={compactReferenceTableFrameClassName}>
         <MembersListSkeleton />
       </div>
     );
@@ -221,7 +230,7 @@ const MembersList = ({
 
   if (errorMessage) {
     return (
-      <div className="w-full max-w-[48rem]">
+      <div className={compactReferenceTableFrameClassName}>
         <div
           className="border-destructive bg-card border-2 p-4 shadow-[var(--shadow-pixel)]"
           role="alert"
@@ -256,7 +265,12 @@ const MembersList = ({
   if (!members || rows.length === 0) {
     const hasMembers = (members?.length ?? 0) > 0;
     return (
-      <div className="bg-card flex w-full max-w-[48rem] flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]">
+      <div
+        className={cn(
+          "bg-card flex flex-col items-start gap-3 border-2 border-[var(--border-ink)] p-6 shadow-[var(--shadow-pixel)]",
+          compactReferenceTableFrameClassName,
+        )}
+      >
         <div className="space-y-1">
           <p className="font-heading text-base font-semibold uppercase">
             No members
@@ -273,7 +287,10 @@ const MembersList = ({
 
   return (
     <div
-      className={`${referenceTableFrameClassName} w-full max-w-[48rem]`}
+      className={cn(
+        referenceTableFrameClassName,
+        compactReferenceTableFrameClassName,
+      )}
       data-testid={referenceTableFrameTestId}
     >
       <div
@@ -289,7 +306,10 @@ const MembersList = ({
               </th>
               <th
                 scope="col"
-                className="w-[clamp(5.5rem,17%,9.25rem)] px-3 py-2 text-center"
+                className={cn(
+                  compactReferenceTableActionsColumnClassName,
+                  "px-3 py-2 text-right",
+                )}
               />
             </tr>
           </thead>
@@ -326,13 +346,18 @@ const MembersList = ({
               >
                 <td className="min-w-0 px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="font-mono font-semibold break-words">
+                    <span className="min-w-0 font-mono font-semibold break-words">
                       {member.name}
                     </span>
                     {member.is_hidden ? <HiddenRowIndicator /> : null}
                   </div>
                 </td>
-                <td className="w-[clamp(5.5rem,17%,9.25rem)] px-3 py-2 align-middle">
+                <td
+                  className={cn(
+                    compactReferenceTableActionsColumnClassName,
+                    "px-3 py-2 text-right align-middle",
+                  )}
+                >
                   <RowActions
                     foldable
                     actions={
@@ -372,7 +397,6 @@ const MembersList = ({
                         },
                       ] satisfies readonly RowAction[]
                     }
-                    className="justify-center"
                     indicatorSlots={["featured", "hidden"]}
                   />
                 </td>

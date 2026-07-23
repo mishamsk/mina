@@ -211,6 +211,25 @@ const expectSameHorizontalSlot = async (
   expect(firstBox?.x).toBeCloseTo(secondBox?.x ?? 0, 4);
 };
 
+const compactTableGeometry = (frame: Locator) =>
+  frame.evaluate((element) => {
+    const actionHeader = element.querySelector("thead th:last-child");
+    const scroller = element.querySelector<HTMLElement>(
+      "[data-testid='reference-table-scroll']",
+    );
+    const actionRect = actionHeader?.getBoundingClientRect();
+    const frameRect = element.getBoundingClientRect();
+
+    return {
+      actionOffset: (actionRect?.left ?? 0) - frameRect.left,
+      actionWidth: actionRect?.width,
+      frameLeft: frameRect.left,
+      frameWidth: frameRect.width,
+      horizontalOverflow:
+        (scroller?.scrollWidth ?? 0) - (scroller?.clientWidth ?? 0),
+    };
+  });
+
 const referenceTableTargets: readonly ReferenceTableTarget[] = [
   {
     createFixture: createAccount,
@@ -247,7 +266,7 @@ const referenceTableTargets: readonly ReferenceTableTarget[] = [
     scrollerTestId: "reference-table-scroll",
   },
   {
-    compactMaxWidth: 768,
+    compactMaxWidth: 896,
     createFixture: createMember,
     fixtureName: (unique, suffix) =>
       `ZZZ E2E Scroll Members ${unique} ${suffix}`,
@@ -299,6 +318,107 @@ for (const table of referenceTableTargets) {
     await expectBlankActionHeaderWithMatchedInset(scroller);
   });
 }
+
+test("Members and Tags share compact table sizing at wide and narrow viewports", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const memberName = `E2E Compact Member ${unique}`;
+  const tagFqn = `E2ECompactTag${unique}`;
+  await createMember(page, memberName);
+  await createTag(page, tagFqn);
+
+  const visitCompactTable = async ({
+    path,
+    rowTestId,
+    rowText,
+  }: {
+    readonly path: string;
+    readonly rowTestId: string;
+    readonly rowText: string;
+  }) => {
+    await page.goto(`${path}?q=${encodeURIComponent(rowText)}`);
+    const row = page
+      .getByTestId(rowTestId)
+      .filter({ hasText: rowText })
+      .first();
+    await expect(row).toBeVisible();
+    return {
+      frame: page.getByTestId("reference-table-frame"),
+      row,
+    };
+  };
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const wideTags = await visitCompactTable({
+    path: "/tags",
+    rowTestId: "tags-tree-row",
+    rowText: tagFqn,
+  });
+  const wideTagGeometry = await compactTableGeometry(wideTags.frame);
+  const wideMembers = await visitCompactTable({
+    path: "/members",
+    rowTestId: "members-list-row",
+    rowText: memberName,
+  });
+  const wideMemberGeometry = await compactTableGeometry(wideMembers.frame);
+
+  expect(wideTagGeometry.frameWidth).toBeLessThanOrEqual(898);
+  expect(wideTagGeometry.actionWidth).toBeDefined();
+  expect(wideMemberGeometry.actionWidth).toBeDefined();
+  expect(
+    Math.abs(wideMemberGeometry.frameWidth - wideTagGeometry.frameWidth),
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs(wideMemberGeometry.frameLeft - wideTagGeometry.frameLeft),
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs(wideMemberGeometry.actionOffset - wideTagGeometry.actionOffset),
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs(
+      (wideMemberGeometry.actionWidth ?? 0) -
+        (wideTagGeometry.actionWidth ?? 0),
+    ),
+  ).toBeLessThanOrEqual(2);
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  const narrowTags = await visitCompactTable({
+    path: "/tags",
+    rowTestId: "tags-tree-row",
+    rowText: tagFqn,
+  });
+  const narrowTagGeometry = await compactTableGeometry(narrowTags.frame);
+  await expect(
+    narrowTags.row.getByRole("button", { name: "More row actions" }),
+  ).toBeVisible();
+  const narrowMembers = await visitCompactTable({
+    path: "/members",
+    rowTestId: "members-list-row",
+    rowText: memberName,
+  });
+  const narrowMemberGeometry = await compactTableGeometry(narrowMembers.frame);
+  await expect(
+    narrowMembers.row.getByRole("button", { name: "More row actions" }),
+  ).toBeVisible();
+
+  expect(narrowTagGeometry.horizontalOverflow).toBeLessThanOrEqual(1);
+  expect(narrowMemberGeometry.horizontalOverflow).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(narrowMemberGeometry.frameWidth - narrowTagGeometry.frameWidth),
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs(
+      narrowMemberGeometry.actionOffset - narrowTagGeometry.actionOffset,
+    ),
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs(
+      (narrowMemberGeometry.actionWidth ?? 0) -
+        (narrowTagGeometry.actionWidth ?? 0),
+    ),
+  ).toBeLessThanOrEqual(2);
+});
 
 test("reference-table indicator slots keep hidden eyes aligned and stars unclipped", async ({
   page,
