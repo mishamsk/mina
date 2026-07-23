@@ -1,12 +1,25 @@
 import {
+  Calendar,
   Check,
+  ChevronRight,
+  Clock,
   Close,
   Copy,
+  Flag,
   MagicEdit,
   Scissors,
   Trash,
 } from "pixelarticons/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { DisplayAmount, JournalRecord, Transaction } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
@@ -16,7 +29,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
-import { localTimestampDateValue } from "@/utils/date";
+import {
+  formatLocalCivilDate,
+  localCivilDate,
+  localTimestampDateValue,
+} from "@/utils/date";
 
 import { AmountText } from "./amount-text";
 import { ClassBadge } from "./class-badge";
@@ -65,8 +82,13 @@ const floatingOverlaySelectors = [
 const formatTimestamp = (value: string): string =>
   new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
-    timeStyle: "short",
+    timeStyle: "medium",
   }).format(new Date(value));
+
+const formatFullCivilDate = (value: string): string =>
+  new Intl.DateTimeFormat(undefined, {
+    dateStyle: "long",
+  }).format(localCivilDate(value));
 
 const recordDisplayAmount = (record: JournalRecord): DisplayAmount => ({
   amount: record.amount,
@@ -92,6 +114,270 @@ const uniqueRecordSources = (transaction: Transaction): string =>
   Array.from(new Set(transaction.records.map((record) => record.source))).join(
     ", ",
   );
+
+type LifecycleRecordStage = "pending" | "posted";
+
+interface LifecycleStageSummary {
+  readonly canonicalDay: string | null;
+  readonly dateValue: string;
+  readonly qualifier: string | null;
+  readonly reachedCount: number;
+  readonly tooltip: string;
+  readonly varies: boolean;
+}
+
+interface TransactionLifecycle {
+  readonly expected: boolean;
+  readonly pending: LifecycleStageSummary;
+  readonly posted: LifecycleStageSummary;
+}
+
+const recordStageTimestamp = (
+  record: JournalRecord,
+  stage: LifecycleRecordStage,
+): string | null =>
+  stage === "pending" ? record.pending_date : (record.posted_date ?? null);
+
+const recordHasReachedStage = (
+  record: JournalRecord,
+  stage: LifecycleRecordStage,
+): boolean => {
+  if (record.posting_status === "cancelled") {
+    return recordStageTimestamp(record, stage) !== null;
+  }
+  return stage === "pending"
+    ? record.posting_status === "pending" || record.posting_status === "posted"
+    : record.posting_status === "posted";
+};
+
+const lifecycleRecordName = (maps: LookupMaps, record: JournalRecord): string =>
+  maps.accountsById.get(record.account_id)?.fqn ?? `Record ${record.record_id}`;
+
+const buildLifecycleStage = (
+  records: readonly JournalRecord[],
+  stage: LifecycleRecordStage,
+  maps: LookupMaps,
+  expected: boolean,
+): LifecycleStageSummary => {
+  const label = stage === "pending" ? "Pending" : "Posted";
+  const reachedRecords = records.flatMap((record) => {
+    if (expected || !recordHasReachedStage(record, stage)) {
+      return [];
+    }
+    const timestamp = recordStageTimestamp(record, stage);
+    const day = timestamp ? localTimestampDateValue(timestamp) || null : null;
+    return [{ day, record, timestamp }];
+  });
+  const days = Array.from(
+    new Set(
+      reachedRecords
+        .map(({ day }) => day)
+        .filter((day): day is string => day !== null),
+    ),
+  ).sort();
+  const partial =
+    reachedRecords.length > 0 && reachedRecords.length < records.length;
+  const hasMissingDay = reachedRecords.some(({ day }) => day === null);
+  const varies =
+    days.length > 1 || partial || (days.length > 0 && hasMissingDay);
+  const formattedDate =
+    days.length === 0
+      ? reachedRecords.length > 0
+        ? "date unavailable"
+        : "—"
+      : days.length === 1
+        ? formatLocalCivilDate(days[0]!)
+        : `${formatLocalCivilDate(days[0]!)}–${formatLocalCivilDate(days.at(-1)!)}`;
+  const qualifiers = [
+    varies ? "varies" : undefined,
+    partial ? `${reachedRecords.length} of ${records.length}` : undefined,
+  ].filter((value): value is string => Boolean(value));
+  const exactTimestamps = Array.from(
+    new Set(
+      reachedRecords
+        .map(({ timestamp }) => timestamp)
+        .filter((timestamp): timestamp is string => timestamp !== null),
+    ),
+  );
+  const tooltip =
+    reachedRecords.length === 0
+      ? `${label} not reached`
+      : exactTimestamps.length === 0
+        ? `${label} date unavailable`
+        : exactTimestamps.length === 1 &&
+            reachedRecords.every(
+              ({ timestamp }) => timestamp === exactTimestamps[0],
+            )
+          ? `${label} ${formatTimestamp(exactTimestamps[0]!)}`
+          : reachedRecords
+              .map(
+                ({ record, timestamp }) =>
+                  `${lifecycleRecordName(maps, record)} ${timestamp ? formatTimestamp(timestamp) : "—"}`,
+              )
+              .join(" · ");
+
+  return {
+    canonicalDay: days.length === 1 ? days[0]! : null,
+    dateValue: formattedDate,
+    qualifier: qualifiers.length > 0 ? qualifiers.join(" · ") : null,
+    reachedCount: reachedRecords.length,
+    tooltip,
+    varies,
+  };
+};
+
+const buildTransactionLifecycle = (
+  transaction: Transaction,
+  maps: LookupMaps,
+): TransactionLifecycle => {
+  const expected = linePostingStatus(transaction) === "expected";
+
+  return {
+    expected,
+    pending: buildLifecycleStage(
+      transaction.records,
+      "pending",
+      maps,
+      expected,
+    ),
+    posted: buildLifecycleStage(transaction.records, "posted", maps, expected),
+  };
+};
+
+const LifecycleStageIcon = ({
+  reached,
+  stage,
+}: {
+  readonly reached: boolean;
+  readonly stage: "expected" | "initiated" | LifecycleRecordStage;
+}) => {
+  if (!reached) {
+    return null;
+  }
+  const Icon =
+    stage === "posted" ? Check : stage === "pending" ? Clock : Calendar;
+  return (
+    <Icon
+      aria-hidden="true"
+      className={cn(
+        "size-4 shrink-0",
+        stage === "posted"
+          ? "text-[var(--color-status-posted-ink)]"
+          : stage === "pending" || stage === "expected"
+            ? "text-[var(--color-status-pending-ink)]"
+            : "text-muted-foreground",
+      )}
+    />
+  );
+};
+
+const LifecycleStrip = ({
+  lifecycle,
+  transaction,
+}: {
+  readonly lifecycle: TransactionLifecycle;
+  readonly transaction: Transaction;
+}) => {
+  const firstLabel = lifecycle.expected ? "Expected" : "Initiated";
+  const firstDate = formatInitiatedDate(transaction.initiated_date);
+  const stages = [
+    {
+      key: "initiated",
+      label: firstLabel,
+      reached: true,
+      stage: lifecycle.expected
+        ? ("expected" as const)
+        : ("initiated" as const),
+      tooltip: `${firstLabel} ${formatFullCivilDate(transaction.initiated_date)}`,
+      value: firstDate,
+      qualifier: null,
+    },
+    {
+      key: "pending",
+      label: "Pending",
+      reached: lifecycle.pending.reachedCount > 0,
+      stage: "pending" as const,
+      tooltip: lifecycle.pending.tooltip,
+      value: lifecycle.pending.dateValue,
+      qualifier: lifecycle.pending.qualifier,
+    },
+    {
+      key: "posted",
+      label: "Posted",
+      reached: lifecycle.posted.reachedCount > 0,
+      stage: "posted" as const,
+      tooltip: lifecycle.posted.tooltip,
+      value: lifecycle.posted.dateValue,
+      qualifier: lifecycle.posted.qualifier,
+    },
+  ];
+
+  return (
+    <ol
+      aria-label="Transaction lifecycle"
+      className="flex flex-nowrap items-center overflow-x-auto border-y border-[var(--hairline)] bg-[var(--band)] px-2 py-1 font-mono text-xs"
+      data-testid="transaction-lifecycle"
+    >
+      {stages.map((stage, index) => (
+        <li key={stage.key} className="flex shrink-0 items-center">
+          <Tooltip
+            className="min-h-6 shrink-0"
+            focusable={false}
+            label={stage.tooltip}
+          >
+            <span
+              className={cn(
+                "inline-flex shrink-0 flex-nowrap items-center gap-x-1",
+                !stage.reached && "text-muted-foreground",
+              )}
+              data-lifecycle-stage-content={stage.key}
+            >
+              <span className="text-muted-foreground shrink-0 font-semibold uppercase">
+                {stage.label}
+              </span>
+              <LifecycleStageIcon reached={stage.reached} stage={stage.stage} />
+              <span
+                className="shrink-0 whitespace-nowrap"
+                data-lifecycle-value={stage.key}
+              >
+                {stage.value}
+              </span>
+              {stage.qualifier ? (
+                <span
+                  className="shrink-0 whitespace-nowrap"
+                  data-lifecycle-qualifier={stage.key}
+                >
+                  · {stage.qualifier}
+                </span>
+              ) : null}
+            </span>
+          </Tooltip>
+          {index < stages.length - 1 ? (
+            <ChevronRight
+              aria-hidden="true"
+              className="text-muted-foreground ml-1 size-4 shrink-0"
+            />
+          ) : null}
+        </li>
+      ))}
+    </ol>
+  );
+};
+
+export const TransactionLifecycleStrip = ({
+  maps,
+  transaction,
+}: {
+  readonly maps: LookupMaps;
+  readonly transaction: Transaction;
+}) => {
+  const lifecycle = useMemo(
+    () => buildTransactionLifecycle(transaction, maps),
+    [maps, transaction],
+  );
+
+  return <LifecycleStrip lifecycle={lifecycle} transaction={transaction} />;
+};
 
 const DetailAmountList = ({
   transaction,
@@ -153,7 +439,111 @@ const RecordTagSet = ({
   ) : null;
 };
 
+const recordStageDay = (
+  record: JournalRecord,
+  stage: LifecycleRecordStage,
+  expected: boolean,
+): string | null => {
+  if (expected) {
+    return null;
+  }
+  const timestamp = recordStageTimestamp(record, stage);
+  return timestamp ? localTimestampDateValue(timestamp) || null : null;
+};
+
+const stageDiffersForRecord = (
+  record: JournalRecord,
+  summary: LifecycleStageSummary,
+  stage: LifecycleRecordStage,
+  expected: boolean,
+): boolean => {
+  if (expected || summary.reachedCount === 0) {
+    return false;
+  }
+  const recordDay = recordStageDay(record, stage, expected);
+  if (!recordHasReachedStage(record, stage)) {
+    return true;
+  }
+  if (recordDay === null) {
+    return summary.varies;
+  }
+  if (summary.canonicalDay === null) {
+    return summary.varies;
+  }
+  return summary.canonicalDay !== recordDay;
+};
+
+const recordDeviation = (
+  record: JournalRecord,
+  transaction: Transaction,
+  lifecycle: TransactionLifecycle,
+):
+  | {
+      readonly ariaLabel: string;
+      readonly text: string;
+      readonly tooltip: string;
+    }
+  | undefined => {
+  if (transaction.records.length <= 1) {
+    return undefined;
+  }
+  const pendingDiffers = stageDiffersForRecord(
+    record,
+    lifecycle.pending,
+    "pending",
+    lifecycle.expected,
+  );
+  const postedDiffers = stageDiffersForRecord(
+    record,
+    lifecycle.posted,
+    "posted",
+    lifecycle.expected,
+  );
+  const cancelled = record.posting_status === "cancelled";
+  if (!cancelled && !pendingDiffers && !postedDiffers) {
+    return undefined;
+  }
+
+  const pendingDay = recordStageDay(record, "pending", lifecycle.expected);
+  const postedDay = recordStageDay(record, "posted", lifecycle.expected);
+  const pendingDisplay = pendingDay ? formatLocalCivilDate(pendingDay) : "—";
+  const postedDisplay = postedDay ? formatLocalCivilDate(postedDay) : "—";
+  const text = `${pendingDisplay}→${postedDisplay}`;
+  const pendingTimestamp = lifecycle.expected
+    ? null
+    : recordStageTimestamp(record, "pending");
+  const postedTimestamp = lifecycle.expected
+    ? null
+    : recordStageTimestamp(record, "posted");
+
+  return {
+    ariaLabel:
+      pendingDiffers || postedDiffers
+        ? `Dates differ: ${text}`
+        : `Cancelled lifecycle: ${text}`,
+    text,
+    tooltip: `${postingStatusLabel(record.posting_status)} — initiated ${formatFullCivilDate(transaction.initiated_date)} · pending ${pendingTimestamp ? formatTimestamp(pendingTimestamp) : "—"} · posted ${postedTimestamp ? formatTimestamp(postedTimestamp) : "—"}`,
+  };
+};
+
+const sourceLabel = (source: JournalRecord["source"]): string =>
+  source
+    .split("_")
+    .map((part, index) =>
+      index === 0 ? `${part.charAt(0).toUpperCase()}${part.slice(1)}` : part,
+    )
+    .join(" ");
+
+const isInteractiveRowTarget = (
+  event: MouseEvent<HTMLTableRowElement>,
+): boolean =>
+  event.target instanceof Element &&
+  event.target.closest(
+    "a, button, input, select, textarea, [role='button'], [role='link']",
+  ) !== null;
+
 const DetailRecordsTable = ({
+  lifecycle,
   maps,
   onFilterCategory,
   onFilterMember,
@@ -161,161 +551,283 @@ const DetailRecordsTable = ({
   records,
   transaction,
 }: {
+  readonly lifecycle: TransactionLifecycle;
   readonly maps: LookupMaps;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
   readonly records: readonly JournalRecord[];
   readonly transaction: Transaction;
-}) => (
-  <div
-    className="transaction-detail-records-table max-w-full overflow-visible border-2 border-[var(--border-ink)]"
-    data-testid="transaction-detail-records-table"
-  >
-    <table className="w-full table-fixed border-collapse text-sm">
-      <colgroup>
-        <col className="detail-records-account-column" />
-        <col className="detail-records-amount-column" />
-        <col className="detail-records-category-column" />
-        <col className="detail-records-tags-column" />
-        <col className="detail-records-member-column" />
-        <col className="detail-records-status-column" />
-        <col className="detail-records-dates-column" />
-        <col className="detail-records-memo-column" />
-      </colgroup>
-      <thead>
-        <tr className="font-heading bg-[var(--table-header)] text-left text-xs font-semibold uppercase">
-          <th className="detail-records-account-column px-2 py-2">Account</th>
-          <th className="detail-records-amount-column px-2 py-2 text-right">
-            Amount
-          </th>
-          <th className="detail-records-category-column px-2 py-2">Category</th>
-          <th className="detail-records-tags-column px-2 py-2">Tags</th>
-          <th className="detail-records-member-column px-2 py-2">Member</th>
-          <th className="detail-records-status-column px-2 py-2">Statuses</th>
-          <th className="detail-records-dates-column px-2 py-2">Dates</th>
-          <th className="detail-records-memo-column px-2 py-2">Memo</th>
-        </tr>
-      </thead>
-      <tbody>
-        {records.map((record, index) => {
-          const account = maps.accountsById.get(record.account_id);
-          const category = maps.categoriesById.get(record.category_id);
-          const member =
-            record.member_id === null || record.member_id === undefined
-              ? undefined
-              : maps.membersById.get(record.member_id);
+}) => {
+  const [expandedRecordIds, setExpandedRecordIds] = useState<
+    ReadonlySet<number>
+  >(() => new Set());
 
-          return (
-            <tr
-              key={record.record_id}
-              className={cn(
-                "border-t border-[var(--hairline)] align-top",
-                index % 2 === 0 ? "bg-card" : "bg-[var(--band)]",
-                record.posting_status === "cancelled" &&
-                  "text-muted-foreground line-through",
-              )}
-            >
-              <td
-                className="detail-records-account-column min-w-0 px-2 py-1.5"
-                data-label="Account"
-              >
-                {account ? <FqnPath value={account.fqn} /> : "Unknown account"}
-              </td>
-              <td
-                className="detail-records-amount-column min-w-0 px-2 py-1.5 text-right"
-                data-label="Amount"
-              >
-                <AmountText
-                  amount={recordDisplayAmount(record)}
-                  tone="neutral"
-                />
-              </td>
-              <td
-                className="detail-records-category-column min-w-0 px-2 py-1.5"
-                data-label="Category"
-              >
-                {category ? (
-                  <FqnPath
-                    value={category.fqn}
-                    variant="full-chip"
-                    onActivate={
-                      onFilterCategory
-                        ? () => {
-                            onFilterCategory(category.category_id);
-                          }
-                        : undefined
+  const toggleRecord = (recordId: number) => {
+    setExpandedRecordIds((current) => {
+      const next = new Set(current);
+      if (next.has(recordId)) {
+        next.delete(recordId);
+      } else {
+        next.add(recordId);
+      }
+      return next;
+    });
+  };
+
+  const handleRecordKeyDown = (
+    event: ReactKeyboardEvent<HTMLTableRowElement>,
+    recordId: number,
+  ) => {
+    if (
+      event.target !== event.currentTarget ||
+      (event.key !== "Enter" && event.key !== " ")
+    ) {
+      return;
+    }
+    event.preventDefault();
+    toggleRecord(recordId);
+  };
+
+  return (
+    <div
+      className="transaction-detail-records-table max-w-full overflow-visible border-2 border-[var(--border-ink)]"
+      data-testid="transaction-detail-records-table"
+    >
+      <table className="w-full table-fixed border-collapse text-sm">
+        <colgroup>
+          <col className="detail-records-account-column" />
+          <col className="detail-records-amount-column" />
+          <col className="detail-records-category-column" />
+          <col className="detail-records-tags-column" />
+          <col className="detail-records-member-column" />
+          <col className="detail-records-status-column" />
+          <col className="detail-records-memo-column" />
+        </colgroup>
+        <thead>
+          <tr className="font-heading bg-[var(--table-header)] text-left text-xs font-semibold uppercase">
+            <th className="detail-records-account-column px-2 py-2">Account</th>
+            <th className="detail-records-amount-column px-2 py-2 text-right">
+              Amount
+            </th>
+            <th className="detail-records-category-column px-2 py-2">
+              Category
+            </th>
+            <th className="detail-records-tags-column px-2 py-2">Tags</th>
+            <th className="detail-records-member-column px-2 py-2">Member</th>
+            <th className="detail-records-status-column px-2 py-2">Status</th>
+            <th className="detail-records-memo-column px-2 py-2">Memo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((record, index) => {
+            const account = maps.accountsById.get(record.account_id);
+            const category = maps.categoriesById.get(record.category_id);
+            const member =
+              record.member_id === null || record.member_id === undefined
+                ? undefined
+                : maps.membersById.get(record.member_id);
+            const expanded = expandedRecordIds.has(record.record_id);
+            const disclosureId = `record-${record.record_id}-detail`;
+            const deviation = recordDeviation(record, transaction, lifecycle);
+            const cancelled = record.posting_status === "cancelled";
+            const rowTone = index % 2 === 0 ? "bg-card" : "bg-[var(--band)]";
+            const rowHoverTone =
+              index % 2 === 0
+                ? "hover:bg-[color-mix(in_srgb,var(--card),var(--table-header)_28%)]"
+                : "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
+
+            return (
+              <Fragment key={record.record_id}>
+                <tr
+                  aria-controls={disclosureId}
+                  aria-expanded={expanded}
+                  className={cn(
+                    "cursor-pointer border-t border-[var(--hairline)] align-top",
+                    rowTone,
+                    rowHoverTone,
+                    cancelled &&
+                      "text-muted-foreground line-through decoration-1",
+                  )}
+                  data-detail-record-row="true"
+                  onClick={(event) => {
+                    if (!isInteractiveRowTarget(event)) {
+                      toggleRecord(record.record_id);
                     }
-                  />
-                ) : (
-                  "Uncategorized"
-                )}
-              </td>
-              <td
-                className="detail-records-tags-column min-w-0 px-2 py-1.5"
-                data-label="Tags"
-              >
-                <div className="max-w-full overflow-visible">
-                  <RecordTagSet
-                    maps={maps}
-                    onFilterTag={onFilterTag}
-                    record={record}
-                  />
-                </div>
-              </td>
-              <td
-                className="detail-records-member-column min-w-0 px-2 py-1.5"
-                data-label="Member"
-              >
-                {member ? (
-                  <MemberChip
-                    name={member.name}
-                    onActivate={
-                      onFilterMember
-                        ? () => {
-                            onFilterMember(member.member_id);
-                          }
-                        : undefined
-                    }
-                  />
-                ) : null}
-              </td>
-              <td
-                className="detail-records-status-column min-w-0 px-2 py-1.5"
-                data-label="Statuses"
-              >
-                <div className="flex min-w-0 flex-col gap-1">
-                  <span className="inline-flex items-center gap-1">
-                    <StatusIcon status={record.posting_status} />
-                    <span className="truncate">
-                      {postingStatusLabel(record.posting_status)}
+                  }}
+                  onKeyDown={(event) => {
+                    handleRecordKeyDown(event, record.record_id);
+                  }}
+                  tabIndex={0}
+                >
+                  <td
+                    className="detail-records-account-column min-w-0 px-2 py-1.5"
+                    data-label="Account"
+                  >
+                    {account ? (
+                      <FqnPath value={account.fqn} />
+                    ) : (
+                      "Unknown account"
+                    )}
+                  </td>
+                  <td
+                    className="detail-records-amount-column min-w-0 px-2 py-1.5 text-right"
+                    data-label="Amount"
+                  >
+                    <AmountText
+                      amount={recordDisplayAmount(record)}
+                      tone="neutral"
+                    />
+                  </td>
+                  <td
+                    className="detail-records-category-column min-w-0 px-2 py-1.5"
+                    data-label="Category"
+                  >
+                    {category ? (
+                      <FqnPath
+                        value={category.fqn}
+                        variant="full-chip"
+                        onActivate={
+                          onFilterCategory
+                            ? () => {
+                                onFilterCategory(category.category_id);
+                              }
+                            : undefined
+                        }
+                      />
+                    ) : (
+                      "Uncategorized"
+                    )}
+                  </td>
+                  <td
+                    className="detail-records-tags-column min-w-0 px-2 py-1.5"
+                    data-label="Tags"
+                  >
+                    <div className="max-w-full overflow-visible">
+                      <RecordTagSet
+                        maps={maps}
+                        onFilterTag={onFilterTag}
+                        record={record}
+                      />
+                    </div>
+                  </td>
+                  <td
+                    className="detail-records-member-column min-w-0 px-2 py-1.5"
+                    data-label="Member"
+                  >
+                    {member ? (
+                      <MemberChip
+                        name={member.name}
+                        onActivate={
+                          onFilterMember
+                            ? () => {
+                                onFilterMember(member.member_id);
+                              }
+                            : undefined
+                        }
+                      />
+                    ) : null}
+                  </td>
+                  <td
+                    className="detail-records-status-column min-w-0 px-2 py-1.5"
+                    data-label="Status"
+                  >
+                    <span
+                      className="flex w-full max-w-full min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap"
+                      data-record-status-content="true"
+                    >
+                      <StatusIcon
+                        className="size-4"
+                        focusable={false}
+                        status={record.posting_status}
+                      />
+                      <span>{postingStatusLabel(record.posting_status)}</span>
+                      {deviation ? (
+                        <Tooltip
+                          className="text-muted-foreground min-h-6"
+                          focusable={false}
+                          label={deviation.tooltip}
+                        >
+                          <span
+                            aria-label={deviation.ariaLabel}
+                            className="inline-flex min-w-0 items-center gap-1 text-xs whitespace-nowrap"
+                          >
+                            <Flag
+                              aria-hidden="true"
+                              className="size-4 shrink-0"
+                            />
+                            <span>{deviation.text}</span>
+                          </span>
+                        </Tooltip>
+                      ) : null}
                     </span>
-                  </span>
-                </div>
-              </td>
-              <td
-                className="detail-records-dates-column text-muted-foreground min-w-0 px-2 py-1.5"
-                data-label="Dates"
-              >
-                {`Initiated ${formatInitiatedDate(transaction.initiated_date)}; pending ${localTimestampDateValue(record.pending_date)}; posted ${localTimestampDateValue(record.posted_date)}`}
-              </td>
-              <td
-                className="detail-records-memo-column text-muted-foreground min-w-0 px-2 py-1.5"
-                data-label="Memo"
-              >
-                {record.memo ? (
-                  <span className="block break-words whitespace-pre-wrap">
-                    {record.memo}
-                  </span>
+                  </td>
+                  <td
+                    className="detail-records-memo-column text-muted-foreground min-w-0 px-2 py-1.5"
+                    data-label="Memo"
+                  >
+                    {record.memo ? (
+                      <span className="block break-words whitespace-pre-wrap">
+                        {record.memo}
+                      </span>
+                    ) : null}
+                  </td>
+                </tr>
+                {expanded ? (
+                  <tr
+                    className={cn(
+                      "detail-records-disclosure-row border-t border-[var(--hairline)]",
+                      rowTone,
+                      cancelled &&
+                        "text-muted-foreground line-through decoration-1",
+                    )}
+                  >
+                    <td
+                      id={disclosureId}
+                      className="detail-records-disclosure-cell px-3 py-2"
+                      colSpan={7}
+                    >
+                      <dl className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
+                        <dt className="text-muted-foreground">
+                          {lifecycle.expected ? "Expected" : "Initiated"}
+                        </dt>
+                        <dd>
+                          {formatFullCivilDate(transaction.initiated_date)}
+                        </dd>
+                        <dt className="text-muted-foreground">Pending</dt>
+                        <dd>
+                          {lifecycle.expected
+                            ? "—"
+                            : formatTimestamp(record.pending_date)}
+                        </dd>
+                        <dt className="text-muted-foreground">Posted</dt>
+                        <dd>
+                          {record.posted_date
+                            ? formatTimestamp(record.posted_date)
+                            : "—"}
+                        </dd>
+                        <dt className="text-muted-foreground">
+                          Posting status
+                        </dt>
+                        <dd>{postingStatusLabel(record.posting_status)}</dd>
+                        <dt className="text-muted-foreground">Source</dt>
+                        <dd>{sourceLabel(record.source)}</dd>
+                        <dt className="text-muted-foreground">Memo</dt>
+                        <dd className="break-words whitespace-pre-wrap sm:col-span-3">
+                          {record.memo || "—"}
+                        </dd>
+                      </dl>
+                    </td>
+                  </tr>
                 ) : null}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  </div>
-);
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 export const TransactionDetailLoadingContent = () => (
   <div className="space-y-4 p-4">
@@ -352,15 +864,16 @@ export const TransactionDetailContent = ({
   readonly transaction: Transaction;
 }) => {
   const summaryMemo = lineMemo(transaction);
+  const lifecycle = useMemo(
+    () => buildTransactionLifecycle(transaction, maps),
+    [maps, transaction],
+  );
 
   return (
     <div className="space-y-5 p-4">
       <header className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0 space-y-3">
           <ClassBadge transactionClass={transaction.transaction_class} />
-          <p className="text-muted-foreground text-sm">
-            Initiated {formatInitiatedDate(transaction.initiated_date)}
-          </p>
           {summaryMemo ? (
             <p
               className="text-muted-foreground font-body text-sm break-words whitespace-pre-wrap"
@@ -381,6 +894,8 @@ export const TransactionDetailContent = ({
           Journal records
         </h3>
         <DetailRecordsTable
+          key={transaction.transaction_id}
+          lifecycle={lifecycle}
           maps={maps}
           onFilterCategory={onFilterCategory}
           onFilterMember={onFilterMember}
@@ -657,6 +1172,10 @@ export const TransactionDetailPanel = ({
           </Button>
         </div>
       </div>
+
+      {transaction && !loading && !errorMessage ? (
+        <TransactionLifecycleStrip maps={maps} transaction={transaction} />
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (

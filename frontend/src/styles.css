@@ -793,7 +793,7 @@
   }
 
   .transaction-detail-records-table .detail-records-account-column {
-    width: 14%;
+    width: 16%;
   }
 
   .transaction-detail-records-table .detail-records-amount-column {
@@ -805,23 +805,19 @@
   }
 
   .transaction-detail-records-table .detail-records-tags-column {
-    width: 14%;
+    width: 13%;
   }
 
   .transaction-detail-records-table .detail-records-member-column {
-    width: 14%;
+    width: 8%;
   }
 
   .transaction-detail-records-table .detail-records-status-column {
-    width: 10%;
-  }
-
-  .transaction-detail-records-table .detail-records-dates-column {
-    width: 12%;
+    width: 25%;
   }
 
   .transaction-detail-records-table .detail-records-memo-column {
-    width: 10%;
+    width: 12%;
   }
 
   .transaction-detail-records-table
@@ -850,12 +846,12 @@
       display: none;
     }
 
-    .transaction-detail-records-table tr {
+    .transaction-detail-records-table tr[data-detail-record-row] {
       border-top: 2px solid var(--border-ink);
       padding: 0.25rem 0;
     }
 
-    .transaction-detail-records-table tr:first-child {
+    .transaction-detail-records-table tr[data-detail-record-row]:first-child {
       border-top: 0;
     }
 
@@ -882,6 +878,19 @@
 
     .transaction-detail-records-table .detail-records-memo-column {
       width: 100%;
+    }
+
+    .transaction-detail-records-table .detail-records-disclosure-row,
+    .transaction-detail-records-table .detail-records-disclosure-cell {
+      width: 100%;
+    }
+
+    .transaction-detail-records-table .detail-records-disclosure-cell {
+      display: block;
+    }
+
+    .transaction-detail-records-table .detail-records-disclosure-cell::before {
+      content: none;
     }
   }
 

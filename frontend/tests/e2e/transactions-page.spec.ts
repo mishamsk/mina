@@ -37,7 +37,10 @@ interface JournalRecordFixture {
   readonly currency: string;
   readonly member_id?: number | null;
   readonly memo?: string | null;
+  readonly pending_date?: string;
+  readonly posted_date?: string | null;
   readonly posting_status: string;
+  readonly record_id?: number;
   readonly reconciliation_status: string;
   readonly source: string;
   readonly tag_ids: readonly number[];
@@ -315,6 +318,7 @@ const createExpectedRecurringFixture = async (
   readonly merchant: AccountFixture;
   readonly merchantFqn: string;
   readonly memo: string;
+  readonly transactionId: number;
 }> => {
   const anchorDate = options.anchorDate ?? formatLocalDate(new Date());
   const checking = await createAccount(
@@ -373,7 +377,20 @@ const createExpectedRecurringFixture = async (
     `/api/recurring-occurrences?recurring_definition_id=${created.recurring_definition_id}` +
       "&status=expected&limit=500&offset=0",
   );
-  expect(materialized.ok(), await materialized.text()).toBe(true);
+  const materializedBody = await materialized.text();
+  expect(materialized.ok(), materializedBody).toBe(true);
+  const occurrenceList = JSON.parse(materializedBody) as {
+    readonly recurring_occurrences: readonly {
+      readonly generated_transaction_id: number | null;
+    }[];
+  };
+  const transactionId =
+    occurrenceList.recurring_occurrences[0]?.generated_transaction_id;
+  expect(transactionId).not.toBeNull();
+  expect(transactionId).not.toBeUndefined();
+  if (transactionId === null || transactionId === undefined) {
+    throw new Error("Expected occurrence has no generated transaction");
+  }
 
   return {
     category,
@@ -381,6 +398,7 @@ const createExpectedRecurringFixture = async (
     merchant,
     merchantFqn: merchant.fqn,
     memo,
+    transactionId,
   };
 };
 
@@ -403,6 +421,128 @@ const getTransactionDetail = async (
   );
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()) as TransactionDetailFixture;
+};
+
+const openUrlTransactionDetail = async (
+  page: Page,
+  transactionId: number,
+): Promise<Locator> => {
+  await page.goto(
+    `/transactions?page=1&pageSize=50&transaction=${transactionId}`,
+  );
+  const panel = page.getByTestId("transaction-detail-panel");
+  await expect(panel).toBeVisible();
+  return panel;
+};
+
+const openAccountTransactionPeek = async (
+  page: Page,
+  account: AccountFixture,
+  memo: string,
+): Promise<Locator> => {
+  await page.goto(`/accounts/${account.account_id}?page=1&pageSize=50`);
+  for (;;) {
+    await expect(page.getByText(/Page \d+ of \d+/)).toBeVisible();
+    await expect(page.getByTestId("account-register-page-busy")).toHaveCount(0);
+    const registerRow = page
+      .getByTestId("account-register-row")
+      .filter({ hasText: memo })
+      .first();
+    if ((await registerRow.count()) > 0) {
+      await registerRow.click();
+      break;
+    }
+    const nextPage = page.getByRole("button", { name: "Next" });
+    if (await nextPage.isDisabled()) {
+      throw new Error(`Account register does not contain record ${memo}`);
+    }
+    await nextPage.click();
+  }
+  const panel = page.getByTestId("account-peek-panel");
+  await expect(panel).toBeVisible();
+  return panel;
+};
+
+const expectDatelessReadOnlyDetailGrid = async (
+  panel: Locator,
+  recordCount: number,
+): Promise<void> => {
+  const table = panel.getByTestId("transaction-detail-records-table");
+  await expect(table.locator("th", { hasText: "Dates" })).toHaveCount(0);
+  await expect(table.locator("tr[data-detail-record-row='true']")).toHaveCount(
+    recordCount,
+  );
+  await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
+  await expect(panel.locator("input, textarea, select")).toHaveCount(0);
+  await expect(
+    panel.getByRole("button", {
+      name: /^(Edit row value|Edit memo|Edit Category|Edit Tags|Edit Member)$/,
+    }),
+  ).toHaveCount(0);
+  await expect
+    .poll(() =>
+      table.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth + 1,
+      ),
+    )
+    .toBe(true);
+};
+
+const expectMouseDisclosure = async (
+  panel: Locator,
+  memo: string,
+): Promise<void> => {
+  const row = panel
+    .locator("tr[data-detail-record-row='true']")
+    .filter({ hasText: memo })
+    .first();
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+  await row.page().mouse.move(0, 0);
+  const restingBackground = await row.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  await row.hover();
+  await expect
+    .poll(() =>
+      row.evaluate((element) => getComputedStyle(element).backgroundColor),
+    )
+    .not.toBe(restingBackground);
+  await row.locator("td[data-label='Memo']").click();
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+  const disclosure = panel
+    .locator("tr.detail-records-disclosure-row")
+    .filter({ hasText: memo });
+  await expect(disclosure).toBeVisible();
+  await expect(disclosure).toContainText("Initiated");
+  await expect(disclosure).toContainText("Pending");
+  await expect(disclosure).toContainText("Posted");
+  await expect(disclosure).toContainText("Posting status");
+  await expect(disclosure).toContainText("Source");
+  await expect(disclosure).toContainText(memo);
+  await expect(
+    disclosure.locator("button, input, textarea, select"),
+  ).toHaveCount(0);
+  await row.locator("td[data-label='Memo']").click();
+  await expect(row).toHaveAttribute("aria-expanded", "false");
+  await expect(disclosure).toHaveCount(0);
+};
+
+const expectKeyboardDisclosure = async (
+  panel: Locator,
+  memo: string,
+): Promise<void> => {
+  const row = panel
+    .locator("tr[data-detail-record-row='true']")
+    .filter({ hasText: memo })
+    .first();
+  await row.focus();
+  await expect(row).toBeFocused();
+  await row.press("Enter");
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+  await row.press("F2");
+  await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
+  await row.press(" ");
+  await expect(row).toHaveAttribute("aria-expanded", "false");
 };
 
 const editorButtonsFitContainer = (container: Locator) =>
@@ -5404,6 +5544,477 @@ test("transaction detail panel is read-only while chips keep filtering", async (
   await deleteTransaction(page, transaction);
 });
 
+test("detail lifecycle and dateless records cover variants in detail and peek", async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const [fundingAccount, splitMerchant] = await Promise.all([
+    createAccount(
+      page,
+      `assets:E2E:Lifecycle:${unique}:Funding`,
+      "balance",
+      "USD",
+    ),
+    createAccount(page, `merchant:E2E:Lifecycle:${unique}`, "flow"),
+  ]);
+  const [firstTag, secondTag] = await Promise.all([
+    createTag(page, `E2E:Lifecycle:${unique}:First`),
+    createTag(page, `E2E:Lifecycle:${unique}:Second`),
+  ]);
+
+  const simpleMemo = `E2E lifecycle uniform ${unique}`;
+  const simpleResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "18.25",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-11",
+      memo: simpleMemo,
+      tag_ids: [firstTag.tag_id, secondTag.tag_id],
+    },
+  });
+  const simpleBody = await simpleResponse.text();
+  expect(simpleResponse.ok(), simpleBody).toBe(true);
+  const simple = JSON.parse(simpleBody) as TransactionDetailFixture;
+
+  const mixedMemo = `E2E lifecycle mixed ${unique}`;
+  const mixedResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-12",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-30.00000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          pending_date: "2026-07-12T16:00:00Z",
+          posted_date: "2026-07-13T16:00:00Z",
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "10.00000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          pending_date: "2026-07-12T16:00:00Z",
+          posted_date: "2026-07-14T16:00:00Z",
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: splitMerchant.account_id,
+          amount: "20.00000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          pending_date: "2026-07-12T16:00:00Z",
+          posted_date: null,
+          posting_status: "pending",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  const mixedBody = await mixedResponse.text();
+  expect(mixedResponse.ok(), mixedBody).toBe(true);
+  const mixed = JSON.parse(mixedBody) as TransactionDetailFixture;
+
+  const missingPostedDateMemo = `E2E lifecycle missing posted date ${unique}`;
+  const missingPostedDateResponse = await page.request.post(
+    "/api/transactions",
+    {
+      data: {
+        initiated_date: "2026-07-18",
+        records: [
+          {
+            account_id: fundingAccount.account_id,
+            amount: "-7.00000000",
+            category_id: category.category_id,
+            currency: "USD",
+            memo: missingPostedDateMemo,
+            pending_date: "2026-07-18T16:00:00Z",
+            posted_date: "2026-07-19T16:00:00Z",
+            posting_status: "posted",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+            tag_ids: [],
+          },
+          {
+            account_id: merchantAccount.account_id,
+            amount: "7.00000000",
+            category_id: category.category_id,
+            currency: "USD",
+            memo: missingPostedDateMemo,
+            pending_date: "2026-07-18T16:00:00Z",
+            posted_date: null,
+            posting_status: "pending",
+            reconciliation_status: "unreconciled",
+            source: "manual",
+            tag_ids: [],
+          },
+        ],
+      },
+    },
+  );
+  const missingPostedDateBody = await missingPostedDateResponse.text();
+  expect(missingPostedDateResponse.ok(), missingPostedDateBody).toBe(true);
+  const missingPostedDate = JSON.parse(
+    missingPostedDateBody,
+  ) as TransactionDetailFixture;
+  const datelessRecord = missingPostedDate.records.find(
+    (record) => record.posting_status === "pending",
+  );
+  if (datelessRecord?.record_id === undefined) {
+    throw new Error("missing posted-date record id");
+  }
+  const postDatelessRecordResponse = await page.request.post(
+    "/api/records/bulk/status",
+    {
+      data: {
+        posting_status: "posted",
+        record_ids: [datelessRecord.record_id],
+      },
+    },
+  );
+  const postDatelessRecordBody = await postDatelessRecordResponse.text();
+  expect(postDatelessRecordResponse.ok(), postDatelessRecordBody).toBe(true);
+
+  const cancelledMemo = `E2E lifecycle cancelled ${unique}`;
+  const cancelledResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-16",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-9.00000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: cancelledMemo,
+          pending_date: "2026-07-15T16:00:00Z",
+          posted_date: "2026-07-16T16:00:00Z",
+          posting_status: "cancelled",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "9.00000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: cancelledMemo,
+          pending_date: "2026-07-15T16:00:00Z",
+          posted_date: "2026-07-16T16:00:00Z",
+          posting_status: "cancelled",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  const cancelledBody = await cancelledResponse.text();
+  expect(cancelledResponse.ok(), cancelledBody).toBe(true);
+  const cancelled = JSON.parse(cancelledBody) as TransactionDetailFixture;
+
+  const expected = await createExpectedRecurringFixture(
+    page,
+    `${unique}Lifecycle`,
+    { anchorDate: "2026-07-23" },
+  );
+  const lifecycleDateLabels = await page.evaluate(
+    ({ cancelledFirstPosted, cancelledPending, firstPosted, secondPosted }) => {
+      const dayLabel = (value: string) => {
+        const date = new Date(value);
+        return new Intl.DateTimeFormat(undefined, {
+          day: "numeric",
+          month: "short",
+          year:
+            date.getFullYear() === new Date().getFullYear()
+              ? undefined
+              : "numeric",
+        }).format(date);
+      };
+      const exactDateLabel = (value: string) =>
+        new Intl.DateTimeFormat(undefined, {
+          dateStyle: "medium",
+        }).format(new Date(value));
+
+      return {
+        cancelledFirstPosted: dayLabel(cancelledFirstPosted),
+        cancelledPending: dayLabel(cancelledPending),
+        firstPosted: dayLabel(firstPosted),
+        firstPostedExact: exactDateLabel(firstPosted),
+        secondPosted: dayLabel(secondPosted),
+        secondPostedExact: exactDateLabel(secondPosted),
+      };
+    },
+    {
+      cancelledFirstPosted: "2026-07-16T16:00:00Z",
+      cancelledPending: "2026-07-15T16:00:00Z",
+      firstPosted: "2026-07-13T16:00:00Z",
+      secondPosted: "2026-07-14T16:00:00Z",
+    },
+  );
+
+  const expectSimpleSurface = async (panel: Locator) => {
+    await expectDatelessReadOnlyDetailGrid(panel, 2);
+    const lifecycle = panel.getByTestId("transaction-lifecycle");
+    await expect
+      .poll(() =>
+        panel.evaluate((panelElement) => {
+          const strip = panelElement.querySelector(
+            "[data-testid='transaction-lifecycle']",
+          );
+          return (
+            strip?.parentElement === panelElement &&
+            strip.previousElementSibling?.querySelector("h2") !== null
+          );
+        }),
+      )
+      .toBe(true);
+    await expect(lifecycle).toContainText("Initiated");
+    await expect(lifecycle).toContainText("Pending");
+    await expect(lifecycle).toContainText("Posted");
+    await expect(lifecycle).not.toContainText("varies");
+    await expect(lifecycle.locator("[tabindex]")).toHaveCount(0);
+    await expect(lifecycle.getByText("Initiated", { exact: true })).toHaveCSS(
+      "font-size",
+      "12px",
+    );
+    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(0);
+    await expect(
+      panel.getByText(firstTag.name, { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      panel.getByText(secondTag.name, { exact: true }).first(),
+    ).toBeVisible();
+  };
+
+  const expectMixedSurface = async (panel: Locator) => {
+    await expectDatelessReadOnlyDetailGrid(panel, 3);
+    const lifecycle = panel.getByTestId("transaction-lifecycle");
+    const postedStage = lifecycle
+      .getByRole("listitem")
+      .filter({ hasText: "Posted" });
+    await expect(postedStage).toContainText(
+      `${lifecycleDateLabels.firstPosted}–${lifecycleDateLabels.secondPosted}`,
+    );
+    await expect(postedStage).toContainText("varies");
+    await expect(postedStage).toContainText("2 of 3");
+    await expect
+      .poll(() =>
+        postedStage
+          .locator("[data-lifecycle-qualifier='posted']")
+          .evaluate((qualifier) => {
+            const qualifierBounds = qualifier.getBoundingClientRect();
+            const stageBounds = qualifier
+              .closest("li")
+              ?.getBoundingClientRect();
+            return (
+              stageBounds !== undefined &&
+              qualifierBounds.left >= stageBounds.left &&
+              qualifierBounds.right <= stageBounds.right
+            );
+          }),
+      )
+      .toBe(true);
+    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(3);
+    await expect(
+      panel.locator("td[data-label='Status']").filter({ hasText: "→" }),
+    ).toHaveCount(3);
+    const statusContent = panel.locator(
+      "[data-record-status-content]:has([aria-label^='Dates differ:'])",
+    );
+    await expect(statusContent).toHaveCount(3);
+    await expect
+      .poll(() =>
+        statusContent.evaluateAll((elements) =>
+          Math.max(
+            ...elements.map(
+              (element) => element.getBoundingClientRect().height,
+            ),
+          ),
+        ),
+      )
+      .toBeLessThanOrEqual(26);
+    await postedStage.locator("[data-slot='tooltip-trigger']").hover();
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toContainText(lifecycleDateLabels.firstPostedExact);
+    await expect(tooltip).toContainText(lifecycleDateLabels.secondPostedExact);
+    await expect(tooltip).toContainText(/\d{1,2}:\d{2}:\d{2}/);
+  };
+
+  const expectLifecycleContentFits = async (panel: Locator) => {
+    const lifecycle = panel.getByTestId("transaction-lifecycle");
+    await expect
+      .poll(() =>
+        lifecycle.evaluate((strip) =>
+          Array.from(
+            strip.querySelectorAll<HTMLElement>(
+              "[data-lifecycle-stage-content]",
+            ),
+          ).every(
+            (stage) =>
+              stage.scrollWidth <= stage.clientWidth + 1 &&
+              stage.scrollHeight <= stage.clientHeight + 1,
+          ),
+        ),
+      )
+      .toBe(true);
+  };
+
+  const expectExpectedSurface = async (panel: Locator) => {
+    await expectDatelessReadOnlyDetailGrid(panel, 2);
+    const lifecycle = panel.getByTestId("transaction-lifecycle");
+    const expectedStage = lifecycle
+      .getByRole("listitem")
+      .filter({ hasText: "Expected" });
+    await expect(expectedStage).toContainText("Jul 23");
+    await expect(
+      lifecycle.getByRole("listitem").filter({ hasText: "Pending" }),
+    ).toContainText("—");
+    await expect(
+      lifecycle.getByRole("listitem").filter({ hasText: "Posted" }),
+    ).toContainText("—");
+    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(0);
+  };
+
+  const expectMissingPostedDateSurface = async (panel: Locator) => {
+    await expectDatelessReadOnlyDetailGrid(panel, 2);
+    const postedStage = panel
+      .getByTestId("transaction-lifecycle")
+      .getByRole("listitem")
+      .filter({ hasText: "Posted" });
+    await expect(postedStage).toContainText("varies");
+    await expect(postedStage).not.toContainText("of 2");
+    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(1);
+  };
+
+  const expectCancelledSurface = async (panel: Locator) => {
+    await expectDatelessReadOnlyDetailGrid(panel, 2);
+    const lifecycle = panel.getByTestId("transaction-lifecycle");
+    await expect(
+      lifecycle.getByRole("listitem").filter({ hasText: "Pending" }),
+    ).toContainText(lifecycleDateLabels.cancelledPending);
+    const postedStage = lifecycle
+      .getByRole("listitem")
+      .filter({ hasText: "Posted" });
+    await expect(postedStage).toContainText(
+      lifecycleDateLabels.cancelledFirstPosted,
+    );
+    await expect(postedStage).not.toContainText("varies");
+    const cancelledRows = panel
+      .locator("tr[data-detail-record-row='true']")
+      .filter({ hasText: "Cancelled" });
+    await expect(cancelledRows).toHaveCount(2);
+    await expect(cancelledRows.first()).toHaveCSS(
+      "text-decoration-line",
+      "line-through",
+    );
+    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(0);
+    await expect(
+      panel.locator("[aria-label^='Cancelled lifecycle:']"),
+    ).toHaveCount(2);
+  };
+
+  await page.setViewportSize({ width: 1600, height: 900 });
+  const simpleDetail = await openUrlTransactionDetail(
+    page,
+    simple.transaction_id,
+  );
+  await expectSimpleSurface(simpleDetail);
+  await expectMouseDisclosure(simpleDetail, simpleMemo);
+
+  const mixedDetail = await openUrlTransactionDetail(
+    page,
+    mixed.transaction_id,
+  );
+  await expectMixedSurface(mixedDetail);
+  await expectLifecycleContentFits(mixedDetail);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await expectLifecycleContentFits(mixedDetail);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await expectKeyboardDisclosure(mixedDetail, mixedMemo);
+
+  const missingPostedDateDetail = await openUrlTransactionDetail(
+    page,
+    missingPostedDate.transaction_id,
+  );
+  await expectMissingPostedDateSurface(missingPostedDateDetail);
+
+  const expectedDetail = await openUrlTransactionDetail(
+    page,
+    expected.transactionId,
+  );
+  await expectExpectedSurface(expectedDetail);
+  await expect(
+    expectedDetail.getByRole("button", { name: "Edit transaction" }),
+  ).toHaveCount(0);
+  await expect(
+    expectedDetail.getByRole("button", { name: "Confirm occurrence" }),
+  ).toBeVisible();
+  await expect(
+    expectedDetail.getByRole("button", { name: "Dismiss occurrence" }),
+  ).toBeVisible();
+
+  const cancelledDetail = await openUrlTransactionDetail(
+    page,
+    cancelled.transaction_id,
+  );
+  await expectCancelledSurface(cancelledDetail);
+
+  await page.setViewportSize({ width: 720, height: 900 });
+  const simplePeek = await openAccountTransactionPeek(
+    page,
+    fundingAccount,
+    simpleMemo,
+  );
+  await expectSimpleSurface(simplePeek);
+  await expectMouseDisclosure(simplePeek, simpleMemo);
+
+  const mixedPeek = await openAccountTransactionPeek(
+    page,
+    fundingAccount,
+    mixedMemo,
+  );
+  await expectMixedSurface(mixedPeek);
+  await expectKeyboardDisclosure(mixedPeek, mixedMemo);
+
+  const expectedPeek = await openAccountTransactionPeek(
+    page,
+    expected.checking,
+    expected.memo,
+  );
+  await expectExpectedSurface(expectedPeek);
+
+  const cancelledPeek = await openAccountTransactionPeek(
+    page,
+    fundingAccount,
+    cancelledMemo,
+  );
+  await expectCancelledSurface(cancelledPeek);
+});
+
 test("toolbar filter trigger opens after transaction detail closes", async ({
   page,
 }, testInfo) => {
@@ -6299,15 +6910,17 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
   await page.goto("/transactions?page=1&pageSize=50");
   await expect(page.getByText("Description")).toBeVisible();
 
-  const row = page.locator("tbody > tr[aria-expanded]").filter({
+  const row = page.locator("[data-transaction-row='true']").filter({
     hasText: memo,
   });
-  const transactionRows = page.locator("tbody > tr[aria-expanded]");
+  const transactionRows = page.locator("[data-transaction-row='true']");
   await expect(row).toBeVisible();
   await expect(row).toHaveAttribute("aria-expanded", "false");
   const deletedRowIndex = await row.evaluate((element) =>
     Array.from(
-      element.parentElement?.querySelectorAll("tr[aria-expanded]") ?? [],
+      element.parentElement?.querySelectorAll(
+        "tr[data-transaction-row='true']",
+      ) ?? [],
     ).indexOf(element),
   );
   const rowCountBeforeDelete = await transactionRows.count();

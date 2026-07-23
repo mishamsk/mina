@@ -12,7 +12,8 @@
 - Category, tags, member, and amount inline editors keep selections as drafts and mutate accounting state only through their checkmark Save controls; Cancel and Escape discard identically.
 - Shared browser bulk-edit interaction follows the owning [Bulk operations specification](../../../../docs/webui-design.md#bulk-operations).
 - Transaction-row lifted member display ignores unattributed records.
-- The transaction detail panel is read-only: it renders no inline editors and no focusable value cells; editing goes only through its Edit/Duplicate/Split modal launches, and entity chips filter the underlying list.
+- The transaction detail panel is read-only: it renders no inline editors or focusable value cells; record rows only toggle inert exact-value disclosures, editing goes through its Edit/Duplicate/Split modal launches, and entity chips filter the underlying list.
+- Transaction detail and account-register peek share the same read-only transaction-detail content component; behavior follows the owning [Transactions specification](../../../../docs/webui-design.md#2-transactions--phase-2-core-screen).
 - Transaction detail panel renders a transaction snapshot passed by the owning page; expected occurrences expose only Confirm/Dismiss, and successful modal edits use the same refresh fan-out as the browser.
 - Transaction detail panel owns the tombstone confirmation UI and delegates delete execution to the owning page.
 - `useTransactionBrowserPage` composes shared browser snapshots, page-granular date jumps with a transient row anchor, transaction detail, row tombstones, pagination, and notices; pages supply their URL filter semantics.

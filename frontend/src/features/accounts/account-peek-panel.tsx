@@ -10,6 +10,7 @@ import {
   TransactionDetailContent,
   TransactionDetailErrorContent,
   TransactionDetailLoadingContent,
+  TransactionLifecycleStrip,
 } from "@/features/ledger";
 import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
 
@@ -104,6 +105,10 @@ export const AccountPeekPanel = ({
           </Button>
         </Tooltip>
       </div>
+
+      {transaction && !loading && !errorMessage ? (
+        <TransactionLifecycleStrip maps={maps} transaction={transaction} />
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading ? (

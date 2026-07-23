@@ -37,6 +37,7 @@ export {
   TransactionDetailErrorContent,
   TransactionDetailLoadingContent,
   TransactionDetailPanel,
+  TransactionLifecycleStrip,
 } from "./transaction-detail-panel";
 export {
   hasActiveTransactionFilterChips,
