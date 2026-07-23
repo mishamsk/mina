@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { Tooltip } from "@/components/tooltip";
+import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -276,6 +276,12 @@ export const RowActions = ({
           <PopoverContent
             align="end"
             className="row-actions-menu w-56 p-1"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              focusWithoutTooltip(overflowTriggerRef.current, {
+                preventScroll: true,
+              });
+            }}
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               requestAnimationFrame(() => {

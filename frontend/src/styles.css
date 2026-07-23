@@ -324,11 +324,11 @@
     }
 
     .transactions-table .transactions-actions-column {
-      width: 8%;
+      width: 9%;
     }
   }
 
-  @container transactions-table (max-width: 920px) {
+  @container transactions-table (max-width: 940px) {
     .transactions-table .transactions-status-column {
       visibility: collapse;
       width: 0;
@@ -366,16 +366,6 @@
 
     .transactions-table .transactions-actions-column {
       width: 9%;
-    }
-  }
-
-  @container transactions-table (max-width: 860px) {
-    .transactions-table .row-actions-buttons {
-      display: none !important;
-    }
-
-    .transactions-table .row-actions-overflow {
-      display: inline-flex !important;
     }
   }
 
@@ -497,121 +487,71 @@
   }
 
   /*
-   * Fold dictionary and recurring-table action buttons only when the
-   * actions-cell container is narrower than its full 28px-control cluster
-   * (including 4px gaps). Transactions retain their own column-priority
-   * collapse rule above.
+   * Fold row action buttons only when the actions-cell container is narrower
+   * than its full 28px-control cluster (including 4px gaps).
    */
   @container row-actions (width < 28px) {
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="1"]
-      .row-actions-buttons
-      :is(
-        .row-actions-button,
-        .row-actions-toggle,
-        .row-actions-indicator-slot
-      ) {
+    .row-actions--foldable[data-row-actions-count="1"]
+      :is(.row-actions-buttons, .row-actions-buttons > *) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="1"]
-      .row-actions-overflow {
+    .row-actions--foldable[data-row-actions-count="1"] .row-actions-overflow {
       display: inline-flex !important;
     }
   }
 
   @container row-actions (width < 60px) {
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="2"]
-      .row-actions-buttons
-      :is(
-        .row-actions-button,
-        .row-actions-toggle,
-        .row-actions-indicator-slot
-      ) {
+    .row-actions--foldable[data-row-actions-count="2"]
+      :is(.row-actions-buttons, .row-actions-buttons > *) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="2"]
-      .row-actions-overflow {
+    .row-actions--foldable[data-row-actions-count="2"] .row-actions-overflow {
       display: inline-flex !important;
     }
   }
 
   @container row-actions (width < 92px) {
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="3"]
-      .row-actions-buttons
-      :is(
-        .row-actions-button,
-        .row-actions-toggle,
-        .row-actions-indicator-slot
-      ) {
+    .row-actions--foldable[data-row-actions-count="3"]
+      :is(.row-actions-buttons, .row-actions-buttons > *) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="3"]
-      .row-actions-overflow {
+    .row-actions--foldable[data-row-actions-count="3"] .row-actions-overflow {
       display: inline-flex !important;
     }
   }
 
   @container row-actions (width < 124px) {
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="4"]
-      .row-actions-buttons
-      :is(
-        .row-actions-button,
-        .row-actions-toggle,
-        .row-actions-indicator-slot
-      ) {
+    .row-actions--foldable[data-row-actions-count="4"]
+      :is(.row-actions-buttons, .row-actions-buttons > *) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="4"]
-      .row-actions-overflow {
+    .row-actions--foldable[data-row-actions-count="4"] .row-actions-overflow {
       display: inline-flex !important;
     }
   }
 
   @container row-actions (width < 156px) {
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="5"]
-      .row-actions-buttons
-      :is(
-        .row-actions-button,
-        .row-actions-toggle,
-        .row-actions-indicator-slot
-      ) {
+    .row-actions--foldable[data-row-actions-count="5"]
+      :is(.row-actions-buttons, .row-actions-buttons > *) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="5"]
-      .row-actions-overflow {
+    .row-actions--foldable[data-row-actions-count="5"] .row-actions-overflow {
       display: inline-flex !important;
     }
   }
 
   @container row-actions (width < 188px) {
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="6"]
-      .row-actions-buttons
-      :is(
-        .row-actions-button,
-        .row-actions-toggle,
-        .row-actions-indicator-slot
-      ) {
+    .row-actions--foldable[data-row-actions-count="6"]
+      :is(.row-actions-buttons, .row-actions-buttons > *) {
       display: none !important;
     }
 
-    :is(.accounts-table, .reference-table, .recurring-review-table)
-      .row-actions--foldable[data-row-actions-count="6"]
-      .row-actions-overflow {
+    .row-actions--foldable[data-row-actions-count="6"] .row-actions-overflow {
       display: inline-flex !important;
     }
   }

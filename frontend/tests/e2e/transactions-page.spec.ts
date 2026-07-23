@@ -429,6 +429,81 @@ const boundingBoxesOverlap = (
   first.y < second.y + second.height - 0.5 &&
   first.y + first.height > second.y + 0.5;
 
+const openRowActionsMenu = async (
+  page: Page,
+  row: Locator,
+): Promise<Locator> => {
+  const overflow = row.getByRole("button", { name: "More row actions" });
+  await expect(overflow).toBeVisible();
+  await overflow.click();
+  const menu = page.locator(".row-actions-menu:visible");
+  await expect(menu).toBeVisible();
+  return menu;
+};
+
+const clickRowAction = async (
+  page: Page,
+  row: Locator,
+  label: string,
+): Promise<void> => {
+  const directAction = row
+    .locator(".row-actions-buttons")
+    .getByRole("button", { name: label });
+  if (await directAction.isVisible()) {
+    await directAction.click();
+    return;
+  }
+
+  const menu = await openRowActionsMenu(page, row);
+  await menu.getByRole("button", { name: label }).click();
+};
+
+const expectCollapsedRowActionsKeepAmountVisible = async (row: Locator) => {
+  const directActions = row.locator(".row-actions-buttons");
+  const overflow = row.getByRole("button", { name: "More row actions" });
+  const amountCell = row.locator(".transactions-amount-column");
+  const actionsCell = row.locator(".transactions-actions-column");
+  const amountChip = amountCell.getByTestId("amount-chip");
+
+  await expect(directActions).toBeHidden();
+  await expect(overflow).toBeVisible();
+  await expect(amountChip).toBeVisible();
+
+  const [
+    amountCellBounds,
+    amountChipBounds,
+    actionsCellBounds,
+    overflowBounds,
+  ] = await Promise.all([
+    requiredBoundingBox(amountCell),
+    requiredBoundingBox(amountChip),
+    requiredBoundingBox(actionsCell),
+    requiredBoundingBox(overflow),
+  ]);
+  expect(amountChipBounds.x).toBeGreaterThanOrEqual(amountCellBounds.x - 0.5);
+  expect(amountChipBounds.x + amountChipBounds.width).toBeLessThanOrEqual(
+    amountCellBounds.x + amountCellBounds.width + 0.5,
+  );
+  expect(overflowBounds.x + overflowBounds.width).toBeLessThanOrEqual(
+    actionsCellBounds.x + actionsCellBounds.width + 0.5,
+  );
+  expect(boundingBoxesOverlap(amountChipBounds, overflowBounds)).toBe(false);
+  await expect(
+    amountChip.evaluate((chip) => {
+      const chipBounds = chip.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(chip);
+      const textFits = Array.from(range.getClientRects()).every(
+        (bounds) =>
+          bounds.left >= chipBounds.left - 0.5 &&
+          bounds.right <= chipBounds.right + 0.5,
+      );
+      range.detach();
+      return textFits;
+    }),
+  ).resolves.toBe(true);
+};
+
 const expectInlineSaveKeepsTransactionTableStable = async (
   page: Page,
   transactionId: number,
@@ -2638,6 +2713,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
 test("transactions inline recurring occurrences support hide, confirm, dismiss, and registers", async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 700, height: 720 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const overdueFixture = await createExpectedRecurringFixture(
@@ -2663,24 +2739,52 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
     `/transactions?page=1&pageSize=50&q=${encodeURIComponent(search)}`,
   );
   await defaultRequest;
-  const overdueRow = page
-    .getByRole("row")
-    .filter({ has: page.getByRole("img", { name: "Expected" }) })
-    .filter({
-      hasText: overdueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
-    });
-  const dueRow = page
-    .getByRole("row")
-    .filter({ has: page.getByRole("img", { name: "Expected" }) })
-    .filter({
-      hasText: dueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
-    });
+  const overdueRow = page.getByRole("row").filter({
+    hasText: overdueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
+  });
+  const dueRow = page.getByRole("row").filter({
+    hasText: dueFixture.merchantFqn.split(":").at(-1) ?? "Merchant",
+  });
   await expect(overdueRow).toBeVisible();
   await expect(dueRow).toBeVisible();
-  await expect(overdueRow.getByRole("img", { name: "Overdue" })).toBeVisible();
+  await expect(overdueRow.locator('[aria-label="Expected"]')).toHaveCount(1);
+  await expect(overdueRow.locator('[aria-label="Overdue"]')).toHaveCount(1);
   await expect(overdueRow.getByText("-23.45 $", { exact: true })).toHaveClass(
     /text-muted-foreground/,
   );
+  await expectCollapsedRowActionsKeepAmountVisible(overdueRow);
+  await expectCollapsedRowActionsKeepAmountVisible(dueRow);
+  const overdueActionsMenu = await openRowActionsMenu(page, overdueRow);
+  await expect(
+    overdueActionsMenu.getByRole("button", {
+      name: "Open transaction detail",
+    }),
+  ).toBeVisible();
+  await expect(
+    overdueActionsMenu.getByRole("button", { name: "Confirm occurrence" }),
+  ).toBeVisible();
+  await expect(
+    overdueActionsMenu.getByRole("button", { name: "Dismiss occurrence" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(overdueActionsMenu).toBeHidden();
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
+  await expect(entryPanel).toBeVisible();
+  const entryPanelActionsMenu = await openRowActionsMenu(page, dueRow);
+  await page.keyboard.press("Escape");
+  await expect(entryPanelActionsMenu).toBeHidden();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "More row actions" }),
+  ).toBeHidden();
+  await page.keyboard.press("Escape");
+  await expect(entryPanel).toHaveCount(0);
+  await page.setViewportSize({ width: 700, height: 720 });
 
   const hideRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -2725,16 +2829,17 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
     .getByTestId("featured-balance-row")
     .filter({ hasText: overdueFixture.checking.fqn.split(":").at(-1) ?? "" });
   await expect(featuredRow).toContainText("0.00 $");
-  await overdueRow.getByRole("button", { name: "Confirm occurrence" }).click();
+  await clickRowAction(page, overdueRow, "Confirm occurrence");
   await expect(
     page.getByRole("status").filter({ hasText: "Occurrence confirmed." }),
   ).toBeVisible();
-  await expect(overdueRow.getByRole("img", { name: "Expected" })).toHaveCount(
-    0,
-  );
+  await expect(overdueRow.locator('[aria-label="Expected"]')).toHaveCount(0);
+  await expect(
+    overdueRow.getByText("-23.45 $", { exact: true }),
+  ).not.toHaveClass(/text-muted-foreground/);
   await expect(featuredRow).toContainText("-23.45 $");
 
-  await dueRow.getByRole("button", { name: "Dismiss occurrence" }).click();
+  await clickRowAction(page, dueRow, "Dismiss occurrence");
   const dismissDialog = page.getByRole("alertdialog", {
     name: "Dismiss occurrence",
   });
@@ -3882,7 +3987,9 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     intermediateTableState.categoryCollapsed,
   );
 
-  for (const width of [1600, 1440, 1150, 1000, 900, 820, 800, 700, 640]) {
+  for (const width of [
+    1600, 1440, 1280, 1249, 1150, 1000, 900, 820, 800, 700, 640,
+  ]) {
     await page.setViewportSize({ width, height: 720 });
     const tableState = await measureTableState();
 
@@ -4277,6 +4384,7 @@ test("transactions display currency symbols with code fallback", async ({
 test("transactions page help and leaf category chips", async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 1920, height: 900 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const [accounts, exchangeCategory] = await Promise.all([
@@ -4787,11 +4895,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   const entryPanel = page.locator("aside[aria-labelledby='entry-panel-title']");
   await expect(entryPanel).toBeVisible();
 
-  await detailRow
-    .getByRole("button", {
-      name: "Open transaction detail",
-    })
-    .click();
+  await clickRowAction(page, detailRow, "Open transaction detail");
 
   await expect(page).toHaveURL(
     new RegExp(`[?&]transaction=${transaction.transaction_id}(?:&|$)`),
@@ -4853,11 +4957,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await alternateDetailRow.locator("td").nth(3).click();
   await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "false");
 
-  await detailRow
-    .getByRole("button", {
-      name: "Open transaction detail",
-    })
-    .click();
+  await clickRowAction(page, detailRow, "Open transaction detail");
   await expect(panel).toBeVisible();
 
   await alternateDetailRow.scrollIntoViewIfNeeded();
@@ -5082,9 +5182,7 @@ test("transaction detail panel reuses inline editors and keeps expected occurren
     })
     .first();
   await expect(expectedRow).toBeVisible();
-  await expectedRow
-    .getByRole("button", { name: "Open transaction detail" })
-    .click();
+  await clickRowAction(page, expectedRow, "Open transaction detail");
   const expectedPanel = page.getByTestId("transaction-detail-panel");
   await expect(expectedPanel).toBeVisible();
   await expect(
@@ -6688,11 +6786,10 @@ test("browser history navigation exits bulk mode before restoring transaction de
   const row = page
     .locator("tbody tr[data-transaction-id]")
     .filter({
-      has: page.getByRole("button", { name: "Open transaction detail" }),
-      hasNot: page.getByRole("button", { name: "Confirm occurrence" }),
+      has: page.locator('.row-actions[data-row-actions-count="2"]'),
     })
     .first();
-  await row.getByRole("button", { name: "Open transaction detail" }).click();
+  await clickRowAction(page, row, "Open transaction detail");
   const detailPanel = page.getByTestId("transaction-detail-panel");
   await expect(detailPanel).toBeVisible();
   const detailUrl = page.url();
@@ -6776,9 +6873,24 @@ test("narrow row bulk shortcuts use the visible bulk bar editor", async ({
   ).toBeLessThanOrEqual(390);
 
   const shortcuts = [
-    { action: "category", combobox: "Category", key: "c" },
-    { action: "tags", combobox: "Tags to add", key: "t" },
-    { action: "member", combobox: "Member", key: "m" },
+    {
+      action: "category",
+      barButton: "Categorize",
+      combobox: "Category",
+      key: "c",
+    },
+    {
+      action: "tags",
+      barButton: "Tag",
+      combobox: "Tags to add",
+      key: "t",
+    },
+    {
+      action: "member",
+      barButton: "Member",
+      combobox: "Member",
+      key: "m",
+    },
   ] as const;
   for (const shortcut of shortcuts) {
     await row.focus();
@@ -6797,6 +6909,9 @@ test("narrow row bulk shortcuts use the visible bulk bar editor", async ({
       .getByRole("button", { name: "Close bulk action picker" })
       .click();
     await expect(picker).toHaveCount(0);
+    await expect(
+      bulkActionBar.getByRole("button", { name: shortcut.barButton }),
+    ).toBeFocused();
   }
 });
 
@@ -7606,6 +7721,15 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
     entryPanel.getByRole("heading", { name: "New spend" }),
   ).toBeVisible();
   await spendPanel.getByLabel("Memo").fill(keptMemo);
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({
+      tabs: {
+        spend: {
+          memo: keptMemo,
+        },
+      },
+    });
   await page.getByRole("tab", { name: "Advanced" }).click();
 
   await expect(
