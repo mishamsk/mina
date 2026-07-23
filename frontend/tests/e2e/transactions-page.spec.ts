@@ -814,6 +814,12 @@ test("transactions page renders demo transaction lines and expands records", asy
   ).toBeVisible();
 
   const transactionRows = page.locator("tbody > tr[aria-expanded]");
+  await expect(
+    transactionRows.locator(".transactions-description-column svg"),
+  ).toHaveCount(0);
+  await expect(
+    transactionRows.getByRole("button", { name: /expand|collapse/i }),
+  ).toHaveCount(0);
   const transferRow = page
     .getByRole("row")
     .filter({ has: page.getByRole("img", { name: "TRANSFER" }) })
@@ -848,21 +854,38 @@ test("transactions page renders demo transaction lines and expands records", asy
     .evaluate((element) => getComputedStyle(element).backgroundColor);
   expect(firstRowBackgroundBefore).not.toBe(secondRowBackgroundBefore);
 
+  const transferRowBackgroundBefore = await transferRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
   await transferRow.locator("td").nth(3).click();
   await expect(transferRow).toHaveAttribute("aria-expanded", "true");
+  await expect(transferRow).toHaveAttribute(
+    "aria-controls",
+    /^transaction-records-\d+$/,
+  );
+  const recordsRowId = await transferRow.getAttribute("aria-controls");
+  expect(recordsRowId).not.toBeNull();
+  const recordsRow = page.locator(`[id="${recordsRowId}"]`);
+  await expect(recordsRow).toBeVisible();
+  await expect(recordsRow).toHaveCSS("border-bottom-width", "2px");
   await expect(
     page.getByRole("columnheader", { exact: true, name: "Memo" }),
   ).toBeVisible();
   await page.mouse.move(0, 0);
+  await expect(transferRow).toHaveCSS("border-bottom-width", "0px");
+  await expect(transferRow).toHaveCSS("box-shadow", "none");
+  const transferRowBackgroundAfter = await transferRow.evaluate(
+    (element) => getComputedStyle(element).backgroundColor,
+  );
+  expect(transferRowBackgroundAfter).not.toBe(transferRowBackgroundBefore);
+  const transferTitle = transferRow.getByTestId("transaction-line-title");
+  await expect(transferTitle).toHaveCSS("font-weight", "600");
+  await expect(transferTitle).toHaveCSS("font-family", /IBM Plex Mono/i);
 
   const firstRowBackgroundAfter = await transactionRows
     .nth(0)
     .evaluate((element) => getComputedStyle(element).backgroundColor);
-  const secondRowBackgroundAfter = await transactionRows
-    .nth(1)
-    .evaluate((element) => getComputedStyle(element).backgroundColor);
   expect(firstRowBackgroundAfter).toBe(firstRowBackgroundBefore);
-  expect(secondRowBackgroundAfter).toBe(secondRowBackgroundBefore);
 
   await expect(page.getByTestId("transactions-table-scroll")).toContainText(
     "Memo",
@@ -879,6 +902,21 @@ test("transactions page renders demo transaction lines and expands records", asy
         : false;
     });
   expect(recordsFitTableContent).toBe(true);
+
+  await transferRow.locator("td").nth(3).click();
+  await expect(transferRow).toHaveAttribute("aria-expanded", "false");
+  await expect(transferRow).not.toHaveAttribute("aria-controls", /.+/);
+  await expect(recordsRow).toHaveCount(0);
+
+  await transferRow.focus();
+  await page.keyboard.press("Space");
+  await expect(transferRow).toHaveAttribute("aria-expanded", "true");
+  await expect(transferRow).toHaveAttribute(
+    "aria-controls",
+    recordsRowId ?? "",
+  );
+  await page.keyboard.press("Space");
+  await expect(transferRow).toHaveAttribute("aria-expanded", "false");
 });
 
 test("expanded records edit per-record values and escalate structural changes", async ({
@@ -5269,11 +5307,18 @@ test("focused transaction row opens detail with Enter and restores focus on Esca
   await expect(detailRow).toBeFocused();
 
   await page.keyboard.press("Space");
+  await expect(detailRow).toHaveAttribute("aria-expanded", "true");
+  await expect(detailRow).toHaveAttribute(
+    "aria-controls",
+    `transaction-records-${transaction.transaction_id}`,
+  );
   await expect(page.getByTestId("bulk-action-bar")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Bulk edit" }).click();
   await detailRow.focus();
   await page.keyboard.press("Space");
+  await expect(detailRow).not.toHaveAttribute("aria-expanded", /.+/);
+  await expect(detailRow).not.toHaveAttribute("aria-controls", /.+/);
   await expect(
     page.getByTestId("transaction-browser-bulk-mode-bar"),
   ).toContainText("1 selected");

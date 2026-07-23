@@ -1,7 +1,5 @@
 import {
   Check,
-  ChevronDown,
-  ChevronRight,
   Close,
   Open,
   Pencil,
@@ -1390,6 +1388,15 @@ export const TransactionBrowser = ({
                 ) : member ? (
                   <MemberChip name={member.name} />
                 ) : null;
+              const expandedRecordsId = `transaction-records-${transaction.transaction_id}`;
+              const rowHoverFill =
+                transactionIndex % 2 === 0
+                  ? "hover:bg-[color-mix(in_srgb,var(--card),var(--table-header)_28%)]"
+                  : "hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
+              const expandedRowFill =
+                transactionIndex % 2 === 0
+                  ? "bg-[color-mix(in_srgb,var(--card),var(--table-header)_28%)] hover:bg-[color-mix(in_srgb,var(--card),var(--table-header)_28%)]"
+                  : "bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)] hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]";
 
               return (
                 <Fragment key={transaction.transaction_id}>
@@ -1403,10 +1410,13 @@ export const TransactionBrowser = ({
                         ? selectable
                           ? "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]"
                           : "cursor-default"
-                        : "cursor-pointer hover:bg-[color-mix(in_srgb,var(--band),var(--table-header)_28%)]",
+                        : `cursor-pointer ${rowHoverFill}`,
                       bulkEditMode &&
                         selected &&
                         "bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_12%)] hover:bg-[color-mix(in_srgb,var(--band),var(--color-interactive-bright)_15%)]",
+                      !bulkEditMode &&
+                        expanded &&
+                        `border-b-0 ${expandedRowFill}`,
                       dateJumpHighlight?.transactionId ===
                         transaction.transaction_id &&
                         "outline-2 outline-offset-[-2px] outline-[var(--ring)]",
@@ -1416,6 +1426,9 @@ export const TransactionBrowser = ({
                       bulkEditMode && !selectable ? true : undefined
                     }
                     aria-expanded={bulkEditMode ? undefined : expanded}
+                    aria-controls={
+                      !bulkEditMode && expanded ? expandedRecordsId : undefined
+                    }
                     aria-selected={bulkEditMode ? selected : undefined}
                     data-date-jump-anchor={
                       dateJumpHighlight?.transactionId ===
@@ -1501,7 +1514,9 @@ export const TransactionBrowser = ({
                       }
 
                       event.preventDefault();
-                      if (bulkEditMode && selectable) {
+                      if (!bulkEditMode) {
+                        toggleExpanded();
+                      } else if (selectable) {
                         if (event.shiftKey) {
                           selectRowRange(transaction.transaction_id);
                         } else {
@@ -1569,60 +1584,28 @@ export const TransactionBrowser = ({
                       </div>
                     </td>
                     <td className="transactions-description-column px-3 py-2">
-                      <div
-                        className={cn(
-                          "flex min-w-0 gap-2",
-                          memo ? "items-start" : "items-center",
-                        )}
-                      >
-                        {bulkEditMode ? null : (
-                          <span
+                      <div className="min-w-0">
+                        <Tooltip label={title} className="block min-w-0">
+                          <div
                             className={cn(
-                              "grid size-6 shrink-0 place-items-center",
-                              memo && "mt-0.5",
+                              "truncate font-medium",
+                              expanded && "font-mono font-semibold",
                             )}
-                            aria-hidden="true"
+                            data-testid="transaction-line-title"
                           >
-                            {expanded ? (
-                              <ChevronDown
-                                className="size-4"
-                                aria-hidden="true"
-                              />
-                            ) : (
-                              <ChevronRight
-                                className="size-4"
-                                aria-hidden="true"
-                              />
-                            )}
-                          </span>
-                        )}
-                        <div
-                          className={cn(
-                            "grid min-w-0 flex-1",
-                            memo ? "items-start" : "items-center",
-                          )}
-                        >
-                          <div className="min-w-0">
-                            <Tooltip label={title} className="block min-w-0">
-                              <div
-                                className="truncate font-medium"
-                                data-testid="transaction-line-title"
-                              >
-                                {title}
-                              </div>
-                            </Tooltip>
-                            {memo ? (
-                              <Tooltip label={memo} className="block min-w-0">
-                                <div
-                                  className="text-muted-foreground truncate text-xs"
-                                  data-testid="transaction-line-memo"
-                                >
-                                  {memo}
-                                </div>
-                              </Tooltip>
-                            ) : null}
+                            {title}
                           </div>
-                        </div>
+                        </Tooltip>
+                        {memo ? (
+                          <Tooltip label={memo} className="block min-w-0">
+                            <div
+                              className="text-muted-foreground truncate text-xs"
+                              data-testid="transaction-line-memo"
+                            >
+                              {memo}
+                            </div>
+                          </Tooltip>
+                        ) : null}
                       </div>
                     </td>
                     <td className="transactions-category-column px-3 py-2">
@@ -1928,7 +1911,10 @@ export const TransactionBrowser = ({
                     </td>
                   </tr>
                   {expanded ? (
-                    <tr className="border-b border-[var(--border-ink)]">
+                    <tr
+                      id={expandedRecordsId}
+                      className="border-b-2 border-[var(--border-ink)]"
+                    >
                       <td colSpan={9} className="max-w-0 overflow-hidden p-0">
                         <RecordsTable
                           records={transaction.records}

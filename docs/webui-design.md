@@ -149,16 +149,16 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 ### Keyboard
 
-- Keyboard-complete tables: up/down moves row focus, expand/collapse, open peek, start inline edit, toggle selection — batch review sessions never need the mouse.
+- Keyboard-complete tables: up/down moves row focus; in the transactions browser Space toggles inline expansion of the focused row and, outside bulk-edit mode, Enter opens the detail panel (in bulk-edit mode Space toggles selection per Bulk operations); open peek, start inline edit, and selection stay keyboard-driven — batch review sessions never need the mouse.
 - Global shortcuts: open command palette, new transaction, focus list search, `Esc` closes overlays, `Cmd+Enter` submits forms, arrows + `Enter` drive pickers.
 - Toggling bulk-edit mode is available from the toolbar and the command palette; in-mode selection keys per Bulk operations.
 
 ### Tables and filtering
 
-- Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, whole-row affordances for expand/peek (a plain disclosure indicator, not a per-row button), leading checkbox column only in bulk-edit mode (see Bulk operations).
+- Server-driven pagination/sort/filter, sticky header, right-aligned numeric columns, whole-row affordances for expand/peek — no per-row disclosure control and no reserved indicator column; the row itself is the affordance, and an expanded row carries a persistent theme-owned expanded-state treatment that visually joins it to its expanded content — leading checkbox column only in bulk-edit mode (see Bulk operations).
 - Per-row actions live in one narrow trailing actions column — always the rightmost column, in every table — never mid-row. Button-class actions render as compact icon buttons with tooltips and are always visible: no hover- or focus-reveal semantics anywhere. State toggles stay persistently visible because they carry state. Fit decides presentation, never count: when the actions cell fits the full action cluster it shows all buttons; when it cannot, the cluster collapses into a single overflow (⋯) button that opens a floating panel with all actions — by the column-collapse priority in the transactions browser, and per row in reference tables.
 - Tables render no Actions column header; the actions column is right-padded so its trailing margin matches the table's leading padding.
-- Reference/dictionary row activation (click, Enter, or Space on a leaf row) opens the entity's read-only detail/register page: accounts open their register, account groups the group register, categories/tags/members their drill-down pages. Edit is a compact trailing row action with a tooltip; all action buttons stop row-activation propagation. The transactions browser is the explicit exception: row activation expands journal records and its detail action stays explicit.
+- Reference/dictionary row activation (click, Enter, or Space on a leaf row) opens the entity's read-only detail/register page: accounts open their register, account groups the group register, categories/tags/members their drill-down pages. Edit is a compact trailing row action with a tooltip; all action buttons stop row-activation propagation. The transactions browser is the explicit exception: row activation (click or Space) expands journal records, Enter opens the detail panel outside bulk-edit mode, and its detail action stays explicit.
 - Stable column layout: fixed percentage-based column widths so columns never shift when paging or when row content changes.
 - When horizontal space runs out, columns collapse by priority instead of showing a horizontal scrollbar: member first, then the status marker, then row actions fold into a single overflow (⋯) menu, then tags, then category.
 - Pagination shows "Page X of Y" from server-provided total counts.

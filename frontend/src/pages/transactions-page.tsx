@@ -256,7 +256,8 @@ export const TransactionsPage = () => {
         eyebrow="Ledger"
         help={
           <PageHelp label="Transactions help">
-            Classified transaction lines with inline journal records.
+            Classified transaction lines with inline journal records. Click a
+            row (or press Space) to expand its journal records.
           </PageHelp>
         }
         actions={
