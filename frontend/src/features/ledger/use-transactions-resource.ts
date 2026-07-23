@@ -52,6 +52,8 @@ interface LoadedTransactionPage {
   readonly transactions: readonly Transaction[];
 }
 
+let ledgerLookupRequestEpoch = 0;
+
 const effectivePageParams = (
   params: TransactionPageParams,
   offset: number,
@@ -64,10 +66,11 @@ const effectivePageParams = (
 const loadLedgerLookups = async (
   shouldCommit: () => boolean = () => true,
 ): Promise<void> => {
+  const requestEpoch = ++ledgerLookupRequestEpoch;
   setLedgerLookupsLoading();
 
   const result = await fetchLedgerLookups();
-  if (!shouldCommit()) {
+  if (!shouldCommit() || requestEpoch !== ledgerLookupRequestEpoch) {
     return;
   }
 

@@ -265,6 +265,10 @@ test("categories row actions hide groups and move renamed paths into transaction
   ).toBeFocused();
   await categoryPicker.fill(moveSource);
   await expect(
+    page.getByRole("option", { name: /Old, group, 2 children/ }),
+  ).toBeVisible();
+  await categoryPicker.press("Enter");
+  await expect(
     page.locator("#transactions-filter-category-options"),
   ).toContainText(`${moveSource}:Alpha`, { timeout: 10_000 });
 
@@ -361,6 +365,10 @@ test("categories row actions hide groups and move renamed paths into transaction
     page.getByRole("checkbox", { name: "Include hidden" }),
   ).toBeFocused();
   await refreshedCategoryPicker.fill(moveDestination);
+  await expect(
+    page.getByRole("option", { name: /New, group, 2 children/ }),
+  ).toBeVisible();
+  await refreshedCategoryPicker.press("Enter");
   await expect(
     page.locator("#transactions-filter-category-options"),
   ).toContainText(`${moveDestination}:Alpha`);

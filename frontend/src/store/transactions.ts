@@ -628,6 +628,33 @@ export const setCategoryPickerCategories = (
   );
 };
 
+export const addCategoryPickerCategory = (category: Category): void => {
+  useTransactionsStore.setState(
+    (state) => ({
+      categoryPickerCategories: Object.fromEntries(
+        Object.entries(state.categoryPickerCategories).map(
+          ([intentKey, snapshot]) => [
+            intentKey,
+            intentKey.split(",").includes(category.economic_intent)
+              ? {
+                  categories: [
+                    ...snapshot.categories.filter(
+                      (current) => current.category_id !== category.category_id,
+                    ),
+                    category,
+                  ].sort((left, right) => left.fqn.localeCompare(right.fqn)),
+                  loadedAt: new Date().toISOString(),
+                }
+              : snapshot,
+          ],
+        ),
+      ),
+    }),
+    false,
+    "TransactionsStore/addCategoryPickerCategory",
+  );
+};
+
 export const setCategoryPickerCategoriesError = (
   intents: readonly CategoryEconomicIntent[],
   errorMessage: string,

@@ -220,6 +220,7 @@ export const BulkReferenceEditor = ({
         <EntityPicker
           autoFocus
           disabled={saving}
+          hierarchical={false}
           id="bulk-member"
           inlineOptions={inlineOptions}
           label="Member"

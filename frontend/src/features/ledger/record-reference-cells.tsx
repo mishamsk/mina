@@ -317,6 +317,7 @@ const MemberReferenceEditor = ({
   return (
     <>
       <EntityPicker
+        hierarchical={false}
         key={pickerResetVersion}
         id={`record-${record.record_id}-member`}
         inlineOptions

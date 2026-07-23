@@ -14,9 +14,13 @@ import {
   type Account,
   apiErrorMessage,
   type Category,
+  type CategoryEconomicIntent,
   createIncome,
   type CreateIncomeTransactionRequest,
   createJournalTransaction,
+  createLedgerAccount,
+  createLedgerCategory,
+  createLedgerTag,
   createRefund,
   type CreateRefundTransactionRequest,
   createSpend,
@@ -55,7 +59,14 @@ import {
   writeTransactionEntryDraft,
 } from "@/services/indexeddb";
 import type { LedgerLookupsSnapshot } from "@/store";
-import { openTransactionEntryLaunch, openTransactionEntryPanel } from "@/store";
+import {
+  addCategoryPickerCategory,
+  invalidateAccountsPage,
+  invalidateCategoriesPage,
+  invalidateTagsPage,
+  openTransactionEntryLaunch,
+  openTransactionEntryPanel,
+} from "@/store";
 import { localTodayISODate } from "@/utils/date";
 
 import { AmountText, MixedAmounts } from "./amount-text";
@@ -72,6 +83,7 @@ import {
 } from "./format";
 import { ClassIcon } from "./line-icons";
 import { useCategoryPickerCategoriesResource } from "./use-transactions-resource";
+import { refreshLedgerLookups } from "./use-transactions-resource";
 
 export interface EntryPanelProps {
   readonly closeRequestRef?: MutableRefObject<(() => void) | null>;
@@ -152,7 +164,10 @@ interface LaunchDraft {
 type DraftPersistenceMode = "launch" | "ordinary";
 
 interface TabConfig {
-  readonly categoryIntents: readonly Category["economic_intent"][];
+  readonly categoryIntents: readonly [
+    Category["economic_intent"],
+    ...Category["economic_intent"][],
+  ];
   readonly counterpartyLabel: string;
   readonly primaryAccountField: FieldName;
   readonly primaryAccountLabel: string;
@@ -1550,6 +1565,8 @@ export const EntryPanel = ({
     readonly Transaction[]
   >([]);
   const [categoryRetryToken, setCategoryRetryToken] = useState(0);
+  const [categoryCreationIntent, setCategoryCreationIntent] =
+    useState<CategoryEconomicIntent>("expense");
   const [templateQuery, setTemplateQuery] = useState("");
   const [templates, setTemplates] = useState<readonly TransactionTemplate[]>(
     [],
@@ -1654,6 +1671,11 @@ export const EntryPanel = ({
   const activeConfig = activeShorthandTab
     ? tabConfigs[activeShorthandTab]
     : undefined;
+  const activeCategoryCreationIntent = activeConfig?.categoryIntents.includes(
+    categoryCreationIntent,
+  )
+    ? categoryCreationIntent
+    : activeConfig?.categoryIntents[0];
   const launchKey = launch
     ? `${launch.type}:${launch.transaction.transaction_id}`
     : `create:${initialTab ?? "remembered"}`;
@@ -1902,11 +1924,60 @@ export const EntryPanel = ({
       tags: tags.map((tag) => entityOption(tag, tag.tag_id)),
     };
   }, [categoryPicker.snapshot, lookups, optionAccounts, selectedEntityIds]);
+  const createConflictOptions = useMemo(
+    () => ({
+      accounts: (lookups?.accounts ?? [])
+        .filter((account) => !account.tombstoned_at)
+        .map((account) => entityOption(account, account.account_id)),
+      categories: (lookups?.categories ?? [])
+        .filter((category) => !category.tombstoned_at)
+        .map((category) => entityOption(category, category.category_id)),
+      tags: (lookups?.tags ?? [])
+        .filter((tag) => !tag.tombstoned_at)
+        .map((tag) => entityOption(tag, tag.tag_id)),
+    }),
+    [lookups],
+  );
+  const createFlowAccountOption = async (fqn: string) => {
+    const result = await createLedgerAccount({
+      account_type: "flow",
+      fqn,
+    });
+    if (!result.data) {
+      throw new Error(apiErrorMessage(result.error));
+    }
+    invalidateAccountsPage();
+    void refreshLedgerLookups();
+    return entityOption(result.data, result.data.account_id);
+  };
+  const createCategoryOption = async (
+    fqn: string,
+    economicIntent: CategoryEconomicIntent,
+  ) => {
+    const result = await createLedgerCategory({
+      economic_intent: economicIntent,
+      fqn,
+    });
+    if (!result.data) {
+      throw new Error(apiErrorMessage(result.error));
+    }
+    invalidateCategoriesPage();
+    addCategoryPickerCategory(result.data);
+    void refreshLedgerLookups();
+    return entityOption(result.data, result.data.category_id);
+  };
+  const createTagOption = async (fqn: string) => {
+    const result = await createLedgerTag({ fqn });
+    if (!result.data) {
+      throw new Error(apiErrorMessage(result.error));
+    }
+    invalidateTagsPage();
+    void refreshLedgerLookups();
+    return entityOption(result.data, result.data.tag_id);
+  };
   const categoryPickerReady =
     activeTab === "advanced" || Boolean(categoryPicker.snapshot);
   const lookupRevision = lookups?.loadedAt ?? "loading";
-  const categoryLookupRevision =
-    categoryPicker.snapshot?.loadedAt ?? "categories-loading";
   const ready = Boolean(lookups && currentDraftReady);
   const canSubmit = Boolean(
     lookups && currentDraftReady && categoryPickerReady && !saving,
@@ -2943,6 +3014,8 @@ export const EntryPanel = ({
                             className="col-span-full"
                           >
                             <EntityMultiPicker
+                              createConflictOptions={createConflictOptions.tags}
+                              createOption={createTagOption}
                               id={`advanced-record-${rowIndex}-tags`}
                               label={`Record ${rowIndex + 1} tags`}
                               labelClassName="sr-only"
@@ -2955,6 +3028,7 @@ export const EntryPanel = ({
                           </AdvancedRecordField>
                           <AdvancedRecordField label="Member">
                             <EntityPicker
+                              hierarchical={false}
                               key={`${lookupRevision}:advanced:${row.draftId}:member`}
                               id={`advanced-record-${rowIndex}-member`}
                               label={`Record ${rowIndex + 1} member`}
@@ -3206,7 +3280,7 @@ export const EntryPanel = ({
                 </div>
 
                 <EntityPicker
-                  key={`${lookupRevision}:${activeTab}:${activeConfig.primaryAccountField}:${primaryAccountValue ?? ""}`}
+                  key={`${lookupRevision}:${initializedLaunchKey}:${sessionCount}:${activeTab}:${activeConfig.primaryAccountField}`}
                   id={`${activeTab}-${activeConfig.primaryAccountField}`}
                   label={activeConfig.primaryAccountLabel}
                   options={options[activeConfig.primaryAccountOptionSet]}
@@ -3225,7 +3299,13 @@ export const EntryPanel = ({
                 />
 
                 <EntityPicker
-                  key={`${lookupRevision}:${activeTab}:${activeConfig.secondaryAccountField}:${secondaryAccountValue ?? ""}`}
+                  createConflictOptions={createConflictOptions.accounts}
+                  createOption={
+                    activeConfig.secondaryAccountOptionSet === "flowAccounts"
+                      ? createFlowAccountOption
+                      : undefined
+                  }
+                  key={`${lookupRevision}:${initializedLaunchKey}:${sessionCount}:${activeTab}:${activeConfig.secondaryAccountField}`}
                   id={`${activeTab}-${activeConfig.secondaryAccountField}`}
                   label={activeConfig.secondaryAccountLabel}
                   options={options[activeConfig.secondaryAccountOptionSet]}
@@ -3241,7 +3321,11 @@ export const EntryPanel = ({
                 />
 
                 <EntityPicker
-                  key={`${categoryLookupRevision}:${activeTab}:category:${activeTabDraft.categoryId ?? ""}`}
+                  key={`${initializedLaunchKey}:${sessionCount}:${activeTab}:category`}
+                  createConflictOptions={createConflictOptions.categories}
+                  createOption={(fqn) =>
+                    createCategoryOption(fqn, activeCategoryCreationIntent!)
+                  }
                   disabled={!categoryPickerReady}
                   id={`${activeTab}-category`}
                   label="Category"
@@ -3254,6 +3338,32 @@ export const EntryPanel = ({
                     updateActiveTabDraft({ categoryId });
                   }}
                 />
+                {activeConfig.categoryIntents.length > 1 ? (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-semibold">
+                      New category intent
+                    </label>
+                    <Select
+                      value={activeCategoryCreationIntent}
+                      onValueChange={(intent) => {
+                        setCategoryCreationIntent(
+                          intent as CategoryEconomicIntent,
+                        );
+                      }}
+                    >
+                      <SelectTrigger aria-label="Creation economic intent">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeConfig.categoryIntents.map((intent) => (
+                          <SelectItem key={intent} value={intent}>
+                            {intent === "expense" ? "Expense" : "Fee"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
                 <FieldError message={fieldErrors.categoryId} />
                 <RetryableFieldError
                   message={categoryPicker.errorMessage}
@@ -3261,6 +3371,8 @@ export const EntryPanel = ({
                 />
 
                 <EntityMultiPicker
+                  createConflictOptions={createConflictOptions.tags}
+                  createOption={createTagOption}
                   id={`${activeTab}-tags`}
                   label="Tags"
                   options={options.tags}
@@ -3272,7 +3384,8 @@ export const EntryPanel = ({
                 <FieldError message={fieldErrors.tagIds} />
 
                 <EntityPicker
-                  key={`${lookupRevision}:${activeTab}:member:${activeTabDraft.memberId ?? ""}`}
+                  hierarchical={false}
+                  key={`${lookupRevision}:${initializedLaunchKey}:${sessionCount}:${activeTab}:member`}
                   id={`${activeTab}-member`}
                   label="Member"
                   options={options.members}

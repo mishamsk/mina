@@ -232,7 +232,10 @@ export const EntryModal = ({
           onEscapeKeyDown={(event) => {
             if (
               event.target instanceof HTMLElement &&
-              event.target.matches("[role='combobox'][aria-expanded='true']")
+              (event.target.matches(
+                "[role='combobox'][aria-expanded='true']",
+              ) ||
+                event.target.closest("[data-picker-breadcrumb]"))
             ) {
               event.preventDefault();
             }

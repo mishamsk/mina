@@ -568,6 +568,7 @@ export const TransactionFilterControls = ({
           </label>
         ) : null}
         <EntityMultiPicker
+          hierarchical={dimension !== "member"}
           id={`transactions-filter-${dimension}`}
           label={config.label}
           onOpenChange={setEntityPickerOpen}

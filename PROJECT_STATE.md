@@ -62,6 +62,7 @@
   - Transaction entry is one app-shell-owned, route-independent stage modal opened in place from page headers, the sidebar, global shortcut, command palette, empty states, rows, and detail panels; it includes shorthand spend/income/refund/transfer tabs, template prefill, an Advanced journal editor, persisted per-tab drafts, sticky batch fields, a session/context rail, and URL-addressable create/edit/split/duplicate launches.
   - Saved transactions support row and detail-panel Edit, Duplicate, and Split actions with shorthand-fit edit detection, duplicate-as-new-entry prefill, split-through-journal replacement, discard protection, and live refresh while the detail panel remains open beneath the modal.
   - Transaction entry category pickers fetch API-filtered category lists by shorthand tab economic intent.
+  - Shared hierarchical entity pickers support breadcrumbed segment browsing, guarded keyboard segment completion and back-out, scoped full-path fallback, exact-FQN selection, account-intent pruning, and multi-select sibling batching across entry, inline, bulk, filter, reference, and recurring surfaces; eligible entry pickers additionally support inline valid-leaf creation.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:
   - Runtime owns accounting location defaults, opens an in-memory DuckDB process database, and selects either an attached accounting database file or the in-memory accounting database with configurable schema fallback.

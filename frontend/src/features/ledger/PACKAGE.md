@@ -23,7 +23,9 @@
 - Transaction-row actions use the shared `RowActions` cluster and follow the owning [table row-action rule](../../../../docs/webui-design.md#tables-and-filtering).
 - Expected recurring rows replace the normal delete action with confirm and named-dismiss occurrence actions while retaining transaction detail; successful lifecycle actions use the standard transaction-mutation refresh fan-out.
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.
-- Lookup-backed inline pickers use bounded REST lists, exclude hidden entities upstream, and do not offer an include-hidden control; broader picker surfaces own their include-hidden controls.
+- Shared FQN picker interaction follows the owning [Pickers specification](../../../../docs/webui-design.md#pickers).
+- Lookup-backed inline pickers use bounded REST lists, exclude hidden entities upstream, prune empty hierarchy groups, and do not offer an include-hidden control; broader picker surfaces own their include-hidden controls.
+- Entry pickers may create client-valid, prefix-free category, tag, and flow-account leaves inline; REST services remain the validation authority and successful creation refreshes shared lookups.
 - Expanded-record editors own only their per-cell transient state; successful saves delegate to the browser page for API-owned validation and the standard transaction-mutation refresh fan-out.
 - Category, tags, and posting status use their narrow record bulk APIs; member, memo, dates, and simple row amounts use atomic transaction replacement built from the displayed transaction shape.
 - Structural record fields remain non-inline; transaction browsers expose a direct escalation action to the modal's full journal editor.

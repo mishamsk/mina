@@ -1,6 +1,7 @@
-import { Close, EyeOff } from "pixelarticons/react";
-import { useMemo, useState } from "react";
+import { ChevronRight, Close, EyeOff, Home, Plus } from "pixelarticons/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -12,12 +13,18 @@ export interface EntityOption {
   readonly searchLabel: string;
 }
 
+type CreateEntityOption = (fqn: string) => Promise<EntityOption>;
+
 interface EntityPickerProps {
   readonly autoFocus?: boolean;
+  readonly createConflictOptions?: readonly EntityOption[];
   readonly clearOnSelect?: boolean;
+  readonly createOption?: CreateEntityOption;
   readonly disabled?: boolean;
   readonly exactMatchOptions?: readonly EntityOption[];
+  readonly excludedOptionIds?: readonly number[];
   readonly id: string;
+  readonly hierarchical?: boolean;
   readonly inlineOptions?: boolean;
   readonly label: string;
   readonly labelClassName?: string;
@@ -28,15 +35,220 @@ interface EntityPickerProps {
   readonly value: number | undefined;
 }
 
-const matchesQuery = (option: EntityOption, query: string): boolean =>
-  option.searchLabel.toLowerCase().includes(query.trim().toLowerCase());
+interface HierarchyGroup {
+  readonly childCount: number;
+  readonly fqn: string;
+  readonly parentFqn: string;
+  readonly segment: string;
+}
+
+interface PickerLeafRow {
+  readonly kind: "leaf";
+  readonly option: EntityOption;
+}
+
+interface PickerGroupRow {
+  readonly group: HierarchyGroup;
+  readonly kind: "group";
+}
+
+interface PickerCreateRow {
+  readonly fqn: string;
+  readonly kind: "create";
+}
+
+type PickerRow = PickerLeafRow | PickerGroupRow | PickerCreateRow;
+
+interface QueryModel {
+  readonly committedPrefix: string;
+  readonly filter: string;
+  readonly levelMode: boolean;
+}
+
+const searchLimit = 8;
+
+const normalized = (value: string): string => value.trim().toLocaleLowerCase();
+
+const optionParentFqn = (option: EntityOption): string => {
+  const separatorIndex = option.searchLabel.lastIndexOf(":");
+  return separatorIndex < 0 ? "" : option.searchLabel.slice(0, separatorIndex);
+};
+
+const deriveGroups = (
+  options: readonly EntityOption[],
+): readonly HierarchyGroup[] => {
+  const descendantCounts = new Map<string, number>();
+  for (const option of options) {
+    for (
+      let separatorIndex = option.searchLabel.indexOf(":");
+      separatorIndex >= 0;
+      separatorIndex = option.searchLabel.indexOf(":", separatorIndex + 1)
+    ) {
+      const fqn = option.searchLabel.slice(0, separatorIndex);
+      descendantCounts.set(fqn, (descendantCounts.get(fqn) ?? 0) + 1);
+    }
+  }
+
+  return [...descendantCounts].map(([fqn, childCount]) => {
+    const separatorIndex = fqn.lastIndexOf(":");
+    return {
+      childCount,
+      fqn,
+      parentFqn: separatorIndex < 0 ? "" : fqn.slice(0, separatorIndex),
+      segment: separatorIndex < 0 ? fqn : fqn.slice(separatorIndex + 1),
+    };
+  });
+};
+
+const deriveQueryModel = (
+  query: string,
+  groupFqns: ReadonlySet<string>,
+): QueryModel => {
+  let committedPrefix = "";
+  for (
+    let separatorIndex = query.indexOf(":");
+    separatorIndex >= 0;
+    separatorIndex = query.indexOf(":", separatorIndex + 1)
+  ) {
+    const candidate = query.slice(0, separatorIndex);
+    if (!groupFqns.has(candidate)) {
+      break;
+    }
+    committedPrefix = candidate;
+  }
+
+  const filter = committedPrefix
+    ? query.slice(committedPrefix.length + 1)
+    : query;
+  return {
+    committedPrefix,
+    filter,
+    levelMode: committedPrefix.length > 0 && !filter.includes(":"),
+  };
+};
+
+const prefixRank = (value: string, query: string): number =>
+  normalized(value).startsWith(normalized(query)) ? 0 : 1;
+
+const compareLevelRows = (
+  left: PickerLeafRow | PickerGroupRow,
+  right: PickerLeafRow | PickerGroupRow,
+  filter: string,
+): number => {
+  const leftName =
+    left.kind === "leaf" ? left.option.label : left.group.segment;
+  const rightName =
+    right.kind === "leaf" ? right.option.label : right.group.segment;
+  return (
+    prefixRank(leftName, filter) - prefixRank(rightName, filter) ||
+    leftName.localeCompare(rightName)
+  );
+};
+
+const fqnIsValid = (fqn: string): boolean =>
+  fqn.length > 0 &&
+  fqn.trim() === fqn &&
+  !fqn.startsWith(":") &&
+  !fqn.endsWith(":") &&
+  !fqn.includes("::") &&
+  fqn
+    .split(":")
+    .every((segment) => segment.length > 0 && segment.trim() === segment);
+
+const pathsConflict = (candidate: string, existing: string): boolean =>
+  candidate === existing ||
+  candidate.startsWith(`${existing}:`) ||
+  existing.startsWith(`${candidate}:`);
+
+const mergeOptions = (
+  options: readonly EntityOption[],
+  additions: readonly EntityOption[],
+): readonly EntityOption[] => {
+  const byId = new Map(options.map((option) => [option.id, option]));
+  for (const addition of additions) {
+    byId.set(addition.id, addition);
+  }
+  return [...byId.values()];
+};
+
+const rowId = (id: string, row: PickerRow): string => {
+  if (row.kind === "leaf") {
+    return `${id}-option-${row.option.id}`;
+  }
+  if (row.kind === "create") {
+    return `${id}-option-create`;
+  }
+  return `${id}-option-group-${encodeURIComponent(row.group.fqn)}`;
+};
+
+const rowsForQuery = (
+  options: readonly EntityOption[],
+  groups: readonly HierarchyGroup[],
+  model: QueryModel,
+): readonly (PickerLeafRow | PickerGroupRow)[] => {
+  const filter = normalized(model.filter);
+  if (model.levelMode) {
+    const groupRows: PickerGroupRow[] = groups
+      .filter(
+        (group) =>
+          group.parentFqn === model.committedPrefix &&
+          normalized(group.segment).includes(filter),
+      )
+      .map((group) => ({ group, kind: "group" }));
+    const leafRows: PickerLeafRow[] = options
+      .filter(
+        (option) =>
+          optionParentFqn(option) === model.committedPrefix &&
+          normalized(option.label).includes(filter),
+      )
+      .map((option) => ({ kind: "leaf", option }));
+    return [...groupRows, ...leafRows].sort((left, right) =>
+      compareLevelRows(left, right, model.filter),
+    );
+  }
+
+  const query = normalized(model.filter);
+  const scopePrefix = model.committedPrefix ? `${model.committedPrefix}:` : "";
+  const leafRows: PickerLeafRow[] = options
+    .filter(
+      (option) =>
+        option.searchLabel.startsWith(scopePrefix) &&
+        normalized(option.searchLabel).includes(query),
+    )
+    .sort((left, right) => left.searchLabel.localeCompare(right.searchLabel))
+    .map((option) => ({ kind: "leaf", option }));
+  const groupRows: PickerGroupRow[] = groups
+    .filter(
+      (group) =>
+        group.fqn.startsWith(scopePrefix) &&
+        normalized(group.fqn).includes(query),
+    )
+    .sort((left, right) => left.fqn.localeCompare(right.fqn))
+    .map((group) => ({ group, kind: "group" }));
+  return [...leafRows, ...groupRows].slice(0, searchLimit);
+};
+
+const retainedPrefixAfterPick = (
+  option: EntityOption,
+  clearOnSelect: boolean,
+  committedPrefix: string,
+): string => {
+  if (!clearOnSelect) {
+    return option.searchLabel;
+  }
+  return committedPrefix ? `${committedPrefix}:` : "";
+};
 
 export const EntityPicker = ({
   autoFocus = false,
+  createConflictOptions = [],
   clearOnSelect = false,
+  createOption,
   disabled = false,
   exactMatchOptions = [],
+  excludedOptionIds = [],
   id,
+  hierarchical = true,
   inlineOptions = false,
   label,
   labelClassName,
@@ -46,35 +258,203 @@ export const EntityPicker = ({
   placeholder = "Search",
   value,
 }: EntityPickerProps) => {
-  const selected = options.find((option) => option.id === value);
+  const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
+    [],
+  );
+  const effectiveOptions = useMemo(
+    () =>
+      mergeOptions(options, createdOptions).filter(
+        (option) => !excludedOptionIds.includes(option.id),
+      ),
+    [createdOptions, excludedOptionIds, options],
+  );
+  const selected = effectiveOptions.find((option) => option.id === value);
   const [query, setQuery] = useState(selected?.searchLabel ?? "");
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const filteredOptions = useMemo(
-    () => options.filter((option) => matchesQuery(option, query)).slice(0, 8),
-    [options, query],
+  const [announcement, setAnnouncement] = useState("");
+  const [createError, setCreateError] = useState<string>();
+  const [creating, setCreating] = useState(false);
+  const [typedThisSession, setTypedThisSession] = useState(false);
+  const typedThisSessionRef = useRef(false);
+  const interactionVersionRef = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const onChangeRef = useRef(onChange);
+  const blurTimeoutRef = useRef<number | undefined>(undefined);
+  const suppressNextFocusOpenRef = useRef(false);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(blurTimeoutRef.current);
+    },
+    [],
+  );
+
+  const groups = useMemo(
+    () => (hierarchical ? deriveGroups(effectiveOptions) : []),
+    [effectiveOptions, hierarchical],
+  );
+  const groupFqns = useMemo(
+    () => new Set(groups.map((group) => group.fqn)),
+    [groups],
+  );
+  const model = useMemo(
+    () => deriveQueryModel(query, groupFqns),
+    [groupFqns, query],
+  );
+  const retainedPrefixRef = useRef(model.committedPrefix);
+  const optionRows = useMemo(
+    () => rowsForQuery(effectiveOptions, groups, model),
+    [effectiveOptions, groups, model],
+  );
+  const createAllowed =
+    Boolean(createOption) &&
+    fqnIsValid(query) &&
+    ![...effectiveOptions, ...exactMatchOptions, ...createConflictOptions].some(
+      (option) => pathsConflict(query, option.searchLabel),
+    );
+  const rows = useMemo<readonly PickerRow[]>(
+    () =>
+      createAllowed
+        ? [...optionRows, { fqn: query, kind: "create" }]
+        : optionRows,
+    [createAllowed, optionRows, query],
   );
   const clampedActiveIndex =
-    filteredOptions.length === 0
-      ? 0
-      : Math.min(activeIndex, filteredOptions.length - 1);
-  const activeOption = filteredOptions[clampedActiveIndex];
+    rows.length === 0 ? 0 : Math.min(activeIndex, rows.length - 1);
+  const activeRow = rows[clampedActiveIndex];
   const activeOptionId =
-    open && !disabled && activeOption
-      ? `${id}-option-${activeOption.id}`
-      : undefined;
+    open && !disabled && activeRow ? rowId(id, activeRow) : undefined;
+  const contextText = model.committedPrefix
+    ? `Browsing under ${model.committedPrefix}`
+    : "Searching full paths";
 
-  const updateOpen = (nextOpen: boolean) => {
+  const updateOpen = (nextOpen: boolean, typedSession = false) => {
+    if (nextOpen && !open) {
+      typedThisSessionRef.current = typedSession;
+      setTypedThisSession(typedSession);
+    }
+    if (!nextOpen) {
+      typedThisSessionRef.current = false;
+      setTypedThisSession(false);
+    }
     setOpen(nextOpen);
     onOpenChange?.(nextOpen);
   };
 
   const selectOption = (option: EntityOption) => {
-    onChange(option.id);
-    setQuery(clearOnSelect ? "" : option.searchLabel);
+    interactionVersionRef.current += 1;
+    onChangeRef.current(option.id);
+    setQuery(
+      retainedPrefixAfterPick(option, clearOnSelect, retainedPrefixRef.current),
+    );
     setActiveIndex(0);
+    setCreateError(undefined);
     updateOpen(false);
   };
+
+  const drillInto = (group: HierarchyGroup) => {
+    interactionVersionRef.current += 1;
+    retainedPrefixRef.current = group.fqn;
+    const nextQuery = `${group.fqn}:`;
+    setQuery(nextQuery);
+    setActiveIndex(0);
+    setCreateError(undefined);
+    onChange(undefined);
+    setAnnouncement(`${group.fqn}: ${group.childCount} children`);
+    updateOpen(true, typedThisSessionRef.current);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.setSelectionRange(nextQuery.length, nextQuery.length);
+    });
+  };
+
+  const backTo = (prefix: string) => {
+    interactionVersionRef.current += 1;
+    retainedPrefixRef.current = prefix;
+    const nextQuery = prefix ? `${prefix}:` : "";
+    setQuery(nextQuery);
+    setActiveIndex(0);
+    setCreateError(undefined);
+    onChange(undefined);
+    setAnnouncement(prefix ? `Back to ${prefix}` : "Back to root");
+    updateOpen(true, typedThisSessionRef.current);
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(nextQuery.length, nextQuery.length);
+    });
+  };
+
+  const activateRow = async (row: PickerRow) => {
+    if (row.kind === "leaf") {
+      selectOption(row.option);
+      return;
+    }
+    if (row.kind === "group") {
+      drillInto(row.group);
+      return;
+    }
+    if (!createOption || creating) {
+      return;
+    }
+
+    const creationVersion = ++interactionVersionRef.current;
+    setCreating(true);
+    setCreateError(undefined);
+    try {
+      const option = await createOption(row.fqn);
+      setCreatedOptions((current) => mergeOptions(current, [option]));
+      if (interactionVersionRef.current === creationVersion) {
+        selectOption(option);
+      }
+    } catch (error) {
+      if (interactionVersionRef.current === creationVersion) {
+        setCreateError(
+          error instanceof Error
+            ? error.message
+            : "Could not create this item.",
+        );
+        setAnnouncement(`Could not create ${row.fqn}`);
+        updateOpen(true, typedThisSessionRef.current);
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const adoptActiveRow = () => {
+    if (!activeRow) {
+      return;
+    }
+    if (activeRow.kind === "group") {
+      drillInto(activeRow.group);
+      return;
+    }
+    if (activeRow.kind === "leaf") {
+      selectOption(activeRow.option);
+      return;
+    }
+    void activateRow(activeRow);
+  };
+
+  const breadcrumbSegments = model.committedPrefix.split(":").filter(Boolean);
+  const visibleBreadcrumbSegments =
+    breadcrumbSegments.length <= 4
+      ? breadcrumbSegments.map((segment, index) => ({
+          index,
+          segment,
+        }))
+      : [
+          { index: 0, segment: breadcrumbSegments[0] },
+          { index: -1, segment: "…" },
+          ...breadcrumbSegments.slice(-2).map((segment, offset) => ({
+            index: breadcrumbSegments.length - 2 + offset,
+            segment,
+          })),
+        ];
 
   return (
     <div
@@ -90,10 +470,12 @@ export const EntityPicker = ({
         {label}
       </label>
       <input
+        ref={inputRef}
         id={id}
         autoFocus={autoFocus}
         role="combobox"
         aria-controls={`${id}-options`}
+        aria-describedby={`${id}-context`}
         aria-expanded={open && !disabled}
         aria-autocomplete="list"
         aria-activedescendant={activeOptionId}
@@ -102,21 +484,40 @@ export const EntityPicker = ({
         placeholder={placeholder}
         value={query}
         onBlur={() => {
-          window.setTimeout(() => {
+          window.clearTimeout(blurTimeoutRef.current);
+          blurTimeoutRef.current = window.setTimeout(() => {
             updateOpen(false);
           }, 100);
         }}
         onChange={(event) => {
+          interactionVersionRef.current += 1;
           const nextQuery = event.target.value;
-          const exactOption = [...options, ...exactMatchOptions].find(
+          const nextModel = deriveQueryModel(nextQuery, groupFqns);
+          retainedPrefixRef.current =
+            nextModel.committedPrefix ||
+            (retainedPrefixRef.current &&
+            nextQuery.startsWith(`${retainedPrefixRef.current}:`)
+              ? retainedPrefixRef.current
+              : "");
+          typedThisSessionRef.current = true;
+          setTypedThisSession(true);
+          const exactOption = [...effectiveOptions, ...exactMatchOptions].find(
             (option) => option.searchLabel === nextQuery,
           );
           if (exactOption) {
             selectOption(exactOption);
             return;
           }
+          if (nextModel.levelMode !== model.levelMode) {
+            setAnnouncement(
+              nextModel.levelMode
+                ? `Browsing under ${nextModel.committedPrefix}`
+                : "Searching full paths",
+            );
+          }
           setQuery(nextQuery);
-          updateOpen(true);
+          setCreateError(undefined);
+          updateOpen(true, true);
           setActiveIndex(0);
           if (!selected || selected.searchLabel !== nextQuery) {
             onChange(undefined);
@@ -126,12 +527,26 @@ export const EntityPicker = ({
           if (disabled) {
             return;
           }
-          setQuery(selected?.searchLabel ?? query);
+          window.clearTimeout(blurTimeoutRef.current);
+          if (suppressNextFocusOpenRef.current) {
+            suppressNextFocusOpenRef.current = false;
+            return;
+          }
+          const nextQuery = selected?.searchLabel ?? query;
+          setQuery(nextQuery);
           updateOpen(true);
+          const focusedModel = deriveQueryModel(nextQuery, groupFqns);
+          const focusedRows = rowsForQuery(
+            effectiveOptions,
+            groups,
+            focusedModel,
+          );
           setActiveIndex(
             Math.max(
               0,
-              filteredOptions.findIndex((option) => option.id === value),
+              focusedRows.findIndex(
+                (row) => row.kind === "leaf" && row.option.id === value,
+              ),
             ),
           );
         }}
@@ -156,9 +571,7 @@ export const EntityPicker = ({
             event.preventDefault();
             updateOpen(true);
             setActiveIndex((current) =>
-              filteredOptions.length === 0
-                ? 0
-                : Math.min(current + 1, filteredOptions.length - 1),
+              rows.length === 0 ? 0 : Math.min(current + 1, rows.length - 1),
             );
             return;
           }
@@ -167,21 +580,109 @@ export const EntityPicker = ({
             event.preventDefault();
             updateOpen(true);
             setActiveIndex((current) =>
-              filteredOptions.length === 0 ? 0 : Math.max(current - 1, 0),
+              rows.length === 0 ? 0 : Math.max(current - 1, 0),
             );
             return;
           }
 
-          if (event.key === "Enter" && open && activeOption) {
+          if (event.key === "Enter" && open && activeRow) {
             event.preventDefault();
-            selectOption(activeOption);
+            void activateRow(activeRow);
+            return;
+          }
+
+          if (
+            event.key === "ArrowRight" &&
+            open &&
+            activeRow?.kind === "group" &&
+            event.currentTarget.selectionStart === query.length &&
+            event.currentTarget.selectionEnd === query.length
+          ) {
+            event.preventDefault();
+            drillInto(activeRow.group);
+            return;
+          }
+
+          if (
+            event.key === "Tab" &&
+            !event.shiftKey &&
+            open &&
+            activeRow &&
+            typedThisSessionRef.current
+          ) {
+            const adoptedValue =
+              activeRow.kind === "group"
+                ? `${activeRow.group.fqn}:`
+                : activeRow.kind === "leaf"
+                  ? activeRow.option.searchLabel
+                  : activeRow.fqn;
+            if (adoptedValue !== query) {
+              event.preventDefault();
+              adoptActiveRow();
+            }
+            return;
+          }
+
+          if (
+            event.key === "ArrowLeft" &&
+            open &&
+            model.committedPrefix &&
+            model.filter === "" &&
+            event.currentTarget.selectionStart === query.length &&
+            event.currentTarget.selectionEnd === query.length
+          ) {
+            event.preventDefault();
+            const separatorIndex = model.committedPrefix.lastIndexOf(":");
+            backTo(
+              separatorIndex < 0
+                ? ""
+                : model.committedPrefix.slice(0, separatorIndex),
+            );
+            return;
+          }
+
+          if (
+            event.key === "Backspace" &&
+            open &&
+            query.endsWith(":") &&
+            event.currentTarget.selectionStart === query.length &&
+            event.currentTarget.selectionEnd === query.length
+          ) {
+            event.preventDefault();
+            interactionVersionRef.current += 1;
+            typedThisSessionRef.current = true;
+            setTypedThisSession(true);
+            const nextQuery = query.slice(0, -1);
+            setQuery(nextQuery);
+            setActiveIndex(0);
+            setCreateError(undefined);
+            onChange(undefined);
+            const nextModel = deriveQueryModel(nextQuery, groupFqns);
+            retainedPrefixRef.current = nextModel.committedPrefix;
+            setAnnouncement(
+              nextModel.committedPrefix
+                ? `Back to ${nextModel.committedPrefix}`
+                : "Back to root",
+            );
           }
         }}
       />
+      <span id={`${id}-context`} className="sr-only">
+        {contextText}
+      </span>
+      <span
+        id={`${id}-announcement`}
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+      >
+        {announcement}
+      </span>
       {open && !disabled ? (
         <div
           id={`${id}-options`}
           role="listbox"
+          data-picker-mode={model.levelMode ? "level" : "search"}
           className={cn(
             "bg-card z-30 overflow-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]",
             inlineOptions
@@ -189,44 +690,189 @@ export const EntityPicker = ({
               : "absolute top-full right-0 left-0 mt-1 max-h-56",
           )}
         >
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option, optionIndex) => (
+          {model.levelMode ? (
+            <div
+              data-picker-breadcrumb
+              data-testid={`${id}-breadcrumb`}
+              className="sticky top-0 z-10 flex min-w-0 items-center gap-1 border-b border-[var(--hairline)] bg-[var(--band)] px-2 py-1 font-mono text-xs"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  updateOpen(false);
+                  suppressNextFocusOpenRef.current = true;
+                  inputRef.current?.focus();
+                }
+              }}
+              onBlur={(event) => {
+                if (
+                  !(event.relatedTarget instanceof Node) ||
+                  !event.currentTarget.contains(event.relatedTarget)
+                ) {
+                  window.clearTimeout(blurTimeoutRef.current);
+                  blurTimeoutRef.current = window.setTimeout(() => {
+                    updateOpen(false);
+                  }, 100);
+                }
+              }}
+            >
+              <Tooltip asChild label="Browse from root">
+                <button
+                  type="button"
+                  tabIndex={typedThisSession ? 0 : -1}
+                  aria-label="Browse from root"
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                  }}
+                  onFocus={() => {
+                    window.clearTimeout(blurTimeoutRef.current);
+                  }}
+                  onClick={() => {
+                    backTo("");
+                  }}
+                >
+                  <Home aria-hidden="true" className="size-4" />
+                </button>
+              </Tooltip>
+              {visibleBreadcrumbSegments.map(({ index, segment }) => (
+                <span
+                  key={`${index}:${segment}`}
+                  className="flex min-w-0 items-center gap-1"
+                >
+                  <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+                  {index < 0 ? (
+                    <Tooltip focusable={false} label={model.committedPrefix}>
+                      <span className="text-muted-foreground">…</span>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip
+                      asChild
+                      label={breadcrumbSegments.slice(0, index + 1).join(":")}
+                    >
+                      <button
+                        type="button"
+                        tabIndex={typedThisSession ? 0 : -1}
+                        aria-label={`Browse ${breadcrumbSegments
+                          .slice(0, index + 1)
+                          .join(":")}`}
+                        className={cn(
+                          "max-w-24 truncate",
+                          index === breadcrumbSegments.length - 1
+                            ? "text-foreground font-semibold"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                        }}
+                        onFocus={() => {
+                          window.clearTimeout(blurTimeoutRef.current);
+                        }}
+                        onClick={() => {
+                          backTo(
+                            breadcrumbSegments.slice(0, index + 1).join(":"),
+                          );
+                        }}
+                      >
+                        {segment}
+                      </button>
+                    </Tooltip>
+                  )}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {rows.length > 0 ? (
+            rows.map((row, rowIndex) => (
               <button
-                key={option.id}
-                id={`${id}-option-${option.id}`}
+                key={rowId(id, row)}
+                id={rowId(id, row)}
                 type="button"
                 role="option"
                 tabIndex={-1}
-                aria-selected={option.id === value}
+                aria-label={
+                  row.kind === "group"
+                    ? `${row.group.fqn}, group, ${row.group.childCount} children`
+                    : row.kind === "create"
+                      ? `Create ${row.fqn}`
+                      : undefined
+                }
+                aria-selected={
+                  row.kind === "leaf" ? row.option.id === value : false
+                }
+                disabled={row.kind === "create" && creating}
                 className={cn(
-                  "hover:bg-muted flex w-full flex-col items-start px-2 py-2 text-left text-sm",
-                  optionIndex === clampedActiveIndex &&
+                  "hover:bg-muted flex w-full items-center px-2 py-2 text-left text-sm",
+                  row.kind === "create" && "bg-card sticky bottom-0",
+                  rowIndex === clampedActiveIndex &&
                     "bg-[var(--color-interactive-bright)]",
-                  option.id === value && "bg-[var(--color-interactive-bright)]",
+                  row.kind === "leaf" &&
+                    row.option.id === value &&
+                    "bg-[var(--color-interactive-bright)]",
                 )}
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  selectOption(option);
+                  void activateRow(row);
                 }}
               >
-                <span className="flex items-center gap-1 font-medium">
-                  {option.hidden ? (
-                    <EyeOff aria-label="Hidden" className="size-3" />
-                  ) : null}
-                  {option.label}
-                </span>
-                {option.detail ? (
-                  <span className="text-muted-foreground font-mono text-xs">
-                    {option.detail}
+                {row.kind === "leaf" ? (
+                  <span className="flex min-w-0 flex-col items-start">
+                    <span className="flex items-center gap-1 font-medium">
+                      {row.option.hidden ? (
+                        <EyeOff aria-label="Hidden" className="size-3" />
+                      ) : null}
+                      {row.option.label}
+                    </span>
+                    {row.option.detail ? (
+                      <span className="text-muted-foreground font-mono text-xs">
+                        {row.option.detail}
+                      </span>
+                    ) : null}
                   </span>
-                ) : null}
+                ) : row.kind === "group" ? (
+                  <>
+                    <Tooltip
+                      className="min-w-0 flex-1 font-mono font-medium"
+                      focusable={false}
+                      label={row.group.fqn}
+                    >
+                      <span className="block truncate">
+                        {row.group.segment}
+                      </span>
+                    </Tooltip>
+                    <span className="text-muted-foreground ml-2 font-mono text-xs">
+                      {row.group.childCount}
+                    </span>
+                    <ChevronRight
+                      aria-hidden="true"
+                      className="text-muted-foreground ml-1 size-4 shrink-0"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Plus
+                      aria-hidden="true"
+                      className="mr-1 size-4 shrink-0 text-[var(--color-class-adjustment-ink)]"
+                    />
+                    <span className="min-w-0 truncate font-medium">
+                      {creating ? "Creating" : "Create"} “{row.fqn}”
+                    </span>
+                  </>
+                )}
               </button>
             ))
           ) : (
             <div className="text-muted-foreground px-2 py-2 text-sm">
-              No matches
+              {model.committedPrefix
+                ? `No matches under ${model.committedPrefix}:`
+                : "No matches"}
             </div>
           )}
+          {createError ? (
+            <div className="text-destructive px-2 py-2 text-xs" role="alert">
+              {createError}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -235,8 +881,11 @@ export const EntityPicker = ({
 
 interface EntityMultiPickerProps {
   readonly autoFocus?: boolean;
+  readonly createConflictOptions?: readonly EntityOption[];
+  readonly createOption?: CreateEntityOption;
   readonly disabled?: boolean;
   readonly id: string;
+  readonly hierarchical?: boolean;
   readonly inlineOptions?: boolean;
   readonly label: string;
   readonly labelClassName?: string;
@@ -249,8 +898,11 @@ interface EntityMultiPickerProps {
 
 export const EntityMultiPicker = ({
   autoFocus = false,
+  createConflictOptions = [],
+  createOption,
   disabled = false,
   id,
+  hierarchical = true,
   inlineOptions = false,
   label,
   labelClassName,
@@ -260,8 +912,21 @@ export const EntityMultiPicker = ({
   placeholder = "Search",
   value,
 }: EntityMultiPickerProps) => {
-  const selectedOptions = options.filter((option) => value.includes(option.id));
-  const availableOptions = options.filter(
+  const [createdOptions, setCreatedOptions] = useState<readonly EntityOption[]>(
+    [],
+  );
+  const effectiveOptions = useMemo(
+    () => mergeOptions(options, createdOptions),
+    [createdOptions, options],
+  );
+  const selectedOptions = effectiveOptions.filter((option) =>
+    value.includes(option.id),
+  );
+  const valueRef = useRef(value);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
+  const availableOptions = effectiveOptions.filter(
     (option) => !value.includes(option.id),
   );
 
@@ -272,7 +937,22 @@ export const EntityMultiPicker = ({
       <EntityPicker
         autoFocus={autoFocus}
         clearOnSelect
+        createConflictOptions={mergeOptions(
+          createConflictOptions,
+          createdOptions,
+        )}
+        createOption={
+          createOption
+            ? async (fqn) => {
+                const option = await createOption(fqn);
+                setCreatedOptions((current) => mergeOptions(current, [option]));
+                return option;
+              }
+            : undefined
+        }
         disabled={disabled}
+        excludedOptionIds={value}
+        hierarchical={hierarchical}
         id={id}
         inlineOptions={inlineOptions}
         label={label}
@@ -283,7 +963,9 @@ export const EntityMultiPicker = ({
         value={undefined}
         onChange={(nextId) => {
           if (nextId) {
-            onChange([...value, nextId]);
+            const nextValue = [...valueRef.current, nextId];
+            valueRef.current = nextValue;
+            onChange(nextValue);
           }
         }}
       />
@@ -311,7 +993,11 @@ export const EntityMultiPicker = ({
                 aria-label={`Remove ${option.label}`}
                 disabled={disabled}
                 onClick={() => {
-                  onChange(value.filter((idValue) => idValue !== option.id));
+                  const nextValue = valueRef.current.filter(
+                    (idValue) => idValue !== option.id,
+                  );
+                  valueRef.current = nextValue;
+                  onChange(nextValue);
                 }}
               >
                 <Close aria-hidden="true" />

@@ -240,6 +240,10 @@ test("tags row actions hide groups and move renamed paths into transaction filte
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
   const tagPicker = page.getByRole("combobox", { name: "Tags" });
   await fillAndExpectValue(tagPicker, moveSource);
+  await expect(
+    page.getByRole("option", { name: /Old, group, 2 children/ }),
+  ).toBeVisible();
+  await tagPicker.press("Enter");
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
     `${moveSource}:Alpha`,
   );
@@ -332,6 +336,10 @@ test("tags row actions hide groups and move renamed paths into transaction filte
   await page.getByRole("button", { exact: true, name: "Tag" }).click();
   const refreshedTagPicker = page.getByRole("combobox", { name: "Tags" });
   await fillAndExpectValue(refreshedTagPicker, moveDestination);
+  await expect(
+    page.getByRole("option", { name: /New, group, 2 children/ }),
+  ).toBeVisible();
+  await refreshedTagPicker.press("Enter");
   await expect(page.locator("#transactions-filter-tag-options")).toContainText(
     `${moveDestination}:Alpha`,
   );

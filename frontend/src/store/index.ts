@@ -146,6 +146,7 @@ export type {
   TransactionsPageParams,
 } from "./transactions";
 export {
+  addCategoryPickerCategory,
   categoryPickerIntentKey,
   clearLedgerLookupsLoading,
   clearTransactionPageLoading,
