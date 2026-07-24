@@ -55,30 +55,30 @@ Per-task checklist — every task below runs the full per-task workflow; tick a 
 
 Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect the stated dependencies; otherwise run in the listed order.
 
-- [ ] Task 1: `wkpr` — Enforce single explicit-commit transaction inline editing (bug; foundational inline-editing interaction model — single active editor, explicit save/cancel — that Tasks 2–5 build on) — branch `wkpr-single-inline-edit`
-- [ ] Task 2: `46vf` — Keep the transaction table responsive after inline saves (bug; builds directly on the explicit-commit save flow established in Task 1) — branch `46vf-inline-save-responsive`
-- [ ] Task 3: `329k` — Remove Include hidden controls from inline transaction editors (bug; editor-content cleanup on the inline editors stabilized in Tasks 1–2) — branch `329k-remove-include-hidden`
-- [ ] Task 4: `yvk7` — Prevent assigned tag chips from overlapping the tag editor menu (bug; tag-editor popup layout fix, ordered after the inline-editing model settles) — branch `yvk7-tag-editor-overlap`
-- [ ] Task 5: `hf98` — Gate transaction selection behind an explicit bulk-edit mode (feature; structural table change removing the always-on checkbox column and layering bulk mode over the Task 1 editing model; first of the space-reclamation set) — branch `hf98-bulk-edit-mode`
-- [ ] Task 6: `zb9f` — Remove transaction expansion chevrons (feature; reclaims the disclosure column; independent of Task 5 but grouped in the same layout wave) — branch `zb9f-remove-chevrons`
-- [ ] Task 7: `trxj` — Collapse transaction row actions before they overlap amounts (bug; actions-cell collapse behavior tuned after the structural column removals in Tasks 5–6) — branch `trxj-collapse-row-actions`
-- [ ] Task 8: `8tkz` — Keep recurring indicators inside the transaction description column (bug; description-cell layout after the surrounding column reclamations) — branch `8tkz-recurring-indicators`
-- [ ] Task 9: `zd6c` — Restore right-aligned transaction amount chips (bug; amount alignment verified against the final row layout produced by Tasks 5–8) — branch `zd6c-amount-right-align`
-- [ ] Task 10: `9nkm` — Render Hide expected as an icon chip in transaction toolbars (feature; toolbar polish, independent of row layout, closes out the transaction-table wave) — branch `9nkm-hide-expected-chip`
-- [ ] Task 11: `0288` — Replace the transaction edit sidebar with a spacious modal editor (feature; establishes the canonical editor surface that Task 12 routes to) — branch `0288-modal-editor`
-- [ ] Task 12: `bn6q` — Disable inline editing in the transaction side detail panel (feature; requires Task 11 — the panel's Edit action opens the canonical modal editor) — branch `bn6q-side-panel-readonly`
-- [ ] Task 13: `m3ea` — Redesign transaction detail records through judged prototypes (feature; detail-record redesign lands before detail-view link work to avoid rework) — branch `m3ea-detail-records-redesign`
-- [ ] Task 14: `qqdg` — Link accounts in transaction detail views to account pages (feature; lands account links on the redesigned detail records from Task 13) — branch `qqdg-detail-account-links`
-- [ ] Task 15: `vmp6` — Add segment-by-segment completion for hierarchical entity inputs (feature; shared FQN-input behavior integrated after the editor surfaces from Tasks 11–12 settle so completion lands once across final editors and pickers) — branch `vmp6-segment-completion`
-- [ ] Task 16: `1tjt` — Restore the compact Members table layout (bug; reference-table fix independent of the transaction work) — branch `1tjt-members-compact`
-- [ ] Task 17: `f6xc` — Definitively fix clipped filled favorite stars (bug; root-cause fix in the shared icon/button primitive plus a regression check, run last so verification covers every table in its final state) — branch `f6xc-favorite-star-clip`
+- [x] Task 1: `wkpr` — Enforce single explicit-commit transaction inline editing (bug; foundational inline-editing interaction model — single active editor, explicit save/cancel — that Tasks 2–5 build on) — branch `wkpr-single-inline-edit`
+- [x] Task 2: `46vf` — Keep the transaction table responsive after inline saves (bug; builds directly on the explicit-commit save flow established in Task 1) — branch `46vf-inline-save-responsive`
+- [x] Task 3: `329k` — Remove Include hidden controls from inline transaction editors (bug; editor-content cleanup on the inline editors stabilized in Tasks 1–2) — branch `329k-remove-include-hidden`
+- [x] Task 4: `yvk7` — Prevent assigned tag chips from overlapping the tag editor menu (bug; tag-editor popup layout fix, ordered after the inline-editing model settles) — branch `yvk7-tag-editor-overlap`
+- [x] Task 5: `hf98` — Gate transaction selection behind an explicit bulk-edit mode (feature; structural table change removing the always-on checkbox column and layering bulk mode over the Task 1 editing model; first of the space-reclamation set) — branch `hf98-bulk-edit-mode`
+- [x] Task 6: `zb9f` — Remove transaction expansion chevrons (feature; reclaims the disclosure column; independent of Task 5 but grouped in the same layout wave) — branch `zb9f-remove-chevrons`
+- [x] Task 7: `trxj` — Collapse transaction row actions before they overlap amounts (bug; actions-cell collapse behavior tuned after the structural column removals in Tasks 5–6) — branch `trxj-collapse-row-actions`
+- [x] Task 8: `8tkz` — Keep recurring indicators inside the transaction description column (bug; description-cell layout after the surrounding column reclamations) — branch `8tkz-recurring-indicators`
+- [x] Task 9: `zd6c` — Restore right-aligned transaction amount chips (bug; amount alignment verified against the final row layout produced by Tasks 5–8) — branch `zd6c-amount-right-align`
+- [x] Task 10: `9nkm` — Render Hide expected as an icon chip in transaction toolbars (feature; toolbar polish, independent of row layout, closes out the transaction-table wave) — branch `9nkm-hide-expected-chip`
+- [x] Task 11: `0288` — Replace the transaction edit sidebar with a spacious modal editor (feature; establishes the canonical editor surface that Task 12 routes to) — branch `0288-modal-editor`
+- [x] Task 12: `bn6q` — Disable inline editing in the transaction side detail panel (feature; requires Task 11 — the panel's Edit action opens the canonical modal editor) — branch `bn6q-side-panel-readonly`
+- [x] Task 13: `m3ea` — Redesign transaction detail records through judged prototypes (feature; detail-record redesign lands before detail-view link work to avoid rework) — branch `m3ea-detail-records-redesign`
+- [x] Task 14: `qqdg` — Link accounts in transaction detail views to account pages (feature; lands account links on the redesigned detail records from Task 13) — branch `qqdg-detail-account-links`
+- [x] Task 15: `vmp6` — Add segment-by-segment completion for hierarchical entity inputs (feature; shared FQN-input behavior integrated after the editor surfaces from Tasks 11–12 settle so completion lands once across final editors and pickers) — branch `vmp6-segment-completion`
+- [x] Task 16: `1tjt` — Restore the compact Members table layout (bug; reference-table fix independent of the transaction work) — branch `1tjt-members-compact`
+- [x] Task 17: `f6xc` — Definitively fix clipped filled favorite stars (bug; root-cause fix in the shared icon/button primitive plus a regression check, run last so verification covers every table in its final state) — branch `f6xc-favorite-star-clip`
 
 ## Final Verification
 
-- [ ] On the main working branch with all merged branches: `just test` passes
-- [ ] `just test-integration` passes
-- [ ] `just pre-commit` passes
-- [ ] `just test-frontend-e2e` passes
-- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run exactly one and fold unresolved comments into a final fix plan (no further review-loop)
-- [ ] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, Kata refs closed, residual findings and unmerged branches (per-task evidence recorded on each closed Kata issue)
-- [ ] Move this plan to `docs/plans/completed/`
+- [x] On the main working branch with all merged branches: `just test` passes
+- [x] `just test-integration` passes
+- [x] `just pre-commit` passes
+- [x] `just test-frontend-e2e` passes
+- [x] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run exactly one and fold unresolved comments into a final fix plan (no further review-loop)
+- [x] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, Kata refs closed, residual findings and unmerged branches (per-task evidence recorded on each closed Kata issue)
+- [x] Move this plan to `docs/plans/completed/`
