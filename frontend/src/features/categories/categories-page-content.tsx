@@ -1,5 +1,5 @@
 import { Eye, EyeOff, MagicEdit, Trash } from "pixelarticons/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import type { Category, GroupState } from "@/api";
@@ -10,6 +10,7 @@ import {
   updateLedgerCategory,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { FavoriteStarIcon } from "@/components/favorite-star-icon";
 import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import type { RowAction } from "@/components/row-actions";
 import { focusWithoutTooltip } from "@/components/tooltip";
@@ -72,6 +73,10 @@ export const CategoriesPageContent = ({
     string | undefined
   >();
   const [deleting, setDeleting] = useState(false);
+  const [pendingFeaturedIds, setPendingFeaturedIds] = useState<
+    ReadonlySet<number>
+  >(new Set());
+  const pendingFeaturedIdsRef = useRef(new Set<number>());
 
   const showQuickToggleError = (error: unknown, fallback: string) => {
     onNotice(apiErrorMessage(error, fallback), "error");
@@ -138,6 +143,37 @@ export const CategoriesPageContent = ({
     onNotice(result.data.is_hidden ? "Category hidden." : "Category unhidden.");
   };
 
+  const toggleCategoryFeatured = async (category: Category) => {
+    const categoryId = category.category_id;
+    if (pendingFeaturedIdsRef.current.has(categoryId)) {
+      return;
+    }
+    pendingFeaturedIdsRef.current.add(categoryId);
+    setPendingFeaturedIds(new Set(pendingFeaturedIdsRef.current));
+    try {
+      const result = await updateLedgerCategory(categoryId, {
+        is_featured: !category.is_featured,
+      });
+      if (!result.data) {
+        showQuickToggleError(
+          result.error,
+          "Category featured state was not saved.",
+        );
+        return;
+      }
+      const refreshed = await refreshCategoriesAfterMutation();
+      if (!refreshed) {
+        return;
+      }
+      onNotice(
+        result.data.is_featured ? "Category featured." : "Category unfeatured.",
+      );
+    } finally {
+      pendingFeaturedIdsRef.current.delete(categoryId);
+      setPendingFeaturedIds(new Set(pendingFeaturedIdsRef.current));
+    }
+  };
+
   const toggleGroupHidden = async (group: GroupState) => {
     const result = await setLedgerCategoryHiddenByPath({
       is_hidden: !group.is_hidden,
@@ -183,6 +219,20 @@ export const CategoriesPageContent = ({
           onSelect: (opener: HTMLElement) => {
             onEditCategory(row.leaf as Category, opener);
           },
+        },
+        {
+          disabled: pendingFeaturedIds.has(row.leaf.category_id),
+          disabledReason: "Category featured state is updating.",
+          icon: <FavoriteStarIcon filled={row.leaf.is_featured} />,
+          kind: "toggle",
+          label: row.leaf.is_featured
+            ? "Unfeature category"
+            : "Feature category",
+          onToggle: () => {
+            void toggleCategoryFeatured(row.leaf as Category);
+          },
+          pressed: row.leaf.is_featured,
+          slot: "featured",
         },
         {
           icon: row.leaf.is_hidden ? (

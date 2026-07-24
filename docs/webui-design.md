@@ -260,7 +260,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 ### 4. Account and group pages — Phase 2
 
 - Purpose: one account's (or account group's) activity and standing; the drill-down target from Overview, the balance strip, and Accounts.
-- Account page header: FQN path, account type badge, currency, current balance and posted-only balance, credit limit with history (when present), external link metadata, hidden marker.
+- Account page header: FQN path, account type badge, currency, labeled flat favorite toggle, current balance and posted-only balance, credit limit with history (when present), external link metadata, hidden marker.
 - The currency appears in the header exactly once as a compact chip next to the type badge (sized like it); balance figures carry the currency only as the amount's own marker — labels stay plain ("Current", "Posted", "Credit limit") — and the balances block right-aligns with the content edge on wide screens, mirroring the account name's left margin.
 - Register: the shared browser in records shape — the account's records with date, transaction counterparty, category, memo, statuses, signed amount. Selecting a record opens the side peek panel showing the full containing transaction; arrow keys walk rows while the panel follows; "Open transaction" jumps to full detail/edit.
 - Running balance: a per-record running balance column, shown only in the default chronological view and hidden whenever filters, search, or non-chronological sort would make it misleading.
@@ -281,6 +281,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - One shared pattern: searchable tree list (flat list for Members) + side-panel editor; include-hidden toggle where applicable; tombstone delete with confirmation; rename/move with subtree rewrite (same restructuring capability as accounts).
 - Members and Tags render as compact left-aligned lists with a bounded maximum width instead of stretching a near-single-column table across the viewport; the trailing actions column stays narrow. Categories keeps the wider two-column layout (name + intent badge).
 - Row actions follow the accounts affordance philosophy: rows that can be deleted carry a delete quick action in the trailing actions column (always visible per the row-actions rule), disabled with an explanatory tooltip when the listing reports the entity as not deletable; activation opens the standard confirm dialog naming the entity and calls the existing delete endpoint, with API errors surfaced as the fallback. Group-only rows carry no delete while no group delete operation exists. The side-panel editor keeps its delete.
+- Category and Tag leaf rows expose featured and hidden flat toggles in the shared fixed trailing slots.
 - Every dictionary entity is a drill-down target with its own page embedding the shared browser pre-filtered to it, with the same peek panel:
   - Category and tag pages roll up descendants by default (`Food` includes `Food:Restaurants`), with a "this level only" toggle; hidden descendants stay excluded from the rollup, consistent with hidden entities being excluded from default lists everywhere.
   - Member pages show the transactions attributed to that member through the same shared-browser embedding.

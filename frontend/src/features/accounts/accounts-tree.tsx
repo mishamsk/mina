@@ -4,7 +4,6 @@ import {
   MagicEdit,
   Plus,
   Reload,
-  Star,
   Trash,
 } from "pixelarticons/react";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -24,6 +23,7 @@ import {
   updateLedgerAccount,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { FavoriteStarIcon } from "@/components/favorite-star-icon";
 import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import { referenceTableFrameClassName } from "@/components/reference-table-frame";
 import { type RowAction, RowActions } from "@/components/row-actions";
@@ -79,9 +79,6 @@ const interactiveTargetSelector =
   "a, button, input, select, textarea, summary, [role='button'], " +
   "[contenteditable='true'], " +
   "[tabindex]:not([tabindex='-1']):not([data-slot='tooltip-trigger'])";
-
-const filledFeaturedStarPath =
-  "M11 1H13V3H15V7H23V11H21V13H19V16H17V18H16V20H21V22H16V20H14V18H10V20H8V22H3V20H8V18H7V16H5V13H3V11H1V7H9V3H11V1Z";
 
 const isInteractiveTarget = (
   target: EventTarget | null,
@@ -569,21 +566,7 @@ export const AccountsTree = ({
                         slot: "hidden",
                       },
                       {
-                        icon: account.is_featured ? (
-                          <svg
-                            aria-hidden="true"
-                            className="text-[var(--color-class-adjustment-ink)]"
-                            fill="currentColor"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            width="24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path d={filledFeaturedStarPath} />
-                          </svg>
-                        ) : (
-                          <Star aria-hidden="true" />
-                        ),
+                        icon: <FavoriteStarIcon filled={account.is_featured} />,
                         kind: "toggle" as const,
                         label: account.is_featured
                           ? "Unfeature account"

@@ -386,6 +386,28 @@ export const invalidateAccountHeader = (accountId: number): void => {
   );
 };
 
+export const mergeAccountHeaderAccount = (account: Account): void => {
+  useAccountsStore.setState(
+    (state) => {
+      const snapshot = state.accountHeaders[account.account_id];
+      if (!snapshot) {
+        return state;
+      }
+      return {
+        accountHeaders: {
+          ...state.accountHeaders,
+          [account.account_id]: {
+            ...snapshot,
+            account,
+          },
+        },
+      };
+    },
+    false,
+    "AccountsStore/mergeAccountHeaderAccount",
+  );
+};
+
 export const mergeAccountsPageAccount = (account: Account): void => {
   useAccountsStore.setState(
     (state) => {

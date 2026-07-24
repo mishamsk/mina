@@ -125,6 +125,34 @@ const expectCompactActionClusterHugsFrame = async (rowActions: Locator) => {
   ).toBeLessThanOrEqual(3);
 };
 
+const expectOverflowLabelsAligned = async (overflowMenu: Locator) => {
+  const labelOffsets = await overflowMenu
+    .getByRole("button")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const labelNode = Array.from(button.childNodes).find(
+          (node) =>
+            node.nodeType === Node.TEXT_NODE &&
+            Boolean(node.textContent?.trim()),
+        );
+        if (!labelNode) {
+          throw new Error("overflow action label is missing");
+        }
+        const labelRange = document.createRange();
+        labelRange.selectNodeContents(labelNode);
+        return (
+          labelRange.getBoundingClientRect().left -
+          button.getBoundingClientRect().left
+        );
+      }),
+    );
+
+  expect(labelOffsets.length).toBeGreaterThan(1);
+  for (const offset of labelOffsets.slice(1)) {
+    expect(Math.abs(offset - (labelOffsets[0] ?? 0))).toBeLessThanOrEqual(0.01);
+  }
+};
+
 test("reference row actions fold only when their action cell cannot fit them, including compact tags", async ({
   page,
 }, testInfo) => {
@@ -155,13 +183,14 @@ test("reference row actions fold only when their action cell cannot fit them, in
       create: createCategory,
       foldedActionLabels: [
         "Hide category",
+        "Feature category",
         "Edit category",
         "Move or rename",
         "Delete category",
       ],
       path: "/categories",
       rowTestId: "categories-tree-row",
-      toggleCount: 1,
+      toggleCount: 2,
     },
     {
       actionCount: 5,
@@ -170,13 +199,14 @@ test("reference row actions fold only when their action cell cannot fit them, in
       create: createTag,
       foldedActionLabels: [
         "Hide tag",
+        "Feature tag",
         "Edit tag",
         "Move or rename",
         "Delete tag",
       ],
       path: "/tags",
       rowTestId: "tags-tree-row",
-      toggleCount: 1,
+      toggleCount: 2,
     },
   ];
 
@@ -271,6 +301,7 @@ test("reference row actions fold only when their action cell cannot fit them, in
     await expect(firstAction).toBeVisible();
     await expect(moveAction).toBeVisible();
     await expect(overflowMenu).toBeVisible();
+    await expectOverflowLabelsAligned(overflowMenu);
     await page.keyboard.press("Escape");
     await expect(overflowMenu).toBeHidden();
     await expect(overflow).toBeFocused();

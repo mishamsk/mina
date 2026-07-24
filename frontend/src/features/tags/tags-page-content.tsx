@@ -10,6 +10,7 @@ import {
   updateLedgerTag,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { FavoriteStarIcon } from "@/components/favorite-star-icon";
 import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
 import type { RowAction } from "@/components/row-actions";
 import { focusWithoutTooltip } from "@/components/tooltip";
@@ -60,6 +61,10 @@ export const TagsPageContent = ({
     string | undefined
   >();
   const [deleting, setDeleting] = useState(false);
+  const [pendingFeaturedIds, setPendingFeaturedIds] = useState<
+    ReadonlySet<number>
+  >(new Set());
+  const pendingFeaturedIdsRef = useRef(new Set<number>());
 
   const showQuickToggleError = (error: unknown, fallback: string) => {
     onNotice(apiErrorMessage(error, fallback), "error");
@@ -108,6 +113,14 @@ export const TagsPageContent = ({
 
   const restoreToggleFocus = (opener: HTMLElement) => {
     window.requestAnimationFrame(() => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement &&
+        activeElement !== document.body &&
+        activeElement !== opener
+      ) {
+        return;
+      }
       focusWithoutTooltip(
         opener.isConnected ? opener : focusFallbackRef.current,
         {
@@ -131,6 +144,33 @@ export const TagsPageContent = ({
     }
     restoreToggleFocus(opener);
     onNotice(result.data.is_hidden ? "Tag hidden." : "Tag unhidden.");
+  };
+
+  const toggleTagFeatured = async (tag: Tag, opener: HTMLElement) => {
+    const tagId = tag.tag_id;
+    if (pendingFeaturedIdsRef.current.has(tagId)) {
+      return;
+    }
+    pendingFeaturedIdsRef.current.add(tagId);
+    setPendingFeaturedIds(new Set(pendingFeaturedIdsRef.current));
+    try {
+      const result = await updateLedgerTag(tagId, {
+        is_featured: !tag.is_featured,
+      });
+      if (!result.data) {
+        showQuickToggleError(result.error, "Tag featured state was not saved.");
+        return;
+      }
+      const refreshed = await refreshTagsAfterMutation();
+      if (!refreshed) {
+        return;
+      }
+      restoreToggleFocus(opener);
+      onNotice(result.data.is_featured ? "Tag featured." : "Tag unfeatured.");
+    } finally {
+      pendingFeaturedIdsRef.current.delete(tagId);
+      setPendingFeaturedIds(new Set(pendingFeaturedIdsRef.current));
+    }
   };
 
   const toggleGroupHidden = async (group: GroupState, opener: HTMLElement) => {
@@ -177,6 +217,18 @@ export const TagsPageContent = ({
           onSelect: (opener: HTMLElement) => {
             onEditTag(row.leaf as Tag, opener);
           },
+        },
+        {
+          disabled: pendingFeaturedIds.has(row.leaf.tag_id),
+          disabledReason: "Tag featured state is updating.",
+          icon: <FavoriteStarIcon filled={row.leaf.is_featured} />,
+          kind: "toggle",
+          label: row.leaf.is_featured ? "Unfeature tag" : "Feature tag",
+          onToggle: (opener: HTMLElement) => {
+            void toggleTagFeatured(row.leaf as Tag, opener);
+          },
+          pressed: row.leaf.is_featured,
+          slot: "featured",
         },
         {
           icon: row.leaf.is_hidden ? (

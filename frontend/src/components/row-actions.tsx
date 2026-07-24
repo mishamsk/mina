@@ -47,17 +47,21 @@ interface RowActionsProps {
 }
 
 const actionButtonClassName =
-  "row-actions-button size-7 border-[var(--border-ink)] bg-card text-foreground shadow-none " +
+  "row-actions-button size-[28px] border-[var(--border-ink)] bg-card text-foreground shadow-none " +
   "hover:bg-muted hover:shadow-[var(--shadow-chip)] " +
   "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none";
 
 const toggleButtonClassName =
-  "row-actions-toggle inline-grid size-7 place-items-center overflow-visible border-0 bg-transparent p-0 leading-none " +
+  "row-actions-toggle inline-grid size-[28px] place-items-center overflow-visible border-0 bg-transparent p-0 leading-none " +
   "text-muted-foreground shadow-none hover:text-foreground " +
   "focus-visible:outline-ring focus-visible:outline-2 focus-visible:outline-offset-2 " +
-  "aria-pressed:text-foreground [&_svg]:size-6 [&_svg]:shrink-0";
+  "aria-pressed:text-foreground";
 
-const indicatorSlotClassName = "row-actions-indicator-slot size-7 shrink-0";
+const indicatorSlotClassName =
+  "row-actions-indicator-slot size-[28px] shrink-0";
+const toggleIconClassName =
+  "row-actions-toggle-icon inline-grid size-[24px] shrink-0 place-items-center overflow-visible leading-none " +
+  "[&_svg]:block [&_svg]:size-[24px] [&_svg]:shrink-0 [&_svg]:overflow-visible";
 
 const isButtonAction = (
   action: ActionableRowAction,
@@ -72,6 +76,17 @@ const isActionable = (action: RowAction): action is ActionableRowAction =>
 
 const isActionDisabled = (action: ActionableRowAction): boolean =>
   Boolean(action.disabled);
+
+const primaryActionKey = (action: ActionableRowAction): string =>
+  action.kind === "toggle" && action.slot
+    ? `toggle:${action.slot}`
+    : action.label;
+
+const ToggleIcon = ({ icon }: { readonly icon: ReactNode }) => (
+  <span aria-hidden="true" className={toggleIconClassName}>
+    {icon}
+  </span>
+);
 
 const selectAction = (
   action: ActionableRowAction,
@@ -191,7 +206,7 @@ export const RowActions = ({
 
           return (
             <Tooltip
-              key={action.label}
+              key={primaryActionKey(action)}
               label={
                 isActionDisabled(action)
                   ? (action.disabledReason ?? action.label)
@@ -225,7 +240,7 @@ export const RowActions = ({
                   className={cn(
                     toggleButtonClassName,
                     isActionDisabled(action) &&
-                      "text-muted-foreground hover:text-muted-foreground cursor-not-allowed",
+                      "bg-muted text-muted-foreground hover:bg-muted hover:text-muted-foreground [&_svg]:!text-muted-foreground cursor-not-allowed",
                   )}
                   aria-label={action.label}
                   aria-disabled={isActionDisabled(action) ? "true" : undefined}
@@ -244,7 +259,7 @@ export const RowActions = ({
                     action.onToggle(event.currentTarget);
                   }}
                 >
-                  {action.icon}
+                  <ToggleIcon icon={action.icon} />
                 </button>
               )}
             </Tooltip>
@@ -339,7 +354,12 @@ export const RowActions = ({
                       );
                     }}
                   >
-                    {action.icon}
+                    <span
+                      aria-hidden="true"
+                      className="inline-grid size-[24px] shrink-0 place-items-center overflow-visible"
+                    >
+                      {action.icon}
+                    </span>
                     {action.label}
                   </Button>
                 );

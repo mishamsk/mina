@@ -132,6 +132,68 @@ test("tag row delete closes the matching open editor", async ({
   await expect(panel).toBeHidden();
 });
 
+test("tag favorite toggle ignores reactivation while pending", async ({
+  browserName,
+  page,
+}) => {
+  const tag = await createTag(page, {
+    fqn: `E2EFavoritePending:${browserName}${Date.now()}`,
+  });
+  let favoriteRequestCount = 0;
+  let releaseFavoriteRequest: (() => void) | undefined;
+  const favoriteRequestReleased = new Promise<void>((resolve) => {
+    releaseFavoriteRequest = resolve;
+  });
+  let markFavoriteRequestStarted: (() => void) | undefined;
+  const favoriteRequestStarted = new Promise<void>((resolve) => {
+    markFavoriteRequestStarted = resolve;
+  });
+
+  await page.route(`/api/tags/${tag.tag_id}`, async (route) => {
+    if (route.request().method() !== "PATCH") {
+      await route.continue();
+      return;
+    }
+    favoriteRequestCount += 1;
+    markFavoriteRequestStarted?.();
+    await favoriteRequestReleased;
+    await route.continue();
+  });
+
+  await page.goto(`/tags?q=${encodeURIComponent(tag.fqn)}`);
+  const row = page
+    .getByTestId("tags-tree-row")
+    .filter({ hasText: tag.fqn })
+    .first();
+  const toggle = row.getByRole("button", { name: "Feature tag" });
+  await expect(toggle).toBeVisible();
+  await toggle.evaluate((element) => {
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await favoriteRequestStarted;
+
+  await expect(toggle).toHaveAttribute("aria-disabled", "true");
+  expect(favoriteRequestCount).toBe(1);
+  const search = page.locator("#tags-search");
+  await search.focus();
+  await expect(search).toBeFocused();
+
+  const favoriteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/tags/${tag.tag_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  releaseFavoriteRequest?.();
+  expect((await favoriteResponse).ok()).toBe(true);
+  await expect(search).toBeFocused();
+  await expect(
+    row.getByRole("button", { name: "Unfeature tag" }),
+  ).not.toHaveAttribute("aria-disabled", "true");
+});
+
 test("tags page renders demo hierarchy, URL search, and hidden toggle", async ({
   browserName,
   page,

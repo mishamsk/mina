@@ -228,7 +228,7 @@ const renderedLineHeight = async (locator: Locator) => {
 };
 
 const filledFeaturedStarPath =
-  "M11 1H13V3H15V7H23V11H21V13H19V16H17V18H16V20H21V22H16V20H14V18H10V20H8V22H3V20H8V18H7V16H5V13H3V11H1V7H9V3H11V1Z";
+  "M11 1H13V3H15V7H23V11H21V13H19V16H21V22H16V20H14V18H10V20H8V22H3V16H5V13H3V11H1V7H9V3H11V1Z";
 
 const expectFeaturedStarTreatment = async (
   button: Locator,
@@ -2086,4 +2086,243 @@ test("account edit changes type and retains values after a rejected type change"
     .click();
   await blockedRow.getByRole("button", { name: "Edit account" }).click();
   await expect(blockedPanel.getByLabel("Type")).toContainText("Flow");
+});
+
+test("account header favorite toggle replaces a failure with retry success", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const account = await createAccount(page, {
+    fqn: `e2e:accounts:${unique}:HeaderFavoriteFailure`,
+  });
+  const errorMessage = "Favorite update failed.";
+  let failUpdate = true;
+
+  await page.route(`/api/accounts/${account.account_id}`, async (route) => {
+    if (route.request().method() !== "PATCH") {
+      await route.continue();
+      return;
+    }
+    if (!failUpdate) {
+      await route.continue();
+      return;
+    }
+    failUpdate = false;
+    await route.fulfill({
+      body: JSON.stringify({
+        error: {
+          code: "temporary_failure",
+          message: errorMessage,
+        },
+      }),
+      contentType: "application/json",
+      status: 503,
+    });
+  });
+
+  await page.goto(`/accounts/${account.account_id}`);
+  const toggle = page
+    .getByTestId("account-header")
+    .getByRole("button", { name: "Feature account" });
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toContainText("Feature account");
+  await toggle.click();
+
+  await expect(
+    page.getByRole("status").filter({ hasText: errorMessage }),
+  ).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+  await toggle.click();
+  const featuredToggle = page
+    .getByTestId("account-header")
+    .getByRole("button", { name: "Unfeature account" });
+  await expect(featuredToggle).toHaveAttribute("aria-pressed", "true");
+  await expect(featuredToggle).toContainText("Unfeature account");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Account featured." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: errorMessage }),
+  ).toHaveCount(0);
+});
+
+test("account header stays mounted and focused while favorite refreshes", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const account = await createAccount(page, {
+    fqn: `e2e:accounts:${unique}:HeaderFavoriteFocus`,
+  });
+  let holdRefresh = false;
+  let releaseRefresh: (() => void) | undefined;
+  const refreshReleased = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  let markRefreshStarted: (() => void) | undefined;
+  const refreshStarted = new Promise<void>((resolve) => {
+    markRefreshStarted = resolve;
+  });
+
+  await page.route("**/api/accounts?*", async (route) => {
+    if (!holdRefresh || route.request().method() !== "GET") {
+      await route.continue();
+      return;
+    }
+    markRefreshStarted?.();
+    await refreshReleased;
+    await route.continue();
+  });
+
+  await page.goto(`/accounts/${account.account_id}`);
+  const accountHeader = page.getByTestId("account-header");
+  const toggle = accountHeader.getByRole("button", {
+    name: "Feature account",
+  });
+  await expect(toggle).toBeVisible();
+  const typeBadge = accountHeader
+    .locator('[data-slot="badge"]')
+    .filter({ hasText: "Balance" });
+  await expect(typeBadge).toHaveCount(1);
+  expect(
+    await typeBadge.evaluate((element) =>
+      element.nextElementSibling?.textContent?.trim(),
+    ),
+  ).toBe("USD");
+  await toggle.focus();
+  holdRefresh = true;
+
+  const updateResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${account.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  await toggle.press("Enter");
+  expect((await updateResponse).status()).toBe(200);
+  await refreshStarted;
+
+  await expect(accountHeader).toBeVisible();
+  await expect(
+    accountHeader.getByRole("button", { name: "Unfeature account" }),
+  ).toBeFocused();
+
+  releaseRefresh?.();
+  await expect(
+    accountHeader.getByRole("button", { name: "Unfeature account" }),
+  ).toBeFocused();
+});
+
+test("account header ignores favorite reactivation while pending", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const account = await createAccount(page, {
+    fqn: `e2e:accounts:${unique}:HeaderFavoritePending`,
+  });
+  let favoriteRequestCount = 0;
+  let releaseFavoriteRequest: (() => void) | undefined;
+  const favoriteRequestReleased = new Promise<void>((resolve) => {
+    releaseFavoriteRequest = resolve;
+  });
+  let markFavoriteRequestStarted: (() => void) | undefined;
+  const favoriteRequestStarted = new Promise<void>((resolve) => {
+    markFavoriteRequestStarted = resolve;
+  });
+
+  await page.route(`/api/accounts/${account.account_id}`, async (route) => {
+    if (route.request().method() !== "PATCH") {
+      await route.continue();
+      return;
+    }
+    favoriteRequestCount += 1;
+    markFavoriteRequestStarted?.();
+    await favoriteRequestReleased;
+    await route.continue();
+  });
+
+  await page.goto(`/accounts/${account.account_id}`);
+  const accountHeader = page.getByTestId("account-header");
+  const toggle = accountHeader.getByRole("button", {
+    name: "Feature account",
+  });
+  await toggle.evaluate((element) => {
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await favoriteRequestStarted;
+  await expect(toggle).toHaveAttribute("aria-disabled", "true");
+  expect(favoriteRequestCount).toBe(1);
+
+  const favoriteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/accounts/${account.account_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  releaseFavoriteRequest?.();
+  expect((await favoriteResponse).ok()).toBe(true);
+  await expect(
+    page.getByRole("status").filter({ hasText: "Account featured." }),
+  ).toBeVisible();
+  await expect(
+    accountHeader.getByRole("button", { name: "Unfeature account" }),
+  ).not.toHaveAttribute("aria-disabled", "true");
+});
+
+test("account header ignores favorite feedback after account navigation", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [firstAccount, secondAccount] = await Promise.all([
+    createAccount(page, {
+      fqn: `e2e:accounts:${unique}:HeaderFavoriteFirst`,
+    }),
+    createAccount(page, {
+      fqn: `e2e:accounts:${unique}:HeaderFavoriteSecond`,
+    }),
+  ]);
+  let releaseFavoriteRequest: (() => void) | undefined;
+  const favoriteRequestReleased = new Promise<void>((resolve) => {
+    releaseFavoriteRequest = resolve;
+  });
+  let markFavoriteRequestStarted: (() => void) | undefined;
+  const favoriteRequestStarted = new Promise<void>((resolve) => {
+    markFavoriteRequestStarted = resolve;
+  });
+
+  await page.route(
+    `/api/accounts/${firstAccount.account_id}`,
+    async (route) => {
+      if (route.request().method() !== "PATCH") {
+        await route.continue();
+        return;
+      }
+      markFavoriteRequestStarted?.();
+      await favoriteRequestReleased;
+      await route.continue();
+    },
+  );
+
+  await page.goto(`/accounts/${firstAccount.account_id}`);
+  await page
+    .getByTestId("account-header")
+    .getByRole("button", { name: "Feature account" })
+    .click();
+  await favoriteRequestStarted;
+  await page.goto(`/accounts/${secondAccount.account_id}`);
+  await expect(
+    page.getByRole("heading", { name: "HeaderFavoriteSecond" }),
+  ).toBeVisible();
+  releaseFavoriteRequest?.();
+  await expect(
+    page.getByTestId("account-header").getByRole("button", {
+      name: "Feature account",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Account featured." }),
+  ).toHaveCount(0);
 });

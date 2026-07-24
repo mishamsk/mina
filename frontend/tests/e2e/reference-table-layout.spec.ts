@@ -65,28 +65,65 @@ const expectReferenceFrameLayout = async (
   ).toBeLessThanOrEqual(2);
 };
 
-const createAccount = async (page: Page, fqn: string): Promise<void> => {
+const createAccount = async (
+  page: Page,
+  fqn: string,
+  isFeatured = false,
+): Promise<void> => {
   const response = await page.request.post("/api/accounts", {
     data: {
       account_type: "balance",
       currency: "USD",
       fqn,
+      is_featured: isFeatured,
       is_hidden: false,
     },
   });
   expect(response.ok()).toBe(true);
 };
 
-const createCategory = async (page: Page, fqn: string): Promise<void> => {
+const createAccountWithId = async (
+  page: Page,
+  fqn: string,
+  isFeatured: boolean,
+): Promise<number> => {
+  const response = await page.request.post("/api/accounts", {
+    data: {
+      account_type: "balance",
+      currency: "USD",
+      fqn,
+      is_featured: isFeatured,
+      is_hidden: false,
+    },
+  });
+  expect(response.ok()).toBe(true);
+  return ((await response.json()) as { readonly account_id: number })
+    .account_id;
+};
+
+const createCategory = async (
+  page: Page,
+  fqn: string,
+  isFeatured = false,
+): Promise<void> => {
   const response = await page.request.post("/api/categories", {
-    data: { economic_intent: "expense", fqn, is_hidden: false },
+    data: {
+      economic_intent: "expense",
+      fqn,
+      is_featured: isFeatured,
+      is_hidden: false,
+    },
   });
   expect(response.ok()).toBe(true);
 };
 
-const createTag = async (page: Page, fqn: string): Promise<void> => {
+const createTag = async (
+  page: Page,
+  fqn: string,
+  isFeatured = false,
+): Promise<void> => {
   const response = await page.request.post("/api/tags", {
-    data: { fqn, is_hidden: false },
+    data: { fqn, is_featured: isFeatured, is_hidden: false },
   });
   expect(response.ok()).toBe(true);
 };
@@ -209,6 +246,102 @@ const expectSameHorizontalSlot = async (
   expect(firstBox).not.toBeNull();
   expect(secondBox).not.toBeNull();
   expect(firstBox?.x).toBeCloseTo(secondBox?.x ?? 0, 4);
+};
+
+const favoriteStarGeometry = (button: Locator) =>
+  button.evaluate((element) => {
+    const iconBox = element.querySelector<HTMLElement>(
+      ".row-actions-toggle-icon, [data-favorite-star-icon-box]",
+    );
+    const svg = element.querySelector<SVGSVGElement>(
+      "[data-favorite-star-icon]",
+    );
+    const path = svg?.querySelector<SVGPathElement>("path");
+    if (!iconBox || !svg || !path) {
+      throw new Error("favorite star geometry elements are missing");
+    }
+
+    const rect = (target: Element) => {
+      const bounds = target.getBoundingClientRect();
+      return {
+        bottom: bounds.bottom,
+        height: bounds.height,
+        left: bounds.left,
+        right: bounds.right,
+        top: bounds.top,
+        width: bounds.width,
+      };
+    };
+    const clippingAncestors: string[] = [];
+    let ancestor: Element | null = path;
+    while (ancestor) {
+      const styles = window.getComputedStyle(ancestor);
+      if (styles.overflowX !== "visible" || styles.overflowY !== "visible") {
+        clippingAncestors.push(ancestor.tagName.toLowerCase());
+      }
+      if (ancestor === element) {
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+
+    return {
+      button: rect(element),
+      clippingAncestors,
+      controlKind: element.classList.contains("row-actions-toggle")
+        ? "row-action"
+        : "labeled",
+      iconBox: rect(iconBox),
+      lowerPointsFilled:
+        svg.dataset.state === "filled"
+          ? [
+              path.isPointInFill(new DOMPoint(4, 18)),
+              path.isPointInFill(new DOMPoint(20, 18)),
+            ]
+          : undefined,
+      path: rect(path),
+      state: svg.dataset.state,
+      svg: rect(svg),
+      viewBox: svg.getAttribute("viewBox"),
+    };
+  });
+
+const expectFavoriteStarGeometry = async (
+  button: Locator,
+  state: "filled" | "unfilled",
+): Promise<void> => {
+  const expectCurrentGeometry = async () => {
+    const geometry = await favoriteStarGeometry(button);
+    expect(geometry.state).toBe(state);
+    expect(geometry.viewBox).toBe("0 0 24 24");
+    if (geometry.controlKind === "row-action") {
+      expect(geometry.button.width).toBeCloseTo(28, 4);
+      expect(geometry.button.height).toBeCloseTo(28, 4);
+    } else {
+      expect(geometry.button.width).toBeGreaterThan(geometry.iconBox.width);
+      expect(geometry.button.height).toBeGreaterThan(geometry.iconBox.height);
+    }
+    expect(geometry.iconBox.width).toBeCloseTo(24, 4);
+    expect(geometry.iconBox.height).toBeCloseTo(24, 4);
+    expect(geometry.svg.width).toBeCloseTo(24, 4);
+    expect(geometry.svg.height).toBeCloseTo(24, 4);
+    expect(geometry.path.left).toBeGreaterThanOrEqual(geometry.iconBox.left);
+    expect(geometry.path.top).toBeGreaterThanOrEqual(geometry.iconBox.top);
+    expect(geometry.path.right).toBeLessThanOrEqual(geometry.iconBox.right);
+    expect(geometry.path.bottom).toBeLessThanOrEqual(geometry.iconBox.bottom);
+    expect(geometry.clippingAncestors).toEqual([]);
+    if (state === "filled") {
+      expect(geometry.lowerPointsFilled).toEqual([true, true]);
+    }
+  };
+
+  await expect(button).toBeVisible();
+  await expectCurrentGeometry();
+  await button.hover();
+  await expectCurrentGeometry();
+  await button.focus();
+  await expect(button).toBeFocused();
+  await expectCurrentGeometry();
 };
 
 const compactTableGeometry = (frame: Locator) =>
@@ -420,73 +553,121 @@ test("Members and Tags share compact table sizing at wide and narrow viewports",
   ).toBeLessThanOrEqual(2);
 });
 
-test("reference-table indicator slots keep hidden eyes aligned and stars unclipped", async ({
+test("favorite stars stay inside their shared unclipped slot across table layouts and font scaling", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const accountParent = `E2ESlotsAccounts:${unique}`;
-  const accountLeaf = `${accountParent}:Leaf`;
+  const accountFilled = `${accountParent}:Filled`;
+  const accountUnfilled = `${accountParent}:Unfilled`;
   const categoryPrefix = `E2ESlotsCategories:${unique}`;
-  const categoryFirst = `${categoryPrefix}:First`;
-  const categorySecond = `${categoryPrefix}:Second`;
+  const categoryFilled = `${categoryPrefix}:Filled`;
+  const categoryUnfilled = `${categoryPrefix}:Unfilled`;
   const tagPrefix = `E2ESlotsTags:${unique}`;
-  const tagFirst = `${tagPrefix}:First`;
-  const tagSecond = `${tagPrefix}:Second`;
+  const tagFilled = `${tagPrefix}:Filled`;
+  const tagUnfilled = `${tagPrefix}:Unfilled`;
 
-  await createAccount(page, accountLeaf);
-  await createCategory(page, categoryFirst);
-  await createCategory(page, categorySecond);
-  await createTag(page, tagFirst);
-  await createTag(page, tagSecond);
-  await page.setViewportSize({ width: 1440, height: 900 });
-
-  await page.goto(`/accounts?q=${encodeURIComponent(accountParent)}`);
-  const accountLeafRow = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: accountLeaf })
-    .first();
-  const accountGroupRow = page
-    .getByTestId("accounts-tree-row")
-    .filter({ hasText: accountParent })
-    .filter({ hasNotText: "Leaf" })
-    .first();
-  const accountStar = accountLeafRow.getByRole("button", {
-    name: "Feature account",
-  });
-  await expect(accountLeafRow).toBeVisible();
-  await expect(accountGroupRow).toBeVisible();
-  const starBox = await accountStar.locator("svg").boundingBox();
-  const hiddenAccountBox = await accountLeafRow
-    .getByRole("button", { name: "Hide account" })
-    .boundingBox();
-  expect(starBox).not.toBeNull();
-  expect(hiddenAccountBox).not.toBeNull();
-  expect(starBox?.x).toBeLessThan(hiddenAccountBox?.x ?? 0);
-  expect(starBox?.height).toBeGreaterThanOrEqual(24);
-  await expectSameHorizontalSlot(
-    accountLeafRow.getByRole("button", { name: "Hide account" }),
-    accountGroupRow.getByRole("button", { name: "Hide group" }),
+  const accountFilledId = await createAccountWithId(page, accountFilled, true);
+  const accountUnfilledId = await createAccountWithId(
+    page,
+    accountUnfilled,
+    false,
   );
+  expect(accountFilledId).toBeGreaterThan(0);
+  expect(accountUnfilledId).toBeGreaterThan(0);
+  await createCategory(page, categoryFilled, true);
+  await createCategory(page, categoryUnfilled);
+  await createTag(page, tagFilled, true);
+  await createTag(page, tagUnfilled);
 
-  await page.goto(`/categories?q=${encodeURIComponent(categoryPrefix)}`);
-  const categoryRows = page.getByTestId("categories-tree-row");
-  await expectSameHorizontalSlot(
-    categoryRows
-      .filter({ hasText: categoryFirst })
-      .getByRole("button", { name: "Hide category" }),
-    categoryRows
-      .filter({ hasText: categorySecond })
-      .getByRole("button", { name: "Hide category" }),
-  );
+  for (const viewportWidth of [1440, 1200]) {
+    await page.setViewportSize({ width: viewportWidth, height: 900 });
+    for (const rootFontSize of ["16px", "20px"]) {
+      const setRootFontSize = () =>
+        page.evaluate((fontSize) => {
+          document.documentElement.style.fontSize = fontSize;
+        }, rootFontSize);
 
-  await page.goto(`/tags?q=${encodeURIComponent(tagPrefix)}`);
-  const tagRows = page.getByTestId("tags-tree-row");
-  await expectSameHorizontalSlot(
-    tagRows
-      .filter({ hasText: tagFirst })
-      .getByRole("button", { name: "Hide tag" }),
-    tagRows
-      .filter({ hasText: tagSecond })
-      .getByRole("button", { name: "Hide tag" }),
-  );
+      await page.goto(`/accounts?q=${encodeURIComponent(accountParent)}`);
+      await setRootFontSize();
+      const accountRows = page.getByTestId("accounts-tree-row");
+      const filledAccountRow = accountRows
+        .filter({ hasText: accountFilled })
+        .first();
+      const unfilledAccountRow = accountRows
+        .filter({ hasText: accountUnfilled })
+        .first();
+      const accountGroupRow = page.getByRole("button", {
+        exact: true,
+        name: `Open account group ${accountParent}`,
+      });
+      await expect(accountGroupRow).toBeVisible();
+      await expectFavoriteStarGeometry(
+        filledAccountRow.getByRole("button", {
+          name: "Unfeature account",
+        }),
+        "filled",
+      );
+      await expectFavoriteStarGeometry(
+        unfilledAccountRow.getByRole("button", {
+          name: "Feature account",
+        }),
+        "unfilled",
+      );
+      await expectSameHorizontalSlot(
+        filledAccountRow.getByRole("button", { name: "Hide account" }),
+        unfilledAccountRow.getByRole("button", { name: "Hide account" }),
+      );
+      await expectSameHorizontalSlot(
+        filledAccountRow.getByRole("button", { name: "Hide account" }),
+        accountGroupRow.getByRole("button", { name: "Hide group" }),
+      );
+
+      for (const [accountId, label, state] of [
+        [accountFilledId, "Unfeature account", "filled"],
+        [accountUnfilledId, "Feature account", "unfilled"],
+      ] as const) {
+        await page.goto(`/accounts/${accountId}`);
+        await setRootFontSize();
+        await expectFavoriteStarGeometry(
+          page.getByTestId("account-header").getByRole("button", {
+            name: label,
+          }),
+          state,
+        );
+      }
+
+      await page.goto(`/categories?q=${encodeURIComponent(categoryPrefix)}`);
+      await setRootFontSize();
+      const categoryRows = page.getByTestId("categories-tree-row");
+      await expectFavoriteStarGeometry(
+        categoryRows
+          .filter({ hasText: categoryFilled })
+          .getByRole("button", { name: "Unfeature category" }),
+        "filled",
+      );
+      await expectFavoriteStarGeometry(
+        categoryRows
+          .filter({ hasText: categoryUnfilled })
+          .getByRole("button", { name: "Feature category" }),
+        "unfilled",
+      );
+
+      await page.goto(`/tags?q=${encodeURIComponent(tagPrefix)}`);
+      await setRootFontSize();
+      const tagRows = page.getByTestId("tags-tree-row");
+      await expectFavoriteStarGeometry(
+        tagRows
+          .filter({ hasText: tagFilled })
+          .getByRole("button", { name: "Unfeature tag" }),
+        "filled",
+      );
+      await expectFavoriteStarGeometry(
+        tagRows
+          .filter({ hasText: tagUnfilled })
+          .getByRole("button", { name: "Feature tag" }),
+        "unfilled",
+      );
+    }
+  }
 });

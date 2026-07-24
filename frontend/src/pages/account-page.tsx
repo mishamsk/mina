@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 
 import {
@@ -6,15 +6,18 @@ import {
   dismissRecurringOccurrenceById,
   type JournalRecord,
   type Transaction,
+  updateLedgerAccount,
 } from "@/api";
 import { apiErrorMessage } from "@/api";
 import { PageHelp } from "@/components/page-help";
+import { Toast, toastDurationMs } from "@/components/toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AccountHeader,
   AccountPeekPanel,
   AccountRegisterTable,
   refreshAccountRegisterPage,
+  refreshAccountsAfterMutation,
   refreshAccountTransaction,
   useAccountRegisterResource,
 } from "@/features/accounts";
@@ -126,9 +129,17 @@ const AccountPageError = ({ message }: { readonly message: string }) => (
   </div>
 );
 
+interface ToggleNotice {
+  readonly message: string;
+  readonly tone: "error" | "success";
+}
+
 const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [toggleNotice, setToggleNotice] = useState<ToggleNotice | undefined>();
+  const [favoriteTogglePending, setFavoriteTogglePending] = useState(false);
+  const favoriteTogglePendingRef = useRef(false);
   const restoreRecordFocusRef = useRef<HTMLElement | null>(null);
   const page = readPage(searchParams);
   const pageSize = readPageSize(searchParams);
@@ -150,6 +161,42 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
     [resource.lookups.snapshot],
   );
   const account = resource.header.snapshot?.account;
+  const toggleAccountFeatured = async () => {
+    if (!account || favoriteTogglePendingRef.current) {
+      return;
+    }
+    favoriteTogglePendingRef.current = true;
+    setFavoriteTogglePending(true);
+    setToggleNotice(undefined);
+    try {
+      const result = await updateLedgerAccount(account.account_id, {
+        is_featured: !account.is_featured,
+      });
+      if (!result.data) {
+        setToggleNotice({
+          message: apiErrorMessage(
+            result.error,
+            "Featured state was not saved.",
+          ),
+          tone: "error",
+        });
+        return;
+      }
+      await refreshAccountsAfterMutation({
+        account: result.data,
+        preserveAccountHeader: true,
+      });
+      setToggleNotice({
+        message: result.data.is_featured
+          ? "Account featured."
+          : "Account unfeatured.",
+        tone: "success",
+      });
+    } finally {
+      favoriteTogglePendingRef.current = false;
+      setFavoriteTogglePending(false);
+    }
+  };
   const registerSnapshot = resource.register.displayedSnapshot;
   const selectedRecord = registerSnapshot?.records.find(
     (record) => record.record_id === selectedRecordId,
@@ -292,6 +339,10 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
           account={resource.header.snapshot.account}
           balances={resource.header.snapshot.balances}
           creditLimitHistory={resource.header.snapshot.creditLimitHistory}
+          featuredTogglePending={favoriteTogglePending}
+          onToggleFeatured={() => {
+            void toggleAccountFeatured();
+          }}
         />
       ) : null}
 
@@ -350,6 +401,23 @@ const AccountPageContent = ({ accountId }: { readonly accountId: number }) => {
           transactionsById={resource.transactions.transactions}
         />
       </div>
+      <Toast
+        key={
+          toggleNotice
+            ? `${toggleNotice.tone}:${toggleNotice.message}`
+            : "empty"
+        }
+        className={
+          toggleNotice?.tone === "error"
+            ? "text-destructive"
+            : "text-[var(--color-money-in)]"
+        }
+        durationMs={toastDurationMs}
+        message={toggleNotice?.message}
+        onDismiss={() => {
+          setToggleNotice(undefined);
+        }}
+      />
       {selectedRecord ? (
         <AccountPeekPanel
           errorMessage={selectedTransactionError}
@@ -388,5 +456,5 @@ export const AccountPage = () => {
     );
   }
 
-  return <AccountPageContent accountId={accountId} />;
+  return <AccountPageContent key={accountId} accountId={accountId} />;
 };

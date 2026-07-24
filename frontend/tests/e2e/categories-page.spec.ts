@@ -125,6 +125,64 @@ test("category row delete closes the matching open editor", async ({
   await expect(panel).toBeHidden();
 });
 
+test("category favorite toggle ignores reactivation while pending", async ({
+  browserName,
+  page,
+}) => {
+  const category = await createCategory(page, {
+    fqn: `E2EFavoritePending:${browserName}${Date.now()}`,
+  });
+  let favoriteRequestCount = 0;
+  let releaseFavoriteRequest: (() => void) | undefined;
+  const favoriteRequestReleased = new Promise<void>((resolve) => {
+    releaseFavoriteRequest = resolve;
+  });
+  let markFavoriteRequestStarted: (() => void) | undefined;
+  const favoriteRequestStarted = new Promise<void>((resolve) => {
+    markFavoriteRequestStarted = resolve;
+  });
+
+  await page.route(`/api/categories/${category.category_id}`, async (route) => {
+    if (route.request().method() !== "PATCH") {
+      await route.continue();
+      return;
+    }
+    favoriteRequestCount += 1;
+    markFavoriteRequestStarted?.();
+    await favoriteRequestReleased;
+    await route.continue();
+  });
+
+  await page.goto(`/categories?q=${encodeURIComponent(category.fqn)}`);
+  const row = page
+    .getByTestId("categories-tree-row")
+    .filter({ hasText: category.fqn })
+    .first();
+  const toggle = row.getByRole("button", { name: "Feature category" });
+  await expect(toggle).toBeVisible();
+  await toggle.evaluate((element) => {
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await favoriteRequestStarted;
+
+  await expect(toggle).toHaveAttribute("aria-disabled", "true");
+  expect(favoriteRequestCount).toBe(1);
+
+  const favoriteResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/categories/${category.category_id}` &&
+      response.request().method() === "PATCH"
+    );
+  });
+  releaseFavoriteRequest?.();
+  expect((await favoriteResponse).ok()).toBe(true);
+  await expect(
+    row.getByRole("button", { name: "Unfeature category" }),
+  ).not.toHaveAttribute("aria-disabled", "true");
+});
+
 test("categories page renders demo hierarchy, intent badges, URL search, and hidden toggle", async ({
   browserName,
   page,

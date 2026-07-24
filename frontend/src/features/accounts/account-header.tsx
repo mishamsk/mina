@@ -1,6 +1,7 @@
 import { EyeOff } from "pixelarticons/react";
 
 import type { AccountBalance, CreditLimitHistory, DisplayAmount } from "@/api";
+import { FavoriteStarIcon } from "@/components/favorite-star-icon";
 import { Tooltip } from "@/components/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { AmountText, FqnPath } from "@/features/ledger";
@@ -16,10 +17,13 @@ interface AccountHeaderProps {
     readonly external_id?: string | null;
     readonly external_system?: string | null;
     readonly fqn: string;
+    readonly is_featured: boolean;
     readonly is_hidden: boolean;
   };
   readonly balances: readonly AccountBalance[];
   readonly creditLimitHistory: readonly CreditLimitHistory[];
+  readonly featuredTogglePending: boolean;
+  readonly onToggleFeatured: () => void;
 }
 
 const BalanceAmount = ({
@@ -47,6 +51,8 @@ export const AccountHeader = ({
   account,
   balances,
   creditLimitHistory,
+  featuredTogglePending,
+  onToggleFeatured,
 }: AccountHeaderProps) => {
   const latestCreditLimit = creditLimitHistory[0];
 
@@ -69,6 +75,23 @@ export const AccountHeader = ({
                 {account.currency}
               </Badge>
             ) : null}
+            <button
+              type="button"
+              className="focus-visible:outline-ring hover:bg-muted aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:[&_svg]:!text-muted-foreground inline-flex h-9 items-center gap-2 overflow-visible border-0 bg-transparent px-1 py-0 font-mono text-xs font-semibold shadow-none focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:cursor-not-allowed"
+              aria-disabled={featuredTogglePending ? "true" : undefined}
+              aria-pressed={account.is_featured}
+              onClick={onToggleFeatured}
+            >
+              <span
+                aria-hidden="true"
+                className="inline-grid size-[24px] shrink-0 place-items-center overflow-visible"
+                data-favorite-star-icon-box=""
+                data-icon="inline-start"
+              >
+                <FavoriteStarIcon filled={account.is_featured} />
+              </span>
+              {account.is_featured ? "Unfeature account" : "Feature account"}
+            </button>
             {account.is_hidden ? (
               <span
                 aria-label="Hidden account"
