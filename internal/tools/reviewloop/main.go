@@ -70,7 +70,7 @@ var (
 
 type config struct {
 	root                    string
-	goal                    string
+	reviewBasis             string
 	claudeModel             string
 	codexReviewer           codexSettings
 	codexAggregator         codexSettings
@@ -92,6 +92,8 @@ type reviewLoopOptions struct {
 	codexAggregator     string
 	codexValidator      string
 	codexFixer          string
+	goal                string
+	plan                string
 	maxIterations       *int
 	claudeReviewPercent *int
 }
@@ -280,16 +282,15 @@ func loadConfig(args []string) (config, error) {
 	if err != nil {
 		return config{}, err
 	}
-	if len(args) != 1 && len(args) != 2 {
-		return config{}, errors.New("usage: reviewloop --claude-model <model> --codex-reviewer <model/effort> --codex-aggregator <model/effort> --codex-validator <model/effort> --codex-fixer <model/effort> [--base <ref>] [--max-iterations <count>] [--claude-review-percent <percent>] <goal> [branch-or-commit]")
-	}
-
-	goal := strings.TrimSpace(args[0])
-	if goal == "" {
-		return config{}, errors.New("goal is required")
+	if len(args) > 1 {
+		return config{}, errors.New("usage: reviewloop --claude-model <model> --codex-reviewer <model/effort> --codex-aggregator <model/effort> --codex-validator <model/effort> --codex-fixer <model/effort> (--plan <repo-relative-path> | --goal <text>) [--base <ref>] [--max-iterations <count>] [--claude-review-percent <percent>] [branch-or-commit]")
 	}
 
 	root, err := repoRoot()
+	if err != nil {
+		return config{}, err
+	}
+	reviewBasis, err := buildReviewBasis(root, options)
 	if err != nil {
 		return config{}, err
 	}
@@ -325,8 +326,8 @@ func loadConfig(args []string) (config, error) {
 	}
 
 	target := reviewTarget{}
-	if len(args) == 2 {
-		arg := strings.TrimSpace(args[1])
+	if len(args) == 1 {
+		arg := strings.TrimSpace(args[0])
 		if arg == "" {
 			return config{}, errors.New("branch-or-commit must not be empty when provided")
 		}
@@ -384,7 +385,7 @@ func loadConfig(args []string) (config, error) {
 
 	return config{
 		root:                    root,
-		goal:                    goal,
+		reviewBasis:             reviewBasis,
 		claudeModel:             options.claudeModel,
 		codexReviewer:           codexReviewer,
 		codexAggregator:         codexAggregator,
@@ -410,6 +411,8 @@ func parseReviewLoopArgs(args []string) ([]string, reviewLoopOptions, error) {
 		"--codex-aggregator": &options.codexAggregator,
 		"--codex-validator":  &options.codexValidator,
 		"--codex-fixer":      &options.codexFixer,
+		"--goal":             &options.goal,
+		"--plan":             &options.plan,
 	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -466,6 +469,39 @@ func parseReviewLoopArgs(args []string) ([]string, reviewLoopOptions, error) {
 		}
 	}
 	return positional, options, nil
+}
+
+func buildReviewBasis(root string, options reviewLoopOptions) (string, error) {
+	switch {
+	case options.goal != "" && options.plan != "":
+		return "", errors.New("exactly one of --plan or --goal is required")
+	case options.goal != "":
+		return "Stated implementation goal:\n\n" + options.goal, nil
+	case options.plan == "":
+		return "", errors.New("exactly one of --plan or --goal is required")
+	}
+
+	planPath := options.plan
+	if !filepath.IsAbs(planPath) {
+		planPath = filepath.Join(root, planPath)
+	}
+	planPath = filepath.Clean(planPath)
+	relativePath, err := filepath.Rel(root, planPath)
+	if err != nil || relativePath == ".." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("--plan must name a file inside the repository: %s", options.plan)
+	}
+	info, err := os.Stat(planPath)
+	if err != nil {
+		return "", fmt.Errorf("read --plan %s: %w", options.plan, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("--plan must name a regular file: %s", options.plan)
+	}
+
+	return fmt.Sprintf(
+		"Implementation plan: `%s`\n\nRead this plan from the repository and treat it as the ground-truth requirements and constraints for the change. Do not edit, rewrite, move, or otherwise modify the plan.",
+		filepath.ToSlash(relativePath),
+	), nil
 }
 
 func parseStringFlagValue(args []string, index int, name string) (string, int, error) {
@@ -1143,7 +1179,7 @@ func reviewerScopedReviewScope(reviewScope string, reviewer reviewerPrompt) stri
 
 func (cfg config) placeholderValues(overrides map[string]string) map[string]string {
 	values := map[string]string{
-		"GOAL":                 cfg.goal,
+		"REVIEW_BASIS":         cfg.reviewBasis,
 		"BRANCH_OR_COMMIT":     "",
 		"PREVIOUS_REVIEW_FILE": cfg.previousReviewFile,
 		"REVIEWER_NAME":        "",

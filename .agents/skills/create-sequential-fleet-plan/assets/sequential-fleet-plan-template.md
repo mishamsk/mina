@@ -16,7 +16,7 @@
 - Strictly sequential: exactly one active sub-branch / implementor session at any time. Finish (merge or fail) the current task before starting the next.
 - Implementor quota exhausted: stop, schedule a timed background wait until the stated reset time, relaunch once. Do not ask the user.
 - Operator quota exhausted: stop and wait without asking.
-- Review budget per task: at most ONE `just review-loop`, run by the implementor from the initial implementation plan's Success Criteria. If review-loop leaves unresolved comments, they fold into operator fix plans — never re-run review-loop.
+- Review budget per task: at most ONE `just review-loop --plan "<implementation plan path>"`, run by the implementor from the initial implementation plan's Success Criteria. The plan is immutable ground truth for review-loop reviewers and fixers. If review-loop leaves unresolved comments, they fold into operator fix plans — never re-run review-loop.
 - After the implementor session: the operator runs the review below. Findings warrant at most TWO fix plans per task. Every fix plan MUST state "Do not run review-loop." in its Plan Context and omit review-loop from its Success Criteria.
 - A task still failing after 2 fix plans: leave the sub-branch unmerged, mark the task failed with findings, then proceed only to a task that is still viable — skip any task that depends on the failed one, directly or transitively. If no viable tasks remain, stop the fleet entirely. Never merge a failing branch; never silently drop scope.
 - Environmental failure (toolchain, `gt`, non-resetting quota): stop and ask.
@@ -66,6 +66,6 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [ ] `just test-integration` passes
 - [ ] `just pre-commit` passes
 - [ ] `just test-frontend-e2e` passes
-- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run exactly one and fold unresolved comments into a final fix plan (no further review-loop)
+- [ ] Deviation from template, per operator rules: NO fleet-level `just review-loop` (each branch already ran its one allowed loop) — unless merges needed conflict resolution or cross-branch interactions were never covered, in which case run `just review-loop --plan "<this fleet plan's repo-relative path>"` exactly once and fold unresolved comments into a final fix plan (no further review-loop)
 - [ ] Final report: per task — merged/failed, fix plans used, live-verification evidence, governance interventions, Kata refs closed, residual findings and unmerged branches (per-task evidence recorded on each closed Kata issue)
 - [ ] Move this plan to `docs/plans/completed/`

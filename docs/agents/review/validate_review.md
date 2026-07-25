@@ -8,7 +8,9 @@ focused smoke test and only a confirmed finding can reach the fixer.
 
 ## Review context
 
-Changes were made for: {{GOAL}}
+Review basis:
+
+{{REVIEW_BASIS}}
 
 {{REVIEW_SCOPE}}
 

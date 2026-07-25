@@ -363,7 +363,7 @@ pre-commit:
 
 # Run the repository-local review loop through local Codex and Claude CLI sessions.
 [group('agents')]
-review-loop goal branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model="opus" codex_reviewer="5.6-sol/xhigh" codex_aggregator="5.6-sol/medium" codex_validator="5.6-sol/high" codex_fixer="5.6-sol/high":
+review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model="opus" codex_reviewer="5.6-sol/xhigh" codex_aggregator="5.6-sol/medium" codex_validator="5.6-sol/high" codex_fixer="5.6-sol/high":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -389,9 +389,9 @@ review-loop goal branch_or_commit="" base_ref="" max_iterations="" claude_review
     fi
 
     if [ -n "$branch_or_commit" ]; then
-        go run ./internal/tools/reviewloop "$@" {{ quote(goal) }} "$branch_or_commit"
+        go run ./internal/tools/reviewloop "$@" {{ quote(mode) }} {{ quote(context) }} "$branch_or_commit"
     else
-        go run ./internal/tools/reviewloop "$@" {{ quote(goal) }}
+        go run ./internal/tools/reviewloop "$@" {{ quote(mode) }} {{ quote(context) }}
     fi
 
 # Run Codex against an implementation plan.

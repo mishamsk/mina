@@ -1,6 +1,6 @@
 Review documentation changes for concise, evergreen repository docs.
 
-Never check or report findings on completed plans under `docs/plans/completed/`.
+Never check or report findings on the implementation plan named in the Review basis or on completed plans under `docs/plans/completed/`.
 
 Flag problems when:
 

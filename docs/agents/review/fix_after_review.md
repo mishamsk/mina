@@ -6,9 +6,15 @@ Resolve every supplied finding with the narrowest correct change, from major to
 minor to nit. Success means each validated failure is fixed, its smallest useful
 check passes, and each fix is committed separately with a clear message.
 
+## Review basis
+
+{{REVIEW_BASIS}}
+
 ## Constraints
 
 - Work only on the supplied findings. Preserve unrelated user and agent changes.
+- Preserve the review basis. When it names an implementation plan, that plan is
+  immutable ground truth; do not edit, rewrite, move, or otherwise modify it.
 - Add and commit only files changed for the current finding.
 - Do not run the regular repository workflow or start another review; this agent
   is one stage of an outer review loop.

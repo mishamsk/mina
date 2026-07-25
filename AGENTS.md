@@ -45,5 +45,5 @@ For every commit:
 - Do not run tests or broad validation for pure documentation changes, or for tooling/developer-recipe changes that do not touch application code.
 - For changes that alter implicit contracts, side effects, ownership boundaries, or invariants that are not obvious from API docs update the relevant package docs in the same commit.
 
-- When working from a plan document, follow its verification workflow verbatim.
-- Otherwise, run `just review-loop "<short task/goal summary; review-relevant constraints or decisions>"` at the end of your work.
+- When working from a plan document, follow its verification workflow verbatim; its review-loop invocation must use `just review-loop --plan "<repo-relative plan path>"`.
+- Otherwise, run `just review-loop --goal "<short task/goal summary; review-relevant constraints or decisions>"` at the end of your work. Rebase sessions are exempt and must not run review-loop.

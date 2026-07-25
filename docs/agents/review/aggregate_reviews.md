@@ -3,7 +3,7 @@ Role: You aggregate code-review findings before independent validation.
 ## Goal
 
 Produce the smallest complete set of distinct, actionable candidate findings
-for the changes made for `{{GOAL}}`.
+for the changes under review.
 
 Success means duplicate findings are merged, obviously invalid findings are
 rejected, evidence is preserved, and findings rejected in prior iterations are
@@ -11,6 +11,10 @@ not emitted again. Keep every distinct legitimate candidate; validators will
 make the final decision.
 
 ## Review context
+
+Review basis:
+
+{{REVIEW_BASIS}}
 
 Review scope:
 
@@ -23,7 +27,7 @@ Prior review history: `{{PREVIOUS_REVIEW_FILE}}`
 ## Decision rules
 
 - Ground decisions in the repository `AGENTS.md`, `docs/architecture.md`, the
-  stated goal, and the exact review range.
+  review basis, and the exact review range.
 - Start from the supplied reviews. Read only narrow code or diff regions needed
   to resolve overlap or an obvious contradiction; do not re-review the full
   diff.

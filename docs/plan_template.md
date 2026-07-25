@@ -33,6 +33,6 @@
 - [ ] Every task's stated outcome and acceptance conditions are complete.
 - [ ] `<Exact repository validation selected for the affected behavior>` passes; omit commands that do not provide relevant evidence.
 - [ ] Planned commits are present and the worktree is clean.
-- [ ] Unless Plan Context records the user's explicit request to omit it, with a clean worktree run `just review-loop "<short goal; review-relevant constraints and decisions>"` exactly once; resolve its findings, rerun affected validation, and commit the fixes. Never invoke review-loop a second time — one invocation satisfies this item permanently; findings that remain after the fix commits go into the completion report instead.
+- [ ] Unless Plan Context records the user's explicit request to omit it, with a clean worktree run `just review-loop --plan "<this plan's repo-relative path>"` exactly once; resolve its findings, rerun affected validation, and commit the fixes. The plan is immutable ground truth for reviewers and fixers. Never invoke review-loop a second time — one invocation satisfies this item permanently; findings that remain after the fix commits go into the completion report instead.
 - [ ] Move this plan to `docs/plans/completed/` and commit the move.
 - [ ] <If a Kata issue exists, close it with the commits and validation evidence.>
