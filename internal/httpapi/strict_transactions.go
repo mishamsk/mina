@@ -602,6 +602,7 @@ func journalRecordAPIResponse(record transactions.JournalRecord) openapi.Journal
 	return openapi.JournalRecord{
 		RecordId:             record.ID,
 		TransactionId:        record.TransactionID,
+		InitiatedDate:        openAPIDate(record.InitiatedDate),
 		AccountId:            record.AccountID,
 		MemberId:             record.MemberID,
 		Currency:             record.Currency,
@@ -612,7 +613,7 @@ func journalRecordAPIResponse(record transactions.JournalRecord) openapi.Journal
 		RecordRole:           openapi.RecordRole(record.Role),
 		TagIds:               cloneInt64Slice(record.TagIDs),
 		Memo:                 record.Memo,
-		PendingDate:          record.PendingDate.UTC(),
+		PendingDate:          nullableOpenAPITimestamp(record.PendingDate),
 		PostedDate:           nullableOpenAPITimestamp(record.PostedDate),
 		PostingStatus:        openapi.PostingStatus(record.PostingStatus),
 		ReconciliationStatus: openapi.ReconciliationStatus(record.ReconciliationStatus),

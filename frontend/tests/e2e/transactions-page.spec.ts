@@ -41,7 +41,7 @@ interface JournalRecordFixture {
   readonly currency: string;
   readonly member_id?: number | null;
   readonly memo?: string | null;
-  readonly pending_date?: string;
+  readonly pending_date?: string | null;
   readonly posted_date?: string | null;
   readonly posting_status: string;
   readonly record_id?: number;
@@ -578,6 +578,12 @@ const expectMouseDisclosure = async (
   await expect(disclosure).toContainText("Posting status");
   await expect(disclosure).toContainText("Source");
   await expect(disclosure).toContainText(memo);
+  await expect(
+    disclosure
+      .getByText("Pending", { exact: true })
+      .locator("xpath=following-sibling::dd[1]"),
+  ).toHaveText("—");
+  await expect(disclosure).not.toContainText("Invalid Date");
   await expect(
     disclosure.locator("button, input, textarea, select"),
   ).toHaveCount(0);
@@ -1469,6 +1475,149 @@ test("expanded records edit per-record values and escalate structural changes", 
   await expect(
     page.getByRole("heading", { name: "Edit journal" }),
   ).toBeVisible();
+  await deleteTransaction(page, transaction);
+});
+
+test("replacement edits preserve server-stamped pending dates", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const memo = `E2E pending timestamp ${unique}`;
+  const updatedMemo = `${memo} updated`;
+  const created = await createSearchSpend(page, memo);
+  const transaction = await getTransactionDetail(page, created);
+  const targetRecord = transaction.records[0];
+  const targetRecordId = targetRecord?.record_id;
+  expect(targetRecordId).toBeDefined();
+  if (!targetRecord || targetRecordId === undefined) {
+    throw new Error("Created record has no id");
+  }
+
+  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  const transactionRow = page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first();
+  await expect(transactionRow).toBeVisible();
+  await transactionRow.locator("td").nth(3).click();
+  const records = page.getByTestId("expanded-records");
+  await expect(records).toBeVisible();
+
+  let releaseListRefresh = () => {};
+  const listRefreshReleased = new Promise<void>((resolve) => {
+    releaseListRefresh = resolve;
+  });
+  await page.route("**/api/transactions?**", async (route) => {
+    await listRefreshReleased;
+    await route.continue();
+  });
+  await page.route("**/api/records/bulk/status", async (route) => {
+    const response = await route.fetch();
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    await route.fulfill({ response });
+  });
+
+  const statusCell = records.getByTestId("record-postingStatus-cell").first();
+  await statusCell.focus();
+  await statusCell.press("F2");
+  const statusEditor = records
+    .getByTestId("record-postingStatus-editor")
+    .first();
+  await statusEditor.getByRole("combobox", { name: "Posting status" }).click();
+  await page.getByRole("option", { name: "Pending" }).click();
+  await expect(statusEditor).toHaveCount(0);
+
+  const afterStatus = await getTransactionDetail(page, transaction);
+  const authoritativePendingDate = afterStatus.records.find(
+    (record) => record.record_id === targetRecordId,
+  )?.pending_date;
+  expect(authoritativePendingDate).not.toBeNull();
+  expect(authoritativePendingDate).not.toBeUndefined();
+
+  const memoCell = records.getByTestId("record-memo-cell").first();
+  await memoCell.getByRole("button", { name: "Edit memo" }).click();
+  const memoEditor = records.getByTestId("record-memo-editor").first();
+  await memoEditor.getByLabel("Memo").fill(updatedMemo);
+  await memoEditor.getByLabel("Memo").press("Enter");
+  await expect(memoCell).toContainText(updatedMemo);
+
+  const afterReplacement = await getTransactionDetail(page, transaction);
+  expect(
+    afterReplacement.records.find(
+      (record) => record.account_id === targetRecord.account_id,
+    )?.pending_date,
+  ).toBe(authoritativePendingDate);
+
+  releaseListRefresh();
+  await page.unroute("**/api/transactions?**");
+  await page.unroute("**/api/records/bulk/status");
+  await deleteTransaction(page, transaction);
+});
+
+test("successful status saves tolerate an authoritative refetch failure", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const memo = `E2E status refetch ${unique}`;
+  const created = await createSearchSpend(page, memo);
+  const transaction = await getTransactionDetail(page, created);
+  const targetRecord = transaction.records[0];
+  if (!targetRecord) {
+    throw new Error("Created transaction has no records");
+  }
+
+  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  const transactionRow = page
+    .getByRole("row")
+    .filter({ hasText: memo })
+    .first();
+  await expect(transactionRow).toBeVisible();
+  await transactionRow.locator("td").nth(3).click();
+  const records = page.getByTestId("expanded-records");
+  await expect(records).toBeVisible();
+
+  let failedRefetches = 0;
+  await page.route(
+    `**/api/transactions/${transaction.transaction_id}`,
+    async (route) => {
+      if (failedRefetches === 0) {
+        failedRefetches += 1;
+        await route.fulfill({
+          body: JSON.stringify({
+            code: "internal_error",
+            message: "forced authoritative refetch failure",
+          }),
+          contentType: "application/json",
+          status: 500,
+        });
+        return;
+      }
+      await route.continue();
+    },
+  );
+
+  const statusCell = records.getByTestId("record-postingStatus-cell").first();
+  await statusCell.focus();
+  await statusCell.press("F2");
+  const statusEditor = records
+    .getByTestId("record-postingStatus-editor")
+    .first();
+  await statusEditor.getByRole("combobox", { name: "Posting status" }).click();
+  await page.getByRole("option", { name: "Pending" }).click();
+
+  await expect(statusEditor).toHaveCount(0);
+  await expect(statusCell).toContainText("pending");
+  expect(failedRefetches).toBe(1);
+
+  await page.unroute(`**/api/transactions/${transaction.transaction_id}`);
+  const afterStatus = await getTransactionDetail(page, transaction);
+  const updatedRecord = afterStatus.records.find(
+    (record) => record.record_id === targetRecord.record_id,
+  );
+  expect(updatedRecord?.posting_status).toBe("pending");
+  expect(updatedRecord?.pending_date).not.toBeNull();
   await deleteTransaction(page, transaction);
 });
 
@@ -2984,11 +3133,12 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
   await page.setViewportSize({ width: 700, height: 720 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
+  const overdueDate = shiftLocalDate(formatLocalDate(new Date()), -1);
   const overdueFixture = await createExpectedRecurringFixture(
     page,
     `${unique}Overdue`,
     {
-      anchorDate: shiftLocalDate(formatLocalDate(new Date()), -1),
+      anchorDate: overdueDate,
       featured: true,
     },
   );
@@ -3223,11 +3373,35 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
   await expect(hideExpectedToggle).toHaveAttribute("aria-pressed", "false");
   await expect(overdueRow).toBeVisible();
 
+  await page.route(
+    `**/api/transactions/${overdueFixture.transactionId}`,
+    async (route) => {
+      await route.fulfill({
+        body: JSON.stringify({
+          error: {
+            code: "test_transaction_unavailable",
+            message: "Test transaction unavailable.",
+          },
+        }),
+        contentType: "application/json",
+        status: 500,
+      });
+    },
+  );
   await page.goto(`/accounts/${overdueFixture.checking.account_id}`);
   const registerRow = page
     .getByTestId("account-register-row")
     .filter({ hasText: overdueFixture.memo });
   await expect(registerRow).toBeVisible();
+  const overdueDayLabel = await page.evaluate((value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Intl.DateTimeFormat(undefined, {
+      day: "numeric",
+      month: "short",
+    }).format(new Date(year ?? 0, (month ?? 1) - 1, day ?? 1));
+  }, overdueDate);
+  await expect(registerRow).toContainText(overdueDayLabel);
+  await expect(registerRow).toContainText("Transaction unavailable");
   await expect(
     registerRow.getByText("Expected", { exact: true }),
   ).toBeVisible();
@@ -5927,66 +6101,6 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   expect(mixedResponse.ok(), mixedBody).toBe(true);
   const mixed = JSON.parse(mixedBody) as TransactionDetailFixture;
 
-  const missingPostedDateMemo = `E2E lifecycle missing posted date ${unique}`;
-  const missingPostedDateResponse = await page.request.post(
-    "/api/transactions",
-    {
-      data: {
-        initiated_date: "2026-07-18",
-        records: [
-          {
-            account_id: fundingAccount.account_id,
-            amount: "-7.00000000",
-            category_id: null,
-            currency: "USD",
-            memo: missingPostedDateMemo,
-            pending_date: "2026-07-18T16:00:00Z",
-            posted_date: "2026-07-19T16:00:00Z",
-            posting_status: "posted",
-            reconciliation_status: "unreconciled",
-            source: "manual",
-            tag_ids: [],
-          },
-          {
-            account_id: merchantAccount.account_id,
-            amount: "7.00000000",
-            category_id: category.category_id,
-            currency: "USD",
-            memo: missingPostedDateMemo,
-            pending_date: "2026-07-18T16:00:00Z",
-            posted_date: null,
-            posting_status: "pending",
-            reconciliation_status: "unreconciled",
-            source: "manual",
-            tag_ids: [],
-          },
-        ],
-      },
-    },
-  );
-  const missingPostedDateBody = await missingPostedDateResponse.text();
-  expect(missingPostedDateResponse.ok(), missingPostedDateBody).toBe(true);
-  const missingPostedDate = JSON.parse(
-    missingPostedDateBody,
-  ) as TransactionDetailFixture;
-  const datelessRecord = missingPostedDate.records.find(
-    (record) => record.posting_status === "pending",
-  );
-  if (datelessRecord?.record_id === undefined) {
-    throw new Error("missing posted-date record id");
-  }
-  const postDatelessRecordResponse = await page.request.post(
-    "/api/records/bulk/status",
-    {
-      data: {
-        posting_status: "posted",
-        record_ids: [datelessRecord.record_id],
-      },
-    },
-  );
-  const postDatelessRecordBody = await postDatelessRecordResponse.text();
-  expect(postDatelessRecordResponse.ok(), postDatelessRecordBody).toBe(true);
-
   const cancelledMemo = `E2E lifecycle cancelled ${unique}`;
   const cancelledResponse = await page.request.post("/api/transactions", {
     data: {
@@ -5998,8 +6112,8 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
           category_id: null,
           currency: "USD",
           memo: cancelledMemo,
-          pending_date: "2026-07-15T16:00:00Z",
-          posted_date: "2026-07-16T16:00:00Z",
+          pending_date: null,
+          posted_date: null,
           posting_status: "cancelled",
           reconciliation_status: "unreconciled",
           source: "manual",
@@ -6031,7 +6145,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     { anchorDate: "2026-07-23" },
   );
   const lifecycleDateLabels = await page.evaluate(
-    ({ cancelledFirstPosted, cancelledPending, firstPosted, secondPosted }) => {
+    ({ cancelledPending, cancelledPosted, firstPosted, secondPosted }) => {
       const dayLabel = (value: string) => {
         const date = new Date(value);
         return new Intl.DateTimeFormat(undefined, {
@@ -6049,8 +6163,8 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
         }).format(new Date(value));
 
       return {
-        cancelledFirstPosted: dayLabel(cancelledFirstPosted),
         cancelledPending: dayLabel(cancelledPending),
+        cancelledPosted: dayLabel(cancelledPosted),
         firstPosted: dayLabel(firstPosted),
         firstPostedExact: exactDateLabel(firstPosted),
         secondPosted: dayLabel(secondPosted),
@@ -6058,12 +6172,25 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
       };
     },
     {
-      cancelledFirstPosted: "2026-07-16T16:00:00Z",
       cancelledPending: "2026-07-15T16:00:00Z",
+      cancelledPosted: "2026-07-16T16:00:00Z",
       firstPosted: "2026-07-13T16:00:00Z",
       secondPosted: "2026-07-14T16:00:00Z",
     },
   );
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  const simpleRow = page
+    .getByRole("row")
+    .filter({ hasText: simpleMemo })
+    .first();
+  await expect(simpleRow).toBeVisible();
+  await simpleRow.locator("td").nth(3).click();
+  const simpleExpandedRecords = simpleRow.locator(
+    "xpath=following-sibling::tr[1]",
+  );
+  await expect(simpleExpandedRecords).toContainText("pending —; posted ");
+  await expect(simpleExpandedRecords).not.toContainText("pending ;");
 
   const expectSimpleSurface = async (panel: Locator) => {
     await expectDatelessReadOnlyDetailGrid(panel, 2);
@@ -6085,6 +6212,10 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     await expect(lifecycle).toContainText("Pending");
     await expect(lifecycle).toContainText("Posted");
     await expect(lifecycle).not.toContainText("varies");
+    await expect(
+      lifecycle.getByRole("listitem").filter({ hasText: "Pending" }),
+    ).toContainText("—");
+    await expect(panel).not.toContainText("Invalid Date");
     await expect(lifecycle.locator("[tabindex]")).toHaveCount(0);
     await expect(lifecycle.getByText("Initiated", { exact: true })).toHaveCSS(
       "font-size",
@@ -6188,30 +6319,25 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(0);
   };
 
-  const expectMissingPostedDateSurface = async (panel: Locator) => {
-    await expectDatelessReadOnlyDetailGrid(panel, 2);
-    const postedStage = panel
-      .getByTestId("transaction-lifecycle")
-      .getByRole("listitem")
-      .filter({ hasText: "Posted" });
-    await expect(postedStage).toContainText("varies");
-    await expect(postedStage).not.toContainText("of 2");
-    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(1);
-  };
-
   const expectCancelledSurface = async (panel: Locator) => {
     await expectDatelessReadOnlyDetailGrid(panel, 2);
     const lifecycle = panel.getByTestId("transaction-lifecycle");
-    await expect(
-      lifecycle.getByRole("listitem").filter({ hasText: "Pending" }),
-    ).toContainText(lifecycleDateLabels.cancelledPending);
+    const pendingStage = lifecycle
+      .getByRole("listitem")
+      .filter({ hasText: "Pending" });
+    await expect(pendingStage).toContainText(
+      lifecycleDateLabels.cancelledPending,
+    );
+    await expect(pendingStage).toContainText("varies");
+    await expect(pendingStage).toContainText("1 of 2");
     const postedStage = lifecycle
       .getByRole("listitem")
       .filter({ hasText: "Posted" });
     await expect(postedStage).toContainText(
-      lifecycleDateLabels.cancelledFirstPosted,
+      lifecycleDateLabels.cancelledPosted,
     );
-    await expect(postedStage).not.toContainText("varies");
+    await expect(postedStage).toContainText("varies");
+    await expect(postedStage).toContainText("1 of 2");
     const cancelledRows = panel
       .locator("tr[data-detail-record-row='true']")
       .filter({ hasText: "Cancelled" });
@@ -6220,10 +6346,12 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
       "text-decoration-line",
       "line-through",
     );
-    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(0);
+    await expect(panel.locator("[aria-label='Dates differ: —→—']")).toHaveCount(
+      1,
+    );
     await expect(
       panel.locator("[aria-label^='Cancelled lifecycle:']"),
-    ).toHaveCount(2);
+    ).toHaveCount(1);
   };
 
   await page.setViewportSize({ width: 1600, height: 900 });
@@ -6244,12 +6372,6 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   await expectLifecycleContentFits(mixedDetail);
   await page.setViewportSize({ width: 1600, height: 900 });
   await expectKeyboardDisclosure(mixedDetail, mixedMemo);
-
-  const missingPostedDateDetail = await openUrlTransactionDetail(
-    page,
-    missingPostedDate.transaction_id,
-  );
-  await expectMissingPostedDateSurface(missingPostedDateDetail);
 
   const expectedDetail = await openUrlTransactionDetail(
     page,

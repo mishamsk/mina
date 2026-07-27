@@ -36,7 +36,7 @@
 - Saved-transaction Edit/Split saves are full replacements owned by `EntryModal`; successful saves fan out to displayed transaction browsers, detail, balances, overview, registers, and reference snapshots.
 - Saved-transaction Duplicate reuses entry prefill mapping but stays on the create path.
 - Successful transaction mutations trigger shared invalidation for account, category, tag, and member page snapshots so REST-provided `deletable` flags refetch without a reload.
-- Successful inline transaction and record saves update the displayed page, invalidate sibling page snapshots, release the editor, and refresh that displayed page, balances, and overview in the background; category saves fetch the complete server-derived transaction before publishing the row update.
+- Successful inline transaction and record saves update the displayed page, invalidate sibling page snapshots, release the editor, and refresh that displayed page, balances, and overview in the background; category and posting-status saves publish only a complete server-derived transaction, while a failed post-status refetch retains the prior row until background refresh without reporting the committed mutation as failed.
 - A background page response replaces only its unchanged source snapshot and is discarded when a newer source exists; failure preserves the displayed snapshot, marks it stale, and lets the mounted resource retry without a table loading state.
 - Entry-modal saves retain the blocking visible-page refresh so stale displayed rows cannot start a conflicting full-replacement edit while the saved transaction refetches.
 - Successful bulk mutations use the same transaction, balance, overview, register, detail, and reference-page refresh fan-out as other transaction edits.

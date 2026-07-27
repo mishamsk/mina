@@ -32,8 +32,10 @@ interface JournalRecordFixture {
   readonly account_id: number;
   readonly amount: string;
   readonly currency: string;
+  readonly initiated_date: string;
   readonly memo?: string | null;
-  readonly pending_date: string;
+  readonly pending_date: string | null;
+  readonly posted_date: string | null;
   readonly record_id: number;
   readonly running_balance?: string | null;
   readonly transaction_id: number;
@@ -726,11 +728,14 @@ test("account page renders header and paginated running-balance register", async
     ),
     "first transaction",
   );
+  if (!firstRecord.posted_date || !secondRecord.posted_date) {
+    throw new Error("directly posted register records need posted dates");
+  }
   expect(recordsBody.total_count).toBe(27);
   expect(
-    Date.parse(firstRecord.pending_date),
+    Date.parse(firstRecord.posted_date),
     "records are chronological",
-  ).toBeLessThan(Date.parse(secondRecord.pending_date));
+  ).toBeLessThan(Date.parse(secondRecord.posted_date));
 
   const balance = balancesBody.balances.find(
     (row) => row.account_id === account.account_id,

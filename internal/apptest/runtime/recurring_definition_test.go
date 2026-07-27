@@ -601,6 +601,9 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 		formatDate(today),
 	))
 	confirmOccurrences := listRecurringOccurrences(t, client, &httpclient.ListRecurringOccurrencesParams{RecurringDefinitionId: &confirmDefinition.JSON201.RecurringDefinitionId})
+	expectedTransaction := getTransaction(t, client, *confirmOccurrences.JSON200.RecurringOccurrences[0].GeneratedTransactionId)
+	assertRecordLifecycleDates(t, "expected recurring transaction", expectedTransaction.JSON200.Records, nil, nil)
+	confirmStartedAt := time.Now().UTC().Add(-time.Second)
 	confirmed := confirmRecurringOccurrence(t, client, confirmOccurrences.JSON200.RecurringOccurrences[0].RecurringOccurrenceId)
 	assertReviewedOccurrence(t, *confirmed.JSON200, httpclient.Confirmed)
 	assertRecurringActionStatus(t, "double confirm", confirmAgain(t, client, confirmed.JSON200.RecurringOccurrenceId), http.StatusBadRequest)
@@ -610,9 +613,10 @@ func TestRecurringOccurrenceConfirmAndDismissBoundary(t *testing.T) {
 	requireNoTransportError(t, "default confirmed transaction list", err)
 	assertTransactionListResponse(t, "default confirmed transaction list", defaultTransactions, []int64{*confirmed.JSON200.GeneratedTransactionId}, 1)
 	for _, record := range defaultTransactions.JSON200.Transactions[0].Records {
-		if record.PostingStatus != httpclient.PostingStatusPosted || record.Source != httpclient.RecurringTemplate || record.PostedDate == nil {
-			t.Fatalf("confirmed record status/source/posted_date = %q/%q/%v", record.PostingStatus, record.Source, record.PostedDate)
+		if record.PostingStatus != httpclient.PostingStatusPosted || record.Source != httpclient.RecurringTemplate || record.PendingDate != nil || record.PostedDate == nil {
+			t.Fatalf("confirmed record status/source/pending_date/posted_date = %q/%q/%v/%v", record.PostingStatus, record.Source, record.PendingDate, record.PostedDate)
 		}
+		assertLifecycleTimestampBetween(t, "confirmed recurring posted_date", record.PostedDate, confirmStartedAt, time.Now().UTC().Add(time.Second))
 	}
 
 	accountIDs := []int64{refs.CheckingAccountID}
@@ -681,9 +685,13 @@ func TestRecurringDefinitionConfirmNextBoundary(t *testing.T) {
 	if transaction.JSON200.InitiatedDate.Format("2006-01-02") != formatDate(today) {
 		t.Fatalf("confirm-next initiated_date = %s, want %s", transaction.JSON200.InitiatedDate.Format("2006-01-02"), formatDate(today))
 	}
+	wantPostedDate := transaction.JSON200.InitiatedDate.Time
 	for _, record := range transaction.JSON200.Records {
-		if record.PostingStatus != httpclient.PostingStatusPosted || record.PostedDate == nil {
-			t.Fatalf("confirm-next record status/posted_date = %q/%v", record.PostingStatus, record.PostedDate)
+		if record.PostingStatus != httpclient.PostingStatusPosted || record.PendingDate != nil || record.PostedDate == nil {
+			t.Fatalf("confirm-next record status/pending_date/posted_date = %q/%v/%v", record.PostingStatus, record.PendingDate, record.PostedDate)
+		}
+		if !record.PostedDate.Equal(wantPostedDate) {
+			t.Fatalf("confirm-next record posted_date = %v, want initiated date %v", record.PostedDate, wantPostedDate)
 		}
 	}
 

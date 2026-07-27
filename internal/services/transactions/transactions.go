@@ -70,6 +70,7 @@ type Transaction struct {
 type JournalRecord struct {
 	ID                   int64
 	TransactionID        int64
+	InitiatedDate        values.CivilDate
 	AccountID            int64
 	AccountName          string
 	AccountFQN           string
@@ -84,7 +85,7 @@ type JournalRecord struct {
 	Role                 RecordRole
 	TagIDs               []int64
 	Memo                 *string
-	PendingDate          time.Time
+	PendingDate          *time.Time
 	PostedDate           *time.Time
 	PostingStatus        PostingStatus
 	ReconciliationStatus ReconciliationStatus
@@ -477,7 +478,7 @@ func validateClassificationRecord(index int, record ClassificationRecordInput) e
 
 // Create validates and creates a transaction and its journal records.
 func (s *Service) Create(ctx context.Context, input CreateInput) (Transaction, error) {
-	fillMissingPendingDates(&input)
+	fillMissingLifecycleDates(&input)
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
@@ -517,7 +518,7 @@ func (s *Service) Replace(ctx context.Context, id int64, input CreateInput) (Tra
 	if id <= 0 {
 		return Transaction{}, services.InvalidRequest("transaction_id must be positive")
 	}
-	fillMissingPendingDates(&input)
+	fillMissingLifecycleDates(&input)
 	if err := validateTransactionInput(input); err != nil {
 		return Transaction{}, err
 	}
@@ -1359,11 +1360,20 @@ func invalidBulkAccountReferenceError() error {
 	return services.InvalidRequest("records or account missing or inactive resource")
 }
 
-func fillMissingPendingDates(input *CreateInput) {
-	defaultPendingDate := input.InitiatedDate.Time()
+func fillMissingLifecycleDates(input *CreateInput) {
+	defaultLifecycleDate := input.InitiatedDate.Time()
 	for index := range input.Records {
-		if input.Records[index].PendingDate == nil {
-			input.Records[index].PendingDate = &defaultPendingDate
+		record := &input.Records[index]
+		if record.PostingStatus == PostingStatusExpected {
+			record.PendingDate = nil
+			record.PostedDate = nil
+			continue
+		}
+		if record.PostingStatus == PostingStatusPending && record.PendingDate == nil {
+			record.PendingDate = &defaultLifecycleDate
+		}
+		if record.PostingStatus == PostingStatusPosted && record.PostedDate == nil {
+			record.PostedDate = &defaultLifecycleDate
 		}
 	}
 }

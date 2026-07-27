@@ -680,7 +680,6 @@ func (s *Service) notifyCurrencyUsageChanged() {
 
 func (s *Service) generatedJournalRecords(ctx context.Context, definition Definition, scheduledDate values.CivilDate) ([]transactions.JournalRecordInput, error) {
 	records := make([]transactions.JournalRecordInput, 0, len(definition.Records))
-	pendingDate := scheduledDate.Time()
 	for _, record := range definition.Records {
 		amountUSD, err := s.amountUSD.SignedAmountUSD(ctx, record.Currency, record.Amount, scheduledDate)
 		if err != nil {
@@ -695,7 +694,6 @@ func (s *Service) generatedJournalRecords(ctx context.Context, definition Defini
 			CategoryID:           record.CategoryID,
 			TagIDs:               slices.Clone(record.TagIDs),
 			Memo:                 record.Memo,
-			PendingDate:          &pendingDate,
 			PostingStatus:        transactions.PostingStatusExpected,
 			ReconciliationStatus: transactions.ReconciliationStatusUnreconciled,
 			Source:               transactions.SourceRecurringTemplate,

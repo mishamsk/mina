@@ -44,11 +44,6 @@ interface RecordDetailCellsProps {
 const inputDateValue = (value: string | null | undefined): string =>
   localTimestampDateValue(value);
 
-const timestampForDateInput = (value: string, originalValue: string): string =>
-  value === inputDateValue(originalValue)
-    ? originalValue
-    : localCivilDateStartISO(value);
-
 const nullableTimestampForDateInput = (
   value: string,
   originalValue: string | null | undefined,
@@ -136,15 +131,13 @@ export const RecordDetailCells = ({
     }
   };
   const saveDates = () => {
-    if (!pendingDate) {
-      setErrorMessage("Pending date is required.");
-      return;
-    }
-
     void save({
       initiatedDate,
       kind: "dates",
-      pendingDate: timestampForDateInput(pendingDate, record.pending_date),
+      pendingDate: nullableTimestampForDateInput(
+        pendingDate,
+        record.pending_date,
+      ),
       postedDate: nullableTimestampForDateInput(postedDate, record.posted_date),
     });
   };

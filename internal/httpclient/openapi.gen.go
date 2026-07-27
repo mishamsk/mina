@@ -1311,10 +1311,10 @@ type CreateExchangeTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1356,10 +1356,10 @@ type CreateIncomeTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1404,10 +1404,10 @@ type CreateJournalRecordRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC banking transaction timestamp, such as a card hold; when omitted or null, defaults to initiated_date at 00:00:00Z for non-bank records.
+	// PendingDate UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the record posted; use pending_date for manual non-bank records and null until posted.
+	// PostedDate UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1455,10 +1455,10 @@ type CreateRefundTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1497,10 +1497,10 @@ type CreateSpendTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1554,10 +1554,10 @@ type CreateTransferTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1756,13 +1756,16 @@ type JournalRecord struct {
 	Currency       string    `json:"currency"`
 	ExternalId     *string   `json:"external_id,omitempty"`
 	ExternalSystem *string   `json:"external_system,omitempty"`
-	MemberId       *int64    `json:"member_id,omitempty"`
-	Memo           *string   `json:"memo,omitempty"`
 
-	// PendingDate UTC banking transaction timestamp, such as a card hold; non-bank records use initiated_date as a full timestamp.
-	PendingDate time.Time `json:"pending_date"`
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+	MemberId      *int64             `json:"member_id,omitempty"`
+	Memo          *string            `json:"memo,omitempty"`
 
-	// PostedDate UTC timestamp when the record posted; equal to pending_date for manual non-bank records and null until posted.
+	// PendingDate UTC timestamp when the record entered pending; null when the record never had a pending stage.
+	PendingDate *time.Time `json:"pending_date"`
+
+	// PostedDate UTC timestamp when the record posted; null until the record reaches the posted stage.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -2427,10 +2430,10 @@ type SearchAccountJournalRecordsParams struct {
 	// InitiatedDateTo Maximum transaction initiated date in YYYY-MM-DD format.
 	InitiatedDateTo *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
 
-	// PendingDateFrom Minimum pending timestamp in ISO 8601 format.
+	// PendingDateFrom Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
 	PendingDateFrom *time.Time `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
 
-	// PendingDateTo Maximum pending timestamp in ISO 8601 format.
+	// PendingDateTo Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
 	PendingDateTo *time.Time `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
 
 	// PostedDateFrom Minimum posted timestamp in ISO 8601 format.
@@ -2634,10 +2637,10 @@ type SearchJournalRecordsParams struct {
 	// InitiatedDateTo Maximum transaction initiated date in YYYY-MM-DD format.
 	InitiatedDateTo *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
 
-	// PendingDateFrom Minimum pending timestamp in ISO 8601 format.
+	// PendingDateFrom Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
 	PendingDateFrom *time.Time `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
 
-	// PendingDateTo Maximum pending timestamp in ISO 8601 format.
+	// PendingDateTo Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
 	PendingDateTo *time.Time `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
 
 	// PostedDateFrom Minimum posted timestamp in ISO 8601 format.
@@ -2826,10 +2829,10 @@ type ListTransactionsParams struct {
 	// InitiatedDateTo Maximum transaction initiated date in YYYY-MM-DD format.
 	InitiatedDateTo *openapi_types.Date `form:"initiated_date_to,omitempty" json:"initiated_date_to,omitempty"`
 
-	// PendingDateFrom Minimum pending timestamp in ISO 8601 format.
+	// PendingDateFrom Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
 	PendingDateFrom *time.Time `form:"pending_date_from,omitempty" json:"pending_date_from,omitempty"`
 
-	// PendingDateTo Maximum pending timestamp in ISO 8601 format.
+	// PendingDateTo Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
 	PendingDateTo *time.Time `form:"pending_date_to,omitempty" json:"pending_date_to,omitempty"`
 
 	// PostedDateFrom Minimum posted timestamp in ISO 8601 format.

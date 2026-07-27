@@ -710,7 +710,7 @@ export const bulkReassignJournalRecordAccount = <ThrowOnError extends boolean = 
 /**
  * Update posting and reconciliation statuses on selected journal records.
  *
- * Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.
+ * Changing posting_status to pending stamps a missing pending_date with the current UTC time and clears posted_date. Changing posting_status to posted stamps a missing posted_date with the current UTC time. Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.
  */
 export const bulkUpdateJournalRecordStatuses = <ThrowOnError extends boolean = false>(options: Options<BulkUpdateJournalRecordStatusesData, ThrowOnError>): RequestResult<BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordStatusesErrors, ThrowOnError> => (options.client ?? client).post<BulkUpdateJournalRecordStatusesResponses, BulkUpdateJournalRecordStatusesErrors, ThrowOnError>({
     url: '/api/records/bulk/status',

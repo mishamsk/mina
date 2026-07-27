@@ -427,9 +427,9 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		{name: "initiated from", params: &httpclient.SearchJournalRecordsParams{InitiatedDateFrom: apptest.DatePtr("2024-04-01")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
 		{name: "initiated to", params: &httpclient.SearchJournalRecordsParams{InitiatedDateTo: apptest.DatePtr("2024-03-31")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
 		{name: "pending from", params: &httpclient.SearchJournalRecordsParams{PendingDateFrom: apptest.TimestampPtr("2024-04-01T00:00:00Z")}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
-		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: apptest.TimestampPtr("2024-03-31T00:00:00Z")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
+		{name: "pending to", params: &httpclient.SearchJournalRecordsParams{PendingDateTo: apptest.TimestampPtr("2024-03-31T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
 		{name: "posted from", params: &httpclient.SearchJournalRecordsParams{PostedDateFrom: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
-		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
+		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
 		{name: "memo", params: &httpclient.SearchJournalRecordsParams{MemoContains: new("unc")}, want: []int64{firstDebit.RecordId}},
 		{name: "combined", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId, TagId: &refs.TagId, MemoContains: new("Lunch")}},
 	}
@@ -452,6 +452,9 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 	assertRecordIDs(t, accountRecords.JSON200.Records, []int64{firstDebit.RecordId})
 	if accountRecords.JSON200.Records[0].TransactionId != first.JSON201.TransactionId {
 		t.Fatalf("account record transaction_id = %d, want %d", accountRecords.JSON200.Records[0].TransactionId, first.JSON201.TransactionId)
+	}
+	if got := accountRecords.JSON200.Records[0].InitiatedDate.String(); got != "2024-03-10" {
+		t.Fatalf("account record initiated_date = %q, want 2024-03-10", got)
 	}
 
 	accountDateFiltered, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.SavingsAccountId, &httpclient.SearchAccountJournalRecordsParams{
@@ -1081,7 +1084,7 @@ func assertTransactionCancelPreservedFields(t *testing.T, before []httpclient.Jo
 		t.Fatalf("cancelled record count = %d, want %d; before %+v after %+v", len(after), len(before), before, after)
 	}
 	for index := range before {
-		if !after[index].PendingDate.Equal(before[index].PendingDate) ||
+		if !equalOptionalTime(after[index].PendingDate, before[index].PendingDate) ||
 			!equalOptionalTime(after[index].PostedDate, before[index].PostedDate) ||
 			after[index].ReconciliationStatus != before[index].ReconciliationStatus {
 			t.Fatalf("cancelled record %d preserved fields = pending:%v posted:%v reconciliation:%q, want pending:%v posted:%v reconciliation:%q",

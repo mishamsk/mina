@@ -373,7 +373,7 @@ func (s *RecurringStore) CreateConfirmedOccurrence(
 	initiatedDate values.CivilDate,
 	records []transactions.JournalRecordInput,
 ) (recurring.Occurrence, error) {
-	posted := postedJournalRecords(records)
+	posted := postedJournalRecords(records, initiatedDate.Time())
 	return s.createOccurrenceWithTransaction(ctx, definition, scheduledDate, initiatedDate, recurring.OccurrenceStatusConfirmed, posted)
 }
 
@@ -534,7 +534,7 @@ func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64) (recur
 			ctx,
 			`UPDATE `+s.db.accountingName("journal_record")+`
 SET posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`),
-    posted_date = pending_date,
+    posted_date = timezone('UTC', CURRENT_TIMESTAMP),
     updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ?
   AND tombstoned_at IS NULL
@@ -996,16 +996,13 @@ WHERE o.recurring_occurrence_id = ?`,
 	return occurrence, nil
 }
 
-func postedJournalRecords(records []transactions.JournalRecordInput) []transactions.JournalRecordInput {
+func postedJournalRecords(records []transactions.JournalRecordInput, postedAt time.Time) []transactions.JournalRecordInput {
 	posted := make([]transactions.JournalRecordInput, 0, len(records))
 	for _, record := range records {
 		next := record
 		next.TagIDs = slices.Clone(record.TagIDs)
 		next.PostingStatus = transactions.PostingStatusPosted
-		if record.PendingDate != nil {
-			postedDate := *record.PendingDate
-			next.PostedDate = &postedDate
-		}
+		next.PostedDate = &postedAt
 		posted = append(posted, next)
 	}
 

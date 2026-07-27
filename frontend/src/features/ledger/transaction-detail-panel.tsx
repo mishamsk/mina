@@ -150,7 +150,7 @@ const recordHasReachedStage = (
     return recordStageTimestamp(record, stage) !== null;
   }
   return stage === "pending"
-    ? record.posting_status === "pending" || record.posting_status === "posted"
+    ? record.pending_date !== null
     : record.posting_status === "posted";
 };
 
@@ -181,14 +181,10 @@ const buildLifecycleStage = (
   ).sort();
   const partial =
     reachedRecords.length > 0 && reachedRecords.length < records.length;
-  const hasMissingDay = reachedRecords.some(({ day }) => day === null);
-  const varies =
-    days.length > 1 || partial || (days.length > 0 && hasMissingDay);
+  const varies = days.length > 1 || partial;
   const formattedDate =
     days.length === 0
-      ? reachedRecords.length > 0
-        ? "date unavailable"
-        : "—"
+      ? "—"
       : days.length === 1
         ? formatLocalCivilDate(days[0]!)
         : `${formatLocalCivilDate(days[0]!)}–${formatLocalCivilDate(days.at(-1)!)}`;
@@ -206,19 +202,17 @@ const buildLifecycleStage = (
   const tooltip =
     reachedRecords.length === 0
       ? `${label} not reached`
-      : exactTimestamps.length === 0
-        ? `${label} date unavailable`
-        : exactTimestamps.length === 1 &&
-            reachedRecords.every(
-              ({ timestamp }) => timestamp === exactTimestamps[0],
+      : exactTimestamps.length === 1 &&
+          reachedRecords.every(
+            ({ timestamp }) => timestamp === exactTimestamps[0],
+          )
+        ? `${label} ${formatTimestamp(exactTimestamps[0]!)}`
+        : reachedRecords
+            .map(
+              ({ record, timestamp }) =>
+                `${lifecycleRecordName(maps, record)} ${timestamp ? formatTimestamp(timestamp) : "—"}`,
             )
-          ? `${label} ${formatTimestamp(exactTimestamps[0]!)}`
-          : reachedRecords
-              .map(
-                ({ record, timestamp }) =>
-                  `${lifecycleRecordName(maps, record)} ${timestamp ? formatTimestamp(timestamp) : "—"}`,
-              )
-              .join(" · ");
+            .join(" · ");
 
   return {
     canonicalDay: days.length === 1 ? days[0]! : null,
@@ -806,7 +800,7 @@ const DetailRecordsTable = ({
                         </dd>
                         <dt className="text-muted-foreground">Pending</dt>
                         <dd>
-                          {lifecycle.expected
+                          {!record.pending_date
                             ? "—"
                             : formatTimestamp(record.pending_date)}
                         </dd>

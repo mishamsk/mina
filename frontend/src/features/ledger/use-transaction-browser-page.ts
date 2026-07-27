@@ -484,11 +484,15 @@ export const useTransactionBrowserPage = ({
         if (result.error) {
           throw new Error(apiErrorMessage(result.error));
         }
-        nextTransaction = transactionWithRecordUpdate(
-          transaction,
-          [record.record_id],
-          update,
+        const refreshed = await fetchTransactionById(
+          transaction.transaction_id,
         );
+        if (refreshed.data) {
+          nextTransaction = refreshed.data;
+          nextDetailTransaction = refreshed.data;
+        } else {
+          nextTransaction = transaction;
+        }
       } else {
         const result = await replaceLedgerTransaction(
           transaction.transaction_id,

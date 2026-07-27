@@ -932,7 +932,7 @@ LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.catego
 
 	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	` + runningBalanceSelect + `, jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
+	tx.initiated_date, jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
 ` + fromQuery + "\n" + runningBalanceJoin + "\n" + whereQuery
 	query += " ORDER BY tx.initiated_date ASC, jr.transaction_id ASC, jr.record_id ASC"
 	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
@@ -1087,6 +1087,16 @@ func (s *TransactionStore) BulkUpdateStatuses(
 		if postingStatus != nil {
 			setClauses = append(setClauses, "posting_status = CAST(? AS "+s.db.accountingName("posting_status")+")")
 			args = append(args, enumValue(*postingStatus))
+			switch *postingStatus {
+			case transactions.PostingStatusPending:
+				setClauses = append(
+					setClauses,
+					"pending_date = COALESCE(pending_date, timezone('UTC', CURRENT_TIMESTAMP))",
+					"posted_date = NULL",
+				)
+			case transactions.PostingStatusPosted:
+				setClauses = append(setClauses, "posted_date = COALESCE(posted_date, timezone('UTC', CURRENT_TIMESTAMP))")
+			}
 		}
 		if reconciliationStatus != nil {
 			setClauses = append(setClauses, "reconciliation_status = CAST(? AS "+s.db.accountingName("reconciliation_status")+")")
@@ -1195,13 +1205,14 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	var runningBalance sql.Null[duckdb.Decimal]
 	var tagIDs []any
 	var memo sql.NullString
-	var pendingDate time.Time
+	var pendingDate sql.NullTime
 	var postedDate sql.NullTime
 	var postingStatus string
 	var reconciliationStatus string
 	var source string
 	var externalID sql.NullString
 	var externalSystem sql.NullString
+	var initiatedDate time.Time
 	var createdAt time.Time
 	var updatedAt time.Time
 	var tombstonedAt sql.NullTime
@@ -1228,6 +1239,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 		&source,
 		&externalID,
 		&externalSystem,
+		&initiatedDate,
 		&createdAt,
 		&updatedAt,
 		&tombstonedAt,
@@ -1263,7 +1275,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	if memo.Valid {
 		record.Memo = &memo.String
 	}
-	record.PendingDate = pendingDate.UTC()
+	record.PendingDate = nullableTimeFromSQL(pendingDate)
 	record.PostedDate = nullableTimeFromSQL(postedDate)
 	parsedTagIDs, err := int64ListFromDuckDB(tagIDs)
 	if err != nil {
@@ -1277,6 +1289,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	if externalSystem.Valid {
 		record.ExternalSystem = &externalSystem.String
 	}
+	record.InitiatedDate = values.CivilDateFromTime(initiatedDate)
 	record.CreatedAt = createdAt.UTC()
 	record.UpdatedAt = updatedAt.UTC()
 	record.TombstonedAt = nullableTimeFromSQL(tombstonedAt)
@@ -1313,8 +1326,9 @@ func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 		`SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	CAST(NULL AS DECIMAL(18,8)) AS running_balance,
 	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
+	tx.initiated_date, jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
 FROM `+db.accountingName("journal_record")+` jr
+JOIN `+db.accountingName("transaction")+` tx ON tx.transaction_id = jr.transaction_id
 JOIN `+db.accountingName("account")+` a ON a.account_id = jr.account_id
 LEFT JOIN `+db.accountingName("category")+` c ON c.category_id = jr.category_id
 WHERE jr.transaction_id IN (`+placeholders(len(transactionIDs))+`) AND jr.tombstoned_at IS NULL

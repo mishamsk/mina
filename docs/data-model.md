@@ -241,9 +241,9 @@ CREATE TABLE journal_record (
     -- Optional record note or description.
     memo TEXT,
 
-    -- UTC banking transaction timestamp, such as a card hold; for non-bank records, initiated_date as a full timestamp.
-    pending_date TIMESTAMP NOT NULL,
-    -- UTC timestamp when the record posted; equal to pending_date for manual non-bank records and NULL until posted.
+    -- UTC timestamp when the record entered pending; NULL when the record never had a pending stage.
+    pending_date TIMESTAMP,
+    -- UTC timestamp when the record posted; NULL until the record reaches the posted stage.
     posted_date TIMESTAMP DEFAULT NULL,
 
     -- Banking lifecycle state for this record.
@@ -270,8 +270,8 @@ COMMENT ON COLUMN journal_record.amount IS 'Signed debit or credit amount in the
 COMMENT ON COLUMN journal_record.amount_usd IS 'Signed USD conversion at recording time; NULL when no exchange rate is available.';
 COMMENT ON COLUMN journal_record.tag_ids IS 'Tag IDs assigned to this record for flexible grouping.';
 COMMENT ON COLUMN journal_record.memo IS 'Optional record note or description.';
-COMMENT ON COLUMN journal_record.pending_date IS 'UTC banking transaction timestamp, such as a card hold; for non-bank records, initiated_date as a full timestamp.';
-COMMENT ON COLUMN journal_record.posted_date IS 'UTC timestamp when the record posted; equal to pending_date for manual non-bank records and NULL until posted.';
+COMMENT ON COLUMN journal_record.pending_date IS 'UTC timestamp when the record entered pending; NULL when the record never had a pending stage.';
+COMMENT ON COLUMN journal_record.posted_date IS 'UTC timestamp when the record posted; NULL until the record reaches the posted stage.';
 COMMENT ON COLUMN journal_record.posting_status IS 'Banking lifecycle state for this record.';
 COMMENT ON COLUMN journal_record.reconciliation_status IS 'Import/reconciliation matching state.';
 COMMENT ON COLUMN journal_record.source IS 'Origin of this record.';

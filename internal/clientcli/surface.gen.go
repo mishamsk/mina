@@ -93,7 +93,7 @@ func Operations() []Operation {
 			Method:      "POST",
 			Path:        "/api/records/bulk/status",
 			Summary:     "Update posting and reconciliation statuses on selected journal records.",
-			Description: "Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.",
+			Description: "Changing posting_status to pending stamps a missing pending_date with the current UTC time and clears posted_date. Changing posting_status to posted stamps a missing posted_date with the current UTC time. Updates are rejected when they would leave any transaction with a mix of cancelled and non-cancelled active journal records, or with a mix of expected and non-expected active journal records.",
 			CLI:         CLIOperation{Area: "records", Name: "bulk-update-statuses"},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -497,13 +497,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{
@@ -605,13 +605,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{
@@ -791,13 +791,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{
@@ -893,13 +893,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{
@@ -1089,13 +1089,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{
@@ -2439,13 +2439,13 @@ func Operations() []Operation {
 					{
 						Name:        "pending_date_from",
 						Type:        "string",
-						Description: "Minimum pending timestamp in ISO 8601 format.",
+						Description: "Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.",
 						Required:    false,
 					},
 					{
 						Name:        "pending_date_to",
 						Type:        "string",
-						Description: "Maximum pending timestamp in ISO 8601 format.",
+						Description: "Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.",
 						Required:    false,
 					},
 					{
@@ -2874,13 +2874,13 @@ func Operations() []Operation {
 					{
 						Name:        "pending_date_from",
 						Type:        "string",
-						Description: "Minimum pending timestamp in ISO 8601 format.",
+						Description: "Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.",
 						Required:    false,
 					},
 					{
 						Name:        "pending_date_to",
 						Type:        "string",
-						Description: "Maximum pending timestamp in ISO 8601 format.",
+						Description: "Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.",
 						Required:    false,
 					},
 					{
@@ -3028,13 +3028,13 @@ func Operations() []Operation {
 					{
 						Name:        "pending_date_from",
 						Type:        "string",
-						Description: "Minimum pending timestamp in ISO 8601 format.",
+						Description: "Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.",
 						Required:    false,
 					},
 					{
 						Name:        "pending_date_to",
 						Type:        "string",
-						Description: "Maximum pending timestamp in ISO 8601 format.",
+						Description: "Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.",
 						Required:    false,
 					},
 					{

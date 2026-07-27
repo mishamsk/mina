@@ -310,11 +310,11 @@ export type CreateJournalRecordRequest = {
      */
     memo?: string | null;
     /**
-     * UTC banking transaction timestamp, such as a card hold; when omitted or null, defaults to initiated_date at 00:00:00Z for non-bank records.
+     * UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
      */
     pending_date?: string | null;
     /**
-     * UTC timestamp when the record posted; use pending_date for manual non-bank records and null until posted.
+     * UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
      */
     posted_date?: string | null;
     posting_status: PostingStatus;
@@ -425,11 +425,11 @@ export type CreateSpendTransactionRequest = {
      */
     memo?: string | null;
     /**
-     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
      */
     pending_date?: string | null;
     /**
-     * UTC timestamp when the generated records posted.
+     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
      */
     posted_date?: string | null;
     posting_status?: PostingStatus;
@@ -474,11 +474,11 @@ export type CreateIncomeTransactionRequest = {
      */
     memo?: string | null;
     /**
-     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
      */
     pending_date?: string | null;
     /**
-     * UTC timestamp when the generated records posted.
+     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
      */
     posted_date?: string | null;
     posting_status?: PostingStatus;
@@ -523,11 +523,11 @@ export type CreateRefundTransactionRequest = {
      */
     memo?: string | null;
     /**
-     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
      */
     pending_date?: string | null;
     /**
-     * UTC timestamp when the generated records posted.
+     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
      */
     posted_date?: string | null;
     posting_status?: PostingStatus;
@@ -568,11 +568,11 @@ export type CreateTransferTransactionRequest = {
      */
     memo?: string | null;
     /**
-     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
      */
     pending_date?: string | null;
     /**
-     * UTC timestamp when the generated records posted.
+     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
      */
     posted_date?: string | null;
     posting_status?: PostingStatus;
@@ -613,11 +613,11 @@ export type CreateExchangeTransactionRequest = {
      */
     memo?: string | null;
     /**
-     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     * UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
      */
     pending_date?: string | null;
     /**
-     * UTC timestamp when the generated records posted.
+     * UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
      */
     posted_date?: string | null;
     posting_status?: PostingStatus;
@@ -1036,6 +1036,10 @@ export type MemberListResponse = {
 export type JournalRecord = {
     record_id: number;
     transaction_id: number;
+    /**
+     * Human-facing transaction date in YYYY-MM-DD format.
+     */
+    initiated_date: string;
     account_id: number;
     member_id?: number | null;
     currency: string;
@@ -1056,11 +1060,11 @@ export type JournalRecord = {
     tag_ids: Array<number>;
     memo?: string | null;
     /**
-     * UTC banking transaction timestamp, such as a card hold; non-bank records use initiated_date as a full timestamp.
+     * UTC timestamp when the record entered pending; null when the record never had a pending stage.
      */
-    pending_date: string;
+    pending_date: string | null;
     /**
-     * UTC timestamp when the record posted; equal to pending_date for manual non-bank records and null until posted.
+     * UTC timestamp when the record posted; null until the record reaches the posted stage.
      */
     posted_date?: string | null;
     posting_status: PostingStatus;
@@ -3892,11 +3896,11 @@ export type ListTransactionsData = {
          */
         initiated_date_to?: string;
         /**
-         * Minimum pending timestamp in ISO 8601 format.
+         * Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
          */
         pending_date_from?: string;
         /**
-         * Maximum pending timestamp in ISO 8601 format.
+         * Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
          */
         pending_date_to?: string;
         /**
@@ -4203,11 +4207,11 @@ export type SearchJournalRecordsData = {
          */
         initiated_date_to?: string;
         /**
-         * Minimum pending timestamp in ISO 8601 format.
+         * Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
          */
         pending_date_from?: string;
         /**
-         * Maximum pending timestamp in ISO 8601 format.
+         * Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
          */
         pending_date_to?: string;
         /**
@@ -4310,11 +4314,11 @@ export type SearchAccountJournalRecordsData = {
          */
         initiated_date_to?: string;
         /**
-         * Minimum pending timestamp in ISO 8601 format.
+         * Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
          */
         pending_date_from?: string;
         /**
-         * Maximum pending timestamp in ISO 8601 format.
+         * Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.
          */
         pending_date_to?: string;
         /**

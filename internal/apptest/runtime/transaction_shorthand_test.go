@@ -671,6 +671,12 @@ func assertDefaultShorthandRecords(t *testing.T, transaction httpclient.Transact
 		if record.Source != httpclient.Manual {
 			t.Fatalf("default source = %q, want %q", record.Source, httpclient.Manual)
 		}
+		if record.PendingDate != nil {
+			t.Fatalf("default pending_date = %v, want nil", record.PendingDate)
+		}
+		if record.PostedDate == nil {
+			t.Fatal("default posted_date = nil, want populated")
+		}
 	}
 }
 

@@ -593,7 +593,7 @@ const RecordsTable = ({
                   field="dates"
                   record={record}
                   transaction={transaction}
-                  value={`Initiated ${transaction.initiated_date}; pending ${localTimestampDateValue(record.pending_date)}; posted ${localTimestampDateValue(record.posted_date)}`}
+                  value={`Initiated ${transaction.initiated_date}; pending ${localTimestampDateValue(record.pending_date) || "—"}; posted ${localTimestampDateValue(record.posted_date) || "—"}`}
                   onSave={onUpdateRecord}
                 />
               </td>

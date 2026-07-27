@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
@@ -294,7 +295,18 @@ func TestRecordBulkStatusPostingStatusInvariantsBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
 
-	posted := createTransaction(t, client, balancedTransactionRequest(refs.transactionRefs))
+	postedRequest := balancedTransactionRequest(refs.transactionRefs)
+	for index := range postedRequest.Records {
+		postedRequest.Records[index].PendingDate = nil
+	}
+	posted := createTransaction(t, client, postedRequest)
+	originalPostedDates := make(map[int64]time.Time, len(posted.JSON201.Records))
+	for _, record := range posted.JSON201.Records {
+		if record.PostedDate == nil {
+			t.Fatalf("directly posted record %d posted_date = nil", record.RecordId)
+		}
+		originalPostedDates[record.RecordId] = *record.PostedDate
+	}
 	cancelledStatus := httpclient.NonExpectedPostingStatusCancelled
 	wholeCancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     recordIDs(posted.JSON201.Records),
@@ -317,9 +329,15 @@ func TestRecordBulkStatusPostingStatusInvariantsBoundary(t *testing.T) {
 		t.Fatalf("whole uncancel status = %d, want %d; body %s", wholeUncancel.StatusCode(), http.StatusOK, wholeUncancel.Body)
 	}
 	assertBulkResponse(t, wholeUncancel.JSON200, recordIDs(posted.JSON201.Records))
-	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.PostingStatusPosted)
-
+	uncancelled := getTransaction(t, client, posted.JSON201.TransactionId)
+	assertTransactionRecordPostingStatuses(t, uncancelled.JSON200.Records, httpclient.PostingStatusPosted)
+	for _, record := range uncancelled.JSON200.Records {
+		if record.PendingDate != nil {
+			t.Fatalf("uncancelled directly posted record %d pending_date = %v, want nil", record.RecordId, record.PendingDate)
+		}
+	}
 	pendingStatus := httpclient.NonExpectedPostingStatusPending
+	pendingStartedAt := time.Now().UTC().Add(-time.Second)
 	partialPending, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
 		PostingStatus: &pendingStatus,
@@ -337,9 +355,20 @@ func TestRecordBulkStatusPostingStatusInvariantsBoundary(t *testing.T) {
 	if got := mixedPostingStatuses.JSON200.Records[0].PostingStatus; got != httpclient.PostingStatusPending {
 		t.Fatalf("first record posting_status = %q, want %q", got, httpclient.PostingStatusPending)
 	}
+	assertLifecycleTimestampBetween(
+		t,
+		"posted-to-pending pending_date",
+		mixedPostingStatuses.JSON200.Records[0].PendingDate,
+		pendingStartedAt,
+		time.Now().UTC().Add(time.Second),
+	)
+	if got := mixedPostingStatuses.JSON200.Records[0].PostedDate; got != nil {
+		t.Fatalf("posted-to-pending posted_date = %v, want nil", got)
+	}
 	if got := mixedPostingStatuses.JSON200.Records[1].PostingStatus; got != httpclient.PostingStatusPosted {
 		t.Fatalf("second record posting_status = %q, want %q", got, httpclient.PostingStatusPosted)
 	}
+	repostStartedAt := time.Now().UTC().Add(-time.Second)
 	restorePartialPosted, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},
 		PostingStatus: &postedStatus,
@@ -349,7 +378,26 @@ func TestRecordBulkStatusPostingStatusInvariantsBoundary(t *testing.T) {
 		t.Fatalf("restore partial posted status = %d, want %d; body %s", restorePartialPosted.StatusCode(), http.StatusOK, restorePartialPosted.Body)
 	}
 	assertBulkResponse(t, restorePartialPosted.JSON200, []int64{posted.JSON201.Records[0].RecordId})
-	assertTransactionPostingStatus(t, client, posted.JSON201.TransactionId, httpclient.PostingStatusPosted)
+	restored := getTransaction(t, client, posted.JSON201.TransactionId)
+	assertTransactionRecordPostingStatuses(t, restored.JSON200.Records, httpclient.PostingStatusPosted)
+	assertLifecycleTimestampBetween(
+		t,
+		"reposted posted_date",
+		restored.JSON200.Records[0].PostedDate,
+		repostStartedAt,
+		time.Now().UTC().Add(time.Second),
+	)
+	if restored.JSON200.Records[0].PostedDate.Equal(originalPostedDates[restored.JSON200.Records[0].RecordId]) {
+		t.Fatalf(
+			"reposted record %d posted_date = %v, want fresh timestamp after %v",
+			restored.JSON200.Records[0].RecordId,
+			restored.JSON200.Records[0].PostedDate,
+			originalPostedDates[restored.JSON200.Records[0].RecordId],
+		)
+	}
+	if record := restored.JSON200.Records[1]; record.PostedDate == nil || !record.PostedDate.Equal(originalPostedDates[record.RecordId]) {
+		t.Fatalf("unchanged record %d posted_date = %v, want %v", record.RecordId, record.PostedDate, originalPostedDates[record.RecordId])
+	}
 
 	partialCancel, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds:     []int64{posted.JSON201.Records[0].RecordId},

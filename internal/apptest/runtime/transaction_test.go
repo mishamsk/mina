@@ -32,6 +32,7 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	if len(created.JSON201.Records) != 2 {
 		t.Fatalf("created record count = %d, want 2; body %+v", len(created.JSON201.Records), created.JSON201)
 	}
+	assertRecordInitiatedDates(t, "created", created.JSON201.Records, "2024-03-10")
 	if created.JSON201.Records[0].AccountId != refs.CheckingAccountId || created.JSON201.Records[1].AccountId != refs.MerchantAccountId {
 		t.Fatalf("created account ids = %d/%d, want %d/%d", created.JSON201.Records[0].AccountId, created.JSON201.Records[1].AccountId, refs.CheckingAccountId, refs.MerchantAccountId)
 	}
@@ -56,6 +57,7 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	if len(read.JSON200.Records) != 2 {
 		t.Fatalf("read record count = %d, want 2; body %+v", len(read.JSON200.Records), read.JSON200)
 	}
+	assertRecordInitiatedDates(t, "read", read.JSON200.Records, "2024-03-10")
 	if read.JSON200.Records[0].Memo == nil || *read.JSON200.Records[0].Memo != "Lunch" {
 		t.Fatalf("read memo = %v, want Lunch", read.JSON200.Records[0].Memo)
 	}
@@ -73,6 +75,7 @@ func TestTransactionCreateReadListBoundary(t *testing.T) {
 	if list.JSON200.Transactions[0].TransactionId != created.JSON201.TransactionId || len(list.JSON200.Transactions[0].Records) != 2 {
 		t.Fatalf("listed transaction = %+v, want id %d with 2 records", list.JSON200.Transactions[0], created.JSON201.TransactionId)
 	}
+	assertRecordInitiatedDates(t, "listed", list.JSON200.Transactions[0].Records, "2024-03-10")
 	if list.JSON200.Transactions[0].RecurringOccurrenceId != nil {
 		t.Fatalf("listed recurring_occurrence_id = %v, want nil", list.JSON200.Transactions[0].RecurringOccurrenceId)
 	}
@@ -467,10 +470,141 @@ func TestTransactionRecordFieldsBoundary(t *testing.T) {
 	}
 }
 
+func TestTransactionPendingLifecycleBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createTransactionRefs(t, client)
+
+	directPostedRequest := lifecycleTransactionRequest(refs, "2024-03-10", httpclient.PostingStatusPosted)
+	directPosted := createTransaction(t, client, directPostedRequest)
+	assertRecordLifecycleDates(t, "direct posted create", directPosted.JSON201.Records, nil, apptest.TimestampPtr("2024-03-10T00:00:00Z"))
+
+	directPostedReplacement := lifecycleTransactionRequest(refs, "2024-03-14", httpclient.PostingStatusPosted)
+	replaced, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		directPosted.JSON201.TransactionId,
+		httpclient.UpdateTransactionRequest(directPostedReplacement),
+	)
+	requireNoTransportError(t, "replace direct posted transaction", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf("replace direct posted status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
+	}
+	assertRecordLifecycleDates(t, "direct posted replace", replaced.JSON200.Records, nil, apptest.TimestampPtr("2024-03-14T00:00:00Z"))
+
+	pendingRequest := lifecycleTransactionRequest(refs, "2024-03-12", httpclient.PostingStatusPending)
+	pending := createTransaction(t, client, pendingRequest)
+	wantPending := apptest.TimestampPtr("2024-03-12T00:00:00Z")
+	assertRecordLifecycleDates(t, "pending create", pending.JSON201.Records, wantPending, nil)
+
+	postedStatus := httpclient.NonExpectedPostingStatusPosted
+	postStartedAt := time.Now().UTC().Add(-time.Second)
+	posted, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(
+		context.Background(),
+		httpclient.BulkUpdateRecordStatusRequest{
+			RecordIds:     recordIDs(pending.JSON201.Records),
+			PostingStatus: &postedStatus,
+		},
+	)
+	requireNoTransportError(t, "post pending transaction records", err)
+	if posted.StatusCode() != http.StatusOK {
+		t.Fatalf("post pending records status = %d, want %d; body %s", posted.StatusCode(), http.StatusOK, posted.Body)
+	}
+	pendingThenPosted := getTransaction(t, client, pending.JSON201.TransactionId)
+	for index, record := range pendingThenPosted.JSON200.Records {
+		if record.PendingDate == nil || !record.PendingDate.Equal(*wantPending) {
+			t.Fatalf("pending-then-posted record %d pending_date = %v, want %v", index, record.PendingDate, wantPending)
+		}
+		assertLifecycleTimestampBetween(t, "pending-then-posted posted_date", record.PostedDate, postStartedAt, time.Now().UTC().Add(time.Second))
+	}
+
+	explicitPending := apptest.Timestamp("2024-03-11T18:30:00Z")
+	explicitPendingRequest := lifecycleTransactionRequest(refs, "2024-03-13", httpclient.PostingStatusPosted)
+	for index := range explicitPendingRequest.Records {
+		explicitPendingRequest.Records[index].PendingDate = &explicitPending
+	}
+	explicitPendingPosted := createTransaction(t, client, explicitPendingRequest)
+	assertRecordLifecycleDates(
+		t,
+		"explicit pending on posted",
+		explicitPendingPosted.JSON201.Records,
+		&explicitPending,
+		apptest.TimestampPtr("2024-03-13T00:00:00Z"),
+	)
+
+	expectedRequest := lifecycleTransactionRequest(refs, "2024-03-15", httpclient.PostingStatusExpected)
+	expectedPending := apptest.Timestamp("2024-03-14T18:00:00Z")
+	expectedPosted := apptest.Timestamp("2024-03-15T18:00:00Z")
+	for index := range expectedRequest.Records {
+		expectedRequest.Records[index].PendingDate = &expectedPending
+		expectedRequest.Records[index].PostedDate = &expectedPosted
+	}
+	expected := createTransaction(t, client, expectedRequest)
+	assertRecordLifecycleDates(t, "expected create", expected.JSON201.Records, nil, nil)
+
+	expectedReplacementRequest := lifecycleTransactionRequest(refs, "2024-03-16", httpclient.PostingStatusExpected)
+	for index := range expectedReplacementRequest.Records {
+		expectedReplacementRequest.Records[index].PendingDate = &expectedPending
+		expectedReplacementRequest.Records[index].PostedDate = &expectedPosted
+	}
+	expectedReplacement, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		expected.JSON201.TransactionId,
+		httpclient.UpdateTransactionRequest(expectedReplacementRequest),
+	)
+	requireNoTransportError(t, "replace expected transaction", err)
+	if expectedReplacement.StatusCode() != http.StatusOK {
+		t.Fatalf("replace expected transaction status = %d, want %d; body %s", expectedReplacement.StatusCode(), http.StatusOK, expectedReplacement.Body)
+	}
+	assertRecordLifecycleDates(t, "expected replace", expectedReplacement.JSON200.Records, nil, nil)
+
+	pendingFrom := apptest.Timestamp("2024-03-12T00:00:00Z")
+	pendingTo := apptest.Timestamp("2024-03-12T23:59:59Z")
+	listed, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		PendingDateFrom: &pendingFrom,
+		PendingDateTo:   &pendingTo,
+	})
+	requireNoTransportError(t, "list transactions by pending range", err)
+	assertTransactionListResponse(t, "pending range transaction list", listed, []int64{pending.JSON201.TransactionId}, 1)
+
+	searched, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		PendingDateFrom: &pendingFrom,
+		PendingDateTo:   &pendingTo,
+	})
+	requireNoTransportError(t, "search records by pending range", err)
+	if searched.StatusCode() != http.StatusOK {
+		t.Fatalf("pending range record search status = %d, want %d; body %s", searched.StatusCode(), http.StatusOK, searched.Body)
+	}
+	assertRecordIDs(t, searched.JSON200.Records, recordIDs(pending.JSON201.Records))
+}
+
 func assertTransactionListOffset(t *testing.T, label string, list httpclient.TransactionListResponse, want int) {
 	t.Helper()
 	if list.Offset != want {
 		t.Fatalf("%s offset = %d, want %d; body %+v", label, list.Offset, want, list)
+	}
+}
+
+func lifecycleTransactionRequest(refs transactionRefs, initiatedDate string, status httpclient.PostingStatus) httpclient.CreateTransactionRequest {
+	request := balancedTransactionRequest(refs)
+	request.InitiatedDate = apptest.Date(initiatedDate)
+	for index := range request.Records {
+		request.Records[index].PendingDate = nil
+		request.Records[index].PostedDate = nil
+		request.Records[index].PostingStatus = status
+	}
+
+	return request
+}
+
+func assertRecordLifecycleDates(t *testing.T, label string, records []httpclient.JournalRecord, wantPending *time.Time, wantPosted *time.Time) {
+	t.Helper()
+
+	for index, record := range records {
+		if !equalOptionalTime(record.PendingDate, wantPending) {
+			t.Fatalf("%s record %d pending_date = %v, want %v", label, index, record.PendingDate, wantPending)
+		}
+		if !equalOptionalTime(record.PostedDate, wantPosted) {
+			t.Fatalf("%s record %d posted_date = %v, want %v", label, index, record.PostedDate, wantPosted)
+		}
 	}
 }
 
@@ -1375,6 +1509,16 @@ func assertTransactionRecordPostingStatuses(t *testing.T, records []httpclient.J
 	}
 }
 
+func assertRecordInitiatedDates(t *testing.T, label string, records []httpclient.JournalRecord, want string) {
+	t.Helper()
+
+	for _, record := range records {
+		if got := record.InitiatedDate.String(); got != want {
+			t.Fatalf("%s record %d initiated_date = %q, want %q", label, record.RecordId, got, want)
+		}
+	}
+}
+
 func assertMixedCancellationError(t *testing.T, label string, gotStatus int, gotBody *httpclient.InvalidRequest, rawBody []byte) {
 	t.Helper()
 
@@ -1422,6 +1566,14 @@ func assertRecordTimestamps(t *testing.T, label string, record httpclient.Journa
 	}
 	if record.PostedDate == nil || !record.PostedDate.Equal(wantPosted) {
 		t.Fatalf("%s posted_date = %v, want %s", label, record.PostedDate, wantPosted.Format(time.RFC3339))
+	}
+}
+
+func assertLifecycleTimestampBetween(t *testing.T, label string, got *time.Time, from time.Time, to time.Time) {
+	t.Helper()
+
+	if got == nil || got.Before(from) || got.After(to) {
+		t.Fatalf("%s = %v, want between %s and %s", label, got, from.Format(time.RFC3339Nano), to.Format(time.RFC3339Nano))
 	}
 }
 

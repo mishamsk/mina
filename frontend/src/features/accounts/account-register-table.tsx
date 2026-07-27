@@ -476,8 +476,8 @@ export const AccountRegisterTable = ({
           </thead>
           <tbody>
             {records.map((record, index) => {
-              const date = formatLocalCivilDateParts(record.pending_date);
               const transaction = transactionsById[record.transaction_id];
+              const date = formatLocalCivilDateParts(record.initiated_date);
               const transactionError =
                 transactionErrorsById[record.transaction_id];
               const account = maps.accountsById.get(record.account_id);
@@ -501,8 +501,7 @@ export const AccountRegisterTable = ({
                 transaction !== undefined &&
                 transaction.recurring_occurrence_id !== null &&
                 busyOccurrenceId === transaction.recurring_occurrence_id;
-              const overdueExpected =
-                expected && record.pending_date.slice(0, 10) < today;
+              const overdueExpected = expected && record.initiated_date < today;
               const showStatus = record.posting_status !== "posted";
               const selected = selectedRecordId === record.record_id;
               const walkRowFocus = (
