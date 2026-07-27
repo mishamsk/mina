@@ -74,7 +74,7 @@ Per-task checklist — every task below runs the full per-task workflow; tick a 
 
 Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect the stated dependencies; otherwise run in the listed order.
 
-- [ ] Task 1: `3fp5` — Preserve transaction detail and split editor while debounced search syncs URL (P1 frontend bug; no dependencies; leads the fleet on priority and owns the debounced-search URL-sync behavior later tasks build on) — branch `3fp5-search-url-detail-preserve`
+- [x] Task 1: `3fp5` — Preserve transaction detail and split editor while debounced search syncs URL (P1 frontend bug; no dependencies; leads the fleet on priority and owns the debounced-search URL-sync behavior later tasks build on) — branch `3fp5-search-url-detail-preserve`
 - [ ] Task 2: `zh4g` — Restore transaction detail from deep-link query parameters (P2 frontend bug; same transactions URL-parameter surface as Task 1 — runs after it so deep-link restore builds on the corrected param-preserving sync) — branch `zh4g-detail-deep-link`
 - [ ] Task 3: (no Kata ref) — Entry modal must not eagerly create a draft (user-reported bug; scope is Brief A above; fixes the draft dirty-tracking that Task 13's draft-adjacent picker polish later builds on) — branch `entry-eager-draft`
 - [ ] Task 4: `5qah` — Do not assign pending timestamps to directly posted manual transactions (P2 backend/API bug; nullable pending-timestamp contract must land before its frontend lifecycle-display consumer in Task 5) — branch `5qah-no-pending-direct-post`
