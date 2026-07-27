@@ -5290,6 +5290,50 @@ test("transactions line composition uses compact dates and single-line leaf tags
   ).toBeLessThan(1);
 });
 
+test("cold transaction detail deep link restores outside the list snapshot", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const memo = `E2E cold detail ${unique}`;
+  const missingSearch = `No snapshot match ${unique}`;
+  const transaction = await createSearchSpend(page, memo);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=25&q=${encodeURIComponent(missingSearch)}` +
+      `&transaction=${transaction.transaction_id}`,
+  );
+
+  await expect(
+    page.getByRole("heading", { name: "No transactions" }),
+  ).toBeVisible();
+  await expect(
+    page.locator("[data-transaction-row]").filter({ hasText: memo }),
+  ).toHaveCount(0);
+  const panel = page.getByTestId("transaction-detail-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel).toHaveAccessibleName(transaction.display_title);
+  await expect(panel.getByTestId("transaction-detail-summary-memo")).toHaveText(
+    memo,
+  );
+  await expect(
+    panel
+      .getByTestId("transaction-detail-records-table")
+      .locator("tr[data-detail-record-row='true']"),
+  ).toHaveCount(2);
+  await expect(panel.getByText("cash:Wallet").first()).toBeVisible();
+  await expect(panel.getByText("merchant:Books").first()).toBeVisible();
+  await expectTransactionsPageUrl(page, 1, 25, {
+    q: missingSearch,
+    transaction: String(transaction.transaction_id),
+  });
+
+  await page.keyboard.press("Escape");
+
+  await expect(panel).toHaveCount(0);
+  await expectTransactionsPageUrl(page, 1, 25, { q: missingSearch });
+});
+
 test("transaction detail panel shows full records and supports deep links", async ({
   page,
 }, testInfo) => {
@@ -9932,6 +9976,81 @@ test("the entry modal blocks the command palette while an edit is active", async
     entryPanel.getByRole("heading", { name: "Edit spend" }),
   ).toBeVisible();
   await expect(editSpendPanel.getByLabel("Amount")).toHaveValue("34.56");
+});
+
+test("cold entry edit deep link composes over restored transaction detail", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const memo = `E2E cold entry ${unique}`;
+  const missingSearch = `No entry snapshot match ${unique}`;
+  const transaction = await createSearchSpend(page, memo);
+  const entry = `edit:${transaction.transaction_id}`;
+  const entryModal = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
+
+  await page.goto(
+    `/transactions?page=1&pageSize=25&q=${encodeURIComponent(missingSearch)}` +
+      `&entry=${encodeURIComponent(entry)}`,
+  );
+
+  await expect(
+    entryModal.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await expect(entryModal.getByLabel("Memo")).toHaveValue(memo);
+  await expect(
+    page.getByRole("heading", {
+      includeHidden: true,
+      name: "No transactions",
+    }),
+  ).toBeVisible();
+  await expectTransactionsPageUrl(page, 1, 25, {
+    entry,
+    q: missingSearch,
+  });
+
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect(entryModal).toHaveCount(0);
+  await expectTransactionsPageUrl(page, 1, 25, { q: missingSearch });
+
+  await page.goto(
+    `/transactions?page=1&pageSize=25&q=${encodeURIComponent(missingSearch)}` +
+      `&transaction=${transaction.transaction_id}` +
+      `&entry=${encodeURIComponent(entry)}`,
+  );
+
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(detailPanel).toBeVisible();
+  await expect(
+    entryModal.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await expect(entryModal.getByLabel("Memo")).toHaveValue(memo);
+  await expect(
+    page.getByRole("heading", {
+      includeHidden: true,
+      name: "No transactions",
+    }),
+  ).toBeVisible();
+  await expectTransactionsPageUrl(page, 1, 25, {
+    entry,
+    q: missingSearch,
+    transaction: String(transaction.transaction_id),
+  });
+
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await expect(entryModal).toHaveCount(0);
+  await expect(detailPanel).toBeVisible();
+  await expect(detailPanel).toHaveAccessibleName(transaction.display_title);
+  await expect(
+    detailPanel.getByTestId("transaction-detail-summary-memo"),
+  ).toHaveText(memo);
+  await expectTransactionsPageUrl(page, 1, 25, {
+    q: missingSearch,
+    transaction: String(transaction.transaction_id),
+  });
 });
 
 test("entry modal deep links compose with history and report missing transactions", async ({
