@@ -60,17 +60,20 @@ import type {
   TransactionEntryType,
 } from "@/models/ui-state";
 import {
+  deleteTransactionEntryDraft,
   readTransactionEntryDraft,
   writeTransactionEntryDraft,
 } from "@/services/indexeddb";
 import type { LedgerLookupsSnapshot } from "@/store";
 import {
   addCategoryPickerCategory,
+  getUiPreferencesSnapshot,
   invalidateAccountsPage,
   invalidateCategoriesPage,
   invalidateTagsPage,
   openTransactionEntryLaunch,
   openTransactionEntryPanel,
+  setTransactionEntryActiveTab,
 } from "@/store";
 import { localTodayISODate } from "@/utils/date";
 
@@ -183,6 +186,10 @@ interface LaunchDraft {
   readonly replacement?: ReplacementContext;
 }
 
+interface PendingLaunchDraft extends LaunchDraft {
+  readonly discardOrdinaryDraft: boolean;
+}
+
 type DraftPersistenceMode = "launch" | "ordinary";
 
 interface TabConfig {
@@ -213,6 +220,48 @@ const tabLabels: Record<TransactionEntryType, string> = {
   refund: "Refund",
   spend: "Spend",
   transfer: "Transfer",
+};
+
+const draftDiscardLaunchWaitMs = 1_000;
+
+const discardStoredTransactionEntryDraft = async (
+  ordinaryBaseline: TransactionEntryDraft | undefined,
+): Promise<void> => {
+  try {
+    await deleteTransactionEntryDraft();
+  } catch {
+    if (!ordinaryBaseline) {
+      return;
+    }
+    try {
+      await writeTransactionEntryDraft(
+        ordinaryBaseline,
+        ordinaryBaseline,
+        false,
+      );
+    } catch {
+      // Draft storage is disposable; storage failure must not block the launch.
+    }
+  }
+};
+
+const waitForStoredTransactionEntryDraftDiscard = async (
+  ordinaryBaseline: TransactionEntryDraft | undefined,
+): Promise<void> => {
+  let timeoutId: number | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timeoutId = window.setTimeout(resolve, draftDiscardLaunchWaitMs);
+  });
+  try {
+    await Promise.race([
+      discardStoredTransactionEntryDraft(ordinaryBaseline),
+      timeout,
+    ]);
+  } finally {
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+    }
+  }
 };
 
 const tabConfigs: Record<ShorthandTransactionEntryType, TabConfig> = {
@@ -849,50 +898,153 @@ const advancedDraftFromTransaction = (
   ),
 });
 
-const spendMerchantDraftIsEmpty = (merchant: SpendMerchantDraft): boolean =>
-  !merchant.accountId && !merchant.amount.trim() && !merchant.categoryId;
+const merchantUserInput = (merchant: SpendMerchantDraft) => ({
+  accountId: merchant.accountId,
+  amount: merchant.amount.trim(),
+  categoryId: merchant.categoryId,
+});
 
-const blankTabDraftIsEmpty = (draft: TransactionEntryTabDraft): boolean =>
-  !draft.amount.trim() &&
-  !draft.boughtAccountId &&
-  !draft.boughtAmount.trim() &&
-  !draft.categoryId &&
-  !draft.chargeAccountId &&
-  !draft.chargeAmount.trim() &&
-  !draft.chargeCategoryId &&
-  !draft.chargeEnabled &&
-  normalizeCurrency(draft.currency) === "USD" &&
-  draft.date === localTodayISODate() &&
-  !draft.destinationAccountId &&
-  !draft.fundingAccountId &&
-  !draft.memberId &&
-  !draft.merchantAccountId &&
-  !draft.memo.trim() &&
-  !draft.sourceAccountId &&
-  !draft.soldAccountId &&
-  draft.spendMerchants.every(spendMerchantDraftIsEmpty) &&
-  draft.tagIds.length === 0;
+const merchantHasUserInput = (
+  merchant: ReturnType<typeof merchantUserInput>,
+): boolean =>
+  merchant.accountId !== undefined ||
+  Boolean(merchant.amount) ||
+  merchant.categoryId !== undefined;
 
-const blankRecordRowDraftIsEmpty = (row: JournalRecordRowDraft): boolean =>
-  !row.accountId &&
-  !row.amount.trim() &&
-  !row.categoryId &&
-  normalizeCurrency(row.currency) === "USD" &&
-  !row.memberId &&
-  !row.memo.trim() &&
-  !row.pendingDateTime.trim() &&
-  !row.postedDateTime.trim() &&
-  row.postingStatus === "posted" &&
-  row.reconciliationStatus === "unreconciled" &&
-  row.tagIds.length === 0;
+const tabDraftUserInput = (draft: TransactionEntryTabDraft) => ({
+  amount: draft.amount.trim(),
+  boughtAccountId: draft.boughtAccountId,
+  boughtAmount: draft.boughtAmount.trim(),
+  categoryId: draft.categoryId,
+  chargeAccountId: draft.chargeAccountId,
+  chargeAmount: draft.chargeAmount.trim(),
+  chargeCategoryId: draft.chargeCategoryId,
+  chargeEnabled: draft.chargeEnabled,
+  currency: normalizeCurrency(draft.currency),
+  date: draft.date,
+  destinationAccountId: draft.destinationAccountId,
+  fundingAccountId: draft.fundingAccountId,
+  memberId: draft.memberId,
+  merchantAccountId: draft.merchantAccountId,
+  memo: draft.memo.trim(),
+  soldAccountId: draft.soldAccountId,
+  sourceAccountId: draft.sourceAccountId,
+  spendMerchants: draft.spendMerchants
+    .map(merchantUserInput)
+    .filter(merchantHasUserInput),
+  tagIds: draft.tagIds,
+});
 
-const draftHasUserInput = (draft: TransactionEntryDraft): boolean =>
-  Object.values(draft.tabs).some(
-    (tabDraft) => !blankTabDraftIsEmpty(tabDraft),
-  ) ||
-  draft.advanced.date !== localTodayISODate() ||
-  draft.advanced.records.length !== 2 ||
-  draft.advanced.records.some((row) => !blankRecordRowDraftIsEmpty(row));
+const recordRowUserInput = (row: JournalRecordRowDraft) => ({
+  accountId: row.accountId,
+  amount: row.amount.trim(),
+  categoryId: row.categoryId,
+  currency: normalizeCurrency(row.currency),
+  memberId: row.memberId,
+  memo: row.memo.trim(),
+  pendingDateTime: row.pendingDateTime.trim(),
+  postedDateTime: row.postedDateTime.trim(),
+  postingStatus: row.postingStatus,
+  reconciliationStatus: row.reconciliationStatus,
+  tagIds: row.tagIds,
+});
+
+const draftUserInput = (draft: TransactionEntryDraft) => ({
+  advanced: {
+    date: draft.advanced.date,
+    records: draft.advanced.records.map(recordRowUserInput),
+  },
+  tabs: {
+    income: tabDraftUserInput(draft.tabs.income),
+    refund: tabDraftUserInput(draft.tabs.refund),
+    spend: tabDraftUserInput(draft.tabs.spend),
+    transfer: tabDraftUserInput(draft.tabs.transfer),
+    exchange: tabDraftUserInput(draft.tabs.exchange),
+  },
+});
+
+const draftHasUserInput = (
+  draft: TransactionEntryDraft,
+  baseline: TransactionEntryDraft,
+): boolean =>
+  JSON.stringify(draftUserInput(draft)) !==
+  JSON.stringify(draftUserInput(baseline));
+
+const draftFingerprint = (draft: TransactionEntryDraft): string =>
+  JSON.stringify(draft);
+
+const sharedLegacyDefault = (
+  values: readonly string[],
+  fallback: string,
+): string => {
+  const counts = new Map<string, number>();
+  let sharedValue = fallback;
+  let sharedCount = 0;
+  for (const value of values) {
+    const count = (counts.get(value) ?? 0) + 1;
+    counts.set(value, count);
+    if (count > sharedCount) {
+      sharedValue = value;
+      sharedCount = count;
+    }
+  }
+  return sharedValue;
+};
+
+const legacyDraftBaseline = (
+  draft: TransactionEntryDraft,
+): TransactionEntryDraft => {
+  const baseline = defaultDraft();
+  const sharedCurrency = sharedLegacyDefault(
+    [
+      ...entryTypes
+        .filter(
+          (entryType): entryType is ShorthandTransactionEntryType =>
+            entryType !== "advanced",
+        )
+        .map((entryType) => draft.tabs[entryType].currency),
+      ...draft.advanced.records.map((row) => row.currency),
+    ],
+    baseline.tabs.spend.currency,
+  );
+  const sharedDate = sharedLegacyDefault(
+    [
+      ...entryTypes
+        .filter(
+          (entryType): entryType is ShorthandTransactionEntryType =>
+            entryType !== "advanced",
+        )
+        .map((entryType) => draft.tabs[entryType].date),
+      draft.advanced.date,
+    ],
+    baseline.tabs.spend.date,
+  );
+  const tabBaseline = (
+    entryType: ShorthandTransactionEntryType,
+  ): TransactionEntryTabDraft => ({
+    ...baseline.tabs[entryType],
+    currency: sharedCurrency,
+    date: sharedDate,
+  });
+
+  return {
+    ...baseline,
+    advanced: {
+      date: sharedDate,
+      records: baseline.advanced.records.map((row) => ({
+        ...row,
+        currency: sharedCurrency,
+      })),
+    },
+    tabs: {
+      income: tabBaseline("income"),
+      refund: tabBaseline("refund"),
+      spend: tabBaseline("spend"),
+      transfer: tabBaseline("transfer"),
+      exchange: tabBaseline("exchange"),
+    },
+  };
+};
 
 const shorthandMemberId = (
   records: readonly JournalRecord[],
@@ -2366,7 +2518,7 @@ export const EntryPanel = ({
     ReplacementContext | undefined
   >();
   const [pendingLaunchDraft, setPendingLaunchDraft] = useState<
-    LaunchDraft | undefined
+    PendingLaunchDraft | undefined
   >();
   const [initializedLaunchKey, setInitializedLaunchKey] = useState<
     string | undefined
@@ -2377,6 +2529,7 @@ export const EntryPanel = ({
   const [draftPersistence, setDraftPersistence] =
     useState<DraftPersistenceMode>("ordinary");
   const [confirmDiscardDraftOpen, setConfirmDiscardDraftOpen] = useState(false);
+  const [discardingPendingLaunch, setDiscardingPendingLaunch] = useState(false);
   const [confirmCloseDiscardOpen, setConfirmCloseDiscardOpen] = useState(false);
   const [attentionErrorCount, setAttentionErrorCount] = useState(0);
   const entryPanelRef = useRef<HTMLElement>(null);
@@ -2403,6 +2556,12 @@ export const EntryPanel = ({
   const launchDraftBaselineRef = useRef<TransactionEntryDraft | undefined>(
     undefined,
   );
+  const ordinaryDraftBaselineRef = useRef<TransactionEntryDraft | undefined>(
+    undefined,
+  );
+  const ordinaryBaselineMustPersistRef = useRef(false);
+  const ordinaryDraftStoredRef = useRef(false);
+  const lastStoredDraftFingerprintRef = useRef<string | undefined>(undefined);
 
   const requestClose = useCallback(() => {
     const modifiedReplacement =
@@ -2496,12 +2655,22 @@ export const EntryPanel = ({
     });
   }, []);
 
-  const discardPendingLaunch = useCallback(() => {
-    if (!pendingLaunchDraft) {
+  const discardPendingLaunch = useCallback(async () => {
+    if (!pendingLaunchDraft || discardingPendingLaunch) {
       return;
     }
-    if (pendingLaunchDraft.persistence === "launch") {
-      void writeTransactionEntryDraft(defaultDraft());
+    setDiscardingPendingLaunch(true);
+    if (pendingLaunchDraft.discardOrdinaryDraft) {
+      ordinaryDraftStoredRef.current = false;
+      lastStoredDraftFingerprintRef.current = undefined;
+      await waitForStoredTransactionEntryDraftDiscard(
+        ordinaryDraftBaselineRef.current,
+      );
+    }
+    if (pendingLaunchDraft.persistence === "ordinary") {
+      ordinaryDraftBaselineRef.current = pendingLaunchDraft.draft;
+      ordinaryBaselineMustPersistRef.current = false;
+      ordinaryDraftStoredRef.current = false;
     }
     setDraft(pendingLaunchDraft.draft);
     setReplacement(pendingLaunchDraft.replacement);
@@ -2515,7 +2684,8 @@ export const EntryPanel = ({
     setFieldErrors({});
     setAdvancedFieldErrors({});
     setGeneralError(undefined);
-  }, [pendingLaunchDraft]);
+    setDiscardingPendingLaunch(false);
+  }, [discardingPendingLaunch, pendingLaunchDraft]);
 
   useEffect(() => {
     if (!open) {
@@ -2542,21 +2712,41 @@ export const EntryPanel = ({
     let active = true;
     void readTransactionEntryDraft().then((storedDraft) => {
       if (active) {
-        const migratedDraft = migrateStoredDraft(storedDraft);
+        const storedEnvelope =
+          storedDraft && "draft" in storedDraft && "baseline" in storedDraft
+            ? storedDraft
+            : undefined;
+        const legacyStoredDraft =
+          storedDraft && !("draft" in storedDraft) ? storedDraft : undefined;
+        const migratedDraft = migrateStoredDraft(
+          storedEnvelope?.draft ?? legacyStoredDraft,
+        );
+        const ordinaryBaseline = storedEnvelope
+          ? migrateStoredDraft(storedEnvelope.baseline)
+          : legacyDraftBaseline(migratedDraft);
+        const ordinaryBaselineMustPersist =
+          storedEnvelope?.persistBaseline ?? false;
         const launchDraft = launch
           ? launchDraftFromTransaction(launch, latestLookupsRef.current!)
           : undefined;
+        const rememberedActiveTab =
+          storedDraft === undefined
+            ? getUiPreferencesSnapshot().transactionEntryActiveTab
+            : migratedDraft.activeTab;
         const ordinaryDraft = initialTab
           ? {
               ...migratedDraft,
               activeTab: initialTab,
             }
-          : migratedDraft;
+          : {
+              ...migratedDraft,
+              activeTab: rememberedActiveTab,
+            };
         const nextDraft = launchDraft ?? {
           draft: ordinaryDraft,
           persistence: "ordinary" as const,
         };
-        rememberedActiveTabRef.current = migratedDraft.activeTab;
+        rememberedActiveTabRef.current = rememberedActiveTab;
         initialTabOverrideRef.current = launchDraft ? undefined : initialTab;
         userSelectedActiveTabRef.current = false;
         setPendingLaunchDraft(undefined);
@@ -2566,8 +2756,20 @@ export const EntryPanel = ({
           launchDraftBaselineRef.current !== undefined &&
           JSON.stringify(latestDraftRef.current) !==
             JSON.stringify(launchDraftBaselineRef.current);
+        const ordinaryDraftHasUserInput = draftHasUserInput(
+          migratedDraft,
+          ordinaryBaseline,
+        );
         const existingOrdinaryDraftWouldBeDiscarded =
-          Boolean(launchDraft) && draftHasUserInput(migratedDraft);
+          Boolean(launchDraft) && ordinaryDraftHasUserInput;
+        ordinaryDraftBaselineRef.current = ordinaryBaseline;
+        ordinaryBaselineMustPersistRef.current = ordinaryBaselineMustPersist;
+        ordinaryDraftStoredRef.current = storedDraft !== undefined;
+        lastStoredDraftFingerprintRef.current =
+          storedDraft === undefined ||
+          (!ordinaryBaselineMustPersist && !ordinaryDraftHasUserInput)
+            ? undefined
+            : draftFingerprint(migratedDraft);
         if (inFlightLaunchChanged || existingOrdinaryDraftWouldBeDiscarded) {
           setDraft(
             inFlightLaunchChanged ? latestDraftRef.current : migratedDraft,
@@ -2576,9 +2778,17 @@ export const EntryPanel = ({
             inFlightLaunchChanged ? latestReplacementRef.current : undefined,
           );
           setDraftPersistence(inFlightLaunchChanged ? "launch" : "ordinary");
-          setPendingLaunchDraft(nextDraft);
+          setPendingLaunchDraft({
+            ...nextDraft,
+            discardOrdinaryDraft: existingOrdinaryDraftWouldBeDiscarded,
+          });
           setConfirmDiscardDraftOpen(true);
         } else {
+          if (launchDraft?.persistence === "ordinary") {
+            ordinaryDraftBaselineRef.current = nextDraft.draft;
+            ordinaryBaselineMustPersistRef.current = false;
+            ordinaryDraftStoredRef.current = false;
+          }
           setDraft(nextDraft.draft);
           setReplacement(nextDraft.replacement);
           setDraftPersistence(nextDraft.persistence);
@@ -2601,7 +2811,43 @@ export const EntryPanel = ({
       return;
     }
 
-    void writeTransactionEntryDraft(draftForStorage(draft));
+    const ordinaryBaseline = ordinaryDraftBaselineRef.current;
+    if (!ordinaryBaseline) {
+      return;
+    }
+    const storedDraft = draftForStorage(draft);
+    const baseline = draftForStorage(ordinaryBaseline);
+    const fingerprint = draftFingerprint(storedDraft);
+    if (
+      ordinaryDraftStoredRef.current &&
+      lastStoredDraftFingerprintRef.current === fingerprint
+    ) {
+      return;
+    }
+
+    if (!draftHasUserInput(storedDraft, baseline)) {
+      if (!ordinaryDraftStoredRef.current) {
+        return;
+      }
+      if (!ordinaryBaselineMustPersistRef.current) {
+        ordinaryDraftStoredRef.current = false;
+        lastStoredDraftFingerprintRef.current = undefined;
+        void deleteTransactionEntryDraft().catch(() => {
+          // Draft storage is disposable and the next write self-heals it.
+        });
+        return;
+      }
+    }
+
+    ordinaryDraftStoredRef.current = true;
+    lastStoredDraftFingerprintRef.current = fingerprint;
+    void writeTransactionEntryDraft(
+      storedDraft,
+      baseline,
+      ordinaryBaselineMustPersistRef.current,
+    ).catch(() => {
+      // Draft storage is disposable and later draft changes retry the write.
+    });
   }, [currentDraftReady, draft, draftForStorage, draftPersistence, open]);
 
   useEffect(() => {
@@ -3279,7 +3525,10 @@ export const EntryPanel = ({
     }
 
     userSelectedActiveTabRef.current = true;
-    rememberedActiveTabRef.current = "advanced";
+    if (!replacement) {
+      rememberedActiveTabRef.current = "advanced";
+      setTransactionEntryActiveTab("advanced");
+    }
     setDraft((currentDraft) => ({
       ...currentDraft,
       activeTab: "advanced",
@@ -3304,43 +3553,52 @@ export const EntryPanel = ({
       return;
     }
     userSelectedActiveTabRef.current = true;
-    rememberedActiveTabRef.current = entryType;
+    if (!replacement) {
+      rememberedActiveTabRef.current = entryType;
+      setTransactionEntryActiveTab(entryType);
+    }
     setDraft((currentDraft) => ({ ...currentDraft, activeTab: entryType }));
     setFieldErrors({});
     setAdvancedFieldErrors({});
     setGeneralError(undefined);
   };
 
-  const applyTemplate = useCallback((template: TransactionTemplate) => {
-    const records = template.records
-      .filter((record) => !record.tombstoned_at)
-      .map((record) => ({
-        ...blankRecordRowDraft(),
-        accountId: record.account_id ?? undefined,
-        amount: record.amount ?? "",
-        categoryId: record.category_id ?? undefined,
-        currency: record.currency ?? "USD",
-        memberId: record.member_id ?? undefined,
-        memo: record.memo ?? "",
-        postingStatus: record.posting_status ?? "posted",
-        reconciliationStatus: record.reconciliation_status ?? "unreconciled",
-        tagIds: [...record.tag_ids],
+  const applyTemplate = useCallback(
+    (template: TransactionTemplate) => {
+      const records = template.records
+        .filter((record) => !record.tombstoned_at)
+        .map((record) => ({
+          ...blankRecordRowDraft(),
+          accountId: record.account_id ?? undefined,
+          amount: record.amount ?? "",
+          categoryId: record.category_id ?? undefined,
+          currency: record.currency ?? "USD",
+          memberId: record.member_id ?? undefined,
+          memo: record.memo ?? "",
+          postingStatus: record.posting_status ?? "posted",
+          reconciliationStatus: record.reconciliation_status ?? "unreconciled",
+          tagIds: [...record.tag_ids],
+        }));
+      userSelectedActiveTabRef.current = true;
+      if (!replacement) {
+        rememberedActiveTabRef.current = "advanced";
+        setTransactionEntryActiveTab("advanced");
+      }
+      setDraft((currentDraft) => ({
+        ...currentDraft,
+        activeTab: "advanced",
+        advanced: {
+          date: currentDraft.advanced.date || localTodayISODate(),
+          records: records.length > 0 ? records : blankAdvancedDraft().records,
+        },
       }));
-    userSelectedActiveTabRef.current = true;
-    rememberedActiveTabRef.current = "advanced";
-    setDraft((currentDraft) => ({
-      ...currentDraft,
-      activeTab: "advanced",
-      advanced: {
-        date: currentDraft.advanced.date || localTodayISODate(),
-        records: records.length > 0 ? records : blankAdvancedDraft().records,
-      },
-    }));
-    setTemplateQuery(template.fqn);
-    setFieldErrors({});
-    setAdvancedFieldErrors({});
-    setGeneralError(undefined);
-  }, []);
+      setTemplateQuery(template.fqn);
+      setFieldErrors({});
+      setAdvancedFieldErrors({});
+      setGeneralError(undefined);
+    },
+    [replacement],
+  );
 
   useEffect(() => {
     if (!open || replacement || templates.length > 0) {
@@ -3462,15 +3720,9 @@ export const EntryPanel = ({
           );
 
           if (result.data) {
-            const clearedDraft = defaultDraft();
-            setDraft(clearedDraft);
             setReplacement(undefined);
-            setDraftPersistence("ordinary");
             launchDraftBaselineRef.current = undefined;
-            latestDraftRef.current = clearedDraft;
-            latestDraftPersistenceRef.current = "ordinary";
             latestReplacementRef.current = undefined;
-            await writeTransactionEntryDraft(draftForStorage(clearedDraft));
             await onSaved(result.data, {
               operation: "updated",
               previousTransaction: replacement.transaction,
@@ -3556,7 +3808,17 @@ export const EntryPanel = ({
               draftPersistence === "ordinary" ||
               draftPersistence === "launch"
             ) {
-              await writeTransactionEntryDraft(draftForStorage(nextDraft));
+              const storedNextDraft = draftForStorage(nextDraft);
+              ordinaryDraftBaselineRef.current = storedNextDraft;
+              ordinaryBaselineMustPersistRef.current = true;
+              ordinaryDraftStoredRef.current = true;
+              lastStoredDraftFingerprintRef.current =
+                draftFingerprint(storedNextDraft);
+              await writeTransactionEntryDraft(
+                storedNextDraft,
+                storedNextDraft,
+                true,
+              );
             }
             await onSaved(result.data, { operation: "created" });
             if (closeAfterSave) {
@@ -3789,7 +4051,17 @@ export const EntryPanel = ({
             draftPersistence === "ordinary" ||
             draftPersistence === "launch"
           ) {
-            await writeTransactionEntryDraft(draftForStorage(nextDraft));
+            const storedNextDraft = draftForStorage(nextDraft);
+            ordinaryDraftBaselineRef.current = storedNextDraft;
+            ordinaryBaselineMustPersistRef.current = true;
+            ordinaryDraftStoredRef.current = true;
+            lastStoredDraftFingerprintRef.current =
+              draftFingerprint(storedNextDraft);
+            await writeTransactionEntryDraft(
+              storedNextDraft,
+              storedNextDraft,
+              true,
+            );
           }
           await onSaved(result.data, { operation: "created" });
           if (closeAfterSave) {
@@ -5059,17 +5331,21 @@ export const EntryPanel = ({
       </div>
       <ConfirmationDialog
         cancelLabel="Keep draft"
+        cancelPendingTooltip="Draft deletion is in progress; the saved draft cannot be reopened yet."
         confirmIcon={<Trash aria-hidden="true" />}
         confirmLabel="Discard draft"
+        confirmPendingTooltip="Draft deletion is already in progress."
         errorMessage={undefined}
-        onConfirm={discardPendingLaunch}
+        onConfirm={() => {
+          void discardPendingLaunch();
+        }}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen) {
+          if (!nextOpen && !discardingPendingLaunch) {
             cancelPendingLaunch();
           }
         }}
         open={confirmDiscardDraftOpen}
-        pending={false}
+        pending={discardingPendingLaunch}
         pendingLabel="Discarding"
         title="Discard entry draft"
       >

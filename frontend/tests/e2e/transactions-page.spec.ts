@@ -68,6 +68,27 @@ interface StoredTransactionEntryDraftFixture {
   };
 }
 
+interface StoredTransactionEntryDraftEnvelopeFixture {
+  readonly draft: StoredTransactionEntryDraftFixture;
+}
+
+interface StoredTransactionEntryDraftShapeFixture {
+  advanced: {
+    date: string;
+    records: { currency: string }[];
+  };
+  tabs: Record<
+    "exchange" | "income" | "refund" | "spend" | "transfer",
+    { currency: string; date: string }
+  >;
+}
+
+interface StoredTransactionEntryDraftSeedEnvelopeFixture {
+  baseline: StoredTransactionEntryDraftShapeFixture;
+  draft: StoredTransactionEntryDraftShapeFixture;
+  persistBaseline: boolean;
+}
+
 interface RecurringDefinitionFixture {
   readonly recurring_definition_id: number;
 }
@@ -6775,10 +6796,9 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
   await detailPanel
     .getByRole("button", { exact: true, name: "Edit transaction" })
     .click();
-  await page
-    .getByRole("alertdialog", { name: "Discard entry draft" })
-    .getByRole("button", { name: "Discard draft" })
-    .click();
+  await expect(
+    page.getByRole("alertdialog", { name: "Discard entry draft" }),
+  ).toHaveCount(0);
   await expect(
     entryPanel.getByRole("heading", { name: "Edit spend" }),
   ).toBeVisible();
@@ -8515,16 +8535,183 @@ const readStoredTransactionEntryDraft = async (
               );
             };
             getRequest.onsuccess = () => {
+              const storedValue = getRequest.result as
+                | StoredTransactionEntryDraftEnvelopeFixture
+                | StoredTransactionEntryDraftFixture
+                | undefined;
               database.close();
               resolve(
-                getRequest.result as
-                  StoredTransactionEntryDraftFixture | undefined,
+                storedValue && "draft" in storedValue
+                  ? storedValue.draft
+                  : storedValue,
               );
             };
           };
         },
       ),
   );
+
+const seedStoredPristineTransactionEntryDefaults = async (
+  page: Page,
+  date: string,
+  currency: string,
+  changedTab?: {
+    readonly currency?: string;
+    readonly date?: string;
+    readonly name: keyof StoredTransactionEntryDraftShapeFixture["tabs"];
+  },
+): Promise<void> =>
+  page.evaluate(
+    ({
+      changedTab: seededChangedTab,
+      currency: seededCurrency,
+      date: seededDate,
+    }) =>
+      new Promise<void>((resolve, reject) => {
+        const openRequest = indexedDB.open("mina-ui-state", 3);
+        openRequest.onerror = () => {
+          reject(
+            new Error(
+              openRequest.error?.message ??
+                "Failed to open transaction draft store.",
+            ),
+          );
+        };
+        openRequest.onsuccess = () => {
+          const database = openRequest.result;
+          const transaction = database.transaction(
+            "transaction_entry_draft",
+            "readwrite",
+          );
+          const store = transaction.objectStore("transaction_entry_draft");
+          const getRequest = store.get("transaction-entry");
+          getRequest.onerror = () => {
+            database.close();
+            reject(
+              new Error(
+                getRequest.error?.message ??
+                  "Failed to read transaction draft.",
+              ),
+            );
+          };
+          getRequest.onsuccess = () => {
+            const storedValue = getRequest.result as
+              | StoredTransactionEntryDraftSeedEnvelopeFixture
+              | StoredTransactionEntryDraftShapeFixture;
+            const storedBaseline =
+              "baseline" in storedValue ? storedValue.baseline : storedValue;
+            const baseline = JSON.parse(
+              JSON.stringify(storedBaseline),
+            ) as StoredTransactionEntryDraftShapeFixture;
+            baseline.advanced.date = seededDate;
+            for (const record of baseline.advanced.records) {
+              record.currency = seededCurrency;
+            }
+            for (const tab of Object.values(baseline.tabs)) {
+              tab.currency = seededCurrency;
+              tab.date = seededDate;
+            }
+            const draft = JSON.parse(
+              JSON.stringify(baseline),
+            ) as StoredTransactionEntryDraftShapeFixture;
+            if (seededChangedTab) {
+              const tab = draft.tabs[seededChangedTab.name];
+              if (seededChangedTab.currency) {
+                tab.currency = seededChangedTab.currency;
+              }
+              if (seededChangedTab.date) {
+                tab.date = seededChangedTab.date;
+              }
+            }
+            store.put(draft, "transaction-entry");
+          };
+          transaction.oncomplete = () => {
+            database.close();
+            resolve();
+          };
+          transaction.onerror = () => {
+            database.close();
+            reject(
+              new Error(
+                transaction.error?.message ??
+                  "Failed to seed transaction draft.",
+              ),
+            );
+          };
+        };
+      }),
+    { changedTab, currency, date },
+  );
+
+const delayTransactionEntryDraftDeletion = async (
+  page: Page,
+): Promise<() => Promise<void>> => {
+  await page.evaluate(() => {
+    const originalDelete: IDBObjectStore["delete"] = Reflect.get(
+      IDBObjectStore.prototype,
+      "delete",
+    );
+    let releaseDeletion!: () => void;
+    const deletionGate = new Promise<void>((resolve) => {
+      releaseDeletion = resolve;
+    });
+    const testWindow = window as typeof window & {
+      releaseTransactionEntryDraftDeletion?: () => void;
+    };
+    testWindow.releaseTransactionEntryDraftDeletion = () => {
+      IDBObjectStore.prototype.delete = originalDelete;
+      releaseDeletion();
+      delete testWindow.releaseTransactionEntryDraftDeletion;
+    };
+    IDBObjectStore.prototype.delete = function delayedDelete(
+      key,
+    ): IDBRequest<undefined> {
+      const request = originalDelete.call(this, key);
+      return deletionGate.then(
+        () => request,
+      ) as unknown as IDBRequest<undefined>;
+    };
+  });
+
+  return async () => {
+    await page.evaluate(() => {
+      const testWindow = window as typeof window & {
+        releaseTransactionEntryDraftDeletion?: () => void;
+      };
+      testWindow.releaseTransactionEntryDraftDeletion?.();
+    });
+  };
+};
+
+const failTransactionEntryDraftDeletion = async (
+  page: Page,
+): Promise<() => Promise<void>> => {
+  await page.evaluate(() => {
+    const originalDelete: IDBObjectStore["delete"] = Reflect.get(
+      IDBObjectStore.prototype,
+      "delete",
+    );
+    const testWindow = window as typeof window & {
+      restoreTransactionEntryDraftDeletion?: () => void;
+    };
+    testWindow.restoreTransactionEntryDraftDeletion = () => {
+      IDBObjectStore.prototype.delete = originalDelete;
+      delete testWindow.restoreTransactionEntryDraftDeletion;
+    };
+    IDBObjectStore.prototype.delete = () => {
+      throw new DOMException("Synthetic draft deletion failure", "AbortError");
+    };
+  });
+
+  return async () => {
+    await page.evaluate(() => {
+      const testWindow = window as typeof window & {
+        restoreTransactionEntryDraftDeletion?: () => void;
+      };
+      testWindow.restoreTransactionEntryDraftDeletion?.();
+    });
+  };
+};
 
 const journalRecord = (page: Page, index: number): Locator =>
   page.locator(`[aria-label="Journal record ${index}"]`);
@@ -9384,6 +9571,304 @@ test("entry panel creates each shorthand transaction type", async ({
   );
   await exchangePanel.getByLabel("Memo").fill("E2E tab exchange");
   await saveAndExpectEntryCount("/api/transactions/exchange", 5);
+});
+
+test("pristine create drafts do not block saved transaction launches", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const memo = `E2E pristine launch ${unique}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.00",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-08",
+      memo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Income" }).click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New income" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toBeUndefined();
+
+  await page.reload();
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New income" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await clickRowAction(page, row, "Edit transaction");
+  await expect(
+    page.getByRole("alertdialog", { name: "Discard entry draft" }),
+  ).toHaveCount(0);
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Edit as journal" }).click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit journal" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  const discardChangesDialog = page.getByRole("alertdialog", {
+    name: "Discard transaction changes?",
+  });
+  await expect(discardChangesDialog).toBeVisible();
+  await discardChangesDialog
+    .getByRole("button", { name: "Discard changes" })
+    .click();
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New income" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await clickRowAction(page, row, "Duplicate transaction");
+  await expect(
+    page.getByRole("alertdialog", { name: "Discard entry draft" }),
+  ).toHaveCount(0);
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  const duplicateSpendPanel = entryPanel.getByRole("tabpanel", {
+    name: "Spend",
+  });
+  await expect(duplicateSpendPanel.getByLabel("Memo")).toHaveValue(memo);
+  await expect(duplicateSpendPanel.getByLabel("Amount")).toHaveValue("12");
+  await expect(
+    page.getByRole("alertdialog", { name: "Discard entry draft" }),
+  ).toHaveCount(0);
+});
+
+test("dirty and stale-pristine entry drafts use their initialization baseline", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const transactionMemo = `E2E baseline launch ${unique}`;
+  const draftMemo = `E2E kept draft ${unique}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.00",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-08",
+      memo: transactionMemo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
+  const row = page
+    .getByRole("row")
+    .filter({ hasText: transactionMemo })
+    .first();
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await spendPanel.getByLabel("Memo").fill(draftMemo);
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({
+      tabs: {
+        spend: {
+          memo: draftMemo,
+        },
+      },
+    });
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await clickRowAction(page, row, "Edit transaction");
+  const discardDialog = page.getByRole("alertdialog", {
+    name: "Discard entry draft",
+  });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "Keep draft" }).click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await expect(spendPanel.getByLabel("Memo")).toHaveValue(draftMemo);
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await seedStoredPristineTransactionEntryDefaults(page, "2001-02-03", "EUR");
+  await clickRowAction(page, row, "Edit transaction");
+  await expect(discardDialog).toHaveCount(0);
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await seedStoredPristineTransactionEntryDefaults(page, "2001-02-03", "EUR", {
+    date: "2001-02-04",
+    name: "spend",
+  });
+  await clickRowAction(page, row, "Duplicate transaction");
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "Keep draft" }).click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await expect(spendPanel.getByLabel("Date")).toHaveValue("2001-02-04");
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await seedStoredPristineTransactionEntryDefaults(page, "2001-02-03", "EUR", {
+    currency: "CAD",
+    name: "spend",
+  });
+  await clickRowAction(page, row, "Split transaction");
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole("button", { name: "Keep draft" }).click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await expect(spendPanel.getByLabel("Currency")).toHaveValue("CAD");
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const delayedDraftMemo = `${draftMemo} delayed discard`;
+  await spendPanel.getByLabel("Memo").fill(delayedDraftMemo);
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({
+      tabs: {
+        spend: {
+          memo: delayedDraftMemo,
+        },
+      },
+    });
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await clickRowAction(page, row, "Edit transaction");
+  await expect(discardDialog).toBeVisible();
+
+  const releaseDeletion = await delayTransactionEntryDraftDeletion(page);
+  const discardDraftButton = discardDialog.getByRole("button", {
+    name: "Discard draft",
+  });
+  await discardDraftButton.focus();
+  await discardDraftButton.press("Enter");
+  const keepDraftButton = discardDialog.getByRole("button", {
+    name: "Keep draft",
+  });
+  await expect(keepDraftButton).toHaveAttribute("aria-disabled", "true");
+  await expect(
+    discardDialog.getByRole("button", { name: "Discarding" }),
+  ).toHaveAttribute("aria-disabled", "true");
+  await keepDraftButton.locator("..").hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Draft deletion is in progress; the saved draft cannot be reopened yet.",
+  );
+  const discardingButton = discardDialog.getByRole("button", {
+    name: "Discarding",
+  });
+  await expect(discardingButton).toBeFocused();
+  await discardingButton.locator("..").hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "Draft deletion is already in progress.",
+  );
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await releaseDeletion();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const failedDeletionDraftMemo = `${draftMemo} failed deletion`;
+  await spendPanel.getByLabel("Memo").fill(failedDeletionDraftMemo);
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toMatchObject({
+      tabs: {
+        spend: {
+          memo: failedDeletionDraftMemo,
+        },
+      },
+    });
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+  await clickRowAction(page, row, "Edit transaction");
+  await expect(discardDialog).toBeVisible();
+
+  const restoreDeletion = await failTransactionEntryDraftDeletion(page);
+  await discardDialog.getByRole("button", { name: "Discard draft" }).click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  await restoreDeletion();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "New spend" }),
+  ).toBeVisible();
+  await expect(spendPanel.getByLabel("Memo")).toHaveValue("");
+  await expect
+    .poll(async () => readStoredTransactionEntryDraft(page))
+    .toBeUndefined();
 });
 
 test("advanced journal entry gates balance, persists drafts, and saves records", async ({

@@ -90,6 +90,7 @@ export {
   hydrateUiPreferences,
   setSidebarCollapsed,
   setThemePreference,
+  setTransactionEntryActiveTab,
   usePreferencesStore,
   usePreferencesView,
 } from "./preferences";

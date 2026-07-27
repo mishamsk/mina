@@ -11,10 +11,19 @@ import type {
   UiPreferences,
 } from "@/models/ui-state";
 
+export interface StoredTransactionEntryDraft {
+  readonly baseline: TransactionEntryDraft;
+  readonly draft: TransactionEntryDraft;
+  readonly persistBaseline: boolean;
+}
+
+type TransactionEntryDraftStorageValue =
+  StoredTransactionEntryDraft | TransactionEntryDraft;
+
 interface MinaUiDb extends DBSchema {
   readonly transaction_entry_draft: {
     readonly key: "transaction-entry";
-    readonly value: TransactionEntryDraft;
+    readonly value: TransactionEntryDraftStorageValue;
   };
   readonly status_page_ui_state: {
     readonly key: "status-page";
@@ -62,7 +71,10 @@ const migrateTransactionEntryDraftStore = (
       }
 
       return draftStore
-        .put(legacyDraft as TransactionEntryDraft, transactionEntryKey)
+        .put(
+          legacyDraft as TransactionEntryDraftStorageValue,
+          transactionEntryKey,
+        )
         .then(() => draftStore.delete(legacySpendEntryKey));
     })
     .catch(() => {
@@ -122,7 +134,7 @@ export const writeStatusPageUiState = async (
 };
 
 export const readTransactionEntryDraft = async (): Promise<
-  TransactionEntryDraft | undefined
+  TransactionEntryDraftStorageValue | undefined
 > => {
   const database = await openMinaUiDb();
   return database.get(transactionEntryStoreName, transactionEntryKey);
@@ -130,7 +142,18 @@ export const readTransactionEntryDraft = async (): Promise<
 
 export const writeTransactionEntryDraft = async (
   draft: TransactionEntryDraft,
+  baseline: TransactionEntryDraft,
+  persistBaseline = false,
 ): Promise<void> => {
   const database = await openMinaUiDb();
-  await database.put(transactionEntryStoreName, draft, transactionEntryKey);
+  await database.put(
+    transactionEntryStoreName,
+    { baseline, draft, persistBaseline },
+    transactionEntryKey,
+  );
+};
+
+export const deleteTransactionEntryDraft = async (): Promise<void> => {
+  const database = await openMinaUiDb();
+  await database.delete(transactionEntryStoreName, transactionEntryKey);
 };

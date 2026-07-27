@@ -3,6 +3,7 @@ export type ThemePreference = "system" | "light" | "dark";
 export interface UiPreferences {
   readonly sidebarCollapsed: boolean;
   readonly theme: ThemePreference;
+  readonly transactionEntryActiveTab: TransactionEntryType;
 }
 
 export interface StatusPageUiState {
