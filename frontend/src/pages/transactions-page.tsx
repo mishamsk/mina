@@ -9,6 +9,7 @@ import {
   captureTransactionEntryLaunchContext,
   defaultTransactionPage,
   hasActiveTransactionFilterChips,
+  readLiveSearchParams,
   readTransactionFiltersFromSearchParams,
   TransactionBrowser,
   TransactionBrowserToolbar,
@@ -90,12 +91,24 @@ export const TransactionsPage = () => {
   const setSearchFilter = useCallback(
     (normalizedSearch: string) => {
       browser.cancelDateJump();
-      setSearchParams((current) =>
-        writeTransactionFiltersToSearchParams(current, {
-          ...readTransactionFiltersFromSearchParams(current),
-          search: normalizedSearch,
-        }),
-      );
+      const current = readLiveSearchParams();
+      const next = writeTransactionFiltersToSearchParams(current, {
+        ...readTransactionFiltersFromSearchParams(current),
+        search: normalizedSearch,
+      });
+      const activeSurfaceParam = current.has("entry")
+        ? "entry"
+        : current.has("transaction")
+          ? "transaction"
+          : undefined;
+      if (activeSurfaceParam) {
+        const background = new URLSearchParams(next);
+        background.delete(activeSurfaceParam);
+        // Keep these writes synchronous in the same tick so React never renders
+        // the overlay-less background state; never await between them.
+        setSearchParams(background, { replace: true });
+      }
+      setSearchParams(next);
     },
     [browser, setSearchParams],
   );
@@ -103,8 +116,11 @@ export const TransactionsPage = () => {
   const setTransactionFilters = useCallback(
     (nextFilters: TransactionFilters) => {
       browser.cancelDateJump();
-      setSearchParams((current) =>
-        writeTransactionFiltersToSearchParams(current, nextFilters),
+      setSearchParams(
+        writeTransactionFiltersToSearchParams(
+          readLiveSearchParams(),
+          nextFilters,
+        ),
       );
     },
     [browser, setSearchParams],
@@ -114,57 +130,62 @@ export const TransactionsPage = () => {
       const transactionClass = transactionClasses.find(
         (candidate) => candidate === value,
       );
+      const currentFilters = readTransactionFiltersFromSearchParams(
+        readLiveSearchParams(),
+      );
       setTransactionFilters({
-        ...filters,
+        ...currentFilters,
         classes: transactionClass ? [transactionClass] : [],
       });
     },
-    [filters, setTransactionFilters],
+    [setTransactionFilters],
   );
   const setHideExpected = useCallback(
     (hideExpected: boolean) => {
+      const currentFilters = readTransactionFiltersFromSearchParams(
+        readLiveSearchParams(),
+      );
       setTransactionFilters({
-        ...filters,
+        ...currentFilters,
         hideExpected,
       });
     },
-    [filters, setTransactionFilters],
+    [setTransactionFilters],
   );
   const clearFilterChips = useCallback(() => {
+    const currentFilters = readTransactionFiltersFromSearchParams(
+      readLiveSearchParams(),
+    );
     setTransactionFilters({
       ...emptyTransactionFilters,
-      classes: filters.classes,
-      hideExpected: filters.hideExpected,
-      search: filters.search,
+      classes: currentFilters.classes,
+      hideExpected: currentFilters.hideExpected,
+      search: currentFilters.search,
     });
-  }, [
-    filters.classes,
-    filters.hideExpected,
-    filters.search,
-    setTransactionFilters,
-  ]);
+  }, [setTransactionFilters]);
   const addEntityFilter = useCallback(
     (kind: "category" | "member" | "tag", id: number) => {
       browser.cancelDateJump();
-      setSearchParams((current) => {
-        const currentFilters = readTransactionFiltersFromSearchParams(current);
-        const nextFilters =
-          kind === "category"
+      const current = readLiveSearchParams();
+      const currentFilters = readTransactionFiltersFromSearchParams(current);
+      const nextFilters =
+        kind === "category"
+          ? {
+              ...currentFilters,
+              categoryIds: [...currentFilters.categoryIds, id],
+            }
+          : kind === "tag"
             ? {
                 ...currentFilters,
-                categoryIds: [...currentFilters.categoryIds, id],
+                tagIds: [...currentFilters.tagIds, id],
               }
-            : kind === "tag"
-              ? {
-                  ...currentFilters,
-                  tagIds: [...currentFilters.tagIds, id],
-                }
-              : {
-                  ...currentFilters,
-                  memberIds: [...currentFilters.memberIds, id],
-                };
-        return writeTransactionFiltersToSearchParams(current, nextFilters);
-      });
+            : {
+                ...currentFilters,
+                memberIds: [...currentFilters.memberIds, id],
+              };
+      setSearchParams(
+        writeTransactionFiltersToSearchParams(current, nextFilters),
+      );
     },
     [browser, setSearchParams],
   );

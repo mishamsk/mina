@@ -12,6 +12,7 @@ import {
   defaultTransactionPageSize,
   FqnPath,
   hasActiveTransactionFilterChips,
+  readLiveSearchParams,
   readTransactionFiltersFromSearchParams,
   TransactionBrowser,
   TransactionBrowserToolbar,
@@ -277,14 +278,15 @@ export const ReferenceDrilldownPage = ({
   const addEntityFilter = useCallback(
     (kind: "category" | "member" | "tag", id: number) => {
       browser.cancelDateJump();
+      const current = readLiveSearchParams();
       if (kind === filterKind) {
         browser.detail.closeTransactionDetail();
         const nextFilters = stripScopedFilterKind(
           filterKind,
-          readTransactionFiltersFromSearchParams(searchParams),
+          readTransactionFiltersFromSearchParams(current),
         );
         const next = writeTransactionFiltersToSearchParams(
-          searchParams,
+          current,
           nextFilters,
         );
         next.delete("transaction");
@@ -296,52 +298,58 @@ export const ReferenceDrilldownPage = ({
         return;
       }
 
-      setSearchParams((current) => {
-        const currentFilters = stripScopedFilterKind(
-          filterKind,
-          readTransactionFiltersFromSearchParams(current),
-        );
-        const nextFilters =
-          kind === "category"
+      const currentFilters = stripScopedFilterKind(
+        filterKind,
+        readTransactionFiltersFromSearchParams(current),
+      );
+      const nextFilters =
+        kind === "category"
+          ? {
+              ...currentFilters,
+              categoryIds: [...currentFilters.categoryIds, id],
+            }
+          : kind === "tag"
             ? {
                 ...currentFilters,
-                categoryIds: [...currentFilters.categoryIds, id],
+                tagIds: [...currentFilters.tagIds, id],
               }
-            : kind === "tag"
-              ? {
-                  ...currentFilters,
-                  tagIds: [...currentFilters.tagIds, id],
-                }
-              : {
-                  ...currentFilters,
-                  memberIds: [...currentFilters.memberIds, id],
-                };
-        const next = writeTransactionFiltersToSearchParams(
-          current,
-          nextFilters,
-        );
-        next.set("pageSize", String(browser.pageSize));
-        return next;
-      });
+            : {
+                ...currentFilters,
+                memberIds: [...currentFilters.memberIds, id],
+              };
+      const next = writeTransactionFiltersToSearchParams(current, nextFilters);
+      next.set("pageSize", String(browser.pageSize));
+      setSearchParams(next);
     },
-    [browser, filterKind, navigate, searchParams, setSearchParams],
+    [browser, filterKind, navigate, setSearchParams],
   );
 
   const setSearchFilter = useCallback(
     (normalizedSearch: string) => {
       browser.cancelDateJump();
-      setSearchParams((current) => {
-        const nextFilters = stripScopedFilterKind(
-          filterKind,
-          readTransactionFiltersFromSearchParams(current),
-        );
-        const next = writeTransactionFiltersToSearchParams(current, {
-          ...nextFilters,
-          search: normalizedSearch,
-        });
-        next.set("pageSize", String(browser.pageSize));
-        return next;
+      const current = readLiveSearchParams();
+      const nextFilters = stripScopedFilterKind(
+        filterKind,
+        readTransactionFiltersFromSearchParams(current),
+      );
+      const next = writeTransactionFiltersToSearchParams(current, {
+        ...nextFilters,
+        search: normalizedSearch,
       });
+      next.set("pageSize", String(browser.pageSize));
+      const activeSurfaceParam = current.has("entry")
+        ? "entry"
+        : current.has("transaction")
+          ? "transaction"
+          : undefined;
+      if (activeSurfaceParam) {
+        const background = new URLSearchParams(next);
+        background.delete(activeSurfaceParam);
+        // Keep these writes synchronous in the same tick so React never renders
+        // the overlay-less background state; never await between them.
+        setSearchParams(background, { replace: true });
+      }
+      setSearchParams(next);
     },
     [browser, filterKind, setSearchParams],
   );
@@ -349,14 +357,13 @@ export const ReferenceDrilldownPage = ({
   const setTransactionFilters = useCallback(
     (nextFilters: TransactionFilters) => {
       browser.cancelDateJump();
-      setSearchParams((current) => {
-        const next = writeTransactionFiltersToSearchParams(
-          current,
-          stripScopedFilterKind(filterKind, nextFilters),
-        );
-        next.set("pageSize", String(browser.pageSize));
-        return next;
-      });
+      const current = readLiveSearchParams();
+      const next = writeTransactionFiltersToSearchParams(
+        current,
+        stripScopedFilterKind(filterKind, nextFilters),
+      );
+      next.set("pageSize", String(browser.pageSize));
+      setSearchParams(next);
     },
     [browser, filterKind, setSearchParams],
   );
@@ -366,35 +373,42 @@ export const ReferenceDrilldownPage = ({
       const transactionClass = transactionClasses.find(
         (candidate) => candidate === value,
       );
+      const currentFilters = stripScopedFilterKind(
+        filterKind,
+        readTransactionFiltersFromSearchParams(readLiveSearchParams()),
+      );
       setTransactionFilters({
-        ...pageFilters,
+        ...currentFilters,
         classes: transactionClass ? [transactionClass] : [],
       });
     },
-    [pageFilters, setTransactionFilters],
+    [filterKind, setTransactionFilters],
   );
   const setHideExpected = useCallback(
     (hideExpected: boolean) => {
+      const currentFilters = stripScopedFilterKind(
+        filterKind,
+        readTransactionFiltersFromSearchParams(readLiveSearchParams()),
+      );
       setTransactionFilters({
-        ...pageFilters,
+        ...currentFilters,
         hideExpected,
       });
     },
-    [pageFilters, setTransactionFilters],
+    [filterKind, setTransactionFilters],
   );
   const clearFilterChips = useCallback(() => {
+    const currentFilters = stripScopedFilterKind(
+      filterKind,
+      readTransactionFiltersFromSearchParams(readLiveSearchParams()),
+    );
     setTransactionFilters({
       ...emptyTransactionFilters,
-      classes: pageFilters.classes,
-      hideExpected: pageFilters.hideExpected,
-      search: pageFilters.search,
+      classes: currentFilters.classes,
+      hideExpected: currentFilters.hideExpected,
+      search: currentFilters.search,
     });
-  }, [
-    pageFilters.classes,
-    pageFilters.hideExpected,
-    pageFilters.search,
-    setTransactionFilters,
-  ]);
+  }, [filterKind, setTransactionFilters]);
 
   const hiddenFilterDimensions = useMemo(
     () => [filterKind] as const,

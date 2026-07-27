@@ -184,6 +184,9 @@ export const readTransactionFiltersFromSearchParams = (
     tagIds: readPositiveIntegerParams(searchParams, "tag"),
   });
 
+export const readLiveSearchParams = (): URLSearchParams =>
+  new URLSearchParams(window.location.search);
+
 export const writeTransactionFiltersToSearchParams = (
   searchParams: URLSearchParams,
   filters: Partial<TransactionFilters>,

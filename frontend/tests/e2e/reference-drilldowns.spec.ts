@@ -1,4 +1,8 @@
 import { expect, type Locator, type Page, type Route } from "@playwright/test";
+import {
+  captureSearchDebounce,
+  runCapturedSearchDebounce,
+} from "@tests/e2e/search-debounce";
 import { test } from "@tests/e2e/test";
 
 interface AccountFixture {
@@ -308,6 +312,67 @@ test("category drill-down direct navigation, view-all, refresh, not-found, and d
   await expect(
     page.getByRole("link", { name: "Back to categories" }),
   ).toHaveAttribute("href", "/categories");
+});
+
+test("debounced drill-down search preserves unsaved split editor input", async ({
+  page,
+}, testInfo) => {
+  const clockStart = Date.now();
+  await page.clock.install({ time: clockStart });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const category = await createCategory(page, `E2ESearchRace:${unique}`);
+  const memo = `E2E drill-down search race ${unique}`;
+  const modifiedMemo = `E2E unsaved drill-down split ${unique}`;
+  const transaction = await createSpend(page, { category, memo });
+
+  await page.goto(`/categories/${category.category_id}?page=1&pageSize=50`);
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(row).toBeVisible();
+  await page.clock.pauseAt(clockStart + 60_000);
+  await captureSearchDebounce(
+    page,
+    page.getByRole("searchbox", { name: "Search" }),
+    unique,
+  );
+  await row.getByRole("button", { name: "Split transaction" }).click();
+
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
+  const memoInput = page
+    .locator('[aria-label="Journal record 1"]')
+    .getByLabel("Memo");
+  await expect(entryPanel).toBeVisible();
+  await expect(memoInput).toBeVisible();
+  await memoInput.fill(modifiedMemo);
+  await runCapturedSearchDebounce(page, unique);
+  await page.clock.runFor(350);
+
+  await expect
+    .poll(() => {
+      const params = new URL(page.url()).searchParams;
+      return {
+        entry: params.get("entry"),
+        page: params.get("page"),
+        q: params.get("q"),
+      };
+    })
+    .toEqual({
+      entry: `split:${transaction.transaction_id}`,
+      page: "1",
+      q: unique,
+    });
+  await expect(entryPanel).toBeVisible();
+  await expect(memoInput).toHaveValue(modifiedMemo);
+
+  await memoInput.fill(memo);
+  await page.goBack();
+  await expect(entryPanel).toHaveCount(0);
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue(
+    unique,
+  );
+  expect(new URL(page.url()).searchParams.get("q")).toBe(unique);
 });
 
 test("reference transaction drill-downs share the bulk-mode lifecycle", async ({

@@ -1,4 +1,8 @@
 import { expect, type Locator, type Page, type Route } from "@playwright/test";
+import {
+  captureSearchDebounce,
+  runCapturedSearchDebounce,
+} from "@tests/e2e/search-debounce";
 import { test } from "@tests/e2e/test";
 
 interface AccountFixture {
@@ -130,23 +134,31 @@ const expectTransactionsPageUrl = async (
   page: Page,
   expectedPage: number,
   expectedPageSize: number,
-  expectedFilters: { readonly q?: string } = {},
+  expectedFilters: {
+    readonly entry?: string;
+    readonly q?: string;
+    readonly transaction?: string;
+  } = {},
 ): Promise<void> => {
   await expect
     .poll(() => {
       const searchParams = new URL(page.url()).searchParams;
       return {
         anchorDate: searchParams.get("anchor_date"),
+        entry: searchParams.get("entry"),
         page: searchParams.get("page"),
         pageSize: searchParams.get("pageSize"),
         q: searchParams.get("q"),
+        transaction: searchParams.get("transaction"),
       };
     })
     .toEqual({
       anchorDate: null,
+      entry: expectedFilters.entry ?? null,
       page: String(expectedPage),
       pageSize: String(expectedPageSize),
       q: expectedFilters.q ?? null,
+      transaction: expectedFilters.transaction ?? null,
     });
 };
 
@@ -400,6 +412,32 @@ const createExpectedRecurringFixture = async (
     memo,
     transactionId,
   };
+};
+
+const createSearchSpend = async (
+  page: Page,
+  memo: string,
+): Promise<TransactionFixture> => {
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const response = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-05-31",
+      memo,
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  return (await response.json()) as TransactionFixture;
 };
 
 const deleteTransaction = async (
@@ -2582,26 +2620,7 @@ test("transactions page search filters server-side and deep-links", async ({
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
   const memo = `E2E search memo ${unique}`;
-  const [accounts, categories] = await Promise.all([
-    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
-    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
-  ]);
-  const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
-  const category = findByFqn(categories, "Entertainment:Books");
-
-  const spendResponse = await page.request.post("/api/transactions/spend", {
-    data: {
-      amount: "12.34",
-      category_id: category.category_id,
-      counterparty_account_id: merchantAccount.account_id,
-      currency: "USD",
-      funding_account_id: fundingAccount.account_id,
-      initiated_date: "2026-05-31",
-      memo,
-    },
-  });
-  expect(spendResponse.ok()).toBe(true);
+  await createSearchSpend(page, memo);
 
   await page.goto("/transactions?page=2&pageSize=25");
   await expect(page.getByText("Description")).toBeVisible();
@@ -2639,6 +2658,96 @@ test("transactions page search filters server-side and deep-links", async ({
   );
   await expectTransactionsPageUrl(page, 1, 50, { q: unique });
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+});
+
+test("debounced search preserves transaction detail URL state", async ({
+  page,
+}, testInfo) => {
+  const clockStart = Date.now();
+  await page.clock.install({ time: clockStart });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const memo = `E2E search race ${unique}`;
+  const transaction = await createSearchSpend(page, memo);
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(row).toBeVisible();
+  await page.clock.pauseAt(clockStart + 60_000);
+  await captureSearchDebounce(
+    page,
+    page.getByRole("searchbox", { name: "Search" }),
+    unique,
+  );
+  await row.getByRole("button", { name: "Open transaction detail" }).click();
+  await runCapturedSearchDebounce(page, unique);
+  await page.clock.runFor(350);
+
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await expect(detailPanel).toBeVisible();
+  await expectTransactionsPageUrl(page, 1, 50, {
+    q: unique,
+    transaction: String(transaction.transaction_id),
+  });
+
+  await page.goBack();
+  await expect(detailPanel).toHaveCount(0);
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue(
+    unique,
+  );
+  await expectTransactionsPageUrl(page, 1, 50, { q: unique });
+});
+
+test("debounced search preserves unsaved split editor input", async ({
+  page,
+}, testInfo) => {
+  const clockStart = Date.now();
+  await page.clock.install({ time: clockStart });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const modifiedMemo = `E2E unsaved split ${unique}`;
+  const memo = `E2E search race ${unique}`;
+  const transaction = await createSearchSpend(page, memo);
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(row).toBeVisible();
+  await page.clock.pauseAt(clockStart + 60_000);
+  // Keep the pre-entry callback so the URL rerender cannot replace it before
+  // the test fires that exact late write after editing the split draft.
+  await captureSearchDebounce(
+    page,
+    page.getByRole("searchbox", { name: "Search" }),
+    unique,
+  );
+  await row.getByRole("button", { name: "Split transaction" }).click();
+  await expectTransactionsPageUrl(page, 1, 50, {
+    entry: `split:${transaction.transaction_id}`,
+  });
+
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
+  const memoInput = journalRecord(page, 1).getByLabel("Memo");
+  await expect(entryPanel).toBeVisible();
+  await expect(memoInput).toBeVisible();
+  await memoInput.fill(modifiedMemo);
+  await runCapturedSearchDebounce(page, unique);
+  await page.clock.runFor(350);
+
+  await expectTransactionsPageUrl(page, 1, 50, {
+    entry: `split:${transaction.transaction_id}`,
+    q: unique,
+  });
+  await expect(entryPanel).toBeVisible();
+  await expect(memoInput).toHaveValue(modifiedMemo);
+
+  await memoInput.fill(memo);
+  await page.goBack();
+  await expect(entryPanel).toHaveCount(0);
+  await expectTransactionsPageUrl(page, 1, 50, { q: unique });
 });
 
 test("transactions page add-filter menu drives server filters and chips", async ({
