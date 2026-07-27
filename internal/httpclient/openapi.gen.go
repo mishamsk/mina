@@ -48,19 +48,22 @@ func (e APIErrorCode) Valid() bool {
 
 // Defines values for AccountType.
 const (
-	Balance AccountType = "balance"
-	Flow    AccountType = "flow"
-	System  AccountType = "system"
+	AccountTypeFlow   AccountType = "flow"
+	AccountTypeOwned  AccountType = "owned"
+	AccountTypeParty  AccountType = "party"
+	AccountTypeSystem AccountType = "system"
 )
 
 // Valid indicates whether the value is a known member of the AccountType enum.
 func (e AccountType) Valid() bool {
 	switch e {
-	case Balance:
+	case AccountTypeFlow:
 		return true
-	case Flow:
+	case AccountTypeOwned:
 		return true
-	case System:
+	case AccountTypeParty:
+		return true
+	case AccountTypeSystem:
 		return true
 	default:
 		return false
@@ -135,34 +138,16 @@ func (e BackgroundOperationRunTrigger) Valid() bool {
 
 // Defines values for CategoryEconomicIntent.
 const (
-	CategoryEconomicIntentAdjustment CategoryEconomicIntent = "adjustment"
-	CategoryEconomicIntentExchange   CategoryEconomicIntent = "exchange"
-	CategoryEconomicIntentExpense    CategoryEconomicIntent = "expense"
-	CategoryEconomicIntentFee        CategoryEconomicIntent = "fee"
-	CategoryEconomicIntentFxGainLoss CategoryEconomicIntent = "fx_gain_loss"
-	CategoryEconomicIntentIncome     CategoryEconomicIntent = "income"
-	CategoryEconomicIntentRefund     CategoryEconomicIntent = "refund"
-	CategoryEconomicIntentTransfer   CategoryEconomicIntent = "transfer"
+	CategoryEconomicIntentExpense CategoryEconomicIntent = "expense"
+	CategoryEconomicIntentIncome  CategoryEconomicIntent = "income"
 )
 
 // Valid indicates whether the value is a known member of the CategoryEconomicIntent enum.
 func (e CategoryEconomicIntent) Valid() bool {
 	switch e {
-	case CategoryEconomicIntentAdjustment:
-		return true
-	case CategoryEconomicIntentExchange:
-		return true
 	case CategoryEconomicIntentExpense:
 		return true
-	case CategoryEconomicIntentFee:
-		return true
-	case CategoryEconomicIntentFxGainLoss:
-		return true
 	case CategoryEconomicIntentIncome:
-		return true
-	case CategoryEconomicIntentRefund:
-		return true
-	case CategoryEconomicIntentTransfer:
 		return true
 	default:
 		return false
@@ -376,6 +361,39 @@ func (e ReconciliationStatus) Valid() bool {
 	}
 }
 
+// Defines values for RecordRole.
+const (
+	RecordRoleAdjustment RecordRole = "adjustment"
+	RecordRoleBalance    RecordRole = "balance"
+	RecordRoleClawback   RecordRole = "clawback"
+	RecordRoleExchange   RecordRole = "exchange"
+	RecordRoleExpense    RecordRole = "expense"
+	RecordRoleIncome     RecordRole = "income"
+	RecordRoleRefund     RecordRole = "refund"
+)
+
+// Valid indicates whether the value is a known member of the RecordRole enum.
+func (e RecordRole) Valid() bool {
+	switch e {
+	case RecordRoleAdjustment:
+		return true
+	case RecordRoleBalance:
+		return true
+	case RecordRoleClawback:
+		return true
+	case RecordRoleExchange:
+		return true
+	case RecordRoleExpense:
+		return true
+	case RecordRoleIncome:
+		return true
+	case RecordRoleRefund:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RecurringDefinitionDeferRequestUnit.
 const (
 	DAY   RecurringDefinitionDeferRequestUnit = "DAY"
@@ -511,8 +529,8 @@ func (e Source) Valid() bool {
 // Defines values for TransactionClass.
 const (
 	TransactionClassAdjustment       TransactionClass = "adjustment"
+	TransactionClassClawback         TransactionClass = "clawback"
 	TransactionClassCurrencyExchange TransactionClass = "currency_exchange"
-	TransactionClassFxGainLoss       TransactionClass = "fx_gain_loss"
 	TransactionClassIncome           TransactionClass = "income"
 	TransactionClassMixed            TransactionClass = "mixed"
 	TransactionClassRefund           TransactionClass = "refund"
@@ -525,9 +543,9 @@ func (e TransactionClass) Valid() bool {
 	switch e {
 	case TransactionClassAdjustment:
 		return true
-	case TransactionClassCurrencyExchange:
+	case TransactionClassClawback:
 		return true
-	case TransactionClassFxGainLoss:
+	case TransactionClassCurrencyExchange:
 		return true
 	case TransactionClassIncome:
 		return true
@@ -538,6 +556,60 @@ func (e TransactionClass) Valid() bool {
 	case TransactionClassSpend:
 		return true
 	case TransactionClassTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransactionShapeType.
+const (
+	TransactionShapeTypeAdjustment TransactionShapeType = "adjustment"
+	TransactionShapeTypeClawback   TransactionShapeType = "clawback"
+	TransactionShapeTypeExchange   TransactionShapeType = "exchange"
+	TransactionShapeTypeIncome     TransactionShapeType = "income"
+	TransactionShapeTypeRefund     TransactionShapeType = "refund"
+	TransactionShapeTypeSpend      TransactionShapeType = "spend"
+	TransactionShapeTypeTransfer   TransactionShapeType = "transfer"
+)
+
+// Valid indicates whether the value is a known member of the TransactionShapeType enum.
+func (e TransactionShapeType) Valid() bool {
+	switch e {
+	case TransactionShapeTypeAdjustment:
+		return true
+	case TransactionShapeTypeClawback:
+		return true
+	case TransactionShapeTypeExchange:
+		return true
+	case TransactionShapeTypeIncome:
+		return true
+	case TransactionShapeTypeRefund:
+		return true
+	case TransactionShapeTypeSpend:
+		return true
+	case TransactionShapeTypeTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WritableAccountType.
+const (
+	WritableAccountTypeFlow  WritableAccountType = "flow"
+	WritableAccountTypeOwned WritableAccountType = "owned"
+	WritableAccountTypeParty WritableAccountType = "party"
+)
+
+// Valid indicates whether the value is a known member of the WritableAccountType enum.
+func (e WritableAccountType) Valid() bool {
+	switch e {
+	case WritableAccountTypeFlow:
+		return true
+	case WritableAccountTypeOwned:
+		return true
+	case WritableAccountTypeParty:
 		return true
 	default:
 		return false
@@ -947,7 +1019,7 @@ type APIErrorCode string
 type Account struct {
 	AccountId int64 `json:"account_id"`
 
-	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+	// AccountType Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics.
 	AccountType AccountType `json:"account_type"`
 	CreatedAt   time.Time   `json:"created_at"`
 	Currency    *string     `json:"currency,omitempty"`
@@ -1000,7 +1072,7 @@ type AccountListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+// AccountType Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics.
 type AccountType string
 
 // BackgroundOperationId defines model for BackgroundOperationId.
@@ -1106,7 +1178,7 @@ type Category struct {
 	// Deletable Populated in listCategories responses. True when the active category has no active dependent resources and can be tombstone-deleted.
 	Deletable *bool `json:"deletable,omitempty"`
 
-	// EconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+	// EconomicIntent Whether a category describes spending or income.
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
 	Fqn            string                 `json:"fqn"`
 	IsFeatured     bool                   `json:"is_featured"`
@@ -1118,7 +1190,7 @@ type Category struct {
 	UpdatedAt      time.Time              `json:"updated_at"`
 }
 
-// CategoryEconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+// CategoryEconomicIntent Whether a category describes spending or income.
 type CategoryEconomicIntent string
 
 // CategoryListResponse defines model for CategoryListResponse.
@@ -1129,10 +1201,40 @@ type CategoryListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
+// ClassifiedRecord defines model for ClassifiedRecord.
+type ClassifiedRecord struct {
+	// RecordIndex Zero-based index into the request records.
+	RecordIndex int `json:"record_index"`
+
+	// RecordRole Accounting role derived independently from one record's account, sign, and category intent.
+	RecordRole RecordRole `json:"record_role"`
+}
+
+// ClassifyJournalRecordRequest defines model for ClassifyJournalRecordRequest.
+type ClassifyJournalRecordRequest struct {
+	// AccountId Account identifier used to derive this draft record's semantic role.
+	AccountId int64 `json:"account_id"`
+
+	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8).
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier used to derive this draft flow record's semantic role.
+	CategoryId *int64 `json:"category_id,omitempty"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+}
+
+// ClassifyTransactionRequest defines model for ClassifyTransactionRequest.
+type ClassifyTransactionRequest struct {
+	// Records Unsaved journal-record draft; records need not balance.
+	Records []ClassifyJournalRecordRequest `json:"records"`
+}
+
 // CreateAccountRequest defines model for CreateAccountRequest.
 type CreateAccountRequest struct {
-	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
-	AccountType AccountType `json:"account_type"`
+	// AccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
+	AccountType WritableAccountType `json:"account_type"`
 
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency *string `json:"currency,omitempty"`
@@ -1155,7 +1257,7 @@ type CreateAccountRequest struct {
 
 // CreateCategoryRequest defines model for CreateCategoryRequest.
 type CreateCategoryRequest struct {
-	// EconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+	// EconomicIntent Whether a category describes spending or income.
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
 
 	// Fqn Colon-separated hierarchical FQN for the category leaf.
@@ -1190,6 +1292,45 @@ type CreateExchangeRateRequest struct {
 
 	// ToCurrency Destination currency code using ISO 4217 or the `C::` crypto prefix.
 	ToCurrency string `json:"to_currency"`
+}
+
+// CreateExchangeTransactionRequest defines model for CreateExchangeTransactionRequest.
+type CreateExchangeTransactionRequest struct {
+	// BoughtAccountId Owned or party account into which currency is bought.
+	BoughtAccountId int64 `json:"bought_account_id"`
+
+	// BoughtAmount JSON string, not a JSON number. Positive amount bought in the bought account's currency.
+	BoughtAmount string `json:"bought_amount"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+
+	// SoldAccountId Owned or party account from which currency is sold.
+	SoldAccountId int64 `json:"sold_account_id"`
+
+	// SoldAmount JSON string, not a JSON number. Positive amount sold in the sold account's currency.
+	SoldAmount string `json:"sold_amount"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateIncomeTransactionRequest defines model for CreateIncomeTransactionRequest.
@@ -1245,8 +1386,8 @@ type CreateJournalRecordRequest struct {
 	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountUsd *string `json:"amount_usd,omitempty"`
 
-	// CategoryId Category identifier for this journal record or shorthand transaction.
-	CategoryId int64 `json:"category_id"`
+	// CategoryId Category identifier for a flow record; omit or use null for every other account type.
+	CategoryId *int64 `json:"category_id,omitempty"`
 
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency string `json:"currency"`
@@ -1398,9 +1539,6 @@ type CreateTransferTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount string `json:"amount"`
 
-	// CategoryId Category identifier for this journal record or shorthand transaction.
-	CategoryId int64 `json:"category_id"`
-
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency string `json:"currency"`
 
@@ -1516,6 +1654,15 @@ type ErrorResponse struct {
 	Error APIError `json:"error"`
 }
 
+// ExchangeEffectiveRate defines model for ExchangeEffectiveRate.
+type ExchangeEffectiveRate struct {
+	BoughtCurrency string `json:"bought_currency"`
+
+	// Rate JSON string, not a JSON number. Sold currency units per one bought currency unit, such as USD/EUR.
+	Rate         string `json:"rate"`
+	SoldCurrency string `json:"sold_currency"`
+}
+
 // ExchangeRate defines model for ExchangeRate.
 type ExchangeRate struct {
 	CreatedAt      time.Time `json:"created_at"`
@@ -1604,7 +1751,7 @@ type JournalRecord struct {
 
 	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountUsd      *string   `json:"amount_usd"`
-	CategoryId     int64     `json:"category_id"`
+	CategoryId     *int64    `json:"category_id"`
 	CreatedAt      time.Time `json:"created_at"`
 	Currency       string    `json:"currency"`
 	ExternalId     *string   `json:"external_id,omitempty"`
@@ -1624,6 +1771,9 @@ type JournalRecord struct {
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
+
+	// RecordRole Accounting role derived independently from one record's account, sign, and category intent.
+	RecordRole RecordRole `json:"record_role"`
 
 	// RunningBalance JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	RunningBalance *string    `json:"running_balance,omitempty"`
@@ -1685,6 +1835,9 @@ type PostingStatus string
 // ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 type ReconciliationStatus string
 
+// RecordRole Accounting role derived independently from one record's account, sign, and category intent.
+type RecordRole string
+
 // RecurringDefinition defines model for RecurringDefinition.
 type RecurringDefinition struct {
 	AnchorDate            openapi_types.Date          `json:"anchor_date"`
@@ -1734,7 +1887,7 @@ type RecurringDefinitionRecord struct {
 
 	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount                      string     `json:"amount"`
-	CategoryId                  int64      `json:"category_id"`
+	CategoryId                  *int64     `json:"category_id"`
 	CreatedAt                   time.Time  `json:"created_at"`
 	Currency                    string     `json:"currency"`
 	MemberId                    *int64     `json:"member_id"`
@@ -1754,8 +1907,8 @@ type RecurringDefinitionRecordRequest struct {
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount *string `json:"amount,omitempty"`
 
-	// CategoryId Category identifier for this journal record or shorthand transaction.
-	CategoryId *int64 `json:"category_id,omitempty"`
+	// CategoryId Category identifier for this recurring record. After template inheritance, flow-account records require a category; owned, party, and system-account records forbid one.
+	CategoryId nullable.Nullable[int64] `json:"category_id,omitempty"`
 
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency *string `json:"currency,omitempty"`
@@ -1919,8 +2072,7 @@ type TagListResponse struct {
 
 // Transaction defines model for Transaction.
 type Transaction struct {
-	Components []TransactionComponent `json:"components"`
-	CreatedAt  time.Time              `json:"created_at"`
+	CreatedAt time.Time `json:"created_at"`
 
 	// DisplayTitle Server-derived transaction summary title for transaction lines.
 	DisplayTitle   string             `json:"display_title"`
@@ -1929,21 +2081,22 @@ type Transaction struct {
 	Records        []JournalRecord    `json:"records"`
 
 	// RecurringOccurrenceId Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
-	RecurringOccurrenceId *int64           `json:"recurring_occurrence_id"`
-	TombstonedAt          *time.Time       `json:"tombstoned_at,omitempty"`
-	TransactionClass      TransactionClass `json:"transaction_class"`
-	TransactionId         int64            `json:"transaction_id"`
+	RecurringOccurrenceId *int64             `json:"recurring_occurrence_id"`
+	Shapes                []TransactionShape `json:"shapes"`
+	TombstonedAt          *time.Time         `json:"tombstoned_at,omitempty"`
+	TransactionClass      TransactionClass   `json:"transaction_class"`
+	TransactionId         int64              `json:"transaction_id"`
 }
 
 // TransactionClass defines model for TransactionClass.
 type TransactionClass string
 
-// TransactionComponent defines model for TransactionComponent.
-type TransactionComponent struct {
-	Amounts []DisplayAmount `json:"amounts"`
-
-	// Intent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
-	Intent CategoryEconomicIntent `json:"intent"`
+// TransactionClassification defines model for TransactionClassification.
+type TransactionClassification struct {
+	PrimaryAmounts   []DisplayAmount    `json:"primary_amounts"`
+	Records          []ClassifiedRecord `json:"records"`
+	Shapes           []TransactionShape `json:"shapes"`
+	TransactionClass TransactionClass   `json:"transaction_class"`
 }
 
 // TransactionListResponse defines model for TransactionListResponse.
@@ -1972,6 +2125,20 @@ type TransactionMonthTotalsResponse struct {
 	Spend  TransactionMonthTotal `json:"spend"`
 }
 
+// TransactionShape defines model for TransactionShape.
+type TransactionShape struct {
+	Amounts []DisplayAmount `json:"amounts"`
+
+	// EffectiveRate Present only for the exchange shape.
+	EffectiveRate *ExchangeEffectiveRate `json:"effective_rate,omitempty"`
+
+	// Shape One independently present kind of transaction activity.
+	Shape TransactionShapeType `json:"shape"`
+}
+
+// TransactionShapeType One independently present kind of transaction activity.
+type TransactionShapeType string
+
 // TransactionTemplate defines model for TransactionTemplate.
 type TransactionTemplate struct {
 	CreatedAt             time.Time                   `json:"created_at"`
@@ -1998,7 +2165,7 @@ type TransactionTemplateRecord struct {
 
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount                      *string               `json:"amount"`
-	CategoryId                  int64                 `json:"category_id"`
+	CategoryId                  *int64                `json:"category_id"`
 	CreatedAt                   time.Time             `json:"created_at"`
 	Currency                    *string               `json:"currency"`
 	MemberId                    *int64                `json:"member_id"`
@@ -2020,8 +2187,8 @@ type TransactionTemplateRecordRequest struct {
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount *string `json:"amount,omitempty"`
 
-	// CategoryId Category identifier for this journal record or shorthand transaction.
-	CategoryId int64 `json:"category_id"`
+	// CategoryId Optional category default for a flow-account record.
+	CategoryId *int64 `json:"category_id,omitempty"`
 
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency *string `json:"currency,omitempty"`
@@ -2053,8 +2220,8 @@ type TransactionTemplateWriteRequest struct {
 
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
-	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
-	AccountType *AccountType `json:"account_type,omitempty"`
+	// AccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
+	AccountType *WritableAccountType `json:"account_type,omitempty"`
 
 	// ExternalId Optional identifier assigned by an external system.
 	ExternalId nullable.Nullable[string] `json:"external_id,omitempty"`
@@ -2114,6 +2281,9 @@ type UpdateTransactionRequest struct {
 	Records []CreateJournalRecordRequest `json:"records"`
 }
 
+// WritableAccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
+type WritableAccountType string
+
 // AccountFQNConflict defines model for AccountFQNConflict.
 type AccountFQNConflict = ErrorResponse
 
@@ -2149,7 +2319,7 @@ type ListAccountsParams struct {
 	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 
-	// AccountType Filter by balance, flow, or system account type.
+	// AccountType Filter by owned, party, flow, or system account type.
 	AccountType *AccountType `form:"account_type,omitempty" json:"account_type,omitempty"`
 
 	// IsFeatured Filter by featured state when provided.
@@ -2179,7 +2349,7 @@ type ListAccountBalancesParams struct {
 	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
-	// AccountIds Account identifiers to include; omit to return all eligible active balance accounts.
+	// AccountIds Account identifiers to include; omit to return all eligible active owned and party accounts.
 	AccountIds *[]int64 `form:"account_ids,omitempty" json:"account_ids,omitempty"`
 }
 
@@ -2443,6 +2613,9 @@ type SearchJournalRecordsParams struct {
 	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
+	// RecordRole Filters records by their server-derived accounting role.
+	RecordRole *RecordRole `form:"record_role,omitempty" json:"record_role,omitempty"`
+
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountMin *string `form:"amount_min,omitempty" json:"amount_min,omitempty"`
 
@@ -2629,6 +2802,12 @@ type ListTransactionsParams struct {
 	// TransactionClass Filter by one or more server-derived transaction classes.
 	TransactionClass *[]TransactionClass `form:"transaction_class,omitempty" json:"transaction_class,omitempty"`
 
+	// TransactionShape Filter by one or more server-derived transaction shapes.
+	TransactionShape *[]TransactionShapeType `form:"transaction_shape,omitempty" json:"transaction_shape,omitempty"`
+
+	// RecordRole Filter by one or more server-derived record roles present in a transaction.
+	RecordRole *[]RecordRole `form:"record_role,omitempty" json:"record_role,omitempty"`
+
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
 	AmountMin *string `form:"amount_min,omitempty" json:"amount_min,omitempty"`
 
@@ -2761,6 +2940,12 @@ type ReplaceTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
 
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = CreateTransactionRequest
+
+// ClassifyTransactionJSONRequestBody defines body for ClassifyTransaction for application/json ContentType.
+type ClassifyTransactionJSONRequestBody = ClassifyTransactionRequest
+
+// CreateExchangeTransactionJSONRequestBody defines body for CreateExchangeTransaction for application/json ContentType.
+type CreateExchangeTransactionJSONRequestBody = CreateExchangeTransactionRequest
 
 // CreateIncomeTransactionJSONRequestBody defines body for CreateIncomeTransaction for application/json ContentType.
 type CreateIncomeTransactionJSONRequestBody = CreateIncomeTransactionRequest
@@ -3138,6 +3323,16 @@ type ClientInterface interface {
 	CreateTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateTransaction(ctx context.Context, body CreateTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ClassifyTransactionWithBody request with any body
+	ClassifyTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	ClassifyTransaction(ctx context.Context, body ClassifyTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateExchangeTransactionWithBody request with any body
+	CreateExchangeTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateExchangeTransaction(ctx context.Context, body CreateExchangeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateIncomeTransactionWithBody request with any body
 	CreateIncomeTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4439,6 +4634,54 @@ func (c *Client) CreateTransactionWithBody(ctx context.Context, contentType stri
 
 func (c *Client) CreateTransaction(ctx context.Context, body CreateTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateTransactionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ClassifyTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewClassifyTransactionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ClassifyTransaction(ctx context.Context, body ClassifyTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewClassifyTransactionRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateExchangeTransactionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateExchangeTransactionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateExchangeTransaction(ctx context.Context, body CreateExchangeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateExchangeTransactionRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7253,6 +7496,18 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 
 		}
 
+		if params.RecordRole != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "record_role", *params.RecordRole, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.AmountMin != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "amount_min", *params.AmountMin, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -9073,6 +9328,30 @@ func NewListTransactionsRequest(server string, params *ListTransactionsParams) (
 
 		}
 
+		if params.TransactionShape != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "transaction_shape", *params.TransactionShape, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.RecordRole != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "record_role", *params.RecordRole, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.AmountMin != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "amount_min", *params.AmountMin, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -9240,6 +9519,86 @@ func NewCreateTransactionRequestWithBody(server string, contentType string, body
 	}
 
 	operationPath := fmt.Sprintf("/api/transactions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewClassifyTransactionRequest calls the generic ClassifyTransaction builder with application/json body
+func NewClassifyTransactionRequest(server string, body ClassifyTransactionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewClassifyTransactionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewClassifyTransactionRequestWithBody generates requests for ClassifyTransaction with any type of body
+func NewClassifyTransactionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/classify")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewCreateExchangeTransactionRequest calls the generic CreateExchangeTransaction builder with application/json body
+func NewCreateExchangeTransactionRequest(server string, body CreateExchangeTransactionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateExchangeTransactionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateExchangeTransactionRequestWithBody generates requests for CreateExchangeTransaction with any type of body
+func NewCreateExchangeTransactionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/transactions/exchange")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -9949,6 +10308,16 @@ type ClientWithResponsesInterface interface {
 	CreateTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTransactionResponse, error)
 
 	CreateTransactionWithResponse(ctx context.Context, body CreateTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTransactionResponse, error)
+
+	// ClassifyTransactionWithBodyWithResponse request with any body
+	ClassifyTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ClassifyTransactionResponse, error)
+
+	ClassifyTransactionWithResponse(ctx context.Context, body ClassifyTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*ClassifyTransactionResponse, error)
+
+	// CreateExchangeTransactionWithBodyWithResponse request with any body
+	CreateExchangeTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateExchangeTransactionResponse, error)
+
+	CreateExchangeTransactionWithResponse(ctx context.Context, body CreateExchangeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateExchangeTransactionResponse, error)
 
 	// CreateIncomeTransactionWithBodyWithResponse request with any body
 	CreateIncomeTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateIncomeTransactionResponse, error)
@@ -12437,6 +12806,68 @@ func (r CreateTransactionResponse) ContentType() string {
 	return ""
 }
 
+type ClassifyTransactionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *TransactionClassification
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r ClassifyTransactionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ClassifyTransactionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ClassifyTransactionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateExchangeTransactionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *Transaction
+	JSON400      *InvalidRequest
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateExchangeTransactionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateExchangeTransactionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateExchangeTransactionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CreateIncomeTransactionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13642,6 +14073,40 @@ func (c *ClientWithResponses) CreateTransactionWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseCreateTransactionResponse(rsp)
+}
+
+// ClassifyTransactionWithBodyWithResponse request with arbitrary body returning *ClassifyTransactionResponse
+func (c *ClientWithResponses) ClassifyTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ClassifyTransactionResponse, error) {
+	rsp, err := c.ClassifyTransactionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseClassifyTransactionResponse(rsp)
+}
+
+func (c *ClientWithResponses) ClassifyTransactionWithResponse(ctx context.Context, body ClassifyTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*ClassifyTransactionResponse, error) {
+	rsp, err := c.ClassifyTransaction(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseClassifyTransactionResponse(rsp)
+}
+
+// CreateExchangeTransactionWithBodyWithResponse request with arbitrary body returning *CreateExchangeTransactionResponse
+func (c *ClientWithResponses) CreateExchangeTransactionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateExchangeTransactionResponse, error) {
+	rsp, err := c.CreateExchangeTransactionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateExchangeTransactionResponse(rsp)
+}
+
+func (c *ClientWithResponses) CreateExchangeTransactionWithResponse(ctx context.Context, body CreateExchangeTransactionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateExchangeTransactionResponse, error) {
+	rsp, err := c.CreateExchangeTransaction(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateExchangeTransactionResponse(rsp)
 }
 
 // CreateIncomeTransactionWithBodyWithResponse request with arbitrary body returning *CreateIncomeTransactionResponse
@@ -16716,6 +17181,72 @@ func ParseCreateTransactionResponse(rsp *http.Response) (*CreateTransactionRespo
 	}
 
 	response := &CreateTransactionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Transaction
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseClassifyTransactionResponse parses an HTTP response from a ClassifyTransactionWithResponse call
+func ParseClassifyTransactionResponse(rsp *http.Response) (*ClassifyTransactionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ClassifyTransactionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TransactionClassification
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InvalidRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateExchangeTransactionResponse parses an HTTP response from a CreateExchangeTransactionWithResponse call
+func ParseCreateExchangeTransactionResponse(rsp *http.Response) (*CreateExchangeTransactionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateExchangeTransactionResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

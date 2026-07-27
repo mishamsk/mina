@@ -20,7 +20,7 @@ func TestTransactionTemplateRestructureRenamesSubtreeAndPreservesRecords(t *test
 		Fqn: "restructure:Template:Old:First",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
-				CategoryId: refs.CategoryID,
+				CategoryId: apptest.Int64Ptr(refs.CategoryID),
 				AccountId:  &refs.MerchantAccountID,
 				Amount:     &amount,
 				Memo:       &memo,
@@ -31,7 +31,7 @@ func TestTransactionTemplateRestructureRenamesSubtreeAndPreservesRecords(t *test
 	second := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:Template:Old:Second",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	firstRecordIDs := transactionTemplateRecordIDs(first.JSON201.Records)
@@ -50,7 +50,7 @@ func TestTransactionTemplateRestructureRenamesSubtreeAndPreservesRecords(t *test
 	leaf := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:TemplateLeafGroup",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	leafToGroup := restructureTransactionTemplates(t, client, "restructure:TemplateLeafGroup", "restructure:TemplateLeafGroup:Other")
@@ -69,13 +69,13 @@ func TestTransactionTemplateRestructureRejectsMissingConflictAndSamePath(t *test
 	ownSubtree := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:TemplateOwnSubtree:One",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:TemplateOwnSubtree:Two",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	assertRestructureTransactionTemplateStatus(t, client, "restructure:TemplateOwnSubtree", "restructure:TemplateOwnSubtree:Moved", http.StatusBadRequest, httpclient.APIErrorCodeInvalidRequest)
@@ -84,13 +84,13 @@ func TestTransactionTemplateRestructureRejectsMissingConflictAndSamePath(t *test
 	source := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:TemplateConflict:Source",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	occupied := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:TemplateConflict:Target:Child",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	assertRestructureTransactionTemplateStatus(t, client, "restructure:TemplateConflict:Source", "restructure:TemplateConflict:Target", http.StatusConflict, httpclient.APIErrorCodeConflict)
@@ -100,13 +100,13 @@ func TestTransactionTemplateRestructureRejectsMissingConflictAndSamePath(t *test
 	prefixSource := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:TemplatePrefixConflict:Source",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	prefixOccupied := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:TemplatePrefixConflict:Target",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	assertRestructureTransactionTemplateStatus(t, client, "restructure:TemplatePrefixConflict:Source", "restructure:TemplatePrefixConflict:Target:Child", http.StatusConflict, httpclient.APIErrorCodeConflict)
@@ -125,14 +125,14 @@ func TestTransactionTemplateRestructureExcludesTombstonedTemplates(t *testing.T)
 	tombstoned := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:TemplateTombstone:Old:Deleted",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	deleteTransactionTemplateForRestructure(t, client, tombstoned.JSON201.TransactionTemplateId)
 	active := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "restructure:TemplateTombstone:Old:Active",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 

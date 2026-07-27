@@ -503,7 +503,6 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				Currency:             "USD",
 				Amount:               "-12.34",
 				AmountUsd:            apptest.StringPtr("-12.34"),
-				CategoryId:           refs.CategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.TagId),
 				Memo:                 &memo,
 				PendingDate:          &pendingDate,
@@ -517,7 +516,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				Currency:             "USD",
 				Amount:               "12.34",
 				AmountUsd:            apptest.StringPtr("12.34"),
-				CategoryId:           refs.CategoryId,
+				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -641,7 +640,6 @@ func TestTransactionCreateInfersMissingAmountUSD(t *testing.T) {
 				AccountId:            eurCash.AccountId,
 				Currency:             "EUR",
 				Amount:               "-11.00",
-				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -650,7 +648,7 @@ func TestTransactionCreateInfersMissingAmountUSD(t *testing.T) {
 				AccountId:            eurMerchant.AccountId,
 				Currency:             "EUR",
 				Amount:               "11.00",
-				CategoryId:           refs.CategoryId,
+				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -695,7 +693,6 @@ func TestTransactionLeavesUnrepresentableInferredAmountUSDNull(t *testing.T) {
 				AccountId:            cash.AccountId,
 				Currency:             currency,
 				Amount:               "-100.00",
-				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -704,7 +701,7 @@ func TestTransactionLeavesUnrepresentableInferredAmountUSDNull(t *testing.T) {
 				AccountId:            counterparty.AccountId,
 				Currency:             currency,
 				Amount:               "100.00",
-				CategoryId:           refs.CategoryId,
+				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -727,9 +724,8 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
 	scenario := client.Scenario()
-	provider := scenario.Account("merchant:ExchangeProvider")
+	provider := fixedSystemAccounts(t, client)["system:exchange"]
 	cashEUR := scenario.AccountWithCurrency("cash:Travel:EUR", "EUR")
-	exchangeCategory := scenario.CategoryWithIntent("Currency:Exchange", httpclient.CategoryEconomicIntentExchange)
 
 	req := httpclient.CreateTransactionRequest{
 		InitiatedDate: apptest.Date("2024-03-10"),
@@ -739,7 +735,6 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Currency:             "USD",
 				Amount:               "-110.00",
 				AmountUsd:            apptest.StringPtr("-110.00"),
-				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -749,7 +744,6 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Currency:             "USD",
 				Amount:               "110.00",
 				AmountUsd:            apptest.StringPtr("110.00"),
-				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -759,7 +753,6 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Currency:             "EUR",
 				Amount:               "-100.00",
 				AmountUsd:            apptest.StringPtr("-110.00"),
-				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -769,7 +762,6 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				Currency:             "EUR",
 				Amount:               "100.00",
 				AmountUsd:            nil,
-				CategoryId:           exchangeCategory.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -971,7 +963,7 @@ func TestTransactionValidationErrors(t *testing.T) {
 	}
 
 	missingCategory := balancedTransactionRequest(refs)
-	missingCategory.Records[0].CategoryId = 999
+	missingCategory.Records[0].CategoryId = apptest.Int64Ptr(999)
 	missingCategoryResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), missingCategory)
 	if err != nil {
 		t.Fatalf("missing category request: %v", err)
@@ -1094,7 +1086,7 @@ func TestTransactionRejectsTombstonedAccountAndCategoryReferences(t *testing.T) 
 	}
 
 	createWithTombstonedCategory := balancedTransactionRequest(refs)
-	createWithTombstonedCategory.Records[0].CategoryId = tombstonedCategory.CategoryId
+	createWithTombstonedCategory.Records[0].CategoryId = apptest.Int64Ptr(tombstonedCategory.CategoryId)
 	rejectedCreateCategory, err := client.REST().CreateTransactionWithResponse(context.Background(), createWithTombstonedCategory)
 	if err != nil {
 		t.Fatalf("create with tombstoned category request: %v", err)
@@ -1122,7 +1114,7 @@ func TestTransactionRejectsTombstonedAccountAndCategoryReferences(t *testing.T) 
 	}
 
 	replaceWithTombstonedCategory := replacementTransactionRequest(refs)
-	replaceWithTombstonedCategory.Records[0].CategoryId = tombstonedCategory.CategoryId
+	replaceWithTombstonedCategory.Records[0].CategoryId = apptest.Int64Ptr(tombstonedCategory.CategoryId)
 	rejectedReplaceCategory, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replaceWithTombstonedCategory)
 	if err != nil {
 		t.Fatalf("replace with tombstoned category request: %v", err)
@@ -1197,7 +1189,7 @@ func TestTransactionAcceptsHiddenActiveReferences(t *testing.T) {
 
 	hiddenChecking, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "checking:HiddenTransactionReference",
-		AccountType: httpclient.Balance,
+		AccountType: httpclient.WritableAccountTypeOwned,
 		Currency:    apptest.StringPtr("USD"),
 		IsHidden:    &hidden,
 	})
@@ -1209,7 +1201,7 @@ func TestTransactionAcceptsHiddenActiveReferences(t *testing.T) {
 	}
 	hiddenMerchant, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "merchant:HiddenTransactionReference",
-		AccountType: httpclient.Flow,
+		AccountType: httpclient.WritableAccountTypeFlow,
 		IsHidden:    &hidden,
 	})
 	if err != nil {
@@ -1232,10 +1224,10 @@ func TestTransactionAcceptsHiddenActiveReferences(t *testing.T) {
 
 	request := balancedTransactionRequest(refs)
 	request.Records[0].AccountId = hiddenChecking.JSON201.AccountId
-	request.Records[0].CategoryId = hiddenCategory.CategoryId
+	request.Records[0].CategoryId = nil
 	request.Records[0].TagIds = apptest.Int64SlicePtr(hiddenTagResponse.JSON201.TagId)
 	request.Records[1].AccountId = hiddenMerchant.JSON201.AccountId
-	request.Records[1].CategoryId = hiddenCategory.CategoryId
+	request.Records[1].CategoryId = apptest.Int64Ptr(hiddenCategory.CategoryId)
 	created, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
 	if err != nil {
 		t.Fatalf("create with hidden references request: %v", err)
@@ -1247,10 +1239,10 @@ func TestTransactionAcceptsHiddenActiveReferences(t *testing.T) {
 
 	replacement := replacementTransactionRequest(refs)
 	replacement.Records[0].AccountId = hiddenChecking.JSON201.AccountId
-	replacement.Records[0].CategoryId = hiddenCategory.CategoryId
+	replacement.Records[0].CategoryId = nil
 	replacement.Records[0].TagIds = apptest.Int64SlicePtr(hiddenTagResponse.JSON201.TagId)
 	replacement.Records[1].AccountId = hiddenMerchant.JSON201.AccountId
-	replacement.Records[1].CategoryId = hiddenCategory.CategoryId
+	replacement.Records[1].CategoryId = apptest.Int64Ptr(hiddenCategory.CategoryId)
 	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, replacement)
 	if err != nil {
 		t.Fatalf("replace with hidden references request: %v", err)
@@ -1313,7 +1305,6 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				Currency:             "USD",
 				Amount:               "-12.34",
 				AmountUsd:            apptest.StringPtr("-12.34"),
-				CategoryId:           refs.CategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.TagId),
 				Memo:                 &memo,
 				PendingDate:          &pendingDate,
@@ -1327,7 +1318,7 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				Currency:             "USD",
 				Amount:               "12.34",
 				AmountUsd:            apptest.StringPtr("12.34"),
-				CategoryId:           refs.CategoryId,
+				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,

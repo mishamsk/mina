@@ -157,10 +157,12 @@ const UnconvertedNote = ({ count }: { readonly count: number }) =>
   ) : null;
 
 const GroupSubtotals = ({
+  accountType,
   balances,
   balanceAccounts,
   prefix,
 }: {
+  readonly accountType: "owned" | "party";
   readonly balances: readonly AccountBalance[];
   readonly balanceAccounts: readonly Account[];
   readonly prefix: string;
@@ -198,7 +200,8 @@ const GroupSubtotals = ({
             <FqnPath value={prefix} />
           </CardTitle>
           <p className="text-muted-foreground text-xs">
-            {balanceAccounts.length} balance account
+            {accountType === "owned" ? "Owned funds" : "Party balances"} ·{" "}
+            {balanceAccounts.length} account
             {balanceAccounts.length === 1 ? "" : "s"}
           </p>
         </div>
@@ -478,8 +481,11 @@ export const AccountGroupPageContent = ({
         .sort((left, right) => left.fqn.localeCompare(right.fqn)) ?? [],
     [accountsResource.snapshot?.accounts, prefix],
   );
-  const balanceAccounts = matchingAccounts.filter(
-    (account) => account.account_type === "balance",
+  const ownedAccounts = matchingAccounts.filter(
+    (account) => account.account_type === "owned",
+  );
+  const partyAccounts = matchingAccounts.filter(
+    (account) => account.account_type === "party",
   );
   const accountIds = new Set(
     matchingAccounts.map((account) => account.account_id),
@@ -528,11 +534,22 @@ export const AccountGroupPageContent = ({
       ) : null}
       {accountsResource.snapshot ? (
         <>
-          <GroupSubtotals
-            balances={matchingBalances}
-            balanceAccounts={balanceAccounts}
-            prefix={prefix}
-          />
+          {ownedAccounts.length > 0 ? (
+            <GroupSubtotals
+              accountType="owned"
+              balances={matchingBalances}
+              balanceAccounts={ownedAccounts}
+              prefix={prefix}
+            />
+          ) : null}
+          {partyAccounts.length > 0 ? (
+            <GroupSubtotals
+              accountType="party"
+              balances={matchingBalances}
+              balanceAccounts={partyAccounts}
+              prefix={prefix}
+            />
+          ) : null}
           <GroupRegister prefix={prefix} />
         </>
       ) : null}

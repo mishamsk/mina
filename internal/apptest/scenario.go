@@ -66,11 +66,11 @@ func TimestampPtr(value string) *time.Time {
 func (s *Scenario) Account(fqn string) models.Account {
 	s.client.t.Helper()
 
-	return s.AccountWithType(fqn, models.Flow)
+	return s.AccountWithType(fqn, models.WritableAccountTypeFlow)
 }
 
 // AccountWithType creates an account fixture with an explicit semantic type through the API client.
-func (s *Scenario) AccountWithType(fqn string, accountType models.AccountType) models.Account {
+func (s *Scenario) AccountWithType(fqn string, accountType models.WritableAccountType) models.Account {
 	s.client.t.Helper()
 
 	response, err := s.client.REST().CreateAccountWithResponse(context.Background(), models.CreateAccountRequest{
@@ -88,7 +88,7 @@ func (s *Scenario) AccountWithCurrency(fqn string, currency string) models.Accou
 
 	response, err := s.client.REST().CreateAccountWithResponse(context.Background(), models.CreateAccountRequest{
 		Fqn:         fqn,
-		AccountType: models.Balance,
+		AccountType: models.WritableAccountTypeOwned,
 		Currency:    &currency,
 	})
 	requireNoClientError(s.client, "create account", err)
@@ -198,7 +198,6 @@ func (s *Scenario) BalancedTransaction(refs TransactionRefs) models.Transaction 
 				AccountId:            refs.CheckingAccountID,
 				Amount:               "-12.34",
 				AmountUsd:            StringPtr("-12.34"),
-				CategoryId:           refs.CategoryID,
 				Currency:             "USD",
 				MemberId:             &memberID,
 				Memo:                 &memo,
@@ -211,7 +210,7 @@ func (s *Scenario) BalancedTransaction(refs TransactionRefs) models.Transaction 
 				AccountId:            refs.MerchantAccountID,
 				Amount:               "12.34",
 				AmountUsd:            StringPtr("12.34"),
-				CategoryId:           refs.CategoryID,
+				CategoryId:           Int64Ptr(refs.CategoryID),
 				Currency:             "USD",
 				PostingStatus:        models.PostingStatusPosted,
 				ReconciliationStatus: models.Reconciled,

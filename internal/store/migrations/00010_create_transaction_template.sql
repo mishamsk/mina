@@ -25,8 +25,8 @@ COMMENT ON COLUMN transaction_template.level IS 'Zero-based template depth deriv
 CREATE TABLE transaction_template_record (
 	transaction_template_record_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
 	transaction_template_id INTEGER NOT NULL,
-	-- Category is the minimum record default required for manual-entry templates.
-	category_id INTEGER NOT NULL,
+	-- Optional category default; only meaningful for flow-account record defaults.
+	category_id INTEGER,
 	-- Optional account default for partial manual-entry templates.
 	account_id INTEGER,
 	-- Optional household-member default for partial manual-entry templates.
@@ -44,7 +44,7 @@ CREATE TABLE transaction_template_record (
 	tombstoned_at TIMESTAMP
 );
 
-COMMENT ON COLUMN transaction_template_record.category_id IS 'Category is the minimum record default required for manual-entry templates.';
+COMMENT ON COLUMN transaction_template_record.category_id IS 'Optional category default; only meaningful for flow-account record defaults.';
 COMMENT ON COLUMN transaction_template_record.account_id IS 'Optional account default for partial manual-entry templates.';
 COMMENT ON COLUMN transaction_template_record.member_id IS 'Optional household-member default for partial manual-entry templates.';
 COMMENT ON COLUMN transaction_template_record.currency IS 'Optional currency default; templates do not store converted amount_usd.';

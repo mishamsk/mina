@@ -26,7 +26,7 @@
 - Direct `AppDB.db` access is limited to open, attach, detach, migration setup, connection or transaction creation, and close paths.
 - DuckDB indexes are created with quoted one-part names on fully qualified tables because DuckDB rejects database-qualified index names in `CREATE INDEX`.
 - Store code owns DB-facing row types and conversion between app service types and database column values.
-- Store code reads account-type and category economic-intent metadata for service-owned semantic decisions.
+- Store code returns account FQN/type and nullable category intent metadata for service-owned semantic decisions.
 - Transaction repositories return semantic metadata for service-owned classification and bulk semantic validation.
 - Repositories bind and scan DuckDB `DATE`, `TIMESTAMP`, and decimal columns through app service value types.
 - Exchange-rate loading queries infer needed currencies and latest active USD-pair dates from active accounting rows only.
@@ -43,6 +43,8 @@
 - Dictionary usage queries report active dependency facts only; services decide whether those facts block deletes.
 - Category FQN restructure rewrites active `budget.category_fqn` paths in the same store transaction as the category rewrite.
 - Transaction lists exclude expected records by default; explicit `posting_status=expected` filters include them.
+- Transaction class, shape, and record-role filters reproduce the service-owned derived role rules in SQL; transfer shape requires balance records of both signs.
+- Month totals aggregate only categorized `flow` records: expense-intent records net spend/refunds and income-intent records net income/clawbacks.
 - Record searches exclude expected records by default; explicit `posting_status=expected` filters or `include_expected=true` include them.
 - Account balance aggregation reads active transactions and journal records only, includes pending records in current balances, excludes cancelled and expected records, and casts aggregate sums to `DECIMAL(18,8)` in SQL.
 - Account-record running balances are computed over full active account history, exclude cancelled and expected record amounts, and cast aggregate sums to `DECIMAL(18,8)` in SQL.

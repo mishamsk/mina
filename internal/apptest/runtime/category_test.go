@@ -331,19 +331,18 @@ func TestCategoryListFiltersByEconomicIntent(t *testing.T) {
 	hidden := true
 
 	expense := scenario.CategoryWithIntent("FilterIntent:Expense", httpclient.CategoryEconomicIntentExpense)
-	fee, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
-		Fqn:            "FilterIntent:FeeHidden",
-		EconomicIntent: httpclient.CategoryEconomicIntentFee,
+	hiddenIncome, err := client.REST().CreateCategoryWithResponse(context.Background(), httpclient.CreateCategoryRequest{
+		Fqn:            "FilterIntent:IncomeHidden",
+		EconomicIntent: httpclient.CategoryEconomicIntentIncome,
 		IsHidden:       &hidden,
 	})
 	if err != nil {
 		t.Fatalf("hidden fee create request: %v", err)
 	}
-	if fee.StatusCode() != http.StatusCreated {
-		t.Fatalf("hidden fee create status = %d, want %d; body %s", fee.StatusCode(), http.StatusCreated, fee.Body)
+	if hiddenIncome.StatusCode() != http.StatusCreated {
+		t.Fatalf("hidden income create status = %d, want %d; body %s", hiddenIncome.StatusCode(), http.StatusCreated, hiddenIncome.Body)
 	}
 	income := scenario.CategoryWithIntent("FilterIntent:Income", httpclient.CategoryEconomicIntentIncome)
-	refund := scenario.CategoryWithIntent("FilterIntent:Refund", httpclient.CategoryEconomicIntentRefund)
 
 	incomeIntent := []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentIncome}
 	singleIntent, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
@@ -357,12 +356,12 @@ func TestCategoryListFiltersByEconomicIntent(t *testing.T) {
 	}
 	assertCategoryIDs(t, singleIntent.JSON200.Categories, []int64{income.CategoryId})
 
-	expenseOrRefund := []httpclient.CategoryEconomicIntent{
+	expenseOrIncome := []httpclient.CategoryEconomicIntent{
 		httpclient.CategoryEconomicIntentExpense,
-		httpclient.CategoryEconomicIntentRefund,
+		httpclient.CategoryEconomicIntentIncome,
 	}
 	multipleIntents, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
-		EconomicIntent: &expenseOrRefund,
+		EconomicIntent: &expenseOrIncome,
 	})
 	if err != nil {
 		t.Fatalf("multiple intents list request: %v", err)
@@ -370,31 +369,30 @@ func TestCategoryListFiltersByEconomicIntent(t *testing.T) {
 	if multipleIntents.StatusCode() != http.StatusOK {
 		t.Fatalf("multiple intents list status = %d, want %d; body %s", multipleIntents.StatusCode(), http.StatusOK, multipleIntents.Body)
 	}
-	assertCategoryIDs(t, multipleIntents.JSON200.Categories, []int64{expense.CategoryId, refund.CategoryId})
+	assertCategoryIDs(t, multipleIntents.JSON200.Categories, []int64{expense.CategoryId, income.CategoryId})
 
-	feeIntent := []httpclient.CategoryEconomicIntent{httpclient.CategoryEconomicIntentFee}
-	feeWithoutHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
-		EconomicIntent: &feeIntent,
+	incomeWithoutHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		EconomicIntent: &incomeIntent,
 	})
 	if err != nil {
-		t.Fatalf("fee without hidden list request: %v", err)
+		t.Fatalf("income without hidden list request: %v", err)
 	}
-	if feeWithoutHidden.StatusCode() != http.StatusOK {
-		t.Fatalf("fee without hidden list status = %d, want %d; body %s", feeWithoutHidden.StatusCode(), http.StatusOK, feeWithoutHidden.Body)
+	if incomeWithoutHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("income without hidden list status = %d, want %d; body %s", incomeWithoutHidden.StatusCode(), http.StatusOK, incomeWithoutHidden.Body)
 	}
-	assertCategoryIDs(t, feeWithoutHidden.JSON200.Categories, nil)
+	assertCategoryIDs(t, incomeWithoutHidden.JSON200.Categories, []int64{income.CategoryId})
 
-	feeWithHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
-		EconomicIntent: &feeIntent,
+	incomeWithHidden, err := client.REST().ListCategoriesWithResponse(context.Background(), &httpclient.ListCategoriesParams{
+		EconomicIntent: &incomeIntent,
 		IncludeHidden:  &hidden,
 	})
 	if err != nil {
-		t.Fatalf("fee with hidden list request: %v", err)
+		t.Fatalf("income with hidden list request: %v", err)
 	}
-	if feeWithHidden.StatusCode() != http.StatusOK {
-		t.Fatalf("fee with hidden list status = %d, want %d; body %s", feeWithHidden.StatusCode(), http.StatusOK, feeWithHidden.Body)
+	if incomeWithHidden.StatusCode() != http.StatusOK {
+		t.Fatalf("income with hidden list status = %d, want %d; body %s", incomeWithHidden.StatusCode(), http.StatusOK, incomeWithHidden.Body)
 	}
-	assertCategoryIDs(t, feeWithHidden.JSON200.Categories, []int64{fee.JSON201.CategoryId})
+	assertCategoryIDs(t, incomeWithHidden.JSON200.Categories, []int64{income.CategoryId, hiddenIncome.JSON201.CategoryId})
 
 	invalidIntent, err := client.REST().ListCategoriesWithResponse(context.Background(), nil, apptest.ReplaceRawQuery("economic_intent=unknown"))
 	if err != nil {

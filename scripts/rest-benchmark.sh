@@ -270,7 +270,7 @@ USE main;
 SELECT
   (SELECT category_id FROM category WHERE fqn LIKE 'Benchmark:Expense:%' AND tombstoned_at IS NULL ORDER BY category_id LIMIT 1) AS category_id,
   (SELECT member_id FROM member WHERE name LIKE 'Benchmark Member %' AND tombstoned_at IS NULL ORDER BY member_id LIMIT 1) AS member_id,
-  (SELECT account_id FROM account WHERE fqn LIKE 'Benchmark:Bank:%' AND account_type = 'BALANCE' AND tombstoned_at IS NULL ORDER BY account_id LIMIT 1) AS balance_account_id,
+  (SELECT account_id FROM account WHERE fqn LIKE 'Benchmark:Bank:%' AND CAST(account_type AS VARCHAR) IN ('OWNED', 'BALANCE') AND tombstoned_at IS NULL ORDER BY account_id LIMIT 1) AS balance_account_id,
   (SELECT account_id FROM account WHERE fqn LIKE 'Benchmark:Merchant:%' AND account_type = 'FLOW' AND tombstoned_at IS NULL ORDER BY account_id LIMIT 1) AS flow_account_id,
   (SELECT tag_id FROM tag WHERE fqn LIKE 'Benchmark:Tag:%' AND tombstoned_at IS NULL ORDER BY tag_id LIMIT 1) AS tag_id;
 SQL
@@ -330,7 +330,7 @@ else
         account_fqn="$(printf 'Benchmark:Bank:%03d' "$i")"
         is_featured=false
         if [ "$i" -le 5 ]; then is_featured=true; fi
-        run_seed_entry 3 --variable "base_url=$base_url" --variable "account_fqn=$account_fqn" --variable account_type=balance --variable "is_featured=$is_featured" >/dev/null
+        run_seed_entry 3 --variable "base_url=$base_url" --variable "account_fqn=$account_fqn" --variable account_type=owned --variable "is_featured=$is_featured" >/dev/null
     done
     for i in $(seq 1 "$flow_accounts"); do
         account_fqn="$(printf 'Benchmark:Merchant:%03d' "$i")"

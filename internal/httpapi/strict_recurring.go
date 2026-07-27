@@ -222,7 +222,7 @@ func recurringDefinitionRecordAPIInputs(records *[]openapi.RecurringDefinitionRe
 			MemberID:   optionalRecurringNullableInt64(record.MemberId),
 			Currency:   record.Currency,
 			Amount:     amount,
-			CategoryID: record.CategoryId,
+			CategoryID: optionalRecurringNullableInt64(record.CategoryId),
 			TagIDs:     tagIDs,
 			Memo:       optionalRecurringNullableString(record.Memo),
 		})

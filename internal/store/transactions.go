@@ -173,15 +173,8 @@ func (s *TransactionStore) MonthTotals(ctx context.Context, monthRange transacti
 		`WITH classified_records AS (
 	SELECT
 		CASE
-			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`)
-			  AND a.account_type = CAST(? AS `+s.db.accountingName("account_type")+`) THEN 'spend'
-			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`)
-			  AND a.account_type IN (
-				  CAST(? AS `+s.db.accountingName("account_type")+`),
-				  CAST(? AS `+s.db.accountingName("account_type")+`)
-			  ) THEN 'spend'
-			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`)
-			  AND a.account_type = CAST(? AS `+s.db.accountingName("account_type")+`) THEN 'income'
+			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`) THEN 'spend'
+			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`) THEN 'income'
 			ELSE NULL
 		END AS total_kind,
 		CASE
@@ -197,6 +190,7 @@ func (s *TransactionStore) MonthTotals(ctx context.Context, monthRange transacti
 	  AND tx.tombstoned_at IS NULL
 	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
 	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
+	  AND a.account_type = CAST(? AS `+s.db.accountingName("account_type")+`)
 	  AND tx.initiated_date >= ?
 	  AND tx.initiated_date < ?
 )
@@ -214,15 +208,11 @@ SELECT
 FROM classified_records
 WHERE total_kind IS NOT NULL`,
 		enumValue(categories.CategoryEconomicIntentExpense),
-		enumValue(accounts.AccountTypeFlow),
-		enumValue(categories.CategoryEconomicIntentFee),
-		enumValue(accounts.AccountTypeFlow),
-		enumValue(accounts.AccountTypeSystem),
 		enumValue(categories.CategoryEconomicIntentIncome),
-		enumValue(accounts.AccountTypeFlow),
 		enumValue(categories.CategoryEconomicIntentIncome),
 		enumValue(transactions.PostingStatusCancelled),
 		enumValue(transactions.PostingStatusExpected),
+		enumValue(accounts.AccountTypeFlow),
 		civilDateArg(monthRange.Start),
 		civilDateArg(monthRange.End),
 	)
@@ -431,6 +421,20 @@ WHERE tx.tombstoned_at IS NULL`
 			args = append(args, string(class))
 		}
 	}
+	if len(opts.TransactionShapes) > 0 {
+		shapeConditions := make([]string, 0, len(opts.TransactionShapes))
+		for _, shape := range opts.TransactionShapes {
+			shapeConditions = append(shapeConditions, s.transactionListShapeCondition(shape))
+		}
+		query += " AND (" + strings.Join(shapeConditions, " OR ") + ")"
+	}
+	if len(opts.RecordRoles) > 0 {
+		roleCondition := s.recordRoleExpression() + " IN (" + placeholders(len(opts.RecordRoles)) + ")"
+		query += " AND " + s.transactionListSemanticRecordExists(roleCondition)
+		for _, role := range opts.RecordRoles {
+			args = append(args, string(role))
+		}
+	}
 	if opts.AmountMin != nil || opts.AmountMax != nil {
 		conditions := []string{}
 		if opts.AmountMin != nil {
@@ -485,7 +489,7 @@ WHERE tx.tombstoned_at IS NULL`
 		query += ` AND EXISTS (
 	SELECT 1
 	FROM ` + s.db.accountingName("journal_record") + ` jr
-	JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
+	LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
 	JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
 	LEFT JOIN ` + s.db.accountingName("member") + ` m ON m.member_id = jr.member_id
 	WHERE jr.transaction_id = tx.transaction_id
@@ -503,23 +507,6 @@ WHERE tx.tombstoned_at IS NULL`
 			  JOIN ` + s.db.accountingName("tag") + ` tg ON tg.tag_id = jr_tag.tag_id
 			  WHERE lower(tg.fqn) LIKE ? ESCAPE '\'
 		  )
-		  OR (
-			  lower(a.name) LIKE ? ESCAPE '\'
-			  AND (
-				  (c.economic_intent IN (CAST(? AS ` + s.db.accountingName("category_economic_intent") + `), CAST(? AS ` + s.db.accountingName("category_economic_intent") + `))
-					  AND a.account_type IN (CAST(? AS ` + s.db.accountingName("account_type") + `), CAST(? AS ` + s.db.accountingName("account_type") + `))
-					  AND jr.amount > 0)
-				  OR (c.economic_intent IN (CAST(? AS ` + s.db.accountingName("category_economic_intent") + `), CAST(? AS ` + s.db.accountingName("category_economic_intent") + `))
-					  AND a.account_type = CAST(? AS ` + s.db.accountingName("account_type") + `)
-					  AND jr.amount < 0)
-				  OR (c.economic_intent = CAST(? AS ` + s.db.accountingName("category_economic_intent") + `)
-					  AND a.account_type = CAST(? AS ` + s.db.accountingName("account_type") + `))
-				  OR (c.economic_intent = CAST(? AS ` + s.db.accountingName("category_economic_intent") + `)
-					  AND a.account_type = CAST(? AS ` + s.db.accountingName("account_type") + `))
-				  OR (c.economic_intent IN (CAST(? AS ` + s.db.accountingName("category_economic_intent") + `), CAST(? AS ` + s.db.accountingName("category_economic_intent") + `))
-					  AND a.account_type <> CAST(? AS ` + s.db.accountingName("account_type") + `))
-			  )
-		  )
 	  )
 )`
 		args = append(args,
@@ -530,21 +517,6 @@ WHERE tx.tombstoned_at IS NULL`
 			searchTerm,
 			searchPattern,
 			searchPattern,
-			searchPattern,
-			enumValue(categories.CategoryEconomicIntentExpense),
-			enumValue(categories.CategoryEconomicIntentFee),
-			enumValue(accounts.AccountTypeFlow),
-			enumValue(accounts.AccountTypeSystem),
-			enumValue(categories.CategoryEconomicIntentIncome),
-			enumValue(categories.CategoryEconomicIntentRefund),
-			enumValue(accounts.AccountTypeFlow),
-			enumValue(categories.CategoryEconomicIntentTransfer),
-			enumValue(accounts.AccountTypeBalance),
-			enumValue(categories.CategoryEconomicIntentExchange),
-			enumValue(accounts.AccountTypeFlow),
-			enumValue(categories.CategoryEconomicIntentAdjustment),
-			enumValue(categories.CategoryEconomicIntentFXGainLoss),
-			enumValue(accounts.AccountTypeSystem),
 		)
 	}
 
@@ -561,35 +533,109 @@ func (s *TransactionStore) transactionListRecordExists(condition string) string 
 )`
 }
 
-func (s *TransactionStore) transactionListClassExpression() string {
+func (s *TransactionStore) transactionListSemanticRecordExists(condition string) string {
+	return `EXISTS (
+	SELECT 1
+	FROM ` + s.db.accountingName("journal_record") + ` jr
+	JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
+	LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
+	WHERE jr.transaction_id = tx.transaction_id
+	  AND jr.tombstoned_at IS NULL
+	  AND ` + condition + `
+)`
+}
+
+func (s *TransactionStore) recordRoleExpression() string {
+	accountType := s.db.accountingName("account_type")
 	intentType := s.db.accountingName("category_economic_intent")
 
+	return `CASE
+	WHEN a.account_type = CAST('FLOW' AS ` + accountType + `)
+	  AND c.economic_intent = CAST('EXPENSE' AS ` + intentType + `)
+	  AND jr.amount > 0 THEN 'expense'
+	WHEN a.account_type = CAST('FLOW' AS ` + accountType + `)
+	  AND c.economic_intent = CAST('EXPENSE' AS ` + intentType + `)
+	  AND jr.amount < 0 THEN 'refund'
+	WHEN a.account_type = CAST('FLOW' AS ` + accountType + `)
+	  AND c.economic_intent = CAST('INCOME' AS ` + intentType + `)
+	  AND jr.amount < 0 THEN 'income'
+	WHEN a.account_type = CAST('FLOW' AS ` + accountType + `)
+	  AND c.economic_intent = CAST('INCOME' AS ` + intentType + `)
+	  AND jr.amount > 0 THEN 'clawback'
+	WHEN a.account_type = CAST('SYSTEM' AS ` + accountType + `)
+	  AND a.fqn = 'system:exchange' THEN 'exchange'
+	WHEN a.account_type = CAST('SYSTEM' AS ` + accountType + `) THEN 'adjustment'
+	WHEN a.account_type IN (
+		CAST('OWNED' AS ` + accountType + `),
+		CAST('PARTY' AS ` + accountType + `)
+	) THEN 'balance'
+	ELSE NULL
+END`
+}
+
+func (s *TransactionStore) transactionListShapeCondition(shape transactions.TransactionShapeType) string {
+	switch shape {
+	case transactions.TransactionShapeSpend:
+		return s.transactionListSemanticRecordExists(s.recordRoleExpression() + " = 'expense'")
+	case transactions.TransactionShapeRefund:
+		return s.transactionListSemanticRecordExists(s.recordRoleExpression() + " = 'refund'")
+	case transactions.TransactionShapeIncome:
+		return s.transactionListSemanticRecordExists(s.recordRoleExpression() + " = 'income'")
+	case transactions.TransactionShapeClawback:
+		return s.transactionListSemanticRecordExists(s.recordRoleExpression() + " = 'clawback'")
+	case transactions.TransactionShapeAdjustment:
+		return s.transactionListSemanticRecordExists(s.recordRoleExpression() + " = 'adjustment'")
+	case transactions.TransactionShapeExchange:
+		return s.transactionListSemanticRecordExists(s.recordRoleExpression() + " = 'exchange'")
+	case transactions.TransactionShapeTransfer:
+		return s.transactionListSemanticRecordExists(s.recordRoleExpression()+" = 'balance' AND jr.amount > 0") +
+			" AND " + s.transactionListSemanticRecordExists(s.recordRoleExpression()+" = 'balance' AND jr.amount < 0") +
+			" AND NOT " + s.transactionListSemanticRecordExists(s.recordRoleExpression()+" = 'exchange'")
+	default:
+		return "FALSE"
+	}
+}
+
+func (s *TransactionStore) transactionListClassExpression() string {
 	return `(SELECT CASE
-	WHEN has_income AND NOT has_expense AND NOT has_fee AND NOT has_refund AND NOT has_adjustment AND NOT has_fx THEN 'income'
-	WHEN has_refund AND NOT has_expense AND NOT has_fee AND NOT has_income AND NOT has_adjustment AND NOT has_fx THEN 'refund'
-	WHEN has_transfer AND NOT has_expense AND NOT has_income AND NOT has_refund AND NOT has_adjustment AND NOT has_exchange AND NOT has_fx THEN 'transfer'
-	WHEN has_exchange AND NOT has_expense AND NOT has_income AND NOT has_refund AND NOT has_transfer AND NOT has_adjustment THEN 'currency_exchange'
-	WHEN has_expense AND NOT has_income AND NOT has_refund AND NOT has_adjustment AND NOT has_fx THEN 'spend'
-	WHEN has_fee AND NOT has_expense AND NOT has_income AND NOT has_refund AND NOT has_transfer AND NOT has_exchange AND NOT has_adjustment AND NOT has_fx THEN 'spend'
-	WHEN has_adjustment AND NOT has_expense AND NOT has_fee AND NOT has_income AND NOT has_refund AND NOT has_transfer AND NOT has_exchange THEN 'adjustment'
-	WHEN has_fx AND NOT has_expense AND NOT has_fee AND NOT has_income AND NOT has_refund AND NOT has_transfer AND NOT has_exchange AND NOT has_adjustment THEN 'fx_gain_loss'
-	ELSE 'mixed'
+	WHEN economic_count > 1 THEN 'mixed'
+	WHEN has_expense THEN 'spend'
+	WHEN has_refund THEN 'refund'
+	WHEN has_income THEN 'income'
+	WHEN has_clawback THEN 'clawback'
+	WHEN has_adjustment THEN 'adjustment'
+	WHEN has_exchange THEN 'currency_exchange'
+	ELSE 'transfer'
 END
 FROM (
 	SELECT
-		COALESCE(bool_or(c.economic_intent = CAST('EXPENSE' AS ` + intentType + `)), false) AS has_expense,
-		COALESCE(bool_or(c.economic_intent = CAST('FEE' AS ` + intentType + `)), false) AS has_fee,
-		COALESCE(bool_or(c.economic_intent = CAST('INCOME' AS ` + intentType + `)), false) AS has_income,
-		COALESCE(bool_or(c.economic_intent = CAST('REFUND' AS ` + intentType + `)), false) AS has_refund,
-		COALESCE(bool_or(c.economic_intent = CAST('TRANSFER' AS ` + intentType + `)), false) AS has_transfer,
-		COALESCE(bool_or(c.economic_intent = CAST('EXCHANGE' AS ` + intentType + `)), false) AS has_exchange,
-		COALESCE(bool_or(c.economic_intent = CAST('ADJUSTMENT' AS ` + intentType + `)), false) AS has_adjustment,
-		COALESCE(bool_or(c.economic_intent = CAST('FX_GAIN_LOSS' AS ` + intentType + `)), false) AS has_fx
-	FROM ` + s.db.accountingName("journal_record") + ` jr
-	JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
-	WHERE jr.transaction_id = tx.transaction_id
-	  AND jr.tombstoned_at IS NULL
-) component_presence)`
+		CAST(has_expense AS INTEGER) + CAST(has_refund AS INTEGER) +
+		CAST(has_income AS INTEGER) + CAST(has_clawback AS INTEGER) +
+		CAST(has_adjustment AS INTEGER) + CAST(has_exchange AS INTEGER) AS economic_count,
+		has_expense,
+		has_refund,
+		has_income,
+		has_clawback,
+		has_adjustment,
+		has_exchange
+	FROM (
+		SELECT
+			COALESCE(bool_or(role = 'expense'), false) AS has_expense,
+			COALESCE(bool_or(role = 'refund'), false) AS has_refund,
+			COALESCE(bool_or(role = 'income'), false) AS has_income,
+			COALESCE(bool_or(role = 'clawback'), false) AS has_clawback,
+			COALESCE(bool_or(role = 'adjustment'), false) AS has_adjustment,
+			COALESCE(bool_or(role = 'exchange'), false) AS has_exchange
+		FROM (
+			SELECT ` + s.recordRoleExpression() + ` AS role
+			FROM ` + s.db.accountingName("journal_record") + ` jr
+			JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
+			LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
+			WHERE jr.transaction_id = tx.transaction_id
+			  AND jr.tombstoned_at IS NULL
+		) classified_records
+	) economic_presence
+) classification)`
 }
 
 func (s *TransactionStore) transactionAnchorOffset(ctx context.Context, anchor values.CivilDate, limit *int, predicate transactionListPredicate) (int, error) {
@@ -790,7 +836,7 @@ func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.
 	fromQuery := `FROM ` + s.db.accountingName("journal_record") + ` jr
 JOIN ` + s.db.accountingName("transaction") + ` tx ON tx.transaction_id = jr.transaction_id
 JOIN ` + s.db.accountingName("account") + ` a ON a.account_id = jr.account_id
-JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id`
+LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id`
 	whereQuery := `WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	args := []any{}
 	if opts.PostingStatus == nil && !opts.IncludeExpected {
@@ -829,6 +875,10 @@ JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
 	if opts.ReconciliationStatus != nil {
 		whereQuery += " AND jr.reconciliation_status = CAST(? AS " + s.db.accountingName("reconciliation_status") + ")"
 		args = append(args, enumValue(*opts.ReconciliationStatus))
+	}
+	if opts.RecordRole != nil {
+		whereQuery += " AND " + s.recordRoleExpression() + " = ?"
+		args = append(args, string(*opts.RecordRole))
 	}
 	if opts.AmountMin != nil {
 		whereQuery += " AND jr.amount >= ?"
@@ -882,7 +932,7 @@ JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.category_id
 
 	query := `SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	` + runningBalanceSelect + `, jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, c.economic_intent
+	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
 ` + fromQuery + "\n" + runningBalanceJoin + "\n" + whereQuery
 	query += " ORDER BY tx.initiated_date ASC, jr.transaction_id ASC, jr.record_id ASC"
 	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
@@ -1157,6 +1207,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	var tombstonedAt sql.NullTime
 	var accountType sql.NullString
 	var accountName sql.NullString
+	var accountFQN sql.NullString
 	var economicIntent sql.NullString
 	if err := scanner.Scan(
 		&record.ID,
@@ -1182,6 +1233,7 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 		&tombstonedAt,
 		&accountType,
 		&accountName,
+		&accountFQN,
 		&economicIntent,
 	); err != nil {
 		return transactions.JournalRecord{}, err
@@ -1237,6 +1289,9 @@ func scanJournalRecord(scanner journalRecordScanner) (transactions.JournalRecord
 	if accountName.Valid {
 		record.AccountName = accountName.String
 	}
+	if accountFQN.Valid {
+		record.AccountFQN = accountFQN.String
+	}
 	if economicIntent.Valid {
 		record.EconomicIntent = categories.CategoryEconomicIntent(strings.ToLower(economicIntent.String))
 	}
@@ -1258,10 +1313,10 @@ func recordsByTransactionIDs(ctx context.Context, queryer rowsQuerier, db *AppDB
 		`SELECT jr.record_id, jr.transaction_id, jr.account_id, jr.member_id, jr.currency, jr.amount, jr.amount_usd, jr.category_id,
 	CAST(NULL AS DECIMAL(18,8)) AS running_balance,
 	jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
-	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, c.economic_intent
+	jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
 FROM `+db.accountingName("journal_record")+` jr
 JOIN `+db.accountingName("account")+` a ON a.account_id = jr.account_id
-JOIN `+db.accountingName("category")+` c ON c.category_id = jr.category_id
+LEFT JOIN `+db.accountingName("category")+` c ON c.category_id = jr.category_id
 WHERE jr.transaction_id IN (`+placeholders(len(transactionIDs))+`) AND jr.tombstoned_at IS NULL
 ORDER BY jr.transaction_id ASC, jr.record_id ASC`,
 		int64Args(transactionIDs)...,

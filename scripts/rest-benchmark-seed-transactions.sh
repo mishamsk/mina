@@ -82,7 +82,7 @@ CREATE TEMP TABLE seed_balance_account AS
 SELECT row_number() OVER (ORDER BY account_id) AS rn, account_id
 FROM account
 WHERE fqn LIKE 'Benchmark:Bank:%'
-  AND account_type = 'BALANCE'
+  AND account_type = 'OWNED'
   AND tombstoned_at IS NULL;
 
 CREATE TEMP TABLE seed_flow_account AS
@@ -164,7 +164,7 @@ SELECT
   'USD',
   -amount,
   NULL,
-  category_id,
+  NULL,
   [tag_id],
   printf('benchmark transaction %06d', i),
   CAST(initiated_date AS TIMESTAMP),

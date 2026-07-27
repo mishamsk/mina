@@ -28,20 +28,15 @@ CREATE TYPE source AS ENUM (
 );
 
 CREATE TYPE account_type AS ENUM (
-    'BALANCE',
+    'OWNED',
+    'PARTY',
     'FLOW',
     'SYSTEM'
 );
 
 CREATE TYPE category_economic_intent AS ENUM (
     'EXPENSE',
-    'FEE',
-    'INCOME',
-    'REFUND',
-    'TRANSFER',
-    'EXCHANGE',
-    'ADJUSTMENT',
-    'FX_GAIN_LOSS'
+    'INCOME'
 );
 
 CREATE TYPE recurring_occurrence_status AS ENUM (
@@ -238,7 +233,8 @@ CREATE TABLE journal_record (
     -- Signed USD conversion at recording time; NULL when no exchange rate is available.
     amount_usd DECIMAL(18,8),
 
-    category_id INTEGER NOT NULL,
+    -- Category for flow records; NULL on every other record.
+    category_id INTEGER,
     -- Tag IDs assigned to this record for flexible grouping.
     tag_ids INTEGER[] NOT NULL DEFAULT [],
 
@@ -268,6 +264,7 @@ CREATE TABLE journal_record (
     tombstoned_at TIMESTAMP
 );
 
+COMMENT ON COLUMN journal_record.category_id IS 'Category for flow records; NULL on every other record.';
 COMMENT ON COLUMN journal_record.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
 COMMENT ON COLUMN journal_record.amount IS 'Signed debit or credit amount in the record currency.';
 COMMENT ON COLUMN journal_record.amount_usd IS 'Signed USD conversion at recording time; NULL when no exchange rate is available.';
@@ -393,8 +390,8 @@ COMMENT ON COLUMN transaction_template.level IS 'Zero-based template depth deriv
 CREATE TABLE transaction_template_record (
     transaction_template_record_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
     transaction_template_id INTEGER NOT NULL,
-    -- Category is the minimum record default required for manual-entry templates.
-    category_id INTEGER NOT NULL,
+    -- Optional category default; only meaningful for flow-account record defaults.
+    category_id INTEGER,
     -- Optional account default for partial manual-entry templates.
     account_id INTEGER,
     -- Optional household-member default for partial manual-entry templates.
@@ -412,7 +409,7 @@ CREATE TABLE transaction_template_record (
     tombstoned_at TIMESTAMP
 );
 
-COMMENT ON COLUMN transaction_template_record.category_id IS 'Category is the minimum record default required for manual-entry templates.';
+COMMENT ON COLUMN transaction_template_record.category_id IS 'Optional category default; only meaningful for flow-account record defaults.';
 COMMENT ON COLUMN transaction_template_record.account_id IS 'Optional account default for partial manual-entry templates.';
 COMMENT ON COLUMN transaction_template_record.member_id IS 'Optional household-member default for partial manual-entry templates.';
 COMMENT ON COLUMN transaction_template_record.currency IS 'Optional currency default; templates do not store converted amount_usd.';
@@ -480,7 +477,8 @@ CREATE TABLE recurring_definition_record (
     -- Signed debit or credit amount copied to generated transactions.
     amount DECIMAL(18,8) NOT NULL,
 
-    category_id INTEGER NOT NULL,
+    -- Category for flow records; NULL on every other record.
+    category_id INTEGER,
     -- Tag IDs assigned to generated records for flexible grouping.
     tag_ids INTEGER[] NOT NULL DEFAULT [],
 
@@ -492,6 +490,7 @@ CREATE TABLE recurring_definition_record (
     tombstoned_at TIMESTAMP
 );
 
+COMMENT ON COLUMN recurring_definition_record.category_id IS 'Category for flow records; NULL on every other record.';
 COMMENT ON COLUMN recurring_definition_record.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
 COMMENT ON COLUMN recurring_definition_record.amount IS 'Signed debit or credit amount copied to generated transactions.';
 COMMENT ON COLUMN recurring_definition_record.tag_ids IS 'Tag IDs assigned to generated records for flexible grouping.';
@@ -634,3 +633,16 @@ Accounts, categories, tags, transaction templates, and recurring definitions use
 Hierarchy is encoded directly in the name string. Tree structure is derived at query time when needed.
 Account type and category economic intent are explicit metadata; they are not inferred from FQN prefixes.
 Group/leaf semantics, hierarchy invariants, and restructuring rules are owned by `docs/hierarchy-semantics.md`.
+
+## Seeded Rows
+
+The four `system` accounts (`system:suspense`, `system:correction`,
+`system:opening_balance`, `system:exchange`) are installed by migration and are
+not user configurable. `docs/accounting-semantics.md` owns their meaning.
+
+## Nullable Category
+
+`category_id` is nullable on journal, template, and recurring definition
+records. A journal record carries a category if and only if it is a `flow`
+record; `docs/accounting-semantics.md` owns that rule. Referential integrity is
+checked only when the value is present.

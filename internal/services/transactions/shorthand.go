@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mishamsk/mina/internal/services"
+	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
 	"github.com/mishamsk/mina/internal/services/values"
 )
@@ -53,7 +54,22 @@ type TransferInput struct {
 	ShorthandCreateFields
 	SourceAccountID      int64
 	DestinationAccountID int64
-	TransferCategoryID   int64
+}
+
+// ExchangeInput creates a two-currency exchange through the fixed system account.
+type ExchangeInput struct {
+	InitiatedDate        values.CivilDate
+	SoldAccountID        int64
+	BoughtAccountID      int64
+	SoldAmount           values.Decimal
+	BoughtAmount         values.Decimal
+	MemberID             *int64
+	TagIDs               []int64
+	Memo                 *string
+	PendingDate          *time.Time
+	PostedDate           *time.Time
+	PostingStatus        *PostingStatus
+	ReconciliationStatus *ReconciliationStatus
 }
 
 type shorthandRecordSpec struct {
@@ -66,13 +82,18 @@ func (s *Service) CreateSpend(ctx context.Context, input SpendInput) (Transactio
 	if err := validateShorthandAmount(input.Amount); err != nil {
 		return Transaction{}, err
 	}
-	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, input.ExpenseCategoryID, categories.CategoryEconomicIntentExpense, []shorthandRecordSpec{
+	if err := s.requireShorthandBalanceAccounts(ctx, input.FundingAccountID); err != nil {
+		return Transaction{}, err
+	}
+	intent := categories.CategoryEconomicIntentExpense
+	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, &input.ExpenseCategoryID, &intent, []shorthandRecordSpec{
 		{accountID: input.FundingAccountID, amount: input.Amount.Neg()},
 		{accountID: input.CounterpartyAccountID, amount: input.Amount},
 	})
 	if err != nil {
 		return Transaction{}, err
 	}
+	createInput.Records[1].CategoryID = &input.ExpenseCategoryID
 
 	return s.Create(ctx, createInput)
 }
@@ -82,13 +103,18 @@ func (s *Service) CreateIncome(ctx context.Context, input IncomeInput) (Transact
 	if err := validateShorthandAmount(input.Amount); err != nil {
 		return Transaction{}, err
 	}
-	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, input.IncomeCategoryID, categories.CategoryEconomicIntentIncome, []shorthandRecordSpec{
+	if err := s.requireShorthandBalanceAccounts(ctx, input.DestinationAccountID); err != nil {
+		return Transaction{}, err
+	}
+	intent := categories.CategoryEconomicIntentIncome
+	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, &input.IncomeCategoryID, &intent, []shorthandRecordSpec{
 		{accountID: input.DestinationAccountID, amount: input.Amount},
 		{accountID: input.SourceAccountID, amount: input.Amount.Neg()},
 	})
 	if err != nil {
 		return Transaction{}, err
 	}
+	createInput.Records[1].CategoryID = &input.IncomeCategoryID
 
 	return s.Create(ctx, createInput)
 }
@@ -98,13 +124,18 @@ func (s *Service) CreateRefund(ctx context.Context, input RefundInput) (Transact
 	if err := validateShorthandAmount(input.Amount); err != nil {
 		return Transaction{}, err
 	}
-	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, input.RefundCategoryID, categories.CategoryEconomicIntentRefund, []shorthandRecordSpec{
+	if err := s.requireShorthandBalanceAccounts(ctx, input.DestinationAccountID); err != nil {
+		return Transaction{}, err
+	}
+	intent := categories.CategoryEconomicIntentExpense
+	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, &input.RefundCategoryID, &intent, []shorthandRecordSpec{
 		{accountID: input.DestinationAccountID, amount: input.Amount},
 		{accountID: input.CounterpartyAccountID, amount: input.Amount.Neg()},
 	})
 	if err != nil {
 		return Transaction{}, err
 	}
+	createInput.Records[1].CategoryID = &input.RefundCategoryID
 
 	return s.Create(ctx, createInput)
 }
@@ -117,7 +148,10 @@ func (s *Service) CreateTransfer(ctx context.Context, input TransferInput) (Tran
 	if input.SourceAccountID > 0 && input.SourceAccountID == input.DestinationAccountID {
 		return Transaction{}, services.InvalidRequest("source_account_id and destination_account_id must differ")
 	}
-	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, input.TransferCategoryID, categories.CategoryEconomicIntentTransfer, []shorthandRecordSpec{
+	if err := s.requireShorthandBalanceAccounts(ctx, input.SourceAccountID, input.DestinationAccountID); err != nil {
+		return Transaction{}, err
+	}
+	createInput, err := s.shorthandCreateInput(ctx, input.ShorthandCreateFields, nil, nil, []shorthandRecordSpec{
 		{accountID: input.SourceAccountID, amount: input.Amount.Neg()},
 		{accountID: input.DestinationAccountID, amount: input.Amount},
 	})
@@ -126,6 +160,103 @@ func (s *Service) CreateTransfer(ctx context.Context, input TransferInput) (Tran
 	}
 
 	return s.Create(ctx, createInput)
+}
+
+// CreateExchange builds and creates the four records of a currency exchange.
+func (s *Service) CreateExchange(ctx context.Context, input ExchangeInput) (Transaction, error) {
+	if err := validateShorthandAmount(input.SoldAmount); err != nil {
+		return Transaction{}, services.InvalidRequest("sold_amount must be greater than zero")
+	}
+	if err := validateShorthandAmount(input.BoughtAmount); err != nil {
+		return Transaction{}, services.InvalidRequest("bought_amount must be greater than zero")
+	}
+	if input.SoldAccountID <= 0 || input.BoughtAccountID <= 0 || input.SoldAccountID == input.BoughtAccountID {
+		return Transaction{}, services.InvalidRequest("sold_account_id and bought_account_id must be positive and differ")
+	}
+
+	accountRefs, err := s.accounts.ValidateActiveReferences(
+		ctx,
+		[]int64{input.SoldAccountID, input.BoughtAccountID},
+		accounts.ReferenceOptions{AllowHidden: true},
+	)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return Transaction{}, invalidTransactionReferenceError()
+	}
+	if err != nil {
+		return Transaction{}, err
+	}
+	sold := accountRefs[input.SoldAccountID]
+	bought := accountRefs[input.BoughtAccountID]
+	if !shorthandWritableAccountType(sold.AccountType) || !shorthandWritableAccountType(bought.AccountType) {
+		return Transaction{}, services.InvalidRequest("exchange accounts must be owned or party accounts")
+	}
+	if sold.Currency == nil || bought.Currency == nil || *sold.Currency == *bought.Currency {
+		return Transaction{}, services.InvalidRequest("exchange accounts must have two distinct currencies")
+	}
+	exchange, err := s.accounts.ActiveReferenceByFQN(ctx, "system:exchange")
+	if errors.Is(err, services.ErrInvalidReference) {
+		return Transaction{}, services.InvalidRequest("system:exchange account is unavailable")
+	}
+	if err != nil {
+		return Transaction{}, err
+	}
+
+	postingStatus := PostingStatusPosted
+	if input.PostingStatus != nil {
+		postingStatus = *input.PostingStatus
+	}
+	reconciliationStatus := ReconciliationStatusReconciled
+	if input.ReconciliationStatus != nil {
+		reconciliationStatus = *input.ReconciliationStatus
+	}
+	record := func(accountID int64, currency string, amount values.Decimal) JournalRecordInput {
+		return JournalRecordInput{
+			AccountID:            accountID,
+			MemberID:             input.MemberID,
+			Currency:             currency,
+			Amount:               amount,
+			TagIDs:               append([]int64{}, input.TagIDs...),
+			Memo:                 input.Memo,
+			PendingDate:          input.PendingDate,
+			PostedDate:           input.PostedDate,
+			PostingStatus:        postingStatus,
+			ReconciliationStatus: reconciliationStatus,
+			Source:               SourceManual,
+		}
+	}
+	return s.Create(ctx, CreateInput{
+		InitiatedDate: input.InitiatedDate,
+		Records: []JournalRecordInput{
+			record(sold.ID, *sold.Currency, input.SoldAmount.Neg()),
+			record(exchange.ID, *sold.Currency, input.SoldAmount),
+			record(exchange.ID, *bought.Currency, input.BoughtAmount.Neg()),
+			record(bought.ID, *bought.Currency, input.BoughtAmount),
+		},
+	})
+}
+
+func shorthandWritableAccountType(accountType accounts.AccountType) bool {
+	return accountType == accounts.AccountTypeOwned || accountType == accounts.AccountTypeParty
+}
+
+func (s *Service) requireShorthandBalanceAccounts(ctx context.Context, accountIDs ...int64) error {
+	accountRefs, err := s.accounts.ValidateActiveReferences(
+		ctx,
+		accountIDs,
+		accounts.ReferenceOptions{AllowHidden: true},
+	)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return invalidTransactionReferenceError()
+	}
+	if err != nil {
+		return err
+	}
+	for _, accountID := range accountIDs {
+		if !shorthandWritableAccountType(accountRefs[accountID].AccountType) {
+			return services.InvalidRequest("balance accounts must be owned or party accounts")
+		}
+	}
+	return nil
 }
 
 func validateShorthandAmount(amount values.Decimal) error {
@@ -139,12 +270,14 @@ func validateShorthandAmount(amount values.Decimal) error {
 func (s *Service) shorthandCreateInput(
 	ctx context.Context,
 	fields ShorthandCreateFields,
-	categoryID int64,
-	expectedIntent categories.CategoryEconomicIntent,
+	categoryID *int64,
+	expectedIntent *categories.CategoryEconomicIntent,
 	specs []shorthandRecordSpec,
 ) (CreateInput, error) {
-	if err := s.requireShorthandCategoryIntent(ctx, categoryID, expectedIntent); err != nil {
-		return CreateInput{}, err
+	if categoryID != nil && expectedIntent != nil {
+		if err := s.requireShorthandCategoryIntent(ctx, *categoryID, *expectedIntent); err != nil {
+			return CreateInput{}, err
+		}
 	}
 
 	postingStatus := PostingStatusPosted
@@ -163,7 +296,6 @@ func (s *Service) shorthandCreateInput(
 			MemberID:             fields.MemberID,
 			Currency:             fields.Currency,
 			Amount:               spec.amount,
-			CategoryID:           categoryID,
 			TagIDs:               append([]int64{}, fields.TagIDs...),
 			Memo:                 fields.Memo,
 			PendingDate:          fields.PendingDate,

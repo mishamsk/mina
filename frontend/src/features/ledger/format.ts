@@ -21,8 +21,8 @@ export interface LookupMaps {
 
 const classLabels: Record<TransactionClass, string> = {
   adjustment: "Adjustment",
+  clawback: "Clawback",
   currency_exchange: "Currency exchange",
-  fx_gain_loss: "FX gain/loss",
   income: "Income",
   mixed: "Mixed",
   refund: "Refund",
@@ -32,8 +32,8 @@ const classLabels: Record<TransactionClass, string> = {
 
 const compactClassLabels: Record<TransactionClass, string> = {
   adjustment: "ADJUST",
+  clawback: "CLAWBACK",
   currency_exchange: "EXCHANGE",
-  fx_gain_loss: "FX",
   income: "INCOME",
   mixed: "MIXED",
   refund: "REFUND",
@@ -191,27 +191,6 @@ export const simpleTransactionAmountRecords = (
   return [first, second];
 };
 
-const recordAmountIsPositive = (record: JournalRecord): boolean =>
-  !record.amount.startsWith("-");
-
-const balanceRecords = (
-  transaction: Transaction,
-  maps: LookupMaps,
-): readonly JournalRecord[] =>
-  transaction.records.filter(
-    (record) =>
-      maps.accountsById.get(record.account_id)?.account_type === "balance",
-  );
-
-const signedBalanceRecord = (
-  transaction: Transaction,
-  maps: LookupMaps,
-  positive: boolean,
-): JournalRecord | undefined =>
-  balanceRecords(transaction, maps).find(
-    (record) => recordAmountIsPositive(record) === positive,
-  );
-
 const uniformValue = <T>(
   values: readonly T[],
   equals: (left: T, right: T) => boolean = Object.is,
@@ -247,7 +226,9 @@ export const lineCategory = (
   maps: LookupMaps,
 ): Category | "mixed" | undefined => {
   const categoryId = uniformValue(
-    activeTransactionRecords(transaction).map((record) => record.category_id),
+    activeTransactionRecords(transaction)
+      .map((record) => record.category_id)
+      .filter((categoryId): categoryId is number => categoryId !== null),
   );
   if (categoryId === "mixed") {
     return "mixed";
@@ -312,40 +293,23 @@ export const linePostingStatus = (
 
 export const lineDisplayAmounts = (
   transaction: Transaction,
-  maps?: LookupMaps,
 ): readonly DisplayAmount[] => {
-  if (transaction.transaction_class === "transfer") {
-    return transaction.components.flatMap((component) => component.amounts);
-  }
-
   if (transaction.transaction_class === "currency_exchange") {
-    const exchangeAmounts =
-      transaction.components.find(
-        (component) => component.intent === "exchange",
-      )?.amounts ?? [];
-    const soldSide = exchangeAmounts.find((amount) =>
-      amount.amount.startsWith("-"),
-    );
-    if (soldSide) {
-      return [soldSide];
-    }
-
-    const soldRecord =
-      maps === undefined
-        ? undefined
-        : signedBalanceRecord(transaction, maps, false);
-    return soldRecord
-      ? [{ amount: soldRecord.amount, currency: soldRecord.currency }]
-      : exchangeAmounts.slice(0, 1);
+    return transaction.shapes
+      .filter((shape) => shape.shape === "exchange")
+      .flatMap((shape) => shape.amounts)
+      .filter((amount) => amount.amount.startsWith("-"));
   }
 
-  if (transaction.transaction_class === "mixed") {
-    return transaction.components.flatMap((component) => component.amounts);
-  }
-
-  if (transaction.primary_amounts.length > 0) {
-    return transaction.primary_amounts;
-  }
-
-  return transaction.components.flatMap((component) => component.amounts);
+  const shapeAmounts = transaction.shapes.flatMap((shape) => shape.amounts);
+  const amounts =
+    transaction.primary_amounts.length > 0
+      ? [
+          ...transaction.primary_amounts,
+          ...transaction.shapes
+            .filter((shape) => shape.shape === "transfer")
+            .flatMap((shape) => shape.amounts),
+        ]
+      : shapeAmounts;
+  return amounts;
 };

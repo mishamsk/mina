@@ -25,7 +25,7 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 	minimal := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Utilities:Electric",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	assertTransactionTemplateHierarchy(t, *minimal.JSON201, "Utilities", "Electric", 1)
@@ -41,7 +41,7 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 		Fqn: "Food:Coffee",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
-				CategoryId: refs.CategoryID,
+				CategoryId: apptest.Int64Ptr(refs.CategoryID),
 				AccountId:  &refs.MerchantAccountID,
 				Amount:     &coffeeAmount,
 				Memo:       &coffeeMemo,
@@ -63,7 +63,7 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 		Fqn: "Transfers:Planning",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
-				CategoryId:           refs.CategoryID,
+				CategoryId:           apptest.Int64Ptr(refs.CategoryID),
 				AccountId:            &refs.CheckingAccountID,
 				MemberId:             &refs.MemberID,
 				Currency:             &fullCurrency,
@@ -74,7 +74,7 @@ func TestTransactionTemplateCreateReadListScenarios(t *testing.T) {
 				ReconciliationStatus: &reconciliationStatus,
 			},
 			{
-				CategoryId: refs.CategoryID,
+				CategoryId: apptest.Int64Ptr(refs.CategoryID),
 				AccountId:  &refs.MerchantAccountID,
 				Currency:   &fullCurrency,
 				Amount:     &creditAmount,
@@ -166,8 +166,8 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	original := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
-			{CategoryId: refs.CategoryID, AccountId: &refs.MerchantAccountID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), AccountId: &refs.MerchantAccountID},
 		},
 	})
 	originalRecordIDs := transactionTemplateRecordIDs(original.JSON201.Records)
@@ -175,7 +175,7 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	duplicate, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if err != nil {
@@ -191,7 +191,7 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	changedFQNReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Bills:Existing",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if err != nil {
@@ -225,7 +225,7 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	missingCategoryReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID + 9999},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID + 9999)},
 		},
 	})
 	if err != nil {
@@ -239,7 +239,7 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	missingTemplateReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId+9999, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID + 9999},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID + 9999)},
 		},
 	})
 	if err != nil {
@@ -254,7 +254,7 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
-				CategoryId: refs.CategoryID,
+				CategoryId: apptest.Int64Ptr(refs.CategoryID),
 				AccountId:  &refs.CheckingAccountID,
 				Amount:     &amount,
 			},
@@ -301,7 +301,7 @@ func TestTransactionTemplateReplaceDeleteAndDuplicateFQN(t *testing.T) {
 	recreated := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Bills:Power",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if recreated.JSON201.TransactionTemplateId == original.JSON201.TransactionTemplateId {
@@ -316,13 +316,13 @@ func TestTransactionTemplateRejectsHierarchyFQNConflict(t *testing.T) {
 	createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Leaf",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	extendsLeaf, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Leaf:Child",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if err != nil {
@@ -338,13 +338,13 @@ func TestTransactionTemplateRejectsHierarchyFQNConflict(t *testing.T) {
 	createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Group:Child",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	prefixesChild, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Group",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if err != nil {
@@ -360,14 +360,14 @@ func TestTransactionTemplateRejectsHierarchyFQNConflict(t *testing.T) {
 	original := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Replace",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	originalRecordIDs := transactionTemplateRecordIDs(original.JSON201.Records)
 	changedToGroupPathReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Group",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if err != nil {
@@ -384,7 +384,7 @@ func TestTransactionTemplateRejectsHierarchyFQNConflict(t *testing.T) {
 	changedToLeafChildReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Leaf:Child",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if err != nil {
@@ -402,8 +402,8 @@ func TestTransactionTemplateRejectsHierarchyFQNConflict(t *testing.T) {
 	unchangedFQNReplace, err := client.REST().ReplaceTransactionTemplateWithResponse(context.Background(), original.JSON201.TransactionTemplateId, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchy:Replace",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, Amount: &amount},
-			{CategoryId: refs.CategoryID, AccountId: &refs.MerchantAccountID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), Amount: &amount},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), AccountId: &refs.MerchantAccountID},
 		},
 	})
 	if err != nil {
@@ -430,14 +430,14 @@ func TestTransactionTemplateAllowsHierarchyLookalikeBoundary(t *testing.T) {
 	createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchyLookalike:Leaf",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 
 	lookalike, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TemplateHierarchyLookalike:Leafish:Child",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if err != nil {
@@ -455,7 +455,7 @@ func TestTransactionTemplateAllowsHierarchyPrefixReuseAfterTombstone(t *testing.
 	leaf := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TombstonedTemplateHierarchy:Leaf",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	deleteTransactionTemplateForRestructure(t, client, leaf.JSON201.TransactionTemplateId)
@@ -463,7 +463,7 @@ func TestTransactionTemplateAllowsHierarchyPrefixReuseAfterTombstone(t *testing.
 	childAfterDeletedLeaf, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TombstonedTemplateHierarchy:Leaf:Child",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if err != nil {
@@ -476,7 +476,7 @@ func TestTransactionTemplateAllowsHierarchyPrefixReuseAfterTombstone(t *testing.
 	child := createTransactionTemplate(t, client, httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TombstonedTemplateHierarchy:Group:Child",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	deleteTransactionTemplateForRestructure(t, client, child.JSON201.TransactionTemplateId)
@@ -484,7 +484,7 @@ func TestTransactionTemplateAllowsHierarchyPrefixReuseAfterTombstone(t *testing.
 	parentAfterDeletedChild, err := client.REST().CreateTransactionTemplateWithResponse(context.Background(), httpclient.TransactionTemplateWriteRequest{
 		Fqn: "TombstonedTemplateHierarchy:Group",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	if err != nil {
@@ -505,25 +505,25 @@ func TestTransactionTemplateValidationErrors(t *testing.T) {
 	assertInvalidTransactionTemplateCreate(t, client, "zero category id", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:CategoryID",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: 0},
+			{CategoryId: apptest.Int64Ptr(0)},
 		},
 	})
 	assertInvalidTransactionTemplateCreate(t, client, "zero account id", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:AccountID",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, AccountId: &invalidAccountID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), AccountId: &invalidAccountID},
 		},
 	})
 	assertInvalidTransactionTemplateCreate(t, client, "negative member id", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:MemberID",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, MemberId: &invalidMemberID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), MemberId: &invalidMemberID},
 		},
 	})
 	assertInvalidTransactionTemplateCreate(t, client, "duplicate tag ids", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:DuplicateTags",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, TagIds: &invalidTagIDs},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), TagIds: &invalidTagIDs},
 		},
 	})
 
@@ -531,7 +531,7 @@ func TestTransactionTemplateValidationErrors(t *testing.T) {
 	assertInvalidTransactionTemplateCreate(t, client, "invalid currency", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:Currency",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, Currency: &invalidCurrency},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), Currency: &invalidCurrency},
 		},
 	})
 
@@ -539,13 +539,13 @@ func TestTransactionTemplateValidationErrors(t *testing.T) {
 	assertInvalidTransactionTemplateCreate(t, client, "whitespace fqn", httpclient.TransactionTemplateWriteRequest{
 		Fqn: " Invalid:FQN",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID)},
 		},
 	})
 	assertInvalidTransactionTemplateCreate(t, client, "whitespace memo", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:Memo",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, Memo: &memoWithWhitespace},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), Memo: &memoWithWhitespace},
 		},
 	})
 
@@ -553,7 +553,7 @@ func TestTransactionTemplateValidationErrors(t *testing.T) {
 	assertInvalidTransactionTemplateCreate(t, client, "zero amount", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:ZeroAmount",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, Amount: &zeroAmount},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), Amount: &zeroAmount},
 		},
 	})
 
@@ -561,14 +561,14 @@ func TestTransactionTemplateValidationErrors(t *testing.T) {
 	assertInvalidTransactionTemplateCreate(t, client, "unsupported posting status", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:PostingStatus",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, PostingStatus: &unsupportedStatus},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), PostingStatus: &unsupportedStatus},
 		},
 	})
 	unsupportedReconciliationStatus := httpclient.ReconciliationStatus("unknown")
 	assertInvalidTransactionTemplateCreate(t, client, "unsupported reconciliation status", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "Invalid:ReconciliationStatus",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, ReconciliationStatus: &unsupportedReconciliationStatus},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), ReconciliationStatus: &unsupportedReconciliationStatus},
 		},
 	})
 
@@ -593,17 +593,17 @@ func TestTransactionTemplateValidationErrors(t *testing.T) {
 		t.Fatalf("empty records status = %d, want %d; body %s", emptyRecords.StatusCode(), http.StatusBadRequest, emptyRecords.Body)
 	}
 
-	missingCategory, err := client.REST().CreateTransactionTemplateWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
-		"fqn": "Invalid:MissingCategory",
+	optionalCategory, err := client.REST().CreateTransactionTemplateWithBodyWithResponse(context.Background(), "application/json", apptest.JSONReader(map[string]any{
+		"fqn": "Valid:MissingCategory",
 		"records": []map[string]any{
 			{"memo": "missing category"},
 		},
 	}))
 	if err != nil {
-		t.Fatalf("missing category request: %v", err)
+		t.Fatalf("optional category request: %v", err)
 	}
-	if missingCategory.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("missing category status = %d, want %d; body %s", missingCategory.StatusCode(), http.StatusBadRequest, missingCategory.Body)
+	if optionalCategory.StatusCode() != http.StatusCreated {
+		t.Fatalf("optional category status = %d, want %d; body %s", optionalCategory.StatusCode(), http.StatusCreated, optionalCategory.Body)
 	}
 }
 
@@ -614,28 +614,28 @@ func TestTransactionTemplateReferenceChecks(t *testing.T) {
 	assertInvalidTransactionTemplateCreate(t, client, "missing category reference", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "References:MissingCategory",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID + 9999},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID + 9999)},
 		},
 	})
 	missingAccountID := refs.CheckingAccountID + 9999
 	assertInvalidTransactionTemplateCreate(t, client, "missing account reference", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "References:MissingAccount",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, AccountId: &missingAccountID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), AccountId: &missingAccountID},
 		},
 	})
 	missingMemberID := refs.MemberID + 9999
 	assertInvalidTransactionTemplateCreate(t, client, "missing member reference", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "References:MissingMember",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, MemberId: &missingMemberID},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), MemberId: &missingMemberID},
 		},
 	})
 	missingTagIDs := []int64{refs.TagID + 9999}
 	assertInvalidTransactionTemplateCreate(t, client, "missing tag reference", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "References:MissingTag",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, TagIds: &missingTagIDs},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), TagIds: &missingTagIDs},
 		},
 	})
 
@@ -651,26 +651,26 @@ func TestTransactionTemplateReferenceChecks(t *testing.T) {
 	assertInvalidTransactionTemplateCreate(t, client, "tombstoned category reference", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "References:TombstonedCategory",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: deletedCategory.CategoryId},
+			{CategoryId: apptest.Int64Ptr(deletedCategory.CategoryId)},
 		},
 	})
 	assertInvalidTransactionTemplateCreate(t, client, "tombstoned account reference", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "References:TombstonedAccount",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, AccountId: &deletedAccount.AccountId},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), AccountId: &deletedAccount.AccountId},
 		},
 	})
 	assertInvalidTransactionTemplateCreate(t, client, "tombstoned member reference", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "References:TombstonedMember",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, MemberId: &deletedMember.MemberId},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), MemberId: &deletedMember.MemberId},
 		},
 	})
 	deletedTagIDs := []int64{deletedTag.TagId}
 	assertInvalidTransactionTemplateCreate(t, client, "tombstoned tag reference", httpclient.TransactionTemplateWriteRequest{
 		Fqn: "References:TombstonedTag",
 		Records: []httpclient.TransactionTemplateRecordRequest{
-			{CategoryId: refs.CategoryID, TagIds: &deletedTagIDs},
+			{CategoryId: apptest.Int64Ptr(refs.CategoryID), TagIds: &deletedTagIDs},
 		},
 	})
 
@@ -678,7 +678,7 @@ func TestTransactionTemplateReferenceChecks(t *testing.T) {
 	hiddenCategory := client.Scenario().CategoryWithHidden("Templates:HiddenCategory", hidden)
 	hiddenAccountResponse, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "expense:HiddenMerchant",
-		AccountType: httpclient.Flow,
+		AccountType: httpclient.WritableAccountTypeFlow,
 		IsHidden:    &hidden,
 	})
 	if err != nil {
@@ -702,13 +702,14 @@ func TestTransactionTemplateReferenceChecks(t *testing.T) {
 		Fqn: "References:HiddenActive",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
-				CategoryId: hiddenCategory.CategoryId,
+				CategoryId: apptest.Int64Ptr(hiddenCategory.CategoryId),
 				AccountId:  &hiddenAccountResponse.JSON201.AccountId,
 				TagIds:     &hiddenTagIDs,
 			},
 		},
 	})
-	if created.JSON201.Records[0].CategoryId != hiddenCategory.CategoryId ||
+	if created.JSON201.Records[0].CategoryId == nil ||
+		*created.JSON201.Records[0].CategoryId != hiddenCategory.CategoryId ||
 		created.JSON201.Records[0].AccountId == nil ||
 		*created.JSON201.Records[0].AccountId != hiddenAccountResponse.JSON201.AccountId {
 		t.Fatalf("hidden active references not returned as selected: %+v", created.JSON201.Records[0])
@@ -840,8 +841,8 @@ func assertInvalidTransactionTemplateCreate(
 func assertRequiredOnlyTemplateRecord(t *testing.T, record httpclient.TransactionTemplateRecord, categoryID int64) {
 	t.Helper()
 
-	if record.CategoryId != categoryID {
-		t.Fatalf("category_id = %d, want %d", record.CategoryId, categoryID)
+	if record.CategoryId == nil || *record.CategoryId != categoryID {
+		t.Fatalf("category_id = %v, want %d", record.CategoryId, categoryID)
 	}
 	if record.AccountId != nil || record.MemberId != nil || record.Currency != nil || record.Amount != nil || record.Memo != nil ||
 		record.PostingStatus != nil || record.ReconciliationStatus != nil {
@@ -872,8 +873,8 @@ func assertPartialTemplateRecord(
 ) {
 	t.Helper()
 
-	if record.CategoryId != refs.CategoryID {
-		t.Fatalf("category_id = %d, want %d", record.CategoryId, refs.CategoryID)
+	if record.CategoryId == nil || *record.CategoryId != refs.CategoryID {
+		t.Fatalf("category_id = %v, want %d", record.CategoryId, refs.CategoryID)
 	}
 	if record.AccountId == nil || *record.AccountId != refs.MerchantAccountID {
 		t.Fatalf("account_id = %v, want %d", record.AccountId, refs.MerchantAccountID)
@@ -898,8 +899,8 @@ func assertRichTemplateRecord(
 ) {
 	t.Helper()
 
-	if record.CategoryId != refs.CategoryID {
-		t.Fatalf("category_id = %d, want %d", record.CategoryId, refs.CategoryID)
+	if record.CategoryId == nil || *record.CategoryId != refs.CategoryID {
+		t.Fatalf("category_id = %v, want %d", record.CategoryId, refs.CategoryID)
 	}
 	if record.AccountId == nil || *record.AccountId != refs.CheckingAccountID {
 		t.Fatalf("account_id = %v, want %d", record.AccountId, refs.CheckingAccountID)

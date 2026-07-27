@@ -68,6 +68,8 @@
   --color-class-income-bright: #6fe3b8;
   --color-class-refund-ink: #0a7a6e;
   --color-class-refund-bright: #5be0d2;
+  --color-class-clawback-ink: #b4451d;
+  --color-class-clawback-bright: #f08a5c;
   --color-class-transfer-ink: #1a56c4;
   --color-class-transfer-bright: #92c7f5;
   --color-class-exchange-ink: #a81c86;
@@ -505,6 +507,7 @@
       [data-testid="amount-chip"] {
       padding-right: 0 !important;
       padding-left: 0 !important;
+      font-size: 0.75rem;
     }
   }
 

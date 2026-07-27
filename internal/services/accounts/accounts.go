@@ -15,15 +15,16 @@ import (
 type AccountType string
 
 const (
-	AccountTypeBalance AccountType = "balance"
-	AccountTypeFlow    AccountType = "flow"
-	AccountTypeSystem  AccountType = "system"
+	AccountTypeOwned  AccountType = "owned"
+	AccountTypeParty  AccountType = "party"
+	AccountTypeFlow   AccountType = "flow"
+	AccountTypeSystem AccountType = "system"
 )
 
 // ValidAccountType reports whether value is a supported account type.
 func ValidAccountType(value AccountType) bool {
 	switch value {
-	case AccountTypeBalance, AccountTypeFlow, AccountTypeSystem:
+	case AccountTypeOwned, AccountTypeParty, AccountTypeFlow, AccountTypeSystem:
 		return true
 	default:
 		return false
@@ -109,8 +110,10 @@ type ReferenceOptions struct {
 // Reference is the account data needed to validate write references and classify transactions.
 type Reference struct {
 	ID          int64
+	FQN         string
 	AccountType AccountType
 	IsHidden    bool
+	Currency    *string
 }
 
 // ActiveUsage reports active resources that reference an account.
@@ -176,7 +179,10 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Account, error
 		return Account{}, err
 	}
 	if !ValidAccountType(input.AccountType) {
-		return Account{}, services.InvalidRequest("account_type must be one of balance, flow, or system")
+		return Account{}, services.InvalidRequest("account_type must be one of owned, party, flow, or system")
+	}
+	if input.AccountType == AccountTypeSystem || services.FQNAtOrUnder(input.FQN, "system") {
+		return Account{}, services.InvalidRequest("system accounts are installed and managed by Mina")
 	}
 	if err := validateCurrency(input.Currency); err != nil {
 		return Account{}, err
@@ -249,6 +255,20 @@ func (s *Service) ValidateActiveReference(ctx context.Context, id int64, opts Re
 	return refs[id], nil
 }
 
+// ActiveReferenceByFQN returns one active account reference by exact FQN.
+func (s *Service) ActiveReferenceByFQN(ctx context.Context, fqn string) (Reference, error) {
+	states, err := s.cache.Snapshot(ctx)
+	if err != nil {
+		return Reference{}, err
+	}
+	for _, state := range states {
+		if state.active && state.reference.FQN == fqn {
+			return state.reference, nil
+		}
+	}
+	return Reference{}, services.ErrInvalidReference
+}
+
 // InvalidateReferenceCache forces the next reference validation to reload references.
 func (s *Service) InvalidateReferenceCache() {
 	s.cache.Invalidate()
@@ -274,7 +294,7 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ac
 // List returns accounts using default visibility rules unless explicitly overridden.
 func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Account], error) {
 	if opts.AccountType != nil && !ValidAccountType(*opts.AccountType) {
-		return services.PaginatedList[Account]{}, services.InvalidRequest("account_type must be one of balance, flow, or system")
+		return services.PaginatedList[Account]{}, services.InvalidRequest("account_type must be one of owned, party, flow, or system")
 	}
 
 	list, err := s.repo.List(ctx, opts)
@@ -322,7 +342,7 @@ func (s *Service) GroupStates(ctx context.Context, includeHidden bool) ([]servic
 			continue
 		}
 		leaves = append(leaves, services.FQNLeafState{
-			FQN:      state.fqn,
+			FQN:      state.reference.FQN,
 			IsHidden: state.reference.IsHidden,
 		})
 	}
@@ -339,19 +359,22 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 		return Account{}, services.InvalidRequest("at least one account field is required")
 	}
 	if input.AccountType != nil && !ValidAccountType(*input.AccountType) {
-		return Account{}, services.InvalidRequest("account_type must be one of balance, flow, or system")
+		return Account{}, services.InvalidRequest("account_type must be one of owned, party, flow, or system")
 	}
 
 	var account Account
 	if err := s.refs.SerializeReferenceOperation(func() error {
+		current, err := s.repo.Get(ctx, id, false)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("account not found")
+		}
+		if err != nil {
+			return err
+		}
+		if current.AccountType == AccountTypeSystem {
+			return services.InvalidRequest("system accounts are read-only")
+		}
 		if input.ExternalID.Specified || input.ExternalSystem.Specified || input.AccountType != nil {
-			current, err := s.repo.Get(ctx, id, false)
-			if errors.Is(err, services.ErrNotFound) {
-				return services.NotFound("account not found")
-			}
-			if err != nil {
-				return err
-			}
 			externalID := current.ExternalID
 			if input.ExternalID.Specified {
 				externalID = input.ExternalID.Value
@@ -414,6 +437,9 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 	if from == to {
 		return 0, services.InvalidRequest("to_fqn must differ from from_fqn")
 	}
+	if services.FQNAtOrUnder(from, "system") || services.FQNAtOrUnder(to, "system") {
+		return 0, services.InvalidRequest("system account paths are read-only")
+	}
 
 	var movedCount int64
 	if err := s.refs.SerializeReferenceOperation(func() error {
@@ -424,7 +450,7 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 
 		moved := map[int64]accountReferenceState{}
 		for id, state := range states {
-			if state.active && services.FQNAtOrUnder(state.fqn, from) {
+			if state.active && services.FQNAtOrUnder(state.reference.FQN, from) {
 				moved[id] = state
 			}
 		}
@@ -443,7 +469,7 @@ func (s *Service) Restructure(ctx context.Context, from string, to string) (int6
 			if _, ok := moved[id]; ok {
 				continue
 			}
-			if services.FQNPathConflict(to, state.fqn) {
+			if services.FQNPathConflict(to, state.reference.FQN) {
 				return services.Conflict("account destination fqn conflicts with existing account hierarchy")
 			}
 		}
@@ -471,6 +497,9 @@ func (s *Service) SetHiddenByPath(ctx context.Context, path string, hidden bool)
 	if err := validateFQN(path); err != nil {
 		return 0, err
 	}
+	if services.FQNAtOrUnder(path, "system") {
+		return 0, services.InvalidRequest("system account paths are read-only")
+	}
 
 	var updatedCount int64
 	if err := s.refs.SerializeReferenceOperation(func() error {
@@ -481,7 +510,7 @@ func (s *Service) SetHiddenByPath(ctx context.Context, path string, hidden bool)
 
 		targetCount := int64(0)
 		for _, state := range states {
-			if state.active && services.FQNAtOrUnder(state.fqn, path) {
+			if state.active && services.FQNAtOrUnder(state.reference.FQN, path) {
 				targetCount++
 			}
 		}
@@ -508,7 +537,7 @@ func singleLeafMove(moved map[int64]accountReferenceState, from string) bool {
 		return false
 	}
 	for _, state := range moved {
-		return state.fqn == from
+		return state.reference.FQN == from
 	}
 	return false
 }
@@ -528,10 +557,14 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	}
 
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		if _, err := s.repo.Get(ctx, id, false); errors.Is(err, services.ErrNotFound) {
+		current, err := s.repo.Get(ctx, id, false)
+		if errors.Is(err, services.ErrNotFound) {
 			return services.NotFound("account not found")
 		} else if err != nil {
 			return err
+		}
+		if current.AccountType == AccountTypeSystem {
+			return services.InvalidRequest("system accounts are read-only")
 		}
 		usageByID, err := s.repo.ActiveUsage(ctx, []int64{id})
 		if err != nil {
@@ -568,7 +601,9 @@ func (s *Service) populateDeleteability(ctx context.Context, accountItems []Acco
 	}
 	for index := range accountItems {
 		usage := usageByID[accountItems[index].ID]
-		deletable := accountItems[index].TombstonedAt == nil && !usage.HasActiveDependents()
+		deletable := accountItems[index].TombstonedAt == nil &&
+			accountItems[index].AccountType != AccountTypeSystem &&
+			!usage.HasActiveDependents()
 		accountItems[index].Deletable = &deletable
 	}
 
@@ -577,7 +612,6 @@ func (s *Service) populateDeleteability(ctx context.Context, accountItems []Acco
 
 type accountReferenceState struct {
 	reference Reference
-	fqn       string
 	active    bool
 }
 
@@ -587,10 +621,10 @@ func (s *Service) ensureFQNAvailable(ctx context.Context, fqn string) error {
 		return err
 	}
 	for _, state := range states {
-		if !state.active || !services.FQNPathConflict(fqn, state.fqn) {
+		if !state.active || !services.FQNPathConflict(fqn, state.reference.FQN) {
 			continue
 		}
-		if fqn == state.fqn {
+		if fqn == state.reference.FQN {
 			return services.Conflict("active account fqn already exists")
 		}
 		return services.Conflict("active account fqn conflicts with existing account hierarchy")
@@ -621,10 +655,11 @@ func accountReferenceStateFromAccount(account Account) accountReferenceState {
 	return accountReferenceState{
 		reference: Reference{
 			ID:          account.ID,
+			FQN:         account.FQN,
 			AccountType: account.AccountType,
 			IsHidden:    account.IsHidden,
+			Currency:    account.Currency,
 		},
-		fqn:    account.FQN,
 		active: account.TombstonedAt == nil,
 	}
 }

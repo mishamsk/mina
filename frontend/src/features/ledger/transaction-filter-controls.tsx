@@ -1,7 +1,14 @@
 import { Close, EyeOff, Filter } from "pixelarticons/react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-import type { Account, Category, Member, Tag } from "@/api";
+import type {
+  Account,
+  Category,
+  Member,
+  RecordRole,
+  Tag,
+  TransactionShapeType,
+} from "@/api";
 import {
   focusWithoutTooltip,
   Tooltip as AppTooltip,
@@ -21,8 +28,10 @@ import {
 } from "@/components/ui/tooltip";
 import type { TransactionFilters } from "@/models/transaction-filters";
 import {
+  recordRoles,
   transactionFilterDecimalPattern,
   transactionPostingStatuses,
+  transactionShapes,
 } from "@/models/transaction-filters";
 import type { LedgerLookupsSnapshot } from "@/store";
 
@@ -33,7 +42,7 @@ type EntityDimension = "account" | "category" | "tag" | "member";
 type RangeDimension =
   "amount" | "amountUsd" | "initiated" | "pending" | "posted";
 export type TransactionFilterDimension =
-  EntityDimension | "status" | RangeDimension;
+  EntityDimension | "role" | "shape" | "status" | RangeDimension;
 
 interface TransactionFilterControlsProps {
   readonly filters: TransactionFilters;
@@ -53,6 +62,8 @@ const dimensions: readonly DimensionDefinition[] = [
   { id: "tag", label: "Tag" },
   { id: "member", label: "Member" },
   { id: "status", label: "Posting status" },
+  { id: "shape", label: "Transaction shape" },
+  { id: "role", label: "Record role" },
   { id: "amount", label: "Amount" },
   { id: "amountUsd", label: "Amount USD" },
   { id: "initiated", label: "Initiated date" },
@@ -142,6 +153,8 @@ const filterCount = (
   (hiddenDimensions.has("tag") ? 0 : filters.tagIds.length) +
   (hiddenDimensions.has("member") ? 0 : filters.memberIds.length) +
   (hiddenDimensions.has("status") ? 0 : filters.statuses.length) +
+  (hiddenDimensions.has("shape") ? 0 : filters.shapes.length) +
+  (hiddenDimensions.has("role") ? 0 : filters.recordRoles.length) +
   [
     hiddenDimensions.has("amount")
       ? undefined
@@ -255,6 +268,9 @@ const CheckboxList = <T extends string>({
     })}
   </div>
 );
+
+const accountingLabel = (value: RecordRole | TransactionShapeType): string =>
+  `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 
 interface RangeEditorProps {
   readonly fromLabel: string;
@@ -625,6 +641,32 @@ export const TransactionFilterControls = ({
       );
     }
 
+    if (selectedDimension === "shape") {
+      return (
+        <CheckboxList
+          values={transactionShapes}
+          selectedValues={filters.shapes}
+          labelFor={accountingLabel}
+          onChange={(shapes) => {
+            updateFilters({ ...filters, shapes });
+          }}
+        />
+      );
+    }
+
+    if (selectedDimension === "role") {
+      return (
+        <CheckboxList
+          values={recordRoles}
+          selectedValues={filters.recordRoles}
+          labelFor={accountingLabel}
+          onChange={(recordRoles) => {
+            updateFilters({ ...filters, recordRoles });
+          }}
+        />
+      );
+    }
+
     if (selectedDimension === "amount") {
       return (
         <RangeEditor
@@ -903,6 +945,38 @@ export const TransactionFilterControls = ({
                       ...filters,
                       statuses: filters.statuses.filter(
                         (selectedStatus) => selectedStatus !== status,
+                      ),
+                    });
+                  }}
+                />
+              ))
+            : null}
+          {!hiddenDimensionSet.has("shape")
+            ? filters.shapes.map((shape) => (
+                <FilterChip
+                  key={`shape-${shape}`}
+                  label={`Transaction shape ${accountingLabel(shape)}`}
+                  onRemove={() => {
+                    updateFilters({
+                      ...filters,
+                      shapes: filters.shapes.filter(
+                        (selectedShape) => selectedShape !== shape,
+                      ),
+                    });
+                  }}
+                />
+              ))
+            : null}
+          {!hiddenDimensionSet.has("role")
+            ? filters.recordRoles.map((role) => (
+                <FilterChip
+                  key={`role-${role}`}
+                  label={`Record role ${accountingLabel(role)}`}
+                  onRemove={() => {
+                    updateFilters({
+                      ...filters,
+                      recordRoles: filters.recordRoles.filter(
+                        (selectedRole) => selectedRole !== role,
                       ),
                     });
                   }}

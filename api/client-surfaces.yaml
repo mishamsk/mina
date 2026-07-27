@@ -260,14 +260,14 @@ operations:
     mcp:
       state: exposed
       name: create
-      description: Create one account leaf after accounts_list confirms the colon-separated FQN does not already exist. Choose balance, flow, or system type from accounting meaning, not the FQN text.
+      description: Create one account leaf after accounts_list confirms the colon-separated FQN does not already exist. Choose owned, party, or flow from accounting meaning, not the FQN text; the system namespace is reserved for Mina-managed accounts.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   restructureAccounts:
     cli: {state: exposed, name: restructure}
     mcp:
       state: exposed
       name: restructure
-      description: Rename or move an account leaf or implicit group by FQN prefix, atomically moving its active subtree. This is a bulk hierarchy mutation; use only with explicit user intent.
+      description: Rename or move an account leaf or implicit group by FQN prefix, atomically moving its active subtree. Mina-managed system accounts cannot be moved or renamed, and no path may move into the reserved system namespace. This is a bulk hierarchy mutation; use only with explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: false, open_world: false}
   listAccountGroups:
     cli: {state: exposed, name: list-groups}
@@ -281,7 +281,7 @@ operations:
     mcp:
       state: exposed
       name: set_hidden
-      description: Bulk-set hidden state on every active account leaf at or below one leaf or group FQN path. Use accounts_update for one known leaf and require explicit intent for group-wide changes.
+      description: Bulk-set hidden state on every active account leaf at or below one leaf or group FQN path. Mina-managed system accounts cannot be hidden. Use accounts_update for one known leaf and require explicit intent for group-wide changes.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   listAccountBalances:
     cli: {state: exposed, name: list-balances}
@@ -302,14 +302,14 @@ operations:
     mcp:
       state: exposed
       name: update
-      description: Update mutable metadata for one account ID; it does not rename the FQN or change currency. Use accounts_restructure for rename or move operations.
+      description: Update mutable metadata for one account ID; Mina-managed system accounts are immutable. This does not rename the FQN or change currency; use accounts_restructure for rename or move operations.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteAccount:
     cli: {state: exposed, name: delete}
     mcp:
       state: exposed
       name: delete
-      description: Tombstone one account leaf by exact ID; accounts with active references cannot be deleted. This is destructive and requires explicit user intent.
+      description: Tombstone one account leaf by exact ID; accounts with active references and Mina-managed system accounts cannot be deleted. This is destructive and requires explicit user intent.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   listCreditLimitHistory:
     cli: {state: exposed, name: list-credit-limits}
@@ -518,12 +518,26 @@ operations:
       name: create
       description: Use for advanced transaction creation with a complete journal that balances to zero within each currency. Prefer the spend, income, refund, or transfer shorthand tools for simple same-currency entries.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
+  classifyTransaction:
+    cli: {state: exposed, name: classify}
+    mcp:
+      state: exposed
+      name: classify
+      description: Use to preview Mina's derived record roles, transaction shapes, class, and display amounts for an unsaved balanced or unbalanced journal draft. This never persists data.
+      annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
+  createExchangeTransaction:
+    cli: {state: exposed, name: create-exchange}
+    mcp:
+      state: exposed
+      name: create_exchange
+      description: Preferred shortcut for exchanging two currencies between tracked owned or party accounts. Mina supplies the fixed system exchange records and returns the effective rate.
+      annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getTransactionMonthTotals:
     cli: {state: exposed, name: month-totals}
     mcp:
       state: exposed
       name: month_totals
-      description: Use this server-computed civil-month spend and income aggregate instead of client-side record summation. It excludes expected/cancelled and non-spend/non-income intents and reports unconverted-record counts.
+      description: Use this server-computed civil-month aggregate instead of client-side record summation. Expense/refund roles net spend, income/clawback roles net income, expected/cancelled and other roles are excluded, and unconverted-record counts are reported.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createSpendTransaction:
     cli: {state: exposed, name: create-spend}
@@ -551,7 +565,7 @@ operations:
     mcp:
       state: exposed
       name: create_transfer
-      description: Preferred shortcut for a simple same-currency balance-account transfer. Use transactions_create for attached fees, currency exchange, adjustments, or other multi-record journals.
+      description: Preferred shortcut for a simple same-currency balance-account transfer. Use transactions_create_exchange for currency exchange, or transactions_create for attached fees, adjustments, and other multi-record journals.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getTransaction:
     cli: {state: exposed, name: get}
@@ -601,7 +615,7 @@ operations:
     mcp:
       state: exposed
       name: bulk_categorize
-      description: Assign one category to selected record IDs. This is a bulk mutation that can change transaction classification; require explicit user intent and inspect records first.
+      description: Assign one category to selected flow-record IDs; owned, party, and system records cannot be categorized. This is a bulk mutation that can change transaction classification; require explicit user intent and inspect records first.
       annotations: {read_only: false, destructive: true, idempotent: true, open_world: false}
   bulkUpdateJournalRecordTags:
     cli: {state: exposed, name: bulk-update-tags}

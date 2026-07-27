@@ -13,7 +13,8 @@ const classStyles: Record<TransactionClass, string> = {
     "border-[var(--border-ink)] bg-[var(--color-class-adjustment-bright)] text-foreground",
   currency_exchange:
     "border-[var(--border-ink)] bg-[var(--color-class-currency_exchange-bright)] text-foreground",
-  fx_gain_loss: "border-muted-foreground bg-card text-muted-foreground",
+  clawback:
+    "border-[var(--border-ink)] bg-[var(--color-class-clawback-bright)] text-foreground",
   income:
     "border-[var(--border-ink)] bg-[var(--color-class-income-bright)] text-foreground",
   mixed: "border-[var(--border-ink)] bg-transparent text-foreground",

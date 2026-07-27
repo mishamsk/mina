@@ -13,9 +13,10 @@ from these semantics.
   colon-separated FQN (e.g. `Subscriptions:Netflix`), following
   `docs/hierarchy-semantics.md` conventions.
 - A definition owns a **complete, balanced transaction shape**: a full record
-  set with accounts, categories, currencies, and amounts. Unlike transaction
-  templates, partial shapes are not allowed, so generation always yields a
-  valid transaction.
+  set with accounts, currencies, amounts, and categories wherever
+  `docs/accounting-semantics.md` requires them. Unlike transaction templates,
+  partial shapes are not allowed, so generation always yields a valid
+  transaction.
 - A definition may be seeded by copying a transaction template's shape at
   creation time. There is no live link to the template afterwards; templates
   remain schedule-free.

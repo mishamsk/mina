@@ -43,7 +43,6 @@ import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AmountText,
-  buildLookupMaps,
   captureTransactionEntryLaunchContext,
   ClassIcon,
   displayAmountKey,
@@ -306,14 +305,12 @@ const TransactionSearchResultsSkeleton = () => (
 
 const TransactionResultAmounts = ({
   deemphasized,
-  maps,
   transaction,
 }: {
   readonly deemphasized: boolean;
-  readonly maps: ReturnType<typeof buildLookupMaps>;
   readonly transaction: Transaction;
 }) => {
-  const amounts = lineDisplayAmounts(transaction, maps);
+  const amounts = lineDisplayAmounts(transaction);
   if (transaction.transaction_class === "mixed") {
     return (
       <span className={cn(deemphasized && "text-muted-foreground")}>
@@ -325,9 +322,9 @@ const TransactionResultAmounts = ({
     );
   }
 
-  return amounts.map((amount) => (
+  return amounts.map((amount, index) => (
     <AmountText
-      key={displayAmountKey(amount)}
+      key={`${displayAmountKey(amount)}:${index}`}
       amount={amount}
       chip
       className={cn(
@@ -345,9 +342,8 @@ const TransactionResultAmounts = ({
 
 const transactionResultAmountLabel = (
   transaction: Transaction,
-  maps: ReturnType<typeof buildLookupMaps>,
 ): string | undefined => {
-  const amounts = lineDisplayAmounts(transaction, maps);
+  const amounts = lineDisplayAmounts(transaction);
   if (amounts.length === 0) {
     return undefined;
   }
@@ -369,9 +365,8 @@ const transactionResultOptionLabel = (
   transaction: Transaction,
   memo: string | undefined,
   postingStatus: ReturnType<typeof linePostingStatus>,
-  maps: ReturnType<typeof buildLookupMaps>,
 ): string => {
-  const amountLabel = transactionResultAmountLabel(transaction, maps);
+  const amountLabel = transactionResultAmountLabel(transaction);
   return [
     `Transaction ${formatInitiatedDate(transaction.initiated_date)}`,
     transaction.display_title,
@@ -390,10 +385,6 @@ export const CommandPalette = () => {
   const { open } = useCommandPaletteView();
   const transactionBulkEdit = useTransactionBulkEditView();
   const lookups = useLedgerLookupsView();
-  const lookupMaps = useMemo(
-    () => buildLookupMaps(lookups.snapshot),
-    [lookups.snapshot],
-  );
   const lastTransactionsPageSearch = useLastTransactionsPageSearch();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -609,6 +600,16 @@ export const CommandPalette = () => {
         id: "entry-transfer",
         keywords: ["transfer"],
         label: "New transfer",
+      },
+      {
+        action: () => {
+          openEntryCommand("exchange");
+        },
+        group: "New transaction",
+        icon: Plus,
+        id: "entry-exchange",
+        keywords: ["exchange", "currency", "fx"],
+        label: "New exchange",
       },
     ];
     const templateCommands: readonly CommandItem[] = templates.map(
@@ -1228,7 +1229,6 @@ export const CommandPalette = () => {
                           transaction,
                           memo,
                           postingStatus,
-                          lookupMaps,
                         );
                         return (
                           <button
@@ -1313,7 +1313,6 @@ export const CommandPalette = () => {
                             <span className="flex min-w-0 flex-wrap justify-end gap-1 overflow-hidden">
                               <TransactionResultAmounts
                                 deemphasized={amountDeemphasized}
-                                maps={lookupMaps}
                                 transaction={transaction}
                               />
                             </span>

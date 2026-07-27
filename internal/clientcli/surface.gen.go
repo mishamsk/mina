@@ -194,6 +194,34 @@ func Operations() []Operation {
 			Invoke: invokeCancelTransaction,
 		},
 		{
+			ID:          "classifyTransaction",
+			Method:      "POST",
+			Path:        "/api/transactions/classify",
+			Summary:     "Classify an unsaved transaction draft without persisting it.",
+			Description: "Returns server-derived record roles, transaction shapes, class, and display amounts. Drafts need not balance, but category and exchange rules still apply.",
+			CLI:         CLIOperation{Area: "transactions", Name: "classify"},
+			Input: InputDescriptor{
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "records",
+							Type:        "array",
+							Description: "Unsaved journal-record draft; records need not balance.",
+							Required:    true,
+							Array:       true,
+							ItemType:    "object",
+						},
+					},
+					RequiredProperties: []string{"records"},
+					Simple:             false,
+				},
+			},
+			Invoke: invokeClassifyTransaction,
+		},
+		{
 			ID:          "confirmNextRecurringDefinition",
 			Method:      "POST",
 			Path:        "/api/recurring-definitions/{recurring_definition_id}/confirm-next",
@@ -247,9 +275,9 @@ func Operations() []Operation {
 						{
 							Name:        "account_type",
 							Type:        "string",
-							Description: "Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.",
+							Description: "User-writable account semantic type. System accounts are installed and managed only by Mina.",
 							Required:    true,
-							Enum:        []string{"balance", "flow", "system"},
+							Enum:        []string{"owned", "party", "flow"},
 						},
 						{
 							Name:        "currency",
@@ -310,9 +338,9 @@ func Operations() []Operation {
 						{
 							Name:        "economic_intent",
 							Type:        "string",
-							Description: "Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.",
+							Description: "Whether a category describes spending or income.",
 							Required:    true,
-							Enum:        []string{"expense", "fee", "income", "refund", "transfer", "exchange", "adjustment", "fx_gain_loss"},
+							Enum:        []string{"expense", "income"},
 						},
 						{
 							Name:        "fqn",
@@ -422,6 +450,102 @@ func Operations() []Operation {
 				},
 			},
 			Invoke: invokeCreateExchangeRate,
+		},
+		{
+			ID:          "createExchangeTransaction",
+			Method:      "POST",
+			Path:        "/api/transactions/exchange",
+			Summary:     "Create a two-currency exchange transaction.",
+			Description: "Creates the two supplied balance records and the matching `system:exchange` records.",
+			CLI:         CLIOperation{Area: "transactions", Name: "create-exchange"},
+			Input: InputDescriptor{
+				Body: BodyDescriptor{
+					Present:  true,
+					Required: true,
+					Type:     "object",
+					Properties: []BodyPropertyDescriptor{
+						{
+							Name:        "bought_account_id",
+							Type:        "integer",
+							Description: "Owned or party account into which currency is bought.",
+							Required:    true,
+						},
+						{
+							Name:        "bought_amount",
+							Type:        "string",
+							Description: "JSON string, not a JSON number. Positive amount bought in the bought account's currency.",
+							Required:    true,
+						},
+						{
+							Name:        "initiated_date",
+							Type:        "string",
+							Description: "Human-facing transaction date in YYYY-MM-DD format.",
+							Required:    true,
+						},
+						{
+							Name:        "member_id",
+							Type:        "integer",
+							Description: "Optional household-member identifier for the journal records.",
+							Required:    false,
+						},
+						{
+							Name:        "memo",
+							Type:        "string",
+							Description: "Optional memo text for the journal records.",
+							Required:    false,
+						},
+						{
+							Name:        "pending_date",
+							Type:        "string",
+							Description: "UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.",
+							Required:    false,
+						},
+						{
+							Name:        "posted_date",
+							Type:        "string",
+							Description: "UTC timestamp when the generated records posted.",
+							Required:    false,
+						},
+						{
+							Name:        "posting_status",
+							Type:        "string",
+							Description: "Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.",
+							Required:    false,
+							Enum:        []string{"expected", "pending", "posted", "cancelled"},
+						},
+						{
+							Name:        "reconciliation_status",
+							Type:        "string",
+							Description: "Whether a journal record has been reconciled with its external or expected source.",
+							Required:    false,
+							Enum:        []string{"reconciled", "unreconciled"},
+						},
+						{
+							Name:        "sold_account_id",
+							Type:        "integer",
+							Description: "Owned or party account from which currency is sold.",
+							Required:    true,
+						},
+						{
+							Name:        "sold_amount",
+							Type:        "string",
+							Description: "JSON string, not a JSON number. Positive amount sold in the sold account's currency.",
+							Required:    true,
+						},
+						{
+							Name:        "tag_ids",
+							Type:        "array",
+							Description: "Tag identifiers to assign to the journal records.",
+							Required:    false,
+							Array:       true,
+							ItemType:    "integer",
+						},
+					},
+					RequiredProperties: []string{"bought_account_id", "bought_amount", "initiated_date", "sold_account_id", "sold_amount"},
+					Simple:             false,
+				},
+			},
+			Invoke: invokeCreateExchangeTransaction,
 		},
 		{
 			ID:          "createIncomeTransaction",
@@ -933,12 +1057,6 @@ func Operations() []Operation {
 							Required:    true,
 						},
 						{
-							Name:        "category_id",
-							Type:        "integer",
-							Description: "Category identifier for this journal record or shorthand transaction.",
-							Required:    true,
-						},
-						{
 							Name:        "currency",
 							Type:        "string",
 							Description: "Currency code using ISO 4217 or the `C::` crypto prefix.",
@@ -1009,7 +1127,7 @@ func Operations() []Operation {
 							ItemType:    "integer",
 						},
 					},
-					RequiredProperties: []string{"amount", "category_id", "currency", "destination_account_id", "initiated_date", "source_account_id"},
+					RequiredProperties: []string{"amount", "currency", "destination_account_id", "initiated_date", "source_account_id"},
 					Simple:             false,
 				},
 			},
@@ -1528,7 +1646,7 @@ func Operations() []Operation {
 			Method:      "GET",
 			Path:        "/api/transactions/month-totals",
 			Summary:     "Get server-computed spend and income totals for a civil month.",
-			Description: "Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense and fee component records increase spend, income component records increase income, refund records are excluded from both spend and gross income, and transfer/exchange/adjustment/fx_gain_loss records are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.",
+			Description: "Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense-role records increase spend, refund-role records net against spend, income-role records increase income, and clawback-role records net against income. Balance, adjustment, and exchange roles are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.",
 			CLI:         CLIOperation{Area: "transactions", Name: "month-totals"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -1565,8 +1683,8 @@ func Operations() []Operation {
 			ID:          "listAccountBalances",
 			Method:      "GET",
 			Path:        "/api/accounts/balances",
-			Summary:     "List current and posted-only balances for active balance accounts.",
-			Description: "Returns server-computed per-currency balances for active `balance` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.",
+			Summary:     "List current and posted-only balances for active tracked accounts.",
+			Description: "Returns server-computed per-currency balances for active `owned` and `party` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.",
 			CLI:         CLIOperation{Area: "accounts", Name: "list-balances"},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -1579,7 +1697,7 @@ func Operations() []Operation {
 					{
 						Name:        "account_ids",
 						Type:        "array",
-						Description: "Account identifiers to include; omit to return all eligible active balance accounts.",
+						Description: "Account identifiers to include; omit to return all eligible active owned and party accounts.",
 						Required:    false,
 						Array:       true,
 						ItemType:    "integer",
@@ -1631,9 +1749,9 @@ func Operations() []Operation {
 					{
 						Name:        "account_type",
 						Type:        "string",
-						Description: "Filter by balance, flow, or system account type.",
+						Description: "Filter by owned, party, flow, or system account type.",
 						Required:    false,
-						Enum:        []string{"balance", "flow", "system"},
+						Enum:        []string{"owned", "party", "flow", "system"},
 					},
 					{
 						Name:        "is_featured",
@@ -1747,7 +1865,7 @@ func Operations() []Operation {
 						Required:    false,
 						Array:       true,
 						ItemType:    "string",
-						Enum:        []string{"expense", "fee", "income", "refund", "transfer", "exchange", "adjustment", "fx_gain_loss"},
+						Enum:        []string{"expense", "income"},
 					},
 					{
 						Name:        "sort",
@@ -2262,7 +2380,25 @@ func Operations() []Operation {
 						Required:    false,
 						Array:       true,
 						ItemType:    "string",
-						Enum:        []string{"spend", "income", "refund", "transfer", "currency_exchange", "adjustment", "fx_gain_loss", "mixed"},
+						Enum:        []string{"spend", "income", "refund", "clawback", "transfer", "currency_exchange", "adjustment", "mixed"},
+					},
+					{
+						Name:        "transaction_shape",
+						Type:        "array",
+						Description: "Filter by one or more server-derived transaction shapes.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+						Enum:        []string{"spend", "refund", "income", "clawback", "adjustment", "exchange", "transfer"},
+					},
+					{
+						Name:        "record_role",
+						Type:        "array",
+						Description: "Filter by one or more server-derived record roles present in a transaction.",
+						Required:    false,
+						Array:       true,
+						ItemType:    "string",
+						Enum:        []string{"expense", "refund", "income", "clawback", "exchange", "adjustment", "balance"},
 					},
 					{
 						Name:        "amount_min",
@@ -2847,6 +2983,13 @@ func Operations() []Operation {
 						Enum:        []string{"reconciled", "unreconciled"},
 					},
 					{
+						Name:        "record_role",
+						Type:        "string",
+						Description: "Filters records by their server-derived accounting role.",
+						Required:    false,
+						Enum:        []string{"expense", "refund", "income", "clawback", "exchange", "adjustment", "balance"},
+					},
+					{
 						Name:        "amount_min",
 						Type:        "string",
 						Description: "JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.",
@@ -3098,9 +3241,9 @@ func Operations() []Operation {
 						{
 							Name:        "account_type",
 							Type:        "string",
-							Description: "Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.",
+							Description: "User-writable account semantic type. System accounts are installed and managed only by Mina.",
 							Required:    false,
-							Enum:        []string{"balance", "flow", "system"},
+							Enum:        []string{"owned", "party", "flow"},
 						},
 						{
 							Name:        "external_id",
@@ -3459,6 +3602,20 @@ func invokeCancelTransaction(ctx context.Context, client httpclient.ClientWithRe
 	return normalizeInvocationResult(response.Body, response.HTTPResponse)
 }
 
+func invokeClassifyTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.ClassifyTransactionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
 func invokeConfirmNextRecurringDefinition(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
 	if err := validateInvocationInput(input, []string{"recurring_definition_id"}, nil, false, false); err != nil {
 		return InvocationResult{}, err
@@ -3561,6 +3718,20 @@ func invokeCreateExchangeRate(ctx context.Context, client httpclient.ClientWithR
 		return InvocationResult{}, err
 	}
 	response, err := client.CreateExchangeRateWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
+	if err != nil {
+		return InvocationResult{}, err
+	}
+	if response == nil {
+		return InvocationResult{}, errors.New("generated client returned no operation response")
+	}
+	return normalizeInvocationResult(response.Body, response.HTTPResponse)
+}
+
+func invokeCreateExchangeTransaction(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
+	if err := validateInvocationInput(input, nil, nil, true, true); err != nil {
+		return InvocationResult{}, err
+	}
+	response, err := client.CreateExchangeTransactionWithBodyWithResponse(ctx, "application/json", bytes.NewReader(input.Body))
 	if err != nil {
 		return InvocationResult{}, err
 	}
@@ -5946,7 +6117,7 @@ func invokeListTransactionTemplates(ctx context.Context, client httpclient.Clien
 }
 
 func invokeListTransactions(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_id", "initiated_date_from", "initiated_date_to", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "search", "sort", "sort_dir", "tag_id", "transaction_class"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "anchor_date", "category_id", "initiated_date_from", "initiated_date_to", "limit", "member_id", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "record_role", "search", "sort", "sort_dir", "tag_id", "transaction_class", "transaction_shape"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.ListTransactionsParams{}
@@ -6182,52 +6353,56 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		}
 		params.TransactionClass = &queryValue10
 	}
-	queryValues11, querySupplied11 := input.Query["amount_min"]
+	queryValues11, querySupplied11 := input.Query["transaction_shape"]
 	if querySupplied11 {
-		if len(queryValues11) != 1 {
+		if len(queryValues11) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_min",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues11)),
+				Name:     "transaction_shape",
+				Err:      errors.New("value is required"),
 			}
 		}
-		var queryValue11 string
-		if err := parseInvocationValue(queryValues11[0], true, &queryValue11); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_min",
-				Value:    queryValues11[0],
-				Err:      err,
+		queryValue11 := make([]httpclient.TransactionShapeType, len(queryValues11))
+		for valueIndex, raw := range queryValues11 {
+			if err := parseInvocationValue(raw, true, &queryValue11[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "transaction_shape",
+					Value:    raw,
+					Err:      err,
+				}
 			}
 		}
-		params.AmountMin = &queryValue11
+		params.TransactionShape = &queryValue11
 	}
-	queryValues12, querySupplied12 := input.Query["amount_max"]
+	queryValues12, querySupplied12 := input.Query["record_role"]
 	if querySupplied12 {
-		if len(queryValues12) != 1 {
+		if len(queryValues12) == 0 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
-				Err:      fmt.Errorf("got %d values, want 1", len(queryValues12)),
+				Name:     "record_role",
+				Err:      errors.New("value is required"),
 			}
 		}
-		var queryValue12 string
-		if err := parseInvocationValue(queryValues12[0], true, &queryValue12); err != nil {
-			return InvocationResult{}, &InvocationInputError{
-				Location: "query",
-				Name:     "amount_max",
-				Value:    queryValues12[0],
-				Err:      err,
+		queryValue12 := make([]httpclient.RecordRole, len(queryValues12))
+		for valueIndex, raw := range queryValues12 {
+			if err := parseInvocationValue(raw, true, &queryValue12[valueIndex]); err != nil {
+				return InvocationResult{}, &InvocationInputError{
+					Location: "query",
+					Name:     "record_role",
+					Value:    raw,
+					Err:      err,
+				}
 			}
 		}
-		params.AmountMax = &queryValue12
+		params.RecordRole = &queryValue12
 	}
-	queryValues13, querySupplied13 := input.Query["amount_usd_min"]
+	queryValues13, querySupplied13 := input.Query["amount_min"]
 	if querySupplied13 {
 		if len(queryValues13) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues13)),
 			}
 		}
@@ -6235,19 +6410,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues13[0], true, &queryValue13); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_min",
 				Value:    queryValues13[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMin = &queryValue13
+		params.AmountMin = &queryValue13
 	}
-	queryValues14, querySupplied14 := input.Query["amount_usd_max"]
+	queryValues14, querySupplied14 := input.Query["amount_max"]
 	if querySupplied14 {
 		if len(queryValues14) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues14)),
 			}
 		}
@@ -6255,99 +6430,99 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues14[0], true, &queryValue14); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_max",
 				Value:    queryValues14[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMax = &queryValue14
+		params.AmountMax = &queryValue14
 	}
-	queryValues15, querySupplied15 := input.Query["initiated_date_from"]
+	queryValues15, querySupplied15 := input.Query["amount_usd_min"]
 	if querySupplied15 {
 		if len(queryValues15) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues15)),
 			}
 		}
-		var queryValue15 openapi_types.Date
+		var queryValue15 string
 		if err := parseInvocationValue(queryValues15[0], true, &queryValue15); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_min",
 				Value:    queryValues15[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateFrom = &queryValue15
+		params.AmountUsdMin = &queryValue15
 	}
-	queryValues16, querySupplied16 := input.Query["initiated_date_to"]
+	queryValues16, querySupplied16 := input.Query["amount_usd_max"]
 	if querySupplied16 {
 		if len(queryValues16) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "amount_usd_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues16)),
 			}
 		}
-		var queryValue16 openapi_types.Date
+		var queryValue16 string
 		if err := parseInvocationValue(queryValues16[0], true, &queryValue16); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "amount_usd_max",
 				Value:    queryValues16[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateTo = &queryValue16
+		params.AmountUsdMax = &queryValue16
 	}
-	queryValues17, querySupplied17 := input.Query["pending_date_from"]
+	queryValues17, querySupplied17 := input.Query["initiated_date_from"]
 	if querySupplied17 {
 		if len(queryValues17) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues17)),
 			}
 		}
-		var queryValue17 time.Time
+		var queryValue17 openapi_types.Date
 		if err := parseInvocationValue(queryValues17[0], true, &queryValue17); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_from",
 				Value:    queryValues17[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateFrom = &queryValue17
+		params.InitiatedDateFrom = &queryValue17
 	}
-	queryValues18, querySupplied18 := input.Query["pending_date_to"]
+	queryValues18, querySupplied18 := input.Query["initiated_date_to"]
 	if querySupplied18 {
 		if len(queryValues18) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "initiated_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
 			}
 		}
-		var queryValue18 time.Time
+		var queryValue18 openapi_types.Date
 		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "initiated_date_to",
 				Value:    queryValues18[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateTo = &queryValue18
+		params.InitiatedDateTo = &queryValue18
 	}
-	queryValues19, querySupplied19 := input.Query["posted_date_from"]
+	queryValues19, querySupplied19 := input.Query["pending_date_from"]
 	if querySupplied19 {
 		if len(queryValues19) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
 			}
 		}
@@ -6355,19 +6530,19 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_from",
 				Value:    queryValues19[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateFrom = &queryValue19
+		params.PendingDateFrom = &queryValue19
 	}
-	queryValues20, querySupplied20 := input.Query["posted_date_to"]
+	queryValues20, querySupplied20 := input.Query["pending_date_to"]
 	if querySupplied20 {
 		if len(queryValues20) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "pending_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
 			}
 		}
@@ -6375,32 +6550,72 @@ func invokeListTransactions(ctx context.Context, client httpclient.ClientWithRes
 		if err := parseInvocationValue(queryValues20[0], true, &queryValue20); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "pending_date_to",
 				Value:    queryValues20[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateTo = &queryValue20
+		params.PendingDateTo = &queryValue20
 	}
-	queryValues21, querySupplied21 := input.Query["search"]
+	queryValues21, querySupplied21 := input.Query["posted_date_from"]
 	if querySupplied21 {
 		if len(queryValues21) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
 			}
 		}
-		var queryValue21 string
+		var queryValue21 time.Time
 		if err := parseInvocationValue(queryValues21[0], true, &queryValue21); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "search",
+				Name:     "posted_date_from",
 				Value:    queryValues21[0],
 				Err:      err,
 			}
 		}
-		params.Search = &queryValue21
+		params.PostedDateFrom = &queryValue21
+	}
+	queryValues22, querySupplied22 := input.Query["posted_date_to"]
+	if querySupplied22 {
+		if len(queryValues22) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "posted_date_to",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues22)),
+			}
+		}
+		var queryValue22 time.Time
+		if err := parseInvocationValue(queryValues22[0], true, &queryValue22); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "posted_date_to",
+				Value:    queryValues22[0],
+				Err:      err,
+			}
+		}
+		params.PostedDateTo = &queryValue22
+	}
+	queryValues23, querySupplied23 := input.Query["search"]
+	if querySupplied23 {
+		if len(queryValues23) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues23)),
+			}
+		}
+		var queryValue23 string
+		if err := parseInvocationValue(queryValues23[0], true, &queryValue23); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "search",
+				Value:    queryValues23[0],
+				Err:      err,
+			}
+		}
+		params.Search = &queryValue23
 	}
 	response, err := client.ListTransactionsWithResponse(ctx, params)
 	if err != nil {
@@ -7008,7 +7223,7 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 }
 
 func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "record_role", "tag_id"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.SearchJournalRecordsParams{}
@@ -7172,32 +7387,32 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		}
 		params.ReconciliationStatus = &queryValue7
 	}
-	queryValues8, querySupplied8 := input.Query["amount_min"]
+	queryValues8, querySupplied8 := input.Query["record_role"]
 	if querySupplied8 {
 		if len(queryValues8) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_min",
+				Name:     "record_role",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues8)),
 			}
 		}
-		var queryValue8 string
+		var queryValue8 httpclient.RecordRole
 		if err := parseInvocationValue(queryValues8[0], true, &queryValue8); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_min",
+				Name:     "record_role",
 				Value:    queryValues8[0],
 				Err:      err,
 			}
 		}
-		params.AmountMin = &queryValue8
+		params.RecordRole = &queryValue8
 	}
-	queryValues9, querySupplied9 := input.Query["amount_max"]
+	queryValues9, querySupplied9 := input.Query["amount_min"]
 	if querySupplied9 {
 		if len(queryValues9) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues9)),
 			}
 		}
@@ -7205,19 +7420,19 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		if err := parseInvocationValue(queryValues9[0], true, &queryValue9); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_max",
+				Name:     "amount_min",
 				Value:    queryValues9[0],
 				Err:      err,
 			}
 		}
-		params.AmountMax = &queryValue9
+		params.AmountMin = &queryValue9
 	}
-	queryValues10, querySupplied10 := input.Query["amount_usd_min"]
+	queryValues10, querySupplied10 := input.Query["amount_max"]
 	if querySupplied10 {
 		if len(queryValues10) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues10)),
 			}
 		}
@@ -7225,19 +7440,19 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		if err := parseInvocationValue(queryValues10[0], true, &queryValue10); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_min",
+				Name:     "amount_max",
 				Value:    queryValues10[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMin = &queryValue10
+		params.AmountMax = &queryValue10
 	}
-	queryValues11, querySupplied11 := input.Query["amount_usd_max"]
+	queryValues11, querySupplied11 := input.Query["amount_usd_min"]
 	if querySupplied11 {
 		if len(queryValues11) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues11)),
 			}
 		}
@@ -7245,39 +7460,39 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		if err := parseInvocationValue(queryValues11[0], true, &queryValue11); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "amount_usd_max",
+				Name:     "amount_usd_min",
 				Value:    queryValues11[0],
 				Err:      err,
 			}
 		}
-		params.AmountUsdMax = &queryValue11
+		params.AmountUsdMin = &queryValue11
 	}
-	queryValues12, querySupplied12 := input.Query["initiated_date_from"]
+	queryValues12, querySupplied12 := input.Query["amount_usd_max"]
 	if querySupplied12 {
 		if len(queryValues12) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues12)),
 			}
 		}
-		var queryValue12 openapi_types.Date
+		var queryValue12 string
 		if err := parseInvocationValue(queryValues12[0], true, &queryValue12); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_from",
+				Name:     "amount_usd_max",
 				Value:    queryValues12[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateFrom = &queryValue12
+		params.AmountUsdMax = &queryValue12
 	}
-	queryValues13, querySupplied13 := input.Query["initiated_date_to"]
+	queryValues13, querySupplied13 := input.Query["initiated_date_from"]
 	if querySupplied13 {
 		if len(queryValues13) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues13)),
 			}
 		}
@@ -7285,39 +7500,39 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		if err := parseInvocationValue(queryValues13[0], true, &queryValue13); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "initiated_date_to",
+				Name:     "initiated_date_from",
 				Value:    queryValues13[0],
 				Err:      err,
 			}
 		}
-		params.InitiatedDateTo = &queryValue13
+		params.InitiatedDateFrom = &queryValue13
 	}
-	queryValues14, querySupplied14 := input.Query["pending_date_from"]
+	queryValues14, querySupplied14 := input.Query["initiated_date_to"]
 	if querySupplied14 {
 		if len(queryValues14) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues14)),
 			}
 		}
-		var queryValue14 time.Time
+		var queryValue14 openapi_types.Date
 		if err := parseInvocationValue(queryValues14[0], true, &queryValue14); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_from",
+				Name:     "initiated_date_to",
 				Value:    queryValues14[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateFrom = &queryValue14
+		params.InitiatedDateTo = &queryValue14
 	}
-	queryValues15, querySupplied15 := input.Query["pending_date_to"]
+	queryValues15, querySupplied15 := input.Query["pending_date_from"]
 	if querySupplied15 {
 		if len(queryValues15) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues15)),
 			}
 		}
@@ -7325,19 +7540,19 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		if err := parseInvocationValue(queryValues15[0], true, &queryValue15); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "pending_date_to",
+				Name:     "pending_date_from",
 				Value:    queryValues15[0],
 				Err:      err,
 			}
 		}
-		params.PendingDateTo = &queryValue15
+		params.PendingDateFrom = &queryValue15
 	}
-	queryValues16, querySupplied16 := input.Query["posted_date_from"]
+	queryValues16, querySupplied16 := input.Query["pending_date_to"]
 	if querySupplied16 {
 		if len(queryValues16) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues16)),
 			}
 		}
@@ -7345,19 +7560,19 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		if err := parseInvocationValue(queryValues16[0], true, &queryValue16); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_from",
+				Name:     "pending_date_to",
 				Value:    queryValues16[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateFrom = &queryValue16
+		params.PendingDateTo = &queryValue16
 	}
-	queryValues17, querySupplied17 := input.Query["posted_date_to"]
+	queryValues17, querySupplied17 := input.Query["posted_date_from"]
 	if querySupplied17 {
 		if len(queryValues17) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues17)),
 			}
 		}
@@ -7365,59 +7580,59 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		if err := parseInvocationValue(queryValues17[0], true, &queryValue17); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "posted_date_to",
+				Name:     "posted_date_from",
 				Value:    queryValues17[0],
 				Err:      err,
 			}
 		}
-		params.PostedDateTo = &queryValue17
+		params.PostedDateFrom = &queryValue17
 	}
-	queryValues18, querySupplied18 := input.Query["memo_contains"]
+	queryValues18, querySupplied18 := input.Query["posted_date_to"]
 	if querySupplied18 {
 		if len(queryValues18) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "memo_contains",
+				Name:     "posted_date_to",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
 			}
 		}
-		var queryValue18 string
+		var queryValue18 time.Time
 		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "memo_contains",
+				Name:     "posted_date_to",
 				Value:    queryValues18[0],
 				Err:      err,
 			}
 		}
-		params.MemoContains = &queryValue18
+		params.PostedDateTo = &queryValue18
 	}
-	queryValues19, querySupplied19 := input.Query["limit"]
+	queryValues19, querySupplied19 := input.Query["memo_contains"]
 	if querySupplied19 {
 		if len(queryValues19) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "memo_contains",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
 			}
 		}
-		var queryValue19 int
-		if err := parseInvocationValue(queryValues19[0], false, &queryValue19); err != nil {
+		var queryValue19 string
+		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "memo_contains",
 				Value:    queryValues19[0],
 				Err:      err,
 			}
 		}
-		params.Limit = &queryValue19
+		params.MemoContains = &queryValue19
 	}
-	queryValues20, querySupplied20 := input.Query["offset"]
+	queryValues20, querySupplied20 := input.Query["limit"]
 	if querySupplied20 {
 		if len(queryValues20) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
 			}
 		}
@@ -7425,12 +7640,32 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		if err := parseInvocationValue(queryValues20[0], false, &queryValue20); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "limit",
 				Value:    queryValues20[0],
 				Err:      err,
 			}
 		}
-		params.Offset = &queryValue20
+		params.Limit = &queryValue20
+	}
+	queryValues21, querySupplied21 := input.Query["offset"]
+	if querySupplied21 {
+		if len(queryValues21) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
+			}
+		}
+		var queryValue21 int
+		if err := parseInvocationValue(queryValues21[0], false, &queryValue21); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues21[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue21
 	}
 	response, err := client.SearchJournalRecordsWithResponse(ctx, params)
 	if err != nil {

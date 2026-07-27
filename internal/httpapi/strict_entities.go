@@ -77,6 +77,14 @@ func accountTypeParam(value *openapi.AccountType) *accounts.AccountType {
 	return &accountType
 }
 
+func writableAccountTypeParam(value *openapi.WritableAccountType) *accounts.AccountType {
+	if value == nil {
+		return nil
+	}
+	accountType := accounts.AccountType(*value)
+	return &accountType
+}
+
 func (s *strictServer) CreateAccount(ctx context.Context, request openapi.CreateAccountRequestObject) (openapi.CreateAccountResponseObject, error) {
 	account, err := s.deps.Accounts.Create(ctx, accounts.CreateInput{
 		FQN:            request.Body.Fqn,
@@ -131,7 +139,7 @@ func (s *strictServer) GetAccount(ctx context.Context, request openapi.GetAccoun
 
 func (s *strictServer) UpdateAccount(ctx context.Context, request openapi.UpdateAccountRequestObject) (openapi.UpdateAccountResponseObject, error) {
 	account, err := s.deps.Accounts.UpdateMutable(ctx, request.AccountId, accounts.UpdateInput{
-		AccountType:    accountTypeParam(request.Body.AccountType),
+		AccountType:    writableAccountTypeParam(request.Body.AccountType),
 		IsHidden:       request.Body.IsHidden,
 		IsFeatured:     request.Body.IsFeatured,
 		ExternalID:     optionalNullableString(request.Body.ExternalId),

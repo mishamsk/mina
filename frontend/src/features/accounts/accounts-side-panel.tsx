@@ -10,7 +10,6 @@ import {
 
 import {
   type Account,
-  type AccountType,
   apiErrorMessage,
   type CreateAccountRequest,
   createLedgerAccount,
@@ -21,6 +20,7 @@ import {
   fetchCreditLimitHistory,
   type UpdateAccountRequest,
   updateLedgerAccount,
+  type WritableAccountType,
 } from "@/api";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-delete-description";
@@ -52,7 +52,7 @@ type AccountFormField =
 type AccountFormErrors = Partial<Record<AccountFormField, string>>;
 
 interface AccountFormState {
-  readonly accountType: AccountType;
+  readonly accountType: WritableAccountType;
   readonly currency: string;
   readonly externalId: string;
   readonly externalSystem: string;
@@ -80,7 +80,7 @@ const nonNegativeDecimalPattern = /^\d+(\.\d{1,8})?$/;
 const floatingOverlaySelector =
   "[role='alertdialog'], [role='listbox'], [data-slot='select-content'][data-state='open']";
 const blankForm = (): AccountFormState => ({
-  accountType: "balance",
+  accountType: "owned",
   currency: "USD",
   externalId: "",
   externalSystem: "",
@@ -92,7 +92,8 @@ const blankForm = (): AccountFormState => ({
 const formFromAccount = (account: Account | undefined): AccountFormState =>
   account
     ? {
-        accountType: account.account_type,
+        accountType:
+          account.account_type === "system" ? "owned" : account.account_type,
         currency: account.currency ?? "",
         externalId: account.external_id ?? "",
         externalSystem: account.external_system ?? "",
@@ -303,7 +304,7 @@ const AccountsSidePanelContent = ({
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState<readonly CreditLimitHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(
-    () => mode === "edit" && account?.account_type === "balance",
+    () => mode === "edit" && account?.account_type === "owned",
   );
   const [historyError, setHistoryError] = useState<string | undefined>();
   const [creditDraft, setCreditDraft] = useState<CreditLimitDraft>({
@@ -330,7 +331,7 @@ const AccountsSidePanelContent = ({
   }, []);
 
   const loadHistory = useCallback(async () => {
-    if (!account || account.account_type !== "balance") {
+    if (!account || account.account_type !== "owned") {
       setHistory([]);
       return [];
     }
@@ -563,9 +564,9 @@ const AccountsSidePanelContent = ({
       }
       if (nextHistory && nextHistory.length > 0) {
         setForm((current) =>
-          current.accountType === "balance"
+          current.accountType === "owned"
             ? current
-            : { ...current, accountType: "balance" },
+            : { ...current, accountType: "owned" },
         );
         setFieldError("type", undefined);
       }
@@ -646,8 +647,7 @@ const AccountsSidePanelContent = ({
   };
 
   const title = mode === "create" ? "Create account" : "Edit account";
-  const showCreditLimits =
-    mode === "edit" && account?.account_type === "balance";
+  const showCreditLimits = mode === "edit" && account?.account_type === "owned";
   const hasLoadedEmptyCreditLimitHistory =
     !historyLoading && !historyError && history.length === 0;
   const creditLimitCurrency = account?.currency ?? form.currency;
@@ -739,7 +739,7 @@ const AccountsSidePanelContent = ({
                 value={form.accountType}
                 onValueChange={(value) => {
                   updateForm({
-                    accountType: value as AccountType,
+                    accountType: value as WritableAccountType,
                   });
                   setFieldError("type", undefined);
                 }}
@@ -748,9 +748,9 @@ const AccountsSidePanelContent = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="balance">Balance</SelectItem>
+                  <SelectItem value="owned">Owned</SelectItem>
+                  <SelectItem value="party">Party</SelectItem>
                   <SelectItem value="flow">Flow</SelectItem>
-                  <SelectItem value="system">System</SelectItem>
                 </SelectContent>
               </Select>
               <FieldError message={fieldErrors.type} />

@@ -101,7 +101,6 @@ func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
 				AccountId:            eurCash.AccountId,
 				Currency:             "EUR",
 				Amount:               "-11.00",
-				CategoryId:           refs.CategoryId,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -110,7 +109,7 @@ func TestTransactionReplaceInfersMissingNonUSDAmountUSD(t *testing.T) {
 				AccountId:            eurMerchant.AccountId,
 				Currency:             "EUR",
 				Amount:               "11.00",
-				CategoryId:           refs.CategoryId,
+				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -380,7 +379,6 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				Currency:             "USD",
 				Amount:               "-50.00",
 				AmountUsd:            apptest.StringPtr("-50.00"),
-				CategoryId:           refs.SecondCategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.SecondTagId),
 				Memo:                 &memo,
 				PendingDate:          &pendingDate,
@@ -393,7 +391,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 				Currency:             "USD",
 				Amount:               "50.00",
 				AmountUsd:            apptest.StringPtr("50.00"),
-				CategoryId:           refs.SecondCategoryId,
+				CategoryId:           apptest.Int64Ptr(refs.SecondCategoryId),
 				PostingStatus:        httpclient.PostingStatusPending,
 				ReconciliationStatus: httpclient.Unreconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -417,7 +415,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		want   []int64
 	}{
 		{name: "account", params: &httpclient.SearchJournalRecordsParams{AccountId: &refs.CheckingAccountId}, want: []int64{firstDebit.RecordId}},
-		{name: "category", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId}, want: []int64{firstDebit.RecordId, firstCredit.RecordId}},
+		{name: "category", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId}, want: []int64{firstCredit.RecordId}},
 		{name: "tag", params: &httpclient.SearchJournalRecordsParams{TagId: &refs.TagId}, want: []int64{firstDebit.RecordId}},
 		{name: "member", params: &httpclient.SearchJournalRecordsParams{MemberId: &refs.MemberId}, want: []int64{firstDebit.RecordId}},
 		{name: "posting status", params: &httpclient.SearchJournalRecordsParams{PostingStatus: ptrTo(httpclient.PostingStatusPending)}, want: []int64{secondDebit.RecordId, secondCredit.RecordId}},
@@ -433,7 +431,7 @@ func TestRecordSearchFiltersBoundary(t *testing.T) {
 		{name: "posted from", params: &httpclient.SearchJournalRecordsParams{PostedDateFrom: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
 		{name: "posted to", params: &httpclient.SearchJournalRecordsParams{PostedDateTo: apptest.TimestampPtr("2024-03-11T00:00:00Z")}, want: []int64{firstDebit.RecordId}},
 		{name: "memo", params: &httpclient.SearchJournalRecordsParams{MemoContains: new("unc")}, want: []int64{firstDebit.RecordId}},
-		{name: "combined", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId, TagId: &refs.TagId, MemoContains: new("Lunch")}, want: []int64{firstDebit.RecordId}},
+		{name: "combined", params: &httpclient.SearchJournalRecordsParams{CategoryId: &refs.CategoryId, TagId: &refs.TagId, MemoContains: new("Lunch")}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -567,7 +565,7 @@ func TestRecordSearchDictionaryFilterReferencesBoundary(t *testing.T) {
 	hidden := true
 	hiddenAccount, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "checking:RecordSearch:HiddenFilter",
-		AccountType: httpclient.Balance,
+		AccountType: httpclient.WritableAccountTypeOwned,
 		IsHidden:    &hidden,
 		Currency:    ptrTo("USD"),
 	})
@@ -630,7 +628,7 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 	funding := scenario.AccountWithCurrency("cash:Prefix:Funding", "USD")
 	merchant := scenario.Account("merchant:Prefix:Coffee")
 	chaseChecking := scenario.AccountWithCurrency("banks:Chase:checking:Joint", "USD")
-	chaseFees := scenario.AccountWithType("banks:Chase:fees", httpclient.Flow)
+	chaseFees := scenario.AccountWithType("banks:Chase:fees", httpclient.WritableAccountTypeFlow)
 	chaserChecking := scenario.AccountWithCurrency("banks:Chaser:checking", "USD")
 	allyChecking := scenario.AccountWithCurrency("banks:Ally:checking", "USD")
 
@@ -691,7 +689,7 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 
 	wildcardPrefix := "banks:Save_1%\\Vault"
 	wildcardDescendantAccount := scenario.AccountWithCurrency(wildcardPrefix+":Joint", "USD")
-	wildcardFeeAccount := scenario.AccountWithType(wildcardPrefix+":Fees", httpclient.Flow)
+	wildcardFeeAccount := scenario.AccountWithType(wildcardPrefix+":Fees", httpclient.WritableAccountTypeFlow)
 	wildcardLookalikeAccount := scenario.AccountWithCurrency("banks:Savex1ExtraVault:Joint", "USD")
 	wildcardDescendant := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-07", category.CategoryId, wildcardDescendantAccount.AccountId, merchant.AccountId, httpclient.PostingStatusPosted))
 	wildcardFee := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-08", category.CategoryId, funding.AccountId, wildcardFeeAccount.AccountId, httpclient.PostingStatusPosted))
@@ -981,7 +979,6 @@ func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransa
 				Currency:             "USD",
 				Amount:               "-20.00",
 				AmountUsd:            apptest.StringPtr("-20.00"),
-				CategoryId:           refs.CategoryId,
 				TagIds:               apptest.Int64SlicePtr(refs.TagId),
 				Memo:                 &memo,
 				PendingDate:          &pendingDate,
@@ -995,7 +992,7 @@ func replacementTransactionRequest(refs transactionRefs) httpclient.UpdateTransa
 				Currency:             "USD",
 				Amount:               "20.00",
 				AmountUsd:            apptest.StringPtr("20.00"),
-				CategoryId:           refs.CategoryId,
+				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -1046,7 +1043,6 @@ func recordSearchPrefixTransactionRequest(
 				Currency:             "USD",
 				Amount:               "-10.00",
 				AmountUsd:            apptest.StringPtr("-10.00"),
-				CategoryId:           categoryID,
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -1056,7 +1052,7 @@ func recordSearchPrefixTransactionRequest(
 				Currency:             "USD",
 				Amount:               "10.00",
 				AmountUsd:            apptest.StringPtr("10.00"),
-				CategoryId:           categoryID,
+				CategoryId:           apptest.Int64Ptr(categoryID),
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,

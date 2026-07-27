@@ -85,6 +85,7 @@ const hasActiveOverlay = (): boolean =>
   );
 
 const createEntryTypes: Readonly<Record<string, TransactionEntryType>> = {
+  exchange: "exchange",
   income: "income",
   journal: "advanced",
   refund: "refund",

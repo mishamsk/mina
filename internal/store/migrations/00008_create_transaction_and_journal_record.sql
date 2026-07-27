@@ -23,7 +23,8 @@ CREATE TABLE journal_record (
 	amount DECIMAL(18,8) NOT NULL,
 	-- Signed USD conversion at recording time; NULL when no exchange rate is available.
 	amount_usd DECIMAL(18,8),
-	category_id INTEGER NOT NULL,
+	-- Category for flow records; NULL on every other record.
+	category_id INTEGER,
 	-- Tag IDs assigned to this record for flexible grouping.
 	tag_ids INTEGER[] NOT NULL DEFAULT [],
 	-- Optional record note or description.
@@ -50,6 +51,7 @@ CREATE TABLE journal_record (
 COMMENT ON COLUMN journal_record.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
 COMMENT ON COLUMN journal_record.amount IS 'Signed debit or credit amount in the record currency.';
 COMMENT ON COLUMN journal_record.amount_usd IS 'Signed USD conversion at recording time; NULL when no exchange rate is available.';
+COMMENT ON COLUMN journal_record.category_id IS 'Category for flow records; NULL on every other record.';
 COMMENT ON COLUMN journal_record.tag_ids IS 'Tag IDs assigned to this record for flexible grouping.';
 COMMENT ON COLUMN journal_record.memo IS 'Optional record note or description.';
 COMMENT ON COLUMN journal_record.pending_date IS 'UTC banking transaction timestamp, such as a card hold; for non-bank records, initiated_date as a full timestamp.';

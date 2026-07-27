@@ -11,6 +11,7 @@
 - Bulk category mutations also invalidate transaction page snapshots.
 - Category-row deletes own their named confirmation in the page list; side-panel deletes retain their panel-owned confirmation.
 - Delete affordances use only the API `deletable` signal; dependent-resource rules remain backend-owned.
+- Category intent UI exposes only `expense` and `income`; role direction is derived from the flow-record sign by the backend.
 
 ## Boundaries
 

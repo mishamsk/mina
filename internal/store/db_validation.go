@@ -20,7 +20,7 @@ import (
 )
 
 // PinnedMigrationContentHash is the validator-reviewed sha256 of embedded migration SQL.
-const PinnedMigrationContentHash = "ad0268520c0eb0a8b978fabf6e4343c38e7e9126150cd0c37e927e3254ffe483"
+const PinnedMigrationContentHash = "627cb792ef4ef942c3e1329e5831142b34f2e0e2c83509389350ffdccfa42030"
 
 const validationTrimSpaceCharactersSQL = `' ' || ` +
 	`chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || ` +
@@ -191,6 +191,7 @@ func (s *DBValidationStore) ReferentialFindings(ctx context.Context) ([]dbvalida
 func (s *DBValidationStore) InvariantFindings(ctx context.Context, missingUniqueIndexes []string) ([]dbvalidation.Finding, error) {
 	findings := []dbvalidation.Finding{}
 	queryChecks := []func(context.Context) ([]dbvalidation.Finding, error){
+		s.fixedSystemAccountFindings,
 		s.unbalancedTransactionFindings,
 		s.shortTransactionFindings,
 		s.mixedCancellationTransactionFindings,
@@ -235,6 +236,24 @@ func (s *DBValidationStore) InvariantFindings(ctx context.Context, missingUnique
 	findings = append(findings, duplicateFindings...)
 
 	return findings, nil
+}
+
+func (s *DBValidationStore) fixedSystemAccountFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
+	return s.existsFinding(ctx, `SELECT EXISTS (
+	SELECT 1
+	FROM (
+		VALUES
+			('system:correction'),
+			('system:exchange'),
+			('system:opening_balance'),
+			('system:suspense')
+	) AS expected(fqn)
+	LEFT JOIN `+s.db.accountingName("account")+` AS a
+	  ON a.fqn = expected.fqn
+	 AND a.account_type = CAST('SYSTEM' AS `+s.db.accountingName("account_type")+`)
+	 AND a.tombstoned_at IS NULL
+	WHERE a.account_id IS NULL
+)`, dbvalidation.SeverityError, "fixed system account catalog is incomplete")
 }
 
 func (s *DBValidationStore) hierarchyFindings(ctx context.Context) ([]dbvalidation.Finding, error) {

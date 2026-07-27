@@ -20,9 +20,9 @@ mcplist http http://127.0.0.1:$PORT/mcp
 stdout '^transport=http tool=transactions_list read_only=true destructive=false idempotent=true open_world=false$'
 stdout '^transport=http tool=accounts_delete read_only=false destructive=true idempotent=true open_world=false$'
 
-mcpcall http http://127.0.0.1:$PORT/mcp accounts_get '{"account_id":4}'
+mcpcall http http://127.0.0.1:$PORT/mcp accounts_get '{"account_id":8}'
 stdout '"status":200'
-stdout '"account_id":4'
+stdout '"account_id":8'
 stdout '"fqn":"checking:Chase:Joint"'
 
 ! mcpcall http http://127.0.0.1:$PORT/mcp members_create '{"body":{"name":""}}'

@@ -7,12 +7,12 @@ httpwait -timeout 10s '"status":"ok"' http://127.0.0.1:$PORT/api/health
 # Query/list output is raw JSON on stdout.
 exec mina client --server http://127.0.0.1:$PORT transactions list --limit 5
 stdout '"transactions":\['
-stdout '"transaction_id":349'
+stdout '"transaction_id":346'
 ! stderr .
 
 # A path argument selects the transaction observed in the prior list.
-exec mina client --server http://127.0.0.1:$PORT transactions get 349
-stdout '"transaction_id":349'
+exec mina client --server http://127.0.0.1:$PORT transactions get 346
+stdout '"transaction_id":346'
 stdout '"records":\['
 ! stderr .
 

@@ -10,7 +10,15 @@ export interface StatusPageUiState {
 }
 
 export type TransactionEntryType =
-  "spend" | "income" | "refund" | "transfer" | "advanced";
+  "spend" | "income" | "refund" | "transfer" | "exchange" | "advanced";
+
+export interface SpendMerchantDraft {
+  readonly accountId: number | undefined;
+  readonly amount: string;
+  readonly categoryId: number | undefined;
+  readonly draftId: string;
+  readonly sourceRecordId?: number;
+}
 
 export type JournalRecordDraftPostingStatus =
   "cancelled" | "expected" | "pending" | "posted";
@@ -20,7 +28,13 @@ export type JournalRecordDraftReconciliationStatus =
 
 export interface TransactionEntryTabDraft {
   readonly amount: string;
+  readonly boughtAmount: string;
+  readonly boughtAccountId: number | undefined;
   readonly categoryId: number | undefined;
+  readonly chargeAccountId: number | undefined;
+  readonly chargeAmount: string;
+  readonly chargeCategoryId: number | undefined;
+  readonly chargeEnabled: boolean;
   readonly currency: string;
   readonly date: string;
   readonly destinationAccountId: number | undefined;
@@ -29,6 +43,8 @@ export interface TransactionEntryTabDraft {
   readonly merchantAccountId: number | undefined;
   readonly memo: string;
   readonly sourceAccountId: number | undefined;
+  readonly soldAccountId: number | undefined;
+  readonly spendMerchants: readonly SpendMerchantDraft[];
   readonly tagIds: readonly number[];
 }
 

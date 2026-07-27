@@ -11,7 +11,11 @@ Mina is a personal fun project that I am sharing as open source. I want it to be
 
 I started Mina after getting frustrated with personal finance apps that only seem to work well when a bank imports nice, simple transactions for them. That is not how I use money. I want to track a split restaurant bill, a money pool with friends, several currencies, and cash moving between actual wallets without fighting the app every step of the way.
 
-I tried [Ledger](https://ledger-cli.org/), [Actual Budget](https://actualbudget.org/), [Lunch Money](https://lunchmoney.app/), [Paisa](https://paisa.fyi/), [Firefly III](https://www.firefly-iii.org/), and plenty of others. Some are great at automatic imports and budgeting. Ledger and tools built on it have true double-entry accounting, but I did not want to maintain text files or build a separate analytics setup around them. None of them gave me the combination I wanted: easy manual entry for messy real-life transactions, full accounting detail when I need it, and data I can query directly.
+Simple systems flatten one bank posting into one spending item. A mortgage payment is really principal, interest, insurance, and servicing: one source record that still has to match the bank, split across four things worth seeing separately. At the other extreme, full general-ledger accounting turns that same payment into an asset, a liability, a principal schedule, and a book-value question. Without tracking what the house is actually worth, that machinery produces little practical insight for a household.
+
+I tried [Ledger](https://ledger-cli.org/), [Actual Budget](https://actualbudget.org/), [Lunch Money](https://lunchmoney.app/), [Paisa](https://paisa.fyi/), [Firefly III](https://www.firefly-iii.org/), and plenty of others. Some are great at automatic imports and budgeting. Ledger and tools built on it have true double-entry accounting, but I did not want to maintain text files or build a separate analytics setup around them. None of them gave me the combination I wanted: easy manual entry for cash and for informal balances with friends, programmatic and agent access with full ownership of both the data and the AI pipeline over it, and direct analytics on top of that same data.
+
+Mina takes a middle course: [checkbook accounting](docs/checkbook-accounting.md) with balanced double-entry records underneath. It models tracked money precisely and deliberately avoids pretending to know the value of everything a household owns.
 
 The missing piece clicked while working on [PondPilot](https://github.com/pondpilot/pondpilot), a local, DuckDB-powered data explorer. Mina stays deliberately at household scale, so one embedded analytical [DuckDB](https://duckdb.org/) database can handle both transactions and reports. No database server, separate analytics store, or synchronization ritual: the portable accounting state lives in one file.
 
@@ -19,7 +23,7 @@ The OCD-ish part of me wants every bill and coin sitting in wallets or around th
 
 ## What Mina Is Building
 
-- True double-entry accounting exposed through both simplified workflows and full-detail UI and APIs.
+- Checkbook accounting backed by balanced double-entry records, exposed through both simplified workflows and full-detail UI and APIs.
 - All capabilities available through REST, MCP, and CLI, with the browser UI covering everything that makes sense for a person to operate directly.
 - Accounts, categories, tags, household members, transactions, recurring flows, cash, bank accounts, currencies including crypto used as currency, personal debts, exchange rates, backups, and integrity checks.
 - Budgets, reports, and forecasts built on a portable DuckDB file that remains yours.

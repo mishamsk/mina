@@ -481,7 +481,10 @@ export const AccountRegisterTable = ({
               const transactionError =
                 transactionErrorsById[record.transaction_id];
               const account = maps.accountsById.get(record.account_id);
-              const category = maps.categoriesById.get(record.category_id);
+              const category =
+                record.category_id === null
+                  ? undefined
+                  : maps.categoriesById.get(record.category_id);
               const amount = displayAmount(record.amount, record.currency);
               const runningBalance = displayAmount(
                 record.running_balance,
@@ -616,7 +619,10 @@ export const AccountRegisterTable = ({
                   <td className="account-register-category-column px-3 py-2">
                     {lookupsLoaded && category ? (
                       <FqnPath value={category.fqn} />
-                    ) : (
+                    ) : lookupsLoaded &&
+                      account &&
+                      account.account_type !== "flow" &&
+                      record.category_id === null ? null : (
                       <span className="text-muted-foreground font-mono text-xs">
                         {lookupsLoaded
                           ? "Missing category"

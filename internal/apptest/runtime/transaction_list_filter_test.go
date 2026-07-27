@@ -136,7 +136,6 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				Currency:             "USD",
 				Amount:               "-30.00",
 				AmountUsd:            apptest.StringPtr("-30.00"),
-				CategoryId:           refs.CategoryId,
 				Memo:                 &accountMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -147,7 +146,7 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				Currency:             "USD",
 				Amount:               "10.00",
 				AmountUsd:            apptest.StringPtr("10.00"),
-				CategoryId:           refs.SecondCategoryId,
+				CategoryId:           apptest.Int64Ptr(refs.SecondCategoryId),
 				Memo:                 &categoryMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -158,7 +157,7 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				Currency:             "USD",
 				Amount:               "20.00",
 				AmountUsd:            apptest.StringPtr("20.00"),
-				CategoryId:           refs.CategoryId,
+				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				Memo:                 &searchMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -189,10 +188,150 @@ func TestTransactionListCounterpartySearchSemanticShapesBoundary(t *testing.T) {
 	assertTransactionListResponse(t, "transfer counterparty search", transferSearch, []int64{transfer.JSON201.TransactionId}, 1)
 
 	exchangeSearch, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		Search: apptest.StringPtr("ExchangeProvider"),
+		Search: apptest.StringPtr("system:exchange"),
 	})
 	requireNoTransportError(t, "list exchange provider search", err)
 	assertTransactionListResponse(t, "exchange provider search", exchangeSearch, []int64{exchange.JSON201.TransactionId}, 1)
+}
+
+func TestDerivedTransactionAndRecordFiltersBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+
+	spend := createDatedClassificationTransaction(t, client, "2024-02-01", classificationRequest(
+		semanticRecord(fixture.checking.AccountId, "-12.00", "USD", nil),
+		semanticRecord(fixture.merchantA.AccountId, "12.00", "USD", &fixture.expense.CategoryId),
+	))
+	refund := createDatedClassificationTransaction(t, client, "2024-02-02", classificationRequest(
+		semanticRecord(fixture.checking.AccountId, "5.00", "USD", nil),
+		semanticRecord(fixture.merchantA.AccountId, "-5.00", "USD", &fixture.expense.CategoryId),
+	))
+	transfer := createDatedClassificationTransaction(t, client, "2024-02-03", classificationRequest(
+		semanticRecord(fixture.checking.AccountId, "-20.00", "USD", nil),
+		semanticRecord(fixture.savings.AccountId, "20.00", "USD", nil),
+	))
+	createDatedClassificationTransaction(t, client, "2024-02-05", classificationRequest(
+		semanticRecord(fixture.checking.AccountId, "-110.00", "USD", nil),
+		semanticRecord(fixture.exchange.AccountId, "110.00", "USD", nil),
+		semanticRecord(fixture.exchange.AccountId, "-100.00", "EUR", nil),
+		semanticRecord(fixture.cashEUR.AccountId, "100.00", "EUR", nil),
+	))
+	mixed := createDatedClassificationTransaction(t, client, "2024-02-04", classificationRequest(
+		semanticRecord(fixture.merchantA.AccountId, "10.00", "USD", &fixture.expense.CategoryId),
+		semanticRecord(fixture.employer.AccountId, "-10.00", "USD", &fixture.salary.CategoryId),
+	))
+	clawback := createDatedClassificationTransaction(t, client, "2024-02-06", classificationRequest(
+		semanticRecord(fixture.checking.AccountId, "-7.00", "USD", nil),
+		semanticRecord(fixture.employer.AccountId, "7.00", "USD", &fixture.salary.CategoryId),
+	))
+
+	refundClass := []httpclient.TransactionClass{httpclient.TransactionClassRefund}
+	refundList, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		TransactionClass: &refundClass,
+	})
+	requireNoTransportError(t, "list transactions by derived class", err)
+	assertTransactionListResponse(t, "derived class", refundList, []int64{refund.JSON201.TransactionId}, 1)
+
+	mixedClass := []httpclient.TransactionClass{httpclient.TransactionClassMixed}
+	mixedList, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		TransactionClass: &mixedClass,
+	})
+	requireNoTransportError(t, "list transactions by mixed class", err)
+	assertTransactionListResponse(t, "mixed class", mixedList, []int64{mixed.JSON201.TransactionId}, 1)
+
+	clawbackClass := []httpclient.TransactionClass{httpclient.TransactionClassClawback}
+	clawbackClassList, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		TransactionClass: &clawbackClass,
+	})
+	requireNoTransportError(t, "list transactions by clawback class", err)
+	assertTransactionListResponse(t, "clawback class", clawbackClassList, []int64{clawback.JSON201.TransactionId}, 1)
+
+	transferShape := []httpclient.TransactionShapeType{httpclient.TransactionShapeTypeTransfer}
+	transferList, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		TransactionShape: &transferShape,
+	})
+	requireNoTransportError(t, "list transactions by derived shape", err)
+	assertTransactionListResponse(t, "derived shape", transferList, []int64{transfer.JSON201.TransactionId}, 1)
+
+	clawbackShape := []httpclient.TransactionShapeType{httpclient.TransactionShapeTypeClawback}
+	clawbackShapeList, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		TransactionShape: &clawbackShape,
+	})
+	requireNoTransportError(t, "list transactions by clawback shape", err)
+	assertTransactionListResponse(t, "clawback shape", clawbackShapeList, []int64{clawback.JSON201.TransactionId}, 1)
+
+	expenseRole := []httpclient.RecordRole{httpclient.RecordRoleExpense}
+	expenseTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		RecordRole: &expenseRole,
+	})
+	requireNoTransportError(t, "list transactions by derived record role", err)
+	assertTransactionListResponse(
+		t,
+		"derived record role",
+		expenseTransactions,
+		[]int64{mixed.JSON201.TransactionId, spend.JSON201.TransactionId},
+		2,
+	)
+
+	expenseOrRefundRole := []httpclient.RecordRole{
+		httpclient.RecordRoleExpense,
+		httpclient.RecordRoleRefund,
+	}
+	expenseOrRefundTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		RecordRole: &expenseOrRefundRole,
+	})
+	requireNoTransportError(t, "list transactions by multiple record roles", err)
+	assertTransactionListResponse(
+		t,
+		"multiple record roles",
+		expenseOrRefundTransactions,
+		[]int64{
+			mixed.JSON201.TransactionId,
+			refund.JSON201.TransactionId,
+			spend.JSON201.TransactionId,
+		},
+		3,
+	)
+
+	clawbackRole := []httpclient.RecordRole{httpclient.RecordRoleClawback}
+	clawbackTransactions, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
+		RecordRole: &clawbackRole,
+	})
+	requireNoTransportError(t, "list transactions by clawback record role", err)
+	assertTransactionListResponse(t, "clawback record role", clawbackTransactions, []int64{clawback.JSON201.TransactionId}, 1)
+
+	recordRole := httpclient.RecordRoleExpense
+	expenseRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		RecordRole: &recordRole,
+	})
+	requireNoTransportError(t, "search records by derived role", err)
+	if expenseRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("search records by derived role status = %d, want %d; body %s", expenseRecords.StatusCode(), http.StatusOK, expenseRecords.Body)
+	}
+	assertRecordIDs(t, expenseRecords.JSON200.Records, []int64{
+		spend.JSON201.Records[1].RecordId,
+		mixed.JSON201.Records[0].RecordId,
+	})
+	for _, record := range expenseRecords.JSON200.Records {
+		if record.RecordRole != httpclient.RecordRoleExpense {
+			t.Fatalf("searched record role = %q, want expense; record %+v", record.RecordRole, record)
+		}
+	}
+
+	journalClawbackRole := httpclient.RecordRoleClawback
+	clawbackRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
+		RecordRole: &journalClawbackRole,
+	})
+	requireNoTransportError(t, "search records by clawback role", err)
+	if clawbackRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("search records by clawback role status = %d, want %d; body %s", clawbackRecords.StatusCode(), http.StatusOK, clawbackRecords.Body)
+	}
+	assertRecordIDs(t, clawbackRecords.JSON200.Records, []int64{
+		clawback.JSON201.Records[1].RecordId,
+	})
+	if got := clawbackRecords.JSON200.Records[0].RecordRole; got != httpclient.RecordRoleClawback {
+		t.Fatalf("searched record role = %q, want clawback", got)
+	}
 }
 
 func TestTransactionListReferenceMetadataSearchBoundary(t *testing.T) {
@@ -206,7 +345,7 @@ func TestTransactionListReferenceMetadataSearchBoundary(t *testing.T) {
 	member := scenario.Member("Casey Metadata")
 	checking := createSearchAccount(t, client, httpclient.CreateAccountRequest{
 		Fqn:            "checking:ReferenceSearch:Primary%_One",
-		AccountType:    httpclient.Balance,
+		AccountType:    httpclient.WritableAccountTypeOwned,
 		Currency:       ptrTo("USD"),
 		ExternalId:     ptrTo("acct-meta-External%_Needle"),
 		ExternalSystem: ptrTo("plaid-meta-noise"),
@@ -263,7 +402,7 @@ func TestTransactionListReferenceMetadataSearchBoundary(t *testing.T) {
 	}))
 	eurMetadataAccount := createSearchAccount(t, client, httpclient.CreateAccountRequest{
 		Fqn:         "checking:ReferenceSearch:EuroRecord",
-		AccountType: httpclient.Balance,
+		AccountType: httpclient.WritableAccountTypeOwned,
 		Currency:    ptrTo("GBP"),
 	})
 	eurMerchant := scenario.Account("expense:ReferenceSearch:EuroMerchant")
@@ -330,7 +469,6 @@ func TestTransactionListReferenceMetadataSearchDoesNotDuplicateMultiTagMatchesBo
 				Currency:             "USD",
 				Amount:               "-12.00",
 				AmountUsd:            apptest.StringPtr("-12.00"),
-				CategoryId:           category.CategoryId,
 				TagIds:               &tagIDs,
 				Memo:                 &firstMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
@@ -342,7 +480,7 @@ func TestTransactionListReferenceMetadataSearchDoesNotDuplicateMultiTagMatchesBo
 				Currency:             "USD",
 				Amount:               "12.00",
 				AmountUsd:            apptest.StringPtr("12.00"),
-				CategoryId:           category.CategoryId,
+				CategoryId:           apptest.Int64Ptr(category.CategoryId),
 				TagIds:               &tagIDs,
 				Memo:                 &secondMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
@@ -380,7 +518,7 @@ func TestTransactionListReferenceMetadataSearchIgnoresReplacedRecordsBoundary(t 
 	oldMember := scenario.Member("Reference Search Old Member")
 	oldAccount := createSearchAccount(t, client, httpclient.CreateAccountRequest{
 		Fqn:            "checking:ReferenceSearchReplaced:OldPrimary",
-		AccountType:    httpclient.Balance,
+		AccountType:    httpclient.WritableAccountTypeOwned,
 		Currency:       ptrTo("CHF"),
 		ExternalId:     ptrTo("old-ext-search"),
 		ExternalSystem: ptrTo("old-system-search"),
@@ -699,7 +837,7 @@ func TestTransactionListDictionaryFilterReferencesBoundary(t *testing.T) {
 	hidden := true
 	hiddenAccount, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "checking:TransactionList:HiddenFilter",
-		AccountType: httpclient.Balance,
+		AccountType: httpclient.WritableAccountTypeOwned,
 		IsHidden:    &hidden,
 		Currency:    ptrTo("USD"),
 	})
@@ -768,7 +906,6 @@ func transactionListFilterRequest(input transactionListFilterInput) httpclient.C
 				Currency:             currency,
 				Amount:               "-" + input.Amount,
 				AmountUsd:            apptest.StringPtr("-" + input.Amount),
-				CategoryId:           input.CategoryID,
 				TagIds:               &tagIDs,
 				Memo:                 &input.Memo,
 				PendingDate:          &pendingDate,
@@ -782,7 +919,7 @@ func transactionListFilterRequest(input transactionListFilterInput) httpclient.C
 				Currency:             currency,
 				Amount:               input.Amount,
 				AmountUsd:            apptest.StringPtr(input.Amount),
-				CategoryId:           input.CategoryID,
+				CategoryId:           apptest.Int64Ptr(input.CategoryID),
 				PendingDate:          &pendingDate,
 				PostedDate:           postedDate,
 				PostingStatus:        input.PostingStatus,

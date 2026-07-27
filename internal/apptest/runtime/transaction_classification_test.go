@@ -3,726 +3,990 @@ package runtime_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
 	"github.com/mishamsk/mina/internal/httpclient"
 )
 
-func TestTransactionClassificationClassesBoundary(t *testing.T) {
-	cases := []struct {
-		name      string
-		wantClass httpclient.TransactionClass
-		wantTitle string
-		request   func(*classificationFixture) httpclient.CreateTransactionRequest
-	}{
-		{name: "spend", wantClass: httpclient.TransactionClassSpend, wantTitle: "Checking → Local", request: spendClassificationRequest},
-		{name: "cross-currency spend", wantClass: httpclient.TransactionClassSpend, wantTitle: "Checking → Local", request: crossCurrencySpendClassificationRequest},
-		{name: "income", wantClass: httpclient.TransactionClassIncome, wantTitle: "Employer → Checking", request: incomeClassificationRequest},
-		{name: "refund", wantClass: httpclient.TransactionClassRefund, wantTitle: "Local → Checking", request: refundClassificationRequest},
-		{name: "transfer", wantClass: httpclient.TransactionClassTransfer, wantTitle: "Checking → Savings", request: transferClassificationRequest},
-		{name: "currency exchange", wantClass: httpclient.TransactionClassCurrencyExchange, wantTitle: "USD → EUR", request: exchangeClassificationRequest},
-		{name: "fee", wantClass: httpclient.TransactionClassSpend, wantTitle: "Checking → Fees", request: feeClassificationRequest},
-		{name: "transfer with fee", wantClass: httpclient.TransactionClassTransfer, wantTitle: "Checking → Savings", request: transferWithFeeClassificationRequest},
-		{name: "exchange with fee and fx", wantClass: httpclient.TransactionClassCurrencyExchange, wantTitle: "USD → EUR", request: exchangeWithFeeAndFXClassificationRequest},
-		{name: "adjustment", wantClass: httpclient.TransactionClassAdjustment, wantTitle: "Checking", request: adjustmentClassificationRequest},
-		{name: "fx gain loss", wantClass: httpclient.TransactionClassFxGainLoss, wantTitle: "Checking", request: fxGainLossClassificationRequest},
-		{name: "mixed", wantClass: httpclient.TransactionClassMixed, wantTitle: "Employer", request: mixedClassificationRequest},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			client := newSharedClient(t)
-			fixture := newClassificationFixture(t, client)
-
-			created, err := client.REST().CreateTransactionWithResponse(context.Background(), tc.request(fixture))
-			requireNoTransportError(t, "create transaction", err)
-			if created.StatusCode() != http.StatusCreated {
-				t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
-			}
-			assertTransactionClass(t, "created", *created.JSON201, tc.wantClass)
-			assertTransactionDisplayTitle(t, "created", *created.JSON201, tc.wantTitle)
-
-			read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
-			requireNoTransportError(t, "read transaction", err)
-			if read.StatusCode() != http.StatusOK {
-				t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
-			}
-			assertTransactionClass(t, "read", *read.JSON200, tc.wantClass)
-			assertTransactionDisplayTitle(t, "read", *read.JSON200, tc.wantTitle)
-
-			list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
-			requireNoTransportError(t, "list transactions", err)
-			if list.StatusCode() != http.StatusOK {
-				t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
-			}
-			if len(list.JSON200.Transactions) != 1 {
-				t.Fatalf("list count = %d, want 1; body %+v", len(list.JSON200.Transactions), list.JSON200)
-			}
-			assertTransactionClass(t, "listed", list.JSON200.Transactions[0], tc.wantClass)
-			assertTransactionDisplayTitle(t, "listed", list.JSON200.Transactions[0], tc.wantTitle)
-		})
-	}
+type semanticFixture struct {
+	checking        httpclient.Account
+	savings         httpclient.Account
+	card            httpclient.Account
+	cash            httpclient.Account
+	cashEUR         httpclient.Account
+	jordan          httpclient.Account
+	employerBalance httpclient.Account
+	restaurant      httpclient.Account
+	mortgageBank    httpclient.Account
+	supermarket     httpclient.Account
+	fees            httpclient.Account
+	interest        httpclient.Account
+	employer        httpclient.Account
+	lisbon          httpclient.Account
+	merchantA       httpclient.Account
+	exchange        httpclient.Account
+	openingBalance  httpclient.Account
+	correction      httpclient.Account
+	expense         httpclient.Category
+	groceries       httpclient.Category
+	feesCategory    httpclient.Category
+	travel          httpclient.Category
+	mortgage        [4]httpclient.Category
+	interestIncome  httpclient.Category
+	salary          httpclient.Category
+	bonus           httpclient.Category
 }
 
-func TestTransactionListClassFilterParityBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-	cases := []struct {
-		date    string
-		class   httpclient.TransactionClass
-		request func(*classificationFixture) httpclient.CreateTransactionRequest
-	}{
-		{date: "2024-06-01", class: httpclient.TransactionClassSpend, request: spendClassificationRequest},
-		{date: "2024-06-02", class: httpclient.TransactionClassSpend, request: crossCurrencySpendClassificationRequest},
-		{date: "2024-06-03", class: httpclient.TransactionClassSpend, request: feeClassificationRequest},
-		{date: "2024-06-04", class: httpclient.TransactionClassIncome, request: incomeClassificationRequest},
-		{date: "2024-06-05", class: httpclient.TransactionClassRefund, request: refundClassificationRequest},
-		{date: "2024-06-06", class: httpclient.TransactionClassTransfer, request: transferClassificationRequest},
-		{date: "2024-06-07", class: httpclient.TransactionClassTransfer, request: transferWithFeeClassificationRequest},
-		{date: "2024-06-08", class: httpclient.TransactionClassCurrencyExchange, request: exchangeClassificationRequest},
-		{date: "2024-06-09", class: httpclient.TransactionClassCurrencyExchange, request: exchangeWithFeeAndFXClassificationRequest},
-		{date: "2024-06-10", class: httpclient.TransactionClassAdjustment, request: adjustmentClassificationRequest},
-		{date: "2024-06-11", class: httpclient.TransactionClassFxGainLoss, request: fxGainLossClassificationRequest},
-		{date: "2024-06-12", class: httpclient.TransactionClassMixed, request: mixedClassificationRequest},
-	}
-	idsByClass := map[httpclient.TransactionClass][]int64{}
-	for _, tc := range cases {
-		request := tc.request(fixture)
-		request.InitiatedDate = apptest.Date(tc.date)
-		created, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
-		requireNoTransportError(t, "create classified transaction", err)
-		if created.StatusCode() != http.StatusCreated {
-			t.Fatalf("create %s status = %d, want %d; body %s", tc.class, created.StatusCode(), http.StatusCreated, created.Body)
-		}
-		if created.JSON201.TransactionClass != tc.class {
-			t.Fatalf("created transaction_class = %q, want %q; body %+v", created.JSON201.TransactionClass, tc.class, created.JSON201)
-		}
-		idsByClass[tc.class] = append([]int64{created.JSON201.TransactionId}, idsByClass[tc.class]...)
-	}
+type expectedShape struct {
+	shape         httpclient.TransactionShapeType
+	amounts       []httpclient.DisplayAmount
+	effectiveRate *httpclient.ExchangeEffectiveRate
+}
 
-	for _, tc := range cases {
-		t.Run(string(tc.class), func(t *testing.T) {
-			response, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-				TransactionClass: ptrTo([]httpclient.TransactionClass{tc.class}),
-			})
-			requireNoTransportError(t, "list transactions by class", err)
-			assertTransactionListResponse(t, "class filter", response, idsByClass[tc.class], int64(len(idsByClass[tc.class])))
-			for _, transaction := range response.JSON200.Transactions {
-				if transaction.TransactionClass != tc.class {
-					t.Fatalf("listed transaction_class = %q, want %q; transaction %+v", transaction.TransactionClass, tc.class, transaction)
+type workedExample struct {
+	name           string
+	records        func(*semanticFixture) []httpclient.CreateJournalRecordRequest
+	class          httpclient.TransactionClass
+	displayTitle   string
+	primaryAmounts []httpclient.DisplayAmount
+	shapes         []expectedShape
+	roles          []httpclient.RecordRole
+}
+
+func TestDerivedAccountingSemanticsWorkedExamples(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+
+	examples := []workedExample{
+		{
+			name: "simple spend",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.card.AccountId, "-72.00", "USD", nil),
+					semanticRecord(f.restaurant.AccountId, "72.00", "USD", &f.expense.CategoryId),
 				}
+			},
+			class:          httpclient.TransactionClassSpend,
+			primaryAmounts: displayAmounts("USD", "-72.00000000"),
+			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("USD", "-72.00000000")}},
+			roles:          []httpclient.RecordRole{httpclient.RecordRoleBalance, httpclient.RecordRoleExpense},
+		},
+		{
+			name: "mortgage split keeps one funding record",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "-2400.00", "USD", nil),
+					semanticRecord(f.mortgageBank.AccountId, "1800.00", "USD", &f.mortgage[0].CategoryId),
+					semanticRecord(f.mortgageBank.AccountId, "400.00", "USD", &f.mortgage[1].CategoryId),
+					semanticRecord(f.mortgageBank.AccountId, "150.00", "USD", &f.mortgage[2].CategoryId),
+					semanticRecord(f.mortgageBank.AccountId, "50.00", "USD", &f.mortgage[3].CategoryId),
+				}
+			},
+			class:          httpclient.TransactionClassSpend,
+			primaryAmounts: displayAmounts("USD", "-2400.00000000"),
+			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("USD", "-2400.00000000")}},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleExpense,
+				httpclient.RecordRoleExpense,
+				httpclient.RecordRoleExpense,
+				httpclient.RecordRoleExpense,
+			},
+		},
+		{
+			name: "spend with friend split",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.card.AccountId, "-72.00", "USD", nil),
+					semanticRecord(f.restaurant.AccountId, "54.00", "USD", &f.expense.CategoryId),
+					semanticRecord(f.jordan.AccountId, "18.00", "USD", nil),
+				}
+			},
+			class:          httpclient.TransactionClassSpend,
+			primaryAmounts: displayAmounts("USD", "-54.00000000"),
+			shapes: []expectedShape{
+				{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("USD", "-54.00000000")},
+				{shape: httpclient.TransactionShapeTypeTransfer, amounts: displayAmounts("USD", "-18.00000000")},
+			},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleExpense,
+				httpclient.RecordRoleBalance,
+			},
+		},
+		{
+			name: "party repayment",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "18.00", "USD", nil),
+					semanticRecord(f.jordan.AccountId, "-18.00", "USD", nil),
+				}
+			},
+			class:  httpclient.TransactionClassTransfer,
+			shapes: []expectedShape{{shape: httpclient.TransactionShapeTypeTransfer, amounts: displayAmounts("USD", "18.00000000")}},
+			roles:  []httpclient.RecordRole{httpclient.RecordRoleBalance, httpclient.RecordRoleBalance},
+		},
+		{
+			name: "grocery return nets inside expense",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.card.AccountId, "30.00", "USD", nil),
+					semanticRecord(f.supermarket.AccountId, "-30.00", "USD", &f.groceries.CategoryId),
+				}
+			},
+			class:          httpclient.TransactionClassRefund,
+			primaryAmounts: displayAmounts("USD", "30.00000000"),
+			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeRefund, amounts: displayAmounts("USD", "30.00000000")}},
+			roles:          []httpclient.RecordRole{httpclient.RecordRoleBalance, httpclient.RecordRoleRefund},
+		},
+		{
+			name: "supermarket cash back",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "-120.00", "USD", nil),
+					semanticRecord(f.supermarket.AccountId, "100.00", "USD", &f.groceries.CategoryId),
+					semanticRecord(f.cash.AccountId, "20.00", "USD", nil),
+				}
+			},
+			class:          httpclient.TransactionClassSpend,
+			primaryAmounts: displayAmounts("USD", "-100.00000000"),
+			shapes: []expectedShape{
+				{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("USD", "-100.00000000")},
+				{shape: httpclient.TransactionShapeTypeTransfer, amounts: displayAmounts("USD", "20.00000000")},
+			},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleExpense,
+				httpclient.RecordRoleBalance,
+			},
+		},
+		{
+			name: "transfer with wire charge is spend not mixed",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "-525.00", "USD", nil),
+					semanticRecord(f.savings.AccountId, "500.00", "USD", nil),
+					semanticRecord(f.fees.AccountId, "25.00", "USD", &f.feesCategory.CategoryId),
+				}
+			},
+			class:          httpclient.TransactionClassSpend,
+			primaryAmounts: displayAmounts("USD", "-25.00000000"),
+			shapes: []expectedShape{
+				{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("USD", "-25.00000000")},
+				{shape: httpclient.TransactionShapeTypeTransfer, amounts: displayAmounts("USD", "500.00000000")},
+			},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleExpense,
+			},
+		},
+		{
+			name: "bank interest",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "2.15", "USD", nil),
+					semanticRecord(f.interest.AccountId, "-2.15", "USD", &f.interestIncome.CategoryId),
+				}
+			},
+			class:          httpclient.TransactionClassIncome,
+			primaryAmounts: displayAmounts("USD", "2.15000000"),
+			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeIncome, amounts: displayAmounts("USD", "2.15000000")}},
+			roles:          []httpclient.RecordRole{httpclient.RecordRoleBalance, httpclient.RecordRoleIncome},
+		},
+		{
+			name: "currency exchange",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "-330.00", "USD", nil),
+					semanticRecord(f.exchange.AccountId, "330.00", "USD", nil),
+					semanticRecord(f.exchange.AccountId, "-300.00", "EUR", nil),
+					semanticRecord(f.cashEUR.AccountId, "300.00", "EUR", nil),
+				}
+			},
+			class:        httpclient.TransactionClassCurrencyExchange,
+			displayTitle: "USD → EUR",
+			shapes: []expectedShape{{
+				shape: httpclient.TransactionShapeTypeExchange,
+				amounts: []httpclient.DisplayAmount{
+					{Currency: "USD", Amount: "-330.00000000"},
+					{Currency: "EUR", Amount: "300.00000000"},
+				},
+				effectiveRate: &httpclient.ExchangeEffectiveRate{
+					SoldCurrency:   "USD",
+					BoughtCurrency: "EUR",
+					Rate:           "1.10000000",
+				},
+			}},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleExchange,
+				httpclient.RecordRoleExchange,
+				httpclient.RecordRoleBalance,
+			},
+		},
+		{
+			name: "purchase abroad is ordinary spend",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.cashEUR.AccountId, "-60.00", "EUR", nil),
+					semanticRecord(f.lisbon.AccountId, "60.00", "EUR", &f.travel.CategoryId),
+				}
+			},
+			class:          httpclient.TransactionClassSpend,
+			primaryAmounts: displayAmounts("EUR", "-60.00000000"),
+			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("EUR", "-60.00000000")}},
+			roles:          []httpclient.RecordRole{httpclient.RecordRoleBalance, httpclient.RecordRoleExpense},
+		},
+		{
+			name: "income clawback",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "-500.00", "USD", nil),
+					semanticRecord(f.employer.AccountId, "500.00", "USD", &f.bonus.CategoryId),
+				}
+			},
+			class:          httpclient.TransactionClassClawback,
+			primaryAmounts: displayAmounts("USD", "-500.00000000"),
+			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeClawback, amounts: displayAmounts("USD", "-500.00000000")}},
+			roles:          []httpclient.RecordRole{httpclient.RecordRoleBalance, httpclient.RecordRoleClawback},
+		},
+		{
+			name: "paycheck settles party balance",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "3200.00", "USD", nil),
+					semanticRecord(f.employer.AccountId, "-3000.00", "USD", &f.salary.CategoryId),
+					semanticRecord(f.employerBalance.AccountId, "-200.00", "USD", nil),
+				}
+			},
+			class:          httpclient.TransactionClassIncome,
+			primaryAmounts: displayAmounts("USD", "3000.00000000"),
+			shapes: []expectedShape{
+				{shape: httpclient.TransactionShapeTypeIncome, amounts: displayAmounts("USD", "3000.00000000")},
+				{shape: httpclient.TransactionShapeTypeTransfer, amounts: displayAmounts("USD", "200.00000000")},
+			},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleIncome,
+				httpclient.RecordRoleBalance,
+			},
+		},
+		{
+			name: "salary net of wire fee is mixed",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "2985.00", "USD", nil),
+					semanticRecord(f.employer.AccountId, "-3000.00", "USD", &f.salary.CategoryId),
+					semanticRecord(f.fees.AccountId, "15.00", "USD", &f.feesCategory.CategoryId),
+				}
+			},
+			class:        httpclient.TransactionClassMixed,
+			displayTitle: "payroll",
+			shapes: []expectedShape{
+				{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("USD", "-15.00000000")},
+				{shape: httpclient.TransactionShapeTypeIncome, amounts: displayAmounts("USD", "3000.00000000")},
+			},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleIncome,
+				httpclient.RecordRoleExpense,
+			},
+		},
+		{
+			name: "mixed transaction uses uniform memo",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				memo := "Payroll correction"
+				records := []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "2985.00", "USD", nil),
+					semanticRecord(f.employer.AccountId, "-3000.00", "USD", &f.salary.CategoryId),
+					semanticRecord(f.fees.AccountId, "15.00", "USD", &f.feesCategory.CategoryId),
+				}
+				for index := range records {
+					records[index].Memo = &memo
+				}
+				return records
+			},
+			class:        httpclient.TransactionClassMixed,
+			displayTitle: "Payroll correction",
+			shapes: []expectedShape{
+				{shape: httpclient.TransactionShapeTypeSpend, amounts: displayAmounts("USD", "-15.00000000")},
+				{shape: httpclient.TransactionShapeTypeIncome, amounts: displayAmounts("USD", "3000.00000000")},
+			},
+			roles: []httpclient.RecordRole{
+				httpclient.RecordRoleBalance,
+				httpclient.RecordRoleIncome,
+				httpclient.RecordRoleExpense,
+			},
+		},
+		{
+			name: "opening balance",
+			records: func(f *semanticFixture) []httpclient.CreateJournalRecordRequest {
+				return []httpclient.CreateJournalRecordRequest{
+					semanticRecord(f.checking.AccountId, "1000.00", "USD", nil),
+					semanticRecord(f.openingBalance.AccountId, "-1000.00", "USD", nil),
+				}
+			},
+			class:          httpclient.TransactionClassAdjustment,
+			displayTitle:   "Joint",
+			primaryAmounts: displayAmounts("USD", "1000.00000000"),
+			shapes:         []expectedShape{{shape: httpclient.TransactionShapeTypeAdjustment, amounts: displayAmounts("USD", "1000.00000000")}},
+			roles:          []httpclient.RecordRole{httpclient.RecordRoleBalance, httpclient.RecordRoleAdjustment},
+		},
+	}
+
+	for index, example := range examples {
+		t.Run(example.name, func(t *testing.T) {
+			response, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
+				InitiatedDate: apptest.Date("2024-06-" + twoDigits(index+1)),
+				Records:       example.records(fixture),
+			})
+			requireClientResponse(t, "create worked example", err, response.StatusCode(), http.StatusCreated, response.Body)
+			assertDerivedTransaction(t, *response.JSON201, example)
+		})
+	}
+}
+
+func TestCurrencyCountDoesNotClassifyExchange(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+
+	response, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-07-01"),
+		Records: []httpclient.CreateJournalRecordRequest{
+			semanticRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+			semanticRecord(fixture.restaurant.AccountId, "10.00", "USD", &fixture.expense.CategoryId),
+			semanticRecord(fixture.cashEUR.AccountId, "-9.00", "EUR", nil),
+			semanticRecord(fixture.lisbon.AccountId, "9.00", "EUR", &fixture.travel.CategoryId),
+		},
+	})
+	requireClientResponse(t, "create mixed-currency spend", err, response.StatusCode(), http.StatusCreated, response.Body)
+	assertDerivedTransaction(t, *response.JSON201, workedExample{
+		class: httpclient.TransactionClassSpend,
+		primaryAmounts: []httpclient.DisplayAmount{
+			{Currency: "USD", Amount: "-10.00000000"},
+			{Currency: "EUR", Amount: "-9.00000000"},
+		},
+		shapes: []expectedShape{{
+			shape: httpclient.TransactionShapeTypeSpend,
+			amounts: []httpclient.DisplayAmount{
+				{Currency: "USD", Amount: "-10.00000000"},
+				{Currency: "EUR", Amount: "-9.00000000"},
+			},
+		}},
+		roles: []httpclient.RecordRole{
+			httpclient.RecordRoleBalance,
+			httpclient.RecordRoleExpense,
+			httpclient.RecordRoleBalance,
+			httpclient.RecordRoleExpense,
+		},
+	})
+}
+
+func TestCategoryRuleNamesOffendingRecords(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+
+	tests := []struct {
+		name       string
+		records    []httpclient.CreateJournalRecordRequest
+		recordPath string
+	}{
+		{
+			name: "category on owned record",
+			records: []httpclient.CreateJournalRecordRequest{
+				semanticRecord(fixture.checking.AccountId, "-10.00", "USD", &fixture.expense.CategoryId),
+				semanticRecord(fixture.restaurant.AccountId, "10.00", "USD", &fixture.expense.CategoryId),
+			},
+			recordPath: "records[0]",
+		},
+		{
+			name: "missing category on flow record",
+			records: []httpclient.CreateJournalRecordRequest{
+				semanticRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+				semanticRecord(fixture.restaurant.AccountId, "10.00", "USD", nil),
+			},
+			recordPath: "records[1]",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
+				InitiatedDate: apptest.Date("2024-07-02"),
+				Records:       test.records,
+			})
+			requireClientResponse(t, "reject category rule violation", err, response.StatusCode(), http.StatusBadRequest, response.Body)
+			if response.JSON400 == nil || !strings.Contains(response.JSON400.Error.Message, test.recordPath) {
+				t.Fatalf("category rule error = %+v, want offending path %q", response.JSON400, test.recordPath)
 			}
 		})
 	}
 }
 
-func TestTransactionListClassFilterCompositionBoundary(t *testing.T) {
+func TestExchangeExclusivityNamesOffendingRecords(t *testing.T) {
 	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-	spend := createDatedClassificationTransaction(t, client, "2024-06-01", spendClassificationRequest(fixture))
-	income := createDatedClassificationTransaction(t, client, "2024-06-02", incomeClassificationRequest(fixture))
-	refund := createDatedClassificationTransaction(t, client, "2024-06-03", refundClassificationRequest(fixture))
-	createDatedClassificationTransaction(t, client, "2024-06-04", transferClassificationRequest(fixture))
+	fixture := newSemanticFixture(t, client)
 
-	classAndAccount, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		AccountId:        ptrTo([]int64{fixture.employer.AccountId}),
-		TransactionClass: ptrTo([]httpclient.TransactionClass{httpclient.TransactionClassIncome}),
-	})
-	requireNoTransportError(t, "list class and account filter", err)
-	assertTransactionListResponse(t, "class and account filter", classAndAccount, []int64{income.JSON201.TransactionId}, 1)
-
-	limitTwo := 2
-	offsetOne := 1
-	paged, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		TransactionClass: ptrTo([]httpclient.TransactionClass{
-			httpclient.TransactionClassSpend,
-			httpclient.TransactionClassIncome,
-			httpclient.TransactionClassRefund,
-		}),
-		Limit:  &limitTwo,
-		Offset: &offsetOne,
-	})
-	requireNoTransportError(t, "list paged class filter", err)
-	assertTransactionListResponse(t, "paged class filter", paged, []int64{income.JSON201.TransactionId, spend.JSON201.TransactionId}, 3)
-	assertTransactionListOffset(t, "paged class filter", *paged.JSON200, 1)
-
-	anchor := apptest.Date("2024-06-02")
-	anchored, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		TransactionClass: ptrTo([]httpclient.TransactionClass{
-			httpclient.TransactionClassSpend,
-			httpclient.TransactionClassIncome,
-			httpclient.TransactionClassRefund,
-		}),
-		Limit:      &limitTwo,
-		AnchorDate: &anchor,
-	})
-	requireNoTransportError(t, "list anchored class filter", err)
-	assertTransactionListResponse(t, "anchored class filter", anchored, []int64{refund.JSON201.TransactionId, income.JSON201.TransactionId}, 3)
-	assertTransactionListOffset(t, "anchored class filter", *anchored.JSON200, 0)
-
-	assertInvalidTransactionListQuery(t, client, "transaction_class=not_a_class")
-}
-
-func TestTransactionListClassFilterUsesReplacementClassBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-	created := createDatedClassificationTransaction(t, client, "2024-06-01", spendClassificationRequest(fixture))
-	replacement := incomeClassificationRequest(fixture)
-	replacement.InitiatedDate = apptest.Date("2024-06-02")
-
-	replaced, err := client.REST().ReplaceTransactionWithResponse(
-		context.Background(),
-		created.JSON201.TransactionId,
-		httpclient.UpdateTransactionRequest(replacement),
-	)
-	requireNoTransportError(t, "replace transaction for class filter", err)
-	if replaced.StatusCode() != http.StatusOK {
-		t.Fatalf("replace transaction for class filter status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
-	}
-	assertTransactionClass(t, "replaced", *replaced.JSON200, httpclient.TransactionClassIncome)
-
-	oldClass, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		TransactionClass: ptrTo([]httpclient.TransactionClass{httpclient.TransactionClassSpend}),
-	})
-	requireNoTransportError(t, "list old class after replacement", err)
-	assertTransactionListResponse(t, "old class after replacement", oldClass, nil, 0)
-
-	activeClass, err := client.REST().ListTransactionsWithResponse(context.Background(), &httpclient.ListTransactionsParams{
-		TransactionClass: ptrTo([]httpclient.TransactionClass{httpclient.TransactionClassIncome}),
-	})
-	requireNoTransportError(t, "list active class after replacement", err)
-	assertTransactionListResponse(t, "active class after replacement", activeClass, []int64{replaced.JSON200.TransactionId}, 1)
-}
-
-func TestTransactionDisplayTitleMemoFallbackBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-
-	created, err := client.REST().CreateTransactionWithResponse(context.Background(), mixedMemoClassificationRequest(fixture))
-	requireNoTransportError(t, "create mixed memo transaction", err)
-	if created.StatusCode() != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
-	}
-	assertTransactionClass(t, "created", *created.JSON201, httpclient.TransactionClassMixed)
-	assertTransactionDisplayTitle(t, "created", *created.JSON201, "Mixed payroll correction")
-
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
-	requireNoTransportError(t, "read mixed memo transaction", err)
-	if read.StatusCode() != http.StatusOK {
-		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
-	}
-	assertTransactionDisplayTitle(t, "read", *read.JSON200, "Mixed payroll correction")
-
-	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
-	requireNoTransportError(t, "list mixed memo transactions", err)
-	if list.StatusCode() != http.StatusOK {
-		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
-	}
-	if len(list.JSON200.Transactions) != 1 {
-		t.Fatalf("list count = %d, want 1; body %+v", len(list.JSON200.Transactions), list.JSON200)
-	}
-	assertTransactionDisplayTitle(t, "listed", list.JSON200.Transactions[0], "Mixed payroll correction")
-}
-
-func TestTransactionDisplayTitleUsesAccountIdentityForUniquenessBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	scenario := client.Scenario()
-	fixture := newClassificationFixture(t, client)
-	jointA := scenario.AccountWithCurrency("banks:Chase:Joint", "USD")
-	jointB := scenario.AccountWithCurrency("banks:Ally:Joint", "USD")
-
-	created, err := client.REST().CreateTransactionWithResponse(context.Background(), classificationRequest(
-		record(jointA.AccountId, fixture.expenseCategory.CategoryId, "USD", "-7.00"),
-		record(jointB.AccountId, fixture.expenseCategory.CategoryId, "USD", "-5.00"),
-		record(fixture.merchant.AccountId, fixture.expenseCategory.CategoryId, "USD", "12.00"),
-	))
-	requireNoTransportError(t, "create duplicate leaf transaction", err)
-	if created.StatusCode() != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
-	}
-	assertTransactionClass(t, "created", *created.JSON201, httpclient.TransactionClassSpend)
-	assertTransactionDisplayTitle(t, "created", *created.JSON201, "Local")
-}
-
-func TestTransactionClassificationDisplayAmountsBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-
-	created, err := client.REST().CreateTransactionWithResponse(context.Background(), spendClassificationRequest(fixture))
-	requireNoTransportError(t, "create transaction", err)
-	if created.StatusCode() != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
-	}
-	assertSpendDisplayAmounts(t, "created", *created.JSON201)
-
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
-	requireNoTransportError(t, "read transaction", err)
-	if read.StatusCode() != http.StatusOK {
-		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
-	}
-	assertSpendDisplayAmounts(t, "read", *read.JSON200)
-
-	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
-	requireNoTransportError(t, "list transactions", err)
-	if list.StatusCode() != http.StatusOK {
-		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
-	}
-	if len(list.JSON200.Transactions) != 1 {
-		t.Fatalf("list count = %d, want 1; body %+v", len(list.JSON200.Transactions), list.JSON200)
-	}
-	assertSpendDisplayAmounts(t, "listed", list.JSON200.Transactions[0])
-}
-
-func TestTransactionMultiComponentDisplayAmountsBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-
-	created, err := client.REST().CreateTransactionWithResponse(context.Background(), exchangeWithFeeAndFXClassificationRequest(fixture))
-	requireNoTransportError(t, "create transaction", err)
-	if created.StatusCode() != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
-	}
-	assertExchangeWithFeeAndFXDisplayAmounts(t, "created", *created.JSON201)
-
-	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
-	requireNoTransportError(t, "read transaction", err)
-	if read.StatusCode() != http.StatusOK {
-		t.Fatalf("read status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
-	}
-	assertExchangeWithFeeAndFXDisplayAmounts(t, "read", *read.JSON200)
-
-	list, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
-	requireNoTransportError(t, "list transactions", err)
-	if list.StatusCode() != http.StatusOK {
-		t.Fatalf("list status = %d, want %d; body %s", list.StatusCode(), http.StatusOK, list.Body)
-	}
-	if len(list.JSON200.Transactions) != 1 {
-		t.Fatalf("list count = %d, want 1; body %+v", len(list.JSON200.Transactions), list.JSON200)
-	}
-	assertExchangeWithFeeAndFXDisplayAmounts(t, "listed", list.JSON200.Transactions[0])
-}
-
-func TestTransactionSemanticShapeValidationBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-
-	invalidCreate, err := client.REST().CreateTransactionWithResponse(context.Background(), invalidExpenseShapeRequest(fixture))
-	requireNoTransportError(t, "create invalid transaction", err)
-	if invalidCreate.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("invalid create status = %d, want %d; body %s", invalidCreate.StatusCode(), http.StatusBadRequest, invalidCreate.Body)
-	}
-	if invalidCreate.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
-		t.Fatalf("invalid create code = %q, want %q", invalidCreate.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
-	}
-
-	created, err := client.REST().CreateTransactionWithResponse(context.Background(), spendClassificationRequest(fixture))
-	requireNoTransportError(t, "create valid transaction", err)
-	if created.StatusCode() != http.StatusCreated {
-		t.Fatalf("create valid status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
-	}
-	replace, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, httpclient.UpdateTransactionRequest(invalidExpenseShapeRequest(fixture)))
-	requireNoTransportError(t, "replace invalid transaction", err)
-	if replace.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("invalid replace status = %d, want %d; body %s", replace.StatusCode(), http.StatusBadRequest, replace.Body)
-	}
-	afterRejectedReplace, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
-	requireNoTransportError(t, "read after rejected replace", err)
-	if afterRejectedReplace.StatusCode() != http.StatusOK {
-		t.Fatalf("read after rejected replace status = %d, want %d; body %s", afterRejectedReplace.StatusCode(), http.StatusOK, afterRejectedReplace.Body)
-	}
-	assertTransactionClass(t, "after rejected replace", *afterRejectedReplace.JSON200, httpclient.TransactionClassSpend)
-	assertRecordIDs(t, afterRejectedReplace.JSON200.Records, recordIDs(created.JSON201.Records))
-
-	invalidExchange, err := client.REST().CreateTransactionWithResponse(context.Background(), invalidExchangeShapeRequest(fixture))
-	requireNoTransportError(t, "create invalid exchange transaction", err)
-	if invalidExchange.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("invalid exchange status = %d, want %d; body %s", invalidExchange.StatusCode(), http.StatusBadRequest, invalidExchange.Body)
-	}
-}
-
-func TestTransactionReplaceReclassifiesBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-
-	created, err := client.REST().CreateTransactionWithResponse(context.Background(), spendClassificationRequest(fixture))
-	requireNoTransportError(t, "create transaction", err)
-	if created.StatusCode() != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
-	}
-
-	replaced, err := client.REST().ReplaceTransactionWithResponse(context.Background(), created.JSON201.TransactionId, httpclient.UpdateTransactionRequest(incomeClassificationRequest(fixture)))
-	requireNoTransportError(t, "replace transaction", err)
-	if replaced.StatusCode() != http.StatusOK {
-		t.Fatalf("replace status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
-	}
-	if replaced.JSON200.TransactionId != created.JSON201.TransactionId {
-		t.Fatalf("replace transaction_id = %d, want %d", replaced.JSON200.TransactionId, created.JSON201.TransactionId)
-	}
-	assertTransactionClass(t, "replaced", *replaced.JSON200, httpclient.TransactionClassIncome)
-	assertTransactionDisplayTitle(t, "replaced", *replaced.JSON200, "Employer → Checking")
-	assertIncomeDisplayAmounts(t, "replaced", *replaced.JSON200)
-}
-
-func TestBulkSemanticValidationRejectsBreakingUpdatesBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-
-	created, err := client.REST().CreateTransactionWithResponse(context.Background(), spendClassificationRequest(fixture))
-	requireNoTransportError(t, "create transaction", err)
-	if created.StatusCode() != http.StatusCreated {
-		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
-	}
-	fundingRecordID := created.JSON201.Records[0].RecordId
-	counterpartyRecordID := created.JSON201.Records[1].RecordId
-
-	badCategory, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
-		RecordIds:  []int64{counterpartyRecordID},
-		CategoryId: fixture.transferCategory.CategoryId,
-	})
-	requireNoTransportError(t, "bulk category", err)
-	if badCategory.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("bulk category status = %d, want %d; body %s", badCategory.StatusCode(), http.StatusBadRequest, badCategory.Body)
-	}
-
-	badAccount, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
-		RecordIds: []int64{counterpartyRecordID},
-		AccountId: fixture.savings.AccountId,
-	})
-	requireNoTransportError(t, "bulk account", err)
-	if badAccount.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("bulk account status = %d, want %d; body %s", badAccount.StatusCode(), http.StatusBadRequest, badAccount.Body)
-	}
-
-	records, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{CategoryId: &fixture.expenseCategory.CategoryId})
-	requireNoTransportError(t, "search original category", err)
-	if records.StatusCode() != http.StatusOK {
-		t.Fatalf("search status = %d, want %d; body %s", records.StatusCode(), http.StatusOK, records.Body)
-	}
-	assertRecordIDs(t, records.JSON200.Records, []int64{fundingRecordID, counterpartyRecordID})
-
-	savingsRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{AccountId: &fixture.savings.AccountId})
-	requireNoTransportError(t, "search rejected account", err)
-	if savingsRecords.StatusCode() != http.StatusOK {
-		t.Fatalf("search rejected account status = %d, want %d; body %s", savingsRecords.StatusCode(), http.StatusOK, savingsRecords.Body)
-	}
-	assertRecordIDs(t, savingsRecords.JSON200.Records, nil)
-}
-
-func TestBulkSemanticValidationRejectsAllAffectedTransactionsBoundary(t *testing.T) {
-	client := newSharedClient(t)
-	fixture := newClassificationFixture(t, client)
-
-	first, err := client.REST().CreateTransactionWithResponse(context.Background(), spendClassificationRequest(fixture))
-	requireNoTransportError(t, "create first transaction", err)
-	if first.StatusCode() != http.StatusCreated {
-		t.Fatalf("create first status = %d, want %d; body %s", first.StatusCode(), http.StatusCreated, first.Body)
-	}
-	second, err := client.REST().CreateTransactionWithResponse(context.Background(), spendClassificationRequest(fixture))
-	requireNoTransportError(t, "create second transaction", err)
-	if second.StatusCode() != http.StatusCreated {
-		t.Fatalf("create second status = %d, want %d; body %s", second.StatusCode(), http.StatusCreated, second.Body)
-	}
-
-	rejected, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
-		RecordIds: []int64{
-			first.JSON201.Records[0].RecordId,
-			first.JSON201.Records[1].RecordId,
-			second.JSON201.Records[1].RecordId,
+	tests := []struct {
+		name    string
+		records []httpclient.CreateJournalRecordRequest
+	}{
+		{
+			name: "exactly two currencies",
+			records: []httpclient.CreateJournalRecordRequest{
+				semanticRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "10.00", "USD", nil),
+			},
 		},
-		CategoryId: fixture.feeCategory.CategoryId,
+		{
+			name: "no flow records",
+			records: []httpclient.CreateJournalRecordRequest{
+				semanticRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "-9.00", "EUR", nil),
+				semanticRecord(fixture.lisbon.AccountId, "9.00", "EUR", &fixture.travel.CategoryId),
+			},
+		},
+		{
+			name: "no adjustment records",
+			records: []httpclient.CreateJournalRecordRequest{
+				semanticRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "-9.00", "EUR", nil),
+				semanticRecord(fixture.correction.AccountId, "9.00", "EUR", nil),
+			},
+		},
+		{
+			name: "opposite balance signs",
+			records: []httpclient.CreateJournalRecordRequest{
+				semanticRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "10.00", "USD", nil),
+				semanticRecord(fixture.cashEUR.AccountId, "-9.00", "EUR", nil),
+				semanticRecord(fixture.exchange.AccountId, "9.00", "EUR", nil),
+			},
+		},
+		{
+			name: "one balance sign per currency",
+			records: []httpclient.CreateJournalRecordRequest{
+				semanticRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+				semanticRecord(fixture.savings.AccountId, "3.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "7.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "-9.00", "EUR", nil),
+				semanticRecord(fixture.cashEUR.AccountId, "9.00", "EUR", nil),
+			},
+		},
+		{
+			name: "balance records in both currencies",
+			records: []httpclient.CreateJournalRecordRequest{
+				semanticRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "-9.00", "EUR", nil),
+				semanticRecord(fixture.exchange.AccountId, "9.00", "EUR", nil),
+			},
+		},
+		{
+			name: "not three currencies",
+			records: []httpclient.CreateJournalRecordRequest{
+				semanticRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "10.00", "USD", nil),
+				semanticRecord(fixture.exchange.AccountId, "-9.00", "EUR", nil),
+				semanticRecord(fixture.cashEUR.AccountId, "9.00", "EUR", nil),
+				semanticRecord(fixture.cash.AccountId, "-1.00", "JPY", nil),
+				semanticRecord(fixture.exchange.AccountId, "1.00", "JPY", nil),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response, err := client.REST().CreateTransactionWithResponse(context.Background(), httpclient.CreateTransactionRequest{
+				InitiatedDate: apptest.Date("2024-07-03"),
+				Records:       test.records,
+			})
+			requireClientResponse(t, "reject exchange exclusivity violation", err, response.StatusCode(), http.StatusBadRequest, response.Body)
+			if response.JSON400 == nil || !strings.Contains(response.JSON400.Error.Message, "records[") {
+				t.Fatalf("exchange error = %+v, want offending record path", response.JSON400)
+			}
+		})
+	}
+}
+
+func TestClassifyTransactionDraft(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+
+	unbalanced, err := client.REST().ClassifyTransactionWithResponse(context.Background(), httpclient.ClassifyTransactionRequest{
+		Records: []httpclient.ClassifyJournalRecordRequest{
+			classificationRecord(fixture.checking.AccountId, "-12.00", "USD", nil),
+			classificationRecord(fixture.restaurant.AccountId, "10.00", "USD", &fixture.expense.CategoryId),
+		},
 	})
-	requireNoTransportError(t, "bulk category across transactions", err)
-	if rejected.StatusCode() != http.StatusBadRequest {
-		t.Fatalf("bulk category status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
+	requireClientResponse(t, "classify unbalanced draft", err, unbalanced.StatusCode(), http.StatusOK, unbalanced.Body)
+	if unbalanced.JSON200.TransactionClass != httpclient.TransactionClassSpend {
+		t.Fatalf("unbalanced draft class = %q, want spend", unbalanced.JSON200.TransactionClass)
+	}
+	if got := unbalanced.JSON200.Records; len(got) != 2 ||
+		got[0].RecordRole != httpclient.RecordRoleBalance ||
+		got[1].RecordRole != httpclient.RecordRoleExpense {
+		t.Fatalf("unbalanced draft roles = %+v", got)
+	}
+	assertDisplayAmountsEqual(
+		t,
+		"unbalanced draft primary amounts",
+		unbalanced.JSON200.PrimaryAmounts,
+		displayAmounts("USD", "-10.00000000"),
+	)
+	if got := unbalanced.JSON200.Shapes; len(got) != 1 ||
+		got[0].Shape != httpclient.TransactionShapeTypeSpend {
+		t.Fatalf("unbalanced draft shapes = %+v", got)
+	} else {
+		assertDisplayAmountsEqual(
+			t,
+			"unbalanced draft shape amounts",
+			got[0].Amounts,
+			displayAmounts("USD", "-10.00000000"),
+		)
 	}
 
-	feeRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{CategoryId: &fixture.feeCategory.CategoryId})
-	requireNoTransportError(t, "search rejected fee category", err)
-	if feeRecords.StatusCode() != http.StatusOK {
-		t.Fatalf("search fee status = %d, want %d; body %s", feeRecords.StatusCode(), http.StatusOK, feeRecords.Body)
+	exchange, err := client.REST().ClassifyTransactionWithResponse(context.Background(), httpclient.ClassifyTransactionRequest{
+		Records: []httpclient.ClassifyJournalRecordRequest{
+			classificationRecord(fixture.checking.AccountId, "-110.00", "USD", nil),
+			classificationRecord(fixture.exchange.AccountId, "110.00", "USD", nil),
+			classificationRecord(fixture.exchange.AccountId, "-100.00", "EUR", nil),
+			classificationRecord(fixture.cashEUR.AccountId, "100.00", "EUR", nil),
+		},
+	})
+	requireClientResponse(t, "classify exchange draft", err, exchange.StatusCode(), http.StatusOK, exchange.Body)
+	if got := exchange.JSON200.Shapes; len(got) != 1 ||
+		got[0].Shape != httpclient.TransactionShapeTypeExchange {
+		t.Fatalf("exchange draft shapes = %+v", got)
+	} else {
+		assertDisplayAmountsEqual(
+			t,
+			"exchange draft shape amounts",
+			got[0].Amounts,
+			[]httpclient.DisplayAmount{
+				{Currency: "USD", Amount: "-110.00000000"},
+				{Currency: "EUR", Amount: "100.00000000"},
+			},
+		)
+		wantRate := &httpclient.ExchangeEffectiveRate{
+			SoldCurrency:   "USD",
+			BoughtCurrency: "EUR",
+			Rate:           "1.10000000",
+		}
+		if !effectiveRatesEqual(got[0].EffectiveRate, wantRate) {
+			t.Fatalf("exchange draft effective rate = %+v, want %+v", got[0].EffectiveRate, wantRate)
+		}
 	}
-	assertRecordIDs(t, feeRecords.JSON200.Records, nil)
 
-	expenseRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{CategoryId: &fixture.expenseCategory.CategoryId})
-	requireNoTransportError(t, "search original expense category", err)
-	if expenseRecords.StatusCode() != http.StatusOK {
-		t.Fatalf("search expense status = %d, want %d; body %s", expenseRecords.StatusCode(), http.StatusOK, expenseRecords.Body)
+	categoryViolation, err := client.REST().ClassifyTransactionWithResponse(context.Background(), httpclient.ClassifyTransactionRequest{
+		Records: []httpclient.ClassifyJournalRecordRequest{
+			classificationRecord(fixture.checking.AccountId, "-10.00", "USD", &fixture.expense.CategoryId),
+		},
+	})
+	requireClientResponse(t, "classify category violation", err, categoryViolation.StatusCode(), http.StatusBadRequest, categoryViolation.Body)
+
+	exchangeViolation, err := client.REST().ClassifyTransactionWithResponse(context.Background(), httpclient.ClassifyTransactionRequest{
+		Records: []httpclient.ClassifyJournalRecordRequest{
+			classificationRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+			classificationRecord(fixture.exchange.AccountId, "10.00", "USD", nil),
+		},
+	})
+	requireClientResponse(t, "classify exchange violation", err, exchangeViolation.StatusCode(), http.StatusBadRequest, exchangeViolation.Body)
+
+	unbalancedExchange, err := client.REST().ClassifyTransactionWithResponse(context.Background(), httpclient.ClassifyTransactionRequest{
+		Records: []httpclient.ClassifyJournalRecordRequest{
+			classificationRecord(fixture.checking.AccountId, "-10.00", "USD", nil),
+			classificationRecord(fixture.exchange.AccountId, "9.00", "USD", nil),
+			classificationRecord(fixture.exchange.AccountId, "-8.00", "EUR", nil),
+			classificationRecord(fixture.cashEUR.AccountId, "8.00", "EUR", nil),
+		},
+	})
+	requireClientResponse(t, "classify unbalanced exchange", err, unbalancedExchange.StatusCode(), http.StatusBadRequest, unbalancedExchange.Body)
+	if unbalancedExchange.JSON400 == nil || !strings.Contains(unbalancedExchange.JSON400.Error.Message, "records[") {
+		t.Fatalf("unbalanced exchange error = %+v, want offending record path", unbalancedExchange.JSON400)
 	}
-	wantExpenseRecords := append(recordIDs(first.JSON201.Records), recordIDs(second.JSON201.Records)...)
-	assertRecordIDs(t, expenseRecords.JSON200.Records, wantExpenseRecords)
 }
 
-type classificationFixture struct {
-	checking           httpclient.Account
-	savings            httpclient.Account
-	cashEUR            httpclient.Account
-	merchant           httpclient.Account
-	employer           httpclient.Account
-	exchangeProvider   httpclient.Account
-	feeProvider        httpclient.Account
-	openingSystem      httpclient.Account
-	fxSystem           httpclient.Account
-	expenseCategory    httpclient.Category
-	feeCategory        httpclient.Category
-	incomeCategory     httpclient.Category
-	refundCategory     httpclient.Category
-	transferCategory   httpclient.Category
-	exchangeCategory   httpclient.Category
-	adjustmentCategory httpclient.Category
-	fxCategory         httpclient.Category
+func TestExchangeShorthand(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+	member := client.Scenario().Member("Exchange shorthand member")
+	tag := client.Scenario().Tag("Exchange:Shorthand")
+	memo := "Exchange optional fields"
+	pendingDate := apptest.Timestamp("2024-07-04T12:00:00Z")
+	postedDate := apptest.Timestamp("2024-07-05T13:00:00Z")
+	postingStatus := httpclient.PostingStatusPending
+	reconciliationStatus := httpclient.Unreconciled
+
+	response, err := client.REST().CreateExchangeTransactionWithResponse(context.Background(), httpclient.CreateExchangeTransactionRequest{
+		InitiatedDate:        apptest.Date("2024-07-04"),
+		SoldAccountId:        fixture.checking.AccountId,
+		BoughtAccountId:      fixture.cashEUR.AccountId,
+		SoldAmount:           "110.00",
+		BoughtAmount:         "100.00",
+		MemberId:             &member.MemberId,
+		TagIds:               apptest.Int64SlicePtr(tag.TagId),
+		Memo:                 &memo,
+		PendingDate:          &pendingDate,
+		PostedDate:           &postedDate,
+		PostingStatus:        &postingStatus,
+		ReconciliationStatus: &reconciliationStatus,
+	})
+	requireClientResponse(t, "create exchange shorthand", err, response.StatusCode(), http.StatusCreated, response.Body)
+	if len(response.JSON201.Records) != 4 {
+		t.Fatalf("exchange shorthand records = %d, want 4", len(response.JSON201.Records))
+	}
+	for _, record := range response.JSON201.Records {
+		if record.MemberId == nil || *record.MemberId != member.MemberId {
+			t.Fatalf("member_id = %v, want %d", record.MemberId, member.MemberId)
+		}
+		assertInt64s(t, record.TagIds, []int64{tag.TagId})
+		if record.Memo == nil || *record.Memo != memo {
+			t.Fatalf("memo = %v, want %q", record.Memo, memo)
+		}
+		if !record.PendingDate.Equal(pendingDate) {
+			t.Fatalf("pending_date = %v, want %v", record.PendingDate, pendingDate)
+		}
+		if record.PostedDate == nil || !record.PostedDate.Equal(postedDate) {
+			t.Fatalf("posted_date = %v, want %v", record.PostedDate, postedDate)
+		}
+		if record.PostingStatus != postingStatus {
+			t.Fatalf("posting_status = %q, want %q", record.PostingStatus, postingStatus)
+		}
+		if record.ReconciliationStatus != reconciliationStatus {
+			t.Fatalf("reconciliation_status = %q, want %q", record.ReconciliationStatus, reconciliationStatus)
+		}
+	}
+	assertDerivedTransaction(t, *response.JSON201, workedExample{
+		class: httpclient.TransactionClassCurrencyExchange,
+		shapes: []expectedShape{{
+			shape: httpclient.TransactionShapeTypeExchange,
+			amounts: []httpclient.DisplayAmount{
+				{Currency: "USD", Amount: "-110.00000000"},
+				{Currency: "EUR", Amount: "100.00000000"},
+			},
+			effectiveRate: &httpclient.ExchangeEffectiveRate{
+				SoldCurrency:   "USD",
+				BoughtCurrency: "EUR",
+				Rate:           "1.10000000",
+			},
+		}},
+		roles: []httpclient.RecordRole{
+			httpclient.RecordRoleBalance,
+			httpclient.RecordRoleExchange,
+			httpclient.RecordRoleExchange,
+			httpclient.RecordRoleBalance,
+		},
+	})
 }
 
-func newClassificationFixture(t *testing.T, client *apptest.Client) *classificationFixture {
+func TestExchangeShorthandRejectsRateRoundedToZero(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+
+	response, err := client.REST().CreateExchangeTransactionWithResponse(context.Background(), httpclient.CreateExchangeTransactionRequest{
+		InitiatedDate:   apptest.Date("2024-07-04"),
+		SoldAccountId:   fixture.checking.AccountId,
+		BoughtAccountId: fixture.cashEUR.AccountId,
+		SoldAmount:      "0.00000001",
+		BoughtAmount:    "9999999999",
+	})
+	requireClientResponse(t, "reject exchange rate rounded to zero", err, response.StatusCode(), http.StatusBadRequest, response.Body)
+	if response.JSON400 == nil || !strings.Contains(response.JSON400.Error.Message, "below supported decimal precision") {
+		t.Fatalf("zero exchange rate error = %+v, want supported precision message", response.JSON400)
+	}
+}
+
+func TestExchangeShorthandRejectsInvalidAccounts(t *testing.T) {
+	client := newSharedClient(t)
+	fixture := newSemanticFixture(t, client)
+	tests := []struct {
+		name            string
+		soldAccountID   int64
+		boughtAccountID int64
+		message         string
+	}{
+		{
+			name:            "same account",
+			soldAccountID:   fixture.checking.AccountId,
+			boughtAccountID: fixture.checking.AccountId,
+			message:         "must be positive and differ",
+		},
+		{
+			name:            "flow account",
+			soldAccountID:   fixture.restaurant.AccountId,
+			boughtAccountID: fixture.cashEUR.AccountId,
+			message:         "must be owned or party accounts",
+		},
+		{
+			name:            "same currency",
+			soldAccountID:   fixture.checking.AccountId,
+			boughtAccountID: fixture.savings.AccountId,
+			message:         "must have two distinct currencies",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response, err := client.REST().CreateExchangeTransactionWithResponse(
+				context.Background(),
+				httpclient.CreateExchangeTransactionRequest{
+					InitiatedDate:   apptest.Date("2024-07-06"),
+					SoldAccountId:   test.soldAccountID,
+					BoughtAccountId: test.boughtAccountID,
+					SoldAmount:      "110.00",
+					BoughtAmount:    "100.00",
+				},
+			)
+			requireClientResponse(t, "reject exchange shorthand", err, response.StatusCode(), http.StatusBadRequest, response.Body)
+			if response.JSON400 == nil || !strings.Contains(response.JSON400.Error.Message, test.message) {
+				t.Fatalf("exchange shorthand error = %+v, want %q", response.JSON400, test.message)
+			}
+		})
+	}
+}
+
+func newSemanticFixture(t *testing.T, client *apptest.Client) *semanticFixture {
 	t.Helper()
 	scenario := client.Scenario()
+	systems := fixedSystemAccounts(t, client)
 
-	return &classificationFixture{
-		checking:           scenario.AccountWithCurrency("banks:Checking", "USD"),
-		savings:            scenario.AccountWithCurrency("banks:Savings", "USD"),
-		cashEUR:            scenario.AccountWithCurrency("cash:Travel:EUR", "EUR"),
-		merchant:           scenario.Account("merchant:Local"),
-		employer:           scenario.Account("income:Employer"),
-		exchangeProvider:   scenario.Account("merchant:ExchangeProvider"),
-		feeProvider:        scenario.Account("bank:Fees"),
-		openingSystem:      scenario.AccountWithType("system:opening_balance", httpclient.System),
-		fxSystem:           scenario.AccountWithType("system:fx_gain_loss", httpclient.System),
-		expenseCategory:    scenario.CategoryWithIntent("Food:Restaurants", httpclient.CategoryEconomicIntentExpense),
-		feeCategory:        scenario.CategoryWithIntent("Bank:Fees", httpclient.CategoryEconomicIntentFee),
-		incomeCategory:     scenario.CategoryWithIntent("Income:Salary", httpclient.CategoryEconomicIntentIncome),
-		refundCategory:     scenario.CategoryWithIntent("Refunds:Merchants", httpclient.CategoryEconomicIntentRefund),
-		transferCategory:   scenario.CategoryWithIntent("Transfer", httpclient.CategoryEconomicIntentTransfer),
-		exchangeCategory:   scenario.CategoryWithIntent("Currency:Exchange", httpclient.CategoryEconomicIntentExchange),
-		adjustmentCategory: scenario.CategoryWithIntent("Adjustment:Opening", httpclient.CategoryEconomicIntentAdjustment),
-		fxCategory:         scenario.CategoryWithIntent("FX:GainLoss", httpclient.CategoryEconomicIntentFxGainLoss),
+	return &semanticFixture{
+		checking:        scenario.AccountWithCurrency("banks:Chase:checking:Joint", "USD"),
+		savings:         scenario.AccountWithCurrency("banks:Ally:savings:Emergency", "USD"),
+		card:            scenario.AccountWithCurrency("banks:Chase:credit_card:Sapphire", "USD"),
+		cash:            scenario.AccountWithCurrency("cash:Wallet", "USD"),
+		cashEUR:         scenario.AccountWithCurrency("cash:Travel:EUR", "EUR"),
+		jordan:          scenario.AccountWithType("people:Jordan:balance", httpclient.WritableAccountTypeParty),
+		employerBalance: scenario.AccountWithType("employers:Acme:balance", httpclient.WritableAccountTypeParty),
+		restaurant:      scenario.AccountWithType("merchants:Restaurant:Local", httpclient.WritableAccountTypeFlow),
+		mortgageBank:    scenario.AccountWithType("banks:FannieMay", httpclient.WritableAccountTypeFlow),
+		supermarket:     scenario.AccountWithType("merchants:Supermarket", httpclient.WritableAccountTypeFlow),
+		fees:            scenario.AccountWithType("banks:Chase:fees", httpclient.WritableAccountTypeFlow),
+		interest:        scenario.AccountWithType("banks:Chase:interest", httpclient.WritableAccountTypeFlow),
+		employer:        scenario.AccountWithType("employers:Acme:payroll", httpclient.WritableAccountTypeFlow),
+		lisbon:          scenario.AccountWithType("merchants:Travel:Dining:Lisbon", httpclient.WritableAccountTypeFlow),
+		merchantA:       scenario.AccountWithType("merchants:Market:A", httpclient.WritableAccountTypeFlow),
+		exchange:        systems["system:exchange"],
+		openingBalance:  systems["system:opening_balance"],
+		correction:      systems["system:correction"],
+		expense:         scenario.CategoryWithIntent("Food:Restaurants", httpclient.CategoryEconomicIntentExpense),
+		groceries:       scenario.CategoryWithIntent("Food:Groceries", httpclient.CategoryEconomicIntentExpense),
+		feesCategory:    scenario.CategoryWithIntent("Banking:Fees", httpclient.CategoryEconomicIntentExpense),
+		travel:          scenario.CategoryWithIntent("Travel:Dining", httpclient.CategoryEconomicIntentExpense),
+		mortgage: [4]httpclient.Category{
+			scenario.CategoryWithIntent("Housing:Mortgage:Principal", httpclient.CategoryEconomicIntentExpense),
+			scenario.CategoryWithIntent("Housing:Mortgage:Interest", httpclient.CategoryEconomicIntentExpense),
+			scenario.CategoryWithIntent("Housing:Insurance", httpclient.CategoryEconomicIntentExpense),
+			scenario.CategoryWithIntent("Housing:Mortgage:Servicing", httpclient.CategoryEconomicIntentExpense),
+		},
+		interestIncome: scenario.CategoryWithIntent("Banking:Interest", httpclient.CategoryEconomicIntentIncome),
+		salary:         scenario.CategoryWithIntent("Income:Salary", httpclient.CategoryEconomicIntentIncome),
+		bonus:          scenario.CategoryWithIntent("Income:Bonus", httpclient.CategoryEconomicIntentIncome),
 	}
 }
 
-func spendClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(record(f.checking.AccountId, f.expenseCategory.CategoryId, "USD", "-12.34"), record(f.merchant.AccountId, f.expenseCategory.CategoryId, "USD", "12.34"))
-}
-
-func crossCurrencySpendClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(
-		record(f.checking.AccountId, f.exchangeCategory.CategoryId, "USD", "-110.00"),
-		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "USD", "110.00"),
-		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "EUR", "-100.00"),
-		record(f.cashEUR.AccountId, f.exchangeCategory.CategoryId, "EUR", "100.00"),
-		record(f.cashEUR.AccountId, f.expenseCategory.CategoryId, "EUR", "-100.00"),
-		record(f.merchant.AccountId, f.expenseCategory.CategoryId, "EUR", "100.00"),
-	)
-}
-
-func incomeClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(record(f.checking.AccountId, f.incomeCategory.CategoryId, "USD", "100.00"), record(f.employer.AccountId, f.incomeCategory.CategoryId, "USD", "-100.00"))
-}
-
-func refundClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(record(f.checking.AccountId, f.refundCategory.CategoryId, "USD", "8.00"), record(f.merchant.AccountId, f.refundCategory.CategoryId, "USD", "-8.00"))
-}
-
-func transferClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(record(f.checking.AccountId, f.transferCategory.CategoryId, "USD", "-25.00"), record(f.savings.AccountId, f.transferCategory.CategoryId, "USD", "25.00"))
-}
-
-func feeClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(record(f.checking.AccountId, f.feeCategory.CategoryId, "USD", "-5.00"), record(f.feeProvider.AccountId, f.feeCategory.CategoryId, "USD", "5.00"))
-}
-
-func transferWithFeeClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	memo := "Transfer with bank fee"
-	return classificationRequest(
-		recordWithMemo(f.checking.AccountId, f.transferCategory.CategoryId, "USD", "-25.00", memo),
-		recordWithMemo(f.savings.AccountId, f.transferCategory.CategoryId, "USD", "25.00", memo),
-		recordWithMemo(f.checking.AccountId, f.feeCategory.CategoryId, "USD", "-1.00", memo),
-		recordWithMemo(f.feeProvider.AccountId, f.feeCategory.CategoryId, "USD", "1.00", memo),
-	)
-}
-
-func exchangeClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(
-		record(f.checking.AccountId, f.exchangeCategory.CategoryId, "USD", "-110.00"),
-		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "USD", "110.00"),
-		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "EUR", "-100.00"),
-		record(f.cashEUR.AccountId, f.exchangeCategory.CategoryId, "EUR", "100.00"),
-	)
-}
-
-func exchangeWithFeeAndFXClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(
-		record(f.checking.AccountId, f.exchangeCategory.CategoryId, "USD", "-110.00"),
-		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "USD", "110.00"),
-		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "EUR", "-100.00"),
-		record(f.cashEUR.AccountId, f.exchangeCategory.CategoryId, "EUR", "100.00"),
-		record(f.checking.AccountId, f.feeCategory.CategoryId, "USD", "-2.00"),
-		record(f.feeProvider.AccountId, f.feeCategory.CategoryId, "USD", "2.00"),
-		record(f.checking.AccountId, f.fxCategory.CategoryId, "USD", "3.00"),
-		record(f.fxSystem.AccountId, f.fxCategory.CategoryId, "USD", "-3.00"),
-	)
-}
-
-func adjustmentClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(record(f.checking.AccountId, f.adjustmentCategory.CategoryId, "USD", "40.00"), record(f.openingSystem.AccountId, f.adjustmentCategory.CategoryId, "USD", "-40.00"))
-}
-
-func fxGainLossClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(record(f.checking.AccountId, f.fxCategory.CategoryId, "USD", "3.00"), record(f.fxSystem.AccountId, f.fxCategory.CategoryId, "USD", "-3.00"))
-}
-
-func mixedClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(
-		record(f.checking.AccountId, f.expenseCategory.CategoryId, "USD", "-12.00"),
-		record(f.merchant.AccountId, f.expenseCategory.CategoryId, "USD", "12.00"),
-		record(f.checking.AccountId, f.incomeCategory.CategoryId, "USD", "100.00"),
-		record(f.employer.AccountId, f.incomeCategory.CategoryId, "USD", "-100.00"),
-	)
-}
-
-func mixedMemoClassificationRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	memo := "Mixed payroll correction"
-	return classificationRequest(
-		recordWithMemo(f.checking.AccountId, f.expenseCategory.CategoryId, "USD", "-12.00", memo),
-		recordWithMemo(f.merchant.AccountId, f.expenseCategory.CategoryId, "USD", "12.00", memo),
-		recordWithMemo(f.checking.AccountId, f.incomeCategory.CategoryId, "USD", "100.00", memo),
-		recordWithMemo(f.employer.AccountId, f.incomeCategory.CategoryId, "USD", "-100.00", memo),
-	)
-}
-
-func invalidExpenseShapeRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(record(f.checking.AccountId, f.expenseCategory.CategoryId, "USD", "-10.00"), record(f.savings.AccountId, f.expenseCategory.CategoryId, "USD", "10.00"))
-}
-
-func invalidExchangeShapeRequest(f *classificationFixture) httpclient.CreateTransactionRequest {
-	return classificationRequest(
-		record(f.checking.AccountId, f.exchangeCategory.CategoryId, "USD", "-10.00"),
-		record(f.savings.AccountId, f.exchangeCategory.CategoryId, "USD", "10.00"),
-		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "EUR", "-9.00"),
-		record(f.exchangeProvider.AccountId, f.exchangeCategory.CategoryId, "EUR", "9.00"),
-	)
-}
-
-func classificationRequest(records ...httpclient.CreateJournalRecordRequest) httpclient.CreateTransactionRequest {
-	return httpclient.CreateTransactionRequest{
-		InitiatedDate: apptest.Date("2024-06-01"),
-		Records:       records,
-	}
-}
-
-func createDatedClassificationTransaction(t *testing.T, client *apptest.Client, date string, request httpclient.CreateTransactionRequest) *httpclient.CreateTransactionResponse {
+func fixedSystemAccounts(t *testing.T, client *apptest.Client) map[string]httpclient.Account {
 	t.Helper()
-
-	request.InitiatedDate = apptest.Date(date)
-	created, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
-	requireNoTransportError(t, "create dated classification transaction", err)
-	if created.StatusCode() != http.StatusCreated {
-		t.Fatalf("create dated classification transaction status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	accountType := httpclient.AccountTypeSystem
+	response, err := client.REST().ListAccountsWithResponse(context.Background(), &httpclient.ListAccountsParams{
+		AccountType: &accountType,
+	})
+	requireClientResponse(t, "list fixed system accounts", err, response.StatusCode(), http.StatusOK, response.Body)
+	accounts := make(map[string]httpclient.Account, len(response.JSON200.Accounts))
+	for _, account := range response.JSON200.Accounts {
+		accounts[account.Fqn] = account
 	}
-
-	return created
+	return accounts
 }
 
-func record(accountID int64, categoryID int64, currency string, amount string) httpclient.CreateJournalRecordRequest {
+func semanticRecord(accountID int64, amount string, currency string, categoryID *int64) httpclient.CreateJournalRecordRequest {
 	return httpclient.CreateJournalRecordRequest{
 		AccountId:            accountID,
+		Amount:               amount,
 		CategoryId:           categoryID,
 		Currency:             currency,
-		Amount:               amount,
-		AmountUsd:            nil,
 		PostingStatus:        httpclient.PostingStatusPosted,
 		ReconciliationStatus: httpclient.Reconciled,
 		Source:               httpclient.ManualSourceManual,
 	}
 }
 
-func recordWithMemo(accountID int64, categoryID int64, currency string, amount string, memo string) httpclient.CreateJournalRecordRequest {
-	record := record(accountID, categoryID, currency, amount)
-	record.Memo = &memo
-	return record
+func classificationRecord(accountID int64, amount string, currency string, categoryID *int64) httpclient.ClassifyJournalRecordRequest {
+	return httpclient.ClassifyJournalRecordRequest{
+		AccountId:  accountID,
+		Amount:     amount,
+		CategoryId: categoryID,
+		Currency:   currency,
+	}
+}
+
+func displayAmounts(currency string, amount string) []httpclient.DisplayAmount {
+	return []httpclient.DisplayAmount{{Currency: currency, Amount: amount}}
+}
+
+func assertDerivedTransaction(t *testing.T, transaction httpclient.Transaction, want workedExample) {
+	t.Helper()
+	if transaction.TransactionClass != want.class {
+		t.Fatalf("class = %q, want %q; transaction %+v", transaction.TransactionClass, want.class, transaction)
+	}
+	if want.displayTitle != "" {
+		assertTransactionDisplayTitle(t, "derived transaction", transaction, want.displayTitle)
+	}
+	assertDisplayAmountsEqual(t, "primary amounts", transaction.PrimaryAmounts, want.primaryAmounts)
+	if len(transaction.Shapes) != len(want.shapes) {
+		t.Fatalf("shapes = %+v, want %+v", transaction.Shapes, want.shapes)
+	}
+	shapesByType := make(map[httpclient.TransactionShapeType]httpclient.TransactionShape, len(transaction.Shapes))
+	for _, shape := range transaction.Shapes {
+		if _, duplicate := shapesByType[shape.Shape]; duplicate {
+			t.Fatalf("duplicate shape %q in %+v", shape.Shape, transaction.Shapes)
+		}
+		shapesByType[shape.Shape] = shape
+	}
+	for _, expected := range want.shapes {
+		shape, ok := shapesByType[expected.shape]
+		if !ok {
+			t.Fatalf("missing shape %q in %+v", expected.shape, transaction.Shapes)
+		}
+		assertDisplayAmountsEqual(t, "shape amounts", shape.Amounts, expected.amounts)
+		if !effectiveRatesEqual(shape.EffectiveRate, expected.effectiveRate) {
+			t.Fatalf("shape %q effective rate = %+v, want %+v", shape.Shape, shape.EffectiveRate, expected.effectiveRate)
+		}
+	}
+	if len(transaction.Records) != len(want.roles) {
+		t.Fatalf("records = %d, want roles %d", len(transaction.Records), len(want.roles))
+	}
+	for index, role := range want.roles {
+		if transaction.Records[index].RecordRole != role {
+			t.Fatalf("record[%d] role = %q, want %q", index, transaction.Records[index].RecordRole, role)
+		}
+	}
 }
 
 func assertTransactionClass(t *testing.T, label string, transaction httpclient.Transaction, want httpclient.TransactionClass) {
 	t.Helper()
 	if transaction.TransactionClass != want {
-		t.Fatalf("%s transaction_class = %q, want %q; transaction %+v", label, transaction.TransactionClass, want, transaction)
-	}
-	if transaction.Components == nil {
-		t.Fatalf("%s components = nil, want array", label)
-	}
-	if transaction.PrimaryAmounts == nil {
-		t.Fatalf("%s primary_amounts = nil, want array", label)
+		t.Fatalf("%s class = %q, want %q", label, transaction.TransactionClass, want)
 	}
 }
 
 func assertTransactionDisplayTitle(t *testing.T, label string, transaction httpclient.Transaction, want string) {
 	t.Helper()
 	if transaction.DisplayTitle != want {
-		t.Fatalf("%s display_title = %q, want %q; transaction %+v", label, transaction.DisplayTitle, want, transaction)
+		t.Fatalf("%s display title = %q, want %q", label, transaction.DisplayTitle, want)
 	}
 }
 
-func assertSpendDisplayAmounts(t *testing.T, label string, transaction httpclient.Transaction) {
-	t.Helper()
-	assertDisplayAmounts(t, label+" primary_amounts", transaction.PrimaryAmounts, []httpclient.DisplayAmount{{Currency: "USD", Amount: "-12.34000000"}})
-	if len(transaction.Components) != 1 {
-		t.Fatalf("%s components count = %d, want 1; transaction %+v", label, len(transaction.Components), transaction)
-	}
-	component := transaction.Components[0]
-	if component.Intent != httpclient.CategoryEconomicIntentExpense {
-		t.Fatalf("%s component intent = %q, want %q", label, component.Intent, httpclient.CategoryEconomicIntentExpense)
-	}
-	assertDisplayAmounts(t, label+" expense component amounts", component.Amounts, []httpclient.DisplayAmount{{Currency: "USD", Amount: "-12.34000000"}})
-}
-
-func assertIncomeDisplayAmounts(t *testing.T, label string, transaction httpclient.Transaction) {
-	t.Helper()
-	assertDisplayAmounts(t, label+" primary_amounts", transaction.PrimaryAmounts, []httpclient.DisplayAmount{{Currency: "USD", Amount: "100.00000000"}})
-	if len(transaction.Components) != 1 {
-		t.Fatalf("%s components count = %d, want 1; transaction %+v", label, len(transaction.Components), transaction)
-	}
-	component := transaction.Components[0]
-	if component.Intent != httpclient.CategoryEconomicIntentIncome {
-		t.Fatalf("%s component intent = %q, want %q", label, component.Intent, httpclient.CategoryEconomicIntentIncome)
-	}
-	assertDisplayAmounts(t, label+" income component amounts", component.Amounts, []httpclient.DisplayAmount{{Currency: "USD", Amount: "100.00000000"}})
-}
-
-func assertExchangeWithFeeAndFXDisplayAmounts(t *testing.T, label string, transaction httpclient.Transaction) {
-	t.Helper()
-	assertDisplayAmounts(t, label+" primary_amounts", transaction.PrimaryAmounts, nil)
-	if len(transaction.Components) != 3 {
-		t.Fatalf("%s components count = %d, want 3; transaction %+v", label, len(transaction.Components), transaction)
-	}
-
-	fee := transaction.Components[0]
-	if fee.Intent != httpclient.CategoryEconomicIntentFee {
-		t.Fatalf("%s fee component intent = %q, want %q", label, fee.Intent, httpclient.CategoryEconomicIntentFee)
-	}
-	assertDisplayAmounts(t, label+" fee component amounts", fee.Amounts, []httpclient.DisplayAmount{{Currency: "USD", Amount: "-2.00000000"}})
-
-	exchange := transaction.Components[1]
-	if exchange.Intent != httpclient.CategoryEconomicIntentExchange {
-		t.Fatalf("%s exchange component intent = %q, want %q", label, exchange.Intent, httpclient.CategoryEconomicIntentExchange)
-	}
-	assertDisplayAmounts(t, label+" exchange component amounts", exchange.Amounts, []httpclient.DisplayAmount{
-		{Currency: "EUR", Amount: "100.00000000"},
-		{Currency: "USD", Amount: "-110.00000000"},
-	})
-
-	fx := transaction.Components[2]
-	if fx.Intent != httpclient.CategoryEconomicIntentFxGainLoss {
-		t.Fatalf("%s fx component intent = %q, want %q", label, fx.Intent, httpclient.CategoryEconomicIntentFxGainLoss)
-	}
-	assertDisplayAmounts(t, label+" fx component amounts", fx.Amounts, []httpclient.DisplayAmount{{Currency: "USD", Amount: "3.00000000"}})
-}
-
-func assertDisplayAmounts(t *testing.T, label string, got []httpclient.DisplayAmount, want []httpclient.DisplayAmount) {
+func assertDisplayAmountsEqual(t *testing.T, label string, got, want []httpclient.DisplayAmount) {
 	t.Helper()
 	if len(got) != len(want) {
-		t.Fatalf("%s count = %d, want %d; amounts %+v", label, len(got), len(want), got)
+		t.Fatalf("%s = %+v, want %+v", label, got, want)
 	}
 	for index := range want {
 		if got[index] != want[index] {
 			t.Fatalf("%s[%d] = %+v, want %+v", label, index, got[index], want[index])
 		}
 	}
+}
+
+func effectiveRatesEqual(got, want *httpclient.ExchangeEffectiveRate) bool {
+	if got == nil || want == nil {
+		return got == nil && want == nil
+	}
+	return *got == *want
+}
+
+func twoDigits(value int) string {
+	if value < 10 {
+		return "0" + string(rune('0'+value))
+	}
+	return string([]byte{byte('0' + value/10), byte('0' + value%10)})
+}
+
+// classificationFixture keeps the list and aggregate tests readable while their
+// assertions are restated around the new derived semantics.
+type classificationFixture struct {
+	checking         httpclient.Account
+	savings          httpclient.Account
+	cashEUR          httpclient.Account
+	merchant         httpclient.Account
+	feeProvider      httpclient.Account
+	employer         httpclient.Account
+	exchangeProvider httpclient.Account
+	openingSystem    httpclient.Account
+	correctionSystem httpclient.Account
+	expenseCategory  httpclient.Category
+	feeCategory      httpclient.Category
+	refundCategory   httpclient.Category
+	incomeCategory   httpclient.Category
+}
+
+func newClassificationFixture(t *testing.T, client *apptest.Client) classificationFixture {
+	t.Helper()
+	fixture := newSemanticFixture(t, client)
+	return classificationFixture{
+		checking:         fixture.checking,
+		savings:          fixture.savings,
+		cashEUR:          fixture.cashEUR,
+		merchant:         fixture.merchantA,
+		feeProvider:      fixture.fees,
+		employer:         fixture.employer,
+		exchangeProvider: fixture.exchange,
+		openingSystem:    fixture.openingBalance,
+		correctionSystem: fixture.correction,
+		expenseCategory:  fixture.expense,
+		feeCategory:      fixture.feesCategory,
+		refundCategory:   fixture.groceries,
+		incomeCategory:   fixture.salary,
+	}
+}
+
+func record(accountID, categoryID int64, currency, amount string) httpclient.CreateJournalRecordRequest {
+	return semanticRecord(accountID, amount, currency, apptest.Int64Ptr(categoryID))
+}
+
+func balanceRecord(accountID int64, currency, amount string) httpclient.CreateJournalRecordRequest {
+	return semanticRecord(accountID, amount, currency, nil)
+}
+
+func classificationRequest(records ...httpclient.CreateJournalRecordRequest) httpclient.CreateTransactionRequest {
+	return httpclient.CreateTransactionRequest{
+		InitiatedDate: apptest.Date("2024-01-01"),
+		Records:       records,
+	}
+}
+
+func transferClassificationRequest(fixture classificationFixture) httpclient.CreateTransactionRequest {
+	return classificationRequest(
+		semanticRecord(fixture.checking.AccountId, "-50.00", "USD", nil),
+		semanticRecord(fixture.savings.AccountId, "50.00", "USD", nil),
+	)
+}
+
+func exchangeClassificationRequest(fixture classificationFixture) httpclient.CreateTransactionRequest {
+	return classificationRequest(
+		semanticRecord(fixture.checking.AccountId, "-110.00", "USD", nil),
+		semanticRecord(fixture.exchangeProvider.AccountId, "110.00", "USD", nil),
+		semanticRecord(fixture.exchangeProvider.AccountId, "-100.00", "EUR", nil),
+		semanticRecord(fixture.cashEUR.AccountId, "100.00", "EUR", nil),
+	)
+}
+
+func createDatedClassificationTransaction(
+	t *testing.T,
+	client *apptest.Client,
+	date string,
+	request httpclient.CreateTransactionRequest,
+) *httpclient.CreateTransactionResponse {
+	t.Helper()
+	request.InitiatedDate = apptest.Date(date)
+	response, err := client.REST().CreateTransactionWithResponse(context.Background(), request)
+	requireClientResponse(t, "create dated classification transaction", err, response.StatusCode(), http.StatusCreated, response.Body)
+	return response
 }

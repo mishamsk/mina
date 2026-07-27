@@ -213,7 +213,6 @@ func TestDictionaryDeleteAllowsTombstonedTransactionRecordsUnderActiveTransactio
 				AccountId:            replacementRefs.CheckingAccountID,
 				Amount:               "-20.00",
 				AmountUsd:            apptest.StringPtr("-20.00"),
-				CategoryId:           replacementRefs.CategoryID,
 				Currency:             "USD",
 				MemberId:             &replacementRefs.MemberID,
 				PostingStatus:        httpclient.PostingStatusPosted,
@@ -225,7 +224,7 @@ func TestDictionaryDeleteAllowsTombstonedTransactionRecordsUnderActiveTransactio
 				AccountId:            replacementRefs.MerchantAccountID,
 				Amount:               "20.00",
 				AmountUsd:            apptest.StringPtr("20.00"),
-				CategoryId:           replacementRefs.CategoryID,
+				CategoryId:           apptest.Int64Ptr(replacementRefs.CategoryID),
 				Currency:             "USD",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -276,12 +275,11 @@ func TestDictionaryDeleteAllowsTombstonedTransactionTemplateRecordsUnderActiveTe
 		Fqn: "Guarded:Dictionary:References",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
-				AccountId:  &replacementRefs.CheckingAccountID,
-				Amount:     &amount,
-				CategoryId: replacementRefs.CategoryID,
-				Currency:   &currency,
-				MemberId:   &replacementRefs.MemberID,
-				TagIds:     &tags,
+				AccountId: &replacementRefs.CheckingAccountID,
+				Amount:    &amount,
+				Currency:  &currency,
+				MemberId:  &replacementRefs.MemberID,
+				TagIds:    &tags,
 			},
 		},
 	})
@@ -377,12 +375,15 @@ func createGuardedTransactionTemplate(t *testing.T, client *apptest.Client) guar
 		Fqn: "Guarded:Dictionary:References",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
-				AccountId:  &refs.CheckingAccountID,
-				Amount:     &amount,
-				CategoryId: refs.CategoryID,
-				Currency:   &currency,
-				MemberId:   &refs.MemberID,
-				TagIds:     &tags,
+				AccountId: &refs.CheckingAccountID,
+				Amount:    &amount,
+				Currency:  &currency,
+				MemberId:  &refs.MemberID,
+				TagIds:    &tags,
+			},
+			{
+				AccountId:  &refs.MerchantAccountID,
+				CategoryId: &refs.CategoryID,
 			},
 		},
 	})

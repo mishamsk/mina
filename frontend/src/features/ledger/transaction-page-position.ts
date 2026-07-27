@@ -1,10 +1,17 @@
-import type { PostingStatus, TransactionClass } from "@/api";
+import type {
+  PostingStatus,
+  RecordRole,
+  TransactionClass,
+  TransactionShapeType,
+} from "@/api";
 import {
   normalizeTransactionFilters,
+  recordRoles,
   transactionClasses,
   transactionFilterDecimalPattern,
   type TransactionFilters,
   transactionPostingStatuses,
+  transactionShapes,
 } from "@/models/transaction-filters";
 
 export const defaultTransactionPage = 1;
@@ -29,6 +36,8 @@ const filterParamNames = [
   "postedFrom",
   "postedTo",
   "q",
+  "role",
+  "shape",
   "status",
   "tag",
 ] as const;
@@ -156,7 +165,17 @@ export const readTransactionFiltersFromSearchParams = (
     pendingTo: readPatternParam(searchParams, "pendingTo", isoDatePattern),
     postedFrom: readPatternParam(searchParams, "postedFrom", isoDatePattern),
     postedTo: readPatternParam(searchParams, "postedTo", isoDatePattern),
+    recordRoles: readAllowedParams<RecordRole>(
+      searchParams,
+      "role",
+      recordRoles,
+    ),
     search: readTextParam(searchParams, "q"),
+    shapes: readAllowedParams<TransactionShapeType>(
+      searchParams,
+      "shape",
+      transactionShapes,
+    ),
     statuses: readAllowedParams<PostingStatus>(
       searchParams,
       "status",
@@ -194,6 +213,12 @@ export const writeTransactionFiltersToSearchParams = (
   }
   for (const transactionClass of normalized.classes) {
     next.append("class", transactionClass);
+  }
+  for (const transactionShape of normalized.shapes) {
+    next.append("shape", transactionShape);
+  }
+  for (const recordRole of normalized.recordRoles) {
+    next.append("role", recordRole);
   }
   if (normalized.hideExpected) {
     next.set("hideExpected", "true");

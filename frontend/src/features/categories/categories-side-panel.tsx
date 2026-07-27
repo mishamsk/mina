@@ -52,28 +52,15 @@ interface CategoriesSidePanelProps {
 
 const economicIntents: readonly CategoryEconomicIntent[] = [
   "expense",
-  "fee",
   "income",
-  "refund",
-  "transfer",
-  "exchange",
-  "adjustment",
-  "fx_gain_loss",
 ];
 const emptyIntentValue = "mina-empty-intent";
 
 const intentEffects = {
-  adjustment: "Excluded from ordinary totals; used for adjustment views.",
-  exchange: "Excluded from spend and income totals; used for exchange views.",
   expense:
-    "Included in spending totals; standalone transactions classify as spend.",
-  fee: "Included in spending totals; attached fees annotate the primary class.",
-  fx_gain_loss:
-    "Included in gain/loss reporting outside ordinary spend and income totals.",
-  income: "Counts toward income totals.",
-  refund: "Counts toward refund totals and stays out of gross income.",
-  transfer:
-    "Excluded from spend and income totals; used for cashflow and balance movement.",
+    "Positive flow records are expense; negative flow records are refund.",
+  income:
+    "Negative flow records are income; positive flow records are clawback.",
 } satisfies Record<CategoryEconomicIntent, string>;
 
 const blankForm = (): CategoryFormState => ({

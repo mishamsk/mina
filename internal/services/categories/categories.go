@@ -13,27 +13,14 @@ import (
 type CategoryEconomicIntent string
 
 const (
-	CategoryEconomicIntentExpense    CategoryEconomicIntent = "expense"
-	CategoryEconomicIntentFee        CategoryEconomicIntent = "fee"
-	CategoryEconomicIntentIncome     CategoryEconomicIntent = "income"
-	CategoryEconomicIntentRefund     CategoryEconomicIntent = "refund"
-	CategoryEconomicIntentTransfer   CategoryEconomicIntent = "transfer"
-	CategoryEconomicIntentExchange   CategoryEconomicIntent = "exchange"
-	CategoryEconomicIntentAdjustment CategoryEconomicIntent = "adjustment"
-	CategoryEconomicIntentFXGainLoss CategoryEconomicIntent = "fx_gain_loss"
+	CategoryEconomicIntentExpense CategoryEconomicIntent = "expense"
+	CategoryEconomicIntentIncome  CategoryEconomicIntent = "income"
 )
 
 // ValidCategoryEconomicIntent reports whether value is a supported category economic intent.
 func ValidCategoryEconomicIntent(value CategoryEconomicIntent) bool {
 	switch value {
-	case CategoryEconomicIntentExpense,
-		CategoryEconomicIntentFee,
-		CategoryEconomicIntentIncome,
-		CategoryEconomicIntentRefund,
-		CategoryEconomicIntentTransfer,
-		CategoryEconomicIntentExchange,
-		CategoryEconomicIntentAdjustment,
-		CategoryEconomicIntentFXGainLoss:
+	case CategoryEconomicIntentExpense, CategoryEconomicIntentIncome:
 		return true
 	default:
 		return false
@@ -144,7 +131,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Category, erro
 		return Category{}, err
 	}
 	if !ValidCategoryEconomicIntent(input.EconomicIntent) {
-		return Category{}, services.InvalidRequest("economic_intent must be one of expense, fee, income, refund, transfer, exchange, adjustment, or fx_gain_loss")
+		return Category{}, services.InvalidRequest("economic_intent must be one of expense or income")
 	}
 
 	var category Category
@@ -237,7 +224,7 @@ func (s *Service) Get(ctx context.Context, id int64, includeTombstoned bool) (Ca
 func (s *Service) List(ctx context.Context, opts ListOptions) (services.PaginatedList[Category], error) {
 	for _, intent := range opts.EconomicIntents {
 		if !ValidCategoryEconomicIntent(intent) {
-			return services.PaginatedList[Category]{}, services.InvalidRequest("economic_intent must be one of expense, fee, income, refund, transfer, exchange, adjustment, or fx_gain_loss")
+			return services.PaginatedList[Category]{}, services.InvalidRequest("economic_intent must be one of expense or income")
 		}
 	}
 

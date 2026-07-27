@@ -23,20 +23,20 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 	replacementMerchant := client.Scenario().Account("merchant:BulkReplacement")
 
 	bulkCategory, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
-		RecordIds:  []int64{firstRecordID},
+		RecordIds:  []int64{secondRecordID},
 		CategoryId: refs.SecondCategoryId,
 	})
 	requireNoTransportError(t, "bulk categorize records", err)
 	if bulkCategory.StatusCode() != http.StatusOK {
 		t.Fatalf("bulk category status = %d, want %d; body %s", bulkCategory.StatusCode(), http.StatusOK, bulkCategory.Body)
 	}
-	assertBulkResponse(t, bulkCategory.JSON200, []int64{firstRecordID})
+	assertBulkResponse(t, bulkCategory.JSON200, []int64{secondRecordID})
 	categorized, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{CategoryId: &refs.SecondCategoryId})
 	requireNoTransportError(t, "search records", err)
 	if categorized.StatusCode() != http.StatusOK {
 		t.Fatalf("categorized search status = %d, want %d; body %s", categorized.StatusCode(), http.StatusOK, categorized.Body)
 	}
-	assertRecordIDs(t, categorized.JSON200.Records, []int64{firstRecordID})
+	assertRecordIDs(t, categorized.JSON200.Records, []int64{secondRecordID})
 
 	bulkTags, err := client.REST().BulkUpdateJournalRecordTagsWithResponse(context.Background(), httpclient.BulkTagRecordsRequest{
 		RecordIds:    []int64{firstRecordID, secondRecordID},
@@ -106,6 +106,49 @@ func TestRecordBulkOperationsBoundary(t *testing.T) {
 	assertRecordIDs(t, statusRecords.JSON200.Records, []int64{firstRecordID, secondRecordID})
 }
 
+func TestRecordBulkReassignToFixedSystemAccountBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	owned := client.Scenario().AccountWithCurrency("accounts:BulkSystemReassign", "USD")
+	systemAccounts := fixedSystemAccounts(t, client)
+	created := createTransaction(t, client, classificationRequest(
+		semanticRecord(owned.AccountId, "10.00", "USD", nil),
+		semanticRecord(systemAccounts["system:correction"].AccountId, "-10.00", "USD", nil),
+	))
+
+	reassigned, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
+		RecordIds: []int64{created.JSON201.Records[0].RecordId},
+		AccountId: systemAccounts["system:opening_balance"].AccountId,
+	})
+	requireNoTransportError(t, "bulk reassign to fixed system account", err)
+	if reassigned.StatusCode() != http.StatusOK {
+		t.Fatalf("bulk reassign status = %d, want %d; body %s", reassigned.StatusCode(), http.StatusOK, reassigned.Body)
+	}
+	selectedRecordID := created.JSON201.Records[0].RecordId
+	assertBulkResponse(t, reassigned.JSON200, []int64{selectedRecordID})
+
+	read, err := client.REST().GetTransactionWithResponse(context.Background(), created.JSON201.TransactionId)
+	requireNoTransportError(t, "read system-reassigned transaction", err)
+	if read.StatusCode() != http.StatusOK {
+		t.Fatalf("read reassigned transaction status = %d, want %d; body %s", read.StatusCode(), http.StatusOK, read.Body)
+	}
+	selectedFound := false
+	for _, record := range read.JSON200.Records {
+		if record.RecordId == selectedRecordID {
+			selectedFound = true
+			if record.AccountId != systemAccounts["system:opening_balance"].AccountId {
+				t.Fatalf("selected record account_id = %d, want %d", record.AccountId, systemAccounts["system:opening_balance"].AccountId)
+			}
+			continue
+		}
+		if record.AccountId != systemAccounts["system:correction"].AccountId {
+			t.Fatalf("unselected record account_id = %d, want %d", record.AccountId, systemAccounts["system:correction"].AccountId)
+		}
+	}
+	if !selectedFound {
+		t.Fatalf("selected record %d not found after reassignment", selectedRecordID)
+	}
+}
+
 func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
@@ -116,6 +159,7 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 		t.Fatalf("create status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
 	}
 	firstRecordID := created.JSON201.Records[0].RecordId
+	secondRecordID := created.JSON201.Records[1].RecordId
 
 	emptySelection, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
 		RecordIds:  []int64{},
@@ -133,6 +177,15 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	requireNoTransportError(t, "bulk categorize records", err)
 	if duplicateSelection.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("duplicate selection status = %d, want %d; body %s", duplicateSelection.StatusCode(), http.StatusBadRequest, duplicateSelection.Body)
+	}
+
+	ownedRecord, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
+		RecordIds:  []int64{firstRecordID},
+		CategoryId: refs.SecondCategoryId,
+	})
+	requireNoTransportError(t, "bulk categorize owned record", err)
+	if ownedRecord.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("owned record category status = %d, want %d; body %s", ownedRecord.StatusCode(), http.StatusBadRequest, ownedRecord.Body)
 	}
 
 	missingCategory, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
@@ -180,6 +233,21 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 		t.Fatalf("missing account status = %d, want %d; body %s", missingAccount.StatusCode(), http.StatusBadRequest, missingAccount.Body)
 	}
 
+	semanticReassignment, err := client.REST().BulkReassignJournalRecordAccountWithResponse(context.Background(), httpclient.BulkReassignRecordsAccountRequest{
+		RecordIds: []int64{secondRecordID},
+		AccountId: refs.SavingsAccountId,
+	})
+	requireNoTransportError(t, "bulk reassign categorized flow record to owned account", err)
+	if semanticReassignment.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("semantic reassignment status = %d, want %d; body %s", semanticReassignment.StatusCode(), http.StatusBadRequest, semanticReassignment.Body)
+	}
+	originalAccountRecords, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.MerchantAccountId, nil)
+	requireNoTransportError(t, "search original account after rejected reassignment", err)
+	if originalAccountRecords.StatusCode() != http.StatusOK {
+		t.Fatalf("original account records status = %d, want %d; body %s", originalAccountRecords.StatusCode(), http.StatusOK, originalAccountRecords.Body)
+	}
+	assertRecordIDs(t, originalAccountRecords.JSON200.Records, []int64{secondRecordID})
+
 	noOpStatus, err := client.REST().BulkUpdateJournalRecordStatusesWithResponse(context.Background(), httpclient.BulkUpdateRecordStatusRequest{
 		RecordIds: []int64{firstRecordID},
 	})
@@ -199,7 +267,7 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	}
 
 	allOrNothing, err := client.REST().BulkCategorizeJournalRecordsWithResponse(context.Background(), httpclient.BulkCategorizeRecordsRequest{
-		RecordIds:  []int64{firstRecordID, 999},
+		RecordIds:  []int64{secondRecordID, 999},
 		CategoryId: refs.SecondCategoryId,
 	})
 	requireNoTransportError(t, "bulk categorize records", err)
@@ -219,7 +287,7 @@ func TestRecordBulkOperationsRejectInvalidRequestsAndRollback(t *testing.T) {
 	if originalCategoryRecords.StatusCode() != http.StatusOK {
 		t.Fatalf("original category search status = %d, want %d; body %s", originalCategoryRecords.StatusCode(), http.StatusOK, originalCategoryRecords.Body)
 	}
-	assertRecordIDs(t, originalCategoryRecords.JSON200.Records, []int64{created.JSON201.Records[0].RecordId, created.JSON201.Records[1].RecordId})
+	assertRecordIDs(t, originalCategoryRecords.JSON200.Records, []int64{created.JSON201.Records[1].RecordId})
 }
 
 func TestRecordBulkStatusPostingStatusInvariantsBoundary(t *testing.T) {

@@ -8,7 +8,7 @@
 
 - The page lists active definitions in FQN order and refreshes its snapshot after every definition mutation.
 - Confirm-next additionally invalidates transaction, account, overview, and featured-balance snapshots because it posts a generated transaction.
-- The editor submits complete balanced record shapes only; it uses shared ledger lookups and intent-valid account choices but owns recurring schedule and pause-state controls.
+- The editor submits complete balanced record shapes only; category controls exist only after a `flow` account is selected, while recurring schedule and pause-state controls remain locally owned.
 
 ## Boundaries
 

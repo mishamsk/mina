@@ -39,7 +39,7 @@ type ActiveFQN struct {
 type TemplateRecord struct {
 	ID                   int64
 	TemplateID           int64
-	CategoryID           int64
+	CategoryID           *int64
 	AccountID            *int64
 	MemberID             *int64
 	Currency             *string
@@ -61,7 +61,7 @@ type WriteInput struct {
 
 // TemplateRecordInput is one record default inside a transaction template write request.
 type TemplateRecordInput struct {
-	CategoryID           int64
+	CategoryID           *int64
 	AccountID            *int64
 	MemberID             *int64
 	Currency             *string
@@ -369,7 +369,7 @@ func validateTemplateInputShape(fqn string, records []TemplateRecordInput) error
 }
 
 func validateTemplateRecordShape(index int, record TemplateRecordInput) error {
-	if record.CategoryID <= 0 {
+	if record.CategoryID != nil && *record.CategoryID <= 0 {
 		return services.InvalidRequest(indexedField(index, "category_id") + " must be positive")
 	}
 	if record.AccountID != nil && *record.AccountID <= 0 {
@@ -414,7 +414,9 @@ func (s *Service) validateTemplateReferences(ctx context.Context, records []Temp
 	memberIDs := []int64{}
 	tagIDs := []int64{}
 	for _, record := range records {
-		categoryIDs = append(categoryIDs, record.CategoryID)
+		if record.CategoryID != nil {
+			categoryIDs = append(categoryIDs, *record.CategoryID)
+		}
 		if record.AccountID != nil {
 			accountIDs = append(accountIDs, *record.AccountID)
 		}

@@ -42,3 +42,10 @@ COMMENT ON COLUMN account.level IS 'Zero-based account depth derived from fqn.';
 
 CREATE UNIQUE INDEX account_active_fqn_unique
 ON account ((CASE WHEN tombstoned_at IS NULL THEN fqn ELSE NULL END));
+
+INSERT INTO account (fqn, account_type)
+VALUES
+	('system:suspense', 'SYSTEM'),
+	('system:correction', 'SYSTEM'),
+	('system:opening_balance', 'SYSTEM'),
+	('system:exchange', 'SYSTEM');

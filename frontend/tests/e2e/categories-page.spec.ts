@@ -3,15 +3,7 @@ import { test } from "@tests/e2e/test";
 
 interface CategoryFixture {
   readonly category_id: number;
-  readonly economic_intent:
-    | "adjustment"
-    | "exchange"
-    | "expense"
-    | "fee"
-    | "fx_gain_loss"
-    | "income"
-    | "refund"
-    | "transfer";
+  readonly economic_intent: "expense" | "income";
   readonly fqn: string;
 }
 
@@ -241,7 +233,7 @@ test("categories page renders demo hierarchy, intent badges, URL search, and hid
     .filter({ hasText: "Principal" })
     .first();
   await expect(principalRow).toBeVisible();
-  await expect(principalRow).toContainText("Transfer");
+  await expect(principalRow).toContainText("Expense");
   const interestRow = page
     .getByTestId("categories-tree-row")
     .filter({ hasText: "Interest" })
@@ -599,7 +591,9 @@ test("categories side panel creates edits and deletes categories with conflict f
   await createPanel.getByLabel("FQN").fill(fqn);
   await createPanel.getByLabel("Intent").click();
   await page.getByRole("option", { exact: true, name: "Income" }).click();
-  await expect(createPanel).toContainText("Counts toward income totals.");
+  await expect(createPanel).toContainText(
+    "Negative flow records are income; positive flow records are clawback.",
+  );
   const createResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -627,7 +621,9 @@ test("categories side panel creates edits and deletes categories with conflict f
   await expect(editPanel).toBeVisible();
   await expect(editPanel.getByLabel("FQN")).toHaveAttribute("readonly", "");
   await expect(editPanel).toContainText("Income");
-  await expect(editPanel).toContainText("Counts toward income totals.");
+  await expect(editPanel).toContainText(
+    "Negative flow records are income; positive flow records are clawback.",
+  );
   await editPanel.getByLabel("Hidden").click();
   const updateResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());

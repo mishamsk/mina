@@ -7,8 +7,11 @@ interface AccountTypeBadgeProps {
 }
 
 const accountTypeLabel = (accountType: AccountType): string => {
-  if (accountType === "balance") {
-    return "Balance";
+  if (accountType === "owned") {
+    return "Owned";
+  }
+  if (accountType === "party") {
+    return "Party";
   }
   if (accountType === "flow") {
     return "Flow";
@@ -20,7 +23,9 @@ export const AccountTypeBadge = ({ accountType }: AccountTypeBadgeProps) => (
   <Badge
     variant="outline"
     className={cn(
-      accountType === "balance" && "bg-card text-foreground",
+      accountType === "owned" && "bg-card text-foreground",
+      accountType === "party" &&
+        "text-foreground bg-[var(--color-class-transfer-bright)]",
       accountType === "flow" && "text-foreground bg-[var(--band)]",
       accountType === "system" && "bg-muted text-muted-foreground",
     )}

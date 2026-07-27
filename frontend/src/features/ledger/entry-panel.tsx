@@ -15,6 +15,9 @@ import {
   apiErrorMessage,
   type Category,
   type CategoryEconomicIntent,
+  classifyJournalTransaction,
+  createExchange,
+  type CreateExchangeTransactionRequest,
   createIncome,
   type CreateIncomeTransactionRequest,
   createJournalTransaction,
@@ -34,6 +37,7 @@ import {
   replaceLedgerTransaction,
   type Tag,
   type Transaction,
+  type TransactionClassification,
   type TransactionTemplate,
   type UpdateTransactionRequest,
 } from "@/api";
@@ -50,6 +54,7 @@ import {
 import type {
   AdvancedTransactionEntryDraft,
   JournalRecordRowDraft,
+  SpendMerchantDraft,
   TransactionEntryDraft,
   TransactionEntryTabDraft,
   TransactionEntryType,
@@ -70,6 +75,7 @@ import {
 import { localTodayISODate } from "@/utils/date";
 
 import { AmountText, MixedAmounts } from "./amount-text";
+import { ClassBadge } from "./class-badge";
 import {
   EntityMultiPicker,
   type EntityOption,
@@ -112,7 +118,12 @@ export interface EntryPanelSaveContext {
 
 type FieldName =
   | "amount"
+  | "boughtAccountId"
+  | "boughtAmount"
   | "categoryId"
+  | "chargeAccountId"
+  | "chargeAmount"
+  | "chargeCategoryId"
   | "currency"
   | "date"
   | "destinationAccountId"
@@ -121,9 +132,14 @@ type FieldName =
   | "merchantAccountId"
   | "memo"
   | "sourceAccountId"
+  | "soldAccountId"
   | "tagIds";
 
 type FieldErrors = Partial<Record<FieldName, string>>;
+type SpendMerchantFieldName = "accountId" | "amount" | "categoryId";
+type SpendMerchantFieldErrors = Readonly<
+  Record<string, Partial<Record<SpendMerchantFieldName, string>>>
+>;
 type ShorthandTransactionEntryType = Exclude<TransactionEntryType, "advanced">;
 type AdvancedRecordFieldName =
   | "accountId"
@@ -144,10 +160,16 @@ interface AdvancedValidationOptions {
   readonly allowExpectedPostingStatus: boolean;
 }
 
+const advancedValidationOptions: AdvancedValidationOptions = {
+  allowExpectedPostingStatus: false,
+};
+
 interface ShorthandFit {
+  readonly additionalRecords: readonly JournalRecord[];
   readonly entryType: ShorthandTransactionEntryType;
   readonly negativeRecord: JournalRecord;
   readonly positiveRecord: JournalRecord;
+  readonly systemExchangeRecords?: readonly [JournalRecord, JournalRecord];
 }
 
 interface ReplacementContext {
@@ -164,17 +186,14 @@ interface LaunchDraft {
 type DraftPersistenceMode = "launch" | "ordinary";
 
 interface TabConfig {
-  readonly categoryIntents: readonly [
-    Category["economic_intent"],
-    ...Category["economic_intent"][],
-  ];
+  readonly categoryIntents: readonly Category["economic_intent"][];
   readonly counterpartyLabel: string;
   readonly primaryAccountField: FieldName;
   readonly primaryAccountLabel: string;
-  readonly primaryAccountOptionSet: "balanceAccounts";
+  readonly primaryAccountOptionSet: "movementAccounts";
   readonly secondaryAccountField: FieldName;
   readonly secondaryAccountLabel: string;
-  readonly secondaryAccountOptionSet: "balanceAccounts" | "flowAccounts";
+  readonly secondaryAccountOptionSet: "flowAccounts" | "movementAccounts";
   readonly title: string;
 }
 
@@ -183,11 +202,13 @@ const entryTypes: readonly TransactionEntryType[] = [
   "income",
   "refund",
   "transfer",
+  "exchange",
   "advanced",
 ];
 
 const tabLabels: Record<TransactionEntryType, string> = {
   advanced: "Advanced",
+  exchange: "Exchange",
   income: "Income",
   refund: "Refund",
   spend: "Spend",
@@ -200,44 +221,55 @@ const tabConfigs: Record<ShorthandTransactionEntryType, TabConfig> = {
     counterpartyLabel: "source",
     primaryAccountField: "destinationAccountId",
     primaryAccountLabel: "Destination account",
-    primaryAccountOptionSet: "balanceAccounts",
+    primaryAccountOptionSet: "movementAccounts",
     secondaryAccountField: "sourceAccountId",
     secondaryAccountLabel: "Source",
     secondaryAccountOptionSet: "flowAccounts",
     title: "New income",
   },
   refund: {
-    categoryIntents: ["refund"],
+    categoryIntents: ["expense"],
     counterpartyLabel: "merchant",
     primaryAccountField: "destinationAccountId",
     primaryAccountLabel: "Destination account",
-    primaryAccountOptionSet: "balanceAccounts",
+    primaryAccountOptionSet: "movementAccounts",
     secondaryAccountField: "merchantAccountId",
     secondaryAccountLabel: "Merchant",
     secondaryAccountOptionSet: "flowAccounts",
     title: "New refund",
   },
   spend: {
-    categoryIntents: ["expense", "fee"],
+    categoryIntents: ["expense"],
     counterpartyLabel: "merchant",
     primaryAccountField: "fundingAccountId",
     primaryAccountLabel: "Funding account",
-    primaryAccountOptionSet: "balanceAccounts",
+    primaryAccountOptionSet: "movementAccounts",
     secondaryAccountField: "merchantAccountId",
     secondaryAccountLabel: "Merchant",
     secondaryAccountOptionSet: "flowAccounts",
     title: "New spend",
   },
   transfer: {
-    categoryIntents: ["transfer"],
+    categoryIntents: ["expense"],
     counterpartyLabel: "destination",
     primaryAccountField: "sourceAccountId",
     primaryAccountLabel: "From account",
-    primaryAccountOptionSet: "balanceAccounts",
+    primaryAccountOptionSet: "movementAccounts",
     secondaryAccountField: "destinationAccountId",
     secondaryAccountLabel: "To account",
-    secondaryAccountOptionSet: "balanceAccounts",
+    secondaryAccountOptionSet: "movementAccounts",
     title: "New transfer",
+  },
+  exchange: {
+    categoryIntents: [],
+    counterpartyLabel: "destination",
+    primaryAccountField: "soldAccountId",
+    primaryAccountLabel: "From account",
+    primaryAccountOptionSet: "movementAccounts",
+    secondaryAccountField: "boughtAccountId",
+    secondaryAccountLabel: "To account",
+    secondaryAccountOptionSet: "movementAccounts",
+    title: "New exchange",
   },
 };
 
@@ -247,9 +279,22 @@ const newJournalRecordDraftId = (): string =>
   globalThis.crypto?.randomUUID?.() ??
   `journal-record-${Date.now()}-${nextJournalRecordDraftId++}`;
 
-const blankTabDraft = (): TransactionEntryTabDraft => ({
+const blankSpendMerchantDraft = (): SpendMerchantDraft => ({
+  accountId: undefined,
   amount: "",
   categoryId: undefined,
+  draftId: newJournalRecordDraftId(),
+});
+
+const blankTabDraft = (): TransactionEntryTabDraft => ({
+  amount: "",
+  boughtAccountId: undefined,
+  boughtAmount: "",
+  categoryId: undefined,
+  chargeAccountId: undefined,
+  chargeAmount: "",
+  chargeCategoryId: undefined,
+  chargeEnabled: false,
   currency: "USD",
   date: localTodayISODate(),
   destinationAccountId: undefined,
@@ -258,7 +303,14 @@ const blankTabDraft = (): TransactionEntryTabDraft => ({
   merchantAccountId: undefined,
   memo: "",
   sourceAccountId: undefined,
+  soldAccountId: undefined,
+  spendMerchants: [],
   tagIds: [],
+});
+
+const blankSpendTabDraft = (): TransactionEntryTabDraft => ({
+  ...blankTabDraft(),
+  spendMerchants: [blankSpendMerchantDraft()],
 });
 
 const blankRecordRowDraft = (): JournalRecordRowDraft => ({
@@ -303,12 +355,15 @@ const shorthandRecordDraft = (
   draft: TransactionEntryTabDraft,
   accountId: number | undefined,
   amountSign: "negative" | "positive",
+  categoryId: number | undefined,
+  amount = draft.amount,
+  currency = draft.currency,
 ): JournalRecordRowDraft => ({
   ...blankRecordRowDraft(),
   accountId,
-  amount: amountWithSign(draft.amount, amountSign),
-  categoryId: draft.categoryId,
-  currency: normalizeCurrency(draft.currency) || "USD",
+  amount: amountWithSign(amount, amountSign),
+  categoryId,
+  currency: normalizeCurrency(currency) || "USD",
   memberId: draft.memberId,
   memo: draft.memo,
   postingStatus: "posted",
@@ -319,17 +374,62 @@ const shorthandRecordDraft = (
 const shorthandDraftToAdvanced = (
   entryType: ShorthandTransactionEntryType,
   draft: TransactionEntryTabDraft,
+  lookups: LedgerLookupsSnapshot | undefined,
 ): AdvancedTransactionEntryDraft => {
+  const primaryAmount = normalizeAmount(draft.amount);
+  const spendTotal = draft.spendMerchants.reduce(
+    (total, merchant) =>
+      total +
+      (signedAmountMantissa(normalizeAmount(merchant.amount) ?? "") ?? 0n),
+    0n,
+  );
+  const chargeAmount = normalizeAmount(draft.chargeAmount);
+  const transferSourceAmount =
+    primaryAmount && chargeAmount
+      ? formatMantissa(
+          (signedAmountMantissa(primaryAmount) ?? 0n) +
+            (signedAmountMantissa(chargeAmount) ?? 0n),
+        )
+      : draft.amount;
+  const systemExchangeAccountId = lookups?.accounts.find(
+    (account) => account.fqn === "system:exchange",
+  )?.account_id;
+  const boughtCurrency =
+    accountCurrency(lookups, draft.boughtAccountId) ?? draft.currency;
   const records =
     entryType === "spend"
       ? [
-          shorthandRecordDraft(draft, draft.fundingAccountId, "negative"),
-          shorthandRecordDraft(draft, draft.merchantAccountId, "positive"),
+          shorthandRecordDraft(
+            draft,
+            draft.fundingAccountId,
+            "negative",
+            undefined,
+            formatMantissa(spendTotal),
+          ),
+          ...draft.spendMerchants.map((merchant) =>
+            shorthandRecordDraft(
+              draft,
+              merchant.accountId,
+              "positive",
+              merchant.categoryId,
+              merchant.amount,
+            ),
+          ),
         ]
       : entryType === "income"
         ? [
-            shorthandRecordDraft(draft, draft.destinationAccountId, "positive"),
-            shorthandRecordDraft(draft, draft.sourceAccountId, "negative"),
+            shorthandRecordDraft(
+              draft,
+              draft.destinationAccountId,
+              "positive",
+              undefined,
+            ),
+            shorthandRecordDraft(
+              draft,
+              draft.sourceAccountId,
+              "negative",
+              draft.categoryId,
+            ),
           ]
         : entryType === "refund"
           ? [
@@ -337,22 +437,96 @@ const shorthandDraftToAdvanced = (
                 draft,
                 draft.destinationAccountId,
                 "positive",
+                undefined,
               ),
-              shorthandRecordDraft(draft, draft.merchantAccountId, "negative"),
-            ]
-          : [
-              shorthandRecordDraft(draft, draft.sourceAccountId, "negative"),
               shorthandRecordDraft(
                 draft,
-                draft.destinationAccountId,
-                "positive",
+                draft.merchantAccountId,
+                "negative",
+                draft.categoryId,
               ),
-            ];
+            ]
+          : entryType === "transfer"
+            ? [
+                shorthandRecordDraft(
+                  draft,
+                  draft.sourceAccountId,
+                  "negative",
+                  undefined,
+                  transferSourceAmount,
+                ),
+                shorthandRecordDraft(
+                  draft,
+                  draft.destinationAccountId,
+                  "positive",
+                  undefined,
+                ),
+                ...(draft.chargeEnabled ||
+                draft.chargeAccountId ||
+                draft.chargeAmount.trim() ||
+                draft.chargeCategoryId
+                  ? [
+                      shorthandRecordDraft(
+                        draft,
+                        draft.chargeAccountId,
+                        "positive",
+                        draft.chargeCategoryId,
+                        draft.chargeAmount,
+                      ),
+                    ]
+                  : []),
+              ]
+            : [
+                shorthandRecordDraft(
+                  draft,
+                  draft.soldAccountId,
+                  "negative",
+                  undefined,
+                ),
+                shorthandRecordDraft(
+                  draft,
+                  systemExchangeAccountId,
+                  "positive",
+                  undefined,
+                ),
+                shorthandRecordDraft(
+                  draft,
+                  systemExchangeAccountId,
+                  "negative",
+                  undefined,
+                  draft.boughtAmount,
+                  boughtCurrency,
+                ),
+                shorthandRecordDraft(
+                  draft,
+                  draft.boughtAccountId,
+                  "positive",
+                  undefined,
+                  draft.boughtAmount,
+                  boughtCurrency,
+                ),
+              ];
 
   return {
     date: draft.date || localTodayISODate(),
     records,
   };
+};
+
+const shorthandFitRecordsInAdvancedOrder = (
+  fit: ShorthandFit,
+): readonly JournalRecord[] => {
+  if (fit.entryType === "income" || fit.entryType === "refund") {
+    return [fit.positiveRecord, fit.negativeRecord];
+  }
+  if (fit.entryType === "exchange" && fit.systemExchangeRecords) {
+    return [
+      fit.negativeRecord,
+      ...fit.systemExchangeRecords,
+      fit.positiveRecord,
+    ];
+  }
+  return [fit.negativeRecord, fit.positiveRecord, ...fit.additionalRecords];
 };
 
 const defaultDraft = (): TransactionEntryDraft => ({
@@ -361,8 +535,9 @@ const defaultDraft = (): TransactionEntryDraft => ({
   tabs: {
     income: blankTabDraft(),
     refund: blankTabDraft(),
-    spend: blankTabDraft(),
+    spend: blankSpendTabDraft(),
     transfer: blankTabDraft(),
+    exchange: blankTabDraft(),
   },
 });
 
@@ -404,6 +579,59 @@ const migrateStoredAdvancedDraft = (
   };
 };
 
+type StoredTabDraft = Partial<TransactionEntryTabDraft> & {
+  readonly additionalMerchants?: readonly Partial<SpendMerchantDraft>[];
+};
+
+const migrateStoredSpendMerchant = (
+  merchant: Partial<SpendMerchantDraft> | undefined,
+): SpendMerchantDraft => ({
+  ...blankSpendMerchantDraft(),
+  ...merchant,
+  draftId:
+    typeof merchant?.draftId === "string" && merchant.draftId
+      ? merchant.draftId
+      : newJournalRecordDraftId(),
+});
+
+const migrateStoredTabDraft = (
+  storedTab: StoredTabDraft | undefined,
+  entryType: ShorthandTransactionEntryType,
+): TransactionEntryTabDraft => {
+  const base = entryType === "spend" ? blankSpendTabDraft() : blankTabDraft();
+  if (!storedTab) {
+    return base;
+  }
+  if (entryType !== "spend") {
+    return { ...base, ...storedTab, spendMerchants: [] };
+  }
+
+  const storedSpendMerchants = Array.isArray(storedTab.spendMerchants)
+    ? storedTab.spendMerchants.map(migrateStoredSpendMerchant)
+    : [
+        migrateStoredSpendMerchant({
+          accountId: storedTab.merchantAccountId,
+          amount: storedTab.amount,
+          categoryId: storedTab.categoryId,
+          draftId: "primary",
+        }),
+        ...(storedTab.additionalMerchants ?? []).map(
+          migrateStoredSpendMerchant,
+        ),
+      ];
+  return {
+    ...base,
+    ...storedTab,
+    amount: "",
+    categoryId: undefined,
+    merchantAccountId: undefined,
+    spendMerchants:
+      storedSpendMerchants.length > 0
+        ? storedSpendMerchants
+        : [blankSpendMerchantDraft()],
+  };
+};
+
 const migrateStoredDraft = (
   storedDraft: TransactionEntryDraft | TransactionEntryTabDraft | undefined,
 ): TransactionEntryDraft => {
@@ -421,10 +649,18 @@ const migrateStoredDraft = (
         "advanced" in storedDraft ? storedDraft.advanced : undefined,
       ),
       tabs: {
-        income: { ...blankTabDraft(), ...storedDraft.tabs.income },
-        refund: { ...blankTabDraft(), ...storedDraft.tabs.refund },
-        spend: { ...blankTabDraft(), ...storedDraft.tabs.spend },
-        transfer: { ...blankTabDraft(), ...storedDraft.tabs.transfer },
+        income: migrateStoredTabDraft(storedDraft.tabs.income, "income"),
+        refund: migrateStoredTabDraft(storedDraft.tabs.refund, "refund"),
+        spend: migrateStoredTabDraft(storedDraft.tabs.spend, "spend"),
+        transfer: {
+          ...migrateStoredTabDraft(storedDraft.tabs.transfer, "transfer"),
+          chargeEnabled:
+            storedDraft.tabs.transfer.chargeEnabled ||
+            storedDraft.tabs.transfer.chargeAccountId !== undefined ||
+            Boolean(storedDraft.tabs.transfer.chargeAmount?.trim()) ||
+            storedDraft.tabs.transfer.chargeCategoryId !== undefined,
+        },
+        exchange: migrateStoredTabDraft(storedDraft.tabs.exchange, "exchange"),
       },
     };
   }
@@ -433,7 +669,7 @@ const migrateStoredDraft = (
     ...nextDraft,
     tabs: {
       ...nextDraft.tabs,
-      spend: { ...blankTabDraft(), ...storedDraft },
+      spend: migrateStoredTabDraft(storedDraft, "spend"),
     },
   };
 };
@@ -510,6 +746,9 @@ const formatMantissa = (mantissa: bigint): string => {
 const normalizeCurrency = (currency: string): string =>
   currency.trim().toUpperCase();
 
+const accountingWordLabel = (value: string): string =>
+  `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+
 const normalizeMemberId = (memberId: number | null | undefined) =>
   memberId ?? undefined;
 
@@ -583,7 +822,7 @@ const recordRowDraftFromJournalRecord = (
 ): JournalRecordRowDraft => ({
   accountId: record.account_id,
   amount: formatMantissa(signedAmountMantissa(record.amount) ?? 0n),
-  categoryId: record.category_id,
+  categoryId: record.category_id ?? undefined,
   currency: record.currency,
   draftId: newJournalRecordDraftId(),
   memberId: normalizeMemberId(record.member_id),
@@ -610,9 +849,18 @@ const advancedDraftFromTransaction = (
   ),
 });
 
+const spendMerchantDraftIsEmpty = (merchant: SpendMerchantDraft): boolean =>
+  !merchant.accountId && !merchant.amount.trim() && !merchant.categoryId;
+
 const blankTabDraftIsEmpty = (draft: TransactionEntryTabDraft): boolean =>
   !draft.amount.trim() &&
+  !draft.boughtAccountId &&
+  !draft.boughtAmount.trim() &&
   !draft.categoryId &&
+  !draft.chargeAccountId &&
+  !draft.chargeAmount.trim() &&
+  !draft.chargeCategoryId &&
+  !draft.chargeEnabled &&
   normalizeCurrency(draft.currency) === "USD" &&
   draft.date === localTodayISODate() &&
   !draft.destinationAccountId &&
@@ -621,6 +869,8 @@ const blankTabDraftIsEmpty = (draft: TransactionEntryTabDraft): boolean =>
   !draft.merchantAccountId &&
   !draft.memo.trim() &&
   !draft.sourceAccountId &&
+  !draft.soldAccountId &&
+  draft.spendMerchants.every(spendMerchantDraftIsEmpty) &&
   draft.tagIds.length === 0;
 
 const blankRecordRowDraftIsEmpty = (row: JournalRecordRowDraft): boolean =>
@@ -644,95 +894,250 @@ const draftHasUserInput = (draft: TransactionEntryDraft): boolean =>
   draft.advanced.records.length !== 2 ||
   draft.advanced.records.some((row) => !blankRecordRowDraftIsEmpty(row));
 
-const recordPairHasUniformShorthandFields = (
-  left: JournalRecord,
-  right: JournalRecord,
-): boolean =>
-  left.category_id === right.category_id &&
-  normalizeMemberId(left.member_id) === normalizeMemberId(right.member_id) &&
-  normalizeMemo(left.memo) === normalizeMemo(right.memo) &&
-  left.currency === right.currency &&
-  sameIds(left.tag_ids, right.tag_ids);
+const shorthandMemberId = (
+  records: readonly JournalRecord[],
+): number | undefined => {
+  const memberIds = records
+    .map((record) => normalizeMemberId(record.member_id))
+    .filter((memberId): memberId is number => memberId !== undefined);
+  return [...new Set(memberIds)][0];
+};
 
-const accountHasType = (
-  lookups: LedgerLookupsSnapshot,
-  accountId: number,
-  accountType: Account["account_type"],
-): boolean =>
-  lookups.accounts.some(
-    (account) =>
-      account.account_id === accountId && account.account_type === accountType,
+const shorthandMemo = (records: readonly JournalRecord[]): string => {
+  const memos = records
+    .map((record) => normalizeMemo(record.memo))
+    .filter(Boolean);
+  return [...new Set(memos)][0] ?? "";
+};
+
+const recordsHaveUniformShorthandFields = (
+  records: readonly JournalRecord[],
+): boolean => {
+  const [first, ...rest] = records;
+  return Boolean(
+    first &&
+    new Set(
+      records
+        .map((record) => normalizeMemberId(record.member_id))
+        .filter((memberId) => memberId !== undefined),
+    ).size <= 1 &&
+    new Set(records.map((record) => normalizeMemo(record.memo)).filter(Boolean))
+      .size <= 1 &&
+    rest.every((record) => sameIds(first.tag_ids, record.tag_ids)),
   );
+};
+
+const recordsHaveExactlyUniformShorthandFields = (
+  records: readonly JournalRecord[],
+): boolean => {
+  const [first, ...rest] = records;
+  return Boolean(
+    first &&
+    rest.every(
+      (record) =>
+        normalizeMemberId(record.member_id) ===
+          normalizeMemberId(first.member_id) &&
+        normalizeMemo(record.memo) === normalizeMemo(first.memo) &&
+        sameIds(first.tag_ids, record.tag_ids),
+    ),
+  );
+};
+
+const accountTypeForId = (
+  lookups: LedgerLookupsSnapshot | undefined,
+  accountId: number | undefined,
+): Account["account_type"] | undefined =>
+  lookups?.accounts.find((account) => account.account_id === accountId)
+    ?.account_type;
+
+const isMovementAccountType = (
+  accountType: Account["account_type"] | undefined,
+): boolean => accountType === "owned" || accountType === "party";
 
 const shorthandFitFromTransaction = (
   transaction: Transaction,
   lookups: LedgerLookupsSnapshot,
 ): ShorthandFit | undefined => {
   const records = activeTransactionRecords(transaction);
-  if (records.length !== 2) {
+  if (!recordsHaveUniformShorthandFields(records)) {
     return undefined;
   }
 
-  const negativeRecord = records.find(
+  const negativeRecords = records.filter(
     (record) => (signedAmountMantissa(record.amount) ?? 0n) < 0n,
   );
-  const positiveRecord = records.find(
+  const positiveRecords = records.filter(
     (record) => (signedAmountMantissa(record.amount) ?? 0n) > 0n,
   );
-  if (
-    !negativeRecord ||
-    !positiveRecord ||
-    !recordPairHasUniformShorthandFields(negativeRecord, positiveRecord) ||
-    absoluteMantissa(negativeRecord.amount) !==
-      absoluteMantissa(positiveRecord.amount)
-  ) {
+  if (negativeRecords.length === 0 || positiveRecords.length === 0) {
     return undefined;
   }
 
-  const entryType =
-    transaction.transaction_class === "spend" ||
-    transaction.transaction_class === "income" ||
-    transaction.transaction_class === "refund" ||
-    transaction.transaction_class === "transfer"
-      ? transaction.transaction_class
+  if (transaction.transaction_class === "currency_exchange") {
+    const balanceRecords = records.filter((record) =>
+      isMovementAccountType(accountTypeForId(lookups, record.account_id)),
+    );
+    const systemExchangeRecords = records.filter(
+      (record) =>
+        lookups.accounts.find(
+          (account) => account.account_id === record.account_id,
+        )?.fqn === "system:exchange",
+    );
+    const negativeRecord = balanceRecords.find(
+      (record) => (signedAmountMantissa(record.amount) ?? 0n) < 0n,
+    );
+    const positiveRecord = balanceRecords.find(
+      (record) => (signedAmountMantissa(record.amount) ?? 0n) > 0n,
+    );
+    const soldSystemRecord = systemExchangeRecords.find(
+      (record) => record.currency === negativeRecord?.currency,
+    );
+    const boughtSystemRecord = systemExchangeRecords.find(
+      (record) => record.currency === positiveRecord?.currency,
+    );
+    if (
+      records.length !== 4 ||
+      balanceRecords.length !== 2 ||
+      systemExchangeRecords.length !== 2 ||
+      !negativeRecord ||
+      !positiveRecord ||
+      !soldSystemRecord ||
+      !boughtSystemRecord ||
+      negativeRecord.currency === positiveRecord.currency ||
+      (signedAmountMantissa(soldSystemRecord.amount) ?? 0n) <= 0n ||
+      (signedAmountMantissa(boughtSystemRecord.amount) ?? 0n) >= 0n ||
+      absoluteMantissa(negativeRecord.amount) !==
+        absoluteMantissa(soldSystemRecord.amount) ||
+      absoluteMantissa(positiveRecord.amount) !==
+        absoluteMantissa(boughtSystemRecord.amount)
+    ) {
+      return undefined;
+    }
+    return {
+      additionalRecords: [],
+      entryType: "exchange",
+      negativeRecord,
+      positiveRecord,
+      systemExchangeRecords: [soldSystemRecord, boughtSystemRecord],
+    };
+  }
+
+  if (new Set(records.map((record) => record.currency)).size !== 1) {
+    return undefined;
+  }
+
+  const flowRecords = records.filter(
+    (record) => accountTypeForId(lookups, record.account_id) === "flow",
+  );
+  const balanceRecords = records.filter((record) =>
+    isMovementAccountType(accountTypeForId(lookups, record.account_id)),
+  );
+  const negativeBalanceRecords = balanceRecords.filter(
+    (record) => (signedAmountMantissa(record.amount) ?? 0n) < 0n,
+  );
+  const positiveBalanceRecords = balanceRecords.filter(
+    (record) => (signedAmountMantissa(record.amount) ?? 0n) > 0n,
+  );
+
+  if (
+    transaction.transaction_class === "spend" &&
+    records.length === balanceRecords.length + flowRecords.length &&
+    balanceRecords.length === 2 &&
+    negativeBalanceRecords.length === 1 &&
+    positiveBalanceRecords.length === 1 &&
+    flowRecords.length === 1 &&
+    (signedAmountMantissa(flowRecords[0]?.amount ?? "") ?? 0n) > 0n
+  ) {
+    return {
+      additionalRecords: flowRecords,
+      entryType: "transfer",
+      negativeRecord: negativeBalanceRecords[0]!,
+      positiveRecord: positiveBalanceRecords[0]!,
+    };
+  }
+
+  if (
+    transaction.transaction_class === "spend" &&
+    records.length === balanceRecords.length + flowRecords.length &&
+    balanceRecords.length === 1 &&
+    negativeBalanceRecords.length === 1 &&
+    isMovementAccountType(
+      accountTypeForId(lookups, negativeBalanceRecords[0]!.account_id),
+    ) &&
+    flowRecords.length >= 1 &&
+    flowRecords.every(
+      (record) => (signedAmountMantissa(record.amount) ?? 0n) > 0n,
+    )
+  ) {
+    const [positiveRecord, ...additionalRecords] = flowRecords;
+    return positiveRecord
+      ? {
+          additionalRecords,
+          entryType: "spend",
+          negativeRecord: negativeBalanceRecords[0]!,
+          positiveRecord,
+        }
       : undefined;
-  if (!entryType) {
-    return undefined;
   }
 
-  const expectedAccountTypes: Record<
-    ShorthandTransactionEntryType,
-    readonly [Account["account_type"], Account["account_type"]]
-  > = {
-    income: ["flow", "balance"],
-    refund: ["flow", "balance"],
-    spend: ["balance", "flow"],
-    transfer: ["balance", "balance"],
-  };
-  const [negativeAccountType, positiveAccountType] =
-    expectedAccountTypes[entryType];
   if (
-    !accountHasType(lookups, negativeRecord.account_id, negativeAccountType) ||
-    !accountHasType(lookups, positiveRecord.account_id, positiveAccountType)
+    records.length === 2 &&
+    negativeRecords.length === 1 &&
+    positiveRecords.length === 1 &&
+    absoluteMantissa(negativeRecords[0]!.amount) ===
+      absoluteMantissa(positiveRecords[0]!.amount)
   ) {
-    return undefined;
+    const negativeRecord = negativeRecords[0]!;
+    const positiveRecord = positiveRecords[0]!;
+    const negativeType = accountTypeForId(lookups, negativeRecord.account_id);
+    const positiveType = accountTypeForId(lookups, positiveRecord.account_id);
+    const entryType =
+      transaction.transaction_class === "income" &&
+      negativeType === "flow" &&
+      isMovementAccountType(positiveType)
+        ? "income"
+        : transaction.transaction_class === "refund" &&
+            negativeType === "flow" &&
+            isMovementAccountType(positiveType)
+          ? "refund"
+          : transaction.transaction_class === "transfer" &&
+              isMovementAccountType(negativeType) &&
+              isMovementAccountType(positiveType)
+            ? "transfer"
+            : undefined;
+    if (entryType) {
+      return {
+        additionalRecords: [],
+        entryType,
+        negativeRecord,
+        positiveRecord,
+      };
+    }
   }
 
-  return { entryType, negativeRecord, positiveRecord };
+  return undefined;
 };
 
 const tabDraftFromShorthandFit = (
   transaction: Transaction,
   fit: ShorthandFit,
 ): TransactionEntryTabDraft => {
+  const categorizedRecord =
+    fit.entryType === "spend" ? fit.positiveRecord : fit.negativeRecord;
   const common = {
     ...blankTabDraft(),
-    amount: inputAmountFromRecord(fit.positiveRecord),
-    categoryId: fit.positiveRecord.category_id,
-    currency: fit.positiveRecord.currency,
+    amount:
+      fit.entryType === "exchange"
+        ? inputAmountFromRecord(fit.negativeRecord)
+        : inputAmountFromRecord(fit.positiveRecord),
+    categoryId: categorizedRecord.category_id ?? undefined,
+    currency:
+      fit.entryType === "exchange"
+        ? fit.negativeRecord.currency
+        : fit.positiveRecord.currency,
     date: transaction.initiated_date,
-    memberId: normalizeMemberId(fit.positiveRecord.member_id),
-    memo: fit.positiveRecord.memo ?? "",
+    memberId: shorthandMemberId(activeTransactionRecords(transaction)),
+    memo: shorthandMemo(activeTransactionRecords(transaction)),
     tagIds: [...fit.positiveRecord.tag_ids],
   };
 
@@ -752,14 +1157,38 @@ const tabDraftFromShorthandFit = (
     case "spend":
       return {
         ...common,
+        amount: "",
+        categoryId: undefined,
         fundingAccountId: fit.negativeRecord.account_id,
-        merchantAccountId: fit.positiveRecord.account_id,
+        merchantAccountId: undefined,
+        spendMerchants: [fit.positiveRecord, ...fit.additionalRecords].map(
+          (record) => ({
+            accountId: record.account_id,
+            amount: inputAmountFromRecord(record),
+            categoryId: record.category_id ?? undefined,
+            draftId: newJournalRecordDraftId(),
+            sourceRecordId: record.record_id,
+          }),
+        ),
       };
-    case "transfer":
+    case "transfer": {
+      const chargeRecord = fit.additionalRecords[0];
       return {
         ...common,
+        chargeAccountId: chargeRecord?.account_id,
+        chargeAmount: chargeRecord ? inputAmountFromRecord(chargeRecord) : "",
+        chargeCategoryId: chargeRecord?.category_id ?? undefined,
+        chargeEnabled: Boolean(chargeRecord),
         destinationAccountId: fit.positiveRecord.account_id,
         sourceAccountId: fit.negativeRecord.account_id,
+      };
+    }
+    case "exchange":
+      return {
+        ...common,
+        boughtAccountId: fit.positiveRecord.account_id,
+        boughtAmount: inputAmountFromRecord(fit.positiveRecord),
+        soldAccountId: fit.negativeRecord.account_id,
       };
   }
 };
@@ -783,7 +1212,13 @@ const launchDraftFromTransaction = (
   }
 
   const fit = shorthandFitFromTransaction(launch.transaction, lookups);
-  if (!fit) {
+  if (
+    !fit ||
+    (launch.type === "duplicate" &&
+      !recordsHaveExactlyUniformShorthandFields(
+        activeTransactionRecords(launch.transaction),
+      ))
+  ) {
     return {
       draft: {
         ...defaultDraft(),
@@ -822,20 +1257,15 @@ const launchDraftFromTransaction = (
 };
 
 const validCurrencyPattern = /^([A-Z]{3}|C::.+)$/;
-const categoryEconomicIntents = new Set<Category["economic_intent"]>([
-  "adjustment",
-  "exchange",
-  "expense",
-  "fee",
-  "fx_gain_loss",
-  "income",
-  "refund",
-  "transfer",
-]);
-
 const fieldErrorsFromAPI = (message: string): FieldErrors => {
+  const lower = message.toLowerCase();
+  if (lower.includes("exchange accounts must have two distinct currencies")) {
+    return { boughtAccountId: message };
+  }
   const pairs: readonly [FieldName, readonly string[]][] = [
     ["amount", ["amount"]],
+    ["boughtAmount", ["bought_amount"]],
+    ["boughtAccountId", ["bought_account_id"]],
     ["categoryId", ["category_id", "category"]],
     ["currency", ["currency"]],
     ["date", ["initiated_date", "date"]],
@@ -845,9 +1275,9 @@ const fieldErrorsFromAPI = (message: string): FieldErrors => {
     ["merchantAccountId", ["counterparty_account_id", "counterparty"]],
     ["memo", ["memo"]],
     ["sourceAccountId", ["source_account_id", "source"]],
+    ["soldAccountId", ["sold_account_id"]],
     ["tagIds", ["tag_ids", "tag"]],
   ];
-  const lower = message.toLowerCase();
   for (const [field, matches] of pairs) {
     if (matches.some((match) => lower.includes(match))) {
       return { [field]: message };
@@ -873,14 +1303,18 @@ const fieldLabel = (
 const validateDraft = (
   draft: TransactionEntryTabDraft,
   entryType: ShorthandTransactionEntryType,
+  lookups?: LedgerLookupsSnapshot,
 ): FieldErrors => {
   const config = tabConfigs[entryType];
   const errors: FieldErrors = {};
   if (!draft.date) {
     errors.date = "Date is required.";
   }
-  if (!normalizeAmount(draft.amount)) {
+  if (entryType !== "spend" && !normalizeAmount(draft.amount)) {
     errors.amount = "Enter a positive amount with up to 8 decimals.";
+  }
+  if (entryType === "exchange" && !normalizeAmount(draft.boughtAmount)) {
+    errors.boughtAmount = "Enter a positive amount with up to 8 decimals.";
   }
   const currency = normalizeCurrency(draft.currency);
   if (!currency) {
@@ -892,11 +1326,16 @@ const validateDraft = (
     errors[config.primaryAccountField] =
       `${fieldLabel(config.primaryAccountField, entryType)} is required.`;
   }
-  if (!draft[config.secondaryAccountField]) {
+  if (entryType !== "spend" && !draft[config.secondaryAccountField]) {
     errors[config.secondaryAccountField] =
       `${fieldLabel(config.secondaryAccountField, entryType)} is required.`;
   }
-  if (!draft.categoryId) {
+  if (
+    entryType !== "spend" &&
+    entryType !== "transfer" &&
+    entryType !== "exchange" &&
+    !draft.categoryId
+  ) {
     errors.categoryId = "Category is required.";
   }
   if (
@@ -907,6 +1346,41 @@ const validateDraft = (
   ) {
     errors.destinationAccountId = "Choose a different destination account.";
   }
+  const hasChargeInput =
+    draft.chargeEnabled ||
+    draft.chargeAccountId !== undefined ||
+    Boolean(draft.chargeAmount.trim()) ||
+    draft.chargeCategoryId !== undefined;
+  if (entryType === "transfer" && hasChargeInput) {
+    if (!draft.chargeAccountId) {
+      errors.chargeAccountId = "Charge account is required.";
+    }
+    if (!normalizeAmount(draft.chargeAmount)) {
+      errors.chargeAmount =
+        "Enter a positive charge amount with up to 8 decimals.";
+    }
+    if (!draft.chargeCategoryId) {
+      errors.chargeCategoryId = "Charge category is required.";
+    }
+  }
+  if (
+    entryType === "exchange" &&
+    draft.soldAccountId &&
+    draft.boughtAccountId &&
+    draft.soldAccountId === draft.boughtAccountId
+  ) {
+    errors.boughtAccountId = "Choose a different destination account.";
+  } else if (
+    entryType === "exchange" &&
+    draft.soldAccountId &&
+    draft.boughtAccountId &&
+    accountCurrency(lookups, draft.soldAccountId) !== undefined &&
+    accountCurrency(lookups, draft.soldAccountId) ===
+      accountCurrency(lookups, draft.boughtAccountId)
+  ) {
+    errors.boughtAccountId =
+      "Choose a destination account with a different currency.";
+  }
   return errors;
 };
 
@@ -914,10 +1388,62 @@ const fieldErrorForDraft = (
   draft: TransactionEntryTabDraft,
   entryType: ShorthandTransactionEntryType,
   field: FieldName,
-): string | undefined => validateDraft(draft, entryType)[field];
+  lookups?: LedgerLookupsSnapshot,
+): string | undefined => validateDraft(draft, entryType, lookups)[field];
 
 const hasErrors = (errors: FieldErrors): boolean =>
   Object.values(errors).some(Boolean);
+
+const spendMerchantFieldErrors = (
+  merchant: SpendMerchantDraft,
+): Partial<Record<SpendMerchantFieldName, string>> => ({
+  ...(!merchant.accountId
+    ? { accountId: "Merchant account is required." }
+    : {}),
+  ...(!normalizeAmount(merchant.amount)
+    ? { amount: "Enter a positive amount with up to 8 decimals." }
+    : {}),
+  ...(!merchant.categoryId ? { categoryId: "Category is required." } : {}),
+});
+
+const spendMerchantErrors = (
+  merchants: readonly SpendMerchantDraft[],
+): SpendMerchantFieldErrors =>
+  Object.fromEntries(
+    merchants
+      .map(
+        (merchant) =>
+          [merchant.draftId, spendMerchantFieldErrors(merchant)] as const,
+      )
+      .filter(([, errors]) => Object.keys(errors).length > 0),
+  );
+
+const hasSpendMerchantErrors = (errors: SpendMerchantFieldErrors): boolean =>
+  Object.keys(errors).length > 0;
+
+const firstSpendMerchantErrorFieldID = (
+  merchants: readonly SpendMerchantDraft[],
+  errors: SpendMerchantFieldErrors,
+): string | undefined => {
+  for (const [index, merchant] of merchants.entries()) {
+    const merchantErrors = errors[merchant.draftId];
+    if (!merchantErrors) {
+      continue;
+    }
+    const field = (["accountId", "amount", "categoryId"] as const).find(
+      (candidate) => merchantErrors[candidate],
+    );
+    if (field) {
+      const suffix = {
+        accountId: "account",
+        amount: "amount",
+        categoryId: "category",
+      }[field];
+      return `spend-merchant-${index}-${suffix}`;
+    }
+  }
+  return undefined;
+};
 
 const advancedErrorKey = (
   rowIndex: number,
@@ -952,10 +1478,6 @@ const validateAdvancedDraft = (
     } else if (!validCurrencyPattern.test(currency)) {
       errors[advancedErrorKey(rowIndex, "currency")] =
         "Use a 3-letter code or C:: crypto code.";
-    }
-    if (!row.categoryId) {
-      errors[advancedErrorKey(rowIndex, "categoryId")] =
-        "Category is required.";
     }
     if (
       !options.allowExpectedPostingStatus &&
@@ -1106,7 +1628,7 @@ const updateRecordFromDraftRow = (
   return {
     account_id: row.accountId!,
     amount,
-    category_id: row.categoryId!,
+    category_id: row.categoryId ?? null,
     currency,
     ...amountUsdFromDraftRow(row),
     ...externalMetadataFromDraftRow(row),
@@ -1133,21 +1655,32 @@ const updateRecordFromShorthandDraft = (
   draft: TransactionEntryTabDraft,
   accountId: number,
   amountSign: "negative" | "positive",
+  categoryId: number | undefined,
+  rawAmount = draft.amount,
+  currency = draft.currency,
+  preserveOriginalMember = false,
+  preserveOriginalMemo = false,
 ): UpdateTransactionRequest["records"][number] => {
   const amount = amountWithSign(
-    normalizeAmount(draft.amount) ?? draft.amount,
+    normalizeAmount(rawAmount) ?? rawAmount,
     amountSign,
   );
-  const currency = normalizeCurrency(draft.currency);
+  const normalizedCurrency = normalizeCurrency(currency);
   return {
     account_id: accountId,
     amount,
-    category_id: draft.categoryId!,
-    currency,
-    ...amountUsdFromJournalRecord(record, amount, currency),
+    category_id: categoryId ?? null,
+    currency: normalizedCurrency,
+    ...amountUsdFromJournalRecord(record, amount, normalizedCurrency),
     ...externalMetadataFromJournalRecord(record),
-    member_id: draft.memberId ?? null,
-    memo: draft.memo.trim() ? draft.memo.trim() : null,
+    member_id: preserveOriginalMember
+      ? (record.member_id ?? null)
+      : (draft.memberId ?? null),
+    memo: preserveOriginalMemo
+      ? (record.memo ?? null)
+      : draft.memo.trim()
+        ? draft.memo.trim()
+        : null,
     pending_date: record.pending_date,
     posted_date: record.posted_date ?? null,
     posting_status: record.posting_status,
@@ -1157,10 +1690,128 @@ const updateRecordFromShorthandDraft = (
   };
 };
 
+const addedRecordFromShorthandDraft = (
+  record: JournalRecord,
+  draft: TransactionEntryTabDraft,
+  accountId: number,
+  amount: string,
+  categoryId: number,
+  preserveOriginalMember = false,
+  preserveOriginalMemo = false,
+): UpdateTransactionRequest["records"][number] => ({
+  account_id: accountId,
+  amount,
+  category_id: categoryId,
+  currency: normalizeCurrency(draft.currency),
+  member_id: preserveOriginalMember
+    ? (record.member_id ?? null)
+    : (draft.memberId ?? null),
+  memo: preserveOriginalMemo
+    ? (record.memo ?? null)
+    : draft.memo.trim()
+      ? draft.memo.trim()
+      : null,
+  pending_date: record.pending_date,
+  posted_date: record.posted_date ?? null,
+  posting_status: record.posting_status,
+  reconciliation_status: record.reconciliation_status,
+  source: "manual",
+  tag_ids: [...draft.tagIds],
+});
+
 const updateBodyFromShorthandDraft = (
   draft: TransactionEntryTabDraft,
   fit: ShorthandFit,
+  lookups: LedgerLookupsSnapshot | undefined,
 ): UpdateTransactionRequest => {
+  const amount = normalizeAmount(draft.amount) ?? draft.amount;
+  const originalRecords = [
+    fit.negativeRecord,
+    fit.positiveRecord,
+    ...fit.additionalRecords,
+    ...(fit.systemExchangeRecords ?? []),
+  ];
+  const preserveOriginalMember =
+    draft.memberId === shorthandMemberId(originalRecords);
+  const preserveOriginalMemo =
+    normalizeMemo(draft.memo) === shorthandMemo(originalRecords);
+  if (fit.entryType === "exchange" && fit.systemExchangeRecords) {
+    const boughtAmount =
+      normalizeAmount(draft.boughtAmount) ?? draft.boughtAmount;
+    const soldCurrency =
+      accountCurrency(lookups, draft.soldAccountId) ??
+      fit.negativeRecord.currency;
+    const boughtCurrency =
+      accountCurrency(lookups, draft.boughtAccountId) ??
+      fit.positiveRecord.currency;
+    const [soldSystemRecord, boughtSystemRecord] = fit.systemExchangeRecords;
+    return {
+      initiated_date: draft.date,
+      records: [
+        updateRecordFromShorthandDraft(
+          fit.negativeRecord,
+          draft,
+          draft.soldAccountId!,
+          "negative",
+          undefined,
+          amount,
+          soldCurrency,
+          preserveOriginalMember,
+          preserveOriginalMemo,
+        ),
+        updateRecordFromShorthandDraft(
+          soldSystemRecord,
+          draft,
+          soldSystemRecord.account_id,
+          "positive",
+          undefined,
+          amount,
+          soldCurrency,
+          preserveOriginalMember,
+          preserveOriginalMemo,
+        ),
+        updateRecordFromShorthandDraft(
+          boughtSystemRecord,
+          draft,
+          boughtSystemRecord.account_id,
+          "negative",
+          undefined,
+          boughtAmount,
+          boughtCurrency,
+          preserveOriginalMember,
+          preserveOriginalMemo,
+        ),
+        updateRecordFromShorthandDraft(
+          fit.positiveRecord,
+          draft,
+          draft.boughtAccountId!,
+          "positive",
+          undefined,
+          boughtAmount,
+          boughtCurrency,
+          preserveOriginalMember,
+          preserveOriginalMemo,
+        ),
+      ],
+    };
+  }
+  const spendTotal = draft.spendMerchants.reduce(
+    (total, merchant) =>
+      total +
+      (signedAmountMantissa(normalizeAmount(merchant.amount) ?? "") ?? 0n),
+    0n,
+  );
+  const chargeAmount = normalizeAmount(draft.chargeAmount);
+  const negativeAmount =
+    fit.entryType === "spend"
+      ? formatMantissa(spendTotal)
+      : fit.entryType === "transfer" && chargeAmount
+        ? formatMantissa(
+            (signedAmountMantissa(amount) ?? 0n) +
+              (signedAmountMantissa(chargeAmount) ?? 0n),
+          )
+        : amount;
+  const negativeDraft = { ...draft, amount: negativeAmount };
   const negativeAccountId =
     fit.entryType === "spend"
       ? draft.fundingAccountId!
@@ -1169,50 +1820,129 @@ const updateBodyFromShorthandDraft = (
         : fit.entryType === "income"
           ? draft.sourceAccountId!
           : draft.merchantAccountId!;
-  const positiveAccountId =
-    fit.entryType === "spend"
-      ? draft.merchantAccountId!
-      : fit.entryType === "transfer"
-        ? draft.destinationAccountId!
-        : draft.destinationAccountId!;
+  const positiveAccountId = draft.destinationAccountId!;
+  const [primarySpendMerchant, ...remainingSpendMerchants] =
+    draft.spendMerchants;
+
+  const records: UpdateTransactionRequest["records"] = [
+    updateRecordFromShorthandDraft(
+      fit.negativeRecord,
+      negativeDraft,
+      negativeAccountId,
+      "negative",
+      fit.entryType === "income" || fit.entryType === "refund"
+        ? draft.categoryId
+        : undefined,
+      negativeDraft.amount,
+      negativeDraft.currency,
+      preserveOriginalMember,
+      preserveOriginalMemo,
+    ),
+    ...(fit.entryType === "spend" && primarySpendMerchant
+      ? [
+          updateRecordFromShorthandDraft(
+            fit.positiveRecord,
+            draft,
+            primarySpendMerchant.accountId!,
+            "positive",
+            primarySpendMerchant.categoryId,
+            primarySpendMerchant.amount,
+            draft.currency,
+            preserveOriginalMember,
+            preserveOriginalMemo,
+          ),
+          ...remainingSpendMerchants.map((merchant) => {
+            const originalRecord = fit.additionalRecords.find(
+              (record) => record.record_id === merchant.sourceRecordId,
+            );
+            return originalRecord
+              ? updateRecordFromShorthandDraft(
+                  originalRecord,
+                  draft,
+                  merchant.accountId!,
+                  "positive",
+                  merchant.categoryId,
+                  merchant.amount,
+                  draft.currency,
+                  preserveOriginalMember,
+                  preserveOriginalMemo,
+                )
+              : addedRecordFromShorthandDraft(
+                  fit.positiveRecord,
+                  draft,
+                  merchant.accountId!,
+                  normalizeAmount(merchant.amount)!,
+                  merchant.categoryId!,
+                  preserveOriginalMember,
+                  preserveOriginalMemo,
+                );
+          }),
+        ]
+      : [
+          updateRecordFromShorthandDraft(
+            fit.positiveRecord,
+            draft,
+            positiveAccountId,
+            "positive",
+            undefined,
+            draft.amount,
+            draft.currency,
+            preserveOriginalMember,
+            preserveOriginalMemo,
+          ),
+        ]),
+    ...(fit.entryType === "transfer" &&
+    chargeAmount &&
+    draft.chargeAccountId &&
+    draft.chargeCategoryId
+      ? [
+          fit.additionalRecords[0]
+            ? updateRecordFromShorthandDraft(
+                fit.additionalRecords[0],
+                draft,
+                draft.chargeAccountId,
+                "positive",
+                draft.chargeCategoryId,
+                chargeAmount,
+                draft.currency,
+                preserveOriginalMember,
+                preserveOriginalMemo,
+              )
+            : addedRecordFromShorthandDraft(
+                fit.positiveRecord,
+                draft,
+                draft.chargeAccountId,
+                chargeAmount,
+                draft.chargeCategoryId,
+                preserveOriginalMember,
+                preserveOriginalMemo,
+              ),
+        ]
+      : []),
+  ];
+  if (
+    preserveOriginalMember &&
+    draft.memberId !== undefined &&
+    records.every((record) => record.member_id === null)
+  ) {
+    records[0] = { ...records[0]!, member_id: draft.memberId };
+  }
+  const normalizedMemo = normalizeMemo(draft.memo);
+  if (
+    preserveOriginalMemo &&
+    normalizedMemo &&
+    records.every((record) => record.memo === null)
+  ) {
+    records[0] = { ...records[0]!, memo: normalizedMemo };
+  }
 
   return {
     initiated_date: draft.date,
-    records: [
-      updateRecordFromShorthandDraft(
-        fit.negativeRecord,
-        draft,
-        negativeAccountId,
-        "negative",
-      ),
-      updateRecordFromShorthandDraft(
-        fit.positiveRecord,
-        draft,
-        positiveAccountId,
-        "positive",
-      ),
-    ],
+    records,
   };
 };
 
-const semanticShapeIntentFromAPI = (
-  message: string,
-): Category["economic_intent"] | undefined => {
-  const match = message.match(
-    /transaction records violate ([a-z_]+) semantic shape/,
-  );
-  const intent = match?.[1] as Category["economic_intent"] | undefined;
-  if (!intent || !categoryEconomicIntents.has(intent)) {
-    return undefined;
-  }
-  return intent;
-};
-
-const advancedFieldErrorsFromAPI = (
-  message: string,
-  draft: AdvancedTransactionEntryDraft,
-  lookups: LedgerLookupsSnapshot | undefined,
-): AdvancedFieldErrors => {
+const advancedFieldErrorsFromAPI = (message: string): AdvancedFieldErrors => {
   const lower = message.toLowerCase();
   const rowMatch =
     lower.match(/records?\[(\d+)\]/) ?? lower.match(/records?\s+#?(\d+)/);
@@ -1236,23 +1966,7 @@ const advancedFieldErrorsFromAPI = (
     if (lower.includes("initiated_date") || lower.includes("initiated date")) {
       return { date: message };
     }
-    const intent = semanticShapeIntentFromAPI(lower);
-    if (!intent) {
-      return {};
-    }
-    const categoryIntentById = new Map(
-      (lookups?.categories ?? []).map((category) => [
-        category.category_id,
-        category.economic_intent,
-      ]),
-    );
-    const errors: AdvancedFieldErrors = {};
-    draft.records.forEach((row, index) => {
-      if (row.categoryId && categoryIntentById.get(row.categoryId) === intent) {
-        errors[advancedErrorKey(index, "categoryId")] = message;
-      }
-    });
-    return errors;
+    return {};
   }
 
   for (const [field, matches] of fieldMatches) {
@@ -1301,6 +2015,80 @@ const RetryableFieldError = ({
       </Button>
     </div>
   ) : null;
+
+const classificationDisplayAmounts = (
+  classification: TransactionClassification,
+) =>
+  classification.primary_amounts.length > 0
+    ? [
+        ...classification.primary_amounts,
+        ...classification.shapes
+          .filter((shape) => shape.shape === "transfer")
+          .flatMap((shape) => shape.amounts),
+      ]
+    : classification.shapes.flatMap((shape) => shape.amounts);
+
+const ClassificationPreview = ({
+  classification,
+  error,
+}: {
+  readonly classification: TransactionClassification | undefined;
+  readonly error: string | undefined;
+}) => (
+  <div
+    data-testid="classification-preview"
+    className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-2"
+  >
+    <p className="font-heading text-xs font-semibold uppercase">
+      Server classification
+    </p>
+    {classification ? (
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+        <ClassBadge transactionClass={classification.transaction_class} />
+        <span className="font-mono text-xs">
+          {classification.shapes
+            .map((shape) => accountingWordLabel(shape.shape))
+            .join(" + ")}
+        </span>
+        {classificationDisplayAmounts(classification).map((amount, index) => (
+          <AmountText
+            key={`${displayAmountKey(amount)}:${index}`}
+            amount={amount}
+            positiveSign={
+              classification.transaction_class !== "transfer" &&
+              classification.transaction_class !== "currency_exchange"
+            }
+            transactionClass={classification.transaction_class}
+          />
+        ))}
+        {classification.shapes.flatMap((shape) =>
+          shape.effective_rate
+            ? [
+                <span
+                  key={`${shape.effective_rate.sold_currency}:${shape.effective_rate.bought_currency}`}
+                  className="font-mono text-xs"
+                >
+                  1 {shape.effective_rate.bought_currency} ={" "}
+                  {shape.effective_rate.rate}{" "}
+                  {shape.effective_rate.sold_currency}
+                </span>,
+              ]
+            : [],
+        )}
+      </div>
+    ) : (
+      <p
+        className={
+          error
+            ? "text-destructive mt-1 text-xs"
+            : "text-muted-foreground mt-1 text-xs"
+        }
+      >
+        {error ?? "Complete valid records to preview their derived semantics."}
+      </p>
+    )}
+  </div>
+);
 
 const BalanceMeter = ({
   balances,
@@ -1373,7 +2161,7 @@ const stickyNextTabDraft = (
   requestCurrency: string,
 ): TransactionEntryTabDraft => {
   const nextDraft = {
-    ...blankTabDraft(),
+    ...(entryType === "spend" ? blankSpendTabDraft() : blankTabDraft()),
     currency: requestCurrency,
     date: draft.date,
   };
@@ -1395,13 +2183,24 @@ const stickyNextTabDraft = (
       return {
         ...nextDraft,
         fundingAccountId: draft.fundingAccountId,
-        merchantAccountId: draft.merchantAccountId,
+        spendMerchants: [
+          {
+            ...blankSpendMerchantDraft(),
+            accountId: draft.spendMerchants[0]?.accountId,
+          },
+        ],
       };
     case "transfer":
       return {
         ...nextDraft,
         destinationAccountId: draft.destinationAccountId,
         sourceAccountId: draft.sourceAccountId,
+      };
+    case "exchange":
+      return {
+        ...nextDraft,
+        boughtAccountId: draft.boughtAccountId,
+        soldAccountId: draft.soldAccountId,
       };
   }
 };
@@ -1451,24 +2250,6 @@ const visibleMember = (member: Member): boolean =>
 
 const visibleTag = (tag: Tag): boolean => !tag.is_hidden && !tag.tombstoned_at;
 
-const categoryIntentAccountTypes: Record<
-  Category["economic_intent"],
-  readonly Account["account_type"][]
-> = {
-  adjustment: ["balance", "flow", "system"],
-  exchange: ["balance", "flow"],
-  expense: ["balance", "flow"],
-  fee: ["balance", "flow", "system"],
-  fx_gain_loss: ["balance", "flow", "system"],
-  income: ["balance", "flow"],
-  refund: ["balance", "flow"],
-  transfer: ["balance"],
-};
-
-const accountTypesForCategoryIntent = (
-  intent: Category["economic_intent"],
-): readonly Account["account_type"][] => categoryIntentAccountTypes[intent];
-
 const EntryRailRow = ({
   editable,
   transaction,
@@ -1501,9 +2282,9 @@ const EntryRailRow = ({
         />
       ) : amounts.length > 0 ? (
         <span className="flex shrink-0 items-center gap-1">
-          {amounts.map((amount) => (
+          {amounts.map((amount, index) => (
             <AmountText
-              key={displayAmountKey(amount)}
+              key={`${displayAmountKey(amount)}:${index}`}
               amount={amount}
               positiveSign={
                 transaction.transaction_class !== "transfer" &&
@@ -1555,9 +2336,21 @@ export const EntryPanel = ({
 }: EntryPanelProps) => {
   const [draft, setDraft] = useState<TransactionEntryDraft>(defaultDraft);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [merchantFieldErrors, setMerchantFieldErrors] =
+    useState<SpendMerchantFieldErrors>({});
   const [advancedFieldErrors, setAdvancedFieldErrors] =
     useState<AdvancedFieldErrors>({});
   const [generalError, setGeneralError] = useState<string | undefined>();
+  const [classification, setClassification] = useState<
+    TransactionClassification | undefined
+  >();
+  const [classificationError, setClassificationError] = useState<
+    string | undefined
+  >();
+  const [exchangeRate, setExchangeRate] = useState<string | undefined>();
+  const [exchangeRateError, setExchangeRateError] = useState<
+    string | undefined
+  >();
   const [draftReady, setDraftReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
@@ -1565,8 +2358,6 @@ export const EntryPanel = ({
     readonly Transaction[]
   >([]);
   const [categoryRetryToken, setCategoryRetryToken] = useState(0);
-  const [categoryCreationIntent, setCategoryCreationIntent] =
-    useState<CategoryEconomicIntent>("expense");
   const [templateQuery, setTemplateQuery] = useState("");
   const [templates, setTemplates] = useState<readonly TransactionTemplate[]>(
     [],
@@ -1590,8 +2381,11 @@ export const EntryPanel = ({
   const [attentionErrorCount, setAttentionErrorCount] = useState(0);
   const entryPanelRef = useRef<HTMLElement>(null);
   const entryScrollRegionRef = useRef<HTMLDivElement>(null);
+  const addChargeButtonRef = useRef<HTMLButtonElement>(null);
   const addAdvancedRecordButtonRef = useRef<HTMLButtonElement>(null);
   const advancedRemoveButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const addMerchantButtonRef = useRef<HTMLButtonElement>(null);
+  const merchantRemoveButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const templateInputRef = useRef<HTMLInputElement>(null);
   const rememberedActiveTabRef = useRef<TransactionEntryType>("spend");
@@ -1671,11 +2465,7 @@ export const EntryPanel = ({
   const activeConfig = activeShorthandTab
     ? tabConfigs[activeShorthandTab]
     : undefined;
-  const activeCategoryCreationIntent = activeConfig?.categoryIntents.includes(
-    categoryCreationIntent,
-  )
-    ? categoryCreationIntent
-    : activeConfig?.categoryIntents[0];
+  const activeCategoryCreationIntent = activeConfig?.categoryIntents[0];
   const launchKey = launch
     ? `${launch.type}:${launch.transaction.transaction_id}`
     : `create:${initialTab ?? "remembered"}`;
@@ -1687,7 +2477,10 @@ export const EntryPanel = ({
     (launch === undefined || initializedLaunch === launch);
   const categoryPicker = useCategoryPickerCategoriesResource(
     activeConfig?.categoryIntents ?? [],
-    open && currentDraftReady && activeTab !== "advanced",
+    open &&
+      currentDraftReady &&
+      activeTab !== "advanced" &&
+      Boolean(activeConfig?.categoryIntents.length),
     categoryRetryToken,
   );
 
@@ -1834,10 +2627,18 @@ export const EntryPanel = ({
       }
     };
     const addTabDraft = (tabDraft: TransactionEntryTabDraft) => {
+      addNumber(accountIds, tabDraft.boughtAccountId);
+      addNumber(accountIds, tabDraft.chargeAccountId);
       addNumber(accountIds, tabDraft.destinationAccountId);
       addNumber(accountIds, tabDraft.fundingAccountId);
       addNumber(accountIds, tabDraft.merchantAccountId);
       addNumber(accountIds, tabDraft.sourceAccountId);
+      addNumber(accountIds, tabDraft.soldAccountId);
+      addNumber(categoryIds, tabDraft.chargeCategoryId);
+      for (const merchant of tabDraft.spendMerchants) {
+        addNumber(accountIds, merchant.accountId);
+        addNumber(categoryIds, merchant.categoryId);
+      }
       addNumber(categoryIds, tabDraft.categoryId);
       addNumber(memberIds, tabDraft.memberId);
       for (const tagId of tabDraft.tagIds) {
@@ -1907,8 +2708,12 @@ export const EntryPanel = ({
         (visibleTag(tag) || selectedEntityIds.tagIds.has(tag.tag_id)),
     );
     return {
-      balanceAccounts: optionAccounts
-        .filter((account) => account.account_type === "balance")
+      movementAccounts: optionAccounts
+        .filter(
+          (account) =>
+            account.account_type === "owned" ||
+            account.account_type === "party",
+        )
         .map((account) => entityOption(account, account.account_id)),
       allCategories: allCategories.map((category) =>
         entityOption(category, category.category_id),
@@ -1976,7 +2781,10 @@ export const EntryPanel = ({
     return entityOption(result.data, result.data.tag_id);
   };
   const categoryPickerReady =
-    activeTab === "advanced" || Boolean(categoryPicker.snapshot);
+    activeTab === "advanced" ||
+    activeTab === "exchange" ||
+    (activeTab === "transfer" && !activeTabDraft?.chargeEnabled) ||
+    Boolean(categoryPicker.snapshot);
   const lookupRevision = lookups?.loadedAt ?? "loading";
   const ready = Boolean(lookups && currentDraftReady);
   const canSubmit = Boolean(
@@ -1984,13 +2792,159 @@ export const EntryPanel = ({
   );
   const balances = advancedBalances(draft.advanced);
   const allowExpectedPostingStatus = false;
-  const advancedValidationOptions = { allowExpectedPostingStatus };
+  const advancedCategoryErrors = useCallback(
+    (advancedDraft: AdvancedTransactionEntryDraft): AdvancedFieldErrors => {
+      const errors: AdvancedFieldErrors = {};
+      advancedDraft.records.forEach((row, rowIndex) => {
+        const accountType = accountTypeForId(lookups, row.accountId);
+        if (accountType === "flow" && !row.categoryId) {
+          errors[advancedErrorKey(rowIndex, "categoryId")] =
+            "Category is required for a flow record.";
+        }
+        if (accountType && accountType !== "flow" && row.categoryId) {
+          errors[advancedErrorKey(rowIndex, "categoryId")] =
+            "Only flow records can have a category.";
+        }
+      });
+      return errors;
+    },
+    [lookups],
+  );
+  const localAdvancedErrors = useMemo(
+    () => ({
+      ...validateAdvancedDraft(draft.advanced, advancedValidationOptions),
+      ...advancedCategoryErrors(draft.advanced),
+    }),
+    [advancedCategoryErrors, draft.advanced],
+  );
   const advancedCanSubmit =
-    !hasAdvancedErrors(
-      validateAdvancedDraft(draft.advanced, advancedValidationOptions),
-    ) && allCurrenciesBalanced(balances);
+    !hasAdvancedErrors(localAdvancedErrors) && allCurrenciesBalanced(balances);
+  const exchangeDraft = draft.tabs.exchange;
+  const exchangeSoldCurrency = accountCurrency(
+    lookups,
+    exchangeDraft.soldAccountId,
+  );
+  const exchangeBoughtCurrency = accountCurrency(
+    lookups,
+    exchangeDraft.boughtAccountId,
+  );
+  const exchangeAccountsHaveSameCurrency = Boolean(
+    exchangeDraft.soldAccountId &&
+    exchangeDraft.boughtAccountId &&
+    exchangeSoldCurrency &&
+    exchangeSoldCurrency === exchangeBoughtCurrency,
+  );
   const submitDisabled =
-    !canSubmit || (activeTab === "advanced" && !advancedCanSubmit);
+    !canSubmit ||
+    (activeTab === "advanced" && !advancedCanSubmit) ||
+    (activeTab === "exchange" && exchangeAccountsHaveSameCurrency);
+
+  useEffect(() => {
+    if (
+      !open ||
+      activeTab !== "advanced" ||
+      !lookups ||
+      hasAdvancedErrors(localAdvancedErrors)
+    ) {
+      const timeout = window.setTimeout(() => {
+        setClassification(undefined);
+        setClassificationError(undefined);
+      }, 0);
+      return () => {
+        window.clearTimeout(timeout);
+      };
+    }
+
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      void classifyJournalTransaction({
+        records: updateBodyFromAdvancedDraft(draft.advanced).records,
+      }).then((result) => {
+        if (!active) {
+          return;
+        }
+        if (result.data) {
+          setClassification(result.data);
+          setClassificationError(undefined);
+          setAdvancedFieldErrors({});
+          return;
+        }
+        const message = apiErrorMessage(
+          result.error,
+          "Draft could not be classified.",
+        );
+        setClassification(undefined);
+        setClassificationError(message);
+        setAdvancedFieldErrors((current) => ({
+          ...current,
+          ...advancedFieldErrorsFromAPI(message),
+        }));
+      });
+    }, 180);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [activeTab, draft.advanced, localAdvancedErrors, lookups, open]);
+
+  useEffect(() => {
+    if (
+      !open ||
+      activeTab !== "exchange" ||
+      !lookups ||
+      !exchangeDraft.soldAccountId ||
+      !exchangeDraft.boughtAccountId ||
+      exchangeAccountsHaveSameCurrency ||
+      !normalizeAmount(exchangeDraft.amount) ||
+      !normalizeAmount(exchangeDraft.boughtAmount)
+    ) {
+      const timeout = window.setTimeout(() => {
+        setExchangeRate(undefined);
+        setExchangeRateError(undefined);
+      }, 0);
+      return () => {
+        window.clearTimeout(timeout);
+      };
+    }
+
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      const records = updateBodyFromAdvancedDraft(
+        shorthandDraftToAdvanced("exchange", exchangeDraft, lookups),
+      ).records;
+      void classifyJournalTransaction({ records }).then((result) => {
+        if (!active) {
+          return;
+        }
+        const rate = result.data?.shapes.find(
+          (shape) => shape.shape === "exchange",
+        )?.effective_rate;
+        if (rate) {
+          setExchangeRate(
+            `1 ${rate.bought_currency} = ${rate.rate} ${rate.sold_currency}`,
+          );
+          setExchangeRateError(undefined);
+          return;
+        }
+        setExchangeRate(undefined);
+        setExchangeRateError(
+          apiErrorMessage(result.error, "Exchange could not be classified."),
+        );
+      });
+    }, 180);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [
+    activeTab,
+    exchangeAccountsHaveSameCurrency,
+    exchangeDraft,
+    lookups,
+    open,
+  ]);
   const offscreenFieldErrors = useCallback((): readonly HTMLElement[] => {
     const scrollRegion = entryScrollRegionRef.current;
     if (!scrollRegion) {
@@ -2024,50 +2978,59 @@ export const EntryPanel = ({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [activeTab, advancedFieldErrors, fieldErrors, measureAttentionErrors]);
+  }, [
+    activeTab,
+    advancedFieldErrors,
+    fieldErrors,
+    measureAttentionErrors,
+    merchantFieldErrors,
+  ]);
 
   const focusFirstError = useCallback(() => {
     window.requestAnimationFrame(() => {
-      const error =
-        offscreenFieldErrors()[0] ??
-        entryScrollRegionRef.current?.querySelector<HTMLElement>(
-          "[data-entry-field-error]",
-        );
-      if (!error) {
-        return;
-      }
-      error.scrollIntoView({ block: "center" });
-      const fieldSelector = "input, textarea, button, [role='combobox']";
-      const previousElement = error.previousElementSibling;
-      const adjacentField =
-        previousElement instanceof HTMLElement
-          ? previousElement.matches(fieldSelector)
-            ? previousElement
-            : previousElement.querySelector<HTMLElement>(fieldSelector)
-          : null;
-      const field =
-        adjacentField ??
-        error.parentElement?.querySelector<HTMLElement>(fieldSelector);
-      focusWithoutTooltip(field, { preventScroll: true });
+      window.requestAnimationFrame(() => {
+        const error =
+          offscreenFieldErrors()[0] ??
+          entryScrollRegionRef.current?.querySelector<HTMLElement>(
+            "[data-entry-field-error]",
+          );
+        if (!error) {
+          return;
+        }
+        error.scrollIntoView({ block: "center" });
+        const fieldSelector = "input, textarea, button, [role='combobox']";
+        const previousElement = error.previousElementSibling;
+        const adjacentField =
+          previousElement instanceof HTMLElement
+            ? previousElement.matches(fieldSelector)
+              ? previousElement
+              : previousElement.querySelector<HTMLElement>(fieldSelector)
+            : null;
+        const field =
+          adjacentField ??
+          error.parentElement?.querySelector<HTMLElement>(fieldSelector);
+        focusWithoutTooltip(field, { preventScroll: true });
+      });
     });
   }, [offscreenFieldErrors]);
 
-  const advancedAccountOptions = (
-    categoryId: number | undefined,
-  ): readonly EntityOption[] => {
-    const category = (lookups?.categories ?? []).find(
-      (lookupCategory) => lookupCategory.category_id === categoryId,
-    );
-    if (!category) {
-      return optionAccounts.map((account) =>
-        entityOption(account, account.account_id),
-      );
-    }
-    const validTypes = accountTypesForCategoryIntent(category.economic_intent);
-    return optionAccounts
-      .filter((account) => validTypes.includes(account.account_type))
-      .map((account) => entityOption(account, account.account_id));
-  };
+  const focusSpendMerchantError = useCallback(
+    (
+      merchants: readonly SpendMerchantDraft[],
+      errors: SpendMerchantFieldErrors,
+    ) => {
+      const fieldID = firstSpendMerchantErrorFieldID(merchants, errors);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const field = fieldID ? document.getElementById(fieldID) : null;
+          field?.scrollIntoView({ block: "center" });
+          focusWithoutTooltip(field, { preventScroll: true });
+        });
+      });
+    },
+    [],
+  );
+
   const loadingMessage = "Loading lookups...";
 
   const tabIsAvailable = (entryType: TransactionEntryType): boolean =>
@@ -2085,7 +3048,10 @@ export const EntryPanel = ({
         ...currentDraft,
         tabs: {
           ...currentDraft.tabs,
-          [activeShorthandTab]: nextTabDraft,
+          [activeShorthandTab]: {
+            ...currentDraft.tabs[activeShorthandTab],
+            ...patch,
+          },
         },
       }));
       setFieldErrors((currentErrors) => {
@@ -2095,6 +3061,7 @@ export const EntryPanel = ({
             nextTabDraft,
             activeShorthandTab,
             field,
+            lookups,
           );
           if (message) {
             nextErrors[field] = message;
@@ -2106,7 +3073,73 @@ export const EntryPanel = ({
       });
       setGeneralError(undefined);
     },
-    [activeShorthandTab, activeTabDraft],
+    [activeShorthandTab, activeTabDraft, lookups],
+  );
+
+  const updateSpendMerchant = useCallback(
+    (
+      index: number,
+      merchant: SpendMerchantDraft,
+      patch: Partial<SpendMerchantDraft>,
+    ) => {
+      setDraft((currentDraft) => ({
+        ...currentDraft,
+        tabs: {
+          ...currentDraft.tabs,
+          spend: {
+            ...currentDraft.tabs.spend,
+            spendMerchants: currentDraft.tabs.spend.spendMerchants.map(
+              (merchant, merchantIndex) =>
+                merchantIndex === index ? { ...merchant, ...patch } : merchant,
+            ),
+          },
+        },
+      }));
+      setMerchantFieldErrors((currentErrors) => {
+        const currentMerchantErrors = currentErrors[merchant.draftId];
+        if (!currentMerchantErrors) {
+          return currentErrors;
+        }
+        const nextMerchantErrors = { ...currentMerchantErrors };
+        for (const field of Object.keys(patch) as SpendMerchantFieldName[]) {
+          delete nextMerchantErrors[field];
+        }
+        const nextErrors = { ...currentErrors };
+        if (Object.keys(nextMerchantErrors).length === 0) {
+          delete nextErrors[merchant.draftId];
+        } else {
+          nextErrors[merchant.draftId] = nextMerchantErrors;
+        }
+        return nextErrors;
+      });
+      setGeneralError(undefined);
+    },
+    [],
+  );
+
+  const validateSpendMerchantField = useCallback(
+    (merchant: SpendMerchantDraft, field: SpendMerchantFieldName) => {
+      const message = spendMerchantFieldErrors(merchant)[field];
+      setMerchantFieldErrors((currentErrors) => {
+        const nextErrors = { ...currentErrors };
+        const nextMerchantErrors = {
+          ...(nextErrors[merchant.draftId] ?? {}),
+        };
+        if (message) {
+          nextMerchantErrors[field] = message;
+          nextErrors[merchant.draftId] = nextMerchantErrors;
+        } else {
+          delete nextMerchantErrors[field];
+          if (Object.keys(nextMerchantErrors).length === 0) {
+            delete nextErrors[merchant.draftId];
+          } else {
+            nextErrors[merchant.draftId] = nextMerchantErrors;
+          }
+        }
+        return nextErrors;
+      });
+    },
+    [],
   );
 
   const updateAdvancedDraft = useCallback(
@@ -2174,6 +3207,39 @@ export const EntryPanel = ({
     });
   }, []);
 
+  const focusAfterMerchantRemoval = useCallback((merchantIndex: number) => {
+    window.requestAnimationFrame(() => {
+      const target =
+        merchantRemoveButtonRefs.current[merchantIndex] ??
+        merchantRemoveButtonRefs.current[merchantIndex - 1] ??
+        addMerchantButtonRef.current;
+      focusWithoutTooltip(target, { preventScroll: true });
+    });
+  }, []);
+
+  const focusAfterMerchantAddition = useCallback((merchantIndex: number) => {
+    window.requestAnimationFrame(() => {
+      focusWithoutTooltip(
+        document.getElementById(`spend-merchant-${merchantIndex}-account`),
+        { preventScroll: true },
+      );
+    });
+  }, []);
+
+  const focusAfterChargeRemoval = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      focusWithoutTooltip(addChargeButtonRef.current, { preventScroll: true });
+    });
+  }, []);
+
+  const focusAfterChargeAddition = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      focusWithoutTooltip(document.getElementById("transfer-charge-account"), {
+        preventScroll: true,
+      });
+    });
+  }, []);
+
   const retryCategoryPicker = () => {
     setCategoryRetryToken((currentToken) => currentToken + 1);
   };
@@ -2183,46 +3249,34 @@ export const EntryPanel = ({
       return;
     }
 
-    const advancedDraft =
-      replacement?.fit?.entryType === activeShorthandTab
-        ? {
-            date: activeTabDraft.date || localTodayISODate(),
-            records: [
-              {
-                ...recordRowDraftFromJournalRecord(
-                  replacement.fit.negativeRecord,
-                ),
-                accountId:
-                  activeShorthandTab === "spend"
-                    ? activeTabDraft.fundingAccountId
-                    : activeShorthandTab === "refund"
-                      ? activeTabDraft.merchantAccountId
-                      : activeTabDraft.sourceAccountId,
-                amount: amountWithSign(activeTabDraft.amount, "negative"),
-                categoryId: activeTabDraft.categoryId,
-                currency: normalizeCurrency(activeTabDraft.currency) || "USD",
-                memberId: activeTabDraft.memberId,
-                memo: activeTabDraft.memo,
-                tagIds: [...activeTabDraft.tagIds],
-              },
-              {
-                ...recordRowDraftFromJournalRecord(
-                  replacement.fit.positiveRecord,
-                ),
-                accountId:
-                  activeShorthandTab === "spend"
-                    ? activeTabDraft.merchantAccountId
-                    : activeTabDraft.destinationAccountId,
-                amount: amountWithSign(activeTabDraft.amount, "positive"),
-                categoryId: activeTabDraft.categoryId,
-                currency: normalizeCurrency(activeTabDraft.currency) || "USD",
-                memberId: activeTabDraft.memberId,
-                memo: activeTabDraft.memo,
-                tagIds: [...activeTabDraft.tagIds],
-              },
-            ],
-          }
-        : shorthandDraftToAdvanced(activeShorthandTab, activeTabDraft);
+    let advancedDraft = shorthandDraftToAdvanced(
+      activeShorthandTab,
+      activeTabDraft,
+      lookups,
+    );
+    if (replacement?.fit?.entryType === activeShorthandTab) {
+      const originalRecords = shorthandFitRecordsInAdvancedOrder(
+        replacement.fit,
+      );
+      advancedDraft = {
+        ...advancedDraft,
+        records: advancedDraft.records.map((row, index) => {
+          const original = originalRecords[index];
+          return original
+            ? {
+                ...recordRowDraftFromJournalRecord(original),
+                accountId: row.accountId,
+                amount: row.amount,
+                categoryId: row.categoryId,
+                currency: row.currency,
+                memberId: row.memberId,
+                memo: row.memo,
+                tagIds: row.tagIds,
+              }
+            : row;
+        }),
+      };
+    }
 
     userSelectedActiveTabRef.current = true;
     rememberedActiveTabRef.current = "advanced";
@@ -2234,7 +3288,7 @@ export const EntryPanel = ({
     setFieldErrors({});
     setAdvancedFieldErrors({});
     setGeneralError(undefined);
-  }, [activeShorthandTab, activeTabDraft, replacement]);
+  }, [activeShorthandTab, activeTabDraft, lookups, replacement]);
 
   const updateActiveTab = (entryType: TransactionEntryType) => {
     if (!tabIsAvailable(entryType)) {
@@ -2264,7 +3318,7 @@ export const EntryPanel = ({
         ...blankRecordRowDraft(),
         accountId: record.account_id ?? undefined,
         amount: record.amount ?? "",
-        categoryId: record.category_id,
+        categoryId: record.category_id ?? undefined,
         currency: record.currency ?? "USD",
         memberId: record.member_id ?? undefined,
         memo: record.memo ?? "",
@@ -2324,6 +3378,7 @@ export const EntryPanel = ({
           activeTabDraft,
           activeShorthandTab,
           field,
+          lookups,
         );
         if (message) {
           return { ...currentErrors, [field]: message };
@@ -2333,7 +3388,7 @@ export const EntryPanel = ({
         return nextErrors;
       });
     },
-    [activeShorthandTab, activeTabDraft],
+    [activeShorthandTab, activeTabDraft, lookups],
   );
 
   const submit = useCallback(
@@ -2346,9 +3401,7 @@ export const EntryPanel = ({
         let body: UpdateTransactionRequest | undefined;
 
         if (activeTab === "advanced") {
-          const nextAdvancedErrors = validateAdvancedDraft(draft.advanced, {
-            allowExpectedPostingStatus: false,
-          });
+          const nextAdvancedErrors = localAdvancedErrors;
           setAdvancedFieldErrors(nextAdvancedErrors);
           setFieldErrors({});
           setGeneralError(undefined);
@@ -2374,6 +3427,7 @@ export const EntryPanel = ({
           const nextFieldErrors = validateDraft(
             activeTabDraft,
             activeShorthandTab,
+            lookups,
           );
           setFieldErrors(nextFieldErrors);
           setGeneralError(undefined);
@@ -2381,7 +3435,23 @@ export const EntryPanel = ({
             focusFirstError();
             return;
           }
-          body = updateBodyFromShorthandDraft(activeTabDraft, replacement.fit);
+          const nextMerchantErrors =
+            activeShorthandTab === "spend"
+              ? spendMerchantErrors(activeTabDraft.spendMerchants)
+              : {};
+          setMerchantFieldErrors(nextMerchantErrors);
+          if (hasSpendMerchantErrors(nextMerchantErrors)) {
+            focusSpendMerchantError(
+              activeTabDraft.spendMerchants,
+              nextMerchantErrors,
+            );
+            return;
+          }
+          body = updateBodyFromShorthandDraft(
+            activeTabDraft,
+            replacement.fit,
+            lookups,
+          );
         }
 
         setSaving(true);
@@ -2417,11 +3487,7 @@ export const EntryPanel = ({
             "Transaction could not be saved.",
           );
           if (activeTab === "advanced") {
-            const apiFieldErrors = advancedFieldErrorsFromAPI(
-              message,
-              draft.advanced,
-              lookups,
-            );
+            const apiFieldErrors = advancedFieldErrorsFromAPI(message);
             setAdvancedFieldErrors(apiFieldErrors);
             setGeneralError(
               hasAdvancedErrors(apiFieldErrors) ? undefined : message,
@@ -2439,9 +3505,7 @@ export const EntryPanel = ({
       }
 
       if (activeTab === "advanced") {
-        const nextAdvancedErrors = validateAdvancedDraft(draft.advanced, {
-          allowExpectedPostingStatus: false,
-        });
+        const nextAdvancedErrors = localAdvancedErrors;
         setAdvancedFieldErrors(nextAdvancedErrors);
         setFieldErrors({});
         setGeneralError(undefined);
@@ -2458,7 +3522,7 @@ export const EntryPanel = ({
           records: draft.advanced.records.map((row) => ({
             account_id: row.accountId!,
             amount: normalizeSignedAmount(row.amount)!,
-            category_id: row.categoryId!,
+            category_id: row.categoryId ?? null,
             currency: normalizeCurrency(row.currency),
             member_id: row.memberId ?? null,
             memo: row.memo.trim() ? row.memo.trim() : null,
@@ -2509,11 +3573,7 @@ export const EntryPanel = ({
             result.error,
             "Transaction could not be saved.",
           );
-          const apiFieldErrors = advancedFieldErrorsFromAPI(
-            message,
-            draft.advanced,
-            lookups,
-          );
+          const apiFieldErrors = advancedFieldErrorsFromAPI(message);
           setAdvancedFieldErrors(apiFieldErrors);
           setGeneralError(
             hasAdvancedErrors(apiFieldErrors) ? undefined : message,
@@ -2529,23 +3589,57 @@ export const EntryPanel = ({
         return;
       }
 
-      const nextFieldErrors = validateDraft(activeTabDraft, activeShorthandTab);
+      const nextFieldErrors = validateDraft(
+        activeTabDraft,
+        activeShorthandTab,
+        lookups,
+      );
       setFieldErrors(nextFieldErrors);
       setGeneralError(undefined);
       if (hasErrors(nextFieldErrors)) {
         focusFirstError();
         return;
       }
+      const nextMerchantErrors =
+        activeShorthandTab === "spend"
+          ? spendMerchantErrors(activeTabDraft.spendMerchants)
+          : {};
+      setMerchantFieldErrors(nextMerchantErrors);
+      if (hasSpendMerchantErrors(nextMerchantErrors)) {
+        focusSpendMerchantError(
+          activeTabDraft.spendMerchants,
+          nextMerchantErrors,
+        );
+        return;
+      }
 
-      const amount = normalizeAmount(activeTabDraft.amount);
+      const spendMerchantRecords = activeTabDraft.spendMerchants.map(
+        (merchant) => ({
+          accountId: merchant.accountId!,
+          amount: normalizeAmount(merchant.amount)!,
+          categoryId: merchant.categoryId!,
+        }),
+      );
+      const primarySpendMerchant = spendMerchantRecords[0];
+      const amount =
+        activeShorthandTab === "spend"
+          ? primarySpendMerchant?.amount
+          : normalizeAmount(activeTabDraft.amount);
       const currency = normalizeCurrency(activeTabDraft.currency);
-      if (!amount || !currency || !activeTabDraft.categoryId) {
+      const categoryRequired =
+        activeShorthandTab !== "spend" &&
+        activeShorthandTab !== "transfer" &&
+        activeShorthandTab !== "exchange";
+      if (
+        !amount ||
+        !currency ||
+        (categoryRequired && !activeTabDraft.categoryId)
+      ) {
         return;
       }
 
       const common = {
         amount,
-        category_id: activeTabDraft.categoryId,
         currency,
         initiated_date: activeTabDraft.date,
         member_id: activeTabDraft.memberId ?? null,
@@ -2557,16 +3651,56 @@ export const EntryPanel = ({
 
       setSaving(true);
       try {
+        const recordCommon = {
+          currency,
+          member_id: activeTabDraft.memberId ?? null,
+          memo: activeTabDraft.memo.trim() ? activeTabDraft.memo.trim() : null,
+          pending_date: null,
+          posted_date: null,
+          posting_status: "posted" as const,
+          reconciliation_status: "unreconciled" as const,
+          source: "manual" as const,
+          tag_ids: [...activeTabDraft.tagIds],
+        };
+        const spendTotal = spendMerchantRecords.reduce(
+          (total, merchant) =>
+            total + (signedAmountMantissa(merchant.amount) ?? 0n),
+          0n,
+        );
+        const chargeAmount = normalizeAmount(activeTabDraft.chargeAmount);
+        const transferTotal =
+          (signedAmountMantissa(amount) ?? 0n) +
+          (chargeAmount ? (signedAmountMantissa(chargeAmount) ?? 0n) : 0n);
         const result =
           activeShorthandTab === "spend"
-            ? await createSpend({
-                ...common,
-                counterparty_account_id: activeTabDraft.merchantAccountId ?? -1,
-                funding_account_id: activeTabDraft.fundingAccountId ?? -1,
-              } satisfies CreateSpendTransactionRequest)
+            ? spendMerchantRecords.length > 1
+              ? await createJournalTransaction({
+                  initiated_date: activeTabDraft.date,
+                  records: [
+                    {
+                      ...recordCommon,
+                      account_id: activeTabDraft.fundingAccountId ?? -1,
+                      amount: formatMantissa(-spendTotal),
+                      category_id: null,
+                    },
+                    ...spendMerchantRecords.map((merchant) => ({
+                      ...recordCommon,
+                      account_id: merchant.accountId,
+                      amount: merchant.amount,
+                      category_id: merchant.categoryId,
+                    })),
+                  ],
+                } satisfies CreateTransactionRequest)
+              : await createSpend({
+                  ...common,
+                  category_id: primarySpendMerchant!.categoryId,
+                  counterparty_account_id: primarySpendMerchant!.accountId,
+                  funding_account_id: activeTabDraft.fundingAccountId ?? -1,
+                } satisfies CreateSpendTransactionRequest)
             : activeShorthandTab === "income"
               ? await createIncome({
                   ...common,
+                  category_id: activeTabDraft.categoryId!,
                   destination_account_id:
                     activeTabDraft.destinationAccountId ?? -1,
                   source_account_id: activeTabDraft.sourceAccountId ?? -1,
@@ -2574,17 +3708,61 @@ export const EntryPanel = ({
               : activeShorthandTab === "refund"
                 ? await createRefund({
                     ...common,
+                    category_id: activeTabDraft.categoryId!,
                     counterparty_account_id:
                       activeTabDraft.merchantAccountId ?? -1,
                     destination_account_id:
                       activeTabDraft.destinationAccountId ?? -1,
                   } satisfies CreateRefundTransactionRequest)
-                : await createTransfer({
-                    ...common,
-                    destination_account_id:
-                      activeTabDraft.destinationAccountId ?? -1,
-                    source_account_id: activeTabDraft.sourceAccountId ?? -1,
-                  } satisfies CreateTransferTransactionRequest);
+                : activeShorthandTab === "exchange"
+                  ? await createExchange({
+                      bought_account_id: activeTabDraft.boughtAccountId ?? -1,
+                      bought_amount:
+                        normalizeAmount(activeTabDraft.boughtAmount) ?? "",
+                      initiated_date: activeTabDraft.date,
+                      member_id: activeTabDraft.memberId ?? null,
+                      memo: activeTabDraft.memo.trim()
+                        ? activeTabDraft.memo.trim()
+                        : null,
+                      posting_status: "posted",
+                      reconciliation_status: "unreconciled",
+                      sold_account_id: activeTabDraft.soldAccountId ?? -1,
+                      sold_amount: amount,
+                      tag_ids: [...activeTabDraft.tagIds],
+                    } satisfies CreateExchangeTransactionRequest)
+                  : chargeAmount &&
+                      activeTabDraft.chargeAccountId &&
+                      activeTabDraft.chargeCategoryId
+                    ? await createJournalTransaction({
+                        initiated_date: activeTabDraft.date,
+                        records: [
+                          {
+                            ...recordCommon,
+                            account_id: activeTabDraft.sourceAccountId ?? -1,
+                            amount: formatMantissa(-transferTotal),
+                            category_id: null,
+                          },
+                          {
+                            ...recordCommon,
+                            account_id:
+                              activeTabDraft.destinationAccountId ?? -1,
+                            amount,
+                            category_id: null,
+                          },
+                          {
+                            ...recordCommon,
+                            account_id: activeTabDraft.chargeAccountId,
+                            amount: chargeAmount,
+                            category_id: activeTabDraft.chargeCategoryId,
+                          },
+                        ],
+                      } satisfies CreateTransactionRequest)
+                    : await createTransfer({
+                        ...common,
+                        destination_account_id:
+                          activeTabDraft.destinationAccountId ?? -1,
+                        source_account_id: activeTabDraft.sourceAccountId ?? -1,
+                      } satisfies CreateTransferTransactionRequest);
 
         if (result.data) {
           const nextTabDraft = stickyNextTabDraft(
@@ -2644,7 +3822,9 @@ export const EntryPanel = ({
       draft,
       draftForStorage,
       draftPersistence,
+      focusSpendMerchantError,
       focusFirstError,
+      localAdvancedErrors,
       lookups,
       onClose,
       onSaved,
@@ -2660,6 +3840,26 @@ export const EntryPanel = ({
     activeTabDraft && activeConfig
       ? accountValue(activeTabDraft, activeConfig.secondaryAccountField)
       : undefined;
+  const primaryAccountOptions =
+    activeTab === "exchange" && exchangeBoughtCurrency
+      ? options.movementAccounts.filter(
+          (option) =>
+            option.id === primaryAccountValue ||
+            accountCurrency(lookups, option.id) !== exchangeBoughtCurrency,
+        )
+      : activeConfig
+        ? options[activeConfig.primaryAccountOptionSet]
+        : [];
+  const secondaryAccountOptions =
+    activeTab === "exchange" && exchangeSoldCurrency
+      ? options.movementAccounts.filter(
+          (option) =>
+            option.id === secondaryAccountValue ||
+            accountCurrency(lookups, option.id) !== exchangeSoldCurrency,
+        )
+      : activeConfig
+        ? options[activeConfig.secondaryAccountOptionSet]
+        : [];
 
   if (!open) {
     return null;
@@ -2708,7 +3908,7 @@ export const EntryPanel = ({
       <div
         role="tablist"
         aria-label="Transaction type"
-        className="grid grid-cols-5 border-b-2 border-[var(--border-ink)]"
+        className="grid grid-cols-6 border-b-2 border-[var(--border-ink)]"
       >
         {entryTypes.map((entryType) => {
           const disabled = !tabIsAvailable(entryType);
@@ -2851,6 +4051,17 @@ export const EntryPanel = ({
                           <h3 className="font-heading text-sm font-semibold uppercase">
                             Record {rowIndex + 1}
                           </h3>
+                          {classification?.records.find(
+                            (record) => record.record_index === rowIndex,
+                          ) ? (
+                            <span className="font-mono text-xs font-semibold uppercase">
+                              {accountingWordLabel(
+                                classification.records.find(
+                                  (record) => record.record_index === rowIndex,
+                                )!.record_role,
+                              )}
+                            </span>
+                          ) : null}
                           <Tooltip
                             label={`Remove record ${rowIndex + 1}`}
                             asChild
@@ -2885,16 +4096,27 @@ export const EntryPanel = ({
                             className="col-span-full"
                           >
                             <EntityPicker
-                              key={`${lookupRevision}:advanced:${row.draftId}:account:${row.categoryId ?? ""}`}
+                              key={`${lookupRevision}:advanced:${row.draftId}:account`}
                               exactMatchOptions={exactMatchAccountOptions}
                               id={`advanced-record-${rowIndex}-account`}
                               label={`Record ${rowIndex + 1} account`}
                               labelClassName="sr-only"
-                              options={advancedAccountOptions(row.categoryId)}
+                              options={optionAccounts.map((account) =>
+                                entityOption(account, account.account_id),
+                              )}
                               value={row.accountId}
                               onChange={(accountId) => {
+                                const nextAccountType = accountTypeForId(
+                                  lookups,
+                                  accountId,
+                                );
                                 updateAdvancedRow(rowIndex, {
                                   accountId,
+                                  categoryId:
+                                    nextAccountType &&
+                                    nextAccountType !== "flow"
+                                      ? undefined
+                                      : row.categoryId,
                                   currency:
                                     accountCurrency(lookups, accountId) ??
                                     row.currency,
@@ -2982,31 +4204,35 @@ export const EntryPanel = ({
                             label="Category"
                             className="col-span-full"
                           >
-                            <EntityPicker
-                              key={`${lookupRevision}:advanced:${row.draftId}:category`}
-                              id={`advanced-record-${rowIndex}-category`}
-                              label={`Record ${rowIndex + 1} category`}
-                              labelClassName="sr-only"
-                              options={options.allCategories}
-                              value={row.categoryId}
-                              onChange={(categoryId) => {
-                                const accountId = advancedAccountOptions(
-                                  categoryId,
-                                ).some((option) => option.id === row.accountId)
-                                  ? row.accountId
-                                  : undefined;
-                                updateAdvancedRow(rowIndex, {
-                                  accountId,
-                                  categoryId,
-                                });
-                              }}
-                            />
+                            {accountTypeForId(lookups, row.accountId) ===
+                            "flow" ? (
+                              <EntityPicker
+                                key={`${lookupRevision}:advanced:${row.draftId}:category`}
+                                id={`advanced-record-${rowIndex}-category`}
+                                label={`Record ${rowIndex + 1} category`}
+                                labelClassName="sr-only"
+                                options={options.allCategories}
+                                value={row.categoryId}
+                                onChange={(categoryId) => {
+                                  updateAdvancedRow(rowIndex, { categoryId });
+                                }}
+                              />
+                            ) : (
+                              <span className="inline-flex h-9" aria-hidden />
+                            )}
                             <FieldError
-                              message={advancedFieldError(
-                                advancedFieldErrors,
-                                rowIndex,
-                                "categoryId",
-                              )}
+                              message={
+                                advancedFieldError(
+                                  advancedFieldErrors,
+                                  rowIndex,
+                                  "categoryId",
+                                ) ??
+                                advancedFieldError(
+                                  localAdvancedErrors,
+                                  rowIndex,
+                                  "categoryId",
+                                )
+                              }
                             />
                           </AdvancedRecordField>
                           <AdvancedRecordField
@@ -3203,7 +4429,13 @@ export const EntryPanel = ({
               </>
             ) : activeTabDraft && activeConfig ? (
               <>
-                <div className="grid grid-cols-[1fr_130px] gap-3">
+                <div
+                  className={
+                    activeTab === "exchange"
+                      ? "grid grid-cols-1 gap-3"
+                      : "grid grid-cols-[1fr_130px] gap-3"
+                  }
+                >
                   <div className="flex flex-col gap-1">
                     <label
                       htmlFor={`${activeTab}-date`}
@@ -3226,64 +4458,72 @@ export const EntryPanel = ({
                     />
                     <FieldError message={fieldErrors.date} />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label
-                      htmlFor={`${activeTab}-currency`}
-                      className="text-sm font-semibold"
-                    >
-                      Currency
-                    </label>
-                    <input
-                      id={`${activeTab}-currency`}
-                      list="entry-currency-options"
-                      className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                      value={activeTabDraft.currency}
-                      onBlur={() => {
-                        validateField("currency");
-                      }}
-                      onChange={(event) => {
-                        updateActiveTabDraft({
-                          currency: event.target.value.toUpperCase(),
-                        });
-                      }}
-                    />
-                    <datalist id="entry-currency-options">
-                      {options.currencies.map((currency) => (
-                        <option key={currency} value={currency} />
-                      ))}
-                    </datalist>
-                    <FieldError message={fieldErrors.currency} />
-                  </div>
+                  {activeTab !== "exchange" ? (
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor={`${activeTab}-currency`}
+                        className="text-sm font-semibold"
+                      >
+                        Currency
+                      </label>
+                      <input
+                        id={`${activeTab}-currency`}
+                        list="entry-currency-options"
+                        className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                        value={activeTabDraft.currency}
+                        onBlur={() => {
+                          validateField("currency");
+                        }}
+                        onChange={(event) => {
+                          updateActiveTabDraft({
+                            currency: event.target.value.toUpperCase(),
+                          });
+                        }}
+                      />
+                      <datalist id="entry-currency-options">
+                        {options.currencies.map((currency) => (
+                          <option key={currency} value={currency} />
+                        ))}
+                      </datalist>
+                      <FieldError message={fieldErrors.currency} />
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <label
-                    htmlFor={`${activeTab}-amount`}
-                    className="text-sm font-semibold"
-                  >
-                    Amount
-                  </label>
-                  <input
-                    id={`${activeTab}-amount`}
-                    inputMode="decimal"
-                    className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                    placeholder="12.34"
-                    value={activeTabDraft.amount}
-                    onBlur={() => {
-                      validateField("amount");
-                    }}
-                    onChange={(event) => {
-                      updateActiveTabDraft({ amount: event.target.value });
-                    }}
-                  />
-                  <FieldError message={fieldErrors.amount} />
-                </div>
+                {activeTab !== "spend" ? (
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor={`${activeTab}-amount`}
+                      className="text-sm font-semibold"
+                    >
+                      {activeTab === "refund"
+                        ? "Amount received"
+                        : activeTab === "exchange"
+                          ? "Amount sold"
+                          : "Amount"}
+                    </label>
+                    <input
+                      id={`${activeTab}-amount`}
+                      inputMode="decimal"
+                      className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                      placeholder="12.34"
+                      value={activeTabDraft.amount}
+                      onBlur={() => {
+                        validateField("amount");
+                      }}
+                      onChange={(event) => {
+                        updateActiveTabDraft({ amount: event.target.value });
+                      }}
+                    />
+                    <FieldError message={fieldErrors.amount} />
+                  </div>
+                ) : null}
 
                 <EntityPicker
                   key={`${lookupRevision}:${initializedLaunchKey}:${sessionCount}:${activeTab}:${activeConfig.primaryAccountField}`}
                   id={`${activeTab}-${activeConfig.primaryAccountField}`}
                   label={activeConfig.primaryAccountLabel}
-                  options={options[activeConfig.primaryAccountOptionSet]}
+                  options={primaryAccountOptions}
                   value={primaryAccountValue}
                   onChange={(accountId) => {
                     updateActiveTabDraft({
@@ -3298,77 +4538,245 @@ export const EntryPanel = ({
                   message={fieldErrors[activeConfig.primaryAccountField]}
                 />
 
-                <EntityPicker
-                  createConflictOptions={createConflictOptions.accounts}
-                  createOption={
-                    activeConfig.secondaryAccountOptionSet === "flowAccounts"
-                      ? createFlowAccountOption
-                      : undefined
-                  }
-                  key={`${lookupRevision}:${initializedLaunchKey}:${sessionCount}:${activeTab}:${activeConfig.secondaryAccountField}`}
-                  id={`${activeTab}-${activeConfig.secondaryAccountField}`}
-                  label={activeConfig.secondaryAccountLabel}
-                  options={options[activeConfig.secondaryAccountOptionSet]}
-                  value={secondaryAccountValue}
-                  onChange={(accountId) => {
-                    updateActiveTabDraft({
-                      [activeConfig.secondaryAccountField]: accountId,
-                    });
-                  }}
-                />
-                <FieldError
-                  message={fieldErrors[activeConfig.secondaryAccountField]}
-                />
-
-                <EntityPicker
-                  key={`${initializedLaunchKey}:${sessionCount}:${activeTab}:category`}
-                  createConflictOptions={createConflictOptions.categories}
-                  createOption={(fqn) =>
-                    createCategoryOption(fqn, activeCategoryCreationIntent!)
-                  }
-                  disabled={!categoryPickerReady}
-                  id={`${activeTab}-category`}
-                  label="Category"
-                  options={options.categories}
-                  placeholder={
-                    categoryPickerReady ? "Search" : "Loading categories"
-                  }
-                  value={activeTabDraft.categoryId}
-                  onChange={(categoryId) => {
-                    updateActiveTabDraft({ categoryId });
-                  }}
-                />
-                {activeConfig.categoryIntents.length > 1 ? (
-                  <div className="flex flex-col gap-1">
-                    <label className="text-sm font-semibold">
-                      New category intent
-                    </label>
-                    <Select
-                      value={activeCategoryCreationIntent}
-                      onValueChange={(intent) => {
-                        setCategoryCreationIntent(
-                          intent as CategoryEconomicIntent,
-                        );
+                {activeTab === "spend" ? (
+                  <>
+                    {activeTabDraft.spendMerchants.map(
+                      (merchant, merchantIndex) => (
+                        <fieldset
+                          key={merchant.draftId}
+                          className="flex flex-col gap-3 border-2 border-[var(--border-ink)] bg-[var(--band)] p-3"
+                          aria-label={`Merchant ${merchantIndex + 1}`}
+                        >
+                          <legend className="font-heading px-1 text-xs font-semibold uppercase">
+                            Merchant {merchantIndex + 1}
+                          </legend>
+                          <EntityPicker
+                            createConflictOptions={
+                              createConflictOptions.accounts
+                            }
+                            createOption={createFlowAccountOption}
+                            id={`spend-merchant-${merchantIndex}-account`}
+                            label="Merchant account"
+                            options={options.flowAccounts}
+                            value={merchant.accountId}
+                            onChange={(accountId) => {
+                              updateSpendMerchant(merchantIndex, merchant, {
+                                accountId,
+                              });
+                            }}
+                          />
+                          <FieldError
+                            message={
+                              merchantFieldErrors[merchant.draftId]?.accountId
+                            }
+                          />
+                          <div className="flex flex-col gap-1">
+                            <label
+                              htmlFor={`spend-merchant-${merchantIndex}-amount`}
+                              className="text-sm font-semibold"
+                            >
+                              Amount
+                            </label>
+                            <input
+                              id={`spend-merchant-${merchantIndex}-amount`}
+                              inputMode="decimal"
+                              className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                              value={merchant.amount}
+                              onBlur={() => {
+                                validateSpendMerchantField(merchant, "amount");
+                              }}
+                              onChange={(event) => {
+                                updateSpendMerchant(merchantIndex, merchant, {
+                                  amount: event.target.value,
+                                });
+                              }}
+                            />
+                            <FieldError
+                              message={
+                                merchantFieldErrors[merchant.draftId]?.amount
+                              }
+                            />
+                          </div>
+                          <EntityPicker
+                            key={`${initializedLaunchKey}:${sessionCount}:${activeTab}:merchant-${merchantIndex}-category`}
+                            createConflictOptions={
+                              createConflictOptions.categories
+                            }
+                            createOption={(fqn) =>
+                              createCategoryOption(fqn, "expense")
+                            }
+                            id={`spend-merchant-${merchantIndex}-category`}
+                            label="Category"
+                            options={options.categories}
+                            value={merchant.categoryId}
+                            onChange={(categoryId) => {
+                              updateSpendMerchant(merchantIndex, merchant, {
+                                categoryId,
+                              });
+                            }}
+                          />
+                          <FieldError
+                            message={
+                              merchantFieldErrors[merchant.draftId]?.categoryId
+                            }
+                          />
+                          {merchantIndex > 0 ? (
+                            <Button
+                              ref={(element) => {
+                                merchantRemoveButtonRefs.current[
+                                  merchantIndex
+                                ] = element;
+                              }}
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                updateActiveTabDraft({
+                                  spendMerchants:
+                                    activeTabDraft.spendMerchants.filter(
+                                      (_merchant, index) =>
+                                        index !== merchantIndex,
+                                    ),
+                                });
+                                setMerchantFieldErrors((currentErrors) => {
+                                  const nextErrors = { ...currentErrors };
+                                  delete nextErrors[merchant.draftId];
+                                  return nextErrors;
+                                });
+                                focusAfterMerchantRemoval(merchantIndex);
+                              }}
+                            >
+                              <Trash aria-hidden="true" />
+                              Remove merchant
+                            </Button>
+                          ) : null}
+                        </fieldset>
+                      ),
+                    )}
+                    <Button
+                      ref={addMerchantButtonRef}
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        const merchantIndex =
+                          activeTabDraft.spendMerchants.length;
+                        updateActiveTabDraft({
+                          spendMerchants: [
+                            ...activeTabDraft.spendMerchants,
+                            blankSpendMerchantDraft(),
+                          ],
+                        });
+                        focusAfterMerchantAddition(merchantIndex);
                       }}
                     >
-                      <SelectTrigger aria-label="Creation economic intent">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {activeConfig.categoryIntents.map((intent) => (
-                          <SelectItem key={intent} value={intent}>
-                            {intent === "expense" ? "Expense" : "Fee"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <Plus aria-hidden="true" />
+                      Add merchant
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <EntityPicker
+                      createConflictOptions={createConflictOptions.accounts}
+                      createOption={
+                        activeConfig.secondaryAccountOptionSet ===
+                        "flowAccounts"
+                          ? createFlowAccountOption
+                          : undefined
+                      }
+                      key={`${lookupRevision}:${initializedLaunchKey}:${sessionCount}:${activeTab}:${activeConfig.secondaryAccountField}`}
+                      id={`${activeTab}-${activeConfig.secondaryAccountField}`}
+                      label={activeConfig.secondaryAccountLabel}
+                      options={secondaryAccountOptions}
+                      value={secondaryAccountValue}
+                      onChange={(accountId) => {
+                        updateActiveTabDraft({
+                          [activeConfig.secondaryAccountField]: accountId,
+                        });
+                      }}
+                    />
+                    <FieldError
+                      message={fieldErrors[activeConfig.secondaryAccountField]}
+                    />
+                  </>
+                )}
+
+                {activeTab === "exchange" ? (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor="exchange-bought-amount"
+                        className="text-sm font-semibold"
+                      >
+                        Amount bought
+                      </label>
+                      <input
+                        id="exchange-bought-amount"
+                        inputMode="decimal"
+                        className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                        value={activeTabDraft.boughtAmount}
+                        onBlur={() => {
+                          validateField("boughtAmount");
+                        }}
+                        onChange={(event) => {
+                          updateActiveTabDraft({
+                            boughtAmount: event.target.value,
+                          });
+                        }}
+                      />
+                      <FieldError message={fieldErrors.boughtAmount} />
+                    </div>
+                    {exchangeRate ? (
+                      <p className="min-w-0 font-mono text-sm break-all">
+                        {exchangeRate}
+                      </p>
+                    ) : exchangeRateError ? (
+                      <p
+                        className="text-destructive font-mono text-xs"
+                        role="alert"
+                      >
+                        {exchangeRateError}
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground font-mono text-xs">
+                        Enter both exchange amounts to see the effective rate.
+                      </p>
+                    )}
+                  </>
                 ) : null}
-                <FieldError message={fieldErrors.categoryId} />
-                <RetryableFieldError
-                  message={categoryPicker.errorMessage}
-                  onRetry={retryCategoryPicker}
-                />
+
+                {activeTab !== "spend" &&
+                activeTab !== "transfer" &&
+                activeTab !== "exchange" ? (
+                  <EntityPicker
+                    key={`${initializedLaunchKey}:${sessionCount}:${activeTab}:category`}
+                    createConflictOptions={createConflictOptions.categories}
+                    createOption={(fqn) =>
+                      createCategoryOption(fqn, activeCategoryCreationIntent!)
+                    }
+                    disabled={!categoryPickerReady}
+                    id={`${activeTab}-category`}
+                    label={
+                      activeTab === "refund" ? "Expense category" : "Category"
+                    }
+                    options={options.categories}
+                    placeholder={
+                      categoryPickerReady ? "Search" : "Loading categories"
+                    }
+                    value={activeTabDraft.categoryId}
+                    onChange={(categoryId) => {
+                      updateActiveTabDraft({ categoryId });
+                    }}
+                  />
+                ) : null}
+                {activeTab !== "transfer" && activeTab !== "exchange" ? (
+                  <FieldError message={fieldErrors.categoryId} />
+                ) : null}
+                {activeTab !== "exchange" &&
+                (activeTab !== "transfer" || activeTabDraft.chargeEnabled) ? (
+                  <RetryableFieldError
+                    message={categoryPicker.errorMessage}
+                    onRetry={retryCategoryPicker}
+                  />
+                ) : null}
 
                 <EntityMultiPicker
                   createConflictOptions={createConflictOptions.tags}
@@ -3416,10 +4824,96 @@ export const EntryPanel = ({
                 </div>
 
                 {activeTab === "transfer" ? (
-                  <p className="text-muted-foreground font-body text-xs">
-                    Transfer fee rows are not exposed by the shorthand endpoint
-                    yet.
-                  </p>
+                  activeTabDraft.chargeEnabled ? (
+                    <fieldset
+                      className="flex flex-col gap-3 border-2 border-[var(--border-ink)] bg-[var(--band)] p-3"
+                      aria-label="Transfer charge"
+                    >
+                      <legend className="font-heading px-1 text-xs font-semibold uppercase">
+                        Charge
+                      </legend>
+                      <EntityPicker
+                        createConflictOptions={createConflictOptions.accounts}
+                        createOption={createFlowAccountOption}
+                        id="transfer-charge-account"
+                        label="Charge account"
+                        options={options.flowAccounts}
+                        value={activeTabDraft.chargeAccountId}
+                        onChange={(chargeAccountId) => {
+                          updateActiveTabDraft({ chargeAccountId });
+                        }}
+                      />
+                      <FieldError message={fieldErrors.chargeAccountId} />
+                      <div className="flex flex-col gap-1">
+                        <label
+                          htmlFor="transfer-charge-amount"
+                          className="text-sm font-semibold"
+                        >
+                          Charge amount
+                        </label>
+                        <input
+                          id="transfer-charge-amount"
+                          className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                          inputMode="decimal"
+                          value={activeTabDraft.chargeAmount}
+                          onBlur={() => {
+                            validateField("chargeAmount");
+                          }}
+                          onChange={(event) => {
+                            updateActiveTabDraft({
+                              chargeAmount: event.target.value,
+                            });
+                          }}
+                        />
+                        <FieldError message={fieldErrors.chargeAmount} />
+                      </div>
+                      <EntityPicker
+                        createConflictOptions={createConflictOptions.categories}
+                        createOption={(fqn) =>
+                          createCategoryOption(fqn, "expense")
+                        }
+                        id="transfer-charge-category"
+                        label="Charge category"
+                        options={options.categories}
+                        value={activeTabDraft.chargeCategoryId}
+                        onChange={(chargeCategoryId) => {
+                          updateActiveTabDraft({ chargeCategoryId });
+                        }}
+                      />
+                      <FieldError message={fieldErrors.chargeCategoryId} />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          updateActiveTabDraft({
+                            chargeAccountId: undefined,
+                            chargeAmount: "",
+                            chargeCategoryId: undefined,
+                            chargeEnabled: false,
+                          });
+                          focusAfterChargeRemoval();
+                        }}
+                      >
+                        <Trash aria-hidden="true" />
+                        Remove charge
+                      </Button>
+                    </fieldset>
+                  ) : (
+                    <Button
+                      ref={addChargeButtonRef}
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        updateActiveTabDraft({
+                          chargeEnabled: true,
+                        });
+                        focusAfterChargeAddition();
+                      }}
+                    >
+                      <Plus aria-hidden="true" />
+                      Add charge
+                    </Button>
+                  )
                 ) : null}
 
                 <Button
@@ -3435,7 +4929,13 @@ export const EntryPanel = ({
 
           <div className="bg-card flex flex-col gap-3 border-t-2 border-[var(--border-ink)] p-4">
             {activeTab === "advanced" ? (
-              <BalanceMeter balances={balances} />
+              <>
+                <ClassificationPreview
+                  classification={classification}
+                  error={classificationError}
+                />
+                <BalanceMeter balances={balances} />
+              </>
             ) : null}
             {advancedFieldErrors.records ? (
               <FieldError message={advancedFieldErrors.records} />

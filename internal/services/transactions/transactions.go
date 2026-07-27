@@ -60,7 +60,7 @@ type Transaction struct {
 	Class                 TransactionClass
 	DisplayTitle          string
 	PrimaryAmounts        []DisplayAmount
-	Components            []ClassificationComponent
+	Shapes                []TransactionShape
 	CreatedAt             time.Time
 	TombstonedAt          *time.Time
 	Records               []JournalRecord
@@ -72,14 +72,16 @@ type JournalRecord struct {
 	TransactionID        int64
 	AccountID            int64
 	AccountName          string
+	AccountFQN           string
 	AccountType          accounts.AccountType
 	MemberID             *int64
 	Currency             string
 	Amount               values.Decimal
 	AmountUSD            *values.Decimal
 	RunningBalance       *values.Decimal
-	CategoryID           int64
+	CategoryID           *int64
 	EconomicIntent       categories.CategoryEconomicIntent
+	Role                 RecordRole
 	TagIDs               []int64
 	Memo                 *string
 	PendingDate          time.Time
@@ -107,7 +109,7 @@ type JournalRecordInput struct {
 	Currency             string
 	Amount               values.Decimal
 	AmountUSD            *values.Decimal
-	CategoryID           int64
+	CategoryID           *int64
 	TagIDs               []int64
 	Memo                 *string
 	PendingDate          *time.Time
@@ -117,6 +119,14 @@ type JournalRecordInput struct {
 	Source               Source
 	ExternalID           *string
 	ExternalSystem       *string
+}
+
+// ClassificationRecordInput contains only fields used to classify a draft record.
+type ClassificationRecordInput struct {
+	AccountID  int64
+	Currency   string
+	Amount     values.Decimal
+	CategoryID *int64
 }
 
 // AmountUSDBackfillRecord is one unresolved record needing amount-USD inference.
@@ -141,6 +151,7 @@ type RecordSearchOptions struct {
 	MemberID              *int64
 	TagID                 *int64
 	PostingStatus         *PostingStatus
+	RecordRole            *RecordRole
 	IncludeExpected       bool
 	ReconciliationStatus  *ReconciliationStatus
 	AmountMin             *values.Decimal
@@ -170,6 +181,8 @@ type ListOptions struct {
 	MemberIDs          []int64
 	PostingStatuses    []PostingStatus
 	TransactionClasses []TransactionClass
+	TransactionShapes  []TransactionShapeType
+	RecordRoles        []RecordRole
 	AmountMinText      *string
 	AmountMaxText      *string
 	AmountUSDMinText   *string
@@ -227,11 +240,37 @@ const (
 	TransactionClassSpend            TransactionClass = "spend"
 	TransactionClassIncome           TransactionClass = "income"
 	TransactionClassRefund           TransactionClass = "refund"
+	TransactionClassClawback         TransactionClass = "clawback"
 	TransactionClassTransfer         TransactionClass = "transfer"
 	TransactionClassCurrencyExchange TransactionClass = "currency_exchange"
 	TransactionClassAdjustment       TransactionClass = "adjustment"
-	TransactionClassFXGainLoss       TransactionClass = "fx_gain_loss"
 	TransactionClassMixed            TransactionClass = "mixed"
+)
+
+// RecordRole is the accounting role derived independently for one journal record.
+type RecordRole string
+
+const (
+	RecordRoleExpense    RecordRole = "expense"
+	RecordRoleRefund     RecordRole = "refund"
+	RecordRoleIncome     RecordRole = "income"
+	RecordRoleClawback   RecordRole = "clawback"
+	RecordRoleExchange   RecordRole = "exchange"
+	RecordRoleAdjustment RecordRole = "adjustment"
+	RecordRoleBalance    RecordRole = "balance"
+)
+
+// TransactionShapeType identifies one independently present kind of transaction activity.
+type TransactionShapeType string
+
+const (
+	TransactionShapeSpend      TransactionShapeType = "spend"
+	TransactionShapeRefund     TransactionShapeType = "refund"
+	TransactionShapeIncome     TransactionShapeType = "income"
+	TransactionShapeClawback   TransactionShapeType = "clawback"
+	TransactionShapeAdjustment TransactionShapeType = "adjustment"
+	TransactionShapeExchange   TransactionShapeType = "exchange"
+	TransactionShapeTransfer   TransactionShapeType = "transfer"
 )
 
 // DisplayAmount is a signed display amount in one currency.
@@ -240,17 +279,35 @@ type DisplayAmount struct {
 	Amount   values.Decimal
 }
 
-// ClassificationComponent summarizes one economic-intent component.
-type ClassificationComponent struct {
-	Intent  categories.CategoryEconomicIntent
-	Amounts []DisplayAmount
+// ExchangeEffectiveRate is the derived rate encoded by the sold and bought exchange legs.
+type ExchangeEffectiveRate struct {
+	SoldCurrency   string
+	BoughtCurrency string
+	Rate           values.Decimal
+}
+
+// TransactionShape summarizes one independently derived transaction activity.
+type TransactionShape struct {
+	Shape         TransactionShapeType
+	Amounts       []DisplayAmount
+	EffectiveRate *ExchangeEffectiveRate
+}
+
+// Classification is the derived semantic result for a set of records.
+type Classification struct {
+	Class          TransactionClass
+	PrimaryAmounts []DisplayAmount
+	Shapes         []TransactionShape
+	Roles          []RecordRole
 }
 
 // SemanticRecord is the service-owned classification input for one journal record.
 type SemanticRecord struct {
 	Currency       string
 	Amount         values.Decimal
+	AccountFQN     string
 	AccountType    accounts.AccountType
+	CategoryID     *int64
 	EconomicIntent categories.CategoryEconomicIntent
 }
 
@@ -280,6 +337,7 @@ type Repository interface {
 type AccountReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
 	ValidateActiveReference(context.Context, int64, accounts.ReferenceOptions) (accounts.Reference, error)
+	ActiveReferenceByFQN(context.Context, string) (accounts.Reference, error)
 }
 
 // CategoryReferenceValidator resolves active category references for transaction validation.
@@ -369,6 +427,52 @@ func (s *Service) ValidateAccountTypeChange(ctx context.Context, accountID int64
 type semanticDictionaries struct {
 	accounts   map[int64]accounts.Reference
 	categories map[int64]categories.Reference
+}
+
+// Classify derives semantic fields for unsaved records without requiring balance.
+func (s *Service) Classify(ctx context.Context, records []ClassificationRecordInput) (Classification, error) {
+	if len(records) == 0 {
+		return Classification{}, services.InvalidRequest("transaction requires records")
+	}
+	for index, record := range records {
+		if err := validateClassificationRecord(index, record); err != nil {
+			return Classification{}, err
+		}
+	}
+	journalRecords := make([]JournalRecordInput, 0, len(records))
+	for _, record := range records {
+		journalRecords = append(journalRecords, JournalRecordInput{
+			AccountID:  record.AccountID,
+			Currency:   record.Currency,
+			Amount:     record.Amount,
+			CategoryID: record.CategoryID,
+		})
+	}
+	dictionaries, err := s.semanticDictionaries(ctx, journalRecords)
+	if err != nil {
+		return Classification{}, err
+	}
+	semanticRecords, err := semanticRecordsFromDictionaries(journalRecords, dictionaries)
+	if err != nil {
+		return Classification{}, err
+	}
+	return classifySemanticRecords(semanticRecords)
+}
+
+func validateClassificationRecord(index int, record ClassificationRecordInput) error {
+	if record.AccountID <= 0 {
+		return services.InvalidRequest(indexedField(index, "account_id") + " must be positive")
+	}
+	if record.CategoryID != nil && *record.CategoryID <= 0 {
+		return services.InvalidRequest(indexedField(index, "category_id") + " must be positive")
+	}
+	if record.Amount.IsZero() {
+		return services.InvalidRequest(indexedField(index, "amount") + " must be non-zero")
+	}
+	if err := validateCurrency(record.Currency); err != nil {
+		return services.InvalidRequest(indexedField(index, "currency") + " must be an ISO 4217 code or crypto code prefixed with C::")
+	}
+	return nil
 }
 
 // Create validates and creates a transaction and its journal records.
@@ -638,7 +742,17 @@ func validateTransactionListOptions(opts ListOptions) (ListOptions, error) {
 	}
 	for _, class := range opts.TransactionClasses {
 		if !validTransactionClass(class) {
-			return ListOptions{}, services.InvalidRequest("transaction_class values must be spend, income, refund, transfer, currency_exchange, adjustment, fx_gain_loss, or mixed")
+			return ListOptions{}, services.InvalidRequest("transaction_class values must be spend, income, refund, clawback, transfer, currency_exchange, adjustment, or mixed")
+		}
+	}
+	for _, shape := range opts.TransactionShapes {
+		if !validTransactionShape(shape) {
+			return ListOptions{}, services.InvalidRequest("transaction_shape values must be spend, refund, income, clawback, adjustment, exchange, or transfer")
+		}
+	}
+	for _, role := range opts.RecordRoles {
+		if !validRecordRole(role) {
+			return ListOptions{}, services.InvalidRequest("record_role values must be expense, refund, income, clawback, exchange, adjustment, or balance")
 		}
 	}
 	if opts.Search != nil && *opts.Search == "" {
@@ -708,11 +822,41 @@ func validTransactionClass(class TransactionClass) bool {
 	case TransactionClassSpend,
 		TransactionClassIncome,
 		TransactionClassRefund,
+		TransactionClassClawback,
 		TransactionClassTransfer,
 		TransactionClassCurrencyExchange,
 		TransactionClassAdjustment,
-		TransactionClassFXGainLoss,
 		TransactionClassMixed:
+		return true
+	default:
+		return false
+	}
+}
+
+func validTransactionShape(shape TransactionShapeType) bool {
+	switch shape {
+	case TransactionShapeSpend,
+		TransactionShapeRefund,
+		TransactionShapeIncome,
+		TransactionShapeClawback,
+		TransactionShapeAdjustment,
+		TransactionShapeExchange,
+		TransactionShapeTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+func validRecordRole(role RecordRole) bool {
+	switch role {
+	case RecordRoleExpense,
+		RecordRoleRefund,
+		RecordRoleIncome,
+		RecordRoleClawback,
+		RecordRoleExchange,
+		RecordRoleAdjustment,
+		RecordRoleBalance:
 		return true
 	default:
 		return false
@@ -758,7 +902,11 @@ func (s *Service) SearchRecords(ctx context.Context, opts RecordSearchOptions) (
 		return services.PaginatedList[JournalRecord]{}, err
 	}
 
-	return s.repo.SearchRecords(ctx, opts)
+	records, err := s.repo.SearchRecords(ctx, opts)
+	if err != nil {
+		return services.PaginatedList[JournalRecord]{}, err
+	}
+	return classifySearchedRecords(records)
 }
 
 // SearchAccountRecords returns journal records for one active account target.
@@ -781,7 +929,30 @@ func (s *Service) SearchAccountRecords(ctx context.Context, accountID int64, opt
 		return services.PaginatedList[JournalRecord]{}, err
 	}
 
-	return s.repo.SearchRecords(ctx, opts)
+	records, err := s.repo.SearchRecords(ctx, opts)
+	if err != nil {
+		return services.PaginatedList[JournalRecord]{}, err
+	}
+	return classifySearchedRecords(records)
+}
+
+func classifySearchedRecords(records services.PaginatedList[JournalRecord]) (services.PaginatedList[JournalRecord], error) {
+	for index := range records.Items {
+		record := &records.Items[index]
+		role, err := deriveRecordRole(SemanticRecord{
+			Currency:       record.Currency,
+			Amount:         record.Amount,
+			AccountFQN:     record.AccountFQN,
+			AccountType:    record.AccountType,
+			CategoryID:     record.CategoryID,
+			EconomicIntent: record.EconomicIntent,
+		})
+		if err != nil {
+			return services.PaginatedList[JournalRecord]{}, err
+		}
+		record.Role = role
+	}
+	return records, nil
 }
 
 // BulkCategorize assigns one category to selected journal records.
@@ -950,25 +1121,39 @@ func (s *Service) validateInputClassification(ctx context.Context, input CreateI
 	if err != nil {
 		return err
 	}
-	records := make([]SemanticRecord, 0, len(input.Records))
-	for _, record := range input.Records {
+	records, err := semanticRecordsFromDictionaries(input.Records, dictionaries)
+	if err != nil {
+		return err
+	}
+	_, err = classifySemanticRecords(records)
+	return err
+}
+
+func semanticRecordsFromDictionaries(inputs []JournalRecordInput, dictionaries semanticDictionaries) ([]SemanticRecord, error) {
+	records := make([]SemanticRecord, 0, len(inputs))
+	for _, record := range inputs {
 		accountReference, ok := dictionaries.accounts[record.AccountID]
 		if !ok {
-			return invalidTransactionReferenceError()
+			return nil, invalidTransactionReferenceError()
 		}
-		categoryReference, ok := dictionaries.categories[record.CategoryID]
-		if !ok {
-			return invalidTransactionReferenceError()
+		var economicIntent categories.CategoryEconomicIntent
+		if record.CategoryID != nil {
+			categoryReference, ok := dictionaries.categories[*record.CategoryID]
+			if !ok {
+				return nil, invalidTransactionReferenceError()
+			}
+			economicIntent = categoryReference.EconomicIntent
 		}
 		records = append(records, SemanticRecord{
 			Currency:       record.Currency,
 			Amount:         record.Amount,
+			AccountFQN:     accountReference.FQN,
 			AccountType:    accountReference.AccountType,
-			EconomicIntent: categoryReference.EconomicIntent,
+			CategoryID:     record.CategoryID,
+			EconomicIntent: economicIntent,
 		})
 	}
-	_, err = classifySemanticRecords(records)
-	return err
+	return records, nil
 }
 
 func (s *Service) validateBulkCategorizeClassification(ctx context.Context, recordIDs []int64, categoryID int64) error {
@@ -993,6 +1178,7 @@ func (s *Service) validateBulkCategorizeClassification(ctx context.Context, reco
 		for recordIndex := range affected[transactionIndex].Records {
 			record := &affected[transactionIndex].Records[recordIndex]
 			if _, ok := selected[record.ID]; ok {
+				record.CategoryID = &categoryID
 				record.EconomicIntent = categoryReference.EconomicIntent
 				found[record.ID] = struct{}{}
 			}
@@ -1031,6 +1217,7 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 			record := &affected[transactionIndex].Records[recordIndex]
 			if _, ok := selected[record.ID]; ok {
 				record.AccountID = accountID
+				record.AccountFQN = accountReference.FQN
 				record.AccountType = accountReference.AccountType
 				found[record.ID] = struct{}{}
 			}
@@ -1101,7 +1288,9 @@ func (s *Service) semanticDictionaries(ctx context.Context, records []JournalRec
 	tagIDs := []int64{}
 	for _, record := range records {
 		accountIDs = append(accountIDs, record.AccountID)
-		categoryIDs = append(categoryIDs, record.CategoryID)
+		if record.CategoryID != nil {
+			categoryIDs = append(categoryIDs, *record.CategoryID)
+		}
 		if record.MemberID != nil {
 			memberIDs = append(memberIDs, *record.MemberID)
 		}
@@ -1265,7 +1454,7 @@ func validateJournalRecord(index int, record JournalRecordInput) error {
 	if record.MemberID != nil && *record.MemberID <= 0 {
 		return services.InvalidRequest(indexedField(index, "member_id") + " must be positive")
 	}
-	if record.CategoryID <= 0 {
+	if record.CategoryID != nil && *record.CategoryID <= 0 {
 		return services.InvalidRequest(indexedField(index, "category_id") + " must be positive")
 	}
 	if record.Amount.IsZero() {
@@ -1336,6 +1525,9 @@ func validateRecordSearchOptions(opts RecordSearchOptions) error {
 		if err := validatePostingStatus(0, *opts.PostingStatus); err != nil {
 			return services.InvalidRequest("posting_status must be expected, pending, posted, or cancelled")
 		}
+	}
+	if opts.RecordRole != nil && !validRecordRole(*opts.RecordRole) {
+		return services.InvalidRequest("record_role must be expense, refund, income, clawback, exchange, adjustment, or balance")
 	}
 	if opts.ReconciliationStatus != nil {
 		if err := validateReconciliationStatus(0, *opts.ReconciliationStatus); err != nil {

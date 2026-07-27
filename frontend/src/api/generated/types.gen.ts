@@ -116,9 +116,14 @@ export type AccountBalanceListResponse = {
 };
 
 /**
- * Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+ * Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics.
  */
-export type AccountType = 'balance' | 'flow' | 'system';
+export type AccountType = 'owned' | 'party' | 'flow' | 'system';
+
+/**
+ * User-writable account semantic type. System accounts are installed and managed only by Mina.
+ */
+export type WritableAccountType = 'owned' | 'party' | 'flow';
 
 export type CreditLimitHistory = {
     credit_limit_history_id: number;
@@ -193,9 +198,9 @@ export type CategoryListResponse = {
 };
 
 /**
- * Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+ * Whether a category describes spending or income.
  */
-export type CategoryEconomicIntent = 'expense' | 'fee' | 'income' | 'refund' | 'transfer' | 'exchange' | 'adjustment' | 'fx_gain_loss';
+export type CategoryEconomicIntent = 'expense' | 'income';
 
 export type CreateCategoryRequest = {
     /**
@@ -218,7 +223,7 @@ export type CreateAccountRequest = {
      * Colon-separated hierarchical FQN for the account leaf.
      */
     fqn: string;
-    account_type: AccountType;
+    account_type: WritableAccountType;
     /**
      * Whether the entity is excluded from default lists.
      */
@@ -293,9 +298,9 @@ export type CreateJournalRecordRequest = {
      */
     amount_usd?: string | null;
     /**
-     * Category identifier for this journal record or shorthand transaction.
+     * Category identifier for a flow record; omit or use null for every other account type.
      */
-    category_id: number;
+    category_id?: number | null;
     /**
      * Tag identifiers to assign to the journal records.
      */
@@ -543,10 +548,6 @@ export type CreateTransferTransactionRequest = {
      */
     destination_account_id: number;
     /**
-     * Category identifier for this journal record or shorthand transaction.
-     */
-    category_id: number;
-    /**
      * Currency code using ISO 4217 or the `C::` crypto prefix.
      */
     currency: string;
@@ -554,6 +555,51 @@ export type CreateTransferTransactionRequest = {
      * JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount: string;
+    /**
+     * Optional household-member identifier for the journal records.
+     */
+    member_id?: number | null;
+    /**
+     * Tag identifiers to assign to the journal records.
+     */
+    tag_ids?: Array<number>;
+    /**
+     * Optional memo text for the journal records.
+     */
+    memo?: string | null;
+    /**
+     * UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+     */
+    pending_date?: string | null;
+    /**
+     * UTC timestamp when the generated records posted.
+     */
+    posted_date?: string | null;
+    posting_status?: PostingStatus;
+    reconciliation_status?: ReconciliationStatus;
+};
+
+export type CreateExchangeTransactionRequest = {
+    /**
+     * Human-facing transaction date in YYYY-MM-DD format.
+     */
+    initiated_date: string;
+    /**
+     * Owned or party account from which currency is sold.
+     */
+    sold_account_id: number;
+    /**
+     * Owned or party account into which currency is bought.
+     */
+    bought_account_id: number;
+    /**
+     * JSON string, not a JSON number. Positive amount sold in the sold account's currency.
+     */
+    sold_amount: string;
+    /**
+     * JSON string, not a JSON number. Positive amount bought in the bought account's currency.
+     */
+    bought_amount: string;
     /**
      * Optional household-member identifier for the journal records.
      */
@@ -597,7 +643,17 @@ export type DisplayAmount = {
     amount: string;
 };
 
-export type TransactionClass = 'spend' | 'income' | 'refund' | 'transfer' | 'currency_exchange' | 'adjustment' | 'fx_gain_loss' | 'mixed';
+export type TransactionClass = 'spend' | 'income' | 'refund' | 'clawback' | 'transfer' | 'currency_exchange' | 'adjustment' | 'mixed';
+
+/**
+ * Accounting role derived independently from one record's account, sign, and category intent.
+ */
+export type RecordRole = 'expense' | 'refund' | 'income' | 'clawback' | 'exchange' | 'adjustment' | 'balance';
+
+/**
+ * One independently present kind of transaction activity.
+ */
+export type TransactionShapeType = 'spend' | 'refund' | 'income' | 'clawback' | 'adjustment' | 'exchange' | 'transfer';
 
 export type TransactionMonthTotal = {
     /**
@@ -616,9 +672,63 @@ export type TransactionMonthTotalsResponse = {
     income: TransactionMonthTotal;
 };
 
-export type TransactionComponent = {
-    intent: CategoryEconomicIntent;
+export type ExchangeEffectiveRate = {
+    sold_currency: string;
+    bought_currency: string;
+    /**
+     * JSON string, not a JSON number. Sold currency units per one bought currency unit, such as USD/EUR.
+     */
+    rate: string;
+};
+
+export type TransactionShape = {
+    shape: TransactionShapeType;
     amounts: Array<DisplayAmount>;
+    /**
+     * Present only for the exchange shape.
+     */
+    effective_rate?: ExchangeEffectiveRate | null;
+};
+
+export type ClassifyTransactionRequest = {
+    /**
+     * Unsaved journal-record draft; records need not balance.
+     */
+    records: Array<ClassifyJournalRecordRequest>;
+};
+
+export type ClassifyJournalRecordRequest = {
+    /**
+     * Account identifier used to derive this draft record's semantic role.
+     */
+    account_id: number;
+    /**
+     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     */
+    currency: string;
+    /**
+     * JSON string, not a JSON number. Signed non-zero DECIMAL(18,8).
+     */
+    amount: string;
+    /**
+     * Category identifier used to derive this draft flow record's semantic role.
+     */
+    category_id?: number | null;
+};
+
+export type ClassifiedRecord = {
+    /**
+     * Zero-based index into the request records.
+     */
+    record_index: number;
+    record_role: RecordRole;
+};
+
+export type TransactionClassification = {
+    transaction_class: TransactionClass;
+    primary_amounts: Array<DisplayAmount>;
+    shapes: Array<TransactionShape>;
+    records: Array<ClassifiedRecord>;
 };
 
 export type UpdateTransactionRequest = {
@@ -645,9 +755,9 @@ export type TransactionTemplateWriteRequest = {
 
 export type TransactionTemplateRecordRequest = {
     /**
-     * Category identifier for this journal record or shorthand transaction.
+     * Optional category default for a flow-account record.
      */
-    category_id: number;
+    category_id?: number | null;
     /**
      * Account identifier for this journal record or request.
      */
@@ -738,7 +848,7 @@ export type RecurringDefinitionRecordRequest = {
      */
     amount?: string | null;
     /**
-     * Category identifier for this journal record or shorthand transaction.
+     * Category identifier for this recurring record. After template inheritance, flow-account records require a category; owned, party, and system-account records forbid one.
      */
     category_id?: number | null;
     /**
@@ -941,7 +1051,8 @@ export type JournalRecord = {
      * JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     running_balance?: string | null;
-    category_id: number;
+    category_id: number | null;
+    record_role: RecordRole;
     tag_ids: Array<number>;
     memo?: string | null;
     /**
@@ -1038,7 +1149,7 @@ export type TransactionTemplate = {
 export type TransactionTemplateRecord = {
     transaction_template_record_id: number;
     transaction_template_id: number;
-    category_id: number;
+    category_id: number | null;
     account_id: number | null;
     member_id: number | null;
     currency: string | null;
@@ -1095,7 +1206,7 @@ export type RecurringDefinitionRecord = {
      * JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     amount: string;
-    category_id: number;
+    category_id: number | null;
     tag_ids: Array<number>;
     memo: string | null;
     created_at: string;
@@ -1148,7 +1259,7 @@ export type Transaction = {
      */
     display_title: string;
     primary_amounts: Array<DisplayAmount>;
-    components: Array<TransactionComponent>;
+    shapes: Array<TransactionShape>;
     created_at: string;
     tombstoned_at?: string | null;
     records: Array<JournalRecord>;
@@ -1178,7 +1289,7 @@ export type UpdateCategoryRequest = {
 };
 
 export type UpdateAccountRequest = {
-    account_type?: AccountType;
+    account_type?: WritableAccountType;
     /**
      * Whether the account is excluded from default lists.
      */
@@ -2380,7 +2491,7 @@ export type ListAccountsData = {
          */
         include_tombstoned?: boolean;
         /**
-         * Filter by balance, flow, or system account type.
+         * Filter by owned, party, flow, or system account type.
          */
         account_type?: AccountType;
         /**
@@ -2555,7 +2666,7 @@ export type ListAccountBalancesData = {
          */
         include_hidden?: boolean;
         /**
-         * Account identifiers to include; omit to return all eligible active balance accounts.
+         * Account identifiers to include; omit to return all eligible active owned and party accounts.
          */
         account_ids?: Array<number>;
     };
@@ -3749,6 +3860,14 @@ export type ListTransactionsData = {
          */
         transaction_class?: Array<TransactionClass>;
         /**
+         * Filter by one or more server-derived transaction shapes.
+         */
+        transaction_shape?: Array<TransactionShapeType>;
+        /**
+         * Filter by one or more server-derived record roles present in a transaction.
+         */
+        record_role?: Array<RecordRole>;
+        /**
          * JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
          */
         amount_min?: string;
@@ -3838,6 +3957,56 @@ export type CreateTransactionResponses = {
 };
 
 export type CreateTransactionResponse = CreateTransactionResponses[keyof CreateTransactionResponses];
+
+export type ClassifyTransactionData = {
+    body: ClassifyTransactionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/transactions/classify';
+};
+
+export type ClassifyTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type ClassifyTransactionError = ClassifyTransactionErrors[keyof ClassifyTransactionErrors];
+
+export type ClassifyTransactionResponses = {
+    /**
+     * Derived accounting classification for the draft.
+     */
+    200: TransactionClassification;
+};
+
+export type ClassifyTransactionResponse = ClassifyTransactionResponses[keyof ClassifyTransactionResponses];
+
+export type CreateExchangeTransactionData = {
+    body: CreateExchangeTransactionRequest;
+    path?: never;
+    query?: never;
+    url: '/api/transactions/exchange';
+};
+
+export type CreateExchangeTransactionErrors = {
+    /**
+     * The request is invalid.
+     */
+    400: ErrorResponse;
+};
+
+export type CreateExchangeTransactionError = CreateExchangeTransactionErrors[keyof CreateExchangeTransactionErrors];
+
+export type CreateExchangeTransactionResponses = {
+    /**
+     * Exchange transaction created.
+     */
+    201: Transaction;
+};
+
+export type CreateExchangeTransactionResponse = CreateExchangeTransactionResponses[keyof CreateExchangeTransactionResponses];
 
 export type GetTransactionMonthTotalsData = {
     body?: never;
@@ -4005,6 +4174,10 @@ export type SearchJournalRecordsData = {
          * Filter by reconciled or unreconciled journal-record status.
          */
         reconciliation_status?: ReconciliationStatus;
+        /**
+         * Filters records by their server-derived accounting role.
+         */
+        record_role?: RecordRole;
         /**
          * JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
          */

@@ -1,4 +1,9 @@
-import type { PostingStatus, TransactionClass } from "@/api/generated";
+import type {
+  PostingStatus,
+  RecordRole,
+  TransactionClass,
+  TransactionShapeType,
+} from "@/api/generated";
 
 export const transactionPostingStatuses = [
   "pending",
@@ -17,12 +22,32 @@ export const transactionClasses = [
   "spend",
   "income",
   "refund",
+  "clawback",
   "transfer",
   "currency_exchange",
   "adjustment",
-  "fx_gain_loss",
   "mixed",
 ] as const satisfies readonly TransactionClass[];
+
+export const transactionShapes = [
+  "spend",
+  "refund",
+  "income",
+  "clawback",
+  "adjustment",
+  "exchange",
+  "transfer",
+] as const satisfies readonly TransactionShapeType[];
+
+export const recordRoles = [
+  "expense",
+  "refund",
+  "income",
+  "clawback",
+  "exchange",
+  "adjustment",
+  "balance",
+] as const satisfies readonly RecordRole[];
 
 export const transactionFilterDecimalPattern = /^-?(?:\d{1,10})(?:\.\d{1,8})?$/;
 
@@ -42,7 +67,9 @@ export interface TransactionFilters {
   readonly pendingTo?: string;
   readonly postedFrom?: string;
   readonly postedTo?: string;
+  readonly recordRoles: readonly RecordRole[];
   readonly search?: string;
+  readonly shapes: readonly TransactionShapeType[];
   readonly statuses: readonly PostingStatus[];
   readonly tagIds: readonly number[];
 }
@@ -53,6 +80,8 @@ export const emptyTransactionFilters: TransactionFilters = {
   classes: [],
   hideExpected: false,
   memberIds: [],
+  recordRoles: [],
+  shapes: [],
   statuses: [],
   tagIds: [],
 };
@@ -95,7 +124,9 @@ export const normalizeTransactionFilters = (
   pendingTo: trimmedValue(filters.pendingTo),
   postedFrom: trimmedValue(filters.postedFrom),
   postedTo: trimmedValue(filters.postedTo),
+  recordRoles: uniqueAllowedValues(filters.recordRoles ?? [], recordRoles),
   search: trimmedValue(filters.search),
+  shapes: uniqueAllowedValues(filters.shapes ?? [], transactionShapes),
   statuses: uniqueAllowedValues(
     filters.statuses ?? [],
     transactionPostingStatuses,
@@ -114,6 +145,8 @@ export const transactionFilterSignature = (
     `member=${normalized.memberIds.join(",")}`,
     `status=${normalized.statuses.join(",")}`,
     `class=${normalized.classes.join(",")}`,
+    `shape=${normalized.shapes.join(",")}`,
+    `role=${normalized.recordRoles.join(",")}`,
     `hideExpected=${normalized.hideExpected}`,
     `amountMin=${normalized.amountMin ?? ""}`,
     `amountMax=${normalized.amountMax ?? ""}`,

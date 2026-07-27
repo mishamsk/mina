@@ -17,6 +17,11 @@ func Int64SlicePtr(values ...int64) *[]int64 {
 	return &copied
 }
 
+// Int64Ptr returns a pointer to value.
+func Int64Ptr(value int64) *int64 {
+	return &value
+}
+
 // StringPtr returns a pointer to value.
 func StringPtr(value string) *string {
 	return &value

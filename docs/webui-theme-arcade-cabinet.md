@@ -63,7 +63,7 @@ Extended theme namespace (theme-owned, used by domain components): `--color-mone
 
 - Spend amounts and ordinary negative numbers: ink with explicit minus sign. Red never marks spend.
 - Income/refund display amounts: mint/teal ink forms as text; in transaction lines, amount chips use the standard white fill with ink text for every class — money-in is distinguished by the explicit plus sign and the class icon, never by chip color.
-- Class badges/chips: bright-form fill, ink text, ink outline; `spend` uses a white/`--band` neutral chip; `mixed` is outlined-only with no fill; `fx_gain_loss` uses a `--muted-foreground` outline with sign-colored amount.
+- Class badges/chips: bright-form fill, ink text, ink outline; `spend` uses a white/`--band` neutral chip; `mixed` is outlined-only with no fill.
 - Pending: `--muted-foreground` text plus the pending indicator; cancelled: strikethrough + `--muted-foreground`.
 - Status chips (posted, pending, reconciliation when relevant): mint bright for settled/positive states, yellow bright for in-flight states, ink text always.
 

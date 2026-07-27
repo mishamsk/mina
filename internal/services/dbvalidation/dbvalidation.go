@@ -362,15 +362,10 @@ func (s *Service) classificationFindings(ctx context.Context) ([]Finding, error)
 		}
 		for _, transaction := range result.Items {
 			if err := transactions.ValidateTransactionClassification(transaction); err != nil {
-				intent := "UNKNOWN"
-				var shapeErr transactions.SemanticShapeError
-				if errors.As(err, &shapeErr) {
-					intent = strings.ToUpper(string(shapeErr.Intent))
-				}
 				findings = append(findings, Finding{
 					Severity: SeverityError,
 					Layer:    "classification",
-					Message:  fmt.Sprintf("transaction %d violates %s semantic shape", transaction.ID, intent),
+					Message:  fmt.Sprintf("transaction %d violates derived accounting semantics", transaction.ID),
 				})
 			}
 		}

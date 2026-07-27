@@ -15,73 +15,76 @@ func TestTransactionMonthTotalsBoundary(t *testing.T) {
 	scenario := client.Scenario()
 
 	createMonthTotalsTransaction(t, client, "2024-06-03",
-		record(fixture.checking.AccountId, fixture.expenseCategory.CategoryId, "USD", "-100.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "-100.00"),
 		record(fixture.merchant.AccountId, fixture.expenseCategory.CategoryId, "USD", "100.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-04",
-		record(fixture.checking.AccountId, fixture.feeCategory.CategoryId, "USD", "-5.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "-5.00"),
 		record(fixture.feeProvider.AccountId, fixture.feeCategory.CategoryId, "USD", "5.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-05",
-		record(fixture.checking.AccountId, fixture.refundCategory.CategoryId, "USD", "20.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "20.00"),
 		record(fixture.merchant.AccountId, fixture.refundCategory.CategoryId, "USD", "-20.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-06",
-		record(fixture.checking.AccountId, fixture.incomeCategory.CategoryId, "USD", "200.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "200.00"),
 		record(fixture.employer.AccountId, fixture.incomeCategory.CategoryId, "USD", "-200.00"),
 	)
+	createMonthTotalsTransaction(t, client, "2024-06-06",
+		balanceRecord(fixture.checking.AccountId, "USD", "-50.00"),
+		record(fixture.employer.AccountId, fixture.incomeCategory.CategoryId, "USD", "50.00"),
+	)
 	createMonthTotalsTransaction(t, client, "2024-06-07",
-		record(fixture.checking.AccountId, fixture.transferCategory.CategoryId, "USD", "-50.00"),
-		record(fixture.savings.AccountId, fixture.transferCategory.CategoryId, "USD", "50.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "-50.00"),
+		balanceRecord(fixture.savings.AccountId, "USD", "50.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-08",
-		record(fixture.checking.AccountId, fixture.exchangeCategory.CategoryId, "USD", "-110.00"),
-		record(fixture.exchangeProvider.AccountId, fixture.exchangeCategory.CategoryId, "USD", "110.00"),
-		record(fixture.exchangeProvider.AccountId, fixture.exchangeCategory.CategoryId, "EUR", "-100.00"),
-		record(fixture.cashEUR.AccountId, fixture.exchangeCategory.CategoryId, "EUR", "100.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "-110.00"),
+		balanceRecord(fixture.exchangeProvider.AccountId, "USD", "110.00"),
+		balanceRecord(fixture.exchangeProvider.AccountId, "EUR", "-100.00"),
+		balanceRecord(fixture.cashEUR.AccountId, "EUR", "100.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-08",
-		record(fixture.checking.AccountId, fixture.transferCategory.CategoryId, "USD", "-25.00"),
-		record(fixture.savings.AccountId, fixture.transferCategory.CategoryId, "USD", "25.00"),
-		record(fixture.checking.AccountId, fixture.feeCategory.CategoryId, "USD", "-1.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "-26.00"),
+		balanceRecord(fixture.savings.AccountId, "USD", "25.00"),
 		record(fixture.feeProvider.AccountId, fixture.feeCategory.CategoryId, "USD", "1.00"),
 	)
 
 	createExchangeRate(t, client, "USD", "EUR", "1.10000000", "2024-06-09T00:00:00Z")
 	createMonthTotalsTransaction(t, client, "2024-06-09",
-		record(fixture.cashEUR.AccountId, fixture.expenseCategory.CategoryId, "EUR", "-11.00"),
+		balanceRecord(fixture.cashEUR.AccountId, "EUR", "-11.00"),
 		record(fixture.merchant.AccountId, fixture.expenseCategory.CategoryId, "EUR", "11.00"),
 	)
 
 	cryptoCash := scenario.AccountWithCurrency("crypto:MonthTotals:BTC", "C::BTC")
 	cryptoMerchant := scenario.Account("merchant:MonthTotals:Crypto")
 	createMonthTotalsTransaction(t, client, "2024-06-10",
-		record(cryptoCash.AccountId, fixture.expenseCategory.CategoryId, "C::BTC", "-1.00"),
+		balanceRecord(cryptoCash.AccountId, "C::BTC", "-1.00"),
 		record(cryptoMerchant.AccountId, fixture.expenseCategory.CategoryId, "C::BTC", "1.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-11",
-		record(cryptoCash.AccountId, fixture.incomeCategory.CategoryId, "C::BTC", "2.00"),
+		balanceRecord(cryptoCash.AccountId, "C::BTC", "2.00"),
 		record(cryptoMerchant.AccountId, fixture.incomeCategory.CategoryId, "C::BTC", "-2.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-12",
-		record(fixture.checking.AccountId, fixture.adjustmentCategory.CategoryId, "USD", "40.00"),
-		record(fixture.openingSystem.AccountId, fixture.adjustmentCategory.CategoryId, "USD", "-40.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "40.00"),
+		balanceRecord(fixture.openingSystem.AccountId, "USD", "-40.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-06-13",
-		record(fixture.checking.AccountId, fixture.fxCategory.CategoryId, "USD", "3.00"),
-		record(fixture.fxSystem.AccountId, fixture.fxCategory.CategoryId, "USD", "-3.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "3.00"),
+		balanceRecord(fixture.correctionSystem.AccountId, "USD", "-3.00"),
 	)
 	createMonthTotalsTransaction(t, client, "2024-05-31",
-		record(fixture.checking.AccountId, fixture.expenseCategory.CategoryId, "USD", "-999.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "-999.00"),
 		record(fixture.merchant.AccountId, fixture.expenseCategory.CategoryId, "USD", "999.00"),
 	)
 	cancelled := createMonthTotalsTransaction(t, client, "2024-06-14",
-		record(fixture.checking.AccountId, fixture.expenseCategory.CategoryId, "USD", "-300.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "-300.00"),
 		record(fixture.merchant.AccountId, fixture.expenseCategory.CategoryId, "USD", "300.00"),
 	)
 	cancelTransactionRecords(t, client, cancelled)
 	deleted := createMonthTotalsTransaction(t, client, "2024-06-15",
-		record(fixture.checking.AccountId, fixture.expenseCategory.CategoryId, "USD", "-400.00"),
+		balanceRecord(fixture.checking.AccountId, "USD", "-400.00"),
 		record(fixture.merchant.AccountId, fixture.expenseCategory.CategoryId, "USD", "400.00"),
 	)
 	deleteTransaction(t, client, deleted.TransactionId)
@@ -96,8 +99,8 @@ func TestTransactionMonthTotalsBoundary(t *testing.T) {
 	if june.JSON200.Month != "2024-06" {
 		t.Fatalf("month = %q, want 2024-06", june.JSON200.Month)
 	}
-	assertMonthTotal(t, "spend", june.JSON200.Spend, "116.00000000", 1)
-	assertMonthTotal(t, "income", june.JSON200.Income, "200.00000000", 1)
+	assertMonthTotal(t, "spend", june.JSON200.Spend, "96.00000000", 1)
+	assertMonthTotal(t, "income", june.JSON200.Income, "150.00000000", 1)
 
 	july, err := client.REST().GetTransactionMonthTotalsWithResponse(context.Background(), &httpclient.GetTransactionMonthTotalsParams{Month: "2024-07"})
 	if err != nil {

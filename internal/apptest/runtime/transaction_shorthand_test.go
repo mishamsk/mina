@@ -57,7 +57,6 @@ func TestShorthandTransactionCreateSignsAndDefaults(t *testing.T) {
 		InitiatedDate:        apptest.Date("2024-04-04"),
 		SourceAccountId:      refs.checkingAccountID,
 		DestinationAccountId: refs.savingsAccountID,
-		CategoryId:           refs.transferCategoryID,
 		Currency:             "USD",
 		Amount:               "25.00",
 	})
@@ -269,7 +268,6 @@ func TestShorthandTransactionValidationErrors(t *testing.T) {
 		InitiatedDate:        apptest.Date("2024-04-01"),
 		SourceAccountId:      refs.checkingAccountID,
 		DestinationAccountId: refs.checkingAccountID,
-		CategoryId:           refs.transferCategoryID,
 		Currency:             "USD",
 		Amount:               "1.00",
 	})
@@ -394,6 +392,105 @@ func TestShorthandTransactionValidationErrors(t *testing.T) {
 	assertShorthandInvalidRequest(t, "excluded field", excludedField.StatusCode(), excludedField.JSON400, excludedField.Body)
 }
 
+func TestShorthandTransactionsRejectSystemBalanceAccounts(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createShorthandRefs(client)
+	systemAccountID := fixedSystemAccounts(t, client)["system:correction"].AccountId
+
+	spend, err := client.REST().CreateSpendTransactionWithResponse(context.Background(), httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-01"),
+		FundingAccountId:      systemAccountID,
+		CounterpartyAccountId: refs.merchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "USD",
+		Amount:                "1.00",
+	})
+	if err != nil {
+		t.Fatalf("spend with system funding account request: %v", err)
+	}
+	assertShorthandInvalidRequest(t, "spend with system funding account", spend.StatusCode(), spend.JSON400, spend.Body)
+
+	income, err := client.REST().CreateIncomeTransactionWithResponse(context.Background(), httpclient.CreateIncomeTransactionRequest{
+		InitiatedDate:        apptest.Date("2024-04-01"),
+		DestinationAccountId: systemAccountID,
+		SourceAccountId:      refs.employerAccountID,
+		CategoryId:           refs.incomeCategoryID,
+		Currency:             "USD",
+		Amount:               "1.00",
+	})
+	if err != nil {
+		t.Fatalf("income with system destination account request: %v", err)
+	}
+	assertShorthandInvalidRequest(t, "income with system destination account", income.StatusCode(), income.JSON400, income.Body)
+
+	refund, err := client.REST().CreateRefundTransactionWithResponse(context.Background(), httpclient.CreateRefundTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-01"),
+		DestinationAccountId:  systemAccountID,
+		CounterpartyAccountId: refs.merchantAccountID,
+		CategoryId:            refs.refundCategoryID,
+		Currency:              "USD",
+		Amount:                "1.00",
+	})
+	if err != nil {
+		t.Fatalf("refund with system destination account request: %v", err)
+	}
+	assertShorthandInvalidRequest(t, "refund with system destination account", refund.StatusCode(), refund.JSON400, refund.Body)
+
+	transfer, err := client.REST().CreateTransferTransactionWithResponse(context.Background(), httpclient.CreateTransferTransactionRequest{
+		InitiatedDate:        apptest.Date("2024-04-01"),
+		SourceAccountId:      systemAccountID,
+		DestinationAccountId: refs.savingsAccountID,
+		Currency:             "USD",
+		Amount:               "1.00",
+	})
+	if err != nil {
+		t.Fatalf("transfer with system source account request: %v", err)
+	}
+	assertShorthandInvalidRequest(t, "transfer with system source account", transfer.StatusCode(), transfer.JSON400, transfer.Body)
+}
+
+func TestShorthandTransactionsAcceptPartyBalanceAccounts(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createShorthandRefs(client)
+	partyAccountID := client.Scenario().AccountWithType(
+		"people:Shorthand:Jordan",
+		httpclient.WritableAccountTypeParty,
+	).AccountId
+
+	spend := createSpendTransaction(t, client, httpclient.CreateSpendTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-01"),
+		FundingAccountId:      partyAccountID,
+		CounterpartyAccountId: refs.merchantAccountID,
+		CategoryId:            refs.expenseCategoryID,
+		Currency:              "USD",
+		Amount:                "12.34",
+	})
+	assertTransactionClass(t, "party-funded spend", spend, httpclient.TransactionClassSpend)
+	assertRecordAmount(t, spend, partyAccountID, "-12.34000000")
+
+	income := createIncomeTransaction(t, client, httpclient.CreateIncomeTransactionRequest{
+		InitiatedDate:        apptest.Date("2024-04-02"),
+		DestinationAccountId: partyAccountID,
+		SourceAccountId:      refs.employerAccountID,
+		CategoryId:           refs.incomeCategoryID,
+		Currency:             "USD",
+		Amount:               "100.00",
+	})
+	assertTransactionClass(t, "party-destined income", income, httpclient.TransactionClassIncome)
+	assertRecordAmount(t, income, partyAccountID, "100.00000000")
+
+	refund := createRefundTransaction(t, client, httpclient.CreateRefundTransactionRequest{
+		InitiatedDate:         apptest.Date("2024-04-03"),
+		DestinationAccountId:  partyAccountID,
+		CounterpartyAccountId: refs.merchantAccountID,
+		CategoryId:            refs.refundCategoryID,
+		Currency:              "USD",
+		Amount:                "5.67",
+	})
+	assertTransactionClass(t, "party-destined refund", refund, httpclient.TransactionClassRefund)
+	assertRecordAmount(t, refund, partyAccountID, "5.67000000")
+}
+
 type shorthandRefs struct {
 	checkingAccountID     int64
 	savingsAccountID      int64
@@ -419,8 +516,8 @@ func createShorthandRefs(client *apptest.Client) shorthandRefs {
 	employer := scenario.Account("income:Shorthand:Employer")
 	expenseCategory := scenario.CategoryWithIntent("Shorthand:Expense", httpclient.CategoryEconomicIntentExpense)
 	incomeCategory := scenario.CategoryWithIntent("Shorthand:Income", httpclient.CategoryEconomicIntentIncome)
-	refundCategory := scenario.CategoryWithIntent("Shorthand:Refund", httpclient.CategoryEconomicIntentRefund)
-	transferCategory := scenario.CategoryWithIntent("Shorthand:Transfer", httpclient.CategoryEconomicIntentTransfer)
+	refundCategory := scenario.CategoryWithIntent("Shorthand:Refund", httpclient.CategoryEconomicIntentExpense)
+	transferCategory := expenseCategory
 	tag := scenario.Tag("Shorthand:Tagged")
 	member := scenario.Member("Jordan")
 

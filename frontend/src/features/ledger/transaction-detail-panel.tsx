@@ -41,6 +41,7 @@ import {
   buildLookupMaps,
   displayAmountKey,
   formatInitiatedDate,
+  lineDisplayAmounts,
   lineMemo,
   linePostingStatus,
   type LookupMaps,
@@ -97,17 +98,20 @@ const recordDisplayAmount = (record: JournalRecord): DisplayAmount => ({
 
 const detailDisplayAmounts = (
   transaction: Transaction,
-): readonly DisplayAmount[] => {
-  if (
-    transaction.transaction_class === "transfer" ||
-    transaction.transaction_class === "currency_exchange" ||
-    transaction.transaction_class === "mixed"
-  ) {
-    return transaction.components.flatMap((component) => component.amounts);
-  }
-  return transaction.primary_amounts.length > 0
-    ? transaction.primary_amounts
-    : transaction.components.flatMap((component) => component.amounts);
+): readonly DisplayAmount[] =>
+  transaction.transaction_class === "currency_exchange"
+    ? transaction.shapes
+        .filter((shape) => shape.shape === "exchange")
+        .flatMap((shape) => shape.amounts)
+    : lineDisplayAmounts(transaction);
+
+const exchangeRateLabel = (transaction: Transaction): string | undefined => {
+  const rate = transaction.shapes.find(
+    (shape) => shape.shape === "exchange",
+  )?.effective_rate;
+  return rate
+    ? `1 ${rate.bought_currency} = ${rate.rate} ${rate.sold_currency}`
+    : undefined;
 };
 
 const uniqueRecordSources = (transaction: Transaction): string =>
@@ -622,7 +626,10 @@ const DetailRecordsTable = ({
         <tbody>
           {records.map((record, index) => {
             const account = maps.accountsById.get(record.account_id);
-            const category = maps.categoriesById.get(record.category_id);
+            const category =
+              record.category_id === null
+                ? undefined
+                : maps.categoriesById.get(record.category_id);
             const member =
               record.member_id === null || record.member_id === undefined
                 ? undefined
@@ -698,7 +705,7 @@ const DetailRecordsTable = ({
                             : undefined
                         }
                       />
-                    ) : (
+                    ) : account && account.account_type !== "flow" ? null : (
                       "Uncategorized"
                     )}
                   </td>
@@ -867,6 +874,7 @@ export const TransactionDetailContent = ({
   readonly transaction: Transaction;
 }) => {
   const summaryMemo = lineMemo(transaction);
+  const effectiveRate = exchangeRateLabel(transaction);
   const lifecycle = useMemo(
     () => buildTransactionLifecycle(transaction, maps),
     [maps, transaction],
@@ -888,6 +896,14 @@ export const TransactionDetailContent = ({
         </div>
         <DetailAmountList transaction={transaction} />
       </header>
+      {effectiveRate ? (
+        <p
+          className="min-w-0 font-mono text-sm break-all"
+          data-testid="exchange-effective-rate"
+        >
+          Effective rate: {effectiveRate}
+        </p>
+      ) : null}
 
       <section aria-labelledby="transaction-detail-records">
         <h3

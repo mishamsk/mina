@@ -86,6 +86,23 @@ export const AmountText = ({
 
 const AmountSeparator = () => <span className="whitespace-pre">{" / "}</span>;
 
+const countedDisplayAmounts = (amounts: readonly DisplayAmount[]) => {
+  const counted = new Map<
+    string,
+    { readonly amount: DisplayAmount; count: number }
+  >();
+  for (const amount of amounts) {
+    const key = `${amount.currency}:${amount.amount}`;
+    const existing = counted.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      counted.set(key, { amount, count: 1 });
+    }
+  }
+  return [...counted.values()];
+};
+
 const CompactAmounts = ({
   amounts,
 }: {
@@ -98,13 +115,15 @@ const CompactAmounts = ({
   const oneCurrency = amounts.every(
     (amount) => amount.currency === first.currency,
   );
+  const countedAmounts = countedDisplayAmounts(amounts);
   if (oneCurrency) {
     return (
       <>
-        {amounts.map((amount, index) => (
-          <Fragment key={`${amount.currency}:${amount.amount}:${index}`}>
+        {countedAmounts.map(({ amount, count }, index) => (
+          <Fragment key={`${amount.currency}:${amount.amount}`}>
             {index > 0 ? <AmountSeparator /> : null}
             <span>{formatDecimalAmount(amount.amount, amount.currency)}</span>
+            {count > 1 ? <span>{`×${count}`}</span> : null}
           </Fragment>
         ))}
         <span className="text-muted-foreground whitespace-pre">
@@ -114,10 +133,11 @@ const CompactAmounts = ({
     );
   }
 
-  return amounts.map((amount, index) => (
-    <Fragment key={`${amount.currency}:${amount.amount}:${index}`}>
+  return countedAmounts.map(({ amount, count }, index) => (
+    <Fragment key={`${amount.currency}:${amount.amount}`}>
       {index > 0 ? <AmountSeparator /> : null}
       <span>{formatDecimalAmount(amount.amount, amount.currency)}</span>
+      {count > 1 ? <span>{`×${count}`}</span> : null}
       <span className="text-muted-foreground whitespace-pre">
         {` ${currencyDisplayMarker(amount.currency)}`}
       </span>
@@ -133,15 +153,23 @@ const compactAmountsLabel = (amounts: readonly DisplayAmount[]): string => {
   const oneCurrency = amounts.every(
     (amount) => amount.currency === first.currency,
   );
+  const countedAmounts = countedDisplayAmounts(amounts);
   if (oneCurrency) {
-    return `${amounts
-      .map((amount) => formatDecimalAmount(amount.amount, amount.currency))
+    return `${countedAmounts
+      .map(
+        ({ amount, count }) =>
+          `${formatDecimalAmount(amount.amount, amount.currency)}${
+            count > 1 ? `×${count}` : ""
+          }`,
+      )
       .join(" / ")} ${currencyDisplayMarker(first.currency)}`;
   }
-  return amounts
+  return countedAmounts
     .map(
-      (amount) =>
-        `${formatDecimalAmount(amount.amount, amount.currency)} ${currencyDisplayMarker(amount.currency)}`,
+      ({ amount, count }) =>
+        `${formatDecimalAmount(amount.amount, amount.currency)}${
+          count > 1 ? `×${count}` : ""
+        } ${currencyDisplayMarker(amount.currency)}`,
     )
     .join(" / ");
 };

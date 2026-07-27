@@ -469,7 +469,10 @@ const RecordsTable = ({
         {records.map((record) => {
           const expected = linePostingStatus(transaction) === "expected";
           const account = maps.accountsById.get(record.account_id);
-          const category = maps.categoriesById.get(record.category_id);
+          const category =
+            record.category_id === null
+              ? undefined
+              : maps.categoriesById.get(record.category_id);
           const member = record.member_id
             ? maps.membersById.get(record.member_id)
             : undefined;
@@ -519,7 +522,7 @@ const RecordsTable = ({
               </td>
               <td className="px-2 py-2">
                 <RecordReferenceCells
-                  editable={!expected}
+                  editable={!expected && account?.account_type === "flow"}
                   field="category"
                   maps={maps}
                   record={record}
@@ -527,7 +530,7 @@ const RecordsTable = ({
                   value={
                     category ? (
                       <FqnPath value={category.fqn} focusable={false} />
-                    ) : (
+                    ) : account && account.account_type !== "flow" ? null : (
                       "Uncategorized"
                     )
                   }
@@ -1241,7 +1244,7 @@ export const TransactionBrowser = ({
               const simpleAmountRecords =
                 simpleTransactionAmountRecords(transaction);
               const postingStatus = linePostingStatus(transaction);
-              const amounts = lineDisplayAmounts(transaction, maps);
+              const amounts = lineDisplayAmounts(transaction);
               const amountDeemphasized =
                 postingStatus === "expected" ||
                 postingStatus === "pending" ||
@@ -1262,7 +1265,26 @@ export const TransactionBrowser = ({
                 postingStatus !== "cancelled" &&
                 activeRecords.length > 0;
               const categoryEditable =
-                canEditReferences && category !== "mixed";
+                canEditReferences &&
+                category !== "mixed" &&
+                activeRecords.some(
+                  (record) =>
+                    maps.accountsById.get(record.account_id)?.account_type ===
+                    "flow",
+                );
+              const flowRecords = activeRecords.filter(
+                (record) =>
+                  maps.accountsById.get(record.account_id)?.account_type ===
+                  "flow",
+              );
+              const categorizedRecords = flowRecords.filter(
+                (record) => record.category_id !== null,
+              );
+              const categoryTargetRecords =
+                categorizedRecords.length > 0
+                  ? categorizedRecords
+                  : flowRecords;
+              const categoryTargetRecord = categoryTargetRecords[0];
               const tagsEditable = canEditReferences && tags !== "mixed";
               const memberEditable =
                 canEditReferences &&
@@ -1278,7 +1300,9 @@ export const TransactionBrowser = ({
               ): Promise<boolean> =>
                 onUpdateTransactionRecordReferences(
                   transaction,
-                  activeRecords,
+                  update.kind === "category"
+                    ? categoryTargetRecords
+                    : activeRecords,
                   update,
                 );
               const occurrenceActionBusy =
@@ -1652,11 +1676,11 @@ export const TransactionBrowser = ({
                         )
                       ) : category === "mixed" ? (
                         <MixedSentinel />
-                      ) : categoryEditable ? (
+                      ) : categoryEditable && categoryTargetRecord ? (
                         <RecordReferenceCells
                           field="category"
                           maps={maps}
-                          record={activeRecords[0]!}
+                          record={categoryTargetRecord}
                           testIdPrefix={`transaction-${transaction.transaction_id}`}
                           transaction={transaction}
                           value={
@@ -1799,7 +1823,14 @@ export const TransactionBrowser = ({
                       </div>
                     </td>
                     <td className="transactions-amount-column px-3 py-2 text-right align-middle">
-                      <div className="flex min-w-0 flex-row flex-nowrap items-center justify-end gap-1 overflow-visible">
+                      <div
+                        className={cn(
+                          "flex min-w-0 items-end justify-end gap-1 overflow-visible",
+                          amounts.length > 1
+                            ? "flex-col"
+                            : "flex-row flex-nowrap",
+                        )}
+                      >
                         {!bulkEditMode && amountEditable ? (
                           <TransactionAmountCell
                             records={simpleAmountRecords}
@@ -1828,9 +1859,9 @@ export const TransactionBrowser = ({
                             overflowTooltip={!bulkEditMode}
                           />
                         ) : (
-                          amounts.map((amount) => (
+                          amounts.map((amount, index) => (
                             <AmountText
-                              key={displayAmountKey(amount)}
+                              key={`${displayAmountKey(amount)}:${index}`}
                               amount={amount}
                               chip
                               overflowTooltip={!bulkEditMode}

@@ -54,19 +54,22 @@ func (e APIErrorCode) Valid() bool {
 
 // Defines values for AccountType.
 const (
-	Balance AccountType = "balance"
-	Flow    AccountType = "flow"
-	System  AccountType = "system"
+	AccountTypeFlow   AccountType = "flow"
+	AccountTypeOwned  AccountType = "owned"
+	AccountTypeParty  AccountType = "party"
+	AccountTypeSystem AccountType = "system"
 )
 
 // Valid indicates whether the value is a known member of the AccountType enum.
 func (e AccountType) Valid() bool {
 	switch e {
-	case Balance:
+	case AccountTypeFlow:
 		return true
-	case Flow:
+	case AccountTypeOwned:
 		return true
-	case System:
+	case AccountTypeParty:
+		return true
+	case AccountTypeSystem:
 		return true
 	default:
 		return false
@@ -141,34 +144,16 @@ func (e BackgroundOperationRunTrigger) Valid() bool {
 
 // Defines values for CategoryEconomicIntent.
 const (
-	CategoryEconomicIntentAdjustment CategoryEconomicIntent = "adjustment"
-	CategoryEconomicIntentExchange   CategoryEconomicIntent = "exchange"
-	CategoryEconomicIntentExpense    CategoryEconomicIntent = "expense"
-	CategoryEconomicIntentFee        CategoryEconomicIntent = "fee"
-	CategoryEconomicIntentFxGainLoss CategoryEconomicIntent = "fx_gain_loss"
-	CategoryEconomicIntentIncome     CategoryEconomicIntent = "income"
-	CategoryEconomicIntentRefund     CategoryEconomicIntent = "refund"
-	CategoryEconomicIntentTransfer   CategoryEconomicIntent = "transfer"
+	CategoryEconomicIntentExpense CategoryEconomicIntent = "expense"
+	CategoryEconomicIntentIncome  CategoryEconomicIntent = "income"
 )
 
 // Valid indicates whether the value is a known member of the CategoryEconomicIntent enum.
 func (e CategoryEconomicIntent) Valid() bool {
 	switch e {
-	case CategoryEconomicIntentAdjustment:
-		return true
-	case CategoryEconomicIntentExchange:
-		return true
 	case CategoryEconomicIntentExpense:
 		return true
-	case CategoryEconomicIntentFee:
-		return true
-	case CategoryEconomicIntentFxGainLoss:
-		return true
 	case CategoryEconomicIntentIncome:
-		return true
-	case CategoryEconomicIntentRefund:
-		return true
-	case CategoryEconomicIntentTransfer:
 		return true
 	default:
 		return false
@@ -382,6 +367,39 @@ func (e ReconciliationStatus) Valid() bool {
 	}
 }
 
+// Defines values for RecordRole.
+const (
+	RecordRoleAdjustment RecordRole = "adjustment"
+	RecordRoleBalance    RecordRole = "balance"
+	RecordRoleClawback   RecordRole = "clawback"
+	RecordRoleExchange   RecordRole = "exchange"
+	RecordRoleExpense    RecordRole = "expense"
+	RecordRoleIncome     RecordRole = "income"
+	RecordRoleRefund     RecordRole = "refund"
+)
+
+// Valid indicates whether the value is a known member of the RecordRole enum.
+func (e RecordRole) Valid() bool {
+	switch e {
+	case RecordRoleAdjustment:
+		return true
+	case RecordRoleBalance:
+		return true
+	case RecordRoleClawback:
+		return true
+	case RecordRoleExchange:
+		return true
+	case RecordRoleExpense:
+		return true
+	case RecordRoleIncome:
+		return true
+	case RecordRoleRefund:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RecurringDefinitionDeferRequestUnit.
 const (
 	DAY   RecurringDefinitionDeferRequestUnit = "DAY"
@@ -517,8 +535,8 @@ func (e Source) Valid() bool {
 // Defines values for TransactionClass.
 const (
 	TransactionClassAdjustment       TransactionClass = "adjustment"
+	TransactionClassClawback         TransactionClass = "clawback"
 	TransactionClassCurrencyExchange TransactionClass = "currency_exchange"
-	TransactionClassFxGainLoss       TransactionClass = "fx_gain_loss"
 	TransactionClassIncome           TransactionClass = "income"
 	TransactionClassMixed            TransactionClass = "mixed"
 	TransactionClassRefund           TransactionClass = "refund"
@@ -531,9 +549,9 @@ func (e TransactionClass) Valid() bool {
 	switch e {
 	case TransactionClassAdjustment:
 		return true
-	case TransactionClassCurrencyExchange:
+	case TransactionClassClawback:
 		return true
-	case TransactionClassFxGainLoss:
+	case TransactionClassCurrencyExchange:
 		return true
 	case TransactionClassIncome:
 		return true
@@ -544,6 +562,60 @@ func (e TransactionClass) Valid() bool {
 	case TransactionClassSpend:
 		return true
 	case TransactionClassTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TransactionShapeType.
+const (
+	TransactionShapeTypeAdjustment TransactionShapeType = "adjustment"
+	TransactionShapeTypeClawback   TransactionShapeType = "clawback"
+	TransactionShapeTypeExchange   TransactionShapeType = "exchange"
+	TransactionShapeTypeIncome     TransactionShapeType = "income"
+	TransactionShapeTypeRefund     TransactionShapeType = "refund"
+	TransactionShapeTypeSpend      TransactionShapeType = "spend"
+	TransactionShapeTypeTransfer   TransactionShapeType = "transfer"
+)
+
+// Valid indicates whether the value is a known member of the TransactionShapeType enum.
+func (e TransactionShapeType) Valid() bool {
+	switch e {
+	case TransactionShapeTypeAdjustment:
+		return true
+	case TransactionShapeTypeClawback:
+		return true
+	case TransactionShapeTypeExchange:
+		return true
+	case TransactionShapeTypeIncome:
+		return true
+	case TransactionShapeTypeRefund:
+		return true
+	case TransactionShapeTypeSpend:
+		return true
+	case TransactionShapeTypeTransfer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WritableAccountType.
+const (
+	WritableAccountTypeFlow  WritableAccountType = "flow"
+	WritableAccountTypeOwned WritableAccountType = "owned"
+	WritableAccountTypeParty WritableAccountType = "party"
+)
+
+// Valid indicates whether the value is a known member of the WritableAccountType enum.
+func (e WritableAccountType) Valid() bool {
+	switch e {
+	case WritableAccountTypeFlow:
+		return true
+	case WritableAccountTypeOwned:
+		return true
+	case WritableAccountTypeParty:
 		return true
 	default:
 		return false
@@ -953,7 +1025,7 @@ type APIErrorCode string
 type Account struct {
 	AccountId int64 `json:"account_id"`
 
-	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+	// AccountType Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics.
 	AccountType AccountType `json:"account_type"`
 	CreatedAt   time.Time   `json:"created_at"`
 	Currency    *string     `json:"currency,omitempty"`
@@ -1006,7 +1078,7 @@ type AccountListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
-// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
+// AccountType Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics.
 type AccountType string
 
 // BackgroundOperationId defines model for BackgroundOperationId.
@@ -1112,7 +1184,7 @@ type Category struct {
 	// Deletable Populated in listCategories responses. True when the active category has no active dependent resources and can be tombstone-deleted.
 	Deletable *bool `json:"deletable,omitempty"`
 
-	// EconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+	// EconomicIntent Whether a category describes spending or income.
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
 	Fqn            string                 `json:"fqn"`
 	IsFeatured     bool                   `json:"is_featured"`
@@ -1124,7 +1196,7 @@ type Category struct {
 	UpdatedAt      time.Time              `json:"updated_at"`
 }
 
-// CategoryEconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+// CategoryEconomicIntent Whether a category describes spending or income.
 type CategoryEconomicIntent string
 
 // CategoryListResponse defines model for CategoryListResponse.
@@ -1135,10 +1207,40 @@ type CategoryListResponse struct {
 	TotalCount int64 `json:"total_count"`
 }
 
+// ClassifiedRecord defines model for ClassifiedRecord.
+type ClassifiedRecord struct {
+	// RecordIndex Zero-based index into the request records.
+	RecordIndex int `json:"record_index"`
+
+	// RecordRole Accounting role derived independently from one record's account, sign, and category intent.
+	RecordRole RecordRole `json:"record_role"`
+}
+
+// ClassifyJournalRecordRequest defines model for ClassifyJournalRecordRequest.
+type ClassifyJournalRecordRequest struct {
+	// AccountId Account identifier used to derive this draft record's semantic role.
+	AccountId int64 `json:"account_id"`
+
+	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8).
+	Amount string `json:"amount"`
+
+	// CategoryId Category identifier used to derive this draft flow record's semantic role.
+	CategoryId *int64 `json:"category_id,omitempty"`
+
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	Currency string `json:"currency"`
+}
+
+// ClassifyTransactionRequest defines model for ClassifyTransactionRequest.
+type ClassifyTransactionRequest struct {
+	// Records Unsaved journal-record draft; records need not balance.
+	Records []ClassifyJournalRecordRequest `json:"records"`
+}
+
 // CreateAccountRequest defines model for CreateAccountRequest.
 type CreateAccountRequest struct {
-	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
-	AccountType AccountType `json:"account_type"`
+	// AccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
+	AccountType WritableAccountType `json:"account_type"`
 
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency *string `json:"currency,omitempty"`
@@ -1161,7 +1263,7 @@ type CreateAccountRequest struct {
 
 // CreateCategoryRequest defines model for CreateCategoryRequest.
 type CreateCategoryRequest struct {
-	// EconomicIntent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
+	// EconomicIntent Whether a category describes spending or income.
 	EconomicIntent CategoryEconomicIntent `json:"economic_intent"`
 
 	// Fqn Colon-separated hierarchical FQN for the category leaf.
@@ -1196,6 +1298,45 @@ type CreateExchangeRateRequest struct {
 
 	// ToCurrency Destination currency code using ISO 4217 or the `C::` crypto prefix.
 	ToCurrency string `json:"to_currency"`
+}
+
+// CreateExchangeTransactionRequest defines model for CreateExchangeTransactionRequest.
+type CreateExchangeTransactionRequest struct {
+	// BoughtAccountId Owned or party account into which currency is bought.
+	BoughtAccountId int64 `json:"bought_account_id"`
+
+	// BoughtAmount JSON string, not a JSON number. Positive amount bought in the bought account's currency.
+	BoughtAmount string `json:"bought_amount"`
+
+	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
+	InitiatedDate openapi_types.Date `json:"initiated_date"`
+
+	// MemberId Optional household-member identifier for the journal records.
+	MemberId *int64 `json:"member_id,omitempty"`
+
+	// Memo Optional memo text for the journal records.
+	Memo *string `json:"memo,omitempty"`
+
+	// PendingDate UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+	PendingDate *time.Time `json:"pending_date,omitempty"`
+
+	// PostedDate UTC timestamp when the generated records posted.
+	PostedDate *time.Time `json:"posted_date,omitempty"`
+
+	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
+	PostingStatus *PostingStatus `json:"posting_status,omitempty"`
+
+	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
+	ReconciliationStatus *ReconciliationStatus `json:"reconciliation_status,omitempty"`
+
+	// SoldAccountId Owned or party account from which currency is sold.
+	SoldAccountId int64 `json:"sold_account_id"`
+
+	// SoldAmount JSON string, not a JSON number. Positive amount sold in the sold account's currency.
+	SoldAmount string `json:"sold_amount"`
+
+	// TagIds Tag identifiers to assign to the journal records.
+	TagIds *[]int64 `json:"tag_ids,omitempty"`
 }
 
 // CreateIncomeTransactionRequest defines model for CreateIncomeTransactionRequest.
@@ -1251,8 +1392,8 @@ type CreateJournalRecordRequest struct {
 	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountUsd *string `json:"amount_usd,omitempty"`
 
-	// CategoryId Category identifier for this journal record or shorthand transaction.
-	CategoryId int64 `json:"category_id"`
+	// CategoryId Category identifier for a flow record; omit or use null for every other account type.
+	CategoryId *int64 `json:"category_id,omitempty"`
 
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency string `json:"currency"`
@@ -1404,9 +1545,6 @@ type CreateTransferTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount string `json:"amount"`
 
-	// CategoryId Category identifier for this journal record or shorthand transaction.
-	CategoryId int64 `json:"category_id"`
-
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency string `json:"currency"`
 
@@ -1522,6 +1660,15 @@ type ErrorResponse struct {
 	Error APIError `json:"error"`
 }
 
+// ExchangeEffectiveRate defines model for ExchangeEffectiveRate.
+type ExchangeEffectiveRate struct {
+	BoughtCurrency string `json:"bought_currency"`
+
+	// Rate JSON string, not a JSON number. Sold currency units per one bought currency unit, such as USD/EUR.
+	Rate         string `json:"rate"`
+	SoldCurrency string `json:"sold_currency"`
+}
+
 // ExchangeRate defines model for ExchangeRate.
 type ExchangeRate struct {
 	CreatedAt      time.Time `json:"created_at"`
@@ -1610,7 +1757,7 @@ type JournalRecord struct {
 
 	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountUsd      *string   `json:"amount_usd"`
-	CategoryId     int64     `json:"category_id"`
+	CategoryId     *int64    `json:"category_id"`
 	CreatedAt      time.Time `json:"created_at"`
 	Currency       string    `json:"currency"`
 	ExternalId     *string   `json:"external_id,omitempty"`
@@ -1630,6 +1777,9 @@ type JournalRecord struct {
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 	RecordId             int64                `json:"record_id"`
+
+	// RecordRole Accounting role derived independently from one record's account, sign, and category intent.
+	RecordRole RecordRole `json:"record_role"`
 
 	// RunningBalance JSON string or null, not a JSON number. Present on account-record listings when requested; aggregate DECIMAL(18,8) balance after this record in the record currency, with pending and posted records included and cancelled and expected records excluded. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	RunningBalance *string    `json:"running_balance,omitempty"`
@@ -1691,6 +1841,9 @@ type PostingStatus string
 // ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 type ReconciliationStatus string
 
+// RecordRole Accounting role derived independently from one record's account, sign, and category intent.
+type RecordRole string
+
 // RecurringDefinition defines model for RecurringDefinition.
 type RecurringDefinition struct {
 	AnchorDate            openapi_types.Date          `json:"anchor_date"`
@@ -1740,7 +1893,7 @@ type RecurringDefinitionRecord struct {
 
 	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount                      string     `json:"amount"`
-	CategoryId                  int64      `json:"category_id"`
+	CategoryId                  *int64     `json:"category_id"`
 	CreatedAt                   time.Time  `json:"created_at"`
 	Currency                    string     `json:"currency"`
 	MemberId                    *int64     `json:"member_id"`
@@ -1760,8 +1913,8 @@ type RecurringDefinitionRecordRequest struct {
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount *string `json:"amount,omitempty"`
 
-	// CategoryId Category identifier for this journal record or shorthand transaction.
-	CategoryId *int64 `json:"category_id,omitempty"`
+	// CategoryId Category identifier for this recurring record. After template inheritance, flow-account records require a category; owned, party, and system-account records forbid one.
+	CategoryId nullable.Nullable[int64] `json:"category_id,omitempty"`
 
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency *string `json:"currency,omitempty"`
@@ -1925,8 +2078,7 @@ type TagListResponse struct {
 
 // Transaction defines model for Transaction.
 type Transaction struct {
-	Components []TransactionComponent `json:"components"`
-	CreatedAt  time.Time              `json:"created_at"`
+	CreatedAt time.Time `json:"created_at"`
 
 	// DisplayTitle Server-derived transaction summary title for transaction lines.
 	DisplayTitle   string             `json:"display_title"`
@@ -1935,21 +2087,22 @@ type Transaction struct {
 	Records        []JournalRecord    `json:"records"`
 
 	// RecurringOccurrenceId Occurrence this transaction was generated from; null for non-recurring transactions; the definition is reached via the occurrence.
-	RecurringOccurrenceId *int64           `json:"recurring_occurrence_id"`
-	TombstonedAt          *time.Time       `json:"tombstoned_at,omitempty"`
-	TransactionClass      TransactionClass `json:"transaction_class"`
-	TransactionId         int64            `json:"transaction_id"`
+	RecurringOccurrenceId *int64             `json:"recurring_occurrence_id"`
+	Shapes                []TransactionShape `json:"shapes"`
+	TombstonedAt          *time.Time         `json:"tombstoned_at,omitempty"`
+	TransactionClass      TransactionClass   `json:"transaction_class"`
+	TransactionId         int64              `json:"transaction_id"`
 }
 
 // TransactionClass defines model for TransactionClass.
 type TransactionClass string
 
-// TransactionComponent defines model for TransactionComponent.
-type TransactionComponent struct {
-	Amounts []DisplayAmount `json:"amounts"`
-
-	// Intent Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment.
-	Intent CategoryEconomicIntent `json:"intent"`
+// TransactionClassification defines model for TransactionClassification.
+type TransactionClassification struct {
+	PrimaryAmounts   []DisplayAmount    `json:"primary_amounts"`
+	Records          []ClassifiedRecord `json:"records"`
+	Shapes           []TransactionShape `json:"shapes"`
+	TransactionClass TransactionClass   `json:"transaction_class"`
 }
 
 // TransactionListResponse defines model for TransactionListResponse.
@@ -1978,6 +2131,20 @@ type TransactionMonthTotalsResponse struct {
 	Spend  TransactionMonthTotal `json:"spend"`
 }
 
+// TransactionShape defines model for TransactionShape.
+type TransactionShape struct {
+	Amounts []DisplayAmount `json:"amounts"`
+
+	// EffectiveRate Present only for the exchange shape.
+	EffectiveRate *ExchangeEffectiveRate `json:"effective_rate,omitempty"`
+
+	// Shape One independently present kind of transaction activity.
+	Shape TransactionShapeType `json:"shape"`
+}
+
+// TransactionShapeType One independently present kind of transaction activity.
+type TransactionShapeType string
+
 // TransactionTemplate defines model for TransactionTemplate.
 type TransactionTemplate struct {
 	CreatedAt             time.Time                   `json:"created_at"`
@@ -2004,7 +2171,7 @@ type TransactionTemplateRecord struct {
 
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount                      *string               `json:"amount"`
-	CategoryId                  int64                 `json:"category_id"`
+	CategoryId                  *int64                `json:"category_id"`
 	CreatedAt                   time.Time             `json:"created_at"`
 	Currency                    *string               `json:"currency"`
 	MemberId                    *int64                `json:"member_id"`
@@ -2026,8 +2193,8 @@ type TransactionTemplateRecordRequest struct {
 	// Amount JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount *string `json:"amount,omitempty"`
 
-	// CategoryId Category identifier for this journal record or shorthand transaction.
-	CategoryId int64 `json:"category_id"`
+	// CategoryId Optional category default for a flow-account record.
+	CategoryId *int64 `json:"category_id,omitempty"`
 
 	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
 	Currency *string `json:"currency,omitempty"`
@@ -2059,8 +2226,8 @@ type TransactionTemplateWriteRequest struct {
 
 // UpdateAccountRequest defines model for UpdateAccountRequest.
 type UpdateAccountRequest struct {
-	// AccountType Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics.
-	AccountType *AccountType `json:"account_type,omitempty"`
+	// AccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
+	AccountType *WritableAccountType `json:"account_type,omitempty"`
 
 	// ExternalId Optional identifier assigned by an external system.
 	ExternalId nullable.Nullable[string] `json:"external_id,omitempty"`
@@ -2120,6 +2287,9 @@ type UpdateTransactionRequest struct {
 	Records []CreateJournalRecordRequest `json:"records"`
 }
 
+// WritableAccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
+type WritableAccountType string
+
 // AccountFQNConflict defines model for AccountFQNConflict.
 type AccountFQNConflict = ErrorResponse
 
@@ -2155,7 +2325,7 @@ type ListAccountsParams struct {
 	// IncludeTombstoned Include tombstoned entities; defaults to false.
 	IncludeTombstoned *bool `form:"include_tombstoned,omitempty" json:"include_tombstoned,omitempty"`
 
-	// AccountType Filter by balance, flow, or system account type.
+	// AccountType Filter by owned, party, flow, or system account type.
 	AccountType *AccountType `form:"account_type,omitempty" json:"account_type,omitempty"`
 
 	// IsFeatured Filter by featured state when provided.
@@ -2185,7 +2355,7 @@ type ListAccountBalancesParams struct {
 	// IncludeHidden Include hidden active entities; defaults to false.
 	IncludeHidden *bool `form:"include_hidden,omitempty" json:"include_hidden,omitempty"`
 
-	// AccountIds Account identifiers to include; omit to return all eligible active balance accounts.
+	// AccountIds Account identifiers to include; omit to return all eligible active owned and party accounts.
 	AccountIds *[]int64 `form:"account_ids,omitempty" json:"account_ids,omitempty"`
 }
 
@@ -2449,6 +2619,9 @@ type SearchJournalRecordsParams struct {
 	// ReconciliationStatus Filter by reconciled or unreconciled journal-record status.
 	ReconciliationStatus *ReconciliationStatus `form:"reconciliation_status,omitempty" json:"reconciliation_status,omitempty"`
 
+	// RecordRole Filters records by their server-derived accounting role.
+	RecordRole *RecordRole `form:"record_role,omitempty" json:"record_role,omitempty"`
+
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.
 	AmountMin *string `form:"amount_min,omitempty" json:"amount_min,omitempty"`
 
@@ -2635,6 +2808,12 @@ type ListTransactionsParams struct {
 	// TransactionClass Filter by one or more server-derived transaction classes.
 	TransactionClass *[]TransactionClass `form:"transaction_class,omitempty" json:"transaction_class,omitempty"`
 
+	// TransactionShape Filter by one or more server-derived transaction shapes.
+	TransactionShape *[]TransactionShapeType `form:"transaction_shape,omitempty" json:"transaction_shape,omitempty"`
+
+	// RecordRole Filter by one or more server-derived record roles present in a transaction.
+	RecordRole *[]RecordRole `form:"record_role,omitempty" json:"record_role,omitempty"`
+
 	// AmountMin JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits.
 	AmountMin *string `form:"amount_min,omitempty" json:"amount_min,omitempty"`
 
@@ -2768,6 +2947,12 @@ type ReplaceTransactionTemplateJSONRequestBody = TransactionTemplateWriteRequest
 // CreateTransactionJSONRequestBody defines body for CreateTransaction for application/json ContentType.
 type CreateTransactionJSONRequestBody = CreateTransactionRequest
 
+// ClassifyTransactionJSONRequestBody defines body for ClassifyTransaction for application/json ContentType.
+type ClassifyTransactionJSONRequestBody = ClassifyTransactionRequest
+
+// CreateExchangeTransactionJSONRequestBody defines body for CreateExchangeTransaction for application/json ContentType.
+type CreateExchangeTransactionJSONRequestBody = CreateExchangeTransactionRequest
+
 // CreateIncomeTransactionJSONRequestBody defines body for CreateIncomeTransaction for application/json ContentType.
 type CreateIncomeTransactionJSONRequestBody = CreateIncomeTransactionRequest
 
@@ -2791,7 +2976,7 @@ type ServerInterface interface {
 	// Create an account.
 	// (POST /api/accounts)
 	CreateAccount(w http.ResponseWriter, r *http.Request)
-	// List current and posted-only balances for active balance accounts.
+	// List current and posted-only balances for active tracked accounts.
 	// (GET /api/accounts/balances)
 	ListAccountBalances(w http.ResponseWriter, r *http.Request, params ListAccountBalancesParams)
 	// List implicit account groups.
@@ -3016,6 +3201,12 @@ type ServerInterface interface {
 	// Create a per-currency balanced transaction.
 	// (POST /api/transactions)
 	CreateTransaction(w http.ResponseWriter, r *http.Request)
+	// Classify an unsaved transaction draft without persisting it.
+	// (POST /api/transactions/classify)
+	ClassifyTransaction(w http.ResponseWriter, r *http.Request)
+	// Create a two-currency exchange transaction.
+	// (POST /api/transactions/exchange)
+	CreateExchangeTransaction(w http.ResponseWriter, r *http.Request)
 	// Create a same-currency income transaction.
 	// (POST /api/transactions/income)
 	CreateIncomeTransaction(w http.ResponseWriter, r *http.Request)
@@ -3061,7 +3252,7 @@ func (_ Unimplemented) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// List current and posted-only balances for active balance accounts.
+// List current and posted-only balances for active tracked accounts.
 // (GET /api/accounts/balances)
 func (_ Unimplemented) ListAccountBalances(w http.ResponseWriter, r *http.Request, params ListAccountBalancesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -3508,6 +3699,18 @@ func (_ Unimplemented) ListTransactions(w http.ResponseWriter, r *http.Request, 
 // Create a per-currency balanced transaction.
 // (POST /api/transactions)
 func (_ Unimplemented) CreateTransaction(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Classify an unsaved transaction draft without persisting it.
+// (POST /api/transactions/classify)
+func (_ Unimplemented) ClassifyTransaction(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create a two-currency exchange transaction.
+// (POST /api/transactions/exchange)
+func (_ Unimplemented) CreateExchangeTransaction(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -5469,6 +5672,19 @@ func (siw *ServerInterfaceWrapper) SearchJournalRecords(w http.ResponseWriter, r
 		return
 	}
 
+	// ------------- Optional query parameter "record_role" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "record_role", r.URL.Query(), &params.RecordRole, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "record_role"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "record_role", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "amount_min" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "amount_min", r.URL.Query(), &params.AmountMin, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -6747,6 +6963,32 @@ func (siw *ServerInterfaceWrapper) ListTransactions(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// ------------- Optional query parameter "transaction_shape" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "transaction_shape", r.URL.Query(), &params.TransactionShape, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "transaction_shape"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "transaction_shape", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "record_role" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "record_role", r.URL.Query(), &params.RecordRole, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "record_role"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "record_role", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "amount_min" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "amount_min", r.URL.Query(), &params.AmountMin, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -6906,6 +7148,34 @@ func (siw *ServerInterfaceWrapper) CreateTransaction(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateTransaction(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClassifyTransaction operation middleware
+func (siw *ServerInterfaceWrapper) ClassifyTransaction(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClassifyTransaction(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateExchangeTransaction operation middleware
+func (siw *ServerInterfaceWrapper) CreateExchangeTransaction(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateExchangeTransaction(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7451,6 +7721,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/transactions", wrapper.CreateTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/transactions/classify", wrapper.ClassifyTransaction)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/transactions/exchange", wrapper.CreateExchangeTransaction)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/transactions/income", wrapper.CreateIncomeTransaction)
@@ -11223,6 +11499,78 @@ func (response CreateTransaction400JSONResponse) VisitCreateTransactionResponse(
 	return err
 }
 
+type ClassifyTransactionRequestObject struct {
+	Body *ClassifyTransactionJSONRequestBody
+}
+
+type ClassifyTransactionResponseObject interface {
+	VisitClassifyTransactionResponse(w http.ResponseWriter) error
+}
+
+type ClassifyTransaction200JSONResponse TransactionClassification
+
+func (response ClassifyTransaction200JSONResponse) VisitClassifyTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClassifyTransaction400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response ClassifyTransaction400JSONResponse) VisitClassifyTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExchangeTransactionRequestObject struct {
+	Body *CreateExchangeTransactionJSONRequestBody
+}
+
+type CreateExchangeTransactionResponseObject interface {
+	VisitCreateExchangeTransactionResponse(w http.ResponseWriter) error
+}
+
+type CreateExchangeTransaction201JSONResponse Transaction
+
+func (response CreateExchangeTransaction201JSONResponse) VisitCreateExchangeTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateExchangeTransaction400JSONResponse struct{ InvalidRequestJSONResponse }
+
+func (response CreateExchangeTransaction400JSONResponse) VisitCreateExchangeTransactionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateIncomeTransactionRequestObject struct {
 	Body *CreateIncomeTransactionJSONRequestBody
 }
@@ -11606,7 +11954,7 @@ type StrictServerInterface interface {
 	// Create an account.
 	// (POST /api/accounts)
 	CreateAccount(ctx context.Context, request CreateAccountRequestObject) (CreateAccountResponseObject, error)
-	// List current and posted-only balances for active balance accounts.
+	// List current and posted-only balances for active tracked accounts.
 	// (GET /api/accounts/balances)
 	ListAccountBalances(ctx context.Context, request ListAccountBalancesRequestObject) (ListAccountBalancesResponseObject, error)
 	// List implicit account groups.
@@ -11831,6 +12179,12 @@ type StrictServerInterface interface {
 	// Create a per-currency balanced transaction.
 	// (POST /api/transactions)
 	CreateTransaction(ctx context.Context, request CreateTransactionRequestObject) (CreateTransactionResponseObject, error)
+	// Classify an unsaved transaction draft without persisting it.
+	// (POST /api/transactions/classify)
+	ClassifyTransaction(ctx context.Context, request ClassifyTransactionRequestObject) (ClassifyTransactionResponseObject, error)
+	// Create a two-currency exchange transaction.
+	// (POST /api/transactions/exchange)
+	CreateExchangeTransaction(ctx context.Context, request CreateExchangeTransactionRequestObject) (CreateExchangeTransactionResponseObject, error)
 	// Create a same-currency income transaction.
 	// (POST /api/transactions/income)
 	CreateIncomeTransaction(ctx context.Context, request CreateIncomeTransactionRequestObject) (CreateIncomeTransactionResponseObject, error)
@@ -14051,6 +14405,68 @@ func (sh *strictHandler) CreateTransaction(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// ClassifyTransaction operation middleware
+func (sh *strictHandler) ClassifyTransaction(w http.ResponseWriter, r *http.Request) {
+	var request ClassifyTransactionRequestObject
+
+	var body ClassifyTransactionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ClassifyTransaction(ctx, request.(ClassifyTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ClassifyTransaction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ClassifyTransactionResponseObject); ok {
+		if err := validResponse.VisitClassifyTransactionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateExchangeTransaction operation middleware
+func (sh *strictHandler) CreateExchangeTransaction(w http.ResponseWriter, r *http.Request) {
+	var request CreateExchangeTransactionRequestObject
+
+	var body CreateExchangeTransactionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateExchangeTransaction(ctx, request.(CreateExchangeTransactionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateExchangeTransaction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateExchangeTransactionResponseObject); ok {
+		if err := validResponse.VisitCreateExchangeTransactionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CreateIncomeTransaction operation middleware
 func (sh *strictHandler) CreateIncomeTransaction(w http.ResponseWriter, r *http.Request) {
 	var request CreateIncomeTransactionRequestObject
@@ -14317,228 +14733,245 @@ func (sh *strictHandler) CancelTransaction(w http.ResponseWriter, r *http.Reques
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

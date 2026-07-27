@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Transaction class, display titles, primary amounts, and record amounts come from REST responses.
+- Transaction class, shapes, record roles, display titles, primary amounts, and record amounts come from REST responses; mixed lines render economic shape amounts and exchange lines render the sold side.
 - Transaction-row transaction-level inline editing follows the uniformity rule owned by `docs/webui-design.md`.
 - The shared transaction-browser controller permits one active inline editor across the list and expanded records; a conflicting browser interaction discards the draft without performing its action, outside click discards, and Escape discards then restores focus to the originating cell.
 - Category, tags, member, and amount inline editors keep selections as drafts and mutate accounting state only through their checkmark Save controls; Cancel and Escape discard identically.
@@ -27,9 +27,10 @@
 - Lookup-backed inline pickers use bounded REST lists, exclude hidden entities upstream, prune empty hierarchy groups, and do not offer an include-hidden control; broader picker surfaces own their include-hidden controls.
 - Entry pickers may create client-valid, prefix-free category, tag, and flow-account leaves inline; REST services remain the validation authority and successful creation refreshes shared lookups.
 - Expanded-record editors own only their per-cell transient state; successful saves delegate to the browser page for API-owned validation and the standard transaction-mutation refresh fan-out.
-- Category, tags, and posting status use their narrow record bulk APIs; member, memo, dates, and simple row amounts use atomic transaction replacement built from the displayed transaction shape.
+- Category edits target categorized `flow` records only; tags and posting status use their narrow record bulk APIs, while member, memo, dates, and simple row amounts use atomic transaction replacement built from the displayed transaction shape.
 - Structural record fields remain non-inline; transaction browsers expose a direct escalation action to the modal's full journal editor.
-- Entry supports the spend, income, refund, and transfer shorthand endpoints.
+- Entry supports spend, income, refund, transfer, and exchange shorthand endpoints; spend merchant rows share one draft representation, spend/income/refund balance fields accept `owned` and `party` accounts, Transfer may compose an ordinary expense charge, and Advanced previews the server's dry classification.
+- Saved transactions reopen in shorthand when non-empty memo/member values agree and tag sets are uniform across the shape; unchanged shorthand edits preserve the original per-record placement of those values.
 - The app-shell-owned `EntryModal` is the single create/edit/split/duplicate surface on every route; `?entry=` owns its shareable launch state and composes with page URL state.
 - Opening `EntryModal` exits bulk mode; active inline drafts follow the shared conflicting-interaction discard contract before a launcher proceeds.
 - Saved-transaction Edit/Split saves are full replacements owned by `EntryModal`; successful saves fan out to displayed transaction browsers, detail, balances, overview, registers, and reference snapshots.
@@ -41,7 +42,6 @@
 - Successful bulk mutations use the same transaction, balance, overview, register, detail, and reference-page refresh fan-out as other transaction edits.
 - Transaction-entry drafts are per tab and store UI form values only.
 - The active entry tab is a persisted UI preference.
-- Transfer fee rows are not expressible through the transfer shorthand endpoint.
 
 ## Boundaries
 

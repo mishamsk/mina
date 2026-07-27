@@ -926,7 +926,7 @@ paths:
             type: boolean
             default: false
         - name: account_type
-          description: "Filter by balance, flow, or system account type."
+          description: "Filter by owned, party, flow, or system account type."
           in: query
           required: false
           schema:
@@ -1083,8 +1083,8 @@ paths:
       operationId: listAccountBalances
       tags:
         - accounts
-      summary: List current and posted-only balances for active balance accounts.
-      description: Returns server-computed per-currency balances for active `balance` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
+      summary: List current and posted-only balances for active tracked accounts.
+      description: Returns server-computed per-currency balances for active `owned` and `party` accounts. `current_balance` includes pending and posted records; `posted_balance` includes posted records only; cancelled and expected records are excluded. Accounts with `account.currency` and no records return a zero row for that currency.
       parameters:
         - name: include_hidden
           description: "Include hidden active entities; defaults to false."
@@ -1094,7 +1094,7 @@ paths:
             type: boolean
             default: false
         - name: account_ids
-          description: "Account identifiers to include; omit to return all eligible active balance accounts."
+          description: "Account identifiers to include; omit to return all eligible active owned and party accounts."
           in: query
           required: false
           style: form
@@ -2174,6 +2174,26 @@ paths:
             type: array
             items:
               $ref: "#/components/schemas/TransactionClass"
+        - name: transaction_shape
+          description: "Filter by one or more server-derived transaction shapes."
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/TransactionShapeType"
+        - name: record_role
+          description: "Filter by one or more server-derived record roles present in a transaction."
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/RecordRole"
         - name: amount_min
           in: query
           required: false
@@ -2285,13 +2305,57 @@ paths:
                 $ref: "#/components/schemas/Transaction"
         "400":
           $ref: "#/components/responses/InvalidRequest"
+  /api/transactions/classify:
+    post:
+      operationId: classifyTransaction
+      tags:
+        - transactions
+      summary: Classify an unsaved transaction draft without persisting it.
+      description: Returns server-derived record roles, transaction shapes, class, and display amounts. Drafts need not balance, but category and exchange rules still apply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClassifyTransactionRequest"
+      responses:
+        "200":
+          description: Derived accounting classification for the draft.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionClassification"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+  /api/transactions/exchange:
+    post:
+      operationId: createExchangeTransaction
+      tags:
+        - transactions
+      summary: Create a two-currency exchange transaction.
+      description: Creates the two supplied balance records and the matching `system:exchange` records.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExchangeTransactionRequest"
+      responses:
+        "201":
+          description: Exchange transaction created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
   /api/transactions/month-totals:
     get:
       operationId: getTransactionMonthTotals
       tags:
         - transactions
       summary: Get server-computed spend and income totals for a civil month.
-      description: Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense and fee component records increase spend, income component records increase income, refund records are excluded from both spend and gross income, and transfer/exchange/adjustment/fx_gain_loss records are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
+      description: Aggregates active journal records with posting_status pending or posted by transaction initiated_date for the requested YYYY-MM month. Expected and cancelled records are excluded. Expense-role records increase spend, refund-role records net against spend, income-role records increase income, and clawback-role records net against income. Balance, adjustment, and exchange roles are excluded. Totals are USD equivalents; records without amount_usd are counted as unconverted for their total.
       parameters:
         - name: month
           description: "Civil month to aggregate in YYYY-MM format."
@@ -2457,6 +2521,12 @@ paths:
           required: false
           schema:
             $ref: "#/components/schemas/ReconciliationStatus"
+        - name: record_role
+          in: query
+          required: false
+          description: Filters records by their server-derived accounting role.
+          schema:
+            $ref: "#/components/schemas/RecordRole"
         - name: amount_min
           in: query
           required: false
@@ -3208,12 +3278,20 @@ components:
           items:
             $ref: "#/components/schemas/AccountBalance"
     AccountType:
-      description: "Account semantic type: balance is household-facing state, flow is an external source or destination, and system is internal accounting mechanics."
+      description: "Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics."
       type: string
       enum:
-        - balance
+        - owned
+        - party
         - flow
         - system
+    WritableAccountType:
+      description: "User-writable account semantic type. System accounts are installed and managed only by Mina."
+      type: string
+      enum:
+        - owned
+        - party
+        - flow
     CreditLimitHistory:
       type: object
       additionalProperties: false
@@ -3395,17 +3473,11 @@ components:
           minimum: 0
           description: Count of matching categories before limit and offset are applied.
     CategoryEconomicIntent:
-      description: "Economic meaning used to validate journal-record shape and derive transaction classification and reporting treatment."
+      description: "Whether a category describes spending or income."
       type: string
       enum:
         - expense
-        - fee
         - income
-        - refund
-        - transfer
-        - exchange
-        - adjustment
-        - fx_gain_loss
     CreateCategoryRequest:
       type: object
       additionalProperties: false
@@ -3437,7 +3509,7 @@ components:
           description: "Colon-separated hierarchical FQN for the account leaf."
           type: string
         account_type:
-          $ref: "#/components/schemas/AccountType"
+          $ref: "#/components/schemas/WritableAccountType"
         is_hidden:
           description: "Whether the entity is excluded from default lists."
           type: boolean
@@ -3511,7 +3583,6 @@ components:
         - account_id
         - currency
         - amount
-        - category_id
         - posting_status
         - reconciliation_status
         - source
@@ -3543,10 +3614,11 @@ components:
           pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 20
         category_id:
-          description: "Category identifier for this journal record or shorthand transaction."
+          description: "Category identifier for a flow record; omit or use null for every other account type."
           type: integer
           format: int64
           minimum: 1
+          nullable: true
         tag_ids:
           description: "Tag identifiers to assign to the journal records."
           type: array
@@ -3924,7 +3996,6 @@ components:
         - initiated_date
         - source_account_id
         - destination_account_id
-        - category_id
         - currency
         - amount
       properties:
@@ -3943,11 +4014,6 @@ components:
           type: integer
           format: int64
           minimum: 1
-        category_id:
-          description: "Category identifier for this journal record or shorthand transaction."
-          type: integer
-          format: int64
-          minimum: 1
         currency:
           description: "Currency code using ISO 4217 or the `C::` crypto prefix."
           type: string
@@ -3955,6 +4021,77 @@ components:
         amount:
           type: string
           description: JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
+          not:
+            pattern: ^0{1,10}(\.0{1,8})?$
+          maxLength: 19
+        member_id:
+          description: "Optional household-member identifier for the journal records."
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+        tag_ids:
+          description: "Tag identifiers to assign to the journal records."
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        memo:
+          description: "Optional memo text for the journal records."
+          type: string
+          nullable: true
+        pending_date:
+          type: string
+          description: UTC banking transaction timestamp; when omitted or null, defaults to initiated_date at 00:00:00Z.
+          nullable: true
+          format: date-time
+        posted_date:
+          type: string
+          description: UTC timestamp when the generated records posted.
+          nullable: true
+          format: date-time
+        posting_status:
+          $ref: "#/components/schemas/PostingStatus"
+        reconciliation_status:
+          $ref: "#/components/schemas/ReconciliationStatus"
+    CreateExchangeTransactionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - initiated_date
+        - sold_account_id
+        - bought_account_id
+        - sold_amount
+        - bought_amount
+      properties:
+        initiated_date:
+          description: "Human-facing transaction date in YYYY-MM-DD format."
+          type: string
+          pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+          format: date
+        sold_account_id:
+          description: "Owned or party account from which currency is sold."
+          type: integer
+          format: int64
+          minimum: 1
+        bought_account_id:
+          description: "Owned or party account into which currency is bought."
+          type: integer
+          format: int64
+          minimum: 1
+        sold_amount:
+          type: string
+          description: JSON string, not a JSON number. Positive amount sold in the sold account's currency.
+          pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
+          not:
+            pattern: ^0{1,10}(\.0{1,8})?$
+          maxLength: 19
+        bought_amount:
+          type: string
+          description: JSON string, not a JSON number. Positive amount bought in the bought account's currency.
           pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
           not:
             pattern: ^0{1,10}(\.0{1,8})?$
@@ -4030,11 +4167,33 @@ components:
         - spend
         - income
         - refund
+        - clawback
         - transfer
         - currency_exchange
         - adjustment
-        - fx_gain_loss
         - mixed
+    RecordRole:
+      description: "Accounting role derived independently from one record's account, sign, and category intent."
+      type: string
+      enum:
+        - expense
+        - refund
+        - income
+        - clawback
+        - exchange
+        - adjustment
+        - balance
+    TransactionShapeType:
+      description: "One independently present kind of transaction activity."
+      type: string
+      enum:
+        - spend
+        - refund
+        - income
+        - clawback
+        - adjustment
+        - exchange
+        - transfer
     TransactionMonthTotal:
       type: object
       additionalProperties: false
@@ -4067,19 +4226,121 @@ components:
           $ref: "#/components/schemas/TransactionMonthTotal"
         income:
           $ref: "#/components/schemas/TransactionMonthTotal"
-    TransactionComponent:
+    ExchangeEffectiveRate:
       type: object
       additionalProperties: false
       required:
-        - intent
+        - sold_currency
+        - bought_currency
+        - rate
+      properties:
+        sold_currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        bought_currency:
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        rate:
+          type: string
+          description: JSON string, not a JSON number. Sold currency units per one bought currency unit, such as USD/EUR.
+          pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
+          maxLength: 19
+    TransactionShape:
+      type: object
+      additionalProperties: false
+      required:
+        - shape
         - amounts
       properties:
-        intent:
-          $ref: "#/components/schemas/CategoryEconomicIntent"
+        shape:
+          $ref: "#/components/schemas/TransactionShapeType"
         amounts:
           type: array
           items:
             $ref: "#/components/schemas/DisplayAmount"
+        effective_rate:
+          allOf:
+            - $ref: "#/components/schemas/ExchangeEffectiveRate"
+          nullable: true
+          description: Present only for the exchange shape.
+    ClassifyTransactionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - records
+      properties:
+        records:
+          description: "Unsaved journal-record draft; records need not balance."
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ClassifyJournalRecordRequest"
+    ClassifyJournalRecordRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - account_id
+        - currency
+        - amount
+      properties:
+        account_id:
+          description: "Account identifier used to derive this draft record's semantic role."
+          type: integer
+          format: int64
+          minimum: 1
+        currency:
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        amount:
+          type: string
+          description: JSON string, not a JSON number. Signed non-zero DECIMAL(18,8).
+          pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
+          not:
+            pattern: ^-?0{1,10}(\.0{1,8})?$
+          maxLength: 20
+        category_id:
+          description: "Category identifier used to derive this draft flow record's semantic role."
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+    ClassifiedRecord:
+      type: object
+      additionalProperties: false
+      required:
+        - record_index
+        - record_role
+      properties:
+        record_index:
+          type: integer
+          minimum: 0
+          description: Zero-based index into the request records.
+        record_role:
+          $ref: "#/components/schemas/RecordRole"
+    TransactionClassification:
+      type: object
+      additionalProperties: false
+      required:
+        - transaction_class
+        - primary_amounts
+        - shapes
+        - records
+      properties:
+        transaction_class:
+          $ref: "#/components/schemas/TransactionClass"
+        primary_amounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/DisplayAmount"
+        shapes:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionShape"
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClassifiedRecord"
     UpdateTransactionRequest:
       type: object
       additionalProperties: false
@@ -4117,14 +4378,13 @@ components:
     TransactionTemplateRecordRequest:
       type: object
       additionalProperties: false
-      required:
-        - category_id
       properties:
         category_id:
-          description: "Category identifier for this journal record or shorthand transaction."
+          description: "Optional category default for a flow-account record."
           type: integer
           format: int64
           minimum: 1
+          nullable: true
         account_id:
           description: "Account identifier for this journal record or request."
           type: integer
@@ -4252,11 +4512,15 @@ components:
           pattern: ^-?[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 20
         category_id:
-          description: "Category identifier for this journal record or shorthand transaction."
+          description: "Category identifier for this recurring record. After template inheritance, flow-account records require a category; owned, party, and system-account records forbid one."
           type: integer
           format: int64
           minimum: 1
           nullable: true
+          x-go-type: nullable.Nullable[int64]
+          x-go-type-skip-optional-pointer: true
+          x-go-type-import:
+            path: github.com/oapi-codegen/nullable
         tag_ids:
           description: "Tag identifiers to assign to the journal records."
           type: array
@@ -4711,6 +4975,7 @@ components:
         - amount_usd
         - pending_date
         - category_id
+        - record_role
         - tag_ids
         - posting_status
         - reconciliation_status
@@ -4754,6 +5019,9 @@ components:
         category_id:
           type: integer
           format: int64
+          nullable: true
+        record_role:
+          $ref: "#/components/schemas/RecordRole"
         tag_ids:
           type: array
           items:
@@ -4972,6 +5240,7 @@ components:
         category_id:
           type: integer
           format: int64
+          nullable: true
         account_id:
           type: integer
           format: int64
@@ -5151,6 +5420,7 @@ components:
         category_id:
           type: integer
           format: int64
+          nullable: true
         tag_ids:
           type: array
           items:
@@ -5269,7 +5539,7 @@ components:
         - transaction_class
         - display_title
         - primary_amounts
-        - components
+        - shapes
         - created_at
         - records
       properties:
@@ -5295,10 +5565,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DisplayAmount"
-        components:
+        shapes:
           type: array
           items:
-            $ref: "#/components/schemas/TransactionComponent"
+            $ref: "#/components/schemas/TransactionShape"
         created_at:
           type: string
           format: date-time
@@ -5346,7 +5616,7 @@ components:
       additionalProperties: false
       properties:
         account_type:
-          $ref: "#/components/schemas/AccountType"
+          $ref: "#/components/schemas/WritableAccountType"
         is_hidden:
           description: Whether the account is excluded from default lists.
           type: boolean

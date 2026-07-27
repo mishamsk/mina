@@ -89,8 +89,6 @@ const completeEditor = async (page: Page, fqn: string) => {
   await first.getByLabel("Account").fill("checking:Chase:Joint");
   await first.getByLabel("Account").press("Enter");
   await first.getByLabel("Amount").fill("-12.34");
-  await first.getByLabel("Category").fill("Entertainment:Books");
-  await first.getByLabel("Category").press("Enter");
   await second.getByLabel("Account").fill("merchant:Books");
   await second.getByLabel("Account").press("Enter");
   await second.getByLabel("Amount").fill("12.34");

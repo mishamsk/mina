@@ -89,7 +89,13 @@ const isUniformBulkField = (
   }
 
   if (field === "category") {
-    return new Set(records.map((record) => record.category_id)).size === 1;
+    const categorizedRecords = records.filter(
+      (record) => record.category_id !== null,
+    );
+    return (
+      categorizedRecords.length > 0 &&
+      new Set(categorizedRecords.map((record) => record.category_id)).size === 1
+    );
   }
   if (field === "member") {
     return (
@@ -654,10 +660,15 @@ export const useTransactionBrowserPage = ({
       const updatedTransactions: Transaction[] = [];
 
       if (update.kind === "category") {
+        const flowAccountIds = new Set(
+          (lookups.snapshot?.accounts ?? [])
+            .filter((account) => account.account_type === "flow")
+            .map((account) => account.account_id),
+        );
         const recordIds = qualifyingTransactions.flatMap((transaction) =>
-          activeTransactionRecords(transaction).map(
-            (record) => record.record_id,
-          ),
+          activeTransactionRecords(transaction)
+            .filter((record) => flowAccountIds.has(record.account_id))
+            .map((record) => record.record_id),
         );
         if (recordIds.length > 0) {
           const result = await updateJournalRecordsCategory(
@@ -670,9 +681,9 @@ export const useTransactionBrowserPage = ({
           const categoryUpdatedTransactions = qualifyingTransactions.map(
             (transaction) => {
               const categorizedRecordIds = new Set(
-                activeTransactionRecords(transaction).map(
-                  (record) => record.record_id,
-                ),
+                activeTransactionRecords(transaction)
+                  .filter((record) => flowAccountIds.has(record.account_id))
+                  .map((record) => record.record_id),
               );
               return {
                 ...transaction,
@@ -780,7 +791,7 @@ export const useTransactionBrowserPage = ({
           : "success",
       );
     },
-    [displayedPageParams, showNotice],
+    [displayedPageParams, lookups.snapshot?.accounts, showNotice],
   );
 
   const setPage = useCallback(

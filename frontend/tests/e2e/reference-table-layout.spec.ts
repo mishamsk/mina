@@ -72,7 +72,7 @@ const createAccount = async (
 ): Promise<void> => {
   const response = await page.request.post("/api/accounts", {
     data: {
-      account_type: "balance",
+      account_type: "owned",
       currency: "USD",
       fqn,
       is_featured: isFeatured,
@@ -89,7 +89,7 @@ const createAccountWithId = async (
 ): Promise<number> => {
   const response = await page.request.post("/api/accounts", {
     data: {
-      account_type: "balance",
+      account_type: "owned",
       currency: "USD",
       fqn,
       is_featured: isFeatured,

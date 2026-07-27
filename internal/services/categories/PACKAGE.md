@@ -7,6 +7,7 @@
 ## Implicit Contracts
 
 - Service instances own process-local, write-through category reference caches for active-reference validation.
+- Economic intent is exactly `expense` or `income`; transaction semantics own the rule that categories attach only to `flow` records.
 - Hidden active categories are valid references only when callers explicitly allow hidden references.
 - Category group hidden state is derived from active category leaves, including hidden leaves.
 - Featured state is leaf-only portable metadata; groups have no featured state or derivation.

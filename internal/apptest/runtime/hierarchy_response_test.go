@@ -15,7 +15,7 @@ func TestHierarchyRootResponsesEncodeNullParentFQN(t *testing.T) {
 	currency := "USD"
 	account, err := client.REST().CreateAccountWithResponse(context.Background(), httpclient.CreateAccountRequest{
 		Fqn:         "cash",
-		AccountType: httpclient.Balance,
+		AccountType: httpclient.WritableAccountTypeOwned,
 		Currency:    &currency,
 	})
 	if err != nil {

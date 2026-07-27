@@ -8,15 +8,7 @@ interface AccountFixture {
 
 interface CategoryFixture {
   readonly category_id: number;
-  readonly economic_intent:
-    | "adjustment"
-    | "exchange"
-    | "expense"
-    | "fee"
-    | "fx_gain_loss"
-    | "income"
-    | "refund"
-    | "transfer";
+  readonly economic_intent: "expense" | "income";
   readonly fqn: string;
   readonly name: string;
 }
@@ -79,7 +71,7 @@ const createAccount = async (
 ): Promise<AccountFixture> => {
   const response = await page.request.post("/api/accounts", {
     data: {
-      account_type: "balance",
+      account_type: "owned",
       currency: "USD",
       fqn,
       is_hidden: false,
@@ -476,6 +468,12 @@ test("category drill-down rolls visible descendants, excludes hidden descendants
         updated_at: now,
       },
     ],
+    shapes: [
+      {
+        amounts: [{ amount: "12.34000000", currency: "USD" }],
+        shape: "spend",
+      },
+    ],
     transaction_class: "spend",
     transaction_id: transactionId,
   });
@@ -661,6 +659,12 @@ test("tag drill-down rolls visible descendants, excludes hidden descendants, and
         tag_ids: [tagId],
         transaction_id: transactionId,
         updated_at: now,
+      },
+    ],
+    shapes: [
+      {
+        amounts: [{ amount: "12.34000000", currency: "USD" }],
+        shape: "spend",
       },
     ],
     transaction_class: "spend",

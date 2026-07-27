@@ -1,6 +1,11 @@
 import { EyeOff } from "pixelarticons/react";
 
-import type { AccountBalance, CreditLimitHistory, DisplayAmount } from "@/api";
+import type {
+  Account,
+  AccountBalance,
+  CreditLimitHistory,
+  DisplayAmount,
+} from "@/api";
 import { FavoriteStarIcon } from "@/components/favorite-star-icon";
 import { Tooltip } from "@/components/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -11,15 +16,7 @@ import { AccountTypeBadge } from "./account-type-badge";
 import { CreditLimitIndicator } from "./credit-limit-indicator";
 
 interface AccountHeaderProps {
-  readonly account: {
-    readonly account_type: "balance" | "flow" | "system";
-    readonly currency?: string | null;
-    readonly external_id?: string | null;
-    readonly external_system?: string | null;
-    readonly fqn: string;
-    readonly is_featured: boolean;
-    readonly is_hidden: boolean;
-  };
+  readonly account: Account;
   readonly balances: readonly AccountBalance[];
   readonly creditLimitHistory: readonly CreditLimitHistory[];
   readonly featuredTogglePending: boolean;
@@ -75,23 +72,29 @@ export const AccountHeader = ({
                 {account.currency}
               </Badge>
             ) : null}
-            <button
-              type="button"
-              className="focus-visible:outline-ring hover:bg-muted aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:[&_svg]:!text-muted-foreground inline-flex h-9 items-center gap-2 overflow-visible border-0 bg-transparent px-1 py-0 font-mono text-xs font-semibold shadow-none focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:cursor-not-allowed"
-              aria-disabled={featuredTogglePending ? "true" : undefined}
-              aria-pressed={account.is_featured}
-              onClick={onToggleFeatured}
-            >
-              <span
-                aria-hidden="true"
-                className="inline-grid size-[24px] shrink-0 place-items-center overflow-visible"
-                data-favorite-star-icon-box=""
-                data-icon="inline-start"
+            {account.account_type === "system" ? (
+              <Badge variant="outline" className="bg-[var(--band)]">
+                Read-only system account
+              </Badge>
+            ) : (
+              <button
+                type="button"
+                className="focus-visible:outline-ring hover:bg-muted aria-disabled:bg-muted aria-disabled:text-muted-foreground aria-disabled:[&_svg]:!text-muted-foreground inline-flex h-9 items-center gap-2 overflow-visible border-0 bg-transparent px-1 py-0 font-mono text-xs font-semibold shadow-none focus-visible:outline-2 focus-visible:outline-offset-2 aria-disabled:cursor-not-allowed"
+                aria-disabled={featuredTogglePending ? "true" : undefined}
+                aria-pressed={account.is_featured}
+                onClick={onToggleFeatured}
               >
-                <FavoriteStarIcon filled={account.is_featured} />
-              </span>
-              {account.is_featured ? "Unfeature account" : "Feature account"}
-            </button>
+                <span
+                  aria-hidden="true"
+                  className="inline-grid size-[24px] shrink-0 place-items-center overflow-visible"
+                  data-favorite-star-icon-box=""
+                  data-icon="inline-start"
+                >
+                  <FavoriteStarIcon filled={account.is_featured} />
+                </span>
+                {account.is_featured ? "Unfeature account" : "Feature account"}
+              </button>
+            )}
             {account.is_hidden ? (
               <span
                 aria-label="Hidden account"

@@ -35,6 +35,8 @@ func (s *strictServer) ListTransactions(ctx context.Context, request openapi.Lis
 		MemberIDs:          cloneOptionalInt64Slice(request.Params.MemberId),
 		PostingStatuses:    transactionAPIPostingStatusSlice(request.Params.PostingStatus),
 		TransactionClasses: transactionAPIClassSlice(request.Params.TransactionClass),
+		TransactionShapes:  transactionAPIShapeSlice(request.Params.TransactionShape),
+		RecordRoles:        transactionAPIRoleSlice(request.Params.RecordRole),
 		AmountMinText:      request.Params.AmountMin,
 		AmountMaxText:      request.Params.AmountMax,
 		AmountUSDMinText:   request.Params.AmountUsdMin,
@@ -56,6 +58,76 @@ func (s *strictServer) ListTransactions(ctx context.Context, request openapi.Lis
 		Offset:       transactionList.Offset,
 		TotalCount:   transactionList.TotalCount,
 	}, nil
+}
+
+func (s *strictServer) ClassifyTransaction(ctx context.Context, request openapi.ClassifyTransactionRequestObject) (openapi.ClassifyTransactionResponseObject, error) {
+	records, err := classificationRecordAPIInputs(request.Body.Records)
+	if err != nil {
+		return nil, err
+	}
+	classification, err := s.deps.Transactions.Classify(ctx, records)
+	if err != nil {
+		return nil, err
+	}
+	classifiedRecords := make([]openapi.ClassifiedRecord, 0, len(classification.Roles))
+	for index, role := range classification.Roles {
+		classifiedRecords = append(classifiedRecords, openapi.ClassifiedRecord{
+			RecordIndex: index,
+			RecordRole:  openapi.RecordRole(role),
+		})
+	}
+	return openapi.ClassifyTransaction200JSONResponse{
+		TransactionClass: openapi.TransactionClass(classification.Class),
+		PrimaryAmounts:   displayAmountAPIResponses(classification.PrimaryAmounts),
+		Shapes:           transactionShapeAPIResponses(classification.Shapes),
+		Records:          classifiedRecords,
+	}, nil
+}
+
+func classificationRecordAPIInputs(records []openapi.ClassifyJournalRecordRequest) ([]transactions.ClassificationRecordInput, error) {
+	inputs := make([]transactions.ClassificationRecordInput, 0, len(records))
+	for index, record := range records {
+		amount, err := decimalField(recordField(index, "amount"), record.Amount)
+		if err != nil {
+			return nil, err
+		}
+		inputs = append(inputs, transactions.ClassificationRecordInput{
+			AccountID:  record.AccountId,
+			Currency:   record.Currency,
+			Amount:     amount,
+			CategoryID: record.CategoryId,
+		})
+	}
+	return inputs, nil
+}
+
+func (s *strictServer) CreateExchangeTransaction(ctx context.Context, request openapi.CreateExchangeTransactionRequestObject) (openapi.CreateExchangeTransactionResponseObject, error) {
+	soldAmount, err := decimalField("sold_amount", request.Body.SoldAmount)
+	if err != nil {
+		return nil, err
+	}
+	boughtAmount, err := decimalField("bought_amount", request.Body.BoughtAmount)
+	if err != nil {
+		return nil, err
+	}
+	transaction, err := s.deps.Transactions.CreateExchange(ctx, transactions.ExchangeInput{
+		InitiatedDate:        civilDateFromOpenAPI(request.Body.InitiatedDate),
+		SoldAccountID:        request.Body.SoldAccountId,
+		BoughtAccountID:      request.Body.BoughtAccountId,
+		SoldAmount:           soldAmount,
+		BoughtAmount:         boughtAmount,
+		MemberID:             request.Body.MemberId,
+		TagIDs:               cloneOptionalInt64Slice(request.Body.TagIds),
+		Memo:                 request.Body.Memo,
+		PendingDate:          nullableTimestampFromOpenAPI(request.Body.PendingDate),
+		PostedDate:           nullableTimestampFromOpenAPI(request.Body.PostedDate),
+		PostingStatus:        transactionAPIPostingStatusPtr(request.Body.PostingStatus),
+		ReconciliationStatus: transactionAPIReconciliationStatusPtr(request.Body.ReconciliationStatus),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return openapi.CreateExchangeTransaction201JSONResponse(transactionAPIResponse(transaction)), nil
 }
 
 func (s *strictServer) GetTransactionMonthTotals(ctx context.Context, request openapi.GetTransactionMonthTotalsRequestObject) (openapi.GetTransactionMonthTotalsResponseObject, error) {
@@ -192,7 +264,6 @@ func (s *strictServer) CreateTransferTransaction(ctx context.Context, request op
 		ShorthandCreateFields: fields,
 		SourceAccountID:       request.Body.SourceAccountId,
 		DestinationAccountID:  request.Body.DestinationAccountId,
-		TransferCategoryID:    request.Body.CategoryId,
 	})
 	if err != nil {
 		return nil, err
@@ -328,6 +399,7 @@ func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (t
 		CategoryID:        params.CategoryId,
 		MemberID:          params.MemberId,
 		TagID:             params.TagId,
+		RecordRole:        transactionAPIRolePtr(params.RecordRole),
 		InitiatedDateFrom: nullableCivilDateFromOpenAPI(params.InitiatedDateFrom),
 		InitiatedDateTo:   nullableCivilDateFromOpenAPI(params.InitiatedDateTo),
 		PendingDateFrom:   nullableTimestampFromOpenAPI(params.PendingDateFrom),
@@ -492,7 +564,7 @@ func transactionAPIResponse(transaction transactions.Transaction) openapi.Transa
 		TransactionClass:      openapi.TransactionClass(transaction.Class),
 		DisplayTitle:          transaction.DisplayTitle,
 		PrimaryAmounts:        displayAmountAPIResponses(transaction.PrimaryAmounts),
-		Components:            classificationComponentAPIResponses(transaction.Components),
+		Shapes:                transactionShapeAPIResponses(transaction.Shapes),
 		RecurringOccurrenceId: transaction.RecurringOccurrenceID,
 		CreatedAt:             transaction.CreatedAt.UTC(),
 		TombstonedAt:          nullableTimestampTime(transaction.TombstonedAt),
@@ -537,6 +609,7 @@ func journalRecordAPIResponse(record transactions.JournalRecord) openapi.Journal
 		AmountUsd:            amountUSD,
 		RunningBalance:       nullableDecimalString(record.RunningBalance),
 		CategoryId:           record.CategoryID,
+		RecordRole:           openapi.RecordRole(record.Role),
 		TagIds:               cloneInt64Slice(record.TagIDs),
 		Memo:                 record.Memo,
 		PendingDate:          record.PendingDate.UTC(),
@@ -584,17 +657,26 @@ func displayAmountAPIResponses(amounts []transactions.DisplayAmount) []openapi.D
 	return responses
 }
 
-func classificationComponentAPIResponse(component transactions.ClassificationComponent) openapi.TransactionComponent {
-	return openapi.TransactionComponent{
-		Intent:  openapi.CategoryEconomicIntent(component.Intent),
-		Amounts: displayAmountAPIResponses(component.Amounts),
+func transactionShapeAPIResponse(shape transactions.TransactionShape) openapi.TransactionShape {
+	var effectiveRate *openapi.ExchangeEffectiveRate
+	if shape.EffectiveRate != nil {
+		effectiveRate = &openapi.ExchangeEffectiveRate{
+			SoldCurrency:   shape.EffectiveRate.SoldCurrency,
+			BoughtCurrency: shape.EffectiveRate.BoughtCurrency,
+			Rate:           shape.EffectiveRate.Rate.String(),
+		}
+	}
+	return openapi.TransactionShape{
+		Shape:         openapi.TransactionShapeType(shape.Shape),
+		Amounts:       displayAmountAPIResponses(shape.Amounts),
+		EffectiveRate: effectiveRate,
 	}
 }
 
-func classificationComponentAPIResponses(components []transactions.ClassificationComponent) []openapi.TransactionComponent {
-	responses := make([]openapi.TransactionComponent, 0, len(components))
-	for _, component := range components {
-		responses = append(responses, classificationComponentAPIResponse(component))
+func transactionShapeAPIResponses(shapes []transactions.TransactionShape) []openapi.TransactionShape {
+	responses := make([]openapi.TransactionShape, 0, len(shapes))
+	for _, shape := range shapes {
+		responses = append(responses, transactionShapeAPIResponse(shape))
 	}
 
 	return responses
@@ -638,6 +720,36 @@ func transactionAPIClassSlice(classes *[]openapi.TransactionClass) []transaction
 	}
 
 	return values
+}
+
+func transactionAPIShapeSlice(shapes *[]openapi.TransactionShapeType) []transactions.TransactionShapeType {
+	if shapes == nil {
+		return nil
+	}
+	values := make([]transactions.TransactionShapeType, 0, len(*shapes))
+	for _, shape := range *shapes {
+		values = append(values, transactions.TransactionShapeType(shape))
+	}
+	return values
+}
+
+func transactionAPIRoleSlice(roles *[]openapi.RecordRole) []transactions.RecordRole {
+	if roles == nil {
+		return nil
+	}
+	values := make([]transactions.RecordRole, 0, len(*roles))
+	for _, role := range *roles {
+		values = append(values, transactions.RecordRole(role))
+	}
+	return values
+}
+
+func transactionAPIRolePtr(role *openapi.RecordRole) *transactions.RecordRole {
+	if role == nil {
+		return nil
+	}
+	value := transactions.RecordRole(*role)
+	return &value
 }
 
 func transactionAPIPostingStatusPtr(status *openapi.PostingStatus) *transactions.PostingStatus {

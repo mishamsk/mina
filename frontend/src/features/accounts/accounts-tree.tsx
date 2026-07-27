@@ -522,105 +522,115 @@ export const AccountsTree = ({
                   (balance) => balance.credit_limit !== undefined,
                 );
                 const group = groupByFqn.get(row.fqn);
+                const readOnlySystemPath =
+                  row.fqn === "system" || row.fqn.startsWith("system:");
                 const rowHidden =
                   account?.is_hidden ?? group?.is_hidden ?? false;
                 const groupHiddenAction: RowAction | undefined = group
-                  ? {
-                      icon: group.is_hidden ? (
-                        <EyeOff aria-hidden="true" />
-                      ) : (
-                        <Eye aria-hidden="true" />
-                      ),
-                      kind: "toggle" as const,
-                      label: group.is_hidden ? "Unhide group" : "Hide group",
-                      onToggle: () => {
-                        void toggleGroupHidden(group);
-                      },
-                      pressed: group.is_hidden,
-                      slot: "hidden",
-                    }
-                  : undefined;
-                const rowActions: RowAction[] = account
-                  ? [
-                      {
-                        icon: <MagicEdit aria-hidden="true" />,
-                        label: "Edit account",
-                        onSelect: (opener: HTMLElement) => {
-                          onEditAccount?.(account, opener);
-                        },
-                      },
-                      {
-                        icon: account.is_hidden ? (
+                  ? readOnlySystemPath
+                    ? undefined
+                    : {
+                        icon: group.is_hidden ? (
                           <EyeOff aria-hidden="true" />
                         ) : (
                           <Eye aria-hidden="true" />
                         ),
                         kind: "toggle" as const,
-                        label: account.is_hidden
-                          ? "Unhide account"
-                          : "Hide account",
+                        label: group.is_hidden ? "Unhide group" : "Hide group",
                         onToggle: () => {
-                          void toggleAccountHidden(account);
+                          void toggleGroupHidden(group);
                         },
-                        pressed: account.is_hidden,
+                        pressed: group.is_hidden,
                         slot: "hidden",
-                      },
-                      {
-                        icon: <FavoriteStarIcon filled={account.is_featured} />,
-                        kind: "toggle" as const,
-                        label: account.is_featured
-                          ? "Unfeature account"
-                          : "Feature account",
-                        onToggle: () => {
-                          void toggleAccountFeatured(account);
-                        },
-                        pressed: account.is_featured,
-                        slot: "featured",
-                      },
-                      ...(onRestructurePath
-                        ? [
-                            {
-                              icon: <MagicEdit aria-hidden="true" />,
-                              label: "Move or rename",
-                              onSelect: (opener: HTMLElement) => {
-                                opener.blur();
-                                onRestructurePath(row.fqn, opener);
-                              },
+                      }
+                  : undefined;
+                const rowActions: RowAction[] =
+                  account?.account_type === "system"
+                    ? []
+                    : account
+                      ? [
+                          {
+                            icon: <MagicEdit aria-hidden="true" />,
+                            label: "Edit account",
+                            onSelect: (opener: HTMLElement) => {
+                              onEditAccount?.(account, opener);
                             },
-                          ]
-                        : []),
-                      {
-                        disabled: account.deletable !== true,
-                        disabledReason: "Account has active dependent records.",
-                        icon: <Trash aria-hidden="true" />,
-                        label: "Delete account",
-                        onSelect: (opener: HTMLElement) => {
-                          setDeleteErrorMessage(undefined);
-                          setDeleteTarget({
-                            account,
-                            opener,
-                          });
-                        },
-                      },
-                      ...(groupHiddenAction ? [groupHiddenAction] : []),
-                    ]
-                  : groupHiddenAction
-                    ? [
-                        groupHiddenAction,
-                        ...(onRestructurePath
-                          ? [
-                              {
-                                icon: <MagicEdit aria-hidden="true" />,
-                                label: "Move or rename",
-                                onSelect: (opener: HTMLElement) => {
-                                  opener.blur();
-                                  onRestructurePath(row.fqn, opener);
+                          },
+                          {
+                            icon: account.is_hidden ? (
+                              <EyeOff aria-hidden="true" />
+                            ) : (
+                              <Eye aria-hidden="true" />
+                            ),
+                            kind: "toggle" as const,
+                            label: account.is_hidden
+                              ? "Unhide account"
+                              : "Hide account",
+                            onToggle: () => {
+                              void toggleAccountHidden(account);
+                            },
+                            pressed: account.is_hidden,
+                            slot: "hidden",
+                          },
+                          {
+                            icon: (
+                              <FavoriteStarIcon filled={account.is_featured} />
+                            ),
+                            kind: "toggle" as const,
+                            label: account.is_featured
+                              ? "Unfeature account"
+                              : "Feature account",
+                            onToggle: () => {
+                              void toggleAccountFeatured(account);
+                            },
+                            pressed: account.is_featured,
+                            slot: "featured",
+                          },
+                          ...(onRestructurePath
+                            ? [
+                                {
+                                  icon: <MagicEdit aria-hidden="true" />,
+                                  label: "Move or rename",
+                                  onSelect: (opener: HTMLElement) => {
+                                    opener.blur();
+                                    onRestructurePath(row.fqn, opener);
+                                  },
                                 },
-                              },
-                            ]
-                          : []),
-                      ]
-                    : [];
+                              ]
+                            : []),
+                          {
+                            disabled: account.deletable !== true,
+                            disabledReason:
+                              "Account has active dependent records.",
+                            icon: <Trash aria-hidden="true" />,
+                            label: "Delete account",
+                            onSelect: (opener: HTMLElement) => {
+                              setDeleteErrorMessage(undefined);
+                              setDeleteTarget({
+                                account,
+                                opener,
+                              });
+                            },
+                          },
+                          ...(groupHiddenAction ? [groupHiddenAction] : []),
+                        ]
+                      : groupHiddenAction
+                        ? [
+                            groupHiddenAction,
+                            ...(onRestructurePath
+                              ? [
+                                  {
+                                    icon: <MagicEdit aria-hidden="true" />,
+                                    label: "Move or rename",
+                                    onSelect: (opener: HTMLElement) => {
+                                      opener.blur();
+                                      onRestructurePath(row.fqn, opener);
+                                    },
+                                  },
+                                ]
+                              : []),
+                          ]
+                        : [];
                 return (
                   <tr
                     key={row.fqn}
@@ -716,7 +726,8 @@ export const AccountsTree = ({
                       {account?.currency ?? ""}
                     </td>
                     <td className="px-2 py-2 text-right align-middle sm:px-3">
-                      {account?.account_type === "balance" ? (
+                      {account?.account_type === "owned" ||
+                      account?.account_type === "party" ? (
                         <BalanceAmounts balances={rowBalances} />
                       ) : null}
                     </td>

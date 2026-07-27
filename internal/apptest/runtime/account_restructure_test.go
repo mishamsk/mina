@@ -12,7 +12,7 @@ import (
 func TestAccountRestructureRenameMoveAndLeafToGroup(t *testing.T) {
 	client := newSharedClient(t)
 
-	renamed := createAccountForRestructure(t, client, "restructure:Accounts:Old", httpclient.Flow, false, nil)
+	renamed := createAccountForRestructure(t, client, "restructure:Accounts:Old", httpclient.WritableAccountTypeFlow, false, nil)
 	rename := restructureAccounts(t, client, "restructure:Accounts:Old", "restructure:Accounts:New")
 	if rename.JSON200.MovedCount != 1 {
 		t.Fatalf("rename moved_count = %d, want 1", rename.JSON200.MovedCount)
@@ -20,8 +20,8 @@ func TestAccountRestructureRenameMoveAndLeafToGroup(t *testing.T) {
 	assertAccountFQN(t, client, renamed.AccountId, "restructure:Accounts:New")
 
 	currency := "USD"
-	checking := createAccountForRestructure(t, client, "restructure:Bank:Old:Checking", httpclient.Balance, false, &currency)
-	hiddenSavings := createAccountForRestructure(t, client, "restructure:Bank:Old:Savings", httpclient.Balance, true, &currency)
+	checking := createAccountForRestructure(t, client, "restructure:Bank:Old:Checking", httpclient.WritableAccountTypeOwned, false, &currency)
+	hiddenSavings := createAccountForRestructure(t, client, "restructure:Bank:Old:Savings", httpclient.WritableAccountTypeOwned, true, &currency)
 	move := restructureAccounts(t, client, "restructure:Bank:Old", "restructure:Bank:New")
 	if move.JSON200.MovedCount != 2 {
 		t.Fatalf("move moved_count = %d, want 2", move.JSON200.MovedCount)
@@ -30,7 +30,7 @@ func TestAccountRestructureRenameMoveAndLeafToGroup(t *testing.T) {
 	assertAccountFQN(t, client, hiddenSavings.AccountId, "restructure:Bank:New:Savings")
 	assertAccountHidden(t, client, hiddenSavings.AccountId, true)
 
-	leaf := createAccountForRestructure(t, client, "restructure:LeafGroup", httpclient.Flow, false, nil)
+	leaf := createAccountForRestructure(t, client, "restructure:LeafGroup", httpclient.WritableAccountTypeFlow, false, nil)
 	leafToGroup := restructureAccounts(t, client, "restructure:LeafGroup", "restructure:LeafGroup:Other")
 	if leafToGroup.JSON200.MovedCount != 1 {
 		t.Fatalf("leaf-to-group moved_count = %d, want 1", leafToGroup.JSON200.MovedCount)
@@ -41,8 +41,8 @@ func TestAccountRestructureRenameMoveAndLeafToGroup(t *testing.T) {
 func TestAccountRestructureValidationAndConflicts(t *testing.T) {
 	client := newSharedClient(t)
 
-	createAccountForRestructure(t, client, "restructure:OwnSubtree:One", httpclient.Flow, false, nil)
-	createAccountForRestructure(t, client, "restructure:OwnSubtree:Two", httpclient.Flow, false, nil)
+	createAccountForRestructure(t, client, "restructure:OwnSubtree:One", httpclient.WritableAccountTypeFlow, false, nil)
+	createAccountForRestructure(t, client, "restructure:OwnSubtree:Two", httpclient.WritableAccountTypeFlow, false, nil)
 	assertRestructureAccountStatus(t, client, "restructure:OwnSubtree", "restructure:OwnSubtree:Moved", http.StatusBadRequest, httpclient.APIErrorCodeInvalidRequest)
 	assertRestructureAccountStatus(t, client, "restructure:OwnSubtree", "restructure:OwnSubtree", http.StatusBadRequest, httpclient.APIErrorCodeInvalidRequest)
 	assertRestructureAccountStatus(t, client, ":invalid", "restructure:Invalid:To", http.StatusBadRequest, httpclient.APIErrorCodeInvalidRequest)
@@ -50,14 +50,14 @@ func TestAccountRestructureValidationAndConflicts(t *testing.T) {
 	assertRestructureAccountStatus(t, client, "restructure:Missing", "restructure:Missing:New", http.StatusNotFound, httpclient.APIErrorCodeNotFound)
 	assertAccountFQN(t, client, accountIDByFQNForRestructure(t, client, "restructure:OwnSubtree:One"), "restructure:OwnSubtree:One")
 
-	sourceAtDestination := createAccountForRestructure(t, client, "restructure:Destination:Source:Leaf", httpclient.Flow, false, nil)
-	occupiedUnderDestination := createAccountForRestructure(t, client, "restructure:Destination:Target:Occupied", httpclient.Flow, false, nil)
+	sourceAtDestination := createAccountForRestructure(t, client, "restructure:Destination:Source:Leaf", httpclient.WritableAccountTypeFlow, false, nil)
+	occupiedUnderDestination := createAccountForRestructure(t, client, "restructure:Destination:Target:Occupied", httpclient.WritableAccountTypeFlow, false, nil)
 	assertRestructureAccountStatus(t, client, "restructure:Destination:Source", "restructure:Destination:Target", http.StatusConflict, httpclient.APIErrorCodeConflict)
 	assertAccountFQN(t, client, sourceAtDestination.AccountId, "restructure:Destination:Source:Leaf")
 	assertAccountFQN(t, client, occupiedUnderDestination.AccountId, "restructure:Destination:Target:Occupied")
 
-	sourcePrefixedDestination := createAccountForRestructure(t, client, "restructure:PrefixDestination:Source", httpclient.Flow, false, nil)
-	prefixOfDestination := createAccountForRestructure(t, client, "restructure:PrefixDestination:Target", httpclient.Flow, false, nil)
+	sourcePrefixedDestination := createAccountForRestructure(t, client, "restructure:PrefixDestination:Source", httpclient.WritableAccountTypeFlow, false, nil)
+	prefixOfDestination := createAccountForRestructure(t, client, "restructure:PrefixDestination:Target", httpclient.WritableAccountTypeFlow, false, nil)
 	assertRestructureAccountStatus(t, client, "restructure:PrefixDestination:Source", "restructure:PrefixDestination:Target:Child", http.StatusConflict, httpclient.APIErrorCodeConflict)
 	assertAccountFQN(t, client, sourcePrefixedDestination.AccountId, "restructure:PrefixDestination:Source")
 	assertAccountFQN(t, client, prefixOfDestination.AccountId, "restructure:PrefixDestination:Target")
@@ -66,16 +66,16 @@ func TestAccountRestructureValidationAndConflicts(t *testing.T) {
 func TestAccountRestructureLeavesTombstonedFQNsAndKeepsReferencesReachable(t *testing.T) {
 	client := newSharedClient(t)
 
-	tombstoned := createAccountForRestructure(t, client, "restructure:Tombstone:Old:Closed", httpclient.Flow, false, nil)
+	tombstoned := createAccountForRestructure(t, client, "restructure:Tombstone:Old:Closed", httpclient.WritableAccountTypeFlow, false, nil)
 	deleteAccount(t, client, tombstoned.AccountId)
-	active := createAccountForRestructure(t, client, "restructure:Tombstone:Old:Active", httpclient.Flow, false, nil)
+	active := createAccountForRestructure(t, client, "restructure:Tombstone:Old:Active", httpclient.WritableAccountTypeFlow, false, nil)
 	restructureAccounts(t, client, "restructure:Tombstone:Old", "restructure:Tombstone:New")
 	assertAccountFQN(t, client, active.AccountId, "restructure:Tombstone:New:Active")
 	assertTombstonedAccountFQN(t, client, tombstoned.AccountId, "restructure:Tombstone:Old:Closed")
 
 	currency := "USD"
-	checking := createAccountForRestructure(t, client, "restructure:Register:Old", httpclient.Balance, false, &currency)
-	merchant := createAccountForRestructure(t, client, "restructure:Register:Merchant", httpclient.Flow, false, nil)
+	checking := createAccountForRestructure(t, client, "restructure:Register:Old", httpclient.WritableAccountTypeOwned, false, &currency)
+	merchant := createAccountForRestructure(t, client, "restructure:Register:Merchant", httpclient.WritableAccountTypeFlow, false, nil)
 	category := client.Scenario().Category("Restructure:Register")
 	transaction := createBalanceTransactionWithAmountUSD(t, client, checking.AccountId, merchant.AccountId, category.CategoryId, "USD", "-12.34", "12.34", "-12.34", "12.34", httpclient.PostingStatusPosted)
 
@@ -108,7 +108,7 @@ func TestAccountRestructureLeavesTombstonedFQNsAndKeepsReferencesReachable(t *te
 	})
 }
 
-func createAccountForRestructure(t *testing.T, client *apptest.Client, fqn string, accountType httpclient.AccountType, hidden bool, currency *string) httpclient.Account {
+func createAccountForRestructure(t *testing.T, client *apptest.Client, fqn string, accountType httpclient.WritableAccountType, hidden bool, currency *string) httpclient.Account {
 	t.Helper()
 
 	request := httpclient.CreateAccountRequest{

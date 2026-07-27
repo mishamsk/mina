@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- No implicit contracts.
+- Transaction filter state mirrors the REST class, shape, and record-role enums and their URL serialization.
 
 ## Boundaries
 

@@ -505,7 +505,7 @@ const createHiddenAccount = async (
 ): Promise<AccountFixture> => {
   const response = await page.request.post("/api/accounts", {
     data: {
-      account_type: "balance",
+      account_type: "owned",
       currency: "USD",
       fqn,
       is_hidden: true,
@@ -573,10 +573,10 @@ test("command palette opens entry tabs from any page without clobbering plain op
   await overviewLink.focus();
 
   await openPalette(page);
-  await page.getByRole("combobox", { name: "Command search" }).fill("transfer");
-  await page.getByRole("option", { name: "New transfer" }).click();
-  await expect(page).toHaveURL(/\/overview\?entry=new%3Atransfer$/);
-  await expect(page.getByRole("tab", { name: "Transfer" })).toHaveAttribute(
+  await page.getByRole("combobox", { name: "Command search" }).fill("exchange");
+  await page.getByRole("option", { name: "New exchange" }).click();
+  await expect(page).toHaveURL(/\/overview\?entry=new%3Aexchange$/);
+  await expect(page.getByRole("tab", { name: "Exchange" })).toHaveAttribute(
     "aria-selected",
     "true",
   );

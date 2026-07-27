@@ -201,6 +201,11 @@ exec mina db validate --db $WORK/inv_malformed_fqn.db --schema demo
 stdout 'warning: invariant: malformed account.fqn "bad::fqn"'
 stdout 'warning: invariant: malformed tag.fqn "bad::tag"'
 
+duckdbclone $WORK/demo.db $WORK/inv_missing_fixed_system_account.db
+duckdbexec $WORK/inv_missing_fixed_system_account.db inv_missing_fixed_system_account.sql
+! exec mina db validate --db $WORK/inv_missing_fixed_system_account.db --schema demo
+stderr 'error: invariant: fixed system account catalog is incomplete'
+
 duckdbclone $WORK/demo.db $WORK/inv_prefix_free_hierarchy.db
 duckdbexec $WORK/inv_prefix_free_hierarchy.db inv_prefix_free_hierarchy.sql
 ! exec mina db validate --db $WORK/inv_prefix_free_hierarchy.db --schema demo
@@ -253,7 +258,7 @@ stdout 'warning: invariant: duplicate active category.fqn'
 duckdbclone $WORK/demo.db $WORK/class_expense_shape.db
 duckdbexec $WORK/class_expense_shape.db class_expense_shape.sql
 ! exec mina db validate --db $WORK/class_expense_shape.db --schema demo
-stderr 'error: classification: transaction .* violates EXPENSE semantic shape'
+stderr 'error: classification: transaction .* violates derived accounting semantics'
 
 # Startup validation runs shallow by default and can be disabled.
 duckdbclone $WORK/demo.db $WORK/startup_broken_schema.db

@@ -33,7 +33,7 @@ interface TransactionFixture {
 interface JournalRecordFixture {
   readonly account_id: number;
   readonly amount: string;
-  readonly category_id: number;
+  readonly category_id: number | null;
   readonly currency: string;
   readonly member_id?: number | null;
   readonly memo?: string | null;
@@ -289,7 +289,7 @@ const createMember = async (
 const createAccount = async (
   page: Page,
   fqn: string,
-  accountType: "balance" | "flow" | "system",
+  accountType: "flow" | "owned" | "party",
   currency?: string,
   isFeatured?: boolean,
 ): Promise<AccountFixture> => {
@@ -324,7 +324,7 @@ const createExpectedRecurringFixture = async (
   const checking = await createAccount(
     page,
     `e2e:ExpectedFilter:${unique}:Checking${unique}`,
-    "balance",
+    "owned",
     "USD",
     options.featured,
   );
@@ -353,7 +353,7 @@ const createExpectedRecurringFixture = async (
         {
           account_id: checking.account_id,
           amount: "-23.45000000",
-          category_id: category.category_id,
+          category_id: null,
           currency: "USD",
           memo: `${memo} funding`,
           tag_ids: [],
@@ -1265,7 +1265,7 @@ test("expanded records edit per-record values and escalate structural changes", 
         {
           account_id: fundingAccount.account_id,
           amount: "-17.43000000",
-          category_id: initialCategory.category_id,
+          category_id: null,
           currency: "USD",
           memo,
           posting_status: "posted",
@@ -1300,10 +1300,10 @@ test("expanded records edit per-record values and escalate structural changes", 
   await expect(transactionRow).toHaveAttribute("aria-expanded", "true");
   const records = page.getByTestId("expanded-records");
 
-  const categoryCell = records.getByTestId("record-category-cell").first();
+  const categoryCell = records.getByTestId("record-category-cell").last();
   await categoryCell.focus();
   await categoryCell.press("F2");
-  const categoryEditor = records.getByTestId("record-category-editor").first();
+  const categoryEditor = records.getByTestId("record-category-editor").last();
   const categoryInput = categoryEditor.getByRole("combobox", {
     name: "Category",
   });
@@ -1311,7 +1311,9 @@ test("expanded records edit per-record values and escalate structural changes", 
   await categoryInput.fill(nextCategory.fqn);
   await categoryEditor.getByRole("button", { name: "Save category" }).click();
   await expect(categoryCell).toContainText(nextCategory.fqn);
-  await expect(transactionRow.locator("td").nth(4)).toContainText("Mixed");
+  await expect(transactionRow.locator("td").nth(4)).toContainText(
+    nextCategory.name,
+  );
 
   const tagCell = records.getByTestId("record-tags-cell").first();
   await tagCell.hover();
@@ -1445,7 +1447,7 @@ test("tag editor keeps many assignments and controls separate in a narrow viewpo
         {
           account_id: fundingAccount.account_id,
           amount: "-23.45000000",
-          category_id: category.category_id,
+          category_id: null,
           currency: "USD",
           memo,
           posting_status: "posted",
@@ -1652,7 +1654,7 @@ test("inline category tag member and amount saves keep the transaction table sta
   const merchantAccount = findByFqn(accounts, "merchant:Books");
   const initialCategory = findByFqn(categories, "Income:Salary");
   const [nextCategory, nextTag, nextMember] = await Promise.all([
-    createCategory(page, `E2E:ResponsiveSave:${unique}:Category`, "refund"),
+    createCategory(page, `E2E:ResponsiveSave:${unique}:Category`, "expense"),
     createTag(page, `E2E:ResponsiveSave:${unique}:Tag`),
     createMember(page, `Responsive save ${unique}`),
   ]);
@@ -1664,7 +1666,7 @@ test("inline category tag member and amount saves keep the transaction table sta
         {
           account_id: fundingAccount.account_id,
           amount: "17.43000000",
-          category_id: initialCategory.category_id,
+          category_id: null,
           currency: "USD",
           memo,
           posting_status: "posted",
@@ -1735,13 +1737,13 @@ test("inline category tag member and amount saves keep the transaction table sta
       await expect(row.getByRole("img", { name: "REFUND" })).toBeVisible();
       await expect(
         expandedRecords.getByText(nextCategory.fqn, { exact: true }),
-      ).toHaveCount(2);
+      ).toHaveCount(1);
     },
   );
   await expect(categoryEditor).toHaveCount(0);
   await expect(
     expandedRecords.getByText(nextCategory.fqn, { exact: true }),
-  ).toHaveCount(2);
+  ).toHaveCount(1);
   await expect(row.getByRole("img", { name: "REFUND" })).toBeVisible();
 
   const tagCell = row.getByTestId(`${rowPrefix}-tags-cell`);
@@ -1827,22 +1829,16 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:Books");
   const initialCategory = findByFqn(categories, "Entertainment:Books");
-  const [nextCategory, transferCategory, initialTag, nextTag, member] =
-    await Promise.all([
-      createCategory(
-        page,
-        `E2E:RowEditing:${unique}:UpdatedCategory`,
-        "expense",
-      ),
-      createCategory(page, `E2E:RowEditing:${unique}:Transfer`, "transfer"),
-      createTag(page, `E2E:RowEditing:${unique}:InitialTag`),
-      createTag(page, `E2E:RowEditing:${unique}:NextTag`),
-      createMember(page, `Row editor ${unique}`),
-    ]);
+  const [nextCategory, initialTag, nextTag, member] = await Promise.all([
+    createCategory(page, `E2E:RowEditing:${unique}:UpdatedCategory`, "expense"),
+    createTag(page, `E2E:RowEditing:${unique}:InitialTag`),
+    createTag(page, `E2E:RowEditing:${unique}:NextTag`),
+    createMember(page, `Row editor ${unique}`),
+  ]);
   const personAccount = await createAccount(
     page,
     `people:RowEditing:${unique}:balance`,
-    "balance",
+    "owned",
     "USD",
   );
   const memo = `E2E row editing ${unique}`;
@@ -1853,7 +1849,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
         {
           account_id: fundingAccount.account_id,
           amount: "-17.43000000",
-          category_id: initialCategory.category_id,
+          category_id: null,
           currency: "USD",
           member_id: member.member_id,
           memo,
@@ -1911,7 +1907,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
   const expandedRecords = page.getByTestId("expanded-records");
   await expect(
     expandedRecords.getByText(nextCategory.fqn, { exact: true }),
-  ).toHaveCount(2);
+  ).toHaveCount(1);
 
   const tagCell = row.getByTestId(`${rowPrefix}-tags-cell`);
   await tagCell.hover();
@@ -1965,6 +1961,17 @@ test("transaction-row inline editing follows the uniformity rule", async ({
         {
           account_id: fundingAccount.account_id,
           amount: "-12.00000000",
+          category_id: null,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "6.00000000",
           category_id: initialCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
@@ -1975,7 +1982,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
         },
         {
           account_id: merchantAccount.account_id,
-          amount: "12.00000000",
+          amount: "6.00000000",
           category_id: nextCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
@@ -2006,7 +2013,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
         {
           account_id: fundingAccount.account_id,
           amount: "-20.00000000",
-          category_id: initialCategory.category_id,
+          category_id: null,
           currency: "USD",
           memo: nonSimpleMemo,
           posting_status: "posted",
@@ -2028,7 +2035,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
         {
           account_id: personAccount.account_id,
           amount: "5.00000000",
-          category_id: transferCategory.category_id,
+          category_id: null,
           currency: "USD",
           memo: nonSimpleMemo,
           posting_status: "posted",
@@ -2108,7 +2115,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
         {
           account_id: fundingAccount.account_id,
           amount: "-17.43000000",
-          category_id: initialCategory.category_id,
+          category_id: null,
           currency: "USD",
           memo: firstMemo,
           posting_status: "posted",
@@ -2141,7 +2148,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
         {
           account_id: fundingAccount.account_id,
           amount: "-23.58000000",
-          category_id: initialCategory.category_id,
+          category_id: null,
           currency: "USD",
           memo: secondMemo,
           posting_status: "posted",
@@ -2247,7 +2254,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   await expect(firstAmountEditor).toHaveCount(0);
   let storedFirst = await getTransactionDetail(page, firstTransaction);
   expect(storedFirst.records.map((record) => record.category_id)).toEqual([
-    initialCategory.category_id,
+    null,
     initialCategory.category_id,
   ]);
 
@@ -2322,7 +2329,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   await expect(secondCategoryEditor).toHaveCount(0);
   storedFirst = await getTransactionDetail(page, firstTransaction);
   expect(storedFirst.records.map((record) => record.category_id)).toEqual([
-    initialCategory.category_id,
+    null,
     initialCategory.category_id,
   ]);
 
@@ -2335,7 +2342,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   await expect(firstCategoryEditor).toHaveCount(0);
   storedFirst = await getTransactionDetail(page, firstTransaction);
   expect(storedFirst.records.map((record) => record.category_id)).toEqual([
-    initialCategory.category_id,
+    null,
     initialCategory.category_id,
   ]);
 
@@ -2349,7 +2356,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   await expect(firstCategoryCell).toBeFocused();
   storedFirst = await getTransactionDetail(page, firstTransaction);
   expect(storedFirst.records.map((record) => record.category_id)).toEqual([
-    initialCategory.category_id,
+    null,
     initialCategory.category_id,
   ]);
 
@@ -2372,7 +2379,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   await expect(firstCategoryCell).toBeFocused();
   storedFirst = await getTransactionDetail(page, firstTransaction);
   expect(storedFirst.records.map((record) => record.category_id)).toEqual([
-    initialCategory.category_id,
+    null,
     initialCategory.category_id,
   ]);
 
@@ -2398,7 +2405,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   await expect(firstCategoryCell).toContainText(savedCategory.name);
   storedFirst = await getTransactionDetail(page, firstTransaction);
   expect(storedFirst.records.map((record) => record.category_id)).toEqual([
-    savedCategory.category_id,
+    null,
     savedCategory.category_id,
   ]);
 
@@ -2406,7 +2413,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   const expandedRecords = page.getByTestId("expanded-records");
   await expect(
     expandedRecords.getByText(savedCategory.fqn, { exact: true }),
-  ).toHaveCount(2);
+  ).toHaveCount(1);
 
   await Promise.all([
     deleteTransaction(page, firstTransaction),
@@ -3146,7 +3153,7 @@ test("transaction amount chips share one right edge across row variants", async 
   const incomeAccount = await createAccount(
     page,
     `e2e:amount-alignment:${unique}:income`,
-    "balance",
+    "owned",
     "USD",
   );
   const incomeSource = await createAccount(
@@ -3189,7 +3196,7 @@ test("transaction amount chips share one right edge across row variants", async 
           {
             account_id: overdueFixture.checking.account_id,
             amount: "-5.00",
-            category_id: overdueFixture.category.category_id,
+            category_id: null,
             currency: "USD",
             memo: mixedMemo,
             posting_status: "posted",
@@ -3209,7 +3216,7 @@ test("transaction amount chips share one right edge across row variants", async 
           {
             account_id: incomeAccount.account_id,
             amount: "100.00",
-            category_id: incomeCategory.category_id,
+            category_id: null,
             currency: "USD",
             memo: mixedMemo,
             posting_status: "posted",
@@ -3249,7 +3256,7 @@ test("transaction amount chips share one right edge across row variants", async 
       overdueRow.getByRole("img", { name: "Overdue" }),
     ).toBeVisible();
     await expect(mixedRow.getByTestId("amount-chip")).toContainText(
-      "-5.00 / +100.00 $",
+      "-5.00 / +100.00×2 $",
     );
 
     for (const width of [1440, 700]) {
@@ -4391,7 +4398,9 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   expect(intermediateTableState.actionsColumnRightWithinContainer).toBe(true);
   expect(intermediateTableState.amountText).toBe("-43.98 $");
   expect(intermediateTableState.amountTexts).toContain("+3,250.00 $");
-  expect(intermediateTableState.amountChipTexts).toContain("-5.00 / +100.00 $");
+  expect(intermediateTableState.amountChipTexts).toContain(
+    "-5.00 / +100.00 ×2 $",
+  );
   expect(intermediateTableState.memberFullyVisible).toBe(true);
   expect(intermediateTableState.visibleContentOverlapsAmount).toBe(false);
   expect(intermediateTableState.statusHeaderCollapsed).toBe(
@@ -4417,13 +4426,16 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     expect(tableState.amountCellRightWithinContainer).toBe(true);
     expect(tableState.amountContentRightWithinContainer).toBe(true);
     expect(tableState.amountHasTruncatedContent).toBe(false);
-    expect(tableState.amountChipsFitCells).toBe(true);
+    expect(
+      tableState.amountChipsFitCells,
+      `amount chips fit cells at ${width}px viewport / ${tableState.containerWidth}px container: ${tableState.amountChipTexts.join(" | ")}`,
+    ).toBe(true);
     expect(tableState.amountChipsSingleLine).toBe(true);
     expect(tableState.actionsColumnCollapsed).toBe(false);
     expect(tableState.actionsColumnRightWithinContainer).toBe(true);
     expect(tableState.amountText).toBe("-43.98 $");
     expect(tableState.amountTexts).toContain("+3,250.00 $");
-    expect(tableState.amountChipTexts).toContain("-5.00 / +100.00 $");
+    expect(tableState.amountChipTexts).toContain("-5.00 / +100.00 ×2 $");
     expect(tableState.visibleContentOverlapsAmount).toBe(false);
     if (tableState.categoryCollapsed) {
       expect(tableState.tagsCollapsed).toBe(true);
@@ -4473,7 +4485,7 @@ test("mixed amount chips stay inside the amount column where member first appear
   const incomeDestinationAccount = await createAccount(
     page,
     `e2e:overlap:${unique}:income-destination`,
-    "balance",
+    "owned",
     "USD",
   );
   const memo = `E2E mixed amount overlap ${unique}`;
@@ -4487,7 +4499,7 @@ test("mixed amount chips stay inside the amount column where member first appear
           {
             account_id: fundingAccount.account_id,
             amount: "-5.00",
-            category_id: category.category_id,
+            category_id: null,
             currency: "USD",
             member_id: member.member_id,
             memo,
@@ -4509,7 +4521,7 @@ test("mixed amount chips stay inside the amount column where member first appear
           {
             account_id: incomeDestinationAccount.account_id,
             amount: "100.00",
-            category_id: incomeCategory.category_id,
+            category_id: null,
             currency: "USD",
             member_id: member.member_id,
             memo,
@@ -4570,7 +4582,7 @@ test("mixed amount chips stay inside the amount column where member first appear
       expect(state.amountChildrenFitCell, sample.name).toBe(true);
       expect(state.memberOverlaps, sample.name).toBe(false);
       expect(state.singleLine, sample.name).toBe(true);
-      expect(state.chipText, sample.name).toBe("-5.00 / +100.00 $");
+      expect(state.chipText, sample.name).toBe("-5.00 / +100.00 ×2 $");
       expect(state.memberCollapsed, sample.name).toBe(sample.memberCollapsed);
     }
   } finally {
@@ -4599,7 +4611,7 @@ test("transactions contain long amount chips and align the pagination footer", a
   const incomeDestinationAccount = await createAccount(
     page,
     `e2e:long:${unique}:income-destination`,
-    "balance",
+    "owned",
     "USD",
   );
 
@@ -4623,7 +4635,7 @@ test("transactions contain long amount chips and align the pagination footer", a
         {
           account_id: fundingAccount.account_id,
           amount: "-9999999999.99",
-          category_id: category.category_id,
+          category_id: null,
           currency: "USD",
           memo: mixedMemo,
           posting_status: "posted",
@@ -4643,7 +4655,7 @@ test("transactions contain long amount chips and align the pagination footer", a
         {
           account_id: incomeDestinationAccount.account_id,
           amount: "8888888888.88",
-          category_id: incomeCategory.category_id,
+          category_id: null,
           currency: "USD",
           memo: mixedMemo,
           posting_status: "posted",
@@ -4767,7 +4779,7 @@ test("transactions display currency symbols with code fallback", async ({
   const fundingAccount = await createAccount(
     page,
     `e2e:fallback:${unique}:cash`,
-    "balance",
+    "owned",
     "XDR",
   );
   const merchantAccount = await createAccount(
@@ -4811,74 +4823,32 @@ test("transactions page help and leaf category chips", async ({
   await page.setViewportSize({ width: 1920, height: 900 });
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
-  const [accounts, exchangeCategory] = await Promise.all([
-    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
-    createCategory(page, `E2E:Exchange:${unique}:FXBucket`, "exchange"),
-  ]);
-  const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const exchangeProvider = await createAccount(
+  const accounts = await listFixtures<AccountFixture>(
     page,
-    `merchant:E2EExchange:${unique}:Provider`,
-    "flow",
+    "/api/accounts",
+    "accounts",
   );
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const cashEUR = await createAccount(
     page,
     `cash:E2EExchange:${unique}:EUR`,
-    "balance",
+    "owned",
     "EUR",
   );
   const exchangeMemo = `E2E exchange row ${unique}`;
-  const exchangeResponse = await page.request.post("/api/transactions", {
-    data: {
-      initiated_date: "2026-07-10",
-      records: [
-        {
-          account_id: fundingAccount.account_id,
-          amount: "-224.00000000",
-          category_id: exchangeCategory.category_id,
-          currency: "USD",
-          memo: exchangeMemo,
-          posting_status: "posted",
-          reconciliation_status: "unreconciled",
-          source: "manual",
-          tag_ids: [],
-        },
-        {
-          account_id: exchangeProvider.account_id,
-          amount: "224.00000000",
-          category_id: exchangeCategory.category_id,
-          currency: "USD",
-          memo: exchangeMemo,
-          posting_status: "posted",
-          reconciliation_status: "unreconciled",
-          source: "manual",
-          tag_ids: [],
-        },
-        {
-          account_id: exchangeProvider.account_id,
-          amount: "-200.00000000",
-          category_id: exchangeCategory.category_id,
-          currency: "EUR",
-          memo: exchangeMemo,
-          posting_status: "posted",
-          reconciliation_status: "unreconciled",
-          source: "manual",
-          tag_ids: [],
-        },
-        {
-          account_id: cashEUR.account_id,
-          amount: "200.00000000",
-          category_id: exchangeCategory.category_id,
-          currency: "EUR",
-          memo: exchangeMemo,
-          posting_status: "posted",
-          reconciliation_status: "unreconciled",
-          source: "manual",
-          tag_ids: [],
-        },
-      ],
+  const exchangeResponse = await page.request.post(
+    "/api/transactions/exchange",
+    {
+      data: {
+        bought_account_id: cashEUR.account_id,
+        bought_amount: "200.00000000",
+        initiated_date: "2026-07-10",
+        memo: exchangeMemo,
+        sold_account_id: fundingAccount.account_id,
+        sold_amount: "224.00000000",
+      },
     },
-  });
+  );
   expect(exchangeResponse.ok(), await exchangeResponse.text()).toBe(true);
 
   await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
@@ -4916,7 +4886,7 @@ test("transactions page help and leaf category chips", async ({
     mixedRow.locator("td").nth(4).getByText("Mixed", { exact: true }),
   ).toBeVisible();
   await expect(mixedRow.locator("td").nth(7)).toContainText(
-    "-5.00 / +100.00 $",
+    "-5.00 / +100.00×2 $",
   );
   const rowHeights = await page
     .locator("tbody > tr[aria-expanded]")
@@ -5416,7 +5386,7 @@ test("detail and peek account paths navigate without record-row side effects", a
     createAccount(
       page,
       `e2e:DetailLinks:${unique}:Household:Checking`,
-      "balance",
+      "owned",
       "USD",
     ),
     createAccount(page, `e2eDetailLinks${unique}:LinkTarget`, "flow", "USD"),
@@ -5523,7 +5493,7 @@ test("transaction detail panel is read-only while chips keep filtering", async (
         {
           account_id: fundingAccount.account_id,
           amount: "-17.43000000",
-          category_id: initialCategory.category_id,
+          category_id: null,
           currency: "USD",
           member_id: member.member_id,
           memo,
@@ -5705,7 +5675,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     createAccount(
       page,
       `assets:E2E:Lifecycle:${unique}:Funding`,
-      "balance",
+      "owned",
       "USD",
     ),
     createAccount(page, `merchant:E2E:Lifecycle:${unique}`, "flow"),
@@ -5740,7 +5710,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
         {
           account_id: fundingAccount.account_id,
           amount: "-30.00000000",
-          category_id: category.category_id,
+          category_id: null,
           currency: "USD",
           memo: mixedMemo,
           pending_date: "2026-07-12T16:00:00Z",
@@ -5793,7 +5763,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
           {
             account_id: fundingAccount.account_id,
             amount: "-7.00000000",
-            category_id: category.category_id,
+            category_id: null,
             currency: "USD",
             memo: missingPostedDateMemo,
             pending_date: "2026-07-18T16:00:00Z",
@@ -5851,7 +5821,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
         {
           account_id: fundingAccount.account_id,
           amount: "-9.00000000",
-          category_id: category.category_id,
+          category_id: null,
           currency: "USD",
           memo: cancelledMemo,
           pending_date: "2026-07-15T16:00:00Z",
@@ -6453,18 +6423,39 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:Books");
   const category = findByFqn(categories, "Entertainment:Books");
+  const member = await createMember(page, `E2E edit spend ${unique}`);
   const memo = `E2E edit spend ${unique}`;
   const updatedMemo = `E2E edit spend updated ${unique}`;
 
-  const spendResponse = await page.request.post("/api/transactions/spend", {
+  const spendResponse = await page.request.post("/api/transactions", {
     data: {
-      amount: "21.34",
-      category_id: category.category_id,
-      counterparty_account_id: merchantAccount.account_id,
-      currency: "USD",
-      funding_account_id: fundingAccount.account_id,
       initiated_date: "2026-07-04",
-      memo,
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-21.34",
+          category_id: null,
+          currency: "USD",
+          member_id: member.member_id,
+          memo: null,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "21.34",
+          category_id: category.category_id,
+          currency: "USD",
+          member_id: null,
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
     },
   });
   expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
@@ -6517,12 +6508,12 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
     {
       account_id: fundingAccount.account_id,
       amount: "-25.67000000",
-      category_id: category.category_id,
+      category_id: null,
       currency: "USD",
-      member_id: null,
+      member_id: member.member_id,
       memo: updatedMemo,
       posting_status: "posted",
-      reconciliation_status: "reconciled",
+      reconciliation_status: "unreconciled",
       source: "manual",
       tag_ids: [],
     },
@@ -6534,7 +6525,7 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
       member_id: null,
       memo: updatedMemo,
       posting_status: "posted",
-      reconciliation_status: "reconciled",
+      reconciliation_status: "unreconciled",
       source: "manual",
       tag_ids: [],
     },
@@ -6545,6 +6536,143 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
   ).toBeVisible();
   await expect(detailPanel).toBeVisible();
   await expect(detailPanel.getByText(updatedMemo).first()).toBeVisible();
+});
+
+test("sparse shorthand metadata survives merchant removal while Duplicate uses Advanced", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 820 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const booksAccount = findByFqn(accounts, "merchant:Books");
+  const targetAccount = findByFqn(accounts, "merchant:Target");
+  const booksCategory = findByFqn(categories, "Entertainment:Books");
+  const targetCategory = findByFqn(categories, "Food:Groceries");
+  const member = await createMember(page, `E2E sparse merchant ${unique}`);
+  const memo = `E2E sparse merchant ${unique}`;
+
+  const response = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-05",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-30.00",
+          category_id: null,
+          currency: "USD",
+          member_id: null,
+          memo: null,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: booksAccount.account_id,
+          amount: "10.00",
+          category_id: booksCategory.category_id,
+          currency: "USD",
+          member_id: null,
+          memo: null,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: targetAccount.account_id,
+          amount: "20.00",
+          category_id: targetCategory.category_id,
+          currency: "USD",
+          member_id: member.member_id,
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const transaction = (await response.json()) as TransactionDetailFixture;
+
+  await page.goto("/transactions?page=1&pageSize=50");
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Open transaction detail",
+  );
+  const detailPanel = page.getByTestId("transaction-detail-panel");
+  await detailPanel.getByRole("button", { name: "Duplicate" }).click();
+
+  const entryPanel = page.getByRole("dialog", {
+    name: "Transaction editor",
+  });
+  await expect(
+    entryPanel.getByRole("heading", { name: "New journal" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close transaction editor" }).click();
+
+  await detailPanel
+    .getByRole("button", { exact: true, name: "Edit transaction" })
+    .click();
+  await page
+    .getByRole("alertdialog", { name: "Discard entry draft" })
+    .getByRole("button", { name: "Discard draft" })
+    .click();
+  await expect(
+    entryPanel.getByRole("heading", { name: "Edit spend" }),
+  ).toBeVisible();
+  const spendPanel = entryPanel.getByRole("tabpanel", { name: "Spend" });
+  await expect(spendPanel.getByLabel("Memo")).toHaveValue(memo);
+  await spendPanel
+    .getByRole("group", { name: "Merchant 2" })
+    .getByRole("button", { name: "Remove merchant" })
+    .click();
+
+  const replaceResponsePromise = page.waitForResponse((replaceResponse) => {
+    const url = new URL(replaceResponse.url());
+    return (
+      url.pathname === `/api/transactions/${transaction.transaction_id}` &&
+      replaceResponse.request().method() === "PUT"
+    );
+  });
+  await page.getByRole("button", { name: "Update transaction" }).click();
+  const replaceResponse = await replaceResponsePromise;
+  expect(replaceResponse.ok(), await replaceResponse.text()).toBe(true);
+  const replaced = (await replaceResponse.json()) as TransactionDetailFixture;
+  expect(comparableRecords(replaced.records)).toEqual([
+    {
+      account_id: fundingAccount.account_id,
+      amount: "-10.00000000",
+      category_id: null,
+      currency: "USD",
+      member_id: member.member_id,
+      memo,
+      posting_status: "posted",
+      reconciliation_status: "unreconciled",
+      source: "manual",
+      tag_ids: [],
+    },
+    {
+      account_id: booksAccount.account_id,
+      amount: "10.00000000",
+      category_id: booksCategory.category_id,
+      currency: "USD",
+      member_id: null,
+      memo: null,
+      posting_status: "posted",
+      reconciliation_status: "unreconciled",
+      source: "manual",
+      tag_ids: [],
+    },
+  ]);
 });
 
 test("transaction detail edit opens non-fitting transactions in the journal editor", async ({
@@ -6572,7 +6700,7 @@ test("transaction detail edit opens non-fitting transactions in the journal edit
         {
           account_id: fundingAccount.account_id,
           amount: "-10.00000000",
-          category_id: expenseCategory.category_id,
+          category_id: null,
           currency: "USD",
           memo,
           posting_status: "posted",
@@ -6594,7 +6722,7 @@ test("transaction detail edit opens non-fitting transactions in the journal edit
         {
           account_id: fundingAccount.account_id,
           amount: "2.00000000",
-          category_id: incomeCategory.category_id,
+          category_id: null,
           currency: "USD",
           memo,
           posting_status: "posted",
@@ -6730,7 +6858,7 @@ test("shorthand edit escalation saves as a replacement", async ({
     {
       account_id: fundingAccount.account_id,
       amount: "-19.91000000",
-      category_id: category.category_id,
+      category_id: null,
       currency: "USD",
       member_id: null,
       memo,
@@ -6930,6 +7058,9 @@ test("transaction detail split opens journal replacement and surfaces replace er
   await journalRecord(page, 2).getByLabel("Amount").fill("20.00");
   await page.getByRole("button", { name: "Add record" }).click();
   const thirdRecord = journalRecord(page, 3);
+  await chooseOptionByKeyboard(page, "Account", unique, splitAccount.fqn, {
+    scope: thirdRecord,
+  });
   await chooseOptionByKeyboard(
     page,
     "Category",
@@ -6937,9 +7068,6 @@ test("transaction detail split opens journal replacement and surfaces replace er
     "Entertainment:Books",
     { scope: thirdRecord },
   );
-  await chooseOptionByKeyboard(page, "Account", unique, splitAccount.fqn, {
-    scope: thirdRecord,
-  });
   await thirdRecord.getByLabel("Amount").fill("10.00");
   await thirdRecord.getByLabel("Memo").fill(splitMemo);
 
@@ -6981,7 +7109,7 @@ test("transaction detail split opens journal replacement and surfaces replace er
       {
         account_id: fundingAccount.account_id,
         amount: "-30.00000000",
-        category_id: category.category_id,
+        category_id: null,
         currency: "USD",
         member_id: null,
         memo,
@@ -7348,29 +7476,34 @@ test("entry category picker requests spend intents and excludes hidden categorie
   const categoryRequestUrl = new URL(categoryRequest.url());
   expect(categoryRequestUrl.searchParams.getAll("economic_intent")).toEqual([
     "expense",
-    "fee",
   ]);
   expect(categoryRequestUrl.searchParams.has("include_hidden")).toBe(false);
   expect(categoryRequestUrl.searchParams.has("include_tombstoned")).toBe(false);
 
+  const spendPanel = page.getByRole("tabpanel", { name: "Spend" });
+  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books", {
+    scope: spendPanel,
+  });
   const categoryPicker = page.getByRole("combobox", { name: "Category" });
   await categoryPicker.fill(visibleCategory.name);
   await expect(
     page
-      .locator("#spend-category-options")
+      .locator("#spend-merchant-0-category-options")
       .getByRole("option")
       .filter({ hasText: visibleCategory.name })
       .first(),
   ).toBeVisible();
 
   await categoryPicker.fill("Salary");
-  await expect(page.locator("#spend-category-options")).toContainText(
-    "Create “Salary”",
-  );
+  await expect(
+    page.locator("#spend-merchant-0-category-options"),
+  ).toContainText("Create “Salary”");
 
   await categoryPicker.fill(hiddenCategory.name);
   await expect(
-    page.locator(`#spend-category-option-${hiddenCategory.category_id}`),
+    page.locator(
+      `#spend-merchant-0-category-option-${hiddenCategory.category_id}`,
+    ),
   ).toHaveCount(0);
   await expect(
     page.getByRole("option", {
@@ -7435,7 +7568,7 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
         {
           account_id: fundingAccount.account_id,
           amount: "-11.00000000",
-          category_id: initialCategory.category_id,
+          category_id: null,
           currency: "USD",
           member_id: initialMember.member_id,
           memo: uniformMemo,
@@ -7467,6 +7600,17 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
         {
           account_id: fundingAccount.account_id,
           amount: "-7.00000000",
+          category_id: null,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "3.00000000",
           category_id: initialCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
@@ -7477,7 +7621,7 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
         },
         {
           account_id: merchantAccount.account_id,
-          amount: "7.00000000",
+          amount: "4.00000000",
           category_id: targetCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
@@ -7617,7 +7761,11 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
   ).toEqual([initialMember.member_id, null]);
   expect(
     updatedMemberTransaction.records.map((record) => record.member_id ?? null),
-  ).toEqual([targetMember.member_id, targetMember.member_id]);
+  ).toEqual([
+    targetMember.member_id,
+    targetMember.member_id,
+    targetMember.member_id,
+  ]);
 
   const tagButton = bulkActionBar.getByRole("button", { name: "Tag" });
   await tagButton.click();
@@ -8324,6 +8472,10 @@ test("entry category picker completes hierarchy segments and preserves full-path
     .getByRole("button", { name: "New transaction" })
     .click();
 
+  const spendPanel = page.getByRole("tabpanel", { name: "Spend" });
+  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books", {
+    scope: spendPanel,
+  });
   const categoryPicker = page.getByRole("combobox", { name: "Category" });
   await page.getByRole("combobox", { name: "Funding account" }).focus();
   await categoryPicker.focus();
@@ -8334,14 +8486,14 @@ test("entry category picker completes hierarchy segments and preserves full-path
   await expect(categoryPicker).toHaveValue("");
 
   await categoryPicker.fill(`${base}:`);
-  const categoryOptions = page.locator("#spend-category-options");
+  const categoryOptions = page.locator("#spend-merchant-0-category-options");
   await expect(categoryOptions).toHaveAttribute("data-picker-mode", "level");
-  await expect(page.locator("#spend-category-announcement")).toHaveText(
-    `Browsing under ${base}`,
-  );
+  await expect(
+    page.locator("#spend-merchant-0-category-announcement"),
+  ).toHaveText(`Browsing under ${base}`);
   await expect(categoryPicker).toHaveAttribute(
     "aria-activedescendant",
-    /spend-category-option-group-/,
+    /spend-merchant-0-category-option-group-/,
   );
   await expect(
     categoryOptions.getByRole("option", {
@@ -8351,10 +8503,10 @@ test("entry category picker completes hierarchy segments and preserves full-path
 
   await categoryPicker.press("Enter");
   await expect(categoryPicker).toHaveValue(`${base}:Food:`);
-  await expect(page.getByTestId("spend-category-breadcrumb")).toContainText(
-    "Food",
-  );
-  await expect(page.locator("#spend-category-context")).toHaveText(
+  await expect(
+    page.getByTestId("spend-merchant-0-category-breadcrumb"),
+  ).toContainText("Food");
+  await expect(page.locator("#spend-merchant-0-category-context")).toHaveText(
     `Browsing under ${base}:Food`,
   );
 
@@ -8402,9 +8554,9 @@ test("entry category picker completes hierarchy segments and preserves full-path
 
   await categoryPicker.fill(`${base}:Food:market:Gro`);
   await expect(categoryOptions).toHaveAttribute("data-picker-mode", "search");
-  await expect(page.locator("#spend-category-announcement")).toHaveText(
-    "Searching full paths",
-  );
+  await expect(
+    page.locator("#spend-merchant-0-category-announcement"),
+  ).toHaveText("Searching full paths");
   await expect(
     categoryOptions.getByRole("option", { name: /Groceries/ }),
   ).toBeVisible();
@@ -8419,7 +8571,7 @@ test("entry category picker completes hierarchy segments and preserves full-path
   ).toBeVisible();
   await categoryPicker.press("Shift+Tab");
   await expect(categoryPicker).toHaveValue(`${base}:Food:Pan`);
-  await expect(page.getByRole("combobox", { name: "Merchant" })).toBeFocused();
+  await expect(spendPanel.getByLabel("Amount")).toBeFocused();
   await categoryPicker.focus();
   await categoryPicker.press("Tab");
   await expect(categoryPicker).toHaveValue(pantryFqn);
@@ -8436,13 +8588,6 @@ test("entry category picker completes hierarchy segments and preserves full-path
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
 
   const createdFqn = `${base}:Food:New:Bakery`;
-  await page
-    .getByRole("combobox", { name: "Creation economic intent" })
-    .click();
-  await page.getByRole("option", { name: "Fee", exact: true }).click();
-  await expect(
-    page.getByRole("combobox", { name: "Creation economic intent" }),
-  ).toBeFocused();
   await categoryPicker.fill(createdFqn);
   await expect(
     categoryOptions.getByRole("option", {
@@ -8467,7 +8612,7 @@ test("entry category picker completes hierarchy segments and preserves full-path
   expect(createResponse.ok()).toBe(true);
   const createdCategory = (await createResponse.json()) as CategoryFixture;
   expect(createdCategory.fqn).toBe(createdFqn);
-  expect(createdCategory.economic_intent).toBe("fee");
+  expect(createdCategory.economic_intent).toBe("expense");
   await expect(categoryPicker).toHaveValue(createdFqn);
   await expect(categoryPicker).toBeFocused();
   await categoryPicker.press("Tab");
@@ -8500,12 +8645,12 @@ test("entry category picker completes hierarchy segments and preserves full-path
 
   const merchantPicker = page.getByRole("combobox", { name: "Merchant" });
   await merchantPicker.fill("cash");
-  await expect(page.locator("#spend-merchantAccountId-options")).toContainText(
+  await expect(page.locator("#spend-merchant-0-account-options")).toContainText(
     "No matches",
   );
   await expect(
     page
-      .locator("#spend-merchantAccountId-options")
+      .locator("#spend-merchant-0-account-options")
       .getByRole("option", { name: /cash/i }),
   ).toHaveCount(0);
 });
@@ -9057,12 +9202,35 @@ test("entry panel creates each shorthand transaction type", async ({
     "savings:Ally:Emergency",
     { scope: transferPanel },
   );
-  // Truncated text forces a real search instead of selecting an exact searchLabel match.
-  await chooseOptionByKeyboard(page, "Category", "ransfer", "Transfer", {
-    scope: transferPanel,
-  });
   await transferPanel.getByLabel("Memo").fill("E2E tab transfer");
   await saveAndExpectEntryCount("/api/transactions/transfer", 4);
+
+  await page.getByRole("tab", { name: "Exchange" }).click();
+  await expect(
+    page.getByRole("heading", { name: "New exchange" }),
+  ).toBeVisible();
+  const exchangePanel = entryPanel.getByRole("tabpanel", { name: "Exchange" });
+  await exchangePanel.getByLabel("Date").fill("2026-05-30");
+  await chooseOptionByKeyboard(page, "From account", "Wallet", "cash:Wallet", {
+    scope: exchangePanel,
+  });
+  await fillAndExpectValue(
+    exchangePanel.getByLabel("Amount sold"),
+    `32.${cents}`,
+  );
+  await chooseOptionByKeyboard(
+    page,
+    "To account",
+    "Travel:EUR",
+    "cash:Travel:EUR",
+    { scope: exchangePanel },
+  );
+  await fillAndExpectValue(
+    exchangePanel.getByLabel("Amount bought"),
+    `30.${cents}`,
+  );
+  await exchangePanel.getByLabel("Memo").fill("E2E tab exchange");
+  await saveAndExpectEntryCount("/api/transactions/exchange", 5);
 });
 
 test("advanced journal entry gates balance, persists drafts, and saves records", async ({
@@ -9126,13 +9294,6 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
   await chooseOptionByKeyboard(page, "Account", "Wallet", "cash:Wallet", {
     scope: firstRecord,
   });
-  await chooseOptionByKeyboard(
-    page,
-    "Category",
-    "Books",
-    "Entertainment:Books",
-    { scope: firstRecord },
-  );
 
   await chooseOptionByKeyboard(
     page,
@@ -9142,13 +9303,6 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
     { scope: secondRecord },
   );
   await secondRecord.getByLabel("Amount").fill("-5.00");
-  await chooseOptionByKeyboard(
-    page,
-    "Category",
-    "Books",
-    "Entertainment:Books",
-    { scope: secondRecord },
-  );
 
   await page.getByRole("button", { name: "Add record" }).click();
   const thirdRecord = journalRecord(page, 3);
@@ -9421,12 +9575,15 @@ test("spend entry escalates to matching journal records", async ({
   await expect(firstRecord.getByLabel("Amount")).toHaveValue(`-${amount}`);
   await expect(
     firstRecord.getByRole("combobox", { name: "Category" }),
-  ).toHaveValue("Entertainment:Books");
+  ).toHaveCount(0);
   await expect(firstRecord.getByLabel("Memo")).toHaveValue(memo);
   await expect(
     secondRecord.getByRole("combobox", { name: "Account" }),
   ).toHaveValue("merchant:Books");
   await expect(secondRecord.getByLabel("Amount")).toHaveValue(amount);
+  await expect(
+    secondRecord.getByRole("combobox", { name: "Category" }),
+  ).toHaveValue("Entertainment:Books");
 
   const saveResponsePromise = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -9494,26 +9651,27 @@ test("advanced journal account picker follows selected category intent", async (
   await page.getByRole("tab", { name: "Advanced" }).click();
 
   const firstRecord = journalRecord(page, 1);
-  await chooseOptionByKeyboard(page, "Category", "ransfer", "Transfer", {
+  await chooseOptionByKeyboard(page, "Account", "Wallet", "cash:Wallet", {
     scope: firstRecord,
   });
-
-  const accountPicker = firstRecord.getByRole("combobox", { name: "Account" });
-  await accountPicker.fill("merchant:Book");
   await expect(
-    page.locator("#advanced-record-0-account-options"),
-  ).toContainText("No matches");
-  await accountPicker.fill("Wallet");
-  await expect(
-    page.locator("#advanced-record-0-account-options").getByText("cash:Wallet"),
-  ).toBeVisible();
+    firstRecord.getByRole("combobox", { name: "Category" }),
+  ).toHaveCount(0);
 
+  await chooseOptionByKeyboard(page, "Account", "Books", "merchant:Books", {
+    scope: firstRecord,
+  });
   const categoryPicker = firstRecord.getByRole("combobox", {
     name: "Category",
   });
-  await categoryPicker.fill("");
-  await accountPicker.fill("merchant:Books");
-  await expect(accountPicker).toHaveValue("merchant:Books");
+  await expect(categoryPicker).toBeVisible();
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    "Books",
+    "Entertainment:Books",
+    { scope: firstRecord },
+  );
 });
 
 test("advanced journal account picker keeps suggestions filtered but resolves exact hidden FQNs", async ({
@@ -9521,13 +9679,11 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
 }, testInfo) => {
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const unique = `${slug}${Date.now()}`;
-  const visibleSystemFqn = `e2e:advanced:${unique}:VisibleFeeSystem`;
-  const hiddenSystemFqn = `e2e:advanced:${unique}:HiddenFeeSystem`;
-  const feeCategoryFqn = `E2E:Advanced:${unique}:Fee`;
-  const visibleSystem = await createAccount(page, visibleSystemFqn, "system");
-  const hiddenSystem = await createAccount(page, hiddenSystemFqn, "system");
-  await hideAccount(page, hiddenSystem);
-  await createCategory(page, feeCategoryFqn, "fee");
+  const hiddenFlowFqn = `e2e:advanced:${unique}:HiddenFlow`;
+  const expenseCategoryFqn = `E2E:Advanced:${unique}:Expense`;
+  const hiddenFlow = await createAccount(page, hiddenFlowFqn, "flow");
+  await hideAccount(page, hiddenFlow);
+  await createCategory(page, expenseCategoryFqn, "expense");
 
   const accounts = await listFixtures<AccountFixture>(
     page,
@@ -9535,6 +9691,7 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
     "accounts",
   );
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const correctionAccount = findByFqn(accounts, "system:correction");
   const memo = `E2E advanced account parity ${unique}`;
 
   const ledgerLookups = waitForLedgerLookups(page);
@@ -9548,53 +9705,32 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
 
   const firstRecord = journalRecord(page, 1);
   const secondRecord = journalRecord(page, 2);
-  const firstAccountPicker = firstRecord.getByRole("combobox", {
-    name: "Account",
-  });
 
-  await fillAndExpectValue(firstAccountPicker, "VisibleFeeSystem");
-  await expect(
-    page
-      .locator("#advanced-record-0-account-options")
-      .getByText(visibleSystem.fqn),
-  ).toBeVisible();
-  await chooseOptionByKeyboard(
-    page,
-    "Category",
-    feeCategoryFqn,
-    feeCategoryFqn,
-    { scope: firstRecord },
-  );
   await chooseOptionByKeyboard(page, "Account", "Wallet", fundingAccount.fqn, {
     scope: firstRecord,
   });
   await firstRecord.getByLabel("Amount").fill("-10.00");
 
-  await chooseOptionByKeyboard(
-    page,
-    "Category",
-    feeCategoryFqn,
-    feeCategoryFqn,
-    { scope: secondRecord },
+  await fillAndExpectValue(
+    secondRecord.getByRole("combobox", { name: "Account" }),
+    "correction",
   );
+  await expect(
+    page
+      .locator("#advanced-record-1-account-options")
+      .getByText(correctionAccount.fqn),
+  ).toBeVisible();
   await chooseOptionByKeyboard(
     page,
     "Account",
-    "VisibleFeeSystem",
-    visibleSystem.fqn,
+    "correction",
+    correctionAccount.fqn,
     { scope: secondRecord },
   );
   await secondRecord.getByLabel("Amount").fill("10.00");
 
   await page.getByRole("button", { name: "Add record" }).click();
   const thirdRecord = journalRecord(page, 3);
-  await chooseOptionByKeyboard(
-    page,
-    "Category",
-    feeCategoryFqn,
-    feeCategoryFqn,
-    { scope: thirdRecord },
-  );
   await chooseOptionByKeyboard(page, "Account", "Wallet", fundingAccount.fqn, {
     scope: thirdRecord,
   });
@@ -9605,19 +9741,19 @@ test("advanced journal account picker keeps suggestions filtered but resolves ex
   const hiddenAccountPicker = fourthRecord.getByRole("combobox", {
     name: "Account",
   });
-  await chooseOptionByKeyboard(
-    page,
-    "Category",
-    feeCategoryFqn,
-    feeCategoryFqn,
-    { scope: fourthRecord },
-  );
-  await hiddenAccountPicker.fill("HiddenFeeSystem");
+  await hiddenAccountPicker.fill("HiddenFlow");
   await expect(
     page.locator("#advanced-record-3-account-options"),
   ).toContainText("No matches");
-  await hiddenAccountPicker.fill(hiddenSystemFqn);
-  await expect(hiddenAccountPicker).toHaveValue(hiddenSystemFqn);
+  await hiddenAccountPicker.fill(hiddenFlowFqn);
+  await expect(hiddenAccountPicker).toHaveValue(hiddenFlowFqn);
+  await chooseOptionByKeyboard(
+    page,
+    "Category",
+    expenseCategoryFqn,
+    expenseCategoryFqn,
+    { scope: fourthRecord },
+  );
   await fourthRecord.getByLabel("Amount").fill("20.00");
   await fourthRecord.getByLabel("Memo").fill(memo);
 

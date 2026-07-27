@@ -3,7 +3,7 @@ import { test } from "@tests/e2e/test";
 
 interface AccountFixture {
   readonly account_id: number;
-  readonly account_type: "balance" | "flow" | "system";
+  readonly account_type: "flow" | "owned" | "party" | "system";
   readonly fqn: string;
 }
 
@@ -78,11 +78,11 @@ const decimalScale = 8;
 const createAccount = async (
   page: Page,
   {
-    accountType = "balance",
+    accountType = "owned",
     fqn,
     hidden = false,
   }: {
-    readonly accountType?: "balance" | "flow" | "system";
+    readonly accountType?: "flow" | "owned" | "party";
     readonly fqn: string;
     readonly hidden?: boolean;
   },
@@ -303,7 +303,7 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     .filter({ hasText: "Joint" })
     .first();
   await expect(jointRow).toBeVisible();
-  await expect(jointRow).toContainText("Balance");
+  await expect(jointRow).toContainText("Owned");
   await expect(jointRow).toContainText("USD");
   await expect(jointRow).toContainText(
     formatUsdMarkerAmount(jointBalance?.current_balance ?? "0"),
@@ -738,7 +738,7 @@ test("account page renders header and paginated running-balance register", async
   expect(balance).toBeDefined();
 
   await expect(page.getByRole("heading", { name: "Card" })).toBeVisible();
-  await expect(page.getByText("Balance", { exact: true })).toBeVisible();
+  await expect(page.getByText("Owned", { exact: true })).toBeVisible();
   await expect(page.getByText("USD", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Current", { exact: true })).toBeVisible();
   await expect(page.getByText("Posted", { exact: true })).toBeVisible();
@@ -1029,7 +1029,7 @@ test("account group page renders subtotals and combined prefix register", async 
       {
         account_id: fundingAccount.account_id,
         amount: `-${amount}`,
-        category_id: category.category_id,
+        category_id: null,
         currency: "USD",
         memo,
         posting_status: "posted",
@@ -1118,7 +1118,7 @@ test("account group page renders subtotals and combined prefix register", async 
     }),
   ).toBeVisible();
   await expect(page.getByTestId("account-group-subtotals")).toContainText(
-    "1 balance account",
+    "Owned funds · 1 account",
   );
   await expect(
     page
@@ -1770,7 +1770,7 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   await createPanel.getByLabel("FQN").blur();
   await expect(createPanel.getByText("FQN is required.")).toHaveCount(0);
   await createPanel.getByLabel("Type").click();
-  await page.getByRole("option", { exact: true, name: "Balance" }).click();
+  await page.getByRole("option", { exact: true, name: "Owned" }).click();
   await createPanel.getByLabel("Currency").fill("USD");
   const createAccountRequest = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -1968,7 +1968,7 @@ test("accounts form clears API field errors after editing the field", async ({
 
   await fqnInput.fill(duplicateFqn);
   await createPanel.getByLabel("Type").click();
-  await page.getByRole("option", { exact: true, name: "Balance" }).click();
+  await page.getByRole("option", { exact: true, name: "Owned" }).click();
   await createPanel.getByLabel("Currency").fill("USD");
   const duplicateCreate = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -2048,7 +2048,7 @@ test("account edit changes type and retains values after a rejected type change"
   await blockedPanel.getByLabel("Hidden").click();
   await blockedPanel.getByLabel("Featured").click();
   await blockedPanel.getByLabel("Type").click();
-  await page.getByRole("option", { exact: true, name: "Balance" }).click();
+  await page.getByRole("option", { exact: true, name: "Owned" }).click();
   const rejectedTypeChange = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -2067,7 +2067,7 @@ test("account edit changes type and retains values after a rejected type change"
   ).toBeVisible();
   await expect(blockedPanel.getByRole("alert")).toHaveCount(0);
   await expect(blockedPanel.getByLabel("FQN")).toHaveValue(blockedFqn);
-  await expect(blockedPanel.getByLabel("Type")).toContainText("Balance");
+  await expect(blockedPanel.getByLabel("Type")).toContainText("Owned");
   await expect(blockedPanel.getByLabel("External system")).toHaveValue(
     "e2e-system",
   );
@@ -2182,7 +2182,7 @@ test("account header stays mounted and focused while favorite refreshes", async 
   await expect(toggle).toBeVisible();
   const typeBadge = accountHeader
     .locator('[data-slot="badge"]')
-    .filter({ hasText: "Balance" });
+    .filter({ hasText: "Owned" });
   await expect(typeBadge).toHaveCount(1);
   expect(
     await typeBadge.evaluate((element) =>

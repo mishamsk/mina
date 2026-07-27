@@ -6,18 +6,19 @@
 - Implemented API capability groups:
   - Health checks and stable JSON error envelopes.
   - App administration for seeding demo data.
-  - Account, category, tag, and household member CRUD/list flows, including account type changes, account, category, tag, and member delete eligibility, member hidden-state updates and include-hidden listing, account/category/tag featured metadata, and category economic-intent filtering.
-  - Account type and category economic-intent metadata for accounting semantics.
+  - Account, category, tag, and household member CRUD/list flows, including writable account-type changes, fixed system-account protection, account/category/tag/member delete eligibility, member hidden-state updates and include-hidden listing, account/category/tag featured metadata, and category-intent filtering.
+  - Explicit `owned`, `party`, `flow`, and fixed `system` account types plus `expense` and `income` category intents.
   - Exchange-rate and account credit-limit-history flows.
   - Transaction creation, read, paginated/date-anchored/filtered list, free-text transaction search across reference metadata, full replacement, and tombstone deletion with nested journal records.
   - Non-USD `amount_usd` inference on transaction writes using stored `USD -> currency` rates when resolvable.
   - Server-computed transaction month spend/income totals and account balances with USD-equivalent aggregation, unconverted counts, and current credit limits.
-  - Shorthand transaction creation endpoints for spend, income, refund, and transfer.
+  - Shorthand transaction creation endpoints for spend, income, refund, transfer, and two-currency exchange.
   - Transaction-template creation, read, paginated list, full replacement, and tombstone deletion with nested partial record defaults.
   - Recurring definition creation, read, paginated list, full replacement, cancel, pause/resume, defer, confirm-next, occurrence review queue, confirm, and dismiss flows.
   - Per-entity hierarchy restructure endpoints for accounts, categories, tags, and transaction templates, with atomic subtree FQN rewrite; category restructure rewrites active budget category paths in lockstep; template replacement preserves `fqn`.
   - Derived group listings and path-addressed bulk hide/unhide for accounts, categories, and tags; group hidden state is computed from active leaves.
-  - Transaction semantic shape validation with derived transaction class, summary titles, component summaries, and display amounts in REST responses.
+  - Record-local roles and independent transaction shapes derived from account type, sign, and optional category intent; responses include the reduced class, display amounts, and exchange effective rate.
+  - Dry-run transaction classification for unbalanced drafts, with category-rule and exchange-exclusivity validation.
   - Paginated journal-record search with account-FQN prefix register filtering, plus account-record search by account ID.
   - Bulk journal-record category, tag, account, and status updates.
   - Background operation status, concrete typed run lookup, manual exchange-rate loading trigger, and manual database backup trigger flows; one newest-first paged envelope listing spans all operations with an optional operation filter, while operation discovery returns links to each concrete API.
@@ -45,23 +46,24 @@
   - Minimal embedded web UI infrastructure is built from `frontend/`; root routes are canonical, with `/ui/` legacy redirects.
   - Frontend styling is wired through Tailwind CSS v4 and shadcn/ui generated primitives.
   - The app shell shows a featured-account balance strip on every route when featured accounts exist, backed by account metadata and server balances.
-  - Overview is the landing page, with active balance accounts grouped by FQN root, approximate USD subtotals, credit remaining, current-month spend/income pulse, and recent activity links.
+  - Overview is the landing page, with active `owned` and `party` accounts grouped by FQN root, approximate USD subtotals, credit remaining, current-month spend/income pulse, and recent activity links.
 - Transactions page uses server-derived transaction titles, chevron-free whole-row click/Space expansion with a latched expanded-row treatment, a standing URL-backed transaction-class toolbar filter, URL-backed server-side search/filter chips, date-jump anchored pagination with adjacent-day controls, explicit transient bulk-edit mode with page-local whole-row selection and uniform category/tag/member edits from its action surface or selected rows, trailing hover-revealed open-detail and quick-delete row actions, entity chips that add filters in place, URL-addressable read-only detail with one header Edit action and footer Duplicate/Split actions routed through the transaction editor modal plus Delete through a confirmation dialog, a shared detail/peek lifecycle strip and dateless record grid with account-register links, visible date deviations, and exact-value row disclosures, transaction-row uniform category/tags/member edits, simple two-record amount edits, and per-record inline category, tags, member, memo, date, and posting-status editing only in expanded journal records.
   - Transactions and register embeddings show EXPECTED recurring occurrences inline by default with overdue emphasis, a URL-backed hide control, and confirm/dismiss row actions; the Recurring screen manages definitions with schedule, status, next-date, lifecycle actions, and a balanced-record editor.
-  - Accounts page shows the chart of accounts as a searchable/filterable FQN tree with trailing row quick actions for hide/unhide, featured, move/rename, and delete, account create/edit, credit-limit history management, and URL-addressable account registers with running balances, transaction peeks, balance-surface links, and an account-header featured toggle.
+  - Accounts page shows the chart as a searchable/filterable `owned`/`party`/`flow`/`system` FQN tree, with fixed system accounts readable but immutable; user accounts retain hide/unhide, featured, move/rename, delete, create/edit, credit-limit, register, and balance workflows.
   - Accounts tree supports prefix-addressed account rename/move for leaves and groups, with subtree FQN rewrites through the restructure API.
-  - Account group pages show descendant balance-account subtotals and combined prefix registers across balance and flow accounts, with transaction peeks and links from account trees and overview balance groups.
+  - Account group pages show descendant `owned`/`party` subtotals and combined prefix registers across tracked and flow accounts, with transaction peeks and links from account trees and overview balance groups.
   - Status lists registered background operations with URL-backed paged run histories, manual operation triggers, current operation status, and per-operation run details; it keeps backend health and local UI-state controls.
   - Global command palette opens with `Cmd/Ctrl+K`, supports routed-page and account/group navigation by typed name, launches transaction entry tabs, and starts database backup or exchange-rate loading runs.
   - Global command palette supports Alfred-style transaction search with leading-apostrophe mode and URL-addressable transaction detail navigation.
-  - Categories and Tags pages show searchable FQN trees with featured and hidden row toggles, move/rename, and create/edit/delete side-panel workflows; Categories also show intent badges.
+  - Categories and Tags pages show searchable FQN trees with featured and hidden row toggles, move/rename, and create/edit/delete side-panel workflows; Categories show `expense` or `income` intent badges.
   - Category and Tag leaf rows carry deleteability-driven delete actions with named confirmation; group rows do not offer delete.
   - Members page shows a searchable flat member list with create/rename/delete side-panel workflows and hover/focus-revealed Edit/Delete row actions; ineligible deletes are proactively disabled from the API deleteability signal.
   - Categories, Tags, and Members have URL-addressable drill-down pages with metadata and pre-filtered transaction previews.
   - Accounts, Categories, Tags, and Members retain full-height Arcade Cabinet table frames with internally scrolling data bodies.
-  - Transaction entry is one app-shell-owned, route-independent stage modal opened in place from page headers, the sidebar, global shortcut, command palette, empty states, rows, and detail panels; it includes shorthand spend/income/refund/transfer tabs, template prefill, an Advanced journal editor, persisted per-tab drafts, sticky batch fields, a session/context rail, and URL-addressable create/edit/split/duplicate launches.
+  - Transaction entry is one app-shell-owned, route-independent stage modal opened in place from page headers, the sidebar, global shortcut, command palette, empty states, rows, and detail panels; its six tabs cover multi-merchant Spend, Income, money-back Refund, Transfer with an optional charge, two-currency Exchange with effective-rate feedback, and Advanced journal entry.
+  - Advanced entry offers categories only on `flow` records and shows the server's live derived roles, shapes, class, and display amounts before save.
   - Saved transactions support row and detail-panel Edit, Duplicate, and Split actions with shorthand-fit edit detection, duplicate-as-new-entry prefill, split-through-journal replacement, discard protection, and live refresh while the detail panel remains open beneath the modal.
-  - Transaction entry category pickers fetch API-filtered category lists by shorthand tab economic intent.
+  - Transaction entry category pickers fetch API-filtered `expense` or `income` categories for the shorthand flows that carry economic meaning.
   - Shared hierarchical entity pickers support breadcrumbed segment browsing, guarded keyboard segment completion and back-out, scoped full-path fallback, exact-FQN selection, account-intent pruning, and multi-select sibling batching across entry, inline, bulk, filter, reference, and recurring surfaces; eligible entry pickers additionally support inline valid-leaf creation.
   - The status page calls backend health as an infrastructure proof and stores UI-only preference state in IndexedDB.
 - Implemented storage behavior:

@@ -142,10 +142,13 @@ WHERE 1 = 1`
 
 // ListBalances returns active balance-account balances grouped by currency.
 func (s *AccountStore) ListBalances(ctx context.Context, opts accounts.BalanceListOptions) ([]accounts.AccountBalance, error) {
-	filter := `WHERE a.account_type = CAST(? AS ` + s.db.accountingName("account_type") + `)
+	filter := `WHERE a.account_type IN (
+	CAST(? AS ` + s.db.accountingName("account_type") + `),
+	CAST(? AS ` + s.db.accountingName("account_type") + `)
+)
   AND a.tombstoned_at IS NULL
   AND COALESCE(ar.currency, a.currency) IS NOT NULL`
-	args := []any{enumValue(accounts.AccountTypeBalance)}
+	args := []any{enumValue(accounts.AccountTypeOwned), enumValue(accounts.AccountTypeParty)}
 	if !opts.IncludeHidden {
 		filter += " AND a.is_hidden = 0"
 	}

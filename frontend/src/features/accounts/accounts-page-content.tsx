@@ -18,7 +18,12 @@ import type { AccountTypeFilter } from "./accounts-tree";
 import { AccountsTree } from "./accounts-tree";
 import { refreshAccountsPage } from "./use-accounts-resource";
 
-const accountTypes: readonly AccountType[] = ["balance", "flow", "system"];
+const accountTypes: readonly AccountType[] = [
+  "owned",
+  "party",
+  "flow",
+  "system",
+];
 
 export const readAccountsSearchState = (
   searchParams: URLSearchParams,
@@ -144,7 +149,8 @@ export const AccountsToolbar = ({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="balance">Balance</SelectItem>
+            <SelectItem value="owned">Owned</SelectItem>
+            <SelectItem value="party">Party</SelectItem>
             <SelectItem value="flow">Flow</SelectItem>
             <SelectItem value="system">System</SelectItem>
           </SelectContent>

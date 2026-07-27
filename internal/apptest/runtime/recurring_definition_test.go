@@ -130,6 +130,10 @@ func TestRecurringDefinitionValidationAndConflicts(t *testing.T) {
 
 	unbalanced := recurringDefinitionRequest("RecurringValidation:Unbalanced", refs, "-10.00000000", "9.00000000", intervalRule(1, "MONTH"), "2024-01-31")
 	assertRecurringDefinitionCreateStatus(t, client, "unbalanced records", unbalanced, http.StatusBadRequest, httpclient.APIErrorCodeInvalidRequest)
+	invalidCategory := recurringDefinitionRequest("RecurringValidation:InvalidCategory", refs, "-10.00000000", "10.00000000", intervalRule(1, "MONTH"), "2024-01-31")
+	(*invalidCategory.Records)[0].CategoryId = nullable.NewNullableWithValue(refs.CategoryID)
+	assertRecurringDefinitionCreateStatus(t, client, "category on owned record", invalidCategory, http.StatusBadRequest, httpclient.APIErrorCodeInvalidRequest)
+	createRecurringDefinition(t, client, recurringDefinitionRequest("RecurringValidation:InvalidCategory", refs, "-10.00000000", "10.00000000", intervalRule(1, "MONTH"), "2024-01-31"))
 	unbalancedReplace := recurringDefinitionRequest("RecurringValidation:Replaced", refs, "-10.00000000", "9.00000000", intervalRule(1, "WEEK"), "2024-02-01")
 	rejectedReplace, err := client.REST().ReplaceRecurringDefinitionWithResponse(context.Background(), created.JSON201.RecurringDefinitionId, unbalancedReplace)
 	requireNoTransportError(t, "replace recurring definition with unbalanced records", err)
@@ -188,20 +192,19 @@ func TestRecurringDefinitionTemplateSeedAndDeleteGuards(t *testing.T) {
 		Fqn: "RecurringSeed:Template",
 		Records: []httpclient.TransactionTemplateRecordRequest{
 			{
-				AccountId:  &refs.CheckingAccountID,
-				MemberId:   &refs.MemberID,
-				Currency:   recurringStringPtr("USD"),
-				Amount:     recurringStringPtr("-20.00000000"),
-				CategoryId: refs.CategoryID,
-				TagIds:     &[]int64{refs.TagID},
-				Memo:       recurringStringPtr("seed debit"),
+				AccountId: &refs.CheckingAccountID,
+				MemberId:  &refs.MemberID,
+				Currency:  recurringStringPtr("USD"),
+				Amount:    recurringStringPtr("-20.00000000"),
+				TagIds:    &[]int64{refs.TagID},
+				Memo:      recurringStringPtr("seed debit"),
 			},
 			{
 				AccountId:  &refs.MerchantAccountID,
 				MemberId:   &refs.MemberID,
 				Currency:   recurringStringPtr("USD"),
 				Amount:     recurringStringPtr("20.00000000"),
-				CategoryId: refs.CategoryID,
+				CategoryId: apptest.Int64Ptr(refs.CategoryID),
 				TagIds:     &[]int64{refs.TagID},
 				Memo:       recurringStringPtr("seed credit"),
 			},
@@ -224,16 +227,31 @@ func TestRecurringDefinitionTemplateSeedAndDeleteGuards(t *testing.T) {
 		AnchorDate:   apptest.Date("2024-02-15"),
 		TemplateId:   &template.JSON201.TransactionTemplateId,
 		Records: &[]httpclient.RecurringDefinitionRecordRequest{
-			{MemberId: nullable.NewNullNullable[int64](), Memo: nullable.NewNullNullable[string]()},
-			{MemberId: nullable.NewNullNullable[int64](), Memo: nullable.NewNullNullable[string]()},
+			{
+				MemberId:   nullable.NewNullNullable[int64](),
+				CategoryId: nullable.NewNullNullable[int64](),
+				Memo:       nullable.NewNullNullable[string](),
+			},
+			{
+				AccountId:  &refs.CheckingAccountID,
+				MemberId:   nullable.NewNullNullable[int64](),
+				CategoryId: nullable.NewNullNullable[int64](),
+				Memo:       nullable.NewNullNullable[string](),
+			},
 		},
 	}
 	cleared := createRecurringDefinition(t, client, clearRequest)
 	for _, record := range cleared.JSON201.Records {
-		if record.MemberId != nil || record.Memo != nil {
-			t.Fatalf("template nullable override record = %+v, want cleared member_id and memo", record)
+		if record.MemberId != nil || record.CategoryId != nil || record.Memo != nil {
+			t.Fatalf("template nullable override record = %+v, want cleared member_id, category_id, and memo", record)
 		}
 	}
+	if cleared.JSON201.TransactionClass != httpclient.TransactionClassTransfer {
+		t.Fatalf("cleared template transaction_class = %q, want %q", cleared.JSON201.TransactionClass, httpclient.TransactionClassTransfer)
+	}
+	assertDisplayAmountsEqual(t, "cleared template display amounts", cleared.JSON201.DisplayAmounts, []httpclient.DisplayAmount{
+		{Amount: "20.00000000", Currency: "USD"},
+	})
 
 	assertDeleteAccountStatus(t, client, refs.CheckingAccountID, http.StatusConflict)
 	assertDeleteCategoryStatus(t, client, refs.CategoryID, http.StatusConflict)
@@ -960,20 +978,19 @@ func recurringDefinitionRequest(
 		AnchorDate:   apptest.Date(anchor),
 		Records: &[]httpclient.RecurringDefinitionRecordRequest{
 			{
-				AccountId:  &refs.CheckingAccountID,
-				MemberId:   nullable.NewNullableWithValue(refs.MemberID),
-				Currency:   recurringStringPtr("USD"),
-				Amount:     recurringStringPtr(debit),
-				CategoryId: &refs.CategoryID,
-				TagIds:     &[]int64{refs.TagID},
-				Memo:       nullable.NewNullableWithValue("debit"),
+				AccountId: &refs.CheckingAccountID,
+				MemberId:  nullable.NewNullableWithValue(refs.MemberID),
+				Currency:  recurringStringPtr("USD"),
+				Amount:    recurringStringPtr(debit),
+				TagIds:    &[]int64{refs.TagID},
+				Memo:      nullable.NewNullableWithValue("debit"),
 			},
 			{
 				AccountId:  &refs.MerchantAccountID,
 				MemberId:   nullable.NewNullableWithValue(refs.MemberID),
 				Currency:   recurringStringPtr("USD"),
 				Amount:     recurringStringPtr(credit),
-				CategoryId: &refs.CategoryID,
+				CategoryId: nullable.NewNullableWithValue(refs.CategoryID),
 				TagIds:     &[]int64{refs.TagID},
 				Memo:       nullable.NewNullableWithValue("credit"),
 			},
@@ -993,7 +1010,6 @@ func recurringExpectedReplacementRequest(refs recurringDefinitionRefs, memo stri
 				Currency:             "USD",
 				Amount:               "-20.00",
 				AmountUsd:            apptest.StringPtr("-20.00"),
-				CategoryId:           refs.CategoryID,
 				TagIds:               apptest.Int64SlicePtr(refs.TagID),
 				Memo:                 &memo,
 				PendingDate:          &pendingDate,
@@ -1007,7 +1023,7 @@ func recurringExpectedReplacementRequest(refs recurringDefinitionRefs, memo stri
 				Currency:             "USD",
 				Amount:               "20.00",
 				AmountUsd:            apptest.StringPtr("20.00"),
-				CategoryId:           refs.CategoryID,
+				CategoryId:           apptest.Int64Ptr(refs.CategoryID),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
 				Source:               httpclient.ManualSourceManual,
@@ -1092,15 +1108,15 @@ func assertRecurringDefinition(
 	if len(definition.Records) != 2 {
 		t.Fatalf("record count = %d, want 2", len(definition.Records))
 	}
-	assertRecurringRecord(t, definition.Records[0], refs.CheckingAccountID, refs.CategoryID, refs.TagID, refs.MemberID, debit)
-	assertRecurringRecord(t, definition.Records[1], refs.MerchantAccountID, refs.CategoryID, refs.TagID, refs.MemberID, credit)
+	assertRecurringRecord(t, definition.Records[0], refs.CheckingAccountID, nil, refs.TagID, refs.MemberID, debit)
+	assertRecurringRecord(t, definition.Records[1], refs.MerchantAccountID, &refs.CategoryID, refs.TagID, refs.MemberID, credit)
 }
 
-func assertRecurringRecord(t *testing.T, record httpclient.RecurringDefinitionRecord, accountID int64, categoryID int64, tagID int64, memberID int64, amount string) {
+func assertRecurringRecord(t *testing.T, record httpclient.RecurringDefinitionRecord, accountID int64, categoryID *int64, tagID int64, memberID int64, amount string) {
 	t.Helper()
 
-	if record.AccountId != accountID || record.CategoryId != categoryID || record.Currency != "USD" || record.Amount != amount {
-		t.Fatalf("record = account:%d category:%d currency:%q amount:%q", record.AccountId, record.CategoryId, record.Currency, record.Amount)
+	if record.AccountId != accountID || !optionalInt64Equal(record.CategoryId, categoryID) || record.Currency != "USD" || record.Amount != amount {
+		t.Fatalf("record = account:%d category:%v currency:%q amount:%q", record.AccountId, record.CategoryId, record.Currency, record.Amount)
 	}
 	if record.MemberId == nil || *record.MemberId != memberID {
 		t.Fatalf("member_id = %v, want %d", record.MemberId, memberID)
@@ -1111,6 +1127,13 @@ func assertRecurringRecord(t *testing.T, record httpclient.RecurringDefinitionRe
 	if record.RecurringDefinitionRecordId <= 0 || record.RecurringDefinitionId <= 0 || record.CreatedAt.IsZero() || record.UpdatedAt.IsZero() {
 		t.Fatalf("record ids/timestamps not populated: %+v", record)
 	}
+}
+
+func optionalInt64Equal(left, right *int64) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return *left == *right
 }
 
 func recurringDefinitionRecordIDs(records []httpclient.RecurringDefinitionRecord) []int64 {

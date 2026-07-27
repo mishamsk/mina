@@ -88,7 +88,7 @@ func TestAccountListReportsDeleteability(t *testing.T) {
 			{
 				AccountId:  &templateUsedLeaf.AccountId,
 				Amount:     &amount,
-				CategoryId: category.CategoryId,
+				CategoryId: apptest.Int64Ptr(category.CategoryId),
 				Currency:   &currency,
 				MemberId:   &member.MemberId,
 				TagIds:     &tagIDs,
@@ -216,7 +216,7 @@ func createAccountForGroupState(t *testing.T, client *apptest.Client, fqn string
 
 	request := httpclient.CreateAccountRequest{
 		Fqn:         fqn,
-		AccountType: httpclient.Flow,
+		AccountType: httpclient.WritableAccountTypeFlow,
 	}
 	if hidden {
 		request.IsHidden = &hidden

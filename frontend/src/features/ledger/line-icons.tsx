@@ -1,8 +1,8 @@
 import {
   ArrowDownBox,
+  ArrowUpBox,
   Calendar,
   Cancel,
-  Chart,
   Clock,
   PlusBox,
   Receipt,
@@ -43,8 +43,8 @@ interface ClassIconProps {
 
 const classIcons: Record<TransactionClass, PixelIcon> = {
   adjustment: PlusBox,
+  clawback: ArrowUpBox,
   currency_exchange: Shuffle,
-  fx_gain_loss: Chart,
   income: ArrowDownBox,
   mixed: Switch,
   refund: Repeat,
@@ -54,8 +54,8 @@ const classIcons: Record<TransactionClass, PixelIcon> = {
 
 const classTone: Record<TransactionClass, string> = {
   adjustment: "text-[var(--color-class-adjustment-ink)]",
+  clawback: "text-[var(--color-class-clawback-ink)]",
   currency_exchange: "text-[var(--color-class-currency_exchange-ink)]",
-  fx_gain_loss: "text-muted-foreground",
   income: "text-[var(--color-class-income-ink)]",
   mixed: "text-[var(--color-class-mixed-ink)]",
   refund: "text-[var(--color-class-refund-ink)]",

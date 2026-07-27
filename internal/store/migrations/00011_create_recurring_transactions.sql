@@ -60,7 +60,8 @@ CREATE TABLE recurring_definition_record (
 	currency TEXT NOT NULL,
 	-- Signed debit or credit amount copied to generated transactions.
 	amount DECIMAL(18,8) NOT NULL,
-	category_id INTEGER NOT NULL,
+	-- Category for flow records; NULL on every other record.
+	category_id INTEGER,
 	-- Tag IDs assigned to generated records for flexible grouping.
 	tag_ids INTEGER[] NOT NULL DEFAULT [],
 	-- Optional record note or description.
@@ -72,6 +73,7 @@ CREATE TABLE recurring_definition_record (
 
 COMMENT ON COLUMN recurring_definition_record.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
 COMMENT ON COLUMN recurring_definition_record.amount IS 'Signed debit or credit amount copied to generated transactions.';
+COMMENT ON COLUMN recurring_definition_record.category_id IS 'Category for flow records; NULL on every other record.';
 COMMENT ON COLUMN recurring_definition_record.tag_ids IS 'Tag IDs assigned to generated records for flexible grouping.';
 COMMENT ON COLUMN recurring_definition_record.memo IS 'Optional record note or description.';
 

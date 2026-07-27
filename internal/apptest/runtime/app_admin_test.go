@@ -41,7 +41,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 			{
 				AccountId:            900001,
 				Amount:               "-12.34",
-				CategoryId:           900003,
+				CategoryId:           apptest.Int64Ptr(900003),
 				Currency:             "USD",
 				MemberId:             &missingMemberID,
 				PostingStatus:        httpclient.PostingStatusPosted,
@@ -52,7 +52,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 			{
 				AccountId:            900002,
 				Amount:               "12.34",
-				CategoryId:           900003,
+				CategoryId:           apptest.Int64Ptr(900003),
 				Currency:             "USD",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -83,7 +83,6 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 			{
 				AccountId:            refs.checkingAccountID,
 				Amount:               "-12.34",
-				CategoryId:           refs.categoryID,
 				Currency:             "USD",
 				MemberId:             &refs.memberID,
 				PostingStatus:        httpclient.PostingStatusPosted,
@@ -94,7 +93,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 			{
 				AccountId:            refs.merchantAccountID,
 				Amount:               "12.34",
-				CategoryId:           refs.categoryID,
+				CategoryId:           apptest.Int64Ptr(refs.categoryID),
 				Currency:             "USD",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
@@ -222,7 +221,7 @@ func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpcli
 	if len(transactions.JSON200.Transactions) != seeded.Transactions {
 		t.Fatalf("listed transactions = %d, want %d", len(transactions.JSON200.Transactions), seeded.Transactions)
 	}
-	assertDemoSemanticCoverage(t, categories.JSON200.Categories, transactions.JSON200.Transactions)
+	assertDemoSemanticCoverage(t, accounts.JSON200.Accounts, categories.JSON200.Categories, transactions.JSON200.Transactions)
 }
 
 func assertSeededRecurringDemoData(t *testing.T, client *apptest.Client, seeded httpclient.DemoSeedResponse, today time.Time) {
@@ -401,7 +400,7 @@ func assertStringSlicesEqual(t *testing.T, label string, got []string, want []st
 func assertSeededFeaturedBalanceAccounts(t *testing.T, client *apptest.Client) {
 	t.Helper()
 
-	accountType := httpclient.Balance
+	accountType := httpclient.AccountTypeOwned
 	isFeatured := true
 	sortBy := httpclient.ListAccountsParamsSortFqn
 	sortDir := httpclient.ListAccountsParamsSortDirAsc
@@ -433,18 +432,17 @@ func assertSeededFeaturedBalanceAccounts(t *testing.T, client *apptest.Client) {
 	}
 }
 
-func assertDemoSemanticCoverage(t *testing.T, categories []httpclient.Category, transactions []httpclient.Transaction) {
+func assertDemoSemanticCoverage(
+	t *testing.T,
+	accounts []httpclient.Account,
+	categories []httpclient.Category,
+	transactions []httpclient.Transaction,
+) {
 	t.Helper()
 
 	wantIntents := []httpclient.CategoryEconomicIntent{
 		httpclient.CategoryEconomicIntentExpense,
-		httpclient.CategoryEconomicIntentFee,
 		httpclient.CategoryEconomicIntentIncome,
-		httpclient.CategoryEconomicIntentRefund,
-		httpclient.CategoryEconomicIntentTransfer,
-		httpclient.CategoryEconomicIntentExchange,
-		httpclient.CategoryEconomicIntentAdjustment,
-		httpclient.CategoryEconomicIntentFxGainLoss,
 	}
 	gotIntents := map[httpclient.CategoryEconomicIntent]struct{}{}
 	for _, category := range categories {
@@ -463,7 +461,6 @@ func assertDemoSemanticCoverage(t *testing.T, categories []httpclient.Category, 
 		httpclient.TransactionClassTransfer,
 		httpclient.TransactionClassCurrencyExchange,
 		httpclient.TransactionClassAdjustment,
-		httpclient.TransactionClassFxGainLoss,
 		httpclient.TransactionClassMixed,
 	}
 	gotClasses := map[httpclient.TransactionClass]struct{}{}
@@ -474,6 +471,61 @@ func assertDemoSemanticCoverage(t *testing.T, categories []httpclient.Category, 
 		if _, ok := gotClasses[class]; !ok {
 			t.Fatalf("seeded demo missing transaction class %q", class)
 		}
+	}
+
+	accountTypes := make(map[int64]httpclient.AccountType, len(accounts))
+	for _, account := range accounts {
+		accountTypes[account.AccountId] = account.AccountType
+	}
+	expenseCategories := map[int64]struct{}{}
+	refundCategories := map[int64]struct{}{}
+	partySigns := map[int64]map[bool]struct{}{}
+	hasMultiMerchantSpend := false
+	for _, transaction := range transactions {
+		expenseAccounts := map[int64]struct{}{}
+		for _, record := range transaction.Records {
+			switch record.RecordRole {
+			case httpclient.RecordRoleExpense:
+				expenseAccounts[record.AccountId] = struct{}{}
+				expenseCategories[*record.CategoryId] = struct{}{}
+			case httpclient.RecordRoleRefund:
+				refundCategories[*record.CategoryId] = struct{}{}
+			}
+			if accountTypes[record.AccountId] == httpclient.AccountTypeParty {
+				signs := partySigns[record.AccountId]
+				if signs == nil {
+					signs = map[bool]struct{}{}
+					partySigns[record.AccountId] = signs
+				}
+				signs[record.Amount[0] == '-'] = struct{}{}
+			}
+		}
+		if transaction.TransactionClass == httpclient.TransactionClassSpend && len(expenseAccounts) >= 2 {
+			hasMultiMerchantSpend = true
+		}
+	}
+	if !hasMultiMerchantSpend {
+		t.Fatal("seeded demo missing multi-merchant spend")
+	}
+	hasNettedRefund := false
+	for categoryID := range refundCategories {
+		if _, ok := expenseCategories[categoryID]; ok {
+			hasNettedRefund = true
+			break
+		}
+	}
+	if !hasNettedRefund {
+		t.Fatal("seeded demo missing refund in a category also used for spending")
+	}
+	hasSwingingParty := false
+	for _, signs := range partySigns {
+		if len(signs) == 2 {
+			hasSwingingParty = true
+			break
+		}
+	}
+	if !hasSwingingParty {
+		t.Fatal("seeded demo missing party balance with records of both signs")
 	}
 }
 

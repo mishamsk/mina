@@ -173,7 +173,6 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 				{
 					AccountId:            checking.AccountId,
 					Amount:               "-10.00000000",
-					CategoryId:           category.CategoryId,
 					Currency:             "CHF",
 					PendingDate:          &pendingAt,
 					PostedDate:           postedAt,
@@ -184,7 +183,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 				{
 					AccountId:            counterparty.AccountId,
 					Amount:               "10.00000000",
-					CategoryId:           category.CategoryId,
+					CategoryId:           apptest.Int64Ptr(category.CategoryId),
 					Currency:             "CHF",
 					PendingDate:          &pendingAt,
 					PostedDate:           postedAt,
@@ -255,7 +254,6 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 					{
 						AccountId:            cash.AccountId,
 						Amount:               "-" + amount,
-						CategoryId:           category.CategoryId,
 						Currency:             "EUR",
 						PostingStatus:        httpclient.PostingStatusPosted,
 						ReconciliationStatus: httpclient.Reconciled,
@@ -264,7 +262,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 					{
 						AccountId:            counterparty.AccountId,
 						Amount:               amount,
-						CategoryId:           category.CategoryId,
+						CategoryId:           apptest.Int64Ptr(category.CategoryId),
 						Currency:             "EUR",
 						PostingStatus:        httpclient.PostingStatusPosted,
 						ReconciliationStatus: httpclient.Reconciled,
@@ -322,7 +320,6 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 				{
 					AccountId:            cash.AccountId,
 					Amount:               "-11.00",
-					CategoryId:           category.CategoryId,
 					Currency:             "EUR",
 					PostingStatus:        httpclient.PostingStatusPosted,
 					ReconciliationStatus: httpclient.Reconciled,
@@ -331,7 +328,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 				{
 					AccountId:            counterparty.AccountId,
 					Amount:               "11.00",
-					CategoryId:           category.CategoryId,
+					CategoryId:           apptest.Int64Ptr(category.CategoryId),
 					Currency:             "EUR",
 					PostingStatus:        httpclient.PostingStatusPosted,
 					ReconciliationStatus: httpclient.Reconciled,
@@ -473,7 +470,6 @@ func createForeignCurrencyTransaction(t *testing.T, client *apptest.Client, fixt
 				AccountId:            checking.AccountId,
 				Amount:               "-10.00000000",
 				AmountUsd:            sourceAmountUSD,
-				CategoryId:           category.CategoryId,
 				Currency:             fixture.Currency,
 				PendingDate:          &pendingAt,
 				PostedDate:           fixture.PostedAt,
@@ -485,7 +481,7 @@ func createForeignCurrencyTransaction(t *testing.T, client *apptest.Client, fixt
 				AccountId:            counterparty.AccountId,
 				Amount:               "10.00000000",
 				AmountUsd:            counterpartyAmountUSD,
-				CategoryId:           category.CategoryId,
+				CategoryId:           apptest.Int64Ptr(category.CategoryId),
 				Currency:             fixture.Currency,
 				PendingDate:          &pendingAt,
 				PostedDate:           fixture.PostedAt,

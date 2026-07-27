@@ -46,7 +46,7 @@ interface RecordReferenceCellsProps {
 
 export const categoryReferenceOptions = (
   maps: LookupMaps,
-  selectedCategoryId: number,
+  selectedCategoryId: number | null,
   includeHidden: boolean,
 ): readonly EntityOption[] =>
   Array.from(maps.categoriesById.values())
@@ -237,7 +237,7 @@ const CategoryReferenceEditor = ({
   saving,
 }: ReferenceEditorProps) => {
   const [categoryId, setCategoryId] = useState<number | undefined>(
-    record.category_id,
+    record.category_id ?? undefined,
   );
 
   return (

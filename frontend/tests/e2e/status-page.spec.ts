@@ -45,7 +45,7 @@ const waitForStatusDetailsPreference = async (page: Page) => {
 const createAccount = async (
   page: Page,
   fqn: string,
-  accountType: "balance" | "flow",
+  accountType: "flow" | "owned" | "party",
   currency?: string,
   isFeatured = false,
 ): Promise<AccountFixture> => {
@@ -345,12 +345,7 @@ test("featured balance strip follows account metadata and transaction saves", as
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const featuredLeaf = `Featured${unique}`;
   const featuredFqn = `e2e:featured:${featuredLeaf}`;
-  const fundingAccount = await createAccount(
-    page,
-    featuredFqn,
-    "balance",
-    "USD",
-  );
+  const fundingAccount = await createAccount(page, featuredFqn, "owned", "USD");
   const merchantAccount = await createAccount(
     page,
     `e2e:merchant:${unique}`,
@@ -397,6 +392,76 @@ test("featured balance strip follows account metadata and transaction saves", as
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
   await expect.poll(() => featuredRow.innerText()).not.toBe(beforeSaveText);
   await expect(featuredRow).toContainText("-12.34 $");
+});
+
+test("featured balance strip separates and labels party balances", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const owned = await createAccount(
+    page,
+    `e2e:featured:Funds${unique}`,
+    "owned",
+    "USD",
+    true,
+  );
+  const owedToHousehold = await createAccount(
+    page,
+    `e2e:featured:OwedTo${unique}`,
+    "party",
+    "USD",
+    true,
+  );
+  const owedByHousehold = await createAccount(
+    page,
+    `e2e:featured:OwedBy${unique}`,
+    "party",
+    "USD",
+    true,
+  );
+
+  for (const transfer of [
+    {
+      amount: "7.00",
+      destination_account_id: owedToHousehold.account_id,
+      source_account_id: owned.account_id,
+    },
+    {
+      amount: "5.00",
+      destination_account_id: owned.account_id,
+      source_account_id: owedByHousehold.account_id,
+    },
+  ]) {
+    const response = await page.request.post("/api/transactions/transfer", {
+      data: {
+        ...transfer,
+        currency: "USD",
+        initiated_date: "2026-04-01",
+      },
+    });
+    expect(response.ok()).toBe(true);
+  }
+
+  await page.goto("/transactions?page=1&pageSize=25");
+
+  const strip = page.getByTestId("featured-balance-strip");
+  const householdFunds = strip.getByRole("region", {
+    name: "Household funds",
+  });
+  const partyBalances = strip.getByRole("region", { name: "Party balances" });
+  await expect(householdFunds).toContainText(`Funds${unique}`);
+  await expect(householdFunds).not.toContainText(`OwedTo${unique}`);
+  await expect(partyBalances).not.toContainText(`Funds${unique}`);
+  await expect(
+    partyBalances
+      .getByTestId("featured-balance-row")
+      .filter({ hasText: `OwedTo${unique}` }),
+  ).toContainText("Owed to household");
+  await expect(
+    partyBalances
+      .getByTestId("featured-balance-row")
+      .filter({ hasText: `OwedBy${unique}` }),
+  ).toContainText("Owed by household");
 });
 
 test("status page UI preference survives reload", async ({ page }) => {

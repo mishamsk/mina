@@ -67,7 +67,7 @@ type DefinitionRecord struct {
 	MemberID              *int64
 	Currency              string
 	Amount                values.Decimal
-	CategoryID            int64
+	CategoryID            *int64
 	TagIDs                []int64
 	Memo                  *string
 	CreatedAt             time.Time
@@ -90,7 +90,7 @@ type RecordInput struct {
 	MemberID   OptionalInt64
 	Currency   *string
 	Amount     *values.Decimal
-	CategoryID *int64
+	CategoryID OptionalInt64
 	TagIDs     OptionalInt64Slice
 	Memo       OptionalString
 }
@@ -133,7 +133,7 @@ type DefinitionRecordInput struct {
 	MemberID   *int64
 	Currency   string
 	Amount     values.Decimal
-	CategoryID int64
+	CategoryID *int64
 	TagIDs     []int64
 	Memo       *string
 }
@@ -732,7 +732,9 @@ func (s *Service) definitionDisplayAmounts(ctx context.Context, definition Defin
 	categoryIDs := make([]int64, 0, len(definition.Records))
 	for _, record := range definition.Records {
 		accountIDs = append(accountIDs, record.AccountID)
-		categoryIDs = append(categoryIDs, record.CategoryID)
+		if record.CategoryID != nil {
+			categoryIDs = append(categoryIDs, *record.CategoryID)
+		}
 	}
 	accountRefs, err := s.accounts.ValidateActiveReferences(ctx, accountIDs, accounts.ReferenceOptions{AllowHidden: true})
 	if errors.Is(err, services.ErrInvalidReference) {
@@ -751,11 +753,17 @@ func (s *Service) definitionDisplayAmounts(ctx context.Context, definition Defin
 
 	records := make([]transactions.SemanticRecord, 0, len(definition.Records))
 	for _, record := range definition.Records {
+		var economicIntent categories.CategoryEconomicIntent
+		if record.CategoryID != nil {
+			economicIntent = categoryRefs[*record.CategoryID].EconomicIntent
+		}
 		records = append(records, transactions.SemanticRecord{
 			Currency:       record.Currency,
 			Amount:         record.Amount,
+			AccountFQN:     accountRefs[record.AccountID].FQN,
 			AccountType:    accountRefs[record.AccountID].AccountType,
-			EconomicIntent: categoryRefs[record.CategoryID].EconomicIntent,
+			CategoryID:     record.CategoryID,
+			EconomicIntent: economicIntent,
 		})
 	}
 
@@ -810,7 +818,22 @@ func (s *Service) prepareInput(ctx context.Context, input WriteInput) (SaveInput
 	if err := validateCompleteRecords(save.Records); err != nil {
 		return SaveInput{}, err
 	}
-	if err := s.validateReferences(ctx, save.Records); err != nil {
+	if err := s.validateMemberAndTagReferences(ctx, save.Records); err != nil {
+		return SaveInput{}, err
+	}
+	definitionRecords := make([]DefinitionRecord, 0, len(save.Records))
+	for _, record := range save.Records {
+		definitionRecords = append(definitionRecords, DefinitionRecord{
+			AccountID:  record.AccountID,
+			MemberID:   record.MemberID,
+			Currency:   record.Currency,
+			Amount:     record.Amount,
+			CategoryID: record.CategoryID,
+			TagIDs:     record.TagIDs,
+			Memo:       record.Memo,
+		})
+	}
+	if _, _, err := s.definitionDisplayAmounts(ctx, Definition{Records: definitionRecords}); err != nil {
 		return SaveInput{}, err
 	}
 
@@ -835,9 +858,6 @@ func (s *Service) completeRecordInputs(ctx context.Context, input WriteInput) ([
 		if record.AccountID == nil {
 			return nil, services.InvalidRequest(indexedField(index, "account_id") + " is required")
 		}
-		if record.CategoryID == nil {
-			return nil, services.InvalidRequest(indexedField(index, "category_id") + " is required")
-		}
 		if record.Currency == nil {
 			return nil, services.InvalidRequest(indexedField(index, "currency") + " is required")
 		}
@@ -853,7 +873,7 @@ func (s *Service) completeRecordInputs(ctx context.Context, input WriteInput) ([
 			MemberID:   record.MemberID.Value,
 			Currency:   *record.Currency,
 			Amount:     *record.Amount,
-			CategoryID: *record.CategoryID,
+			CategoryID: record.CategoryID.Value,
 			TagIDs:     tagIDs,
 			Memo:       record.Memo.Value,
 		})
@@ -884,7 +904,7 @@ func recordInputFromTemplate(record transactiontemplates.TemplateRecord) RecordI
 		MemberID:   OptionalInt64{Specified: true, Value: record.MemberID},
 		Currency:   record.Currency,
 		Amount:     record.Amount,
-		CategoryID: &record.CategoryID,
+		CategoryID: OptionalInt64{Specified: true, Value: record.CategoryID},
 		TagIDs: OptionalInt64Slice{
 			Specified: true,
 			Values:    slices.Clone(record.TagIDs),
@@ -906,7 +926,7 @@ func mergeRecordInput(base RecordInput, override RecordInput) RecordInput {
 	if override.Amount != nil {
 		base.Amount = override.Amount
 	}
-	if override.CategoryID != nil {
+	if override.CategoryID.Specified {
 		base.CategoryID = override.CategoryID
 	}
 	if override.TagIDs.Specified {
@@ -937,7 +957,7 @@ func validateCompleteRecords(records []DefinitionRecordInput) error {
 		if record.Amount.IsZero() {
 			return services.InvalidRequest(indexedField(index, "amount") + " must be non-zero")
 		}
-		if record.CategoryID <= 0 {
+		if record.CategoryID != nil && *record.CategoryID <= 0 {
 			return services.InvalidRequest(indexedField(index, "category_id") + " must be positive")
 		}
 		if err := validateTagIDs(index, record.TagIDs); err != nil {
@@ -966,32 +986,16 @@ func validateCompleteRecords(records []DefinitionRecordInput) error {
 	return nil
 }
 
-func (s *Service) validateReferences(ctx context.Context, records []DefinitionRecordInput) error {
-	accountIDs := make([]int64, 0, len(records))
-	categoryIDs := make([]int64, 0, len(records))
+func (s *Service) validateMemberAndTagReferences(ctx context.Context, records []DefinitionRecordInput) error {
 	memberIDs := []int64{}
 	tagIDs := []int64{}
 	for _, record := range records {
-		accountIDs = append(accountIDs, record.AccountID)
-		categoryIDs = append(categoryIDs, record.CategoryID)
 		if record.MemberID != nil {
 			memberIDs = append(memberIDs, *record.MemberID)
 		}
 		tagIDs = append(tagIDs, record.TagIDs...)
 	}
 
-	if _, err := s.accounts.ValidateActiveReferences(ctx, accountIDs, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
-		if errors.Is(err, services.ErrInvalidReference) {
-			return invalidReferenceError()
-		}
-		return err
-	}
-	if _, err := s.categories.ValidateActiveReferences(ctx, categoryIDs, categories.ReferenceOptions{AllowHidden: true}); err != nil {
-		if errors.Is(err, services.ErrInvalidReference) {
-			return invalidReferenceError()
-		}
-		return err
-	}
 	if _, err := s.members.ValidateActiveReferences(ctx, memberIDs, members.ReferenceOptions{AllowHidden: true}); err != nil {
 		if errors.Is(err, services.ErrInvalidReference) {
 			return invalidReferenceError()

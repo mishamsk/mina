@@ -2,9 +2,7 @@ import { Check, Close, Plus, Trash } from "pixelarticons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
-  type Account,
   apiErrorMessage,
-  type Category,
   createRecurringDefinition,
   pauseRecurringDefinition,
   type RecurringDefinition,
@@ -96,7 +94,7 @@ const definitionDraft = (
     records: definition?.records.map((record) => ({
       accountId: record.account_id,
       amount: record.amount,
-      categoryId: record.category_id,
+      categoryId: record.category_id ?? undefined,
       currency: record.currency,
       id: nextDraftRecordId++,
       memberId: record.member_id ?? undefined,
@@ -135,20 +133,6 @@ const normalizedAmount = (value: string): string | undefined => {
 
 const recordErrorKey = (row: number, field: string) =>
   `records.${row}.${field}`;
-
-const accountTypesForIntent: Record<
-  Category["economic_intent"],
-  readonly Account["account_type"][]
-> = {
-  adjustment: ["balance", "flow", "system"],
-  exchange: ["balance", "flow"],
-  expense: ["balance", "flow"],
-  fee: ["balance", "flow", "system"],
-  fx_gain_loss: ["balance", "flow", "system"],
-  income: ["balance", "flow"],
-  refund: ["balance", "flow"],
-  transfer: ["balance"],
-};
 
 const option = (
   entity: { readonly fqn?: string; readonly name?: string },
@@ -284,8 +268,14 @@ export const DefinitionEditorPanel = ({
     candidate.records.forEach((row, index) => {
       if (!row.accountId)
         next[recordErrorKey(index, "account")] = "Account is required.";
-      if (!row.categoryId)
+      const accountType = lookups.snapshot?.accounts.find(
+        (account) => account.account_id === row.accountId,
+      )?.account_type;
+      if (accountType === "flow" && !row.categoryId)
         next[recordErrorKey(index, "category")] = "Category is required.";
+      if (accountType && accountType !== "flow" && row.categoryId)
+        next[recordErrorKey(index, "category")] =
+          "Only flow records can have a category.";
       if (!normalizedAmount(row.amount))
         next[recordErrorKey(index, "amount")] =
           "Enter a signed non-zero amount with up to 8 decimals.";
@@ -312,24 +302,6 @@ export const DefinitionEditorPanel = ({
     setGeneralError(undefined);
   };
 
-  const accountOptions = (
-    categoryId: number | undefined,
-  ): readonly EntityOption[] => {
-    const category = lookups.snapshot?.categories.find(
-      (item) => item.category_id === categoryId,
-    );
-    if (!category) return options.accounts;
-    const allowed = accountTypesForIntent[category.economic_intent];
-    return (lookups.snapshot?.accounts ?? [])
-      .filter(
-        (account) =>
-          !account.is_hidden &&
-          !account.tombstoned_at &&
-          allowed.includes(account.account_type),
-      )
-      .map((account) => option(account, account.account_id));
-  };
-
   const save = async () => {
     const nextErrors = validate(draft);
     setErrors(nextErrors);
@@ -344,7 +316,7 @@ export const DefinitionEditorPanel = ({
       (row) => ({
         account_id: row.accountId!,
         amount: normalizedAmount(row.amount)!,
-        category_id: row.categoryId!,
+        category_id: row.categoryId ?? null,
         currency: row.currency.trim().toUpperCase(),
         member_id: row.memberId ?? null,
         memo: row.memo.trim() || null,
@@ -599,7 +571,7 @@ export const DefinitionEditorPanel = ({
                       <EntityPicker
                         id={`recurring-record-${row.id}-account`}
                         label="Account"
-                        options={accountOptions(row.categoryId)}
+                        options={options.accounts}
                         value={row.accountId}
                         onChange={(accountId) => {
                           const account = lookups.snapshot?.accounts.find(
@@ -607,6 +579,10 @@ export const DefinitionEditorPanel = ({
                           );
                           patchRow(index, {
                             accountId,
+                            categoryId:
+                              account && account.account_type !== "flow"
+                                ? undefined
+                                : row.categoryId,
                             currency: account?.currency ?? row.currency,
                           });
                         }}
@@ -639,22 +615,21 @@ export const DefinitionEditorPanel = ({
                       />
                     </label>
                     <div className="col-span-full">
-                      <EntityPicker
-                        id={`recurring-record-${row.id}-category`}
-                        label="Category"
-                        options={options.categories}
-                        value={row.categoryId}
-                        onChange={(categoryId) =>
-                          patchRow(index, {
-                            accountId: accountOptions(categoryId).some(
-                              (item) => item.id === row.accountId,
-                            )
-                              ? row.accountId
-                              : undefined,
-                            categoryId,
-                          })
-                        }
-                      />
+                      {lookups.snapshot?.accounts.find(
+                        (account) => account.account_id === row.accountId,
+                      )?.account_type === "flow" ? (
+                        <EntityPicker
+                          id={`recurring-record-${row.id}-category`}
+                          label="Category"
+                          options={options.categories}
+                          value={row.categoryId}
+                          onChange={(categoryId) =>
+                            patchRow(index, { categoryId })
+                          }
+                        />
+                      ) : (
+                        <span className="inline-flex h-9" aria-hidden />
+                      )}
                       <FieldError
                         message={errors[recordErrorKey(index, "category")]}
                       />

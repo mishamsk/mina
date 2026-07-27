@@ -24,8 +24,23 @@ const formatBalance = (row: FeaturedBalanceRow): string =>
     positiveSign: false,
   })} ${currencyDisplayMarker(row.balance.currency)}`;
 
+const partyBalanceLabel = (row: FeaturedBalanceRow): string => {
+  if (row.balance.current_balance.startsWith("-")) {
+    return "Owed by household";
+  }
+  return /^0(?:\.0+)?$/.test(row.balance.current_balance)
+    ? "Settled"
+    : "Owed to household";
+};
+
 const collapsedTooltipLabel = (rows: readonly FeaturedBalanceRow[]): string =>
-  rows.map((row) => `${row.account.fqn} ${formatBalance(row)}`).join("; ");
+  rows
+    .map((row) =>
+      row.account.account_type === "party"
+        ? `${row.account.fqn} ${partyBalanceLabel(row)}: ${formatBalance(row)}`
+        : `${row.account.fqn} ${formatBalance(row)}`,
+    )
+    .join("; ");
 
 const BalanceAmount = ({ row }: { readonly row: FeaturedBalanceRow }) => (
   <span
@@ -43,33 +58,67 @@ const BalanceAmount = ({ row }: { readonly row: FeaturedBalanceRow }) => (
   </span>
 );
 
+const ExpandedBalanceGroup = ({
+  label,
+  rows,
+}: {
+  readonly label: string;
+  readonly rows: readonly FeaturedBalanceRow[];
+}) => (
+  <section aria-label={label} data-testid="featured-balance-group">
+    <p className="px-2 font-mono text-xs font-semibold text-[var(--frame-muted)] uppercase">
+      {label}
+    </p>
+    <div role="list" className="mt-1 flex flex-col gap-1">
+      {rows.map((row) => (
+        <div
+          key={`${row.account.account_id}:${row.balance.currency}`}
+          role="listitem"
+          data-testid="featured-balance-row"
+          className="grid min-h-8 grid-cols-[minmax(0,1fr)_minmax(0,50%)] items-center gap-2 px-2 py-1"
+        >
+          <div className="min-w-0">
+            <Tooltip label={row.account.fqn} asChild className="min-w-0">
+              <Link
+                to={`/accounts/${row.account.account_id}`}
+                data-testid="featured-balance-name"
+                className="block truncate font-mono text-xs font-medium text-[var(--frame-foreground)] hover:underline"
+              >
+                {row.account.name}
+              </Link>
+            </Tooltip>
+            {row.account.account_type === "party" ? (
+              <span className="block truncate font-mono text-xs text-[var(--frame-muted)]">
+                {partyBalanceLabel(row)}
+              </span>
+            ) : null}
+          </div>
+          <BalanceAmount row={row} />
+        </div>
+      ))}
+    </div>
+  </section>
+);
+
 const ExpandedBalanceRows = ({
   rows,
 }: {
   readonly rows: readonly FeaturedBalanceRow[];
-}) => (
-  <div role="list" className="flex flex-col gap-1">
-    {rows.map((row) => (
-      <div
-        key={`${row.account.account_id}:${row.balance.currency}`}
-        role="listitem"
-        data-testid="featured-balance-row"
-        className="grid min-h-8 grid-cols-[minmax(0,1fr)_minmax(0,50%)] items-center gap-2 px-2 py-1"
-      >
-        <Tooltip label={row.account.fqn} asChild className="min-w-0">
-          <Link
-            to={`/accounts/${row.account.account_id}`}
-            data-testid="featured-balance-name"
-            className="block truncate font-mono text-xs font-medium text-[var(--frame-foreground)] hover:underline"
-          >
-            {row.account.name}
-          </Link>
-        </Tooltip>
-        <BalanceAmount row={row} />
-      </div>
-    ))}
-  </div>
-);
+}) => {
+  const ownedRows = rows.filter((row) => row.account.account_type === "owned");
+  const partyRows = rows.filter((row) => row.account.account_type === "party");
+
+  return (
+    <div className="flex flex-col gap-2">
+      {ownedRows.length > 0 ? (
+        <ExpandedBalanceGroup label="Household funds" rows={ownedRows} />
+      ) : null}
+      {partyRows.length > 0 ? (
+        <ExpandedBalanceGroup label="Party balances" rows={partyRows} />
+      ) : null}
+    </div>
+  );
+};
 
 const BalanceSkeletonRows = () => (
   <div

@@ -9,7 +9,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   AmountText,
   ApproximateUsdAmount,
-  buildLookupMaps,
   ClassIcon,
   formatInitiatedDateParts,
   FqnPath,
@@ -23,17 +22,13 @@ import {
   transactionClassLabel,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
-import type {
-  LedgerLookupsSnapshot,
-  OverviewBalanceRow,
-  OverviewSnapshot,
-} from "@/store";
-import { getTransactionsSnapshot } from "@/store";
+import type { OverviewBalanceRow } from "@/store";
 import { localYearMonth } from "@/utils/date";
 
 import { useOverviewResource } from "./use-overview-resource";
 
 interface BalanceGroup {
+  readonly accountType: "owned" | "party";
   readonly root: string;
   readonly rows: readonly OverviewBalanceRow[];
   readonly subtotalUsd: string;
@@ -46,12 +41,15 @@ const groupedBalances = (
   const groups = new Map<string, OverviewBalanceRow[]>();
   for (const row of rows) {
     const root = row.account.fqn.split(":")[0] ?? row.account.fqn;
-    groups.set(root, [...(groups.get(root) ?? []), row]);
+    const key = `${row.account.account_type}:${root}`;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
   }
 
   return [...groups.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([root, groupRows]) => {
+    .map(([key, groupRows]) => {
+      const [accountType, ...rootParts] = key.split(":");
+      const root = rootParts.join(":");
       const rows = groupRows.sort(
         (left, right) =>
           Number(right.account.is_featured) -
@@ -60,6 +58,7 @@ const groupedBalances = (
       );
 
       return {
+        accountType: accountType as "owned" | "party",
         root,
         rows,
         subtotalUsd: sumDecimalStrings(
@@ -73,20 +72,6 @@ const groupedBalances = (
     });
 };
 
-const overviewLookups = (
-  snapshot: OverviewSnapshot | undefined,
-): LedgerLookupsSnapshot | undefined =>
-  getTransactionsSnapshot().lookups ??
-  (snapshot
-    ? {
-        accounts: snapshot.accounts,
-        categories: [],
-        loadedAt: snapshot.loadedAt,
-        members: [],
-        tags: [],
-      }
-    : undefined);
-
 const monthLabel = (yearMonth: string): string => {
   const [year = "0", month = "1"] = yearMonth.split("-");
   return new Intl.DateTimeFormat(undefined, {
@@ -99,6 +84,13 @@ const UnconvertedNote = ({ count }: { readonly count: number }) =>
   count > 0 ? (
     <span className="text-muted-foreground text-xs">{count} unconverted</span>
   ) : null;
+
+const partyBalanceLabel = (amount: string): string => {
+  if (amount.startsWith("-")) {
+    return "Owed by household";
+  }
+  return /^0(?:\.0+)?$/.test(amount) ? "Settled" : "Owed to household";
+};
 
 const OverviewError = ({ message }: { readonly message: string }) => (
   <div className="border-destructive bg-card border-2 p-4" role="alert">
@@ -208,6 +200,12 @@ const BalanceRow = ({ row }: { readonly row: OverviewBalanceRow }) => {
         </div>
         <p className="text-muted-foreground mt-1 font-mono text-xs">
           {row.balance.currency}
+          {row.account.account_type === "party" ? (
+            <>
+              <span aria-hidden="true"> · </span>
+              {partyBalanceLabel(row.balance.current_balance)}
+            </>
+          ) : null}
           {remainingCredit ? (
             <>
               <span aria-hidden="true"> · </span>
@@ -259,7 +257,10 @@ const BalanceGroups = ({
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       {groups.map((group) => (
-        <Card key={group.root} data-testid="overview-balance-group">
+        <Card
+          key={`${group.accountType}:${group.root}`}
+          data-testid="overview-balance-group"
+        >
           <CardHeader className="grid-cols-[1fr_auto]">
             <div className="min-w-0">
               <CardTitle className="font-heading text-base font-bold uppercase">
@@ -271,7 +272,11 @@ const BalanceGroups = ({
                 </Link>
               </CardTitle>
               <p className="text-muted-foreground text-xs">
-                {group.rows.length} account{group.rows.length === 1 ? "" : "s"}
+                {group.accountType === "owned"
+                  ? "Owned funds"
+                  : "Party balances"}{" "}
+                · {group.rows.length} account
+                {group.rows.length === 1 ? "" : "s"}
               </p>
             </div>
             <div className="justify-self-end text-right">
@@ -279,6 +284,13 @@ const BalanceGroups = ({
                 amountUsd={group.subtotalUsd}
                 className="font-semibold"
               />
+              {group.accountType === "party" ? (
+                <p className="text-muted-foreground text-xs">
+                  {group.unconvertedCount > 0
+                    ? "Direction unavailable"
+                    : partyBalanceLabel(group.subtotalUsd)}
+                </p>
+              ) : null}
               <div>
                 <UnconvertedNote count={group.unconvertedCount} />
               </div>
@@ -350,17 +362,14 @@ const recentActivityTooltipLabel = (
     .join(". ");
 
 const RecentActivityLine = ({
-  lookups,
   transaction,
 }: {
-  readonly lookups: LedgerLookupsSnapshot | undefined;
   readonly transaction: Transaction;
 }) => {
-  const maps = useMemo(() => buildLookupMaps(lookups), [lookups]);
   const memo = lineMemo(transaction);
   const dateParts = formatInitiatedDateParts(transaction.initiated_date);
   const postingStatus = linePostingStatus(transaction);
-  const amounts = lineDisplayAmounts(transaction, maps);
+  const amounts = lineDisplayAmounts(transaction);
   const amountDeemphasized =
     postingStatus === "pending" || postingStatus === "cancelled";
   const lineInactive = postingStatus === "cancelled";
@@ -447,7 +456,6 @@ export const OverviewDashboard = () => {
   const month = localYearMonth();
   const overview = useOverviewResource(month);
   const snapshot = overview.snapshot;
-  const lookups = overviewLookups(snapshot);
   const groups = useMemo(
     () => groupedBalances(snapshot?.balanceRows ?? []),
     [snapshot?.balanceRows],
@@ -524,7 +532,6 @@ export const OverviewDashboard = () => {
                     {snapshot.recentTransactions.map((transaction) => (
                       <RecentActivityLine
                         key={transaction.transaction_id}
-                        lookups={lookups}
                         transaction={transaction}
                       />
                     ))}

@@ -7,9 +7,11 @@ import {
 
 import type {
   CategoryEconomicIntent,
+  ClassifyTransactionRequest,
   CreateAccountRequest,
   CreateCategoryRequest,
   CreateCreditLimitHistoryRequest,
+  CreateExchangeTransactionRequest,
   CreateIncomeTransactionRequest,
   CreateMemberRequest,
   CreateRefundTransactionRequest,
@@ -32,10 +34,12 @@ import {
   bulkCategorizeJournalRecords,
   bulkUpdateJournalRecordStatuses,
   bulkUpdateJournalRecordTags,
+  classifyTransaction,
   confirmRecurringOccurrence as confirmGeneratedRecurringOccurrence,
   createAccount as createGeneratedAccount,
   createCategory as createGeneratedCategory,
   createCreditLimitHistory as createGeneratedCreditLimitHistory,
+  createExchangeTransaction,
   createIncomeTransaction,
   createMember as createGeneratedMember,
   createRefundTransaction,
@@ -183,6 +187,12 @@ const transactionFilterQuery = (
       : {}),
     ...(normalized.classes.length > 0
       ? { transaction_class: [...normalized.classes] }
+      : {}),
+    ...(normalized.shapes.length > 0
+      ? { transaction_shape: [...normalized.shapes] }
+      : {}),
+    ...(normalized.recordRoles.length > 0
+      ? { record_role: [...normalized.recordRoles] }
       : {}),
     ...(normalized.initiatedFrom
       ? { initiated_date_from: normalized.initiatedFrom }
@@ -347,18 +357,42 @@ export const fetchAccountGroupsForLookups = () =>
   });
 
 export const fetchFeaturedAccountBalances = async () => {
-  const accounts = await listAccounts({
-    query: {
-      account_type: "balance",
-      is_featured: true,
-      limit: lookupLimit,
-      offset: 0,
-      sort: "fqn",
-      sort_dir: "asc",
-    },
-  });
+  const [ownedAccounts, partyAccounts] = await Promise.all([
+    listAccounts({
+      query: {
+        account_type: "owned",
+        is_featured: true,
+        limit: lookupLimit,
+        offset: 0,
+        sort: "fqn",
+        sort_dir: "asc",
+      },
+    }),
+    listAccounts({
+      query: {
+        account_type: "party",
+        is_featured: true,
+        limit: lookupLimit,
+        offset: 0,
+        sort: "fqn",
+        sort_dir: "asc",
+      },
+    }),
+  ]);
+  if (!ownedAccounts.data) {
+    return { accounts: ownedAccounts, balances: undefined };
+  }
+  if (!partyAccounts.data) {
+    return { accounts: partyAccounts, balances: undefined };
+  }
+  const accounts = ownedAccounts;
+  accounts.data.accounts = [
+    ...ownedAccounts.data.accounts,
+    ...partyAccounts.data.accounts,
+  ].sort((left, right) => left.fqn.localeCompare(right.fqn));
+  accounts.data.total_count += partyAccounts.data.total_count;
 
-  if (!accounts.data || accounts.data.accounts.length === 0) {
+  if (accounts.data.accounts.length === 0) {
     return { accounts, balances: undefined };
   }
 
@@ -720,7 +754,6 @@ export const fetchOverviewAccountBalances = () => listAccountBalances();
 export const fetchOverviewAccounts = () =>
   listAccounts({
     query: {
-      account_type: "balance",
       limit: lookupLimit,
       offset: 0,
       sort: "fqn",
@@ -916,6 +949,21 @@ export const createRefund = (body: CreateRefundTransactionRequest) =>
 
 export const createTransfer = (body: CreateTransferTransactionRequest) =>
   createTransferTransaction({ body });
+
+export const createExchange = (body: CreateExchangeTransactionRequest) =>
+  createExchangeTransaction({ body });
+
+export const classifyJournalTransaction = (body: ClassifyTransactionRequest) =>
+  classifyTransaction({
+    body: {
+      records: body.records.map((record) => ({
+        account_id: record.account_id,
+        amount: record.amount,
+        category_id: record.category_id,
+        currency: record.currency,
+      })),
+    },
+  });
 
 export const createJournalTransaction = (body: CreateTransactionRequest) =>
   createGeneratedTransaction({ body });
