@@ -39,7 +39,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
-import { localTimestampDateValue, localTodayISODate } from "@/utils/date";
+import { lifecycleTimestampDateValue, localTodayISODate } from "@/utils/date";
 
 import { AmountText, MixedAmounts } from "./amount-text";
 import {
@@ -593,7 +593,7 @@ const RecordsTable = ({
                   field="dates"
                   record={record}
                   transaction={transaction}
-                  value={`Initiated ${transaction.initiated_date}; pending ${localTimestampDateValue(record.pending_date) || "—"}; posted ${localTimestampDateValue(record.posted_date) || "—"}`}
+                  value={`Initiated ${transaction.initiated_date}; pending ${lifecycleTimestampDateValue(record.pending_date) || "—"}; posted ${lifecycleTimestampDateValue(record.posted_date) || "—"}`}
                   onSave={onUpdateRecord}
                 />
               </td>

@@ -138,6 +138,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 - Lists show `initiated_date` as absolute dates: `Jun 30` in the current year, `Jun 30, 2025` otherwise. No relative dates in tables.
 - All dates and times display in the browser's local timezone. Civil-date logic — entry default "today", current-year formatting, date grouping and comparisons — uses local time, never UTC calendar dates. Civil dates stay date-only in storage; timestamp fields stay UTC.
+- Day-precision lifecycle markers stored as midnight-UTC timestamps display as their stored calendar date without local conversion or a fabricated time.
 - Expected and pending records/transactions carry visible status indicators and de-emphasized amounts; posted needs no marker; cancelled renders struck-through and de-emphasized. In transaction lines the status column is icon-encoded with a tooltip.
 - Unreconciled records show a small status indicator (reserved for Phase 5 import workflows; hidden until relevant data exists).
 

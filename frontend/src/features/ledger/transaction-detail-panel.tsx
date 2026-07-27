@@ -30,9 +30,11 @@ import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
 import {
+  formatInstantTimestamp,
+  formatLifecycleTimestamp,
   formatLocalCivilDate,
+  lifecycleTimestampDateValue,
   localCivilDate,
-  localTimestampDateValue,
 } from "@/utils/date";
 
 import { AmountText } from "./amount-text";
@@ -79,12 +81,6 @@ const floatingOverlaySelectors = [
   "[data-page-help-content]",
   "[data-slot='select-content']",
 ] as const;
-
-const formatTimestamp = (value: string): string =>
-  new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "medium",
-  }).format(new Date(value));
 
 const formatFullCivilDate = (value: string): string =>
   new Intl.DateTimeFormat(undefined, {
@@ -169,7 +165,9 @@ const buildLifecycleStage = (
       return [];
     }
     const timestamp = recordStageTimestamp(record, stage);
-    const day = timestamp ? localTimestampDateValue(timestamp) || null : null;
+    const day = timestamp
+      ? lifecycleTimestampDateValue(timestamp) || null
+      : null;
     return [{ day, record, timestamp }];
   });
   const days = Array.from(
@@ -206,11 +204,11 @@ const buildLifecycleStage = (
           reachedRecords.every(
             ({ timestamp }) => timestamp === exactTimestamps[0],
           )
-        ? `${label} ${formatTimestamp(exactTimestamps[0]!)}`
+        ? `${label} ${formatLifecycleTimestamp(exactTimestamps[0]!)}`
         : reachedRecords
             .map(
               ({ record, timestamp }) =>
-                `${lifecycleRecordName(maps, record)} ${timestamp ? formatTimestamp(timestamp) : "—"}`,
+                `${lifecycleRecordName(maps, record)} ${timestamp ? formatLifecycleTimestamp(timestamp) : "—"}`,
             )
             .join(" · ");
 
@@ -446,7 +444,7 @@ const recordStageDay = (
     return null;
   }
   const timestamp = recordStageTimestamp(record, stage);
-  return timestamp ? localTimestampDateValue(timestamp) || null : null;
+  return timestamp ? lifecycleTimestampDateValue(timestamp) || null : null;
 };
 
 const stageDiffersForRecord = (
@@ -520,7 +518,7 @@ const recordDeviation = (
         ? `Dates differ: ${text}`
         : `Cancelled lifecycle: ${text}`,
     text,
-    tooltip: `${postingStatusLabel(record.posting_status)} — initiated ${formatFullCivilDate(transaction.initiated_date)} · pending ${pendingTimestamp ? formatTimestamp(pendingTimestamp) : "—"} · posted ${postedTimestamp ? formatTimestamp(postedTimestamp) : "—"}`,
+    tooltip: `${postingStatusLabel(record.posting_status)} — initiated ${formatFullCivilDate(transaction.initiated_date)} · pending ${pendingTimestamp ? formatLifecycleTimestamp(pendingTimestamp) : "—"} · posted ${postedTimestamp ? formatLifecycleTimestamp(postedTimestamp) : "—"}`,
   };
 };
 
@@ -802,12 +800,12 @@ const DetailRecordsTable = ({
                         <dd>
                           {!record.pending_date
                             ? "—"
-                            : formatTimestamp(record.pending_date)}
+                            : formatLifecycleTimestamp(record.pending_date)}
                         </dd>
                         <dt className="text-muted-foreground">Posted</dt>
                         <dd>
                           {record.posted_date
-                            ? formatTimestamp(record.posted_date)
+                            ? formatLifecycleTimestamp(record.posted_date)
                             : "—"}
                         </dd>
                         <dt className="text-muted-foreground">
@@ -940,7 +938,7 @@ export const TransactionDetailContent = ({
           <dt className="font-heading text-muted-foreground uppercase">
             Created
           </dt>
-          <dd>{formatTimestamp(transaction.created_at)}</dd>
+          <dd>{formatInstantTimestamp(transaction.created_at)}</dd>
         </dl>
       </section>
     </div>

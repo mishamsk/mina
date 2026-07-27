@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- No implicit contracts.
+- Lifecycle timestamp helpers apply the canonical [day-precision lifecycle-marker rule](../../../docs/webui-design.md#dates-and-statuses); the marker distinction does not apply to non-lifecycle timestamps.
 
 ## Boundaries
 
