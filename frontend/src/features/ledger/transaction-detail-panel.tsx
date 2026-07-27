@@ -126,10 +126,23 @@ interface LifecycleStageSummary {
   readonly varies: boolean;
 }
 
+interface LifecycleRecordStageValue {
+  readonly day: string | null;
+  readonly reached: boolean;
+  readonly timestamp: string | null;
+}
+
+interface LifecycleRecord {
+  readonly pending: LifecycleRecordStageValue;
+  readonly posted: LifecycleRecordStageValue;
+  readonly record: JournalRecord;
+}
+
 interface TransactionLifecycle {
   readonly expected: boolean;
   readonly pending: LifecycleStageSummary;
   readonly posted: LifecycleStageSummary;
+  readonly recordsById: ReadonlyMap<number, LifecycleRecord>;
 }
 
 const recordStageTimestamp = (
@@ -153,22 +166,47 @@ const recordHasReachedStage = (
 const lifecycleRecordName = (maps: LookupMaps, record: JournalRecord): string =>
   maps.accountsById.get(record.account_id)?.fqn ?? `Record ${record.record_id}`;
 
+const buildLifecycleRecordStage = (
+  record: JournalRecord,
+  stage: LifecycleRecordStage,
+  expected: boolean,
+): LifecycleRecordStageValue => {
+  const timestamp = expected ? null : recordStageTimestamp(record, stage);
+
+  return {
+    day: timestamp ? lifecycleTimestampDateValue(timestamp) || null : null,
+    reached: !expected && recordHasReachedStage(record, stage),
+    timestamp,
+  };
+};
+
+const buildLifecycleRecord = (
+  record: JournalRecord,
+  expected: boolean,
+): LifecycleRecord => ({
+  pending: buildLifecycleRecordStage(record, "pending", expected),
+  posted: buildLifecycleRecordStage(record, "posted", expected),
+  record,
+});
+
 const buildLifecycleStage = (
-  records: readonly JournalRecord[],
+  records: readonly LifecycleRecord[],
   stage: LifecycleRecordStage,
   maps: LookupMaps,
-  expected: boolean,
 ): LifecycleStageSummary => {
   const label = stage === "pending" ? "Pending" : "Posted";
-  const reachedRecords = records.flatMap((record) => {
-    if (expected || !recordHasReachedStage(record, stage)) {
+  const reachedRecords = records.flatMap((recordLifecycle) => {
+    const stageValue = recordLifecycle[stage];
+    if (!stageValue.reached) {
       return [];
     }
-    const timestamp = recordStageTimestamp(record, stage);
-    const day = timestamp
-      ? lifecycleTimestampDateValue(timestamp) || null
-      : null;
-    return [{ day, record, timestamp }];
+    return [
+      {
+        day: stageValue.day,
+        record: recordLifecycle.record,
+        timestamp: stageValue.timestamp,
+      },
+    ];
   });
   const days = Array.from(
     new Set(
@@ -227,16 +265,20 @@ const buildTransactionLifecycle = (
   maps: LookupMaps,
 ): TransactionLifecycle => {
   const expected = linePostingStatus(transaction) === "expected";
+  const records = transaction.records.map((record) =>
+    buildLifecycleRecord(record, expected),
+  );
 
   return {
     expected,
-    pending: buildLifecycleStage(
-      transaction.records,
-      "pending",
-      maps,
-      expected,
+    pending: buildLifecycleStage(records, "pending", maps),
+    posted: buildLifecycleStage(records, "posted", maps),
+    recordsById: new Map(
+      records.map((recordLifecycle) => [
+        recordLifecycle.record.record_id,
+        recordLifecycle,
+      ]),
     ),
-    posted: buildLifecycleStage(transaction.records, "posted", maps, expected),
   };
 };
 
@@ -435,42 +477,29 @@ const RecordTagSet = ({
   ) : null;
 };
 
-const recordStageDay = (
-  record: JournalRecord,
-  stage: LifecycleRecordStage,
-  expected: boolean,
-): string | null => {
-  if (expected) {
-    return null;
-  }
-  const timestamp = recordStageTimestamp(record, stage);
-  return timestamp ? lifecycleTimestampDateValue(timestamp) || null : null;
-};
-
 const stageDiffersForRecord = (
-  record: JournalRecord,
+  record: LifecycleRecord,
   summary: LifecycleStageSummary,
   stage: LifecycleRecordStage,
-  expected: boolean,
 ): boolean => {
-  if (expected || summary.reachedCount === 0) {
+  if (summary.reachedCount === 0) {
     return false;
   }
-  const recordDay = recordStageDay(record, stage, expected);
-  if (!recordHasReachedStage(record, stage)) {
+  const recordStage = record[stage];
+  if (!recordStage.reached) {
     return true;
   }
-  if (recordDay === null) {
+  if (recordStage.day === null) {
     return summary.varies;
   }
   if (summary.canonicalDay === null) {
     return summary.varies;
   }
-  return summary.canonicalDay !== recordDay;
+  return summary.canonicalDay !== recordStage.day;
 };
 
 const recordDeviation = (
-  record: JournalRecord,
+  recordLifecycle: LifecycleRecord,
   transaction: Transaction,
   lifecycle: TransactionLifecycle,
 ):
@@ -483,34 +512,29 @@ const recordDeviation = (
   if (transaction.records.length <= 1) {
     return undefined;
   }
+  const { record } = recordLifecycle;
   const pendingDiffers = stageDiffersForRecord(
-    record,
+    recordLifecycle,
     lifecycle.pending,
     "pending",
-    lifecycle.expected,
   );
   const postedDiffers = stageDiffersForRecord(
-    record,
+    recordLifecycle,
     lifecycle.posted,
     "posted",
-    lifecycle.expected,
   );
   const cancelled = record.posting_status === "cancelled";
   if (!cancelled && !pendingDiffers && !postedDiffers) {
     return undefined;
   }
 
-  const pendingDay = recordStageDay(record, "pending", lifecycle.expected);
-  const postedDay = recordStageDay(record, "posted", lifecycle.expected);
+  const pendingDay = recordLifecycle.pending.day;
+  const postedDay = recordLifecycle.posted.day;
   const pendingDisplay = pendingDay ? formatLocalCivilDate(pendingDay) : "—";
   const postedDisplay = postedDay ? formatLocalCivilDate(postedDay) : "—";
   const text = `${pendingDisplay}→${postedDisplay}`;
-  const pendingTimestamp = lifecycle.expected
-    ? null
-    : recordStageTimestamp(record, "pending");
-  const postedTimestamp = lifecycle.expected
-    ? null
-    : recordStageTimestamp(record, "posted");
+  const pendingTimestamp = recordLifecycle.pending.timestamp;
+  const postedTimestamp = recordLifecycle.posted.timestamp;
 
   return {
     ariaLabel:
@@ -626,9 +650,12 @@ const DetailRecordsTable = ({
               record.member_id === null || record.member_id === undefined
                 ? undefined
                 : maps.membersById.get(record.member_id);
+            const recordLifecycle = lifecycle.recordsById.get(record.record_id);
             const expanded = expandedRecordIds.has(record.record_id);
             const disclosureId = `record-${record.record_id}-detail`;
-            const deviation = recordDeviation(record, transaction, lifecycle);
+            const deviation = recordLifecycle
+              ? recordDeviation(recordLifecycle, transaction, lifecycle)
+              : undefined;
             const cancelled = record.posting_status === "cancelled";
             const rowTone = index % 2 === 0 ? "bg-card" : "bg-[var(--band)]";
             const rowHoverTone =

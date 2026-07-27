@@ -6538,7 +6538,7 @@ test("Escape closes filter popover before transaction detail panel", async ({
   await expect(panel).toBeHidden();
 });
 
-test("focused transaction row opens detail with Enter and restores focus on Escape", async ({
+test("focused transaction row closes detail with one Escape despite a lifecycle tooltip", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 760 });
@@ -6585,8 +6585,17 @@ test("focused transaction row opens detail with Enter and restores focus on Esca
   await expect(panel).toBeVisible();
   await expect(detailRow).toHaveAttribute("aria-expanded", "false");
 
+  await panel
+    .getByTestId("transaction-lifecycle")
+    .getByRole("listitem")
+    .filter({ hasText: "Initiated" })
+    .locator("[data-slot='tooltip-trigger']")
+    .hover();
+  await expect(page.getByRole("tooltip")).toBeVisible();
+
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
+  await expect(page.getByRole("tooltip")).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
   await expect(detailRow).toBeFocused();
 
@@ -8986,13 +8995,13 @@ test("entry category picker completes hierarchy segments and preserves full-path
   await expect(
     page.getByRole("tooltip").filter({ hasText: "Browse from root" }),
   ).toBeVisible();
-  await page.mouse.move(0, 0);
-  await rootCrumb.focus();
-  await rootCrumb.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toBeHidden();
   await expect(
     page.getByRole("dialog", { name: "Transaction editor" }),
   ).toBeVisible();
   await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
+  await expect(categoryPicker).toHaveValue(`${base}:Food:`);
   await expect(categoryPicker).toBeFocused();
   await categoryPicker.press("ArrowDown");
   await rootCrumb.focus();

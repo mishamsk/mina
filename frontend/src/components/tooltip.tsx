@@ -1,4 +1,10 @@
-import { type FocusEvent, type ReactNode, useRef, useState } from "react";
+import {
+  type FocusEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   Tooltip as TooltipRoot,
@@ -53,7 +59,32 @@ export const Tooltip = ({
   label,
 }: TooltipProps) => {
   const [open, setOpen] = useState(false);
+  const forwardEscapeTargetRef = useRef<EventTarget | null>(null);
   const suppressNextOpenRef = useRef(false);
+
+  useEffect(() => {
+    if (open || !forwardEscapeTargetRef.current) {
+      return;
+    }
+
+    const target = forwardEscapeTargetRef.current;
+    forwardEscapeTargetRef.current = null;
+    const timeout = window.setTimeout(() => {
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          cancelable: true,
+          code: "Escape",
+          composed: true,
+          key: "Escape",
+        }),
+      );
+    });
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [open]);
 
   const handleFocusCapture = (event: FocusEvent<HTMLElement>) => {
     if (
@@ -83,6 +114,14 @@ export const Tooltip = ({
     setOpen(nextOpen);
   };
 
+  const handleEscapeKeyDown = (event: KeyboardEvent) => {
+    // Radix prevents the native event while dismissing its layer. Stop that
+    // delivery and forward the Escape from its original target after the
+    // tooltip unmounts so exactly one interactive ladder level handles it.
+    event.stopPropagation();
+    forwardEscapeTargetRef.current = event.target;
+  };
+
   return (
     <TooltipRoot open={disabled ? false : open} onOpenChange={handleOpenChange}>
       {asChild ? (
@@ -103,7 +142,9 @@ export const Tooltip = ({
           </span>
         </TooltipTrigger>
       )}
-      <TooltipContent>{label}</TooltipContent>
+      <TooltipContent onEscapeKeyDown={handleEscapeKeyDown}>
+        {label}
+      </TooltipContent>
     </TooltipRoot>
   );
 };
