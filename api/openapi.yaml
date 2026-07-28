@@ -2609,6 +2609,25 @@ paths:
           required: false
           schema:
             type: string
+        - name: sort
+          description: "Field used to sort matching results; defaults to `initiated_date`."
+          in: query
+          required: false
+          schema:
+            type: string
+            default: initiated_date
+            enum:
+              - initiated_date
+        - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
         - name: limit
           description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query
@@ -2781,6 +2800,25 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: sort
+          description: "Field used to sort matching results; defaults to `initiated_date`."
+          in: query
+          required: false
+          schema:
+            type: string
+            default: initiated_date
+            enum:
+              - initiated_date
+        - name: sort_dir
+          description: "Sort direction for matching results; defaults to `asc`."
+          in: query
+          required: false
+          schema:
+            type: string
+            default: asc
+            enum:
+              - asc
+              - desc
         - name: limit
           description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded."
           in: query

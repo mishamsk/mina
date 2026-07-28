@@ -262,6 +262,8 @@ export const fetchAccountRecordsPage = (
       include_running_balance: params.includeRunningBalance,
       limit: params.limit,
       offset: params.offset,
+      sort: "initiated_date",
+      sort_dir: "desc",
     },
   });
 
@@ -272,6 +274,8 @@ export const fetchGroupRecordsPage = (params: GroupRecordsPageParams) =>
       include_expected: params.includeExpected,
       limit: params.limit,
       offset: params.offset,
+      sort: "initiated_date",
+      sort_dir: "desc",
     },
   });
 

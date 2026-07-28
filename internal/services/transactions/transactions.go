@@ -146,6 +146,7 @@ type AmountUSDBackfillUpdate struct {
 
 // RecordSearchOptions controls journal record search filters.
 type RecordSearchOptions struct {
+	services.ListOptions
 	AccountID             *int64
 	AccountFQNPrefix      *string
 	CategoryID            *int64
@@ -167,9 +168,6 @@ type RecordSearchOptions struct {
 	PostedDateTo          *time.Time
 	MemoContains          *string
 	IncludeRunningBalance bool
-	Limit                 *int
-	Offset                int
-	IncludeTotalCount     bool
 }
 
 // ListOptions controls transaction list sort, pagination, and date anchoring.
@@ -1508,6 +1506,14 @@ func validateJournalRecord(index int, record JournalRecordInput) error {
 }
 
 func validateRecordSearchOptions(opts RecordSearchOptions) error {
+	if opts.SortKey != "" && opts.SortKey != services.SortKeyInitiatedDate {
+		return services.InvalidRequest("sort must be initiated_date")
+	}
+	switch opts.SortDirection {
+	case "", services.SortDirectionAsc, services.SortDirectionDesc:
+	default:
+		return services.InvalidRequest("sort_dir must be asc or desc")
+	}
 	if opts.AccountID != nil && *opts.AccountID <= 0 {
 		return services.InvalidRequest("account_id must be positive")
 	}

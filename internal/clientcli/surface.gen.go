@@ -2908,6 +2908,20 @@ func Operations() []Operation {
 						Required:    false,
 					},
 					{
+						Name:        "sort",
+						Type:        "string",
+						Description: "Field used to sort matching results; defaults to `initiated_date`.",
+						Required:    false,
+						Enum:        []string{"initiated_date"},
+					},
+					{
+						Name:        "sort_dir",
+						Type:        "string",
+						Description: "Sort direction for matching results; defaults to `asc`.",
+						Required:    false,
+						Enum:        []string{"asc", "desc"},
+					},
+					{
 						Name:        "limit",
 						Type:        "integer",
 						Description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.",
@@ -3054,6 +3068,20 @@ func Operations() []Operation {
 						Type:        "string",
 						Description: "Memo substring filter for matching journal records.",
 						Required:    false,
+					},
+					{
+						Name:        "sort",
+						Type:        "string",
+						Description: "Field used to sort matching results; defaults to `initiated_date`.",
+						Required:    false,
+						Enum:        []string{"initiated_date"},
+					},
+					{
+						Name:        "sort_dir",
+						Type:        "string",
+						Description: "Sort direction for matching results; defaults to `asc`.",
+						Required:    false,
+						Enum:        []string{"asc", "desc"},
 					},
 					{
 						Name:        "limit",
@@ -6799,7 +6827,7 @@ func invokeResumeRecurringDefinition(ctx context.Context, client httpclient.Clie
 }
 
 func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "include_running_balance", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "include_running_balance", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -7172,45 +7200,85 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 		}
 		params.IncludeRunningBalance = &queryValue17
 	}
-	queryValues18, querySupplied18 := input.Query["limit"]
+	queryValues18, querySupplied18 := input.Query["sort"]
 	if querySupplied18 {
 		if len(queryValues18) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
 			}
 		}
-		var queryValue18 int
-		if err := parseInvocationValue(queryValues18[0], false, &queryValue18); err != nil {
+		var queryValue18 httpclient.SearchAccountJournalRecordsParamsSort
+		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort",
 				Value:    queryValues18[0],
 				Err:      err,
 			}
 		}
-		params.Limit = &queryValue18
+		params.Sort = &queryValue18
 	}
-	queryValues19, querySupplied19 := input.Query["offset"]
+	queryValues19, querySupplied19 := input.Query["sort_dir"]
 	if querySupplied19 {
 		if len(queryValues19) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "sort_dir",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
 			}
 		}
-		var queryValue19 int
-		if err := parseInvocationValue(queryValues19[0], false, &queryValue19); err != nil {
+		var queryValue19 httpclient.SearchAccountJournalRecordsParamsSortDir
+		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "sort_dir",
 				Value:    queryValues19[0],
 				Err:      err,
 			}
 		}
-		params.Offset = &queryValue19
+		params.SortDir = &queryValue19
+	}
+	queryValues20, querySupplied20 := input.Query["limit"]
+	if querySupplied20 {
+		if len(queryValues20) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
+			}
+		}
+		var queryValue20 int
+		if err := parseInvocationValue(queryValues20[0], false, &queryValue20); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues20[0],
+				Err:      err,
+			}
+		}
+		params.Limit = &queryValue20
+	}
+	queryValues21, querySupplied21 := input.Query["offset"]
+	if querySupplied21 {
+		if len(queryValues21) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
+			}
+		}
+		var queryValue21 int
+		if err := parseInvocationValue(queryValues21[0], false, &queryValue21); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues21[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue21
 	}
 	response, err := client.SearchAccountJournalRecordsWithResponse(ctx, pathValue0, params)
 	if err != nil {
@@ -7223,7 +7291,7 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 }
 
 func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "record_role", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "record_role", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.SearchJournalRecordsParams{}
@@ -7627,45 +7695,85 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		}
 		params.MemoContains = &queryValue19
 	}
-	queryValues20, querySupplied20 := input.Query["limit"]
+	queryValues20, querySupplied20 := input.Query["sort"]
 	if querySupplied20 {
 		if len(queryValues20) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
 			}
 		}
-		var queryValue20 int
-		if err := parseInvocationValue(queryValues20[0], false, &queryValue20); err != nil {
+		var queryValue20 httpclient.SearchJournalRecordsParamsSort
+		if err := parseInvocationValue(queryValues20[0], true, &queryValue20); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort",
 				Value:    queryValues20[0],
 				Err:      err,
 			}
 		}
-		params.Limit = &queryValue20
+		params.Sort = &queryValue20
 	}
-	queryValues21, querySupplied21 := input.Query["offset"]
+	queryValues21, querySupplied21 := input.Query["sort_dir"]
 	if querySupplied21 {
 		if len(queryValues21) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "sort_dir",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
 			}
 		}
-		var queryValue21 int
-		if err := parseInvocationValue(queryValues21[0], false, &queryValue21); err != nil {
+		var queryValue21 httpclient.SearchJournalRecordsParamsSortDir
+		if err := parseInvocationValue(queryValues21[0], true, &queryValue21); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "sort_dir",
 				Value:    queryValues21[0],
 				Err:      err,
 			}
 		}
-		params.Offset = &queryValue21
+		params.SortDir = &queryValue21
+	}
+	queryValues22, querySupplied22 := input.Query["limit"]
+	if querySupplied22 {
+		if len(queryValues22) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues22)),
+			}
+		}
+		var queryValue22 int
+		if err := parseInvocationValue(queryValues22[0], false, &queryValue22); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues22[0],
+				Err:      err,
+			}
+		}
+		params.Limit = &queryValue22
+	}
+	queryValues23, querySupplied23 := input.Query["offset"]
+	if querySupplied23 {
+		if len(queryValues23) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues23)),
+			}
+		}
+		var queryValue23 int
+		if err := parseInvocationValue(queryValues23[0], false, &queryValue23); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues23[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue23
 	}
 	response, err := client.SearchJournalRecordsWithResponse(ctx, params)
 	if err != nil {

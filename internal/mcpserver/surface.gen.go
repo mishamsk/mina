@@ -3071,7 +3071,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "records", Name: "search_account",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_expected\":{\"default\":false,\"description\":\"Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.\",\"type\":\"boolean\"},\"include_running_balance\":{\"default\":false,\"description\":\"When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.\",\"type\":\"boolean\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"description\":\"Memo substring filter for matching journal records.\",\"type\":\"string\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Filter by reconciled or unreconciled journal-record status.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"account_id\"],\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_expected\":{\"default\":false,\"description\":\"Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.\",\"type\":\"boolean\"},\"include_running_balance\":{\"default\":false,\"description\":\"When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.\",\"type\":\"boolean\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"description\":\"Memo substring filter for matching journal records.\",\"type\":\"string\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters account register records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Filter by reconciled or unreconciled journal-record status.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"description\":\"Sort direction for matching results; defaults to `asc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"required\":[\"account_id\"],\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3194,6 +3194,20 @@ func Operations() []Operation {
 						Required:    false,
 					},
 					{
+						Name:        "sort",
+						Type:        "string",
+						Description: "Field used to sort matching results; defaults to `initiated_date`.",
+						Required:    false,
+						Enum:        []string{"initiated_date"},
+					},
+					{
+						Name:        "sort_dir",
+						Type:        "string",
+						Description: "Sort direction for matching results; defaults to `asc`.",
+						Required:    false,
+						Enum:        []string{"asc", "desc"},
+					},
+					{
 						Name:        "limit",
 						Type:        "integer",
 						Description: "Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.",
@@ -3218,7 +3232,7 @@ func Operations() []Operation {
 			MCP: MCPOperation{
 				Group: "records", Name: "search",
 				ReadOnly: true, Destructive: false, Idempotent: true, OpenWorld: false,
-				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_fqn_prefix\":{\"description\":\"Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.\",\"type\":\"string\"},\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_expected\":{\"default\":false,\"description\":\"Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.\",\"type\":\"boolean\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"description\":\"Memo substring filter for matching journal records.\",\"type\":\"string\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Filter by reconciled or unreconciled journal-record status.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"record_role\":{\"description\":\"Filters records by their server-derived accounting role.\",\"enum\":[\"expense\",\"refund\",\"income\",\"clawback\",\"exchange\",\"adjustment\",\"balance\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"type\":\"object\"}"),
+				InputSchema: json.RawMessage("{\"additionalProperties\":false,\"properties\":{\"account_fqn_prefix\":{\"description\":\"Account FQN prefix for a grouped register. Matches records whose account FQN equals the prefix or is a descendant below it, including balance and flow accounts. Mutually exclusive with account_id.\",\"type\":\"string\"},\"account_id\":{\"description\":\"Account identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"amount_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_max\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD maximum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"amount_usd_min\":{\"description\":\"JSON string, not a JSON number. Signed DECIMAL(18,8) USD minimum filter; use at most 10 integer digits and 8 fractional digits; responses use fixed-scale formatting with exactly 8 fractional digits.\",\"maxLength\":20,\"pattern\":\"^-?[0-9]{1,10}(\\\\.[0-9]{1,8})?$\",\"type\":\"string\"},\"category_id\":{\"description\":\"Category identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"include_expected\":{\"default\":false,\"description\":\"Includes expected records alongside ordinary matching records. Expected records remain excluded from running balances.\",\"type\":\"boolean\"},\"initiated_date_from\":{\"description\":\"Minimum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"initiated_date_to\":{\"description\":\"Maximum transaction initiated date in YYYY-MM-DD format.\",\"format\":\"date\",\"pattern\":\"^[0-9]{4}-[0-9]{2}-[0-9]{2}$\",\"type\":\"string\"},\"limit\":{\"description\":\"Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.\",\"maximum\":500,\"minimum\":1,\"type\":\"integer\"},\"member_id\":{\"description\":\"Household-member identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"},\"memo_contains\":{\"description\":\"Memo substring filter for matching journal records.\",\"type\":\"string\"},\"offset\":{\"description\":\"Zero-based number of matching results to skip.\",\"minimum\":0,\"type\":\"integer\"},\"pending_date_from\":{\"description\":\"Minimum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"pending_date_to\":{\"description\":\"Maximum pending timestamp in ISO 8601 format; records without a pending timestamp do not match.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_from\":{\"description\":\"Minimum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posted_date_to\":{\"description\":\"Maximum posted timestamp in ISO 8601 format.\",\"format\":\"date-time\",\"type\":\"string\"},\"posting_status\":{\"description\":\"Filters records by posting status. Expected records are excluded by default and returned when this filter is explicitly `expected` or when `include_expected=true`.\",\"enum\":[\"expected\",\"pending\",\"posted\",\"cancelled\"],\"type\":\"string\"},\"reconciliation_status\":{\"description\":\"Filter by reconciled or unreconciled journal-record status.\",\"enum\":[\"reconciled\",\"unreconciled\"],\"type\":\"string\"},\"record_role\":{\"description\":\"Filters records by their server-derived accounting role.\",\"enum\":[\"expense\",\"refund\",\"income\",\"clawback\",\"exchange\",\"adjustment\",\"balance\"],\"type\":\"string\"},\"sort\":{\"default\":\"initiated_date\",\"description\":\"Field used to sort matching results; defaults to `initiated_date`.\",\"enum\":[\"initiated_date\"],\"type\":\"string\"},\"sort_dir\":{\"default\":\"asc\",\"description\":\"Sort direction for matching results; defaults to `asc`.\",\"enum\":[\"asc\",\"desc\"],\"type\":\"string\"},\"tag_id\":{\"description\":\"Tag identifier to target or filter by.\",\"format\":\"int64\",\"minimum\":1,\"type\":\"integer\"}},\"type\":\"object\"}"),
 			},
 			Input: InputDescriptor{
 				Query: []ParameterDescriptor{
@@ -3344,6 +3358,20 @@ func Operations() []Operation {
 						Type:        "string",
 						Description: "Memo substring filter for matching journal records.",
 						Required:    false,
+					},
+					{
+						Name:        "sort",
+						Type:        "string",
+						Description: "Field used to sort matching results; defaults to `initiated_date`.",
+						Required:    false,
+						Enum:        []string{"initiated_date"},
+					},
+					{
+						Name:        "sort_dir",
+						Type:        "string",
+						Description: "Sort direction for matching results; defaults to `asc`.",
+						Required:    false,
+						Enum:        []string{"asc", "desc"},
 					},
 					{
 						Name:        "limit",
@@ -7089,7 +7117,7 @@ func invokeResumeRecurringDefinition(ctx context.Context, client httpclient.Clie
 }
 
 func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "include_running_balance", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, []string{"account_id"}, []string{"amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "include_running_balance", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	var pathValue0 int64
@@ -7462,45 +7490,85 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 		}
 		params.IncludeRunningBalance = &queryValue17
 	}
-	queryValues18, querySupplied18 := input.Query["limit"]
+	queryValues18, querySupplied18 := input.Query["sort"]
 	if querySupplied18 {
 		if len(queryValues18) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues18)),
 			}
 		}
-		var queryValue18 int
-		if err := parseInvocationValue(queryValues18[0], false, &queryValue18); err != nil {
+		var queryValue18 httpclient.SearchAccountJournalRecordsParamsSort
+		if err := parseInvocationValue(queryValues18[0], true, &queryValue18); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort",
 				Value:    queryValues18[0],
 				Err:      err,
 			}
 		}
-		params.Limit = &queryValue18
+		params.Sort = &queryValue18
 	}
-	queryValues19, querySupplied19 := input.Query["offset"]
+	queryValues19, querySupplied19 := input.Query["sort_dir"]
 	if querySupplied19 {
 		if len(queryValues19) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "sort_dir",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues19)),
 			}
 		}
-		var queryValue19 int
-		if err := parseInvocationValue(queryValues19[0], false, &queryValue19); err != nil {
+		var queryValue19 httpclient.SearchAccountJournalRecordsParamsSortDir
+		if err := parseInvocationValue(queryValues19[0], true, &queryValue19); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "sort_dir",
 				Value:    queryValues19[0],
 				Err:      err,
 			}
 		}
-		params.Offset = &queryValue19
+		params.SortDir = &queryValue19
+	}
+	queryValues20, querySupplied20 := input.Query["limit"]
+	if querySupplied20 {
+		if len(queryValues20) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
+			}
+		}
+		var queryValue20 int
+		if err := parseInvocationValue(queryValues20[0], false, &queryValue20); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues20[0],
+				Err:      err,
+			}
+		}
+		params.Limit = &queryValue20
+	}
+	queryValues21, querySupplied21 := input.Query["offset"]
+	if querySupplied21 {
+		if len(queryValues21) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
+			}
+		}
+		var queryValue21 int
+		if err := parseInvocationValue(queryValues21[0], false, &queryValue21); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues21[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue21
 	}
 	response, err := client.SearchAccountJournalRecordsWithResponse(ctx, pathValue0, params)
 	if err != nil {
@@ -7513,7 +7581,7 @@ func invokeSearchAccountJournalRecords(ctx context.Context, client httpclient.Cl
 }
 
 func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "record_role", "tag_id"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"account_fqn_prefix", "account_id", "amount_max", "amount_min", "amount_usd_max", "amount_usd_min", "category_id", "include_expected", "initiated_date_from", "initiated_date_to", "limit", "member_id", "memo_contains", "offset", "pending_date_from", "pending_date_to", "posted_date_from", "posted_date_to", "posting_status", "reconciliation_status", "record_role", "sort", "sort_dir", "tag_id"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.SearchJournalRecordsParams{}
@@ -7917,45 +7985,85 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 		}
 		params.MemoContains = &queryValue19
 	}
-	queryValues20, querySupplied20 := input.Query["limit"]
+	queryValues20, querySupplied20 := input.Query["sort"]
 	if querySupplied20 {
 		if len(queryValues20) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues20)),
 			}
 		}
-		var queryValue20 int
-		if err := parseInvocationValue(queryValues20[0], false, &queryValue20); err != nil {
+		var queryValue20 httpclient.SearchJournalRecordsParamsSort
+		if err := parseInvocationValue(queryValues20[0], true, &queryValue20); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "limit",
+				Name:     "sort",
 				Value:    queryValues20[0],
 				Err:      err,
 			}
 		}
-		params.Limit = &queryValue20
+		params.Sort = &queryValue20
 	}
-	queryValues21, querySupplied21 := input.Query["offset"]
+	queryValues21, querySupplied21 := input.Query["sort_dir"]
 	if querySupplied21 {
 		if len(queryValues21) != 1 {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "sort_dir",
 				Err:      fmt.Errorf("got %d values, want 1", len(queryValues21)),
 			}
 		}
-		var queryValue21 int
-		if err := parseInvocationValue(queryValues21[0], false, &queryValue21); err != nil {
+		var queryValue21 httpclient.SearchJournalRecordsParamsSortDir
+		if err := parseInvocationValue(queryValues21[0], true, &queryValue21); err != nil {
 			return InvocationResult{}, &InvocationInputError{
 				Location: "query",
-				Name:     "offset",
+				Name:     "sort_dir",
 				Value:    queryValues21[0],
 				Err:      err,
 			}
 		}
-		params.Offset = &queryValue21
+		params.SortDir = &queryValue21
+	}
+	queryValues22, querySupplied22 := input.Query["limit"]
+	if querySupplied22 {
+		if len(queryValues22) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues22)),
+			}
+		}
+		var queryValue22 int
+		if err := parseInvocationValue(queryValues22[0], false, &queryValue22); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "limit",
+				Value:    queryValues22[0],
+				Err:      err,
+			}
+		}
+		params.Limit = &queryValue22
+	}
+	queryValues23, querySupplied23 := input.Query["offset"]
+	if querySupplied23 {
+		if len(queryValues23) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues23)),
+			}
+		}
+		var queryValue23 int
+		if err := parseInvocationValue(queryValues23[0], false, &queryValue23); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "offset",
+				Value:    queryValues23[0],
+				Err:      err,
+			}
+		}
+		params.Offset = &queryValue23
 	}
 	response, err := client.SearchJournalRecordsWithResponse(ctx, params)
 	if err != nil {

@@ -4227,6 +4227,14 @@ export type SearchJournalRecordsData = {
          */
         memo_contains?: string;
         /**
+         * Field used to sort matching results; defaults to `initiated_date`.
+         */
+        sort?: 'initiated_date';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
+        sort_dir?: 'asc' | 'desc';
+        /**
          * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
          */
         limit?: number;
@@ -4337,6 +4345,14 @@ export type SearchAccountJournalRecordsData = {
          * When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.
          */
         include_running_balance?: boolean;
+        /**
+         * Field used to sort matching results; defaults to `initiated_date`.
+         */
+        sort?: 'initiated_date';
+        /**
+         * Sort direction for matching results; defaults to `asc`.
+         */
+        sort_dir?: 'asc' | 'desc';
         /**
          * Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
          */

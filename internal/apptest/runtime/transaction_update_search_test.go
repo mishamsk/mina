@@ -641,16 +641,20 @@ func TestRecordSearchAccountFQNPrefixBoundary(t *testing.T) {
 	other := createTransaction(t, client, recordSearchPrefixTransactionRequest("2024-01-05", category.CategoryId, allyChecking.AccountId, merchant.AccountId, httpclient.PostingStatusPosted))
 
 	prefix := "banks:Chase"
+	sort := httpclient.SearchJournalRecordsParamsSortInitiatedDate
+	sortDesc := httpclient.SearchJournalRecordsParamsSortDirDesc
 	prefixRecords, err := client.REST().SearchJournalRecordsWithResponse(context.Background(), &httpclient.SearchJournalRecordsParams{
 		AccountFqnPrefix: &prefix,
+		Sort:             &sort,
+		SortDir:          &sortDesc,
 	})
 	requireNoTransportError(t, "search records by account fqn prefix", err)
 	if prefixRecords.StatusCode() != http.StatusOK {
 		t.Fatalf("prefix records status = %d, want %d; body %s", prefixRecords.StatusCode(), http.StatusOK, prefixRecords.Body)
 	}
 	assertRecordIDs(t, prefixRecords.JSON200.Records, []int64{
-		descendant.JSON201.Records[0].RecordId,
 		flow.JSON201.Records[1].RecordId,
+		descendant.JSON201.Records[0].RecordId,
 	})
 	if prefixRecords.JSON200.TotalCount != 2 {
 		t.Fatalf("prefix total_count = %d, want 2", prefixRecords.JSON200.TotalCount)
@@ -825,33 +829,43 @@ func TestRecordSearchPaginationBoundary(t *testing.T) {
 	assertInvalidRecordSearchQuery(t, client, "limit=0")
 	assertInvalidRecordSearchQuery(t, client, "limit=501")
 	assertInvalidRecordSearchQuery(t, client, "offset=-1")
+	assertInvalidRecordSearchQuery(t, client, "sort=created_at")
+	assertInvalidRecordSearchQuery(t, client, "sort_dir=sideways")
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "limit=0")
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "limit=501")
 	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "offset=-1")
+	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "sort=created_at")
+	assertInvalidAccountRecordSearchQuery(t, client, refs.CheckingAccountId, "sort_dir=sideways")
 }
 
 func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
 
-	first := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-01", "First")
+	const sharedInitiatedDate = "2024-01-01"
+
+	first := createTransactionForDate(t, client, refs.transactionRefs, sharedInitiatedDate, "First")
 	cancelledRequest := balancedTransactionRequest(refs.transactionRefs)
-	cancelledRequest.InitiatedDate = apptest.Date("2024-01-02")
+	cancelledRequest.InitiatedDate = apptest.Date(sharedInitiatedDate)
 	cancelledRequest.Records[0].PostingStatus = httpclient.PostingStatusCancelled
 	cancelledRequest.Records[1].PostingStatus = httpclient.PostingStatusCancelled
 	cancelled := createTransaction(t, client, cancelledRequest)
 	pendingRequest := balancedTransactionRequest(refs.transactionRefs)
-	pendingRequest.InitiatedDate = apptest.Date("2024-01-03")
+	pendingRequest.InitiatedDate = apptest.Date(sharedInitiatedDate)
 	pendingRequest.Records[0].PostingStatus = httpclient.PostingStatusPending
 	pendingRequest.Records[1].PostingStatus = httpclient.PostingStatusPending
 	pending := createTransaction(t, client, pendingRequest)
-	second := createTransactionForDate(t, client, refs.transactionRefs, "2024-01-04", "Second")
+	second := createTransactionForDate(t, client, refs.transactionRefs, sharedInitiatedDate, "Second")
 
 	includeRunningBalance := true
 	limitThree := 3
 	offsetOne := 1
+	sort := httpclient.SearchAccountJournalRecordsParamsSortInitiatedDate
+	sortAsc := httpclient.SearchAccountJournalRecordsParamsSortDirAsc
 	page, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
 		IncludeRunningBalance: &includeRunningBalance,
+		Sort:                  &sort,
+		SortDir:               &sortAsc,
 		Limit:                 &limitThree,
 		Offset:                &offsetOne,
 	})
@@ -865,6 +879,24 @@ func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
 		second.JSON201.Records[0].RecordId,
 	})
 	assertRecordRunningBalances(t, page.JSON200.Records, []string{"-12.34000000", "-24.68000000", "-37.02000000"})
+
+	sortDesc := httpclient.SearchAccountJournalRecordsParamsSortDirDesc
+	newestFirstPage, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{
+		IncludeRunningBalance: &includeRunningBalance,
+		Sort:                  &sort,
+		SortDir:               &sortDesc,
+		Limit:                 &limitThree,
+	})
+	requireNoTransportError(t, "search newest-first account records with running balance", err)
+	if newestFirstPage.StatusCode() != http.StatusOK {
+		t.Fatalf("search newest-first account records with running balance status = %d, want %d; body %s", newestFirstPage.StatusCode(), http.StatusOK, newestFirstPage.Body)
+	}
+	assertRecordIDs(t, newestFirstPage.JSON200.Records, []int64{
+		second.JSON201.Records[0].RecordId,
+		pending.JSON201.Records[0].RecordId,
+		cancelled.JSON201.Records[0].RecordId,
+	})
+	assertRecordRunningBalances(t, newestFirstPage.JSON200.Records, []string{"-37.02000000", "-24.68000000", "-12.34000000"})
 
 	filteredMemo := "Second"
 	filtered, err := client.REST().SearchAccountJournalRecordsWithResponse(context.Background(), refs.CheckingAccountId, &httpclient.SearchAccountJournalRecordsParams{

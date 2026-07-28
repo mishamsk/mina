@@ -691,6 +691,39 @@ func (e ListCreditLimitHistoryParamsSortDir) Valid() bool {
 	}
 }
 
+// Defines values for SearchAccountJournalRecordsParamsSort.
+const (
+	SearchAccountJournalRecordsParamsSortInitiatedDate SearchAccountJournalRecordsParamsSort = "initiated_date"
+)
+
+// Valid indicates whether the value is a known member of the SearchAccountJournalRecordsParamsSort enum.
+func (e SearchAccountJournalRecordsParamsSort) Valid() bool {
+	switch e {
+	case SearchAccountJournalRecordsParamsSortInitiatedDate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchAccountJournalRecordsParamsSortDir.
+const (
+	SearchAccountJournalRecordsParamsSortDirAsc  SearchAccountJournalRecordsParamsSortDir = "asc"
+	SearchAccountJournalRecordsParamsSortDirDesc SearchAccountJournalRecordsParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the SearchAccountJournalRecordsParamsSortDir enum.
+func (e SearchAccountJournalRecordsParamsSortDir) Valid() bool {
+	switch e {
+	case SearchAccountJournalRecordsParamsSortDirAsc:
+		return true
+	case SearchAccountJournalRecordsParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListCategoriesParamsSort.
 const (
 	ListCategoriesParamsSortCreatedAt ListCategoriesParamsSort = "created_at"
@@ -808,6 +841,39 @@ func (e ListMembersParamsSortDir) Valid() bool {
 	case ListMembersParamsSortDirAsc:
 		return true
 	case ListMembersParamsSortDirDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchJournalRecordsParamsSort.
+const (
+	SearchJournalRecordsParamsSortInitiatedDate SearchJournalRecordsParamsSort = "initiated_date"
+)
+
+// Valid indicates whether the value is a known member of the SearchJournalRecordsParamsSort enum.
+func (e SearchJournalRecordsParamsSort) Valid() bool {
+	switch e {
+	case SearchJournalRecordsParamsSortInitiatedDate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchJournalRecordsParamsSortDir.
+const (
+	SearchJournalRecordsParamsSortDirAsc  SearchJournalRecordsParamsSortDir = "asc"
+	SearchJournalRecordsParamsSortDirDesc SearchJournalRecordsParamsSortDir = "desc"
+)
+
+// Valid indicates whether the value is a known member of the SearchJournalRecordsParamsSortDir enum.
+func (e SearchJournalRecordsParamsSortDir) Valid() bool {
+	switch e {
+	case SearchJournalRecordsParamsSortDirAsc:
+		return true
+	case SearchJournalRecordsParamsSortDirDesc:
 		return true
 	default:
 		return false
@@ -2448,12 +2514,24 @@ type SearchAccountJournalRecordsParams struct {
 	// IncludeRunningBalance When true, each returned account record includes the account balance after that record in chronological order. The running balance is computed over the account's full active history in that record's currency; pending and posted records contribute, cancelled records do not.
 	IncludeRunningBalance *bool `form:"include_running_balance,omitempty" json:"include_running_balance,omitempty"`
 
+	// Sort Field used to sort matching results; defaults to `initiated_date`.
+	Sort *SearchAccountJournalRecordsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *SearchAccountJournalRecordsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
 	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 
 	// Offset Zero-based number of matching results to skip.
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// SearchAccountJournalRecordsParamsSort defines parameters for SearchAccountJournalRecords.
+type SearchAccountJournalRecordsParamsSort string
+
+// SearchAccountJournalRecordsParamsSortDir defines parameters for SearchAccountJournalRecords.
+type SearchAccountJournalRecordsParamsSortDir string
 
 // ListBackgroundOperationRunEnvelopesParams defines parameters for ListBackgroundOperationRunEnvelopes.
 type ListBackgroundOperationRunEnvelopesParams struct {
@@ -2652,12 +2730,24 @@ type SearchJournalRecordsParams struct {
 	// MemoContains Memo substring filter for matching journal records.
 	MemoContains *string `form:"memo_contains,omitempty" json:"memo_contains,omitempty"`
 
+	// Sort Field used to sort matching results; defaults to `initiated_date`.
+	Sort *SearchJournalRecordsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// SortDir Sort direction for matching results; defaults to `asc`.
+	SortDir *SearchJournalRecordsParamsSortDir `form:"sort_dir,omitempty" json:"sort_dir,omitempty"`
+
 	// Limit Maximum number of matching results to return, from 1 through 500; supply this to keep responses bounded.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 
 	// Offset Zero-based number of matching results to skip.
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
+
+// SearchJournalRecordsParamsSort defines parameters for SearchJournalRecords.
+type SearchJournalRecordsParamsSort string
+
+// SearchJournalRecordsParamsSortDir defines parameters for SearchJournalRecords.
+type SearchJournalRecordsParamsSortDir string
 
 // ListRecurringDefinitionsParams defines parameters for ListRecurringDefinitions.
 type ListRecurringDefinitionsParams struct {
@@ -5790,6 +5880,30 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 
 		}
 
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.SortDir != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort_dir", *params.SortDir, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -7634,6 +7748,30 @@ func NewSearchJournalRecordsRequest(server string, params *SearchJournalRecordsP
 		if params.MemoContains != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "memo_contains", *params.MemoContains, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Sort != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort", *params.Sort, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.SortDir != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sort_dir", *params.SortDir, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

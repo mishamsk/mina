@@ -394,6 +394,13 @@ func (s *strictServer) BulkUpdateJournalRecordStatuses(ctx context.Context, requ
 
 func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (transactions.RecordSearchOptions, error) {
 	opts := transactions.RecordSearchOptions{
+		ListOptions: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyInitiatedDate,
+		),
 		AccountID:         params.AccountId,
 		AccountFQNPrefix:  params.AccountFqnPrefix,
 		CategoryID:        params.CategoryId,
@@ -408,9 +415,6 @@ func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (t
 		PostedDateTo:      nullableTimestampFromOpenAPI(params.PostedDateTo),
 		MemoContains:      params.MemoContains,
 		IncludeExpected:   boolParam(params.IncludeExpected),
-		Limit:             params.Limit,
-		Offset:            offsetParam(params.Offset),
-		IncludeTotalCount: true,
 	}
 	var err error
 	if opts.AmountMin, err = optionalDecimalField("amount_min", params.AmountMin); err != nil {
@@ -432,6 +436,13 @@ func recordSearchOptionsFromParams(params openapi.SearchJournalRecordsParams) (t
 
 func recordSearchOptionsFromAccountParams(params openapi.SearchAccountJournalRecordsParams) (transactions.RecordSearchOptions, error) {
 	opts := transactions.RecordSearchOptions{
+		ListOptions: listOptionsFromParams(
+			params.Sort,
+			params.SortDir,
+			params.Limit,
+			params.Offset,
+			services.SortKeyInitiatedDate,
+		),
 		CategoryID:            params.CategoryId,
 		MemberID:              params.MemberId,
 		TagID:                 params.TagId,
@@ -444,9 +455,6 @@ func recordSearchOptionsFromAccountParams(params openapi.SearchAccountJournalRec
 		MemoContains:          params.MemoContains,
 		IncludeExpected:       boolParam(params.IncludeExpected),
 		IncludeRunningBalance: boolParam(params.IncludeRunningBalance),
-		Limit:                 params.Limit,
-		Offset:                offsetParam(params.Offset),
-		IncludeTotalCount:     true,
 	}
 	var err error
 	if opts.AmountMin, err = optionalDecimalField("amount_min", params.AmountMin); err != nil {

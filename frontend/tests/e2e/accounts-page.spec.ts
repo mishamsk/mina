@@ -699,7 +699,9 @@ test("account page renders header and paginated running-balance register", async
       url.pathname === `/api/accounts/${account.account_id}/records` &&
       url.searchParams.get("include_running_balance") === "true" &&
       url.searchParams.get("limit") === "25" &&
-      url.searchParams.get("offset") === "0"
+      url.searchParams.get("offset") === "0" &&
+      url.searchParams.get("sort") === "initiated_date" &&
+      url.searchParams.get("sort_dir") === "desc"
     );
   });
   const recordsResponse = page.waitForResponse((response) => {
@@ -734,13 +736,14 @@ test("account page renders header and paginated running-balance register", async
   expect(recordsBody.total_count).toBe(27);
   expect(
     Date.parse(firstRecord.posted_date),
-    "records are chronological",
-  ).toBeLessThan(Date.parse(secondRecord.posted_date));
+    "records are reverse chronological",
+  ).toBeGreaterThan(Date.parse(secondRecord.posted_date));
 
   const balance = balancesBody.balances.find(
     (row) => row.account_id === account.account_id,
   );
   expect(balance).toBeDefined();
+  expect(firstRecord.running_balance).toBe(balance?.current_balance);
 
   await expect(page.getByRole("heading", { name: "Card" })).toBeVisible();
   await expect(page.getByText("Owned", { exact: true })).toBeVisible();
@@ -749,18 +752,18 @@ test("account page renders header and paginated running-balance register", async
   await expect(page.getByText("Posted", { exact: true })).toBeVisible();
   await expect(page.getByText("Current USD")).toHaveCount(0);
   await expect(page.getByText("Posted USD")).toHaveCount(0);
+  const accountHeader = page.getByTestId("account-header");
   const currentBalanceText = formatUsdMarkerAmount(
     balance?.current_balance ?? "0",
   );
   expect(balance?.posted_balance).toBe(balance?.current_balance);
-  await expect(page.getByText(currentBalanceText)).toHaveCount(2);
+  await expect(accountHeader.getByText(currentBalanceText)).toHaveCount(2);
   await expect(page.getByText("Credit limit", { exact: true })).toBeVisible();
   await expect(page.getByText("Credit limit USD")).toHaveCount(0);
   await expect(page.getByText("5,000.00 $")).toHaveCount(2);
   await expect(
     page.locator("li").filter({ hasText: "5,000.00 $" }).getByText("May 1"),
   ).toBeVisible();
-  const accountHeader = page.getByTestId("account-header");
   await expect(
     accountHeader.getByTestId("credit-limit-indicator"),
   ).toBeVisible();
@@ -944,7 +947,7 @@ test("account page renders header and paginated running-balance register", async
   await expect(
     page
       .getByTestId("account-register-row")
-      .filter({ hasText: `E2E account register ${unique} 26` }),
+      .filter({ hasText: `E2E account register ${unique} 02` }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Previous" }).click();
   await expectAccountRegisterUrl(page, 1, 25);
@@ -1083,6 +1086,8 @@ test("account group page renders subtotals and combined prefix register", async 
       url.searchParams.get("account_fqn_prefix") === prefix &&
       url.searchParams.get("limit") === "25" &&
       url.searchParams.get("offset") === "0" &&
+      url.searchParams.get("sort") === "initiated_date" &&
+      url.searchParams.get("sort_dir") === "desc" &&
       !url.searchParams.has("include_running_balance") &&
       !url.searchParams.has("account_id")
     );

@@ -934,7 +934,18 @@ LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.catego
 	` + runningBalanceSelect + `, jr.tag_ids, jr.memo, jr.pending_date, jr.posted_date, jr.posting_status, jr.reconciliation_status, jr.source, jr.external_id, jr.external_system,
 	tx.initiated_date, jr.created_at, jr.updated_at, jr.tombstoned_at, a.account_type, a.name, a.fqn, c.economic_intent
 ` + fromQuery + "\n" + runningBalanceJoin + "\n" + whereQuery
-	query += " ORDER BY tx.initiated_date ASC, jr.transaction_id ASC, jr.record_id ASC"
+	sortColumns, ok := recordSortColumns[opts.SortKey]
+	if !ok {
+		sortColumns = recordSortColumns[services.SortKeyInitiatedDate]
+	}
+	direction := serviceListDirection(opts.ListOptions)
+	query += " ORDER BY "
+	for index, column := range sortColumns {
+		if index > 0 {
+			query += ", "
+		}
+		query += column + " " + direction
+	}
 	query, args = appendLimitOffset(query, args, opts.Limit, opts.Offset)
 
 	queryArgs := append(append([]any{}, runningBalanceArgs...), args...)
@@ -1626,4 +1637,8 @@ func int64Args(values []int64) []any {
 var transactionSortColumns = map[services.SortKey][]string{
 	services.SortKeyCreatedAt:     {"created_at"},
 	services.SortKeyInitiatedDate: {"initiated_date"},
+}
+
+var recordSortColumns = map[services.SortKey][]string{
+	services.SortKeyInitiatedDate: {"tx.initiated_date", "jr.transaction_id", "jr.record_id"},
 }
