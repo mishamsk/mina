@@ -46,7 +46,7 @@ Clear the current backlog of small/medium, well-scoped web UI and frontend bugs 
 
 ### Unfiled task briefs
 
-These two tasks have no Kata issue; this section is their ground-truth scope.
+These tasks have no Kata issue; this section is their ground-truth scope.
 
 **Brief A — entry modal must not eagerly create a draft (branch `entry-eager-draft`)**
 
@@ -61,6 +61,17 @@ These two tasks have no Kata issue; this section is their ground-truth scope.
 - Direction (user-decided): do not guess a composite presentation for mixed transactions. Show at most one amount: the spend/income economic amount when identifiable, otherwise no amount — always with a compact indicator that more parts exist (tooltip/detail carries the rest). For mixed spend+transfer specifically, show the spend amount (the economically meaningful one) with the same more-parts indicator.
 - Likely area: `frontend/src/features/ledger/transaction-amount-cell.tsx`, `amount-text.tsx`, `mixed-sentinel.tsx`, `format.ts`; amounts are server-provided per `frontend/src/features/ledger/PACKAGE.md` (no client-side re-derivation of accounting truths).
 - Acceptance: constant row height across all classes; mixed rows show at most one spend/income amount with an accessible more-parts indicator (or indicator only when no spend/income part exists); no `/`-joined or `x2`-style composite values anywhere in list rows; exchange and simple-class rendering unchanged; full amounts remain reachable in transaction detail. Verify against the demo dataset's mixed transactions and update `docs/webui-design.md` amount-display rules if the implemented rule diverges from what the doc currently states.
+
+**Brief C — lifecycle timestamps: no display magic, status-first lifecycle presentation, end-of-day derived stamps (branch `lifecycle-timestamp-simplify`; added by the user 2026-07-28 after reviewing the merged `5qah`/`e222` behavior)**
+
+- Direction (user-decided; ground truth for the task):
+  1. Remove the midnight-UTC "day-marker" display heuristic introduced by the `e222` task entirely — no special magic treatment for midnight timestamps anywhere in display code. Timestamps that remain displayed render plainly in browser local time.
+  2. Transaction detail lifecycle breadcrumbs: stop showing pending/posted timestamps there. The strip shows only the civil `initiated_date` plus a text indicating status when not simply posted — `expected`, `cancelled`, or `pending`; posted shows no status text. Exact pending/posted timestamps remain reachable in the per-record disclosures (unchanged truth path), just not in the breadcrumbs.
+  3. Transaction list: use icons to the right of the description (inside the description cell, where the expected-recurring icon already renders) to indicate not only expected recurring but also pending — and cancelled only if cancelled rows can ever actually be visible in the list; if cancelled transactions are always hard-filtered out, omit the cancelled icon entirely (verify and record which).
+  4. Retain the `5qah` behavior that manual posting-status edits record a posted rather than pending timestamp.
+  5. Even though the UI creates implicit manual transactions with no pending but a posted timestamp, the API must still allow creating non-`manual` source records (e.g. external loads) with their own explicit lifecycle timestamps — verify the create/replace contracts don't over-restrict to the manual pattern, and cover it.
+  6. When generating a posted timestamp from the initiated civil date (directly posted manual creations, recurring confirm-as-of paths), use `<initiated_date>T23:59:59Z`, not midnight. The pending default is not covered by this directive; keep it unless it creates a contradiction, and record the choice.
+- Consequential updates in scope: `docs/webui-design.md` (drop the day-marker sentence; rewrite the Screen 2 lifecycle-strip spec and the row-composition wording to match the new presentation), OpenAPI descriptions that state the midnight default, and every e2e/testscript that pins the old strip contents, day-marker rendering, or `00:00:00Z` stamps.
 
 ## Tasks
 
@@ -89,6 +100,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [ ] Task 13: `2q6j` — Polish segment-completion picker edge cases (P3 frontend; enumerated residual edge cases from the vmp6 review, including flat recurring-member picker names bypassing segment derivation; after Task 3 so draft-lifecycle fixes land first) — branch `2q6j-picker-edge-cases`
 - [ ] Task 14: `r2ae` — Polish inline-save background reconciliation edges (P3 frontend; two enumerated edges in `use-transactions-resource.ts`; independent, ordered by priority) — branch `r2ae-inline-save-reconcile`
 - [ ] Task 15: `q3rh` — Register page header middle-truncates the account FQN despite available width (P4 frontend; smallest polish item, applies the a4py width policy to the register header; independent) — branch `q3rh-register-header-fqn`
+- [ ] Task 16: (no Kata ref) — Lifecycle timestamps: no display magic, status-first lifecycle presentation, end-of-day derived stamps (user-directed follow-up revising the merged `5qah`/`e222` outcomes; scope is Brief C above; runs last so it revises settled lifecycle behavior exactly once) — branch `lifecycle-timestamp-simplify`
 
 ## Final Verification
 
