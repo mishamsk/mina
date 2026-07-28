@@ -222,6 +222,12 @@ test("categories page renders demo hierarchy, intent badges, URL search, and hid
     .first();
   await expect(groceriesRow).toBeVisible();
   await expect(groceriesRow).toContainText("Expense");
+  await expect(
+    groceriesRow.getByRole("button", { name: "Edit category" }),
+  ).toBeVisible();
+  await expect(
+    groceriesRow.getByRole("button", { name: "Move or rename" }),
+  ).toBeVisible();
 
   const mortgageGroup = page
     .getByTestId("categories-tree-row")

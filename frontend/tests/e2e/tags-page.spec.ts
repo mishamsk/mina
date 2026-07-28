@@ -238,6 +238,12 @@ test("tags page renders demo hierarchy, URL search, and hidden toggle", async ({
     .filter({ hasText: "Family" })
     .first();
   await expect(familyRow).toBeVisible();
+  await expect(
+    familyRow.getByRole("button", { name: "Edit tag" }),
+  ).toBeVisible();
+  await expect(
+    familyRow.getByRole("button", { name: "Move or rename" }),
+  ).toBeVisible();
   const cashRow = page
     .getByTestId("tags-tree-row")
     .filter({ hasText: "Cash" })

@@ -1,4 +1,10 @@
-import { Eye, EyeOff, MagicEdit, Trash } from "pixelarticons/react";
+import {
+  ArrowsHorizontal,
+  Eye,
+  EyeOff,
+  Pencil,
+  Trash,
+} from "pixelarticons/react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
@@ -197,7 +203,7 @@ export const TagsPageContent = ({
     row: ReferenceTreeRow<Tag, GroupState>,
   ): readonly RowAction[] => [
     {
-      icon: <MagicEdit aria-hidden="true" />,
+      icon: <ArrowsHorizontal aria-hidden="true" />,
       label: "Move or rename",
       onSelect: (opener: HTMLElement) => {
         opener.blur();
@@ -212,7 +218,7 @@ export const TagsPageContent = ({
     if (row.leaf) {
       return [
         {
-          icon: <MagicEdit aria-hidden="true" />,
+          icon: <Pencil aria-hidden="true" />,
           label: "Edit tag",
           onSelect: (opener: HTMLElement) => {
             onEditTag(row.leaf as Tag, opener);

@@ -1,7 +1,8 @@
 import {
+  ArrowsHorizontal,
   Eye,
   EyeOff,
-  MagicEdit,
+  Pencil,
   Plus,
   Reload,
   Trash,
@@ -550,7 +551,7 @@ export const AccountsTree = ({
                     : account
                       ? [
                           {
-                            icon: <MagicEdit aria-hidden="true" />,
+                            icon: <Pencil aria-hidden="true" />,
                             label: "Edit account",
                             onSelect: (opener: HTMLElement) => {
                               onEditAccount?.(account, opener);
@@ -589,7 +590,7 @@ export const AccountsTree = ({
                           ...(onRestructurePath
                             ? [
                                 {
-                                  icon: <MagicEdit aria-hidden="true" />,
+                                  icon: <ArrowsHorizontal aria-hidden="true" />,
                                   label: "Move or rename",
                                   onSelect: (opener: HTMLElement) => {
                                     opener.blur();
@@ -620,7 +621,9 @@ export const AccountsTree = ({
                             ...(onRestructurePath
                               ? [
                                   {
-                                    icon: <MagicEdit aria-hidden="true" />,
+                                    icon: (
+                                      <ArrowsHorizontal aria-hidden="true" />
+                                    ),
                                     label: "Move or rename",
                                     onSelect: (opener: HTMLElement) => {
                                       opener.blur();

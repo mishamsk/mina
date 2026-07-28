@@ -311,6 +311,12 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     formatUsdMarkerAmount(jointBalance?.current_balance ?? "0"),
   );
   await expect(jointRow.getByTestId("credit-limit-indicator")).toHaveCount(0);
+  await expect(
+    jointRow.getByRole("button", { name: "Edit account" }),
+  ).toBeVisible();
+  await expect(
+    jointRow.getByRole("button", { name: "Move or rename" }),
+  ).toBeVisible();
 
   const traderJoesRow = page
     .getByTestId("accounts-tree-row")
