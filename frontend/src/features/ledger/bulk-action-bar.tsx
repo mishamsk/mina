@@ -5,6 +5,10 @@ import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 
+import {
+  type BulkEditSkipSummary,
+  formatBulkEditSkipReasons,
+} from "./bulk-edit-prediction";
 import { EntityMultiPicker, EntityPicker } from "./entity-picker";
 import type { LookupMaps } from "./format";
 import type { RecordReferenceUpdate } from "./record-reference-cells";
@@ -29,11 +33,11 @@ interface BulkReferenceEditorProps {
   readonly initialMemberId?: number;
   readonly inlineOptions?: boolean;
   readonly maps: LookupMaps;
-  readonly mixedCount: number;
   readonly onApply: (update: RecordReferenceUpdate) => Promise<void>;
   readonly onCancel: () => void;
   readonly onSavingChange?: (saving: boolean) => void;
   readonly selectedCount: number;
+  readonly skipSummary: BulkEditSkipSummary;
 }
 
 const actionTitle: Record<BulkReferenceAction, string> = {
@@ -61,11 +65,11 @@ export const BulkReferenceEditor = ({
   initialMemberId,
   inlineOptions = false,
   maps,
-  mixedCount,
   onApply,
   onCancel,
   onSavingChange,
   selectedCount,
+  skipSummary,
 }: BulkReferenceEditorProps) => {
   const [categoryId, setCategoryId] = useState<number | undefined>(
     initialCategoryId,
@@ -167,9 +171,10 @@ export const BulkReferenceEditor = ({
           <Close aria-hidden="true" />
         </Button>
       </div>
-      {mixedCount > 0 ? (
+      {skipSummary.count > 0 ? (
         <p className="font-mono text-xs text-[var(--color-class-adjustment-ink)]">
-          {mixedCount} mixed {mixedCount === 1 ? "row" : "rows"} will be skipped
+          {skipSummary.count} of {selectedCount} selected will be skipped:{" "}
+          {formatBulkEditSkipReasons(skipSummary)}
         </p>
       ) : null}
       {allowIncludeHidden && (action === "category" || action === "tags") ? (
@@ -266,19 +271,19 @@ export const BulkReferenceEditor = ({
 interface BulkActionBarProps {
   readonly activeEditor: ActiveBulkEditor | undefined;
   readonly maps: LookupMaps;
-  readonly mixedCount: number;
   readonly onApply: (update: RecordReferenceUpdate) => Promise<void>;
   readonly onEditorChange: (editor: ActiveBulkEditor | undefined) => void;
   readonly selectedCount: number;
+  readonly skipSummary: BulkEditSkipSummary;
 }
 
 export const BulkActionBar = ({
   activeEditor,
   maps,
-  mixedCount,
   onApply,
   onEditorChange,
   selectedCount,
+  skipSummary,
 }: BulkActionBarProps) => {
   const categoryButtonRef = useRef<HTMLButtonElement>(null);
   const memberButtonRef = useRef<HTMLButtonElement>(null);
@@ -315,10 +320,10 @@ export const BulkActionBar = ({
             action={activeAction}
             allowIncludeHidden
             maps={maps}
-            mixedCount={mixedCount}
             onApply={onApply}
             onCancel={closeEditor}
             selectedCount={selectedCount}
+            skipSummary={skipSummary}
           />
         </div>
       ) : null}

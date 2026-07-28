@@ -8558,7 +8558,9 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
 
   await bulkActionBar.getByRole("button", { name: "Categorize" }).click();
   const categoryPicker = page.getByTestId("bulk-action-picker");
-  await expect(categoryPicker).toContainText("1 mixed row will be skipped");
+  await expect(categoryPicker).toContainText(
+    "1 of 2 selected will be skipped: mixed records",
+  );
   await categoryPicker
     .getByRole("combobox", { name: "Category" })
     .fill(targetCategory.fqn);
@@ -8616,6 +8618,9 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
 
   await bulkActionBar.getByRole("button", { name: "Member" }).click();
   const memberPicker = page.getByTestId("bulk-action-picker");
+  await expect(memberPicker).toContainText(
+    "1 of 2 selected will be skipped: partially attributed members",
+  );
   await memberPicker
     .getByRole("combobox", { name: "Member" })
     .fill(targetMember.name);
@@ -8623,9 +8628,9 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
   await memberPicker.getByRole("button", { name: "Set member" }).click();
   await expect(memberPicker).toHaveCount(0);
   await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: "1 updated, 1 skipped: mixed records." }),
+    page.getByRole("status").filter({
+      hasText: "1 updated, 1 skipped: partially attributed members.",
+    }),
   ).toBeVisible();
 
   const [partialMemberResponse, updatedMemberResponse] = await Promise.all([
@@ -8710,6 +8715,191 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
   await expect(bulkActionBar).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Bulk edit" })).toBeFocused();
   await expect(uniformRow.getByRole("checkbox")).toHaveCount(0);
+});
+
+test("bulk edit predicts and reports all-cancelled transactions as inactive", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [accounts, categories, targetMember] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+    createMember(page, `E2E bulk cancelled member ${unique}`),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const memo = `E2E bulk all cancelled ${unique}`;
+  const response = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-12",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-9.00000000",
+          category_id: null,
+          currency: "USD",
+          memo,
+          posting_status: "cancelled",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "9.00000000",
+          category_id: category.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "cancelled",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const transaction = (await response.json()) as TransactionDetailFixture;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await row.click();
+  await page
+    .getByTestId("bulk-action-bar")
+    .getByRole("button", { name: "Member" })
+    .click();
+  const picker = page.getByTestId("bulk-action-picker");
+  await expect(picker).toContainText(
+    "1 of 1 selected will be skipped: no active records",
+  );
+  await picker
+    .getByRole("combobox", { name: "Member" })
+    .fill(targetMember.name);
+  await picker.getByRole("combobox", { name: "Member" }).press("Enter");
+  await picker.getByRole("button", { name: "Set member" }).click();
+
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "0 updated, 1 skipped: no active records." }),
+  ).toBeVisible();
+  const unchangedResponse = await page.request.get(
+    `/api/transactions/${transaction.transaction_id}`,
+  );
+  expect(unchangedResponse.ok(), await unchangedResponse.text()).toBe(true);
+  const unchanged =
+    (await unchangedResponse.json()) as TransactionDetailFixture;
+  expect(unchanged.records.map((record) => record.member_id ?? null)).toEqual([
+    null,
+    null,
+  ]);
+});
+
+test("bulk category excludes transactions with no applied records from updated count", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const [accounts, categories, targetCategory] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+    createCategory(page, `E2E:BulkNoApply:${unique}:Target`, "expense"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const initialCategory = findByFqn(categories, "Entertainment:Books");
+  const missingSearch = `E2E bulk no apply missing ${unique}`;
+  const memo = `E2E bulk no apply ${unique}`;
+  const lookupsLoaded = waitForLedgerLookups(page);
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(missingSearch)}`,
+  );
+  await lookupsLoaded;
+
+  const lateFlowAccount = await createAccount(
+    page,
+    `e2e:BulkNoApply:${unique}:Merchant`,
+    "flow",
+  );
+  const response = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-12",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-13.00000000",
+          category_id: null,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: lateFlowAccount.account_id,
+          amount: "13.00000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const transaction = (await response.json()) as TransactionDetailFixture;
+
+  const transactionRefresh = page.waitForResponse((refreshResponse) => {
+    const url = new URL(refreshResponse.url());
+    return (
+      refreshResponse.request().method() === "GET" &&
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("search") === memo
+    );
+  });
+  await page.getByRole("searchbox", { name: "Search" }).fill(memo);
+  await transactionRefresh;
+  const row = page.getByRole("row").filter({ hasText: memo }).first();
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await row.click();
+  await page
+    .getByTestId("bulk-action-bar")
+    .getByRole("button", { name: "Categorize" })
+    .click();
+  const picker = page.getByTestId("bulk-action-picker");
+  await expect(picker).toContainText(
+    "1 of 1 selected will be skipped: no categorizable records",
+  );
+  await picker
+    .getByRole("combobox", { name: "Category" })
+    .fill(targetCategory.fqn);
+  await picker.getByRole("combobox", { name: "Category" }).press("Enter");
+  await picker.getByRole("button", { name: "Apply category" }).click();
+
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "0 updated, 1 skipped: no categorizable records." }),
+  ).toBeVisible();
+  const unchangedResponse = await page.request.get(
+    `/api/transactions/${transaction.transaction_id}`,
+  );
+  expect(unchangedResponse.ok(), await unchangedResponse.text()).toBe(true);
+  const unchanged =
+    (await unchangedResponse.json()) as TransactionDetailFixture;
+  expect(
+    unchanged.records.find(
+      (record) => record.account_id === lateFlowAccount.account_id,
+    )?.category_id,
+  ).toBe(initialCategory.category_id);
 });
 
 test("bulk selection keeps mutation targets after an edit changes the active filter", async ({

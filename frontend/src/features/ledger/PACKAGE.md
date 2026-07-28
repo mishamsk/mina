@@ -12,6 +12,7 @@
 - The shared transaction-browser controller permits one active inline editor across the list and expanded records; a conflicting browser interaction discards the draft without performing its action, outside click discards, and Escape discards then restores focus to the originating cell.
 - Category, tags, member, and amount inline editors keep selections as drafts and mutate accounting state only through their checkmark Save controls; Cancel and Escape discard identically.
 - Shared browser bulk-edit interaction follows the owning [Bulk operations specification](../../../../docs/webui-design.md#bulk-operations).
+- Bulk reference edits share one reasoned per-transaction predicate between prediction and apply; only transactions with records in the applied mutation count as updated.
 - Transaction-row lifted member display ignores unattributed records.
 - The transaction detail panel is read-only: it renders no inline editors; record rows only toggle inert exact-value disclosures, account paths navigate to account registers, editing goes through its Edit/Duplicate/Split modal launches, and entity chips filter the underlying list.
 - Transaction detail and account-register peek share the same read-only transaction-detail content component; behavior follows the owning [Transactions specification](../../../../docs/webui-design.md#2-transactions--phase-2-core-screen).

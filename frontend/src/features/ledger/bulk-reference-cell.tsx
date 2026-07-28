@@ -13,6 +13,7 @@ import {
   type BulkReferenceAction,
   BulkReferenceEditor,
 } from "./bulk-action-bar";
+import type { BulkEditSkipSummary } from "./bulk-edit-prediction";
 import type { LookupMaps } from "./format";
 import type { RecordReferenceUpdate } from "./record-reference-cells";
 
@@ -23,10 +24,10 @@ interface BulkReferenceCellProps {
   readonly initialCategoryId?: number;
   readonly initialMemberId?: number;
   readonly maps: LookupMaps;
-  readonly mixedCount: number;
   readonly onApply: (update: RecordReferenceUpdate) => Promise<void>;
   readonly onOpenChange: (open: boolean) => void;
   readonly selectedCount: number;
+  readonly skipSummary: BulkEditSkipSummary;
   readonly testIdPrefix: string;
 }
 
@@ -43,10 +44,10 @@ export const BulkReferenceCell = ({
   initialCategoryId,
   initialMemberId,
   maps,
-  mixedCount,
   onApply,
   onOpenChange,
   selectedCount,
+  skipSummary,
   testIdPrefix,
 }: BulkReferenceCellProps) => {
   const displayCellRef = useRef<HTMLDivElement>(null);
@@ -151,13 +152,13 @@ export const BulkReferenceCell = ({
             initialMemberId={initialMemberId}
             inlineOptions
             maps={maps}
-            mixedCount={mixedCount}
             onApply={applyAndRestoreFocus}
             onCancel={() => onOpenChange(false)}
             onSavingChange={(saving) => {
               savingRef.current = saving;
             }}
             selectedCount={selectedCount}
+            skipSummary={skipSummary}
           />
         </PopoverContent>
       ) : null}

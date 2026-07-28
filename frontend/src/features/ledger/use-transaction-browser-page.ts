@@ -37,7 +37,14 @@ import {
   useTransactionBulkEditView,
 } from "@/store";
 
-import { activeTransactionRecords, linePostingStatus } from "./format";
+import {
+  activeBulkEditRecords,
+  bulkCategoryTargetRecords,
+  formatBulkEditSkipReasons,
+  predictBulkEdit,
+  summarizeBulkEditSkips,
+} from "./bulk-edit-prediction";
+import { linePostingStatus } from "./format";
 import { useInlineEditCoordinator } from "./inline-editing";
 import {
   type RecordUpdate,
@@ -78,36 +85,6 @@ const sameTagIds = (left: readonly number[], right: readonly number[]) =>
 
 const sortedTagIds = (tagIds: readonly number[]): readonly number[] =>
   [...tagIds].sort((left, right) => left - right);
-
-const isUniformBulkField = (
-  transaction: Transaction,
-  field: "category" | "member" | "tags",
-): boolean => {
-  const records = activeTransactionRecords(transaction);
-  if (records.length === 0) {
-    return false;
-  }
-
-  if (field === "category") {
-    const categorizedRecords = records.filter(
-      (record) => record.category_id !== null,
-    );
-    return (
-      categorizedRecords.length > 0 &&
-      new Set(categorizedRecords.map((record) => record.category_id)).size === 1
-    );
-  }
-  if (field === "member") {
-    return (
-      new Set(records.map((record) => record.member_id ?? null)).size === 1
-    );
-  }
-
-  const firstTagIds = sortedTagIds(records[0]!.tag_ids);
-  return records.every((record) =>
-    sameTagIds(sortedTagIds(record.tag_ids), firstTagIds),
-  );
-};
 
 export const useTransactionBrowserPage = ({
   filters,
@@ -657,22 +634,28 @@ export const useTransactionBrowserPage = ({
         { readonly kind: "category" | "member" | "tags" }
       >,
     ) => {
-      const qualifyingTransactions = transactions.filter((transaction) =>
-        isUniformBulkField(transaction, update.kind),
+      const accountsById = new Map(
+        (lookups.snapshot?.accounts ?? []).map((account) => [
+          account.account_id,
+          account,
+        ]),
       );
-      const skippedCount = transactions.length - qualifyingTransactions.length;
+      const skipSummary = summarizeBulkEditSkips(
+        transactions,
+        update.kind,
+        accountsById,
+      );
+      const qualifyingTransactions = transactions.filter(
+        (transaction) =>
+          !predictBulkEdit(transaction, update.kind, accountsById).skip,
+      );
       const updatedTransactions: Transaction[] = [];
 
       if (update.kind === "category") {
-        const flowAccountIds = new Set(
-          (lookups.snapshot?.accounts ?? [])
-            .filter((account) => account.account_type === "flow")
-            .map((account) => account.account_id),
-        );
         const recordIds = qualifyingTransactions.flatMap((transaction) =>
-          activeTransactionRecords(transaction)
-            .filter((record) => flowAccountIds.has(record.account_id))
-            .map((record) => record.record_id),
+          bulkCategoryTargetRecords(transaction, accountsById).map(
+            (record) => record.record_id,
+          ),
         );
         if (recordIds.length > 0) {
           const result = await updateJournalRecordsCategory(
@@ -685,9 +668,9 @@ export const useTransactionBrowserPage = ({
           const categoryUpdatedTransactions = qualifyingTransactions.map(
             (transaction) => {
               const categorizedRecordIds = new Set(
-                activeTransactionRecords(transaction)
-                  .filter((record) => flowAccountIds.has(record.account_id))
-                  .map((record) => record.record_id),
+                bulkCategoryTargetRecords(transaction, accountsById).map(
+                  (record) => record.record_id,
+                ),
               );
               return {
                 ...transaction,
@@ -707,7 +690,7 @@ export const useTransactionBrowserPage = ({
           { readonly currentTagIds: readonly number[]; recordIds: number[] }
         >();
         for (const transaction of qualifyingTransactions) {
-          const records = activeTransactionRecords(transaction);
+          const records = activeBulkEditRecords(transaction);
           const currentTagIds = sortedTagIds(records[0]!.tag_ids);
           const key = currentTagIds.join(",");
           const group = groups.get(key) ?? {
@@ -734,7 +717,7 @@ export const useTransactionBrowserPage = ({
           }
         }
         for (const transaction of qualifyingTransactions) {
-          const records = activeTransactionRecords(transaction);
+          const records = activeBulkEditRecords(transaction);
           const currentTagIds = sortedTagIds(records[0]!.tag_ids);
           const nextTagIds = Array.from(
             new Set([...currentTagIds, ...update.tagIds]),
@@ -755,7 +738,7 @@ export const useTransactionBrowserPage = ({
                 transaction.transaction_id,
                 recordUpdateBody(
                   transaction,
-                  activeTransactionRecords(transaction).map(
+                  activeBulkEditRecords(transaction).map(
                     (record) => record.record_id,
                   ),
                   update,
@@ -770,7 +753,7 @@ export const useTransactionBrowserPage = ({
         );
       }
 
-      if (qualifyingTransactions.length > 0) {
+      if (updatedTransactions.length > 0) {
         setSelectedTransactionsById((current) => {
           const next = new Map(current);
           for (const transaction of updatedTransactions) {
@@ -782,15 +765,17 @@ export const useTransactionBrowserPage = ({
         });
         await refreshTransactionPageAfterBulkSave(
           displayedPageParams,
-          qualifyingTransactions,
+          updatedTransactions,
         );
       }
 
       showNotice(
-        `${qualifyingTransactions.length} updated, ${skippedCount} skipped${
-          skippedCount > 0 ? ": mixed records" : ""
+        `${updatedTransactions.length} updated, ${skipSummary.count} skipped${
+          skipSummary.count > 0
+            ? `: ${formatBulkEditSkipReasons(skipSummary)}`
+            : ""
         }.`,
-        qualifyingTransactions.length === 0 && skippedCount > 0
+        updatedTransactions.length === 0 && skipSummary.count > 0
           ? "warning"
           : "success",
       );

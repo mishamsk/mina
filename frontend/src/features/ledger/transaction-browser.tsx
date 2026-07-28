@@ -47,6 +47,10 @@ import {
   BulkActionBar,
   type BulkReferenceAction,
 } from "./bulk-action-bar";
+import {
+  type BulkEditSkipSummary,
+  summarizeBulkEditSkips,
+} from "./bulk-edit-prediction";
 import { BulkReferenceCell } from "./bulk-reference-cell";
 import {
   activeTransactionRecords,
@@ -753,26 +757,26 @@ export const TransactionBrowser = ({
     [transactions],
   );
   const selectedCount = selectedTransactionIds.size;
-  const mixedCountByAction = useMemo<
-    Record<BulkReferenceAction, number>
+  const skipSummaryByAction = useMemo<
+    Record<BulkReferenceAction, BulkEditSkipSummary>
   >(() => {
-    const counts: Record<BulkReferenceAction, number> = {
-      category: 0,
-      member: 0,
-      tags: 0,
+    return {
+      category: summarizeBulkEditSkips(
+        selectedTransactions,
+        "category",
+        maps.accountsById,
+      ),
+      member: summarizeBulkEditSkips(
+        selectedTransactions,
+        "member",
+        maps.accountsById,
+      ),
+      tags: summarizeBulkEditSkips(
+        selectedTransactions,
+        "tags",
+        maps.accountsById,
+      ),
     };
-    for (const transaction of selectedTransactions) {
-      if (lineCategory(transaction, maps) === "mixed") {
-        counts.category += 1;
-      }
-      if (lineTags(transaction, maps) === "mixed") {
-        counts.tags += 1;
-      }
-      if (lineMember(transaction, maps) === "mixed") {
-        counts.member += 1;
-      }
-    }
-    return counts;
   }, [maps, selectedTransactions]);
   const applyBulkUpdate = useCallback(
     async (update: RecordReferenceUpdate) => {
@@ -1104,12 +1108,14 @@ export const TransactionBrowser = ({
     <BulkActionBar
       activeEditor={activeBulkEditor}
       maps={maps}
-      mixedCount={
-        activeBulkEditor ? mixedCountByAction[activeBulkEditor.action] : 0
-      }
       onApply={applyBulkUpdate}
       onEditorChange={setActiveBulkEditor}
       selectedCount={selectedCount}
+      skipSummary={
+        activeBulkEditor
+          ? skipSummaryByAction[activeBulkEditor.action]
+          : skipSummaryByAction.category
+      }
     />
   ) : null;
 
@@ -1669,12 +1675,12 @@ export const TransactionBrowser = ({
                                 : category?.category_id
                             }
                             maps={maps}
-                            mixedCount={mixedCountByAction.category}
                             onApply={applyBulkUpdate}
                             onOpenChange={(open) =>
                               setRowBulkEditorOpen("category", open)
                             }
                             selectedCount={selectedCount}
+                            skipSummary={skipSummaryByAction.category}
                             testIdPrefix={`transaction-${transaction.transaction_id}`}
                           >
                             {categoryBulkValue}
@@ -1730,12 +1736,12 @@ export const TransactionBrowser = ({
                               action="tags"
                               active={rowBulkEditorActive("tags")}
                               maps={maps}
-                              mixedCount={mixedCountByAction.tags}
                               onApply={applyBulkUpdate}
                               onOpenChange={(open) =>
                                 setRowBulkEditorOpen("tags", open)
                               }
                               selectedCount={selectedCount}
+                              skipSummary={skipSummaryByAction.tags}
                               testIdPrefix={`transaction-${transaction.transaction_id}`}
                             >
                               {tagsBulkValue}
@@ -1778,12 +1784,12 @@ export const TransactionBrowser = ({
                                   : member?.member_id
                               }
                               maps={maps}
-                              mixedCount={mixedCountByAction.member}
                               onApply={applyBulkUpdate}
                               onOpenChange={(open) =>
                                 setRowBulkEditorOpen("member", open)
                               }
                               selectedCount={selectedCount}
+                              skipSummary={skipSummaryByAction.member}
                               testIdPrefix={`transaction-${transaction.transaction_id}`}
                             >
                               {memberBulkValue}
