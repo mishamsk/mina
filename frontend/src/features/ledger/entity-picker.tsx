@@ -275,13 +275,11 @@ export const EntityPicker = ({
   const [announcement, setAnnouncement] = useState("");
   const [createError, setCreateError] = useState<string>();
   const [creating, setCreating] = useState(false);
-  const [typedThisSession, setTypedThisSession] = useState(false);
   const typedThisSessionRef = useRef(false);
   const interactionVersionRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const onChangeRef = useRef(onChange);
   const blurTimeoutRef = useRef<number | undefined>(undefined);
-  const suppressNextFocusOpenRef = useRef(false);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -289,6 +287,7 @@ export const EntityPicker = ({
 
   useEffect(
     () => () => {
+      interactionVersionRef.current += 1;
       window.clearTimeout(blurTimeoutRef.current);
     },
     [],
@@ -336,11 +335,9 @@ export const EntityPicker = ({
   const updateOpen = (nextOpen: boolean, typedSession = false) => {
     if (nextOpen && !open) {
       typedThisSessionRef.current = typedSession;
-      setTypedThisSession(typedSession);
     }
     if (!nextOpen) {
       typedThisSessionRef.current = false;
-      setTypedThisSession(false);
     }
     setOpen(nextOpen);
     onOpenChange?.(nextOpen);
@@ -418,7 +415,9 @@ export const EntityPicker = ({
             : "Could not create this item.",
         );
         setAnnouncement(`Could not create ${row.fqn}`);
-        updateOpen(true, typedThisSessionRef.current);
+        if (document.activeElement === inputRef.current) {
+          updateOpen(true, typedThisSessionRef.current);
+        }
       }
     } finally {
       setCreating(false);
@@ -500,7 +499,6 @@ export const EntityPicker = ({
               ? retainedPrefixRef.current
               : "");
           typedThisSessionRef.current = true;
-          setTypedThisSession(true);
           const exactOption = [...effectiveOptions, ...exactMatchOptions].find(
             (option) => option.searchLabel === nextQuery,
           );
@@ -528,10 +526,6 @@ export const EntityPicker = ({
             return;
           }
           window.clearTimeout(blurTimeoutRef.current);
-          if (suppressNextFocusOpenRef.current) {
-            suppressNextFocusOpenRef.current = false;
-            return;
-          }
           const nextQuery = selected?.searchLabel ?? query;
           setQuery(nextQuery);
           updateOpen(true);
@@ -651,7 +645,6 @@ export const EntityPicker = ({
             event.preventDefault();
             interactionVersionRef.current += 1;
             typedThisSessionRef.current = true;
-            setTypedThisSession(true);
             const nextQuery = query.slice(0, -1);
             setQuery(nextQuery);
             setActiveIndex(0);
@@ -695,38 +688,15 @@ export const EntityPicker = ({
               data-picker-breadcrumb
               data-testid={`${id}-breadcrumb`}
               className="sticky top-0 z-10 flex min-w-0 items-center gap-1 border-b border-[var(--hairline)] bg-[var(--band)] px-2 py-1 font-mono text-xs"
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  updateOpen(false);
-                  suppressNextFocusOpenRef.current = true;
-                  inputRef.current?.focus();
-                }
-              }}
-              onBlur={(event) => {
-                if (
-                  !(event.relatedTarget instanceof Node) ||
-                  !event.currentTarget.contains(event.relatedTarget)
-                ) {
-                  window.clearTimeout(blurTimeoutRef.current);
-                  blurTimeoutRef.current = window.setTimeout(() => {
-                    updateOpen(false);
-                  }, 100);
-                }
-              }}
             >
               <Tooltip asChild label="Browse from root">
                 <button
                   type="button"
-                  tabIndex={typedThisSession ? 0 : -1}
+                  tabIndex={-1}
                   aria-label="Browse from root"
                   className="text-muted-foreground hover:text-foreground shrink-0"
                   onMouseDown={(event) => {
                     event.preventDefault();
-                  }}
-                  onFocus={() => {
-                    window.clearTimeout(blurTimeoutRef.current);
                   }}
                   onClick={() => {
                     backTo("");
@@ -752,7 +722,7 @@ export const EntityPicker = ({
                     >
                       <button
                         type="button"
-                        tabIndex={typedThisSession ? 0 : -1}
+                        tabIndex={-1}
                         aria-label={`Browse ${breadcrumbSegments
                           .slice(0, index + 1)
                           .join(":")}`}
@@ -764,9 +734,6 @@ export const EntityPicker = ({
                         )}
                         onMouseDown={(event) => {
                           event.preventDefault();
-                        }}
-                        onFocus={() => {
-                          window.clearTimeout(blurTimeoutRef.current);
                         }}
                         onClick={() => {
                           backTo(
@@ -783,84 +750,108 @@ export const EntityPicker = ({
             </div>
           ) : null}
           {rows.length > 0 ? (
-            rows.map((row, rowIndex) => (
-              <button
-                key={rowId(id, row)}
-                id={rowId(id, row)}
-                type="button"
-                role="option"
-                tabIndex={-1}
-                aria-label={
-                  row.kind === "group"
-                    ? `${row.group.fqn}, group, ${row.group.childCount} children`
-                    : row.kind === "create"
-                      ? `Create ${row.fqn}`
+            rows.map((row, rowIndex) => {
+              const option = (
+                <button
+                  key={rowId(id, row)}
+                  id={rowId(id, row)}
+                  type="button"
+                  role="option"
+                  tabIndex={-1}
+                  aria-disabled={
+                    row.kind === "create" && creating ? true : undefined
+                  }
+                  aria-description={
+                    row.kind === "create" && creating
+                      ? "Wait for creation to finish."
                       : undefined
-                }
-                aria-selected={
-                  row.kind === "leaf" ? row.option.id === value : false
-                }
-                disabled={row.kind === "create" && creating}
-                className={cn(
-                  "hover:bg-muted flex w-full items-center px-2 py-2 text-left text-sm",
-                  row.kind === "create" && "bg-card sticky bottom-0",
-                  rowIndex === clampedActiveIndex &&
-                    "bg-[var(--color-interactive-bright)]",
-                  row.kind === "leaf" &&
-                    row.option.id === value &&
-                    "bg-[var(--color-interactive-bright)]",
-                )}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  void activateRow(row);
-                }}
-              >
-                {row.kind === "leaf" ? (
-                  <span className="flex min-w-0 flex-col items-start">
-                    <span className="flex items-center gap-1 font-medium">
-                      {row.option.hidden ? (
-                        <EyeOff aria-label="Hidden" className="size-3" />
+                  }
+                  aria-label={
+                    row.kind === "group"
+                      ? `${row.group.fqn}, group, ${row.group.childCount} children`
+                      : row.kind === "create"
+                        ? `Create ${row.fqn}`
+                        : undefined
+                  }
+                  aria-selected={
+                    row.kind === "leaf" ? row.option.id === value : false
+                  }
+                  className={cn(
+                    "hover:bg-muted flex w-full items-center px-2 py-2 text-left text-sm",
+                    row.kind === "create" && "bg-card sticky bottom-0",
+                    rowIndex === clampedActiveIndex &&
+                      "bg-[var(--color-interactive-bright)]",
+                    row.kind === "leaf" &&
+                      row.option.id === value &&
+                      "bg-[var(--color-interactive-bright)]",
+                    row.kind === "create" &&
+                      creating &&
+                      "text-muted-foreground outline-muted-foreground bg-muted hover:bg-muted [&_svg]:!text-muted-foreground cursor-not-allowed outline outline-1 -outline-offset-1",
+                  )}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    void activateRow(row);
+                  }}
+                >
+                  {row.kind === "leaf" ? (
+                    <span className="flex min-w-0 flex-col items-start">
+                      <span className="flex items-center gap-1 font-medium">
+                        {row.option.hidden ? (
+                          <EyeOff aria-label="Hidden" className="size-3" />
+                        ) : null}
+                        {row.option.label}
+                      </span>
+                      {row.option.detail ? (
+                        <span className="text-muted-foreground font-mono text-xs">
+                          {row.option.detail}
+                        </span>
                       ) : null}
-                      {row.option.label}
                     </span>
-                    {row.option.detail ? (
-                      <span className="text-muted-foreground font-mono text-xs">
-                        {row.option.detail}
+                  ) : row.kind === "group" ? (
+                    <>
+                      <Tooltip
+                        className="min-w-0 flex-1 font-mono font-medium"
+                        focusable={false}
+                        label={row.group.fqn}
+                      >
+                        <span className="block truncate">
+                          {row.group.segment}
+                        </span>
+                      </Tooltip>
+                      <span className="text-muted-foreground ml-2 font-mono text-xs">
+                        {row.group.childCount}
                       </span>
-                    ) : null}
-                  </span>
-                ) : row.kind === "group" ? (
-                  <>
-                    <Tooltip
-                      className="min-w-0 flex-1 font-mono font-medium"
-                      focusable={false}
-                      label={row.group.fqn}
-                    >
-                      <span className="block truncate">
-                        {row.group.segment}
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="text-muted-foreground ml-1 size-4 shrink-0"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Plus
+                        aria-hidden="true"
+                        className="mr-1 size-4 shrink-0 text-[var(--color-class-adjustment-ink)]"
+                      />
+                      <span className="min-w-0 truncate font-medium">
+                        {creating ? "Creating" : "Create"} “{row.fqn}”
                       </span>
-                    </Tooltip>
-                    <span className="text-muted-foreground ml-2 font-mono text-xs">
-                      {row.group.childCount}
-                    </span>
-                    <ChevronRight
-                      aria-hidden="true"
-                      className="text-muted-foreground ml-1 size-4 shrink-0"
-                    />
-                  </>
-                ) : (
-                  <>
-                    <Plus
-                      aria-hidden="true"
-                      className="mr-1 size-4 shrink-0 text-[var(--color-class-adjustment-ink)]"
-                    />
-                    <span className="min-w-0 truncate font-medium">
-                      {creating ? "Creating" : "Create"} “{row.fqn}”
-                    </span>
-                  </>
-                )}
-              </button>
-            ))
+                    </>
+                  )}
+                </button>
+              );
+              return row.kind === "create" ? (
+                <Tooltip
+                  key={rowId(id, row)}
+                  asChild
+                  disabled={!creating}
+                  label="Wait for creation to finish."
+                >
+                  {option}
+                </Tooltip>
+              ) : (
+                option
+              );
+            })
           ) : (
             <div className="text-muted-foreground px-2 py-2 text-sm">
               {model.committedPrefix
@@ -868,11 +859,11 @@ export const EntityPicker = ({
                 : "No matches"}
             </div>
           )}
-          {createError ? (
-            <div className="text-destructive px-2 py-2 text-xs" role="alert">
-              {createError}
-            </div>
-          ) : null}
+        </div>
+      ) : null}
+      {createError ? (
+        <div className="text-destructive px-2 py-2 text-xs" role="alert">
+          {createError}
         </div>
       ) : null}
     </div>

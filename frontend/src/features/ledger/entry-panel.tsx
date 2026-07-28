@@ -2408,6 +2408,20 @@ const visibleMember = (member: Member): boolean =>
 
 const visibleTag = (tag: Tag): boolean => !tag.is_hidden && !tag.tombstoned_at;
 
+const mergeLookupEntities = <Entity,>(
+  current: readonly Entity[],
+  additions: readonly Entity[],
+  idFor: (entity: Entity) => number,
+): readonly Entity[] => {
+  const merged = new Map(
+    current.map((entity) => [idFor(entity), entity] as const),
+  );
+  for (const addition of additions) {
+    merged.set(idFor(addition), addition);
+  }
+  return [...merged.values()];
+};
+
 const EntryRailRow = ({
   editable,
   transaction,
@@ -2500,7 +2514,7 @@ export const EntryPanel = ({
   initialTab,
   initialTemplateFqn,
   launch,
-  lookups,
+  lookups: lookupSnapshot,
   onClose,
   onSaved,
   open,
@@ -2552,6 +2566,35 @@ export const EntryPanel = ({
   const [discardingPendingLaunch, setDiscardingPendingLaunch] = useState(false);
   const [confirmCloseDiscardOpen, setConfirmCloseDiscardOpen] = useState(false);
   const [attentionErrorCount, setAttentionErrorCount] = useState(0);
+  const [inlineCreatedLookups, setInlineCreatedLookups] = useState<{
+    readonly accounts: readonly Account[];
+    readonly categories: readonly Category[];
+    readonly tags: readonly Tag[];
+  }>({ accounts: [], categories: [], tags: [] });
+  const [pickerLifecycle, setPickerLifecycle] = useState(0);
+  const lookups = useMemo<LedgerLookupsSnapshot | undefined>(() => {
+    if (!lookupSnapshot) {
+      return undefined;
+    }
+    return {
+      ...lookupSnapshot,
+      accounts: mergeLookupEntities(
+        lookupSnapshot.accounts,
+        inlineCreatedLookups.accounts,
+        (account) => account.account_id,
+      ),
+      categories: mergeLookupEntities(
+        lookupSnapshot.categories,
+        inlineCreatedLookups.categories,
+        (category) => category.category_id,
+      ),
+      tags: mergeLookupEntities(
+        lookupSnapshot.tags,
+        inlineCreatedLookups.tags,
+        (tag) => tag.tag_id,
+      ),
+    };
+  }, [inlineCreatedLookups, lookupSnapshot]);
   const entryPanelRef = useRef<HTMLElement>(null);
   const entryScrollRegionRef = useRef<HTMLDivElement>(null);
   const addChargeButtonRef = useRef<HTMLButtonElement>(null);
@@ -2692,6 +2735,7 @@ export const EntryPanel = ({
       ordinaryBaselineMustPersistRef.current = false;
       ordinaryDraftStoredRef.current = false;
     }
+    setPickerLifecycle((current) => current + 1);
     setDraft(pendingLaunchDraft.draft);
     setReplacement(pendingLaunchDraft.replacement);
     setDraftPersistence(pendingLaunchDraft.persistence);
@@ -2815,6 +2859,7 @@ export const EntryPanel = ({
           launchDraftBaselineRef.current =
             nextDraft.persistence === "launch" ? nextDraft.draft : undefined;
         }
+        setPickerLifecycle((current) => current + 1);
         setInitializedLaunchKey(launchKey);
         setInitializedLaunch(launch);
         setDraftReady(true);
@@ -3014,12 +3059,21 @@ export const EntryPanel = ({
       account_type: "flow",
       fqn,
     });
-    if (!result.data) {
+    const created = result.data;
+    if (!created) {
       throw new Error(apiErrorMessage(result.error));
     }
+    setInlineCreatedLookups((current) => ({
+      ...current,
+      accounts: mergeLookupEntities(
+        current.accounts,
+        [created],
+        (account) => account.account_id,
+      ),
+    }));
     invalidateAccountsPage();
     void refreshLedgerLookups();
-    return entityOption(result.data, result.data.account_id);
+    return entityOption(created, created.account_id);
   };
   const createCategoryOption = async (
     fqn: string,
@@ -3029,29 +3083,42 @@ export const EntryPanel = ({
       economic_intent: economicIntent,
       fqn,
     });
-    if (!result.data) {
+    const created = result.data;
+    if (!created) {
       throw new Error(apiErrorMessage(result.error));
     }
+    setInlineCreatedLookups((current) => ({
+      ...current,
+      categories: mergeLookupEntities(
+        current.categories,
+        [created],
+        (category) => category.category_id,
+      ),
+    }));
     invalidateCategoriesPage();
-    addCategoryPickerCategory(result.data);
+    addCategoryPickerCategory(created);
     void refreshLedgerLookups();
-    return entityOption(result.data, result.data.category_id);
+    return entityOption(created, created.category_id);
   };
   const createTagOption = async (fqn: string) => {
     const result = await createLedgerTag({ fqn });
-    if (!result.data) {
+    const created = result.data;
+    if (!created) {
       throw new Error(apiErrorMessage(result.error));
     }
+    setInlineCreatedLookups((current) => ({
+      ...current,
+      tags: mergeLookupEntities(current.tags, [created], (tag) => tag.tag_id),
+    }));
     invalidateTagsPage();
     void refreshLedgerLookups();
-    return entityOption(result.data, result.data.tag_id);
+    return entityOption(created, created.tag_id);
   };
   const categoryPickerReady =
     activeTab === "advanced" ||
     activeTab === "exchange" ||
     (activeTab === "transfer" && !activeTabDraft?.chargeEnabled) ||
     Boolean(categoryPicker.snapshot);
-  const lookupRevision = lookups?.loadedAt ?? "loading";
   const ready = Boolean(lookups && currentDraftReady);
   const canSubmit = Boolean(
     lookups && currentDraftReady && categoryPickerReady && !saving,
@@ -3816,6 +3883,7 @@ export const EntryPanel = ({
               ...draft,
               advanced: stickyNextAdvancedDraft(draft.advanced),
             };
+            setPickerLifecycle((current) => current + 1);
             setDraft(nextDraft);
             setAdvancedFieldErrors({});
             setGeneralError(undefined);
@@ -4084,6 +4152,7 @@ export const EntryPanel = ({
             );
           }
           await onSaved(result.data, { operation: "created" });
+          setPickerLifecycle((current) => current + 1);
           if (closeAfterSave) {
             onClose();
           } else {
@@ -4388,7 +4457,7 @@ export const EntryPanel = ({
                             className="col-span-full"
                           >
                             <EntityPicker
-                              key={`${lookupRevision}:advanced:${row.draftId}:account`}
+                              key={`${pickerLifecycle}:advanced:${row.draftId}:account`}
                               exactMatchOptions={exactMatchAccountOptions}
                               id={`advanced-record-${rowIndex}-account`}
                               label={`Record ${rowIndex + 1} account`}
@@ -4499,7 +4568,7 @@ export const EntryPanel = ({
                             {accountTypeForId(lookups, row.accountId) ===
                             "flow" ? (
                               <EntityPicker
-                                key={`${lookupRevision}:advanced:${row.draftId}:category`}
+                                key={`${pickerLifecycle}:advanced:${row.draftId}:category`}
                                 id={`advanced-record-${rowIndex}-category`}
                                 label={`Record ${rowIndex + 1} category`}
                                 labelClassName="sr-only"
@@ -4532,6 +4601,7 @@ export const EntryPanel = ({
                             className="col-span-full"
                           >
                             <EntityMultiPicker
+                              key={`${pickerLifecycle}:advanced:${row.draftId}:tags`}
                               createConflictOptions={createConflictOptions.tags}
                               createOption={createTagOption}
                               id={`advanced-record-${rowIndex}-tags`}
@@ -4546,8 +4616,8 @@ export const EntryPanel = ({
                           </AdvancedRecordField>
                           <AdvancedRecordField label="Member">
                             <EntityPicker
+                              key={`${pickerLifecycle}:advanced:${row.draftId}:member`}
                               hierarchical={false}
-                              key={`${lookupRevision}:advanced:${row.draftId}:member`}
                               id={`advanced-record-${rowIndex}-member`}
                               label={`Record ${rowIndex + 1} member`}
                               labelClassName="sr-only"
@@ -4812,7 +4882,7 @@ export const EntryPanel = ({
                 ) : null}
 
                 <EntityPicker
-                  key={`${lookupRevision}:${initializedLaunchKey}:${sessionCount}:${activeTab}:${activeConfig.primaryAccountField}`}
+                  key={`${pickerLifecycle}:${activeTab}:${activeConfig.primaryAccountField}`}
                   id={`${activeTab}-${activeConfig.primaryAccountField}`}
                   label={activeConfig.primaryAccountLabel}
                   options={primaryAccountOptions}
@@ -4843,6 +4913,7 @@ export const EntryPanel = ({
                             Merchant {merchantIndex + 1}
                           </legend>
                           <EntityPicker
+                            key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:account`}
                             createConflictOptions={
                               createConflictOptions.accounts
                             }
@@ -4890,7 +4961,7 @@ export const EntryPanel = ({
                             />
                           </div>
                           <EntityPicker
-                            key={`${initializedLaunchKey}:${sessionCount}:${activeTab}:merchant-${merchantIndex}-category`}
+                            key={`${pickerLifecycle}:${activeTab}:${merchant.draftId}:category`}
                             createConflictOptions={
                               createConflictOptions.categories
                             }
@@ -4967,6 +5038,7 @@ export const EntryPanel = ({
                 ) : (
                   <>
                     <EntityPicker
+                      key={`${pickerLifecycle}:${activeTab}:${activeConfig.secondaryAccountField}`}
                       createConflictOptions={createConflictOptions.accounts}
                       createOption={
                         activeConfig.secondaryAccountOptionSet ===
@@ -4974,7 +5046,6 @@ export const EntryPanel = ({
                           ? createFlowAccountOption
                           : undefined
                       }
-                      key={`${lookupRevision}:${initializedLaunchKey}:${sessionCount}:${activeTab}:${activeConfig.secondaryAccountField}`}
                       id={`${activeTab}-${activeConfig.secondaryAccountField}`}
                       label={activeConfig.secondaryAccountLabel}
                       options={secondaryAccountOptions}
@@ -5039,7 +5110,7 @@ export const EntryPanel = ({
                 activeTab !== "transfer" &&
                 activeTab !== "exchange" ? (
                   <EntityPicker
-                    key={`${initializedLaunchKey}:${sessionCount}:${activeTab}:category`}
+                    key={`${pickerLifecycle}:${activeTab}:category`}
                     createConflictOptions={createConflictOptions.categories}
                     createOption={(fqn) =>
                       createCategoryOption(fqn, activeCategoryCreationIntent!)
@@ -5071,6 +5142,7 @@ export const EntryPanel = ({
                 ) : null}
 
                 <EntityMultiPicker
+                  key={`${pickerLifecycle}:${activeTab}:tags`}
                   createConflictOptions={createConflictOptions.tags}
                   createOption={createTagOption}
                   id={`${activeTab}-tags`}
@@ -5084,8 +5156,8 @@ export const EntryPanel = ({
                 <FieldError message={fieldErrors.tagIds} />
 
                 <EntityPicker
+                  key={`${pickerLifecycle}:${activeTab}:member`}
                   hierarchical={false}
-                  key={`${lookupRevision}:${initializedLaunchKey}:${sessionCount}:${activeTab}:member`}
                   id={`${activeTab}-member`}
                   label="Member"
                   options={options.members}
@@ -5125,6 +5197,7 @@ export const EntryPanel = ({
                         Charge
                       </legend>
                       <EntityPicker
+                        key={`${pickerLifecycle}:transfer:charge-account`}
                         createConflictOptions={createConflictOptions.accounts}
                         createOption={createFlowAccountOption}
                         id="transfer-charge-account"
@@ -5160,6 +5233,7 @@ export const EntryPanel = ({
                         <FieldError message={fieldErrors.chargeAmount} />
                       </div>
                       <EntityPicker
+                        key={`${pickerLifecycle}:transfer:charge-category`}
                         createConflictOptions={createConflictOptions.categories}
                         createOption={(fqn) =>
                           createCategoryOption(fqn, "expense")

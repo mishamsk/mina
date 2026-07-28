@@ -9756,11 +9756,10 @@ test("entry category picker completes hierarchy segments and preserves full-path
   const currentCrumb = page.getByRole("button", {
     name: `Browse ${base}:Food`,
   });
-  await currentCrumb.focus();
-  await currentCrumb.press("Tab");
-  await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
-  await expect(categoryPicker).not.toBeFocused();
-  await categoryPicker.focus();
+  await expect(
+    page.getByRole("button", { name: "Browse from root" }),
+  ).toHaveAttribute("tabindex", "-1");
+  await expect(currentCrumb).toHaveAttribute("tabindex", "-1");
 
   const rootCrumb = page.getByRole("button", { name: "Browse from root" });
   await rootCrumb.hover();
@@ -9776,18 +9775,19 @@ test("entry category picker completes hierarchy segments and preserves full-path
   await expect(categoryPicker).toHaveValue(`${base}:Food:`);
   await expect(categoryPicker).toBeFocused();
   await categoryPicker.press("ArrowDown");
-  await rootCrumb.focus();
-  await rootCrumb.press("Enter");
+  await rootCrumb.click();
   await expect(categoryPicker).toHaveValue("");
   await expect(categoryPicker).toBeFocused();
   await categoryPicker.fill(`${base}:`);
   await categoryPicker.press("Enter");
   await expect(categoryPicker).toHaveValue(`${base}:Food:`);
 
+  await categoryPicker.press("End");
   await categoryPicker.press("ArrowLeft");
   await expect(categoryPicker).toHaveValue(`${base}:`);
   await categoryPicker.press("ArrowRight");
   await expect(categoryPicker).toHaveValue(`${base}:Food:`);
+  await categoryPicker.press("End");
   await categoryPicker.press("ArrowLeft");
   await expect(categoryPicker).toHaveValue(`${base}:`);
   await categoryPicker.press("Backspace");
@@ -9947,6 +9947,56 @@ test("late category creation preserves newer shorthand edits", async ({
 
   await expect(categoryPicker).toHaveValue(createdFqn);
   await expect(memo).toHaveValue("must survive the category response");
+  await categoryPicker.focus();
+  await expect(
+    page
+      .locator("#spend-merchant-0-category-options")
+      .getByRole("option", { selected: true }),
+  ).toContainText(createdFqn.split(":").at(-1)!);
+});
+
+test("late category creation failures remain visible after blur", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const createdFqn = `E2ELateFailure:${slug}${Date.now()}`;
+  let releaseCreate: (() => void) | undefined;
+  const createGate = new Promise<void>((resolve) => {
+    releaseCreate = resolve;
+  });
+  let markCreateStarted: (() => void) | undefined;
+  const createStarted = new Promise<void>((resolve) => {
+    markCreateStarted = resolve;
+  });
+
+  await page.route("**/api/categories", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    markCreateStarted?.();
+    await createGate;
+    await route.abort("failed");
+  });
+
+  await page.goto("/transactions?page=1&pageSize=25");
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+
+  const categoryPicker = page.getByRole("combobox", { name: "Category" });
+  await categoryPicker.fill(createdFqn);
+  await categoryPicker.press("Enter");
+  await createStarted;
+
+  const memo = page.getByLabel("Memo");
+  await memo.focus();
+  releaseCreate?.();
+
+  await expect(categoryPicker).toHaveAttribute("aria-expanded", "false");
+  await expect(categoryPicker.locator("..").getByRole("alert")).toBeVisible();
+  await expect(memo).toBeFocused();
 });
 
 test("constrained inline category picker renders an unsliced level and selects its leaf", async ({
@@ -10159,6 +10209,65 @@ test("late inline tag creation preserves a newer selection", async ({
   await tagsPicker.press("Enter");
   await createStarted;
 
+  const pendingCreate = page.getByRole("option", {
+    name: `Create ${createdFqn}`,
+  });
+  await expect(pendingCreate).toHaveAttribute("aria-disabled", "true");
+  await expect(pendingCreate).toHaveAccessibleDescription(
+    "Wait for creation to finish.",
+  );
+  const pendingAppearance = await pendingCreate.evaluate((element) => {
+    const probe = document.createElement("span");
+    probe.style.backgroundColor = "var(--muted)";
+    probe.style.color = "var(--muted-foreground)";
+    document.body.append(probe);
+    const style = window.getComputedStyle(element);
+    const probeStyle = window.getComputedStyle(probe);
+    const appearance = {
+      backgroundColor: style.backgroundColor,
+      boxShadow: style.boxShadow,
+      color: style.color,
+      cursor: style.cursor,
+      mutedBackground: probeStyle.backgroundColor,
+      mutedForeground: probeStyle.color,
+      outlineColor: style.outlineColor,
+      outlineStyle: style.outlineStyle,
+      transform: style.transform,
+      glyphColor: window.getComputedStyle(element.querySelector("svg")!).color,
+    };
+    probe.remove();
+    return appearance;
+  });
+  expect(pendingAppearance).toMatchObject({
+    backgroundColor: pendingAppearance.mutedBackground,
+    color: pendingAppearance.mutedForeground,
+    cursor: "not-allowed",
+    glyphColor: pendingAppearance.mutedForeground,
+    outlineColor: pendingAppearance.mutedForeground,
+    outlineStyle: "solid",
+  });
+  await pendingCreate.hover();
+  await expect(
+    page.getByRole("tooltip").filter({
+      hasText: "Wait for creation to finish.",
+    }),
+  ).toBeVisible();
+  await page.mouse.down();
+  const pressedAppearance = await pendingCreate.evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      boxShadow: style.boxShadow,
+      transform: style.transform,
+    };
+  });
+  await page.mouse.up();
+  expect(pressedAppearance).toEqual({
+    backgroundColor: pendingAppearance.backgroundColor,
+    boxShadow: pendingAppearance.boxShadow,
+    transform: pendingAppearance.transform,
+  });
+
   await tagsPicker.fill(existing.fqn);
   const selectedTags = page.getByTestId("entity-multi-picker-selected");
   await expect(selectedTags).toContainText(existing.name);
@@ -10282,15 +10391,42 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   ).toBeVisible();
   await expect(attentionStrip).toHaveCount(0);
   await page.unroute("**/api/transactions/spend");
+  const tags = page.locator("#spend-tags");
+  await tags.focus();
+  let releaseRefresh: (() => void) | undefined;
+  let markRefreshStarted: (() => void) | undefined;
+  const refreshStarted = new Promise<void>((resolve) => {
+    markRefreshStarted = resolve;
+  });
+  const holdTransactionRefresh = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+    markRefreshStarted?.();
+    await new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    await route.continue();
+  };
+  await page.route("**/api/transactions**", holdTransactionRefresh);
   await page.keyboard.press("Meta+Enter");
+  await refreshStarted;
+  await expect(tags).toBeFocused();
+  releaseRefresh?.();
 
   await expect(page.getByText("Entries this session: 1")).toBeVisible();
   await expect(
     page.getByRole("status").filter({ hasText: "Transaction saved." }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("textbox", { exact: true, name: "Date" }),
-  ).toHaveValue("2026-05-31");
+  await page.unroute("**/api/transactions**", holdTransactionRefresh);
+  const dateInput = page.getByRole("textbox", { exact: true, name: "Date" });
+  await expect(dateInput).toBeFocused();
+  await expect(dateInput).toHaveValue("2026-05-31");
   await expect(
     page.getByRole("combobox", { name: "Funding account" }),
   ).toHaveValue("credit_card:Chase:Sapphire");

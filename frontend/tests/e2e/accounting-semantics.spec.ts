@@ -30,6 +30,7 @@ const openEntry = async (page: Page): Promise<Locator> => {
     .click();
   const editor = page.getByRole("dialog", { name: "Transaction editor" });
   await expect(editor).toBeVisible();
+  await expect(page.getByLabel("Start from a template")).toBeFocused();
   return editor;
 };
 

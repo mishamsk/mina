@@ -644,6 +644,7 @@ export const DefinitionEditorPanel = ({
                       />
                     </div>
                     <EntityPicker
+                      hierarchical={false}
                       id={`recurring-record-${row.id}-member`}
                       label="Member"
                       options={options.members}

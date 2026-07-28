@@ -164,12 +164,50 @@ test("recurring definition row actions unfold at desktop width and fold when con
 test("recurring definitions create, edit, pause, defer, resume, and cancel", async ({
   page,
 }, testInfo) => {
+  const memberName = `Recurring:Member:${testInfo.project.name.replace(
+    /[^A-Za-z0-9]/g,
+    "",
+  )}:${Date.now()}`;
+  const memberResponse = await page.request.post("/api/members", {
+    data: { name: memberName },
+  });
+  expect(memberResponse.ok(), await memberResponse.text()).toBe(true);
+  const member = (await memberResponse.json()) as {
+    readonly member_id: number;
+  };
   await page.goto("/recurring");
   const fqn = uniqueName(testInfo.project.name);
   const editor = await completeEditor(page, fqn);
+  const memberPicker = editor
+    .getByLabel("Definition records")
+    .locator("section")
+    .first()
+    .getByLabel("Member");
+  await memberPicker.fill("Recurring:Member:");
+  const memberOptionsId = await memberPicker.getAttribute("aria-controls");
+  const memberOptions = page.locator(`#${memberOptionsId}`);
+  await expect(memberOptions).toHaveAttribute("data-picker-mode", "search");
+  await expect(memberOptions.locator("[data-picker-breadcrumb]")).toHaveCount(
+    0,
+  );
+  await expect(
+    memberOptions.getByRole("option", { name: memberName }),
+  ).toBeVisible();
+  await memberPicker.fill(memberName);
+  await expect(memberPicker).toHaveValue(memberName);
+  await expect(memberPicker).toHaveAttribute("aria-expanded", "false");
   const save = editor.getByRole("button", { name: "Save definition" });
   await expect(save).toBeEnabled();
+  const createRequest = page.waitForRequest(
+    (request) =>
+      new URL(request.url()).pathname === "/api/recurring-definitions" &&
+      request.method() === "POST",
+  );
   await save.click();
+  const createBody = (await createRequest).postDataJSON() as {
+    readonly records: readonly { readonly member_id: number | null }[];
+  };
+  expect(createBody.records[0]?.member_id).toBe(member.member_id);
   await expect(page.getByText("Definition created.")).toBeVisible();
   let definition = await definitionByFqn(page, fqn);
   const row = definitionRow(page, definition);
