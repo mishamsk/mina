@@ -89,6 +89,7 @@ import {
   displayAmountKey,
   formatInitiatedDate,
   lineDisplayAmounts,
+  recordRoleLabel,
 } from "./format";
 import { ClassIcon } from "./line-icons";
 import { useCategoryPickerCategoriesResource } from "./use-transactions-resource";
@@ -4327,7 +4328,7 @@ export const EntryPanel = ({
                             (record) => record.record_index === rowIndex,
                           ) ? (
                             <span className="font-mono text-xs font-semibold uppercase">
-                              {accountingWordLabel(
+                              {recordRoleLabel(
                                 classification.records.find(
                                   (record) => record.record_index === rowIndex,
                                 )!.record_role,

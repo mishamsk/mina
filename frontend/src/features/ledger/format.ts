@@ -5,6 +5,7 @@ import type {
   JournalRecord,
   Member,
   PostingStatus,
+  RecordRole,
   Tag,
   Transaction,
   TransactionClass,
@@ -58,6 +59,19 @@ const postingStatusLabels: Record<PostingStatus, string> = {
 
 export const postingStatusLabel = (status: PostingStatus | "mixed"): string =>
   status === "mixed" ? "Mixed posting status" : postingStatusLabels[status];
+
+const recordRoleLabels: Record<RecordRole, string> = {
+  adjustment: "Adjustment",
+  balance: "Balance",
+  clawback: "Clawback",
+  exchange: "Exchange",
+  expense: "Expense",
+  income: "Income",
+  refund: "Refund",
+};
+
+export const recordRoleLabel = (role: RecordRole): string =>
+  recordRoleLabels[role];
 
 export const buildLookupMaps = (
   lookups: LedgerLookupsSnapshot | undefined,

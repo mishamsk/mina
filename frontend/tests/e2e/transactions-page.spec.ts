@@ -547,6 +547,156 @@ const expectDatelessReadOnlyDetailGrid = async (
     .toBe(true);
 };
 
+const expectRecordRoleIndicators = async (
+  table: Locator,
+  rowSelector: string,
+  expectedLabels: readonly string[],
+  layoutChecks: {
+    readonly narrowDetail?: boolean;
+    readonly narrowInline?: boolean;
+    readonly statusContentFit?: boolean;
+  } = {},
+): Promise<void> => {
+  const indicators = table.getByRole("img", { name: / role$/ });
+  await expect(indicators).toHaveCount(expectedLabels.length);
+  expect(
+    await indicators.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("aria-label")),
+    ),
+  ).toEqual(expectedLabels);
+
+  for (const label of new Set(expectedLabels)) {
+    await table.getByRole("img", { name: label, exact: true }).first().hover();
+    await expect(
+      table.page().getByRole("tooltip").filter({ hasText: label }).last(),
+    ).toBeVisible();
+    await table.locator("thead").hover();
+  }
+
+  const rows = table.locator(rowSelector);
+  const heightsWithIndicators = await rows.evaluateAll((elements) =>
+    elements.map((element) => element.getBoundingClientRect().height),
+  );
+  await rows.evaluateAll((elements) => {
+    for (const element of elements) {
+      const indicator = element.querySelector<HTMLElement>(
+        "[role='img'][aria-label$=' role']",
+      );
+      indicator?.parentElement?.style.setProperty("display", "none");
+    }
+  });
+  const heightsWithoutIndicators = await rows.evaluateAll((elements) =>
+    elements.map((element) => element.getBoundingClientRect().height),
+  );
+  await rows.evaluateAll((elements) => {
+    for (const element of elements) {
+      const indicator = element.querySelector<HTMLElement>(
+        "[role='img'][aria-label$=' role']",
+      );
+      indicator?.parentElement?.style.removeProperty("display");
+    }
+  });
+
+  expect(heightsWithIndicators).toHaveLength(expectedLabels.length);
+  expect(heightsWithoutIndicators).toHaveLength(expectedLabels.length);
+  for (const [index, height] of heightsWithIndicators.entries()) {
+    expect(
+      Math.abs(height - (heightsWithoutIndicators[index] ?? 0)),
+    ).toBeLessThanOrEqual(1);
+  }
+
+  if (layoutChecks.statusContentFit) {
+    const statusContent = table.locator(
+      "[data-record-status-content]:has([aria-label^='Dates differ:'])",
+    );
+    await expect(statusContent).not.toHaveCount(0);
+    await expect
+      .poll(() =>
+        statusContent.evaluateAll((elements) =>
+          elements.every(
+            (element) => element.scrollWidth <= element.clientWidth + 1,
+          ),
+        ),
+      )
+      .toBe(true);
+  }
+
+  if (layoutChecks.narrowInline) {
+    const page = table.page();
+    const originalViewport = page.viewportSize();
+    await page.setViewportSize({ width: 320, height: 800 });
+    try {
+      const trigger = table
+        .getByRole("img", { name: expectedLabels[0], exact: true })
+        .locator("..");
+      await trigger.focus();
+      await expect(trigger).toBeFocused();
+      await expect
+        .poll(() =>
+          trigger.evaluate((element) => {
+            const glyph = element.querySelector("svg");
+            if (!glyph) {
+              return false;
+            }
+
+            const triggerBounds = element.getBoundingClientRect();
+            const glyphBounds = glyph.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            return (
+              triggerBounds.left <= glyphBounds.left &&
+              triggerBounds.right >= glyphBounds.right &&
+              triggerBounds.top <= glyphBounds.top &&
+              triggerBounds.bottom >= glyphBounds.bottom &&
+              style.outlineStyle === "solid" &&
+              style.outlineWidth === "2px"
+            );
+          }),
+        )
+        .toBe(true);
+    } finally {
+      if (originalViewport) {
+        await page.setViewportSize(originalViewport);
+      }
+    }
+  }
+
+  if (layoutChecks.narrowDetail) {
+    const page = table.page();
+    const originalViewport = page.viewportSize();
+    await page.setViewportSize({ width: 680, height: 900 });
+    try {
+      await expect
+        .poll(() =>
+          table.locator(rowSelector).evaluateAll((elements) =>
+            elements.every((element) => {
+              const indicator = element.querySelector<HTMLElement>(
+                "td.detail-records-role-column [role='img']",
+              )?.parentElement;
+              const accountCell = element.querySelector<HTMLElement>(
+                "td.detail-records-account-column",
+              );
+              if (!accountCell || !indicator) {
+                return false;
+              }
+
+              const indicatorBounds = indicator.getBoundingClientRect();
+              const accountBounds = accountCell.getBoundingClientRect();
+              const accountLabelStart =
+                accountBounds.left +
+                Number.parseFloat(getComputedStyle(accountCell).paddingLeft);
+              return indicatorBounds.right <= accountLabelStart - 1;
+            }),
+          ),
+        )
+        .toBe(true);
+    } finally {
+      if (originalViewport) {
+        await page.setViewportSize(originalViewport);
+      }
+    }
+  }
+};
+
 const expectMouseDisclosure = async (
   panel: Locator,
   memo: string,
@@ -5255,6 +5405,159 @@ test("transactions page help and leaf category chips", async ({
   await expect(
     simpleSpendRow.getByRole("button", { name: "More row actions" }),
   ).toBeHidden();
+});
+
+test("record role indicators preserve density across accounting shapes", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const correctionAccount = findByFqn(accounts, "system:correction");
+  const category = findByFqn(categories, "Entertainment:Books");
+  const boughtAccount = await createAccount(
+    page,
+    `cash:E2ERoles:${unique}:EUR`,
+    "owned",
+    "EUR",
+  );
+  const spendMemo = `E2E role spend ${unique}`;
+  const exchangeMemo = `E2E role exchange ${unique}`;
+  const adjustmentMemo = `E2E role adjustment ${unique}`;
+
+  const spendResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "18.75",
+      category_id: category.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-24",
+      memo: spendMemo,
+    },
+  });
+  expect(spendResponse.ok(), await spendResponse.text()).toBe(true);
+
+  const exchangeResponse = await page.request.post(
+    "/api/transactions/exchange",
+    {
+      data: {
+        bought_account_id: boughtAccount.account_id,
+        bought_amount: "20.00000000",
+        initiated_date: "2026-07-25",
+        memo: exchangeMemo,
+        sold_account_id: fundingAccount.account_id,
+        sold_amount: "22.00000000",
+      },
+    },
+  );
+  expect(exchangeResponse.ok(), await exchangeResponse.text()).toBe(true);
+
+  const adjustmentResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-24",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "9.50000000",
+          category_id: null,
+          currency: "USD",
+          memo: adjustmentMemo,
+          pending_date: "2026-07-24T16:00:00Z",
+          posted_date: "2026-07-25T16:00:00Z",
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: correctionAccount.account_id,
+          amount: "-9.50000000",
+          category_id: null,
+          currency: "USD",
+          memo: adjustmentMemo,
+          pending_date: "2026-07-25T16:00:00Z",
+          posted_date: "2026-07-26T16:00:00Z",
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(adjustmentResponse.ok(), await adjustmentResponse.text()).toBe(true);
+
+  const fixtures = [
+    {
+      memo: spendMemo,
+      roles: ["Balance role", "Expense role"],
+    },
+    {
+      memo: exchangeMemo,
+      roles: ["Balance role", "Exchange role", "Exchange role", "Balance role"],
+    },
+    {
+      memo: adjustmentMemo,
+      roles: ["Balance role", "Adjustment role"],
+    },
+  ] as const;
+
+  for (const fixture of fixtures) {
+    await page.goto(
+      `/transactions?q=${encodeURIComponent(fixture.memo)}&page=1&pageSize=50&hideExpected=true`,
+    );
+    const transactionRow = page
+      .getByRole("row")
+      .filter({ hasText: fixture.memo })
+      .first();
+    await expect(transactionRow).toBeVisible();
+    await transactionRow.focus();
+    await transactionRow.press(" ");
+
+    const expandedTable = page.getByTestId("expanded-records");
+    await expect(expandedTable).toBeVisible();
+    await expectRecordRoleIndicators(
+      expandedTable,
+      "tbody > tr",
+      fixture.roles,
+      { narrowInline: fixture.memo === spendMemo },
+    );
+
+    await transactionRow
+      .getByRole("button", { name: "Open transaction detail" })
+      .click();
+    const detailPanel = page.getByTestId("transaction-detail-panel");
+    await expect(detailPanel).toBeVisible();
+    const detailTable = detailPanel.getByTestId(
+      "transaction-detail-records-table",
+    );
+    await expectRecordRoleIndicators(
+      detailTable,
+      "tbody > tr[data-detail-record-row='true']",
+      fixture.roles,
+      {
+        narrowDetail: true,
+        statusContentFit: fixture.memo === adjustmentMemo,
+      },
+    );
+
+    const firstDetailRow = detailTable
+      .locator("tr[data-detail-record-row='true']")
+      .first();
+    await firstDetailRow.click();
+    const disclosure = detailTable.locator("tr.detail-records-disclosure-row");
+    await expect(disclosure).toContainText("Role");
+    await expect(disclosure).toContainText(
+      fixture.roles[0].replace(" role", ""),
+    );
+  }
 });
 
 test("transactions line composition uses compact dates and single-line leaf tags", async ({

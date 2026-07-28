@@ -13,11 +13,15 @@ import {
 } from "pixelarticons/react";
 import type { ComponentType, SVGProps } from "react";
 
-import type { PostingStatus, TransactionClass } from "@/api";
+import type { PostingStatus, RecordRole, TransactionClass } from "@/api";
 import { Tooltip } from "@/components/tooltip";
 import { cn } from "@/lib/utils";
 
-import { postingStatusLabel, transactionClassLabel } from "./format";
+import {
+  postingStatusLabel,
+  recordRoleLabel,
+  transactionClassLabel,
+} from "./format";
 
 type PixelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -81,6 +85,43 @@ export const ClassIcon = ({
           aria-hidden="true"
           className={cn("size-5", classTone[transactionClass])}
         />
+      </span>
+    </Tooltip>
+  );
+};
+
+interface RecordRoleIconProps {
+  readonly className?: string;
+  readonly focusable?: boolean;
+  readonly role: RecordRole;
+}
+
+const recordRoleIcons: Record<RecordRole, PixelIcon> = {
+  adjustment: PlusBox,
+  balance: Wallet,
+  clawback: ArrowUpBox,
+  exchange: Shuffle,
+  expense: Receipt,
+  income: ArrowDownBox,
+  refund: Repeat,
+};
+
+export const RecordRoleIcon = ({
+  className,
+  focusable = true,
+  role,
+}: RecordRoleIconProps) => {
+  const Icon = recordRoleIcons[role];
+  const label = `${recordRoleLabel(role)} role`;
+
+  return (
+    <Tooltip
+      focusable={focusable}
+      label={label}
+      className={cn("inline-grid size-5 min-w-5 place-items-center", className)}
+    >
+      <span aria-label={label} role="img">
+        <Icon aria-hidden="true" className="text-muted-foreground size-4" />
       </span>
     </Tooltip>
   );

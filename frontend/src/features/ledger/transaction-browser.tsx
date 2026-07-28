@@ -65,7 +65,7 @@ import {
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { type InlineEditCoordinator, InlineEditScope } from "./inline-editing";
-import { ClassIcon, StatusIcon } from "./line-icons";
+import { ClassIcon, RecordRoleIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { MixedSentinel } from "./mixed-sentinel";
 import { RecordDetailCells } from "./record-detail-cells";
@@ -455,7 +455,10 @@ const RecordsTable = ({
     <table className="w-full table-fixed border-collapse text-sm">
       <thead>
         <tr className="font-heading text-foreground border-b border-[var(--border-ink)] bg-[var(--table-header)] text-left text-xs font-semibold uppercase">
-          <th className="w-[18%] px-2 py-2">Account</th>
+          <th className="w-[4%] px-1 py-2">
+            <span className="sr-only">Role</span>
+          </th>
+          <th className="w-[14%] px-2 py-2">Account</th>
           <th className="w-[13%] px-2 py-2 text-right">Amount</th>
           <th className="w-[15%] px-2 py-2">Category</th>
           <th className="w-[13%] px-2 py-2">Tags</th>
@@ -489,6 +492,9 @@ const RecordsTable = ({
                   "text-muted-foreground line-through",
               )}
             >
+              <td className="px-1 py-2 align-top">
+                <RecordRoleIcon role={record.record_role} />
+              </td>
               <td className="px-2 py-2">
                 <StructuralRecordCell
                   label="account"

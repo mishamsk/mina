@@ -48,10 +48,11 @@ import {
   linePostingStatus,
   type LookupMaps,
   postingStatusLabel,
+  recordRoleLabel,
   transactionClassLabel,
 } from "./format";
 import { FqnPath } from "./fqn-path";
-import { StatusIcon } from "./line-icons";
+import { RecordRoleIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { TagChip } from "./tag-chip";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
@@ -616,6 +617,7 @@ const DetailRecordsTable = ({
     >
       <table className="w-full table-fixed border-collapse text-sm">
         <colgroup>
+          <col className="detail-records-role-column" />
           <col className="detail-records-account-column" />
           <col className="detail-records-amount-column" />
           <col className="detail-records-category-column" />
@@ -626,6 +628,9 @@ const DetailRecordsTable = ({
         </colgroup>
         <thead>
           <tr className="font-heading bg-[var(--table-header)] text-left text-xs font-semibold uppercase">
+            <th className="detail-records-role-column px-1 py-2">
+              <span className="sr-only">Role</span>
+            </th>
             <th className="detail-records-account-column px-2 py-2">Account</th>
             <th className="detail-records-amount-column px-2 py-2 text-right">
               Amount
@@ -686,6 +691,15 @@ const DetailRecordsTable = ({
                   }}
                   tabIndex={0}
                 >
+                  <td
+                    className="detail-records-role-column min-w-0 px-1 py-1.5"
+                    data-label="Role"
+                  >
+                    <RecordRoleIcon
+                      focusable={false}
+                      role={record.record_role}
+                    />
+                  </td>
                   <td
                     className="detail-records-account-column min-w-0 px-2 py-1.5"
                     data-label="Account"
@@ -814,7 +828,7 @@ const DetailRecordsTable = ({
                     <td
                       id={disclosureId}
                       className="detail-records-disclosure-cell px-3 py-2"
-                      colSpan={7}
+                      colSpan={8}
                     >
                       <dl className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
                         <dt className="text-muted-foreground">
@@ -839,6 +853,8 @@ const DetailRecordsTable = ({
                           Posting status
                         </dt>
                         <dd>{postingStatusLabel(record.posting_status)}</dd>
+                        <dt className="text-muted-foreground">Role</dt>
+                        <dd>{recordRoleLabel(record.record_role)}</dd>
                         <dt className="text-muted-foreground">Source</dt>
                         <dd>{sourceLabel(record.source)}</dd>
                         <dt className="text-muted-foreground">Memo</dt>
