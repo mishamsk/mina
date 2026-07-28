@@ -5924,7 +5924,22 @@ test("transaction detail panel shows full records and supports deep links", asyn
   const panel = page.getByRole("dialog", { name: transaction.display_title });
   await expect(panel).toBeVisible();
   await expect(panel).not.toHaveAttribute("aria-modal", "true");
-  await expect(panel.getByText("SPEND").first()).toBeVisible();
+  const classBadge = panel.getByTestId("class-badge");
+  await expect(classBadge).toHaveRole("img");
+  await expect(classBadge).toHaveAccessibleName("Spend");
+  await expect(classBadge.getByText("SPEND", { exact: true })).toBeVisible();
+  await expect(classBadge.locator("svg")).toBeVisible();
+  await classBadge.hover();
+  await expect(
+    page.getByRole("tooltip").filter({ hasText: "Spend" }),
+  ).toBeVisible();
+  await panel.getByRole("heading", { name: "Journal records" }).hover();
+  const metadata = panel.locator(
+    "section[aria-labelledby='transaction-detail-metadata']",
+  );
+  await expect(metadata.getByText("Class", { exact: true })).toHaveCount(0);
+  await expect(metadata.getByText("Source", { exact: true })).toBeVisible();
+  await expect(metadata.getByText("Created", { exact: true })).toBeVisible();
   await expect(
     panel.getByTestId("amount-chip").filter({ hasText: "-42.19 $" }).first(),
   ).toBeVisible();

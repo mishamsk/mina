@@ -49,7 +49,6 @@ import {
   type LookupMaps,
   postingStatusLabel,
   recordRoleLabel,
-  transactionClassLabel,
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { RecordRoleIcon, StatusIcon } from "./line-icons";
@@ -970,10 +969,6 @@ export const TransactionDetailContent = ({
           Metadata
         </h3>
         <dl className="grid gap-2 text-sm sm:grid-cols-[9rem_1fr]">
-          <dt className="font-heading text-muted-foreground uppercase">
-            Class
-          </dt>
-          <dd>{transactionClassLabel(transaction.transaction_class)}</dd>
           <dt className="font-heading text-muted-foreground uppercase">
             Source
           </dt>

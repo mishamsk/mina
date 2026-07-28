@@ -45,6 +45,11 @@ interface ClassIconProps {
   readonly transactionClass: TransactionClass;
 }
 
+interface ClassGlyphProps {
+  readonly className?: string;
+  readonly transactionClass: TransactionClass;
+}
+
 const classIcons: Record<TransactionClass, PixelIcon> = {
   adjustment: PlusBox,
   clawback: ArrowUpBox,
@@ -67,12 +72,25 @@ const classTone: Record<TransactionClass, string> = {
   transfer: "text-[var(--color-class-transfer-ink)]",
 };
 
+export const ClassGlyph = ({
+  className,
+  transactionClass,
+}: ClassGlyphProps) => {
+  const Icon = classIcons[transactionClass];
+
+  return (
+    <Icon
+      aria-hidden="true"
+      className={cn("size-5", classTone[transactionClass], className)}
+    />
+  );
+};
+
 export const ClassIcon = ({
   className,
   focusable = true,
   transactionClass,
 }: ClassIconProps) => {
-  const Icon = classIcons[transactionClass];
   const label = transactionClassLabel(transactionClass);
   return (
     <Tooltip
@@ -81,10 +99,7 @@ export const ClassIcon = ({
       className={cn("inline-grid size-6 place-items-center", className)}
     >
       <span aria-label={label} role="img">
-        <Icon
-          aria-hidden="true"
-          className={cn("size-5", classTone[transactionClass])}
-        />
+        <ClassGlyph transactionClass={transactionClass} />
       </span>
     </Tooltip>
   );
