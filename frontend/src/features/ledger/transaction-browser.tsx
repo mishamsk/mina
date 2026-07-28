@@ -74,7 +74,7 @@ import { ClassIcon, RecordRoleIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
 import { MixedSentinel, MorePartsIndicator } from "./mixed-sentinel";
 import { RecordDetailCells } from "./record-detail-cells";
-import type { RecordUpdate } from "./record-editing";
+import type { InlineSavePageRefresh, RecordUpdate } from "./record-editing";
 import {
   RecordReferenceCells,
   type RecordReferenceUpdate,
@@ -83,6 +83,10 @@ import { TagChip, tagChipMicroHeightClass } from "./tag-chip";
 import { TransactionAmountCell } from "./transaction-amount-cell";
 import { TransactionDeleteDescription } from "./transaction-delete-description";
 import { transactionPageSizeOptions } from "./transaction-page-position";
+import {
+  focusTransactionRowFallback,
+  transactionRowSelector,
+} from "./transaction-row-focus";
 
 interface TransactionBrowserProps {
   readonly bulkEditMode: boolean;
@@ -135,23 +139,27 @@ interface TransactionBrowserProps {
     transaction: Transaction,
     record: JournalRecord,
     update: RecordUpdate,
-  ) => Promise<void>;
+    onPageRefresh?: InlineSavePageRefresh,
+  ) => Promise<boolean | void>;
   readonly onUpdateTransactionRecordReferences: (
     transaction: Transaction,
     records: readonly JournalRecord[],
     update: RecordReferenceUpdate,
+    onPageRefresh?: InlineSavePageRefresh,
   ) => Promise<boolean>;
   readonly onUpdateTransactionAmount: (
     transaction: Transaction,
     records: readonly [JournalRecord, JournalRecord],
     amount: string,
-  ) => Promise<void>;
+    onPageRefresh?: InlineSavePageRefresh,
+  ) => Promise<boolean | void>;
   readonly onUpdateTransactionsBulkReferences?: (
     transactions: readonly Transaction[],
     update: RecordReferenceUpdate,
   ) => Promise<void>;
   readonly page: number;
   readonly pageSize: number;
+  readonly refreshErrorMessage: string | undefined;
   readonly selectedTransactionIds: ReadonlySet<number>;
   readonly selectedTransactions: readonly Transaction[];
   readonly totalCount: number | undefined;
@@ -206,9 +214,28 @@ const LoadingRows = () => (
   </div>
 );
 
+const TransactionErrorCard = ({
+  heading,
+  message,
+  summary,
+}: {
+  readonly heading: string;
+  readonly message: string;
+  readonly summary: string;
+}) => (
+  <div className="border-destructive bg-card border-2 p-4" role="alert">
+    <p className="text-destructive font-semibold">{heading}</p>
+    <details className="text-muted-foreground mt-3 text-sm">
+      <summary className="text-foreground cursor-pointer">{summary}</summary>
+      <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
+        {message}
+      </pre>
+    </details>
+  </div>
+);
+
 const clippedTagChipSlopPx = 0.5;
 const emptyClippedTagIds: ReadonlySet<number> = new Set();
-const transactionRowSelector = "[data-transaction-row='true']";
 
 const sameTagIdSet = (
   left: ReadonlySet<number>,
@@ -697,6 +724,7 @@ export const TransactionBrowser = ({
   onUpdateTransactionsBulkReferences,
   page,
   pageSize,
+  refreshErrorMessage,
   selectedTransactionIds,
   selectedTransactions,
   totalCount,
@@ -1028,28 +1056,7 @@ export const TransactionBrowser = ({
 
     const rowIndex = deletedRowFocusIndexRef.current;
     deletedRowFocusIndexRef.current = undefined;
-    window.requestAnimationFrame(() => {
-      const root = rootRef.current;
-      if (!root) {
-        return;
-      }
-
-      const rows = Array.from(
-        root.querySelectorAll<HTMLElement>(transactionRowSelector),
-      );
-      const nextRowIndex = Math.min(rowIndex, rows.length - 1);
-      const target =
-        rows[nextRowIndex] ??
-        root.querySelector<HTMLElement>(
-          "[data-testid='transactions-pagination-footer'] button:not(:disabled)",
-        ) ??
-        root.querySelector<HTMLElement>(
-          "[data-testid='transactions-pagination-footer']",
-        ) ??
-        root.querySelector<HTMLElement>("[data-transaction-empty-action]");
-
-      focusWithoutTooltip(target, { preventScroll: true });
-    });
+    focusTransactionRowFallback(rootRef.current, rowIndex);
   }, [deleteDialog, dismissDialog, transactions]);
 
   useEffect(() => {
@@ -1131,19 +1138,11 @@ export const TransactionBrowser = ({
   if (errorMessage) {
     return (
       <>
-        <div className="border-destructive bg-card border-2 p-4" role="alert">
-          <p className="text-destructive font-semibold">
-            Transactions could not be loaded.
-          </p>
-          <details className="text-muted-foreground mt-3 text-sm">
-            <summary className="text-foreground cursor-pointer">
-              API error
-            </summary>
-            <pre className="mt-2 overflow-auto font-mono text-xs whitespace-pre-wrap">
-              {errorMessage}
-            </pre>
-          </details>
-        </div>
+        <TransactionErrorCard
+          heading="Transactions could not be loaded."
+          message={errorMessage}
+          summary="API error"
+        />
         {bulkActionSurface}
       </>
     );
@@ -1151,7 +1150,14 @@ export const TransactionBrowser = ({
 
   if (!transactions || transactions.length === 0) {
     return (
-      <div ref={rootRef} className="flex h-full min-h-0 flex-col">
+      <div ref={rootRef} className="flex h-full min-h-0 flex-col gap-3">
+        {refreshErrorMessage ? (
+          <TransactionErrorCard
+            heading="Transactions may be stale."
+            message={refreshErrorMessage}
+            summary="Refresh error"
+          />
+        ) : null}
         <div className="border-border bg-card flex-1 border p-10 text-center">
           <EmptyStateSprite />
           <h2 className="text-pixel mt-4 text-base">No transactions</h2>
@@ -1181,6 +1187,13 @@ export const TransactionBrowser = ({
       className="flex h-full min-h-0 flex-col gap-3"
       aria-busy={loading ? "true" : undefined}
     >
+      {refreshErrorMessage ? (
+        <TransactionErrorCard
+          heading="Transactions may be stale."
+          message={refreshErrorMessage}
+          summary="Refresh error"
+        />
+      ) : null}
       <div
         className="transactions-table-scroll bg-card min-h-0 flex-1 overflow-auto border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)]"
         data-testid="transactions-table-scroll"
@@ -1311,6 +1324,7 @@ export const TransactionBrowser = ({
                 amounts.length === 1;
               const rowReferenceSave = (
                 update: RecordReferenceUpdate,
+                onPageRefresh?: InlineSavePageRefresh,
               ): Promise<boolean> =>
                 onUpdateTransactionRecordReferences(
                   transaction,
@@ -1318,6 +1332,7 @@ export const TransactionBrowser = ({
                     ? categoryTargetRecords
                     : activeRecords,
                   update,
+                  onPageRefresh,
                 );
               const occurrenceActionBusy =
                 confirmingOccurrenceId !== undefined || dismissing;
@@ -1712,7 +1727,9 @@ export const TransactionBrowser = ({
                               />
                             ) : null
                           }
-                          onSave={(_, __, update) => rowReferenceSave(update)}
+                          onSave={(_, __, update, onPageRefresh) =>
+                            rowReferenceSave(update, onPageRefresh)
+                          }
                         />
                       ) : category ? (
                         <FqnPath
@@ -1764,7 +1781,9 @@ export const TransactionBrowser = ({
                                 onFilterTag={onFilterTag}
                               />
                             }
-                            onSave={(_, __, update) => rowReferenceSave(update)}
+                            onSave={(_, __, update, onPageRefresh) =>
+                              rowReferenceSave(update, onPageRefresh)
+                            }
                           />
                         ) : (
                           <TagChipsLine tags={tags} onFilterTag={onFilterTag} />
@@ -1820,7 +1839,9 @@ export const TransactionBrowser = ({
                                 />
                               ) : null
                             }
-                            onSave={(_, __, update) => rowReferenceSave(update)}
+                            onSave={(_, __, update, onPageRefresh) =>
+                              rowReferenceSave(update, onPageRefresh)
+                            }
                           />
                         ) : member ? (
                           <MemberChip

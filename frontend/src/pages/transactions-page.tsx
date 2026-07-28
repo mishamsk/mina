@@ -301,6 +301,7 @@ export const TransactionsPage = () => {
             }
             page={browser.page}
             pageSize={browser.pageSize}
+            refreshErrorMessage={browser.refreshErrorMessage}
             selectedTransactionIds={browser.selectedTransactionIds}
             selectedTransactions={browser.selectedTransactions}
             totalCount={browser.totalCount}

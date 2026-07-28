@@ -92,8 +92,10 @@ interface TransactionsState {
   readonly overview: OverviewSnapshot | undefined;
   readonly overviewErrorMessage: string | undefined;
   readonly overviewLoading: boolean;
+  readonly pageErrorMessages: Readonly<Record<string, string>>;
   readonly pageGeneration: number;
   readonly pages: Readonly<Record<string, TransactionPageSnapshot>>;
+  readonly refreshFailedPageKeys: Readonly<Record<string, boolean>>;
   readonly stalePageKeys: Readonly<Record<string, boolean>>;
 }
 
@@ -116,8 +118,10 @@ const initialTransactionsState: TransactionsState = {
   overview: undefined,
   overviewErrorMessage: undefined,
   overviewLoading: false,
+  pageErrorMessages: {},
   pageGeneration: 0,
   pages: {},
+  refreshFailedPageKeys: {},
   stalePageKeys: {},
 };
 
@@ -160,9 +164,12 @@ export const useTransactionPageView = (params: TransactionsPageParams) => {
 
       return {
         displayedSnapshot: snapshot ?? fallbackSnapshot,
-        errorMessage: state.errorMessage,
+        errorMessage:
+          state.pageErrorMessages[key] ??
+          (snapshot ? undefined : state.errorMessage),
         generation: state.pageGeneration,
         loading: state.loadingPageKey === requestKey,
+        refreshFailed: state.refreshFailedPageKeys[key] ?? false,
         snapshot,
         stale: state.stalePageKeys[key] ?? false,
       };
@@ -277,7 +284,11 @@ export const setTransactionPage = (
   const loadingKey = transactionPageRequestKey(loadingParams);
   useTransactionsStore.setState(
     (state) => {
+      const pageErrorMessages = { ...state.pageErrorMessages };
+      const refreshFailedPageKeys = { ...state.refreshFailedPageKeys };
       const stalePageKeys = { ...state.stalePageKeys };
+      delete pageErrorMessages[key];
+      delete refreshFailedPageKeys[key];
       delete stalePageKeys[key];
       return {
         errorMessage: undefined,
@@ -290,6 +301,7 @@ export const setTransactionPage = (
           state.loadingPageKey === loadingKey
             ? undefined
             : state.loadingPageKey,
+        pageErrorMessages,
         pages: {
           ...state.pages,
           [key]: {
@@ -299,6 +311,7 @@ export const setTransactionPage = (
             transactions,
           },
         },
+        refreshFailedPageKeys,
         stalePageKeys,
       };
     },
@@ -319,6 +332,7 @@ export const updateDisplayedTransactionPage = (
         return state;
       }
 
+      const pageErrorMessage = state.pageErrorMessages[key];
       return {
         errorMessage: undefined,
         lastLoadedPageKey: key,
@@ -333,6 +347,8 @@ export const updateDisplayedTransactionPage = (
             ),
           },
         },
+        pageErrorMessages: pageErrorMessage ? { [key]: pageErrorMessage } : {},
+        refreshFailedPageKeys: {},
         stalePageKeys: {},
       };
     },
@@ -346,25 +362,31 @@ export const setRefreshedTransactionPage = (
   totalCount: number | undefined,
   transactions: readonly Transaction[],
   pageAtRefreshStart: TransactionPageSnapshot | undefined,
-): void => {
+): boolean => {
   const normalizedParams = {
     ...params,
     filters: normalizeTransactionFilters(params.filters),
   };
   const key = transactionPageKey(normalizedParams);
+  let refreshed = false;
   useTransactionsStore.setState(
     (state) => {
       if (state.pages[key] !== pageAtRefreshStart) {
         return state;
       }
 
+      refreshed = true;
+      const pageErrorMessages = { ...state.pageErrorMessages };
+      const refreshFailedPageKeys = { ...state.refreshFailedPageKeys };
       const stalePageKeys = { ...state.stalePageKeys };
+      delete pageErrorMessages[key];
+      delete refreshFailedPageKeys[key];
       delete stalePageKeys[key];
       const lastLoadedPageKey = state.lastLoadedPageKey ?? key;
 
       return {
-        errorMessage: undefined,
         lastLoadedPageKey,
+        pageErrorMessages,
         pages: {
           ...state.pages,
           [key]: {
@@ -374,25 +396,42 @@ export const setRefreshedTransactionPage = (
             transactions,
           },
         },
+        refreshFailedPageKeys,
         stalePageKeys,
       };
     },
     false,
     "TransactionsStore/setRefreshedTransactionPage",
   );
+  return refreshed;
 };
 
 export const markTransactionPageStale = (
   params: TransactionsPageParams,
   expectedPage: TransactionPageSnapshot | undefined,
-): void => {
+  repeatedFailureMessage?: string,
+): boolean => {
   const key = transactionPageKey(params);
+  let repeatedFailure = false;
   useTransactionsStore.setState(
     (state) => {
       if (state.pages[key] !== expectedPage) {
         return state;
       }
+      if (state.refreshFailedPageKeys[key] && repeatedFailureMessage) {
+        repeatedFailure = true;
+        return {
+          pageErrorMessages: {
+            ...state.pageErrorMessages,
+            [key]: repeatedFailureMessage,
+          },
+        };
+      }
       return {
+        refreshFailedPageKeys: {
+          ...state.refreshFailedPageKeys,
+          [key]: true,
+        },
         stalePageKeys: {
           ...state.stalePageKeys,
           [key]: true,
@@ -402,6 +441,7 @@ export const markTransactionPageStale = (
     false,
     "TransactionsStore/markTransactionPageStale",
   );
+  return repeatedFailure;
 };
 
 export const markOtherTransactionPagesStale = (
@@ -409,13 +449,19 @@ export const markOtherTransactionPagesStale = (
 ): void => {
   const currentKey = transactionPageKey(currentParams);
   useTransactionsStore.setState(
-    (state) => ({
-      stalePageKeys: Object.fromEntries(
-        Object.keys(state.pages)
-          .filter((key) => key !== currentKey)
-          .map((key) => [key, true]),
-      ),
-    }),
+    (state) => {
+      const staleKeys = Object.keys(state.pages).filter(
+        (key) => key !== currentKey,
+      );
+      return {
+        refreshFailedPageKeys: Object.fromEntries(
+          Object.entries(state.refreshFailedPageKeys).filter(
+            ([key]) => !staleKeys.includes(key),
+          ),
+        ),
+        stalePageKeys: Object.fromEntries(staleKeys.map((key) => [key, true])),
+      };
+    },
     false,
     "TransactionsStore/markOtherTransactionPagesStale",
   );
@@ -705,8 +751,10 @@ export const invalidateTransactionPages = (): void => {
       lastLoadedPageKey: undefined,
       loadingPageGeneration: undefined,
       loadingPageKey: undefined,
+      pageErrorMessages: {},
       pageGeneration: state.pageGeneration + 1,
       pages: {},
+      refreshFailedPageKeys: {},
       stalePageKeys: {},
     }),
     false,

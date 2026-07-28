@@ -47,6 +47,7 @@ import {
 import { linePostingStatus } from "./format";
 import { useInlineEditCoordinator } from "./inline-editing";
 import {
+  type InlineSavePageRefresh,
   type RecordUpdate,
   recordUpdateBody,
   transactionWithRecordUpdate,
@@ -171,7 +172,12 @@ export const useTransactionBrowserPage = ({
     dateJumpLoading ||
     lookups.loading ||
     (Boolean(transactions) && !lookups.snapshot);
-  const errorMessage = pageResource.errorMessage ?? lookups.errorMessage;
+  const errorMessage =
+    lookups.errorMessage ??
+    (pageResource.snapshot ? undefined : pageResource.errorMessage);
+  const refreshErrorMessage = pageResource.snapshot
+    ? pageResource.errorMessage
+    : undefined;
 
   const showNotice = useCallback(
     (message: string, kind: Notice["kind"] = "success") => {
@@ -414,6 +420,7 @@ export const useTransactionBrowserPage = ({
       transaction: Transaction,
       record: JournalRecord,
       update: RecordUpdate,
+      onPageRefresh?: InlineSavePageRefresh,
     ) => {
       let nextTransaction: Transaction;
       let nextDetailTransaction: Transaction | undefined;
@@ -478,29 +485,32 @@ export const useTransactionBrowserPage = ({
         if (!result.data) {
           throw new Error(apiErrorMessage(result.error));
         }
-        await refreshTransactionPageAfterSave(
+        const rowRemainsVisible = await refreshTransactionPageAfterSave(
           displayedPageParams,
           transaction.transaction_id,
           result.data,
           transaction,
+          { onPageRefresh },
         );
         await detail.refreshSelectedTransactionDetail(
           transaction.transaction_id,
           result.data,
         );
-        return;
+        return rowRemainsVisible;
       }
 
-      await refreshTransactionPageAfterSave(
+      const rowRemainsVisible = await refreshTransactionPageAfterSave(
         displayedPageParams,
         transaction.transaction_id,
         nextTransaction,
         transaction,
+        { onPageRefresh },
       );
       await detail.refreshSelectedTransactionDetail(
         transaction.transaction_id,
         nextDetailTransaction,
       );
+      return rowRemainsVisible;
     },
     [detail, displayedPageParams],
   );
@@ -513,6 +523,7 @@ export const useTransactionBrowserPage = ({
         RecordUpdate,
         { readonly kind: "category" | "member" | "tags" }
       >,
+      onPageRefresh?: InlineSavePageRefresh,
     ) => {
       const recordIds = records.map((record) => record.record_id);
       if (recordIds.length === 0) {
@@ -571,6 +582,7 @@ export const useTransactionBrowserPage = ({
           transaction.transaction_id,
           result.data,
           transaction,
+          { onPageRefresh },
         );
         await detail.refreshSelectedTransactionDetail(
           transaction.transaction_id,
@@ -584,6 +596,7 @@ export const useTransactionBrowserPage = ({
         transaction.transaction_id,
         nextTransaction,
         transaction,
+        { onPageRefresh },
       );
       await detail.refreshSelectedTransactionDetail(
         transaction.transaction_id,
@@ -599,6 +612,7 @@ export const useTransactionBrowserPage = ({
       transaction: Transaction,
       records: readonly [JournalRecord, JournalRecord],
       amount: string,
+      onPageRefresh?: InlineSavePageRefresh,
     ) => {
       const result = await replaceLedgerTransaction(
         transaction.transaction_id,
@@ -612,16 +626,18 @@ export const useTransactionBrowserPage = ({
         throw new Error(apiErrorMessage(result.error));
       }
 
-      await refreshTransactionPageAfterSave(
+      const rowRemainsVisible = await refreshTransactionPageAfterSave(
         displayedPageParams,
         transaction.transaction_id,
         result.data,
         transaction,
+        { onPageRefresh },
       );
       await detail.refreshSelectedTransactionDetail(
         transaction.transaction_id,
         result.data,
       );
+      return rowRemainsVisible;
     },
     [detail, displayedPageParams],
   );
@@ -867,6 +883,7 @@ export const useTransactionBrowserPage = ({
     page,
     pageSize,
     params,
+    refreshErrorMessage,
     selectPageTransactions,
     selectTransactionRange,
     selectedTransactionIds,

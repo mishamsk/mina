@@ -18,7 +18,8 @@ import {
 } from "@/utils/date";
 
 import { useInlineEdit } from "./inline-editing";
-import type { RecordUpdate } from "./record-editing";
+import type { InlineSavePageRefresh, RecordUpdate } from "./record-editing";
+import { transactionRowFallback } from "./transaction-row-focus";
 
 type DetailField = "dates" | "memo" | "postingStatus";
 
@@ -38,7 +39,8 @@ interface RecordDetailCellsProps {
     transaction: Transaction,
     record: JournalRecord,
     update: RecordUpdate,
-  ) => Promise<void>;
+    onPageRefresh?: InlineSavePageRefresh,
+  ) => Promise<boolean | void>;
   readonly record: JournalRecord;
   readonly transaction: Transaction;
   readonly value: ReactNode;
@@ -81,6 +83,7 @@ export const RecordDetailCells = ({
   );
   const [postingStatusSelectOpen, setPostingStatusSelectOpen] = useState(false);
   const displayCellRef = useRef<HTMLDivElement>(null);
+  const restoreFallbackRef = useRef<() => void>(() => undefined);
   const { activeEditorId, finish, requestStart } = useInlineEdit();
   const instanceId = useId();
   const editorId = `record-${record.record_id}-${field}-${instanceId}`;
@@ -109,6 +112,10 @@ export const RecordDetailCells = ({
     setPendingDate(inputDateValue(record.pending_date));
     setPostedDate(inputDateValue(record.posted_date));
     setErrorMessage(undefined);
+    restoreFallbackRef.current = transactionRowFallback(
+      displayCellRef.current,
+      transaction.transaction_id,
+    );
     requestStart(editorId, restoreDisplayFocus);
   };
 
@@ -120,11 +127,24 @@ export const RecordDetailCells = ({
   );
 
   const save = async (update: RecordUpdate) => {
+    const restoreFallback = restoreFallbackRef.current;
     setSaving(true);
     setErrorMessage(undefined);
     try {
-      await onSave(transaction, record, update);
-      finish(editorId, true);
+      const rowRemainsVisible = await onSave(
+        transaction,
+        record,
+        update,
+        (visible) => {
+          if (!visible) {
+            restoreFallback();
+          }
+        },
+      );
+      finish(editorId, rowRemainsVisible !== false);
+      if (rowRemainsVisible === false) {
+        restoreFallback();
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",

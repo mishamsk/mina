@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 
 import { useInlineEdit } from "./inline-editing";
 import { InlineEditorActions } from "./inline-editor-actions";
+import type { InlineSavePageRefresh } from "./record-editing";
+import { transactionRowFallback } from "./transaction-row-focus";
 
 const amountPattern = /^\d+(\.\d{1,8})?$/;
 
@@ -48,7 +50,8 @@ interface TransactionAmountCellProps {
     transaction: Transaction,
     records: readonly [JournalRecord, JournalRecord],
     amount: string,
-  ) => Promise<void>;
+    onPageRefresh?: InlineSavePageRefresh,
+  ) => Promise<boolean | void>;
 }
 
 export const TransactionAmountCell = ({
@@ -64,6 +67,7 @@ export const TransactionAmountCell = ({
   const [errorMessage, setErrorMessage] = useState<string>();
   const [saving, setSaving] = useState(false);
   const displayCellRef = useRef<HTMLDivElement>(null);
+  const restoreFallbackRef = useRef<() => void>(() => undefined);
   const restoreDisplayFocusRef = useRef(false);
   const savingRef = useRef(false);
   const { activeEditorId, finish, requestStart } = useInlineEdit();
@@ -105,6 +109,10 @@ export const TransactionAmountCell = ({
   const startEditing = () => {
     setAmount(amountFromRecords);
     setErrorMessage(undefined);
+    restoreFallbackRef.current = transactionRowFallback(
+      displayCellRef.current,
+      transaction.transaction_id,
+    );
     requestStart(editorId, restoreDisplayFocus);
   };
 
@@ -129,11 +137,24 @@ export const TransactionAmountCell = ({
     }
 
     savingRef.current = true;
+    const restoreFallback = restoreFallbackRef.current;
     setSaving(true);
     setErrorMessage(undefined);
     try {
-      await onSave(transaction, records, normalizedAmount);
-      finish(editorId, true);
+      const rowRemainsVisible = await onSave(
+        transaction,
+        records,
+        normalizedAmount,
+        (visible) => {
+          if (!visible) {
+            restoreFallback();
+          }
+        },
+      );
+      finish(editorId, rowRemainsVisible !== false);
+      if (rowRemainsVisible === false) {
+        restoreFallback();
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",

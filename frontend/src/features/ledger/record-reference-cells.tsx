@@ -23,7 +23,11 @@ import {
 import type { LookupMaps } from "./format";
 import { useInlineEdit } from "./inline-editing";
 import { InlineEditorActions } from "./inline-editor-actions";
-import type { RecordReferenceUpdate } from "./record-editing";
+import type {
+  InlineSavePageRefresh,
+  RecordReferenceUpdate,
+} from "./record-editing";
+import { transactionRowFallback } from "./transaction-row-focus";
 
 export type { RecordReferenceUpdate } from "./record-editing";
 
@@ -37,6 +41,7 @@ interface RecordReferenceCellsProps {
     transaction: Transaction,
     record: JournalRecord,
     update: RecordReferenceUpdate,
+    onPageRefresh?: InlineSavePageRefresh,
   ) => Promise<boolean | void>;
   readonly record: JournalRecord;
   readonly testIdPrefix?: string;
@@ -446,11 +451,27 @@ export const RecordReferenceCells = ({
   );
 
   const save = async (update: RecordReferenceUpdate) => {
+    const restoreFallback = transactionRowFallback(
+      displayCellRef.current,
+      transaction.transaction_id,
+    );
     setSaving(true);
     setErrorMessage(undefined);
     try {
-      const rowRemainsVisible = await onSave(transaction, record, update);
+      const rowRemainsVisible = await onSave(
+        transaction,
+        record,
+        update,
+        (visible) => {
+          if (!visible) {
+            restoreFallback();
+          }
+        },
+      );
       finish(editorId, rowRemainsVisible !== false);
+      if (rowRemainsVisible === false) {
+        restoreFallback();
+      }
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "The API request failed.",

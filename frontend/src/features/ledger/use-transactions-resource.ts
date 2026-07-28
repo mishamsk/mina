@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import {
+  apiErrorDetails,
   apiErrorMessage,
   type CategoryEconomicIntent,
   fetchCategoryPickerCategories,
@@ -53,6 +54,33 @@ interface LoadedTransactionPage {
 }
 
 let ledgerLookupRequestEpoch = 0;
+const pendingPageRefreshCallbacks = new Map<string, () => void>();
+
+const queuePageRefreshCallback = (
+  params: TransactionPageParams,
+  callback: () => void,
+): void => {
+  pendingPageRefreshCallbacks.set(transactionPageKey(params), callback);
+};
+
+const cancelPageRefreshCallback = (params: TransactionPageParams): void => {
+  pendingPageRefreshCallbacks.delete(transactionPageKey(params));
+};
+
+const cancelAllPageRefreshCallbacks = (): void => {
+  pendingPageRefreshCallbacks.clear();
+};
+
+const settlePageRefreshCallbacks = (params: TransactionPageParams): void => {
+  const key = transactionPageKey(params);
+  const callback = pendingPageRefreshCallbacks.get(key);
+  if (!callback) {
+    return;
+  }
+
+  pendingPageRefreshCallbacks.delete(key);
+  callback();
+};
 
 const effectivePageParams = (
   params: TransactionPageParams,
@@ -104,12 +132,22 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
   const lookups = useLedgerLookupsView();
   const catchupPromiseRef = useRef<Promise<unknown> | undefined>(undefined);
 
+  useEffect(
+    () => () => {
+      cancelPageRefreshCallback(params);
+    },
+    [params],
+  );
+
   useEffect(() => {
     const snapshot = getTransactionsSnapshot();
     const key = transactionPageKey(params);
     const requestKey = transactionPageRequestKey(params);
     const pageAtLoadStart = snapshot.pages[key];
     const pageGenerationAtLoadStart = snapshot.pageGeneration;
+    if (!pageAtLoadStart) {
+      cancelPageRefreshCallback(params);
+    }
     if (
       (pageAtLoadStart && !snapshot.stalePageKeys[key]) ||
       (snapshot.loadingPageKey === requestKey &&
@@ -151,12 +189,15 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
             result.data.offset,
           );
           if (pageAtLoadStart) {
-            setRefreshedTransactionPage(
+            const refreshed = setRefreshedTransactionPage(
               effectiveParams,
               result.data.total_count,
               result.data.transactions,
               pageAtLoadStart,
             );
+            if (refreshed) {
+              settlePageRefreshCallbacks(params);
+            }
           } else {
             setTransactionPage(
               effectiveParams,
@@ -169,7 +210,14 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
         }
 
         if (pageAtLoadStart) {
-          markTransactionPageStale(params, pageAtLoadStart);
+          const repeatedFailure = markTransactionPageStale(
+            params,
+            pageAtLoadStart,
+            apiErrorDetails(result.error),
+          );
+          if (repeatedFailure) {
+            settlePageRefreshCallbacks(params);
+          }
         } else {
           setTransactionPageError(params, apiErrorMessage(result.error));
         }
@@ -178,7 +226,7 @@ export const useTransactionsResource = (params: TransactionPageParams) => {
     return () => {
       active = false;
     };
-  }, [page.generation, page.snapshot, page.stale, params]);
+  }, [page.generation, page.refreshFailed, page.snapshot, page.stale, params]);
 
   useEffect(() => {
     const snapshot = getTransactionsSnapshot();
@@ -266,6 +314,7 @@ export const useCategoryPickerCategoriesResource = (
 export const refreshTransactionPage = async (
   params: TransactionPageParams,
 ): Promise<readonly Transaction[]> => {
+  cancelAllPageRefreshCallbacks();
   invalidateTransactionPages();
   setTransactionPageLoading(params);
 
@@ -291,16 +340,23 @@ const refreshTransactionPageInBackground = async (
   const pageAtRefreshStart = getTransactionsSnapshot().pages[key];
   const result = await fetchTransactionPage(params);
   if (!result.data) {
-    markTransactionPageStale(params, pageAtRefreshStart);
+    markTransactionPageStale(
+      params,
+      pageAtRefreshStart,
+      apiErrorDetails(result.error),
+    );
     return;
   }
 
-  setRefreshedTransactionPage(
+  const refreshed = setRefreshedTransactionPage(
     effectivePageParams(params, result.data.offset),
     result.data.total_count,
     result.data.transactions,
     pageAtRefreshStart,
   );
+  if (refreshed) {
+    settlePageRefreshCallbacks(params);
+  }
 };
 
 export const refreshLedgerLookups = async (): Promise<void> => {
@@ -339,6 +395,7 @@ export const refreshTransactionPageAfterSave = async (
   transaction?: Transaction,
   previousTransaction?: Transaction,
   options: {
+    readonly onPageRefresh?: (rowRemainsVisible: boolean) => void;
     readonly pageRefreshMode?: "background" | "blocking";
   } = {},
 ): Promise<boolean> => {
@@ -351,19 +408,28 @@ export const refreshTransactionPageAfterSave = async (
     if (transaction) {
       updateDisplayedTransactionPage(params, transaction);
     }
-    const rowWasVisible = Boolean(
+    if (options.onPageRefresh) {
+      queuePageRefreshCallback(params, () => {
+        options.onPageRefresh?.(
+          Boolean(
+            getTransactionsSnapshot().pages[
+              transactionPageKey(params)
+            ]?.transactions.some(
+              (current) => current.transaction_id === transactionId,
+            ),
+          ),
+        );
+      });
+    }
+    void refreshTransactionPageInBackground(params);
+    void Promise.all([refreshFeaturedBalances(), refreshOverview()]);
+    return Boolean(
       getTransactionsSnapshot().pages[
         transactionPageKey(params)
       ]?.transactions.some(
         (current) => current.transaction_id === transactionId,
       ),
     );
-    void Promise.all([
-      refreshTransactionPageInBackground(params),
-      refreshFeaturedBalances(),
-      refreshOverview(),
-    ]);
-    return rowWasVisible;
   }
 
   const [transactions] = await Promise.all([
@@ -396,6 +462,7 @@ export const refreshViewsAfterEntrySave = async (
 
   invalidateReferencePagesAfterTransactionMutation();
   invalidateAccountRegistersForTransaction(transaction, previousTransaction);
+  cancelAllPageRefreshCallbacks();
   invalidateTransactionPages();
   await Promise.all([refreshFeaturedBalances(), refreshOverview()]);
   return false;

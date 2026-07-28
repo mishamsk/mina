@@ -2161,6 +2161,712 @@ test("inline category tag member and amount saves keep the transaction table sta
   await deleteTransaction(page, transaction);
 });
 
+test("filtered inline category save restores focus after its row disappears", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, initialCategory, nextCategory] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    createCategory(page, `E2E:FilteredInlineSave:${unique}:Initial`, "expense"),
+    createCategory(page, `E2E:FilteredInlineSave:${unique}:Next`, "expense"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const sourceMemo = `E2E filtered inline source ${unique}`;
+  const neighborMemo = `E2E filtered inline neighbor ${unique}`;
+  const createSpend = async (
+    memo: string,
+    initiatedDate: string,
+  ): Promise<TransactionFixture> => {
+    const response = await page.request.post("/api/transactions/spend", {
+      data: {
+        amount: "12.34",
+        category_id: initialCategory.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: initiatedDate,
+        memo,
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return (await response.json()) as TransactionFixture;
+  };
+  const [sourceTransaction, neighborTransaction] = await Promise.all([
+    createSpend(sourceMemo, "2026-07-20"),
+    createSpend(neighborMemo, "2026-07-19"),
+  ]);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+      unique,
+    )}&category=${initialCategory.category_id}`,
+  );
+  const sourceRow = page.locator(
+    `[data-transaction-id="${sourceTransaction.transaction_id}"]`,
+  );
+  const neighborRow = page.locator(
+    `[data-transaction-id="${neighborTransaction.transaction_id}"]`,
+  );
+  await expect(sourceRow).toBeVisible();
+  await expect(neighborRow).toBeVisible();
+
+  let refreshAttempts = 0;
+  const failFirstListRefresh = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+
+    refreshAttempts += 1;
+    if (refreshAttempts === 1) {
+      await route.fulfill({
+        body: JSON.stringify({
+          error: {
+            code: "forced_transient_refresh_failure",
+            message: "Forced transient transaction refresh failure.",
+          },
+        }),
+        contentType: "application/json",
+        status: 503,
+      });
+      return;
+    }
+    await route.continue();
+  };
+  await page.route("**/api/transactions**", failFirstListRefresh);
+
+  const categoryCell = sourceRow.getByTestId(
+    `transaction-${sourceTransaction.transaction_id}-category-cell`,
+  );
+  await categoryCell.focus();
+  await categoryCell.press("F2");
+  const categoryEditor = sourceRow.getByTestId(
+    `transaction-${sourceTransaction.transaction_id}-category-editor`,
+  );
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(nextCategory.fqn);
+  await categoryEditor.getByRole("button", { name: "Save category" }).click();
+
+  await expect.poll(() => refreshAttempts).toBe(2);
+  await expect(sourceRow).toHaveCount(0);
+  await expect(neighborRow).toBeFocused();
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement === document.body))
+    .toBe(false);
+
+  await page.unroute("**/api/transactions**", failFirstListRefresh);
+  await Promise.all([
+    deleteTransaction(page, sourceTransaction),
+    deleteTransaction(page, neighborTransaction),
+  ]);
+});
+
+test("filtered inline category save focuses the empty-list action", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, initialCategory, nextCategory] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    createCategory(page, `E2E:FilteredEmptySave:${unique}:Initial`, "expense"),
+    createCategory(page, `E2E:FilteredEmptySave:${unique}:Next`, "expense"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const createResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: initialCategory.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-20",
+      memo: `E2E filtered empty inline save ${unique}`,
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionFixture;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+      unique,
+    )}&category=${initialCategory.category_id}`,
+  );
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await expect(row).toBeVisible();
+
+  const categoryCell = row.getByTestId(
+    `transaction-${transaction.transaction_id}-category-cell`,
+  );
+  await categoryCell.focus();
+  await categoryCell.press("F2");
+  const categoryEditor = row.getByTestId(
+    `transaction-${transaction.transaction_id}-category-editor`,
+  );
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(nextCategory.fqn);
+  await categoryEditor.getByRole("button", { name: "Save category" }).click();
+
+  await expect(row).toHaveCount(0);
+  await expect(page.locator("[data-transaction-empty-action]")).toBeFocused();
+
+  await deleteTransaction(page, transaction);
+});
+
+test("filtered expanded and amount saves restore focus after row removal", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, initialCategory, nextCategory] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    createCategory(page, `E2E:FilteredPaths:${unique}:Initial`, "expense"),
+    createCategory(page, `E2E:FilteredPaths:${unique}:Next`, "expense"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const createSpend = async (
+    memo: string,
+    amount: string,
+  ): Promise<TransactionFixture> => {
+    const response = await page.request.post("/api/transactions/spend", {
+      data: {
+        amount,
+        category_id: initialCategory.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: "2026-07-20",
+        memo,
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return (await response.json()) as TransactionFixture;
+  };
+  const categoryMemo = `E2E filtered expanded category ${unique}`;
+  const statusMemo = `E2E filtered expanded status ${unique}`;
+  const amountMemo = `E2E filtered amount ${unique}`;
+  const [categoryTransaction, amountTransaction] = await Promise.all([
+    createSpend(categoryMemo, "12.50"),
+    createSpend(amountMemo, "12.34"),
+  ]);
+  const statusResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-07-20",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-13.34000000",
+          category_id: null,
+          currency: "USD",
+          memo: statusMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "13.34000000",
+          category_id: initialCategory.category_id,
+          currency: "USD",
+          memo: statusMemo,
+          posting_status: "pending",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+          tag_ids: [],
+        },
+      ],
+    },
+  });
+  expect(statusResponse.ok(), await statusResponse.text()).toBe(true);
+  const statusTransaction = (await statusResponse.json()) as TransactionFixture;
+  const transactionRows = page.locator("[data-transaction-row='true']");
+  const neighborAfterRemoval = async (
+    transactionId: number,
+  ): Promise<Locator> => {
+    const rowIds = await transactionRows.evaluateAll((rows) =>
+      rows.map((row) => Number((row as HTMLElement).dataset.transactionId)),
+    );
+    const sourceIndex = rowIds.indexOf(transactionId);
+    expect(sourceIndex).toBeGreaterThanOrEqual(0);
+    const survivingRowIds = rowIds.filter((id) => id !== transactionId);
+    const neighborId =
+      survivingRowIds[Math.min(sourceIndex, survivingRowIds.length - 1)];
+    expect(neighborId).toBeDefined();
+    return page.locator(`[data-transaction-id="${neighborId}"]`);
+  };
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+      unique,
+    )}&category=${initialCategory.category_id}`,
+  );
+  const categoryRow = page.locator(
+    `[data-transaction-id="${categoryTransaction.transaction_id}"]`,
+  );
+  await expect(categoryRow).toBeVisible();
+  await categoryRow.getByTestId("transaction-line-title").click();
+  const categoryCell = page
+    .getByTestId("expanded-records")
+    .getByTestId("record-category-cell")
+    .last();
+  await categoryCell.focus();
+  await categoryCell.press("F2");
+  const categoryEditor = page
+    .getByTestId("expanded-records")
+    .getByTestId("record-category-editor")
+    .last();
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(nextCategory.fqn);
+  const categoryNeighbor = await neighborAfterRemoval(
+    categoryTransaction.transaction_id,
+  );
+  await categoryEditor.getByRole("button", { name: "Save category" }).click();
+  await expect(categoryRow).toHaveCount(0);
+  await expect(categoryNeighbor).toBeFocused();
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+      unique,
+    )}&status=posted`,
+  );
+  const statusRow = page.locator(
+    `[data-transaction-id="${statusTransaction.transaction_id}"]`,
+  );
+  await expect(statusRow).toBeVisible();
+  await statusRow.getByTestId("transaction-line-title").click();
+  const statusCell = page
+    .getByTestId("expanded-records")
+    .getByTestId("record-postingStatus-cell")
+    .first();
+  await statusCell.focus();
+  await statusCell.press("F2");
+  await page
+    .getByTestId("record-postingStatus-editor")
+    .getByRole("combobox", { name: "Posting status" })
+    .click();
+  const statusNeighbor = await neighborAfterRemoval(
+    statusTransaction.transaction_id,
+  );
+  await page.getByRole("option", { name: "Pending" }).click();
+  await expect(statusRow).toHaveCount(0);
+  await expect(statusNeighbor).toBeFocused();
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+      unique,
+    )}&amountMin=12&amountMax=13`,
+  );
+  const amountRow = page.locator(
+    `[data-transaction-id="${amountTransaction.transaction_id}"]`,
+  );
+  await expect(amountRow).toBeVisible();
+  const amountCell = amountRow.getByTestId(
+    `transaction-${amountTransaction.transaction_id}-amount-cell`,
+  );
+  await amountCell.focus();
+  await amountCell.press("F2");
+  const amountEditor = amountRow.getByTestId(
+    `transaction-${amountTransaction.transaction_id}-amount-editor`,
+  );
+  await amountEditor.getByRole("textbox", { name: "Amount" }).fill("29.87");
+  const amountNeighbor = await neighborAfterRemoval(
+    amountTransaction.transaction_id,
+  );
+  await amountEditor.getByRole("button", { name: "Save amount" }).click();
+  await expect(amountRow).toHaveCount(0);
+  await expect(amountNeighbor).toBeFocused();
+
+  await Promise.all([
+    deleteTransaction(page, categoryTransaction),
+    deleteTransaction(page, statusTransaction),
+    deleteTransaction(page, amountTransaction),
+  ]);
+});
+
+test("reference editor releases while its page refresh is pending", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, initialCategory, nextCategory] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    createCategory(page, `E2E:RefreshRelease:${unique}:Initial`, "expense"),
+    createCategory(page, `E2E:RefreshRelease:${unique}:Next`, "expense"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const memo = `E2E reference refresh release ${unique}`;
+  const createResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: initialCategory.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-20",
+      memo,
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionFixture;
+  const neighborResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "23.45",
+      category_id: initialCategory.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-19",
+      memo: `E2E reference refresh release neighbor ${unique}`,
+    },
+  });
+  expect(neighborResponse.ok(), await neighborResponse.text()).toBe(true);
+  const neighborTransaction =
+    (await neighborResponse.json()) as TransactionFixture;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(unique)}&category=${initialCategory.category_id}`,
+  );
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  const neighborRow = page.locator(
+    `[data-transaction-id="${neighborTransaction.transaction_id}"]`,
+  );
+  await expect(row).toBeVisible();
+  await expect(neighborRow).toBeVisible();
+
+  let releaseRefresh: (() => void) | undefined;
+  let markRefreshStarted: (() => void) | undefined;
+  const refreshStarted = new Promise<void>((resolve) => {
+    markRefreshStarted = resolve;
+  });
+  const holdListRefresh = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+
+    markRefreshStarted?.();
+    await new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    await route.continue();
+  };
+  await page.route("**/api/transactions**", holdListRefresh);
+
+  const categoryCell = row.getByTestId(
+    `transaction-${transaction.transaction_id}-category-cell`,
+  );
+  await categoryCell.focus();
+  await categoryCell.press("F2");
+  const categoryEditor = row.getByTestId(
+    `transaction-${transaction.transaction_id}-category-editor`,
+  );
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(nextCategory.fqn);
+  await categoryEditor.getByRole("button", { name: "Save category" }).click();
+  await refreshStarted;
+
+  await expect(categoryEditor).toHaveCount(0);
+  await expect(categoryCell).toBeFocused();
+  const amountCell = neighborRow.getByTestId(
+    `transaction-${neighborTransaction.transaction_id}-amount-cell`,
+  );
+  await amountCell.focus();
+  await amountCell.press("F2");
+  const amountEditor = neighborRow.getByTestId(
+    `transaction-${neighborTransaction.transaction_id}-amount-editor`,
+  );
+  await expect(amountEditor).toBeVisible();
+  const amountInput = amountEditor.getByRole("textbox", { name: "Amount" });
+  await expect(amountInput).toBeFocused();
+
+  releaseRefresh?.();
+  await expect(row).toHaveCount(0);
+  await expect(amountEditor).toBeVisible();
+  await expect(amountInput).toBeFocused();
+
+  await amountEditor
+    .getByRole("button", { name: "Cancel amount edit" })
+    .click();
+  await page.unroute("**/api/transactions**", holdListRefresh);
+  await Promise.all([
+    deleteTransaction(page, transaction),
+    deleteTransaction(page, neighborTransaction),
+  ]);
+});
+
+test("overlapping filtered saves restore focus for the latest save", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, initialCategory, nextCategory] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    createCategory(page, `E2E:OverlappingSave:${unique}:Initial`, "expense"),
+    createCategory(page, `E2E:OverlappingSave:${unique}:Next`, "expense"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const createSpend = async (
+    memo: string,
+    initiatedDate: string,
+  ): Promise<TransactionFixture> => {
+    const response = await page.request.post("/api/transactions/spend", {
+      data: {
+        amount: "12.34",
+        category_id: initialCategory.category_id,
+        counterparty_account_id: merchantAccount.account_id,
+        currency: "USD",
+        funding_account_id: fundingAccount.account_id,
+        initiated_date: initiatedDate,
+        memo,
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    return (await response.json()) as TransactionFixture;
+  };
+  const [
+    firstSourceTransaction,
+    firstNeighborTransaction,
+    latestSourceTransaction,
+    latestNeighborTransaction,
+  ] = await Promise.all([
+    createSpend(`E2E overlapping first source ${unique}`, "2026-07-20"),
+    createSpend(`E2E overlapping first neighbor ${unique}`, "2026-07-19"),
+    createSpend(`E2E overlapping latest source ${unique}`, "2026-07-18"),
+    createSpend(`E2E overlapping latest neighbor ${unique}`, "2026-07-17"),
+  ]);
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+      unique,
+    )}&category=${initialCategory.category_id}`,
+  );
+  const rowFor = (transaction: TransactionFixture) =>
+    page.locator(`[data-transaction-id="${transaction.transaction_id}"]`);
+  const firstSourceRow = rowFor(firstSourceTransaction);
+  const firstNeighborRow = rowFor(firstNeighborTransaction);
+  const latestSourceRow = rowFor(latestSourceTransaction);
+  const latestNeighborRow = rowFor(latestNeighborTransaction);
+  await expect(firstSourceRow).toBeVisible();
+  await expect(firstNeighborRow).toBeVisible();
+  await expect(latestSourceRow).toBeVisible();
+  await expect(latestNeighborRow).toBeVisible();
+
+  let refreshAttempts = 0;
+  const releaseRefreshes: Array<() => void> = [];
+  const holdListRefresh = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+
+    const attempt = refreshAttempts;
+    refreshAttempts += 1;
+    await new Promise<void>((resolve) => {
+      releaseRefreshes[attempt] = resolve;
+    });
+    await route.continue();
+  };
+  await page.route("**/api/transactions**", holdListRefresh);
+
+  const saveCategory = async (
+    row: Locator,
+    transaction: TransactionFixture,
+  ) => {
+    const categoryCell = row.getByTestId(
+      `transaction-${transaction.transaction_id}-category-cell`,
+    );
+    await categoryCell.focus();
+    await categoryCell.press("F2");
+    const categoryEditor = row.getByTestId(
+      `transaction-${transaction.transaction_id}-category-editor`,
+    );
+    await categoryEditor
+      .getByRole("combobox", { name: "Category" })
+      .fill(nextCategory.fqn);
+    await categoryEditor.getByRole("button", { name: "Save category" }).click();
+    await expect(categoryEditor).toHaveCount(0);
+  };
+
+  await saveCategory(firstSourceRow, firstSourceTransaction);
+  await expect.poll(() => refreshAttempts).toBe(1);
+  await saveCategory(latestSourceRow, latestSourceTransaction);
+  await expect.poll(() => refreshAttempts).toBe(2);
+
+  const firstRefreshResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.request().method() === "GET" &&
+      url.pathname === "/api/transactions"
+    );
+  });
+  releaseRefreshes[0]?.();
+  await (await firstRefreshResponse).finished();
+
+  releaseRefreshes[1]?.();
+  await expect(firstSourceRow).toHaveCount(0);
+  await expect(latestSourceRow).toHaveCount(0);
+  await expect(latestNeighborRow).toBeFocused();
+  await expect(firstNeighborRow).not.toBeFocused();
+
+  await page.unroute("**/api/transactions**", holdListRefresh);
+  await Promise.all(
+    [
+      firstSourceTransaction,
+      firstNeighborTransaction,
+      latestSourceTransaction,
+      latestNeighborTransaction,
+    ].map((transaction) => deleteTransaction(page, transaction)),
+  );
+});
+
+test("repeated background refresh failures surface stale transactions", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, initialCategory, nextCategory] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    createCategory(page, `E2E:RepeatedRefresh:${unique}:Initial`, "expense"),
+    createCategory(page, `E2E:RepeatedRefresh:${unique}:Next`, "expense"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const memo = `E2E repeated refresh ${unique}`;
+  const createResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: initialCategory.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-20",
+      memo,
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionFixture;
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(
+      unique,
+    )}`,
+  );
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await expect(row).toBeVisible();
+
+  let failedRefreshes = 0;
+  let holdSuccessfulRefresh = false;
+  let releaseSuccessfulRefresh: (() => void) | undefined;
+  let markSuccessfulRefreshStarted: (() => void) | undefined;
+  const successfulRefreshStarted = new Promise<void>((resolve) => {
+    markSuccessfulRefreshStarted = resolve;
+  });
+  const failTwoListRefreshes = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions"
+    ) {
+      await route.continue();
+      return;
+    }
+    if (failedRefreshes < 2) {
+      failedRefreshes += 1;
+      await route.fulfill({
+        body: JSON.stringify({
+          error: {
+            code: "forced_repeated_refresh_failure",
+            message: "Forced repeated transaction refresh failure.",
+          },
+        }),
+        contentType: "application/json",
+        status: 503,
+      });
+      return;
+    }
+    if (holdSuccessfulRefresh) {
+      markSuccessfulRefreshStarted?.();
+      await new Promise<void>((resolve) => {
+        releaseSuccessfulRefresh = resolve;
+      });
+    }
+    await route.continue();
+  };
+  await page.route("**/api/transactions**", failTwoListRefreshes);
+
+  const categoryCell = row.getByTestId(
+    `transaction-${transaction.transaction_id}-category-cell`,
+  );
+  await categoryCell.focus();
+  await categoryCell.press("F2");
+  const categoryEditor = row.getByTestId(
+    `transaction-${transaction.transaction_id}-category-editor`,
+  );
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(nextCategory.fqn);
+  await categoryEditor.getByRole("button", { name: "Save category" }).click();
+
+  await expect.poll(() => failedRefreshes).toBe(2);
+  const staleAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "Transactions may be stale." });
+  await expect(staleAlert).toBeVisible();
+  await staleAlert.getByText("Refresh error").click();
+  await expect(staleAlert).toContainText(
+    "Forced repeated transaction refresh failure.",
+  );
+  await expect(staleAlert).toContainText("forced_repeated_refresh_failure");
+  await expect(row).toBeVisible();
+  await page.waitForTimeout(250);
+  expect(failedRefreshes).toBe(2);
+
+  holdSuccessfulRefresh = true;
+  await categoryCell.focus();
+  await categoryCell.press("F2");
+  await categoryEditor
+    .getByRole("combobox", { name: "Category" })
+    .fill(initialCategory.fqn);
+  await categoryEditor.getByRole("button", { name: "Save category" }).click();
+  await successfulRefreshStarted;
+  await expect(staleAlert).toBeVisible();
+
+  releaseSuccessfulRefresh?.();
+  await expect(staleAlert).toHaveCount(0);
+  await expect(row).toContainText(initialCategory.name);
+
+  await page.unroute("**/api/transactions**", failTwoListRefreshes);
+  await deleteTransaction(page, transaction);
+});
+
 test("transaction-row inline editing follows the uniformity rule", async ({
   page,
 }, testInfo) => {
@@ -2966,6 +3672,52 @@ test("transactions page search filters server-side and deep-links", async ({
   );
   await expectTransactionsPageUrl(page, 1, 50, { q: unique });
   await expect(page.getByRole("row").filter({ hasText: memo })).toBeVisible();
+});
+
+test("uncached search failure replaces retained rows with the page error", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `MissingSearch${slug}${Date.now()}`;
+
+  await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
+  const previousRow = page.locator("[data-transaction-row='true']").first();
+  await expect(previousRow).toBeVisible();
+
+  await page.route("**/api/transactions**", async (route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions" ||
+      url.searchParams.get("search") !== unique
+    ) {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      body: JSON.stringify({
+        error: {
+          code: "forced_uncached_page_failure",
+          message: "Forced uncached transaction page failure.",
+        },
+      }),
+      contentType: "application/json",
+      status: 503,
+    });
+  });
+
+  await page.getByRole("searchbox", { name: "Search" }).fill(unique);
+
+  const fatalAlert = page
+    .getByRole("alert")
+    .filter({ hasText: "Transactions could not be loaded." });
+  await expect(fatalAlert).toBeVisible();
+  await expect(fatalAlert).toContainText(
+    "Forced uncached transaction page failure.",
+  );
+  await expect(page.locator("[data-transaction-row='true']")).toHaveCount(0);
+  await expect(page.getByText("Transactions may be stale.")).toHaveCount(0);
 });
 
 test("debounced search preserves transaction detail URL state", async ({
@@ -8715,6 +9467,108 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
   await expect(bulkActionBar).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Bulk edit" })).toBeFocused();
   await expect(uniformRow.getByRole("checkbox")).toHaveCount(0);
+});
+
+test("an invalidated sibling page keeps its refresh error scoped", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const initialCategory = findByFqn(categories, "Entertainment:Books");
+  const targetCategory = await createCategory(
+    page,
+    `E2E:InvalidatedRetry:${unique}`,
+    "expense",
+  );
+  const memo = `E2E invalidated sibling retry ${unique}`;
+  const createResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: initialCategory.category_id,
+      counterparty_account_id: merchantAccount.account_id,
+      currency: "USD",
+      funding_account_id: fundingAccount.account_id,
+      initiated_date: "2026-07-28",
+      memo,
+    },
+  });
+  expect(createResponse.ok(), await createResponse.text()).toBe(true);
+  const transaction = (await createResponse.json()) as TransactionFixture;
+
+  await page.goto("/transactions?page=1&pageSize=25&hideExpected=true");
+  const row = page.locator(
+    `[data-transaction-id="${transaction.transaction_id}"]`,
+  );
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { exact: true, name: "Next" }).click();
+  await expect(page).toHaveURL(/page=2/);
+  await page.getByRole("button", { exact: true, name: "Previous" }).click();
+  await expect(page).toHaveURL(/page=1/);
+  await expect(row).toBeVisible();
+
+  await page.getByRole("button", { name: "Bulk edit" }).click();
+  await row.click();
+  const bulkActionBar = page.getByTestId("bulk-action-bar");
+  await bulkActionBar.getByRole("button", { name: "Categorize" }).click();
+  const categoryPicker = page.getByTestId("bulk-action-picker");
+  await categoryPicker
+    .getByRole("combobox", { name: "Category" })
+    .fill(targetCategory.fqn);
+  await categoryPicker
+    .getByRole("combobox", { name: "Category" })
+    .press("Enter");
+  await categoryPicker.getByRole("button", { name: "Apply category" }).click();
+  await expect(categoryPicker).toHaveCount(0);
+
+  let pageTwoRefreshes = 0;
+  const failPageTwoRefreshes = async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      route.request().method() !== "GET" ||
+      url.pathname !== "/api/transactions" ||
+      url.searchParams.get("offset") !== "25"
+    ) {
+      await route.continue();
+      return;
+    }
+
+    pageTwoRefreshes += 1;
+    if (pageTwoRefreshes <= 2) {
+      await route.fulfill({
+        body: JSON.stringify({
+          error: {
+            code: "forced_invalidated_page_failure",
+            message: "Forced invalidated page refresh failure.",
+          },
+        }),
+        contentType: "application/json",
+        status: 503,
+      });
+      return;
+    }
+    await route.continue();
+  };
+  await page.route("**/api/transactions**", failPageTwoRefreshes);
+
+  await page.getByRole("button", { exact: true, name: "Next" }).click();
+  await expect.poll(() => pageTwoRefreshes).toBe(2);
+  await expect(page).toHaveURL(/page=2/);
+  await expect(page.getByText(/Page 2 of \d+/)).toBeVisible();
+  await expect(page.getByText("Transactions may be stale.")).toBeVisible();
+
+  await page.getByRole("button", { exact: true, name: "Previous" }).click();
+  await expect(page).toHaveURL(/page=1/);
+  await expect(row).toBeVisible();
+  await expect(page.getByText("Transactions may be stale.")).toHaveCount(0);
+
+  await page.unroute("**/api/transactions**", failPageTwoRefreshes);
+  await deleteTransaction(page, transaction);
 });
 
 test("bulk edit predicts and reports all-cancelled transactions as inactive", async ({

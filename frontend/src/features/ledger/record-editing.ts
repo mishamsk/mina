@@ -9,6 +9,8 @@ export type RecordReferenceUpdate =
   | { readonly kind: "tags"; readonly tagIds: readonly number[] }
   | { readonly kind: "member"; readonly memberId: number | undefined };
 
+export type InlineSavePageRefresh = (rowRemainsVisible: boolean) => void;
+
 export type RecordUpdate =
   | RecordReferenceUpdate
   | { readonly kind: "memo"; readonly memo: string | null }
