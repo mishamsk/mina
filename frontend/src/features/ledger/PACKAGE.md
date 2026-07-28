@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Transaction class, shapes, record roles, display titles, primary amounts, and record amounts come from REST responses; mixed lines render economic shape amounts and exchange lines render the sold side.
+- Transaction class, shapes, record roles, display titles, primary amounts, and record amounts come from REST responses; multi-part lines render one primary amount when singular plus a more-parts indicator, detail renders every shape amount, and exchange lines render the sold side.
 - Shared journal-record tables render each REST-derived role as a leading indicator; read-only record disclosures also name the role in text.
 - Transaction-row transaction-level inline editing follows the uniformity rule owned by `docs/webui-design.md`.
 - The shared transaction-browser controller permits one active inline editor across the list and expanded records; a conflicting browser interaction discards the draft without performing its action, outside click discards, and Escape discards then restores focus to the originating cell.

@@ -77,7 +77,7 @@ import {
 } from "@/store";
 import { localTodayISODate } from "@/utils/date";
 
-import { AmountText, MixedAmounts } from "./amount-text";
+import { AmountText } from "./amount-text";
 import { ClassBadge } from "./class-badge";
 import {
   EntityMultiPicker,
@@ -90,8 +90,13 @@ import {
   formatInitiatedDate,
   lineDisplayAmounts,
   recordRoleLabel,
+  transactionHasMoreParts,
 } from "./format";
 import { ClassIcon } from "./line-icons";
+import {
+  MorePartsIndicator,
+  moreTransactionPartsLabel,
+} from "./mixed-sentinel";
 import { useCategoryPickerCategoriesResource } from "./use-transactions-resource";
 import { refreshLedgerLookups } from "./use-transactions-resource";
 
@@ -2411,6 +2416,10 @@ const EntryRailRow = ({
   readonly transaction: Transaction;
 }) => {
   const amounts = lineDisplayAmounts(transaction);
+  const hasMoreParts = transactionHasMoreParts(transaction);
+  const partsDescription = hasMoreParts
+    ? moreTransactionPartsLabel(transaction)
+    : undefined;
   const content = (
     <>
       <span className="text-muted-foreground shrink-0">
@@ -2428,12 +2437,7 @@ const EntryRailRow = ({
       >
         <span className="block truncate">{transaction.display_title}</span>
       </Tooltip>
-      {transaction.transaction_class === "mixed" ? (
-        <MixedAmounts
-          amounts={amounts}
-          className="h-auto shrink-0 border-0 bg-transparent p-0 text-xs shadow-none"
-        />
-      ) : amounts.length > 0 ? (
+      {amounts.length > 0 ? (
         <span className="flex shrink-0 items-center gap-1">
           {amounts.map((amount, index) => (
             <AmountText
@@ -2448,9 +2452,14 @@ const EntryRailRow = ({
             />
           ))}
         </span>
-      ) : (
-        <span className="text-muted-foreground shrink-0">Mixed</span>
-      )}
+      ) : null}
+      {hasMoreParts ? (
+        <MorePartsIndicator
+          compact
+          focusable={false}
+          transaction={transaction}
+        />
+      ) : null}
     </>
   );
 
@@ -2458,8 +2467,10 @@ const EntryRailRow = ({
     <button
       type="button"
       tabIndex={-1}
-      className="session-tick flex w-full items-center gap-2 border-l-2 border-[var(--color-class-adjustment-ink)] bg-[var(--band)] px-2 py-1 text-left font-mono text-xs hover:bg-[var(--color-interactive-bright)]"
-      aria-label={`Edit saved transaction ${transaction.display_title}`}
+      className="session-tick flex w-full items-center gap-1 border-l-2 border-[var(--color-class-adjustment-ink)] bg-[var(--band)] px-2 py-1 text-left font-mono text-xs hover:bg-[var(--color-interactive-bright)]"
+      aria-label={`Edit saved transaction ${transaction.display_title}${
+        partsDescription ? `. ${partsDescription}` : ""
+      }`}
       onClick={() => {
         openTransactionEntryLaunch(
           { transaction, type: "edit" },
@@ -2470,7 +2481,15 @@ const EntryRailRow = ({
       {content}
     </button>
   ) : (
-    <div className="flex items-center gap-2 px-2 py-1 font-mono text-xs">
+    <div
+      aria-label={
+        partsDescription
+          ? `Recent transaction ${transaction.display_title}. ${partsDescription}`
+          : undefined
+      }
+      className="flex items-center gap-1 px-2 py-1 font-mono text-xs"
+      role={partsDescription ? "group" : undefined}
+    >
       {content}
     </div>
   );

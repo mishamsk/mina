@@ -15,11 +15,13 @@ import {
   lineDisplayAmounts,
   lineMemo,
   linePostingStatus,
-  MixedAmounts,
+  MorePartsIndicator,
   postingStatusLabel,
   StatusIcon,
   sumDecimalStrings,
   transactionClassLabel,
+  transactionHasMoreParts,
+  transactionPartsLabel,
 } from "@/features/ledger";
 import { cn } from "@/lib/utils";
 import type { OverviewBalanceRow } from "@/store";
@@ -357,6 +359,9 @@ const recentActivityTooltipLabel = (
     `Status ${postingStatusLabel(postingStatus)}`,
     `Description ${transaction.display_title}`,
     memo ? `Memo ${memo}` : undefined,
+    transactionHasMoreParts(transaction)
+      ? `All parts ${transactionPartsLabel(transaction)}`
+      : undefined,
   ]
     .filter((part): part is string => Boolean(part))
     .join(". ");
@@ -370,6 +375,7 @@ const RecentActivityLine = ({
   const dateParts = formatInitiatedDateParts(transaction.initiated_date);
   const postingStatus = linePostingStatus(transaction);
   const amounts = lineDisplayAmounts(transaction);
+  const hasMoreParts = transactionHasMoreParts(transaction);
   const amountDeemphasized =
     postingStatus === "pending" || postingStatus === "cancelled";
   const lineInactive = postingStatus === "cancelled";
@@ -424,27 +430,32 @@ const RecentActivityLine = ({
               </Tooltip>
             ) : null}
           </span>
-          <span className="flex max-w-56 flex-wrap justify-end gap-1">
-            {transaction.transaction_class === "mixed" ? (
-              <MixedAmounts amounts={amounts} />
-            ) : (
-              amounts.map((amount, index) => (
-                <AmountText
-                  key={`${amount.currency}:${amount.amount}:${index}`}
-                  amount={amount}
-                  chip
-                  className={cn(
-                    "max-w-full",
-                    amountDeemphasized && "text-muted-foreground bg-card",
-                  )}
-                  positiveSign={
-                    transaction.transaction_class !== "transfer" &&
-                    transaction.transaction_class !== "currency_exchange"
-                  }
-                  tone="neutral"
-                />
-              ))
-            )}
+          <span className="flex max-w-56 min-w-0 flex-nowrap justify-end gap-1 overflow-hidden">
+            {amounts.map((amount, index) => (
+              <AmountText
+                key={`${amount.currency}:${amount.amount}:${index}`}
+                amount={amount}
+                chip
+                overflowTooltip
+                className={cn(
+                  "max-w-full min-w-0",
+                  amountDeemphasized && "text-muted-foreground bg-card",
+                )}
+                positiveSign={
+                  transaction.transaction_class !== "transfer" &&
+                  transaction.transaction_class !== "currency_exchange"
+                }
+                tone="neutral"
+                truncate
+              />
+            ))}
+            {hasMoreParts ? (
+              <MorePartsIndicator
+                compact
+                focusable={false}
+                transaction={transaction}
+              />
+            ) : null}
           </span>
         </Link>
       </Tooltip>

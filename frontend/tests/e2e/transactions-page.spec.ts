@@ -838,16 +838,20 @@ const requiredBoundingBox = async (locator: Locator) => {
   return bounds;
 };
 
-const expectAmountChipRightEdgesAligned = async (
+const expectAmountMarkerRightEdgesAligned = async (
   rows: readonly Locator[],
   tolerance = 1,
 ): Promise<void> => {
   const bounds = await Promise.all(
     rows.map(async (row) => {
       await expect(row).toBeVisible();
-      const trailingChip = row.getByTestId("amount-chip").last();
-      await expect(trailingChip).toBeVisible();
-      return requiredBoundingBox(trailingChip);
+      const amountChip = row.getByTestId("amount-chip").last();
+      const rightAlignedMarker =
+        (await amountChip.count()) > 0
+          ? amountChip
+          : row.getByTestId("more-parts-indicator").last();
+      await expect(rightAlignedMarker).toBeVisible();
+      return requiredBoundingBox(rightAlignedMarker);
     }),
   );
   const referenceRight = bounds[0]!.x + bounds[0]!.width;
@@ -1131,7 +1135,7 @@ const amountChipsFitCell = async (row: Locator): Promise<boolean> =>
       );
     });
 
-const mixedAmountChipGeometry = async (row: Locator) =>
+const mixedPartsIndicatorGeometry = async (row: Locator) =>
   row.evaluate((rowElement) => {
     const rectFor = (element: Element | undefined | null) => {
       const rect = element?.getBoundingClientRect();
@@ -1189,45 +1193,29 @@ const mixedAmountChipGeometry = async (row: Locator) =>
     const amountCell = cells[7];
     const amountCellRect = rectFor(amountCell);
     const memberCellRect = rectFor(memberCell);
-    const chip = amountCell?.querySelector<HTMLElement>(
-      "[data-testid='amount-chip']",
+    const indicator = amountCell?.querySelector<HTMLElement>(
+      "[data-testid='more-parts-indicator']",
     );
-    const chipRect = rectFor(chip);
-    const childRects = Array.from(chip?.children ?? [])
-      .filter((child): child is HTMLElement => child instanceof HTMLElement)
-      .map(rectFor)
-      .filter(
-        (rect): rect is NonNullable<ReturnType<typeof rectFor>> =>
-          rect !== undefined && rect.width > 0 && rect.height > 0,
-      );
-    const lineCenters = chip ? textLineCenters(chip) : [];
+    const indicatorRect = rectFor(indicator);
+    const lineCenters = indicator ? textLineCenters(indicator) : [];
     const memberCollapsed = isCollapsed(memberCell);
     const scrollContainer = rowElement.closest<HTMLElement>(
       "[data-testid='transactions-table-scroll']",
     );
     const memberOverlaps =
-      !memberCollapsed && memberCellRect
-        ? childRects.some((rect) => intersects(rect, memberCellRect))
+      !memberCollapsed && memberCellRect && indicatorRect
+        ? intersects(indicatorRect, memberCellRect)
         : false;
 
     return {
       amountCellWidth: amountCellRect?.width ?? 0,
-      amountChipFitsCell:
-        Boolean(amountCellRect && chipRect) &&
+      indicatorFitsCell:
+        Boolean(amountCellRect && indicatorRect) &&
         containedBy(
-          chipRect as NonNullable<ReturnType<typeof rectFor>>,
+          indicatorRect as NonNullable<ReturnType<typeof rectFor>>,
           amountCellRect as NonNullable<ReturnType<typeof rectFor>>,
         ),
-      amountChildrenFitCell:
-        Boolean(amountCellRect) &&
-        childRects.length > 0 &&
-        childRects.every((rect) =>
-          containedBy(
-            rect,
-            amountCellRect as NonNullable<ReturnType<typeof rectFor>>,
-          ),
-        ),
-      chipText: chip?.innerText.replace(/\s+/g, " ").trim() ?? "",
+      chipText: indicator?.innerText.replace(/\s+/g, " ").trim() ?? "",
       containerWidth: scrollContainer?.clientWidth ?? 0,
       memberCollapsed,
       memberOverlaps,
@@ -3709,13 +3697,12 @@ test("transaction amount chips share one right edge across row variants", async 
     await expect(
       overdueRow.getByRole("img", { name: "Overdue" }),
     ).toBeVisible();
-    await expect(mixedRow.getByTestId("amount-chip")).toContainText(
-      "-5.00 / +100.00×2 $",
-    );
+    await expect(mixedRow.getByTestId("amount-chip")).toHaveCount(0);
+    await expect(mixedRow.getByTestId("more-parts-indicator")).toBeVisible();
 
     for (const width of [1440, 700]) {
       await page.setViewportSize({ width, height: 720 });
-      await expectAmountChipRightEdgesAligned([
+      await expectAmountMarkerRightEdgesAligned([
         ordinaryRow,
         overdueRow,
         mixedRow,
@@ -3729,6 +3716,243 @@ test("transaction amount chips share one right edge across row variants", async 
       await deleteTransaction(page, mixedTransaction);
     }
   }
+});
+
+test("multi-part transaction rows show one honest amount or only the indicator", async ({
+  page,
+}, testInfo) => {
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `E2E mixed row rule ${slug}${Date.now()}`;
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const wallet = findByFqn(accounts, "cash:Wallet");
+  const joint = findByFqn(accounts, "checking:Chase:Joint");
+  const merchant = findByFqn(accounts, "merchant:Books");
+  const incomeSource = findByFqn(accounts, "income:AcmePayroll");
+  const party = findByFqn(accounts, "person:Friend:Jordan");
+  const expenseCategory = findByFqn(categories, "Entertainment:Books");
+  const incomeCategory = findByFqn(categories, "Income:Salary");
+  const exchangeDestination = await createAccount(
+    page,
+    `cash:E2EMixedRowRule:${slug}${Date.now()}:EUR`,
+    "owned",
+    "EUR",
+  );
+  const initiatedDate = formatLocalDate(new Date());
+  const simpleMemo = `${unique} simple`;
+  const spendTransferMemo = `${unique} spend transfer`;
+  const mixedMemo = `${unique} no primary`;
+  const exchangeMemo = `${unique} exchange`;
+
+  const simpleResponse = await page.request.post("/api/transactions/spend", {
+    data: {
+      amount: "12.34",
+      category_id: expenseCategory.category_id,
+      counterparty_account_id: merchant.account_id,
+      currency: "USD",
+      funding_account_id: wallet.account_id,
+      initiated_date: initiatedDate,
+      memo: simpleMemo,
+    },
+  });
+  expect(simpleResponse.ok(), await simpleResponse.text()).toBe(true);
+  const simple = (await simpleResponse.json()) as TransactionFixture;
+
+  const spendTransferResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: initiatedDate,
+      records: [
+        {
+          account_id: wallet.account_id,
+          amount: "-72.00",
+          category_id: null,
+          currency: "USD",
+          memo: spendTransferMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: merchant.account_id,
+          amount: "54.00",
+          category_id: expenseCategory.category_id,
+          currency: "USD",
+          memo: spendTransferMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: party.account_id,
+          amount: "18.00",
+          category_id: null,
+          currency: "USD",
+          memo: spendTransferMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+      ],
+    },
+  });
+  expect(spendTransferResponse.ok(), await spendTransferResponse.text()).toBe(
+    true,
+  );
+  const spendTransfer =
+    (await spendTransferResponse.json()) as TransactionFixture;
+
+  const mixedResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: initiatedDate,
+      records: [
+        {
+          account_id: wallet.account_id,
+          amount: "-5.00",
+          category_id: null,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: merchant.account_id,
+          amount: "5.00",
+          category_id: expenseCategory.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: joint.account_id,
+          amount: "100.00",
+          category_id: null,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: incomeSource.account_id,
+          amount: "-100.00",
+          category_id: incomeCategory.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+      ],
+    },
+  });
+  expect(mixedResponse.ok(), await mixedResponse.text()).toBe(true);
+  const mixed = (await mixedResponse.json()) as TransactionFixture;
+
+  const exchangeResponse = await page.request.post(
+    "/api/transactions/exchange",
+    {
+      data: {
+        bought_account_id: exchangeDestination.account_id,
+        bought_amount: "100.00",
+        initiated_date: initiatedDate,
+        memo: exchangeMemo,
+        sold_account_id: wallet.account_id,
+        sold_amount: "110.00",
+      },
+    },
+  );
+  expect(exchangeResponse.ok(), await exchangeResponse.text()).toBe(true);
+  const exchange = (await exchangeResponse.json()) as TransactionFixture;
+
+  await page.setViewportSize({ width: 1440, height: 720 });
+  await page.goto(
+    `/transactions?page=1&pageSize=50&hideExpected=true&q=${encodeURIComponent(unique)}`,
+  );
+  await expect(page.getByText("Description")).toBeVisible();
+
+  const transactionRow = (transaction: TransactionFixture) =>
+    page.locator(
+      `[data-transaction-row="true"][data-transaction-id="${transaction.transaction_id}"]`,
+    );
+  const simpleRow = transactionRow(simple);
+  const spendTransferRow = transactionRow(spendTransfer);
+  const mixedRow = transactionRow(mixed);
+  const exchangeRow = transactionRow(exchange);
+  const spendTransferAmountCell = spendTransferRow.locator(
+    ".transactions-amount-column",
+  );
+
+  await expect(simpleRow).toBeVisible();
+  await expect(spendTransferRow).toBeVisible();
+  await expect(spendTransferAmountCell.getByTestId("amount-chip")).toHaveCount(
+    1,
+  );
+  await expect(spendTransferAmountCell.getByTestId("amount-chip")).toHaveText(
+    "-54.00 $",
+  );
+  await expectAmountMarkerRightEdgesAligned([simpleRow, spendTransferRow]);
+  const moreParts = spendTransferAmountCell.getByTestId("more-parts-indicator");
+  await expect(moreParts).toHaveAttribute(
+    "aria-label",
+    "More transaction parts. All parts: -54.00 $, -18.00 $",
+  );
+  await moreParts.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "All parts: -54.00 $, -18.00 $",
+  );
+
+  const [simpleHeight, spendTransferHeight] = await Promise.all([
+    simpleRow.evaluate((row) => row.getBoundingClientRect().height),
+    spendTransferRow.evaluate((row) => row.getBoundingClientRect().height),
+  ]);
+  expect(Math.abs(simpleHeight - spendTransferHeight)).toBeLessThanOrEqual(1);
+
+  await expect(mixedRow).toBeVisible();
+  await expect(mixedRow.getByTestId("amount-chip")).toHaveCount(0);
+  await expect(mixedRow.getByTestId("more-parts-indicator")).toHaveAttribute(
+    "aria-label",
+    /^More transaction parts\. All parts: /,
+  );
+
+  await expect(exchangeRow).toBeVisible();
+  await expect(exchangeRow.getByTestId("amount-chip")).toHaveCount(1);
+  await expect(exchangeRow.getByTestId("amount-chip")).toHaveText("-110.00 $");
+  await expect(exchangeRow).not.toContainText("100.00 €");
+  await expect(exchangeRow.getByTestId("more-parts-indicator")).toHaveCount(0);
+
+  await clickRowAction(page, spendTransferRow, "Open transaction detail");
+  const detail = page.getByTestId("transaction-detail-panel");
+  await expect(detail).toBeVisible();
+  await expect(
+    detail.getByTestId("amount-chip").filter({ hasText: "-54.00 $" }),
+  ).toBeVisible();
+  await expect(
+    detail.getByTestId("amount-chip").filter({ hasText: "-18.00 $" }),
+  ).toBeVisible();
+
+  await detail
+    .getByRole("button", { name: "Close transaction detail" })
+    .click();
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const railMoreParts = page
+    .getByRole("dialog", { name: "Transaction editor" })
+    .getByTestId("more-parts-indicator")
+    .first();
+  await expect(railMoreParts).toHaveCSS("height", "20px");
+  await expect(railMoreParts).toHaveCSS("border-top-style", "solid");
+  expect(
+    await railMoreParts.evaluate(
+      (indicator) => getComputedStyle(indicator).boxShadow,
+    ),
+  ).not.toBe("none");
 });
 
 test("transactions class toolbar filter owns class URL state", async ({
@@ -4852,9 +5076,6 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   expect(intermediateTableState.actionsColumnRightWithinContainer).toBe(true);
   expect(intermediateTableState.amountText).toBe("-43.98 $");
   expect(intermediateTableState.amountTexts).toContain("+3,250.00 $");
-  expect(intermediateTableState.amountChipTexts).toContain(
-    "-5.00 / +100.00 ×2 $",
-  );
   expect(intermediateTableState.memberFullyVisible).toBe(true);
   expect(intermediateTableState.visibleContentOverlapsAmount).toBe(false);
   expect(intermediateTableState.statusHeaderCollapsed).toBe(
@@ -4889,7 +5110,6 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     expect(tableState.actionsColumnRightWithinContainer).toBe(true);
     expect(tableState.amountText).toBe("-43.98 $");
     expect(tableState.amountTexts).toContain("+3,250.00 $");
-    expect(tableState.amountChipTexts).toContain("-5.00 / +100.00 ×2 $");
     expect(tableState.visibleContentOverlapsAmount).toBe(false);
     if (tableState.categoryCollapsed) {
       expect(tableState.tagsCollapsed).toBe(true);
@@ -4921,7 +5141,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   await expect(page).toHaveURL(/[?&]transaction=\d+(?:&|$)/);
 });
 
-test("mixed amount chips stay inside the amount column where member first appears", async ({
+test("mixed more-parts indicators stay inside the amount column where member first appears", async ({
   page,
 }, testInfo) => {
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
@@ -5025,18 +5245,17 @@ test("mixed amount chips stay inside the amount column where member first appear
         height: 720,
         width: viewportWidthForContainer(sample.containerWidth),
       });
-      const state = await mixedAmountChipGeometry(mixedRow);
+      const state = await mixedPartsIndicatorGeometry(mixedRow);
 
       expect(
         Math.abs(state.containerWidth - sample.containerWidth),
         `${sample.name} member breakpoint table width`,
       ).toBeLessThanOrEqual(1);
       expect(state.tableHasHorizontalOverflow, sample.name).toBe(false);
-      expect(state.amountChipFitsCell, sample.name).toBe(true);
-      expect(state.amountChildrenFitCell, sample.name).toBe(true);
+      expect(state.indicatorFitsCell, sample.name).toBe(true);
       expect(state.memberOverlaps, sample.name).toBe(false);
       expect(state.singleLine, sample.name).toBe(true);
-      expect(state.chipText, sample.name).toBe("-5.00 / +100.00 ×2 $");
+      expect(state.chipText, sample.name).toBe("+ PARTS");
       expect(state.memberCollapsed, sample.name).toBe(sample.memberCollapsed);
     }
   } finally {
@@ -5057,17 +5276,10 @@ test("transactions contain long amount chips and align the pagination footer", a
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:Books");
-  const incomeSourceAccount = findByFqn(accounts, "income:AcmePayroll");
+  const partyAccount = findByFqn(accounts, "person:Friend:Jordan");
   const category = findByFqn(categories, "Entertainment:Books");
-  const incomeCategory = findByFqn(categories, "Income:Salary");
   const memo = `E2E long amount ${unique}`;
   const mixedMemo = `E2E mixed long amount ${unique}`;
-  const incomeDestinationAccount = await createAccount(
-    page,
-    `e2e:long:${unique}:income-destination`,
-    "owned",
-    "USD",
-  );
 
   const spendResponse = await page.request.post("/api/transactions/spend", {
     data: {
@@ -5081,6 +5293,7 @@ test("transactions contain long amount chips and align the pagination footer", a
     },
   });
   expect(spendResponse.ok()).toBe(true);
+  const spendTransaction = (await spendResponse.json()) as TransactionFixture;
 
   const mixedResponse = await page.request.post("/api/transactions", {
     data: {
@@ -5098,7 +5311,7 @@ test("transactions contain long amount chips and align the pagination footer", a
         },
         {
           account_id: merchantAccount.account_id,
-          amount: "9999999999.99",
+          amount: "9999999998.98",
           category_id: category.category_id,
           currency: "USD",
           memo: mixedMemo,
@@ -5107,19 +5320,9 @@ test("transactions contain long amount chips and align the pagination footer", a
           source: "manual",
         },
         {
-          account_id: incomeDestinationAccount.account_id,
-          amount: "8888888888.88",
+          account_id: partyAccount.account_id,
+          amount: "1.01",
           category_id: null,
-          currency: "USD",
-          memo: mixedMemo,
-          posting_status: "posted",
-          reconciliation_status: "unreconciled",
-          source: "manual",
-        },
-        {
-          account_id: incomeSourceAccount.account_id,
-          amount: "-8888888888.88",
-          category_id: incomeCategory.category_id,
           currency: "USD",
           memo: mixedMemo,
           posting_status: "posted",
@@ -5130,8 +5333,11 @@ test("transactions contain long amount chips and align the pagination footer", a
     },
   });
   expect(mixedResponse.ok()).toBe(true);
+  const mixedTransaction = (await mixedResponse.json()) as TransactionFixture;
 
-  await page.goto("/transactions?page=1&pageSize=50");
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(unique)}`,
+  );
   await expect(page.getByText("Description")).toBeVisible();
 
   const footerBox = await page
@@ -5161,16 +5367,27 @@ test("transactions contain long amount chips and align the pagination footer", a
       .getByRole("row")
       .filter({ hasText: mixedMemo });
     await expect(mixedLongAmountRow).toBeVisible();
-    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText(
-      "-9,999,999,999.99",
+    const mixedLongAmountChip = mixedLongAmountRow.getByTestId("amount-chip");
+    await expect(mixedLongAmountChip).toHaveText("-9,999,999,998.98 $");
+    await expect(mixedLongAmountChip).toHaveCSS("overflow", "hidden");
+    await expect(mixedLongAmountChip.locator(".truncate")).toHaveCSS(
+      "text-overflow",
+      "ellipsis",
     );
-    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText(
-      "+8,888,888,888.88",
-    );
-    await expect(mixedLongAmountRow.locator("td").nth(7)).toContainText("$");
+    await expect(
+      mixedLongAmountRow.getByTestId("more-parts-indicator"),
+    ).toBeVisible();
 
     await expect(amountChipsFitCell(longAmountRow)).resolves.toBe(true);
     await expect(amountChipsFitCell(mixedLongAmountRow)).resolves.toBe(true);
+    expect(
+      boundingBoxesOverlap(
+        await requiredBoundingBox(mixedLongAmountChip),
+        await requiredBoundingBox(
+          mixedLongAmountRow.getByTestId("more-parts-indicator"),
+        ),
+      ),
+    ).toBe(false);
   }
 
   await page.setViewportSize({ width: 1000, height: 720 });
@@ -5209,6 +5426,15 @@ test("transactions contain long amount chips and align the pagination footer", a
     ),
   ).toBeLessThanOrEqual(1);
   const bulkModeBar = page.getByTestId("transaction-browser-bulk-mode-bar");
+  const mixedLongAmountRow = page
+    .getByRole("row")
+    .filter({ hasText: mixedMemo });
+  const bulkMoreParts = mixedLongAmountRow.getByTestId("more-parts-indicator");
+  await expect(bulkMoreParts).toHaveAttribute("tabindex", "0");
+  await bulkMoreParts.focus();
+  await expect(page.getByRole("tooltip")).toHaveText(
+    "All parts: -9,999,999,998.98 $, -1.01 $",
+  );
   await longAmountRow.click();
   await expect(bulkModeBar).toContainText("1 selected");
   await longAmountRow.getByTestId("amount-chip").hover();
@@ -5219,6 +5445,46 @@ test("transactions contain long amount chips and align the pagination footer", a
   await expect(bulkModeBar).toContainText("0 selected");
   await page.keyboard.press("Escape");
   await expect(bulkModeBar).toHaveCount(0);
+
+  await page.setViewportSize({ width: 1440, height: 720 });
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const entryRail = page.getByRole("complementary", {
+    name: "Transaction entry context",
+  });
+  const mixedRailAmount = entryRail
+    .getByTestId("amount-text")
+    .filter({ hasText: "-9,999,999,998.98 $" });
+  await expect(mixedRailAmount).toBeVisible();
+  const mixedRailRow = mixedRailAmount.locator("../..");
+  await expect(mixedRailRow).toHaveAttribute(
+    "aria-label",
+    /More transaction parts\. All parts: -9,999,999,998\.98 \$, -1\.01 \$/,
+  );
+  await expect(mixedRailRow.getByTestId("more-parts-indicator")).toHaveText(
+    "+",
+  );
+  await expect(
+    mixedRailRow.evaluate((row) => {
+      const indicator = row.querySelector<HTMLElement>(
+        "[data-testid='more-parts-indicator']",
+      );
+      if (!indicator) {
+        return false;
+      }
+      const rowBounds = row.getBoundingClientRect();
+      const indicatorBounds = indicator.getBoundingClientRect();
+      return (
+        row.scrollWidth <= row.clientWidth &&
+        indicatorBounds.right <= rowBounds.right + 0.5
+      );
+    }),
+  ).resolves.toBe(true);
+
+  await deleteTransaction(page, mixedTransaction);
+  await deleteTransaction(page, spendTransaction);
 });
 
 test("transactions display currency symbols with code fallback", async ({
@@ -5339,9 +5605,7 @@ test("transactions page help and leaf category chips", async ({
   await expect(
     mixedRow.locator("td").nth(4).getByText("Mixed", { exact: true }),
   ).toBeVisible();
-  await expect(mixedRow.locator("td").nth(7)).toContainText(
-    "-5.00 / +100.00×2 $",
-  );
+  await expect(mixedRow.locator("td").nth(7)).toHaveText("+ parts");
   const rowHeights = await page
     .locator("tbody > tr[aria-expanded]")
     .evaluateAll((rows) => {

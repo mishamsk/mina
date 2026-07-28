@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
 import { lifecycleTimestampDateValue, localTodayISODate } from "@/utils/date";
 
-import { AmountText, MixedAmounts } from "./amount-text";
+import { AmountText } from "./amount-text";
 import {
   type ActiveBulkEditor,
   BulkActionBar,
@@ -62,12 +62,13 @@ import {
   lineTags,
   type LookupMaps,
   simpleTransactionAmountRecords,
+  transactionHasMoreParts,
 } from "./format";
 import { FqnPath } from "./fqn-path";
 import { type InlineEditCoordinator, InlineEditScope } from "./inline-editing";
 import { ClassIcon, RecordRoleIcon, StatusIcon } from "./line-icons";
 import { MemberChip } from "./member-chip";
-import { MixedSentinel } from "./mixed-sentinel";
+import { MixedSentinel, MorePartsIndicator } from "./mixed-sentinel";
 import { RecordDetailCells } from "./record-detail-cells";
 import type { RecordUpdate } from "./record-editing";
 import {
@@ -1251,6 +1252,7 @@ export const TransactionBrowser = ({
                 simpleTransactionAmountRecords(transaction);
               const postingStatus = linePostingStatus(transaction);
               const amounts = lineDisplayAmounts(transaction);
+              const hasMoreParts = transactionHasMoreParts(transaction);
               const amountDeemphasized =
                 postingStatus === "expected" ||
                 postingStatus === "pending" ||
@@ -1832,6 +1834,7 @@ export const TransactionBrowser = ({
                       <div
                         className={cn(
                           "flex min-w-0 items-end justify-end gap-1 overflow-visible",
+                          hasMoreParts && "overflow-hidden",
                           amounts.length > 1
                             ? "flex-col"
                             : "flex-row flex-nowrap",
@@ -1859,31 +1862,34 @@ export const TransactionBrowser = ({
                               tone="neutral"
                             />
                           </TransactionAmountCell>
-                        ) : transaction.transaction_class === "mixed" ? (
-                          <MixedAmounts
-                            amounts={amounts}
-                            overflowTooltip={!bulkEditMode}
-                          />
                         ) : (
-                          amounts.map((amount, index) => (
-                            <AmountText
-                              key={`${displayAmountKey(amount)}:${index}`}
-                              amount={amount}
-                              chip
-                              overflowTooltip={!bulkEditMode}
-                              className={cn(
-                                "max-w-full",
-                                amountDeemphasized &&
-                                  "text-muted-foreground bg-card",
-                              )}
-                              positiveSign={
-                                transaction.transaction_class !== "transfer" &&
-                                transaction.transaction_class !==
-                                  "currency_exchange"
-                              }
-                              tone="neutral"
-                            />
-                          ))
+                          <>
+                            {hasMoreParts ? (
+                              <MorePartsIndicator transaction={transaction} />
+                            ) : null}
+                            {amounts.map((amount, index) => (
+                              <AmountText
+                                key={`${displayAmountKey(amount)}:${index}`}
+                                amount={amount}
+                                chip
+                                overflowTooltip={hasMoreParts || !bulkEditMode}
+                                className={cn(
+                                  "max-w-full",
+                                  hasMoreParts && "min-w-0",
+                                  amountDeemphasized &&
+                                    "text-muted-foreground bg-card",
+                                )}
+                                positiveSign={
+                                  transaction.transaction_class !==
+                                    "transfer" &&
+                                  transaction.transaction_class !==
+                                    "currency_exchange"
+                                }
+                                tone="neutral"
+                                truncate={hasMoreParts}
+                              />
+                            ))}
+                          </>
                         )}
                       </div>
                     </td>

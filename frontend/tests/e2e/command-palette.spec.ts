@@ -118,6 +118,16 @@ const createSearchFixtureTransaction = async (
   return (await response.json()) as TransactionFixture;
 };
 
+const deleteTransaction = async (
+  page: Page,
+  transaction: TransactionFixture,
+): Promise<void> => {
+  const response = await page.request.delete(
+    `/api/transactions/${transaction.transaction_id}`,
+  );
+  expect(response.ok()).toBe(true);
+};
+
 test("command palette opens globally, filters, navigates, and restores focus", async ({
   page,
 }) => {
@@ -378,9 +388,7 @@ test("command palette transaction search renders results and opens off-page deta
   await expect(option.getByRole("img", { name: "Spend" })).toBeVisible();
   const amountChip = option.getByTestId("amount-chip");
   await expect(amountChip).toContainText("-9,999,999,999.87 $");
-  await expect
-    .poll(async () => (await amountChip.boundingBox())?.height ?? 0)
-    .toBeGreaterThan(28);
+  await expect(amountChip).toHaveCSS("height", "28px");
 
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(
@@ -393,6 +401,130 @@ test("command palette transaction search renders results and opens off-page deta
   await expect(
     detailPanel.getByTestId("transaction-detail-summary-memo"),
   ).toHaveText(memo);
+  await deleteTransaction(page, transaction);
+});
+
+test("command palette keeps narrow multi-part results single-height", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 720 });
+  const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
+  const unique = `${slug}${Date.now()}`;
+  const category = await createCategory(
+    page,
+    `zzE2EPaletteHeight:${unique}:Category`,
+  );
+  const accounts = await listAccountFixtures(page);
+  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const partyAccount = findByFqn(accounts, "person:Friend:Jordan");
+  const simpleMemo = `E2E palette height ${unique} simple`;
+  const multiPartMemo = `E2E palette height ${unique} multi`;
+  const decoyMemo = `E2E palette height ${unique} decoy`;
+
+  const decoyTransaction = await createSearchFixtureTransaction(page, {
+    amount: "11.00",
+    category,
+    initiatedDate: "2026-05-31",
+    memo: decoyMemo,
+  });
+  const simpleTransaction = await createSearchFixtureTransaction(page, {
+    amount: "999999.99",
+    category,
+    initiatedDate: "2026-05-30",
+    memo: simpleMemo,
+  });
+  const multiPartResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-05-29",
+      records: [
+        {
+          account_id: fundingAccount.account_id,
+          amount: "-1000000.00",
+          category_id: null,
+          currency: "USD",
+          memo: multiPartMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: merchantAccount.account_id,
+          amount: "999999.99",
+          category_id: category.category_id,
+          currency: "USD",
+          memo: multiPartMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: partyAccount.account_id,
+          amount: "0.01",
+          category_id: null,
+          currency: "USD",
+          memo: multiPartMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+      ],
+    },
+  });
+  expect(multiPartResponse.ok()).toBe(true);
+  const multiPartTransaction =
+    (await multiPartResponse.json()) as TransactionFixture;
+
+  await page.goto("/overview");
+  await page.getByRole("button", { name: "Command palette" }).click();
+  await page
+    .getByRole("combobox", { name: "Command search" })
+    .fill(`'palette height ${unique}`);
+
+  const dialog = page.getByRole("dialog", { name: "Command Palette" });
+  const simpleOption = dialog
+    .getByRole("option")
+    .filter({ hasText: simpleMemo });
+  const multiPartOption = dialog
+    .getByRole("option")
+    .filter({ hasText: multiPartMemo });
+  await expect(simpleOption).toHaveAttribute("aria-selected", "false");
+  await expect(multiPartOption).toHaveAttribute("aria-selected", "false");
+  await expect(multiPartOption.getByTestId("amount-chip")).toHaveText(
+    "-999,999.99 $",
+  );
+  await expect(
+    multiPartOption.getByTestId("more-parts-indicator"),
+  ).toBeVisible();
+  await expect(multiPartOption).toHaveAttribute(
+    "aria-label",
+    /more transaction parts, all parts -999,999\.99 \$, -0\.01 \$/,
+  );
+  await expect(
+    multiPartOption.evaluate(
+      (option) => option.scrollWidth <= option.clientWidth,
+    ),
+  ).resolves.toBe(true);
+  const [descriptionBounds, amountBounds] = await Promise.all([
+    multiPartOption.getByTestId("transaction-result-description").boundingBox(),
+    multiPartOption.getByTestId("transaction-result-amounts").boundingBox(),
+  ]);
+  expect(descriptionBounds).not.toBeNull();
+  expect(amountBounds).not.toBeNull();
+  expect(descriptionBounds?.width ?? 0).toBeGreaterThan(0);
+  expect(descriptionBounds?.x ?? 0).toBeLessThan((amountBounds?.x ?? 0) + 0.5);
+  expect(
+    (descriptionBounds?.x ?? 0) + (descriptionBounds?.width ?? 0),
+  ).toBeLessThanOrEqual((amountBounds?.x ?? 0) + 0.5);
+
+  const [simpleHeight, multiPartHeight] = await Promise.all([
+    simpleOption.evaluate((option) => option.getBoundingClientRect().height),
+    multiPartOption.evaluate((option) => option.getBoundingClientRect().height),
+  ]);
+  expect(Math.abs(simpleHeight - multiPartHeight)).toBeLessThanOrEqual(1);
+  await deleteTransaction(page, multiPartTransaction);
+  await deleteTransaction(page, simpleTransaction);
+  await deleteTransaction(page, decoyTransaction);
 });
 
 test("command palette transaction search preserves spaces and supports keyboard selection", async ({

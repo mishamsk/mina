@@ -30,7 +30,7 @@ Primary usage patterns, most to least frequent; every design decision favors the
 
 Every transaction surface presents exactly two layers. This doctrine applies to all current and future screens.
 
-- Transaction line: one row per transaction showing the server-derived transaction class and display amount per `docs/accounting-semantics.md`. This is the default everywhere. Multi-part classes carry their amounts directly on the line, and lines stay single-height (transfer: the moved amount; exchange: the sold-side amount only, with the bought side and the effective rate one expansion away; mixed: compact shape amounts with no synthetic total) — there is no separate shape-summary view between the line and the records.
+- Transaction line: one row per transaction showing the server-derived transaction class and display amount per `docs/accounting-semantics.md`. This is the default everywhere. Multi-part transactions stay single-height (transfer: the moved amount; exchange: the sold-side amount only, with the bought side and the effective rate one expansion away; more than one shape: one identifiable primary amount or none plus a more-parts indicator, with complete amounts in detail and never a synthetic total) — there is no separate shape-summary view between the line and the records.
 - Journal records: the full balanced record table with accounts, signed amounts, categories, tags, members, statuses, and dates. One expansion away, always editable.
 
 Entry mirrors display:
@@ -100,7 +100,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 - Format: locale-grouped number with explicit sign for signed contexts, e.g. `−1,234.56`, followed by a de-emphasized currency marker: the conventional currency symbol when the currency has one (e.g. `−1,234.56 $`, `−1,234.56 €`), otherwise the ISO code. Crypto currencies always use their code. Contexts locked to one known currency (an account register header, a single-currency form) may drop the marker.
 - Fiat renders with 2 decimals; crypto (`C::` prefix) renders up to 8 decimals with trailing zeros trimmed.
 - Never sum mixed currencies natively. Aggregations across currencies display the USD equivalent, visibly marked as approximate: `≈ 1,234.56 USD`. Records with no `amount_usd` are surfaced as "unconverted" in any aggregate that needs them.
-- Display amounts per transaction class follow the class table in `docs/accounting-semantics.md`: spend/clawback negative, income/refund positive, transfer/exchange neutral with movement amounts shown separately, mixed shows shape amounts and no synthetic total. Exchanges also show the server-derived effective rate wherever both sides are visible — transaction detail, the account register peek, and the entry form — formatted as a rate with its currency pair and never recomputed in the browser.
+- Display amounts per transaction class follow the class table in `docs/accounting-semantics.md`: spend/clawback negative, income/refund positive, transfer/exchange neutral with movement amounts shown separately. A compact transaction line with more than one shape shows one identifiable primary amount or none plus a more-parts indicator; complete amounts stay in detail and delete confirmation, and no synthetic total is shown. Exchanges also show the server-derived effective rate wherever both sides are visible — transaction detail, the account register peek, and the entry form — formatted as a rate with its currency pair and never recomputed in the browser.
 
 ### Balances
 

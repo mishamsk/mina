@@ -41,9 +41,9 @@ import { AmountText } from "./amount-text";
 import { ClassBadge } from "./class-badge";
 import {
   buildLookupMaps,
+  detailDisplayAmounts,
   displayAmountKey,
   formatInitiatedDate,
-  lineDisplayAmounts,
   lineMemo,
   linePostingStatus,
   type LookupMaps,
@@ -91,15 +91,6 @@ const recordDisplayAmount = (record: JournalRecord): DisplayAmount => ({
   amount: record.amount,
   currency: record.currency,
 });
-
-const detailDisplayAmounts = (
-  transaction: Transaction,
-): readonly DisplayAmount[] =>
-  transaction.transaction_class === "currency_exchange"
-    ? transaction.shapes
-        .filter((shape) => shape.shape === "exchange")
-        .flatMap((shape) => shape.amounts)
-    : lineDisplayAmounts(transaction);
 
 const exchangeRateLabel = (transaction: Transaction): string | undefined => {
   const rate = transaction.shapes.find(

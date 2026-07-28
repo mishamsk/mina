@@ -14,6 +14,7 @@ interface AmountTextProps {
   readonly positiveSign?: boolean;
   readonly tone?: "class-aware" | "neutral";
   readonly transactionClass?: TransactionClass;
+  readonly truncate?: boolean;
   readonly overflowTooltip?: boolean;
 }
 
@@ -42,6 +43,7 @@ export const AmountText = ({
   positiveSign = true,
   tone = "class-aware",
   transactionClass,
+  truncate = false,
 }: AmountTextProps) => {
   const formattedAmount = formatDecimalAmount(amount.amount, amount.currency, {
     positiveSign,
@@ -50,8 +52,10 @@ export const AmountText = ({
   const label = `${formattedAmount} ${marker}`;
   const amountContent = (
     <>
-      <span>{formattedAmount}</span>
-      <span className="text-muted-foreground whitespace-pre">
+      <span className={cn(truncate && "min-w-0 truncate")}>
+        {formattedAmount}
+      </span>
+      <span className="text-muted-foreground shrink-0 whitespace-pre">
         {` ${marker}`}
       </span>
     </>
@@ -65,6 +69,7 @@ export const AmountText = ({
         chip
           ? "bg-card inline-flex h-7 max-w-full items-center justify-end overflow-visible border border-[var(--border-ink)] px-2 text-right font-medium whitespace-nowrap shadow-[var(--shadow-chip)]"
           : "inline-flex max-w-full text-right whitespace-nowrap",
+        chip && truncate && "min-w-0 overflow-hidden",
         tone === "neutral"
           ? "text-foreground"
           : amountClassName(transactionClass),

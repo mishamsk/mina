@@ -255,3 +255,87 @@ test("overview landing page renders grouped balances, pulse, and recent activity
   await expect(page).toHaveURL(/\/overview$/);
   await expect(overviewNavLink).toHaveAttribute("aria-current", "page");
 });
+
+test("overview keeps multi-part activity rows single-height", async ({
+  page,
+}) => {
+  await page.addInitScript(fixedBrowserDateScript);
+  await page.setViewportSize({ width: 590, height: 720 });
+  await createCurrentMonthFixtures(page);
+  const [accounts, categories] = await Promise.all([
+    listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
+    listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+  ]);
+  const wallet = findByFqn(accounts, "cash:Wallet");
+  const books = findByFqn(accounts, "merchant:Books");
+  const friend = findByFqn(accounts, "person:Friend:Jordan");
+  const booksCategory = findByFqn(categories, "Entertainment:Books");
+  const mixedMemo = "E2E overview multi-part activity";
+  const mixedResponse = await page.request.post("/api/transactions", {
+    data: {
+      initiated_date: "2026-05-31",
+      records: [
+        {
+          account_id: wallet.account_id,
+          amount: "-72.00",
+          category_id: null,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: books.account_id,
+          amount: "54.00",
+          category_id: booksCategory.category_id,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+        {
+          account_id: friend.account_id,
+          amount: "18.00",
+          category_id: null,
+          currency: "USD",
+          memo: mixedMemo,
+          posting_status: "posted",
+          reconciliation_status: "unreconciled",
+          source: "manual",
+        },
+      ],
+    },
+  });
+  expect(mixedResponse.ok(), await mixedResponse.text()).toBe(true);
+
+  await page.goto("/overview");
+  const simpleRow = page
+    .getByTestId("overview-recent-activity-link")
+    .filter({ hasText: "E2E overview recent activity" })
+    .first();
+  const mixedRow = page
+    .getByTestId("overview-recent-activity-link")
+    .filter({ hasText: mixedMemo });
+  await expect(simpleRow).toBeVisible();
+  await expect(mixedRow).toBeVisible();
+  await expect(mixedRow.getByTestId("amount-chip")).toHaveText("-54.00 $");
+  await expect(mixedRow.getByTestId("more-parts-indicator")).toBeVisible();
+  await expect(mixedRow).toHaveAccessibleName(
+    /More transaction parts\. All parts: -54\.00 \$, -18\.00 \$/,
+  );
+  await expect(
+    mixedRow.evaluate((row) => row.scrollWidth <= row.clientWidth),
+  ).resolves.toBe(true);
+  await mixedRow.hover({ position: { x: 1, y: 1 } });
+  await expect(page.getByRole("tooltip")).toContainText(
+    "All parts -54.00 $, -18.00 $",
+  );
+
+  const [simpleHeight, mixedHeight] = await Promise.all([
+    simpleRow.evaluate((row) => row.getBoundingClientRect().height),
+    mixedRow.evaluate((row) => row.getBoundingClientRect().height),
+  ]);
+  expect(Math.abs(simpleHeight - mixedHeight)).toBeLessThanOrEqual(1);
+});

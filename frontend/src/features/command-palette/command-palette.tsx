@@ -51,12 +51,14 @@ import {
   lineDisplayAmounts,
   lineMemo,
   linePostingStatus,
-  MixedAmounts,
   MixedSentinel,
+  MorePartsIndicator,
   postingStatusLabel,
   refreshLedgerLookups,
   StatusIcon,
   transactionClassLabel,
+  transactionHasMoreParts,
+  transactionPartsLabel,
 } from "@/features/ledger";
 import { formatDecimalAmount } from "@/features/ledger/format";
 import { cn } from "@/lib/utils";
@@ -134,7 +136,7 @@ const transactionResultLimit = 20;
 const transactionSearchDebounceMs = 180;
 const commandSkeletonRows = [0, 1, 2, 3] as const;
 const transactionResultGridClass =
-  "grid min-w-0 grid-cols-[3.75rem_1.5rem_minmax(0,1fr)_minmax(0,5.5rem)] items-center gap-2 px-2 sm:grid-cols-[4.5rem_1.75rem_2.5rem_minmax(0,1fr)_minmax(0,clamp(7rem,28vw,14rem))] sm:gap-3 sm:px-3";
+  "grid min-w-0 grid-cols-[3.75rem_1.5rem_minmax(0,1fr)_minmax(0,8rem)] items-center gap-2 px-2 sm:grid-cols-[4.5rem_1.75rem_2.5rem_minmax(0,1fr)_minmax(0,clamp(7rem,28vw,14rem))] sm:gap-3 sm:px-3";
 
 const domIdPart = (value: string): string => {
   const slug = value
@@ -311,33 +313,36 @@ const TransactionResultAmounts = ({
   readonly transaction: Transaction;
 }) => {
   const amounts = lineDisplayAmounts(transaction);
-  if (transaction.transaction_class === "mixed") {
-    return (
-      <span className={cn(deemphasized && "text-muted-foreground")}>
-        <MixedAmounts
-          amounts={amounts}
-          className="h-auto min-h-7 flex-wrap overflow-hidden [overflow-wrap:anywhere] whitespace-normal"
+  const hasMoreParts = transactionHasMoreParts(transaction);
+  return (
+    <>
+      {amounts.map((amount, index) => (
+        <AmountText
+          key={`${displayAmountKey(amount)}:${index}`}
+          amount={amount}
+          chip
+          overflowTooltip
+          className={cn(
+            "min-w-0",
+            deemphasized && "text-muted-foreground bg-card",
+          )}
+          positiveSign={
+            transaction.transaction_class !== "transfer" &&
+            transaction.transaction_class !== "currency_exchange"
+          }
+          tone="neutral"
+          truncate
         />
-      </span>
-    );
-  }
-
-  return amounts.map((amount, index) => (
-    <AmountText
-      key={`${displayAmountKey(amount)}:${index}`}
-      amount={amount}
-      chip
-      className={cn(
-        "h-auto min-h-7 min-w-0 flex-wrap overflow-hidden [overflow-wrap:anywhere] whitespace-normal",
-        deemphasized && "text-muted-foreground bg-card",
-      )}
-      positiveSign={
-        transaction.transaction_class !== "transfer" &&
-        transaction.transaction_class !== "currency_exchange"
-      }
-      tone="neutral"
-    />
-  ));
+      ))}
+      {hasMoreParts ? (
+        <MorePartsIndicator
+          compact
+          focusable={false}
+          transaction={transaction}
+        />
+      ) : null}
+    </>
+  );
 };
 
 const transactionResultAmountLabel = (
@@ -367,12 +372,18 @@ const transactionResultOptionLabel = (
   postingStatus: ReturnType<typeof linePostingStatus>,
 ): string => {
   const amountLabel = transactionResultAmountLabel(transaction);
+  const partAmountsLabel = transactionHasMoreParts(transaction)
+    ? transactionPartsLabel(transaction)
+    : undefined;
   return [
     `Transaction ${formatInitiatedDate(transaction.initiated_date)}`,
     transaction.display_title,
     `class ${transactionClassLabel(transaction.transaction_class)}`,
     `status ${postingStatusLabel(postingStatus)}`,
     amountLabel ? `amount ${amountLabel}` : undefined,
+    partAmountsLabel
+      ? `more transaction parts, all parts ${partAmountsLabel}`
+      : undefined,
     memo ? `memo ${memo}` : undefined,
   ]
     .filter((part): part is string => Boolean(part))
@@ -1274,7 +1285,10 @@ export const CommandPalette = () => {
                                 />
                               )}
                             </span>
-                            <span className="grid min-w-0 gap-0.5">
+                            <span
+                              className="grid min-w-0 gap-0.5"
+                              data-testid="transaction-result-description"
+                            >
                               <Tooltip
                                 focusable={false}
                                 label={transaction.display_title}
@@ -1310,7 +1324,10 @@ export const CommandPalette = () => {
                                 </Tooltip>
                               ) : null}
                             </span>
-                            <span className="flex min-w-0 flex-wrap justify-end gap-1 overflow-hidden">
+                            <span
+                              className="flex min-w-0 flex-nowrap justify-end gap-1 overflow-hidden"
+                              data-testid="transaction-result-amounts"
+                            >
                               <TransactionResultAmounts
                                 deemphasized={amountDeemphasized}
                                 transaction={transaction}

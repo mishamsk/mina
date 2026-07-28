@@ -2,9 +2,9 @@ import type { Transaction } from "@/api";
 
 import { AmountText } from "./amount-text";
 import {
+  detailDisplayAmounts,
   displayAmountKey,
   formatInitiatedDate,
-  lineDisplayAmounts,
 } from "./format";
 
 export const TransactionDeleteAmountSummary = ({
@@ -12,7 +12,7 @@ export const TransactionDeleteAmountSummary = ({
 }: {
   readonly transaction: Transaction;
 }) => {
-  const amounts = lineDisplayAmounts(transaction);
+  const amounts = detailDisplayAmounts(transaction);
 
   return amounts.length > 0 ? (
     <span className="inline-flex flex-wrap gap-1">

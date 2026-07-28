@@ -315,15 +315,21 @@ export const lineDisplayAmounts = (
       .filter((amount) => amount.amount.startsWith("-"));
   }
 
-  const shapeAmounts = transaction.shapes.flatMap((shape) => shape.amounts);
-  const amounts =
-    transaction.primary_amounts.length > 0
-      ? [
-          ...transaction.primary_amounts,
-          ...transaction.shapes
-            .filter((shape) => shape.shape === "transfer")
-            .flatMap((shape) => shape.amounts),
-        ]
-      : shapeAmounts;
-  return amounts;
+  if (transactionHasMoreParts(transaction)) {
+    return transaction.primary_amounts.length === 1
+      ? transaction.primary_amounts
+      : [];
+  }
+
+  return transaction.primary_amounts.length > 0
+    ? transaction.primary_amounts
+    : detailDisplayAmounts(transaction);
 };
+
+export const detailDisplayAmounts = (
+  transaction: Transaction,
+): readonly DisplayAmount[] =>
+  transaction.shapes.flatMap((shape) => shape.amounts);
+
+export const transactionHasMoreParts = (transaction: Transaction): boolean =>
+  transaction.shapes.length > 1;
