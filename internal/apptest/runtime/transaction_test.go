@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -476,7 +477,7 @@ func TestTransactionPendingLifecycleBoundary(t *testing.T) {
 
 	directPostedRequest := lifecycleTransactionRequest(refs, "2024-03-10", httpclient.PostingStatusPosted)
 	directPosted := createTransaction(t, client, directPostedRequest)
-	assertRecordLifecycleDates(t, "direct posted create", directPosted.JSON201.Records, nil, apptest.TimestampPtr("2024-03-10T00:00:00Z"))
+	assertRecordLifecycleDates(t, "direct posted create", directPosted.JSON201.Records, nil, apptest.TimestampPtr("2024-03-10T23:59:59Z"))
 
 	directPostedReplacement := lifecycleTransactionRequest(refs, "2024-03-14", httpclient.PostingStatusPosted)
 	replaced, err := client.REST().ReplaceTransactionWithResponse(
@@ -488,11 +489,11 @@ func TestTransactionPendingLifecycleBoundary(t *testing.T) {
 	if replaced.StatusCode() != http.StatusOK {
 		t.Fatalf("replace direct posted status = %d, want %d; body %s", replaced.StatusCode(), http.StatusOK, replaced.Body)
 	}
-	assertRecordLifecycleDates(t, "direct posted replace", replaced.JSON200.Records, nil, apptest.TimestampPtr("2024-03-14T00:00:00Z"))
+	assertRecordLifecycleDates(t, "direct posted replace", replaced.JSON200.Records, nil, apptest.TimestampPtr("2024-03-14T23:59:59Z"))
 
 	pendingRequest := lifecycleTransactionRequest(refs, "2024-03-12", httpclient.PostingStatusPending)
 	pending := createTransaction(t, client, pendingRequest)
-	wantPending := apptest.TimestampPtr("2024-03-12T00:00:00Z")
+	wantPending := apptest.TimestampPtr("2024-03-12T23:59:59Z")
 	assertRecordLifecycleDates(t, "pending create", pending.JSON201.Records, wantPending, nil)
 
 	postedStatus := httpclient.NonExpectedPostingStatusPosted
@@ -527,8 +528,52 @@ func TestTransactionPendingLifecycleBoundary(t *testing.T) {
 		"explicit pending on posted",
 		explicitPendingPosted.JSON201.Records,
 		&explicitPending,
-		apptest.TimestampPtr("2024-03-13T00:00:00Z"),
+		apptest.TimestampPtr("2024-03-13T23:59:59Z"),
 	)
+
+	importedPending := apptest.Timestamp("2024-03-17T16:45:00Z")
+	importedPosted := apptest.Timestamp("2024-03-18T09:30:00Z")
+	importedRequest := lifecycleTransactionRequest(refs, "2024-03-18", httpclient.PostingStatusPosted)
+	for index := range importedRequest.Records {
+		externalID := "imported-create-" + strconv.Itoa(index)
+		externalSystem := "test-import"
+		importedRequest.Records[index].Source = httpclient.WritableSourceImported
+		importedRequest.Records[index].ExternalId = &externalID
+		importedRequest.Records[index].ExternalSystem = &externalSystem
+		importedRequest.Records[index].PendingDate = &importedPending
+		importedRequest.Records[index].PostedDate = &importedPosted
+	}
+	imported := createTransaction(t, client, importedRequest)
+	assertRecordLifecycleDates(t, "imported create", imported.JSON201.Records, &importedPending, &importedPosted)
+	assertRecordSources(t, "imported create", imported.JSON201.Records, httpclient.Imported)
+
+	importedReplacementPending := apptest.Timestamp("2024-03-19T11:15:00Z")
+	importedReplacementPosted := apptest.Timestamp("2024-03-20T20:10:00Z")
+	importedReplacement := lifecycleTransactionRequest(refs, "2024-03-20", httpclient.PostingStatusPosted)
+	for index := range importedReplacement.Records {
+		externalID := "imported-replace-" + strconv.Itoa(index)
+		externalSystem := "test-import"
+		importedReplacement.Records[index].Source = httpclient.WritableSourceImported
+		importedReplacement.Records[index].ExternalId = &externalID
+		importedReplacement.Records[index].ExternalSystem = &externalSystem
+		importedReplacement.Records[index].PendingDate = &importedReplacementPending
+		importedReplacement.Records[index].PostedDate = &importedReplacementPosted
+	}
+	importedReplaced, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		imported.JSON201.TransactionId,
+		httpclient.UpdateTransactionRequest(importedReplacement),
+	)
+	requireNoTransportError(t, "replace imported transaction", err)
+	if importedReplaced.StatusCode() != http.StatusOK {
+		t.Fatalf("replace imported transaction status = %d, want %d; body %s", importedReplaced.StatusCode(), http.StatusOK, importedReplaced.Body)
+	}
+	assertRecordLifecycleDates(t, "imported replace", importedReplaced.JSON200.Records, &importedReplacementPending, &importedReplacementPosted)
+	assertRecordSources(t, "imported replace", importedReplaced.JSON200.Records, httpclient.Imported)
+
+	importedRead := getTransaction(t, client, imported.JSON201.TransactionId)
+	assertRecordLifecycleDates(t, "imported read", importedRead.JSON200.Records, &importedReplacementPending, &importedReplacementPosted)
+	assertRecordSources(t, "imported read", importedRead.JSON200.Records, httpclient.Imported)
 
 	expectedRequest := lifecycleTransactionRequest(refs, "2024-03-15", httpclient.PostingStatusExpected)
 	expectedPending := apptest.Timestamp("2024-03-14T18:00:00Z")
@@ -608,6 +653,16 @@ func assertRecordLifecycleDates(t *testing.T, label string, records []httpclient
 	}
 }
 
+func assertRecordSources(t *testing.T, label string, records []httpclient.JournalRecord, want httpclient.Source) {
+	t.Helper()
+
+	for index, record := range records {
+		if record.Source != want {
+			t.Fatalf("%s record %d source = %q, want %q", label, index, record.Source, want)
+		}
+	}
+}
+
 func assertInvalidTransactionAnchorResponse(t *testing.T, label string, response *httpclient.ListTransactionsResponse) {
 	t.Helper()
 	if response.StatusCode() != http.StatusBadRequest {
@@ -643,7 +698,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				PostedDate:           &postedDate,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -653,7 +708,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	}
@@ -776,7 +831,7 @@ func TestTransactionCreateInfersMissingAmountUSD(t *testing.T) {
 				Amount:               "-11.00",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            eurMerchant.AccountId,
@@ -785,7 +840,7 @@ func TestTransactionCreateInfersMissingAmountUSD(t *testing.T) {
 				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	}
@@ -829,7 +884,7 @@ func TestTransactionLeavesUnrepresentableInferredAmountUSDNull(t *testing.T) {
 				Amount:               "-100.00",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            counterparty.AccountId,
@@ -838,7 +893,7 @@ func TestTransactionLeavesUnrepresentableInferredAmountUSDNull(t *testing.T) {
 				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	}
@@ -871,7 +926,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				AmountUsd:            apptest.StringPtr("-110.00"),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            provider.AccountId,
@@ -880,7 +935,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				AmountUsd:            apptest.StringPtr("110.00"),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            provider.AccountId,
@@ -889,7 +944,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				AmountUsd:            apptest.StringPtr("-110.00"),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            cashEUR.AccountId,
@@ -898,7 +953,7 @@ func TestTransactionAcceptsCurrencyExchangeBalancedPerCurrency(t *testing.T) {
 				AmountUsd:            nil,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	}
@@ -1137,7 +1192,7 @@ func TestTransactionValidationErrors(t *testing.T) {
 	}
 
 	invalidSource := balancedTransactionRequest(refs)
-	invalidSource.Records[0].Source = httpclient.ManualSource("imported")
+	invalidSource.Records[0].Source = httpclient.WritableSource("recurring_template")
 	invalidSourceResponse, err := client.REST().CreateTransactionWithResponse(context.Background(), invalidSource)
 	if err != nil {
 		t.Fatalf("invalid source request: %v", err)
@@ -1445,7 +1500,7 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				PostedDate:           &postedDate,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -1455,7 +1510,7 @@ func balancedTransactionRequest(refs transactionRefs) httpclient.CreateTransacti
 				CategoryId:           apptest.Int64Ptr(refs.CategoryId),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	}

@@ -381,6 +381,7 @@ const blankRecordRowDraft = (): JournalRecordRowDraft => ({
   postingStatus: "posted",
   reconciliationStatus: "unreconciled",
   showDates: false,
+  source: "manual",
   sourceAmount: undefined,
   sourceAmountUsd: undefined,
   sourceCurrency: undefined,
@@ -616,6 +617,7 @@ const migrateStoredRecordRowDraft = (
     storedRow?.reconciliationStatus === "reconciled"
       ? "reconciled"
       : "unreconciled",
+  source: storedRow?.source === "imported" ? "imported" : "manual",
   tagIds: Array.isArray(storedRow?.tagIds) ? storedRow.tagIds : [],
 });
 
@@ -872,6 +874,11 @@ const draftPostingStatus = (
   status: JournalRecord["posting_status"],
 ): JournalRecordDraftPostingStatus => status;
 
+const writableRecordSource = (
+  record: JournalRecord,
+): JournalRecordRowDraft["source"] =>
+  record.source === "imported" ? "imported" : "manual";
+
 const recordRowDraftFromJournalRecord = (
   record: JournalRecord,
 ): JournalRecordRowDraft => ({
@@ -887,6 +894,7 @@ const recordRowDraftFromJournalRecord = (
   postingStatus: draftPostingStatus(record.posting_status),
   reconciliationStatus: record.reconciliation_status,
   showDates: Boolean(record.pending_date || record.posted_date),
+  source: writableRecordSource(record),
   sourceAmount: record.amount,
   sourceAmountUsd: record.amount_usd,
   sourceCurrency: record.currency,
@@ -1796,7 +1804,7 @@ const updateRecordFromDraftRow = (
     posted_date: dateTimeToISO(row.postedDateTime),
     posting_status: row.postingStatus,
     reconciliation_status: row.reconciliationStatus,
-    source: "manual",
+    source: row.source,
     tag_ids: [...row.tagIds],
   };
 };
@@ -1843,7 +1851,7 @@ const updateRecordFromShorthandDraft = (
     posted_date: record.posted_date ?? null,
     posting_status: record.posting_status,
     reconciliation_status: record.reconciliation_status,
-    source: "manual",
+    source: writableRecordSource(record),
     tag_ids: [...draft.tagIds],
   };
 };

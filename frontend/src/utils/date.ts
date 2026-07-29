@@ -22,7 +22,9 @@ export const localCivilDate = (value: string): Date => {
 export const localCivilDateStartISO = (value: string): string =>
   localCivilDate(value).toISOString();
 
-const localTimestampDateValue = (value: string | null | undefined): string => {
+export const timestampDateValue = (
+  value: string | null | undefined,
+): string => {
   if (!value) {
     return "";
   }
@@ -38,30 +40,6 @@ const localTimestampDateValue = (value: string | null | undefined): string => {
   return `${year}-${month}-${day}`;
 };
 
-const lifecycleDayMarkerDateValue = (
-  value: string | null | undefined,
-): string => {
-  if (!value) {
-    return "";
-  }
-
-  const match = /^(\d{4}-\d{2}-\d{2})T00:00:00(?:\.0+)?Z$/.exec(value);
-  if (!match) {
-    return "";
-  }
-
-  const date = new Date(value);
-  return !Number.isNaN(date.getTime()) &&
-    date.toISOString().slice(0, 10) === match[1]
-    ? match[1]
-    : "";
-};
-
-export const lifecycleTimestampDateValue = (
-  value: string | null | undefined,
-): string =>
-  lifecycleDayMarkerDateValue(value) || localTimestampDateValue(value);
-
 export const formatInstantTimestamp = (value: string): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -71,18 +49,6 @@ export const formatInstantTimestamp = (value: string): string => {
     dateStyle: "medium",
     timeStyle: "medium",
   }).format(date);
-};
-
-export const formatLifecycleTimestamp = (value: string): string => {
-  const dayMarker = lifecycleDayMarkerDateValue(value);
-  if (dayMarker) {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeZone: "UTC",
-    }).format(new Date(value));
-  }
-
-  return formatInstantTimestamp(value);
 };
 
 export const formatLocalCivilDate = (value: string): string => {

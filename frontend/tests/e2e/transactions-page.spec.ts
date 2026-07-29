@@ -554,7 +554,6 @@ const expectRecordRoleIndicators = async (
   layoutChecks: {
     readonly narrowDetail?: boolean;
     readonly narrowInline?: boolean;
-    readonly statusContentFit?: boolean;
   } = {},
 ): Promise<void> => {
   const indicators = table.getByRole("img", { name: / role$/ });
@@ -603,22 +602,6 @@ const expectRecordRoleIndicators = async (
     expect(
       Math.abs(height - (heightsWithoutIndicators[index] ?? 0)),
     ).toBeLessThanOrEqual(1);
-  }
-
-  if (layoutChecks.statusContentFit) {
-    const statusContent = table.locator(
-      "[data-record-status-content]:has([aria-label^='Dates differ:'])",
-    );
-    await expect(statusContent).not.toHaveCount(0);
-    await expect
-      .poll(() =>
-        statusContent.evaluateAll((elements) =>
-          elements.every(
-            (element) => element.scrollWidth <= element.clientWidth + 1,
-          ),
-        ),
-      )
-      .toBe(true);
   }
 
   if (layoutChecks.narrowInline) {
@@ -1117,23 +1100,20 @@ const hideAccount = async (
 };
 
 const amountChipsFitCell = async (row: Locator): Promise<boolean> =>
-  row
-    .locator("td")
-    .nth(7)
-    .evaluate((cell) => {
-      const cellRect = cell.getBoundingClientRect();
-      const chips = Array.from(
-        cell.querySelectorAll<HTMLElement>("[data-testid='amount-chip']"),
-      ).map((chip) => chip.getBoundingClientRect());
-      return (
-        chips.length > 0 &&
-        chips.every(
-          (chipRect) =>
-            chipRect.left >= cellRect.left - 0.5 &&
-            chipRect.right <= cellRect.right + 0.5,
-        )
-      );
-    });
+  row.locator(".transactions-amount-column").evaluate((cell) => {
+    const cellRect = cell.getBoundingClientRect();
+    const chips = Array.from(
+      cell.querySelectorAll<HTMLElement>("[data-testid='amount-chip']"),
+    ).map((chip) => chip.getBoundingClientRect());
+    return (
+      chips.length > 0 &&
+      chips.every(
+        (chipRect) =>
+          chipRect.left >= cellRect.left - 0.5 &&
+          chipRect.right <= cellRect.right + 0.5,
+      )
+    );
+  });
 
 const mixedPartsIndicatorGeometry = async (row: Locator) =>
   row.evaluate((rowElement) => {
@@ -1188,9 +1168,12 @@ const mixedPartsIndicatorGeometry = async (row: Locator) =>
       return centers;
     };
 
-    const cells = rowElement.querySelectorAll("td");
-    const memberCell = cells[6];
-    const amountCell = cells[7];
+    const memberCell = rowElement.querySelector<HTMLTableCellElement>(
+      ".transactions-member-column",
+    );
+    const amountCell = rowElement.querySelector<HTMLTableCellElement>(
+      ".transactions-amount-column",
+    );
     const amountCellRect = rectFor(amountCell);
     const memberCellRect = rectFor(memberCell);
     const indicator = amountCell?.querySelector<HTMLElement>(
@@ -1274,48 +1257,45 @@ const chipShadowFitsClippingAncestors = async (
   });
 
 const tagChipLineState = async (row: Locator) =>
-  row
-    .locator("td")
-    .nth(5)
-    .evaluate((cell) => {
-      const list = cell.querySelector<HTMLElement>(
-        "[data-testid='transaction-tag-chips-list']",
-      );
-      if (!list) {
-        return {
-          hiddenLabels: [],
-          visibleLabels: [],
-          visibleRowCount: 0,
-        };
-      }
-
-      const clipRect = list.getBoundingClientRect();
-      const chips = Array.from(list.children).filter(
-        (child): child is HTMLElement => child instanceof HTMLElement,
-      );
-      const chipStates = chips.map((chip) => {
-        const rect = chip.getBoundingClientRect();
-        const visible =
-          rect.left >= clipRect.left - 0.5 &&
-          rect.right <= clipRect.right + 0.5 &&
-          rect.top >= clipRect.top - 0.5 &&
-          rect.bottom <= clipRect.bottom + 0.5;
-        return {
-          label: chip.textContent?.trim() ?? "",
-          top: Math.round(rect.top),
-          visible,
-        };
-      });
-      const visibleStates = chipStates.filter((chip) => chip.visible);
-
+  row.locator(".transactions-tags-column").evaluate((cell) => {
+    const list = cell.querySelector<HTMLElement>(
+      "[data-testid='transaction-tag-chips-list']",
+    );
+    if (!list) {
       return {
-        hiddenLabels: chipStates
-          .filter((chip) => !chip.visible)
-          .map((chip) => chip.label),
-        visibleLabels: visibleStates.map((chip) => chip.label),
-        visibleRowCount: new Set(visibleStates.map((chip) => chip.top)).size,
+        hiddenLabels: [],
+        visibleLabels: [],
+        visibleRowCount: 0,
+      };
+    }
+
+    const clipRect = list.getBoundingClientRect();
+    const chips = Array.from(list.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement,
+    );
+    const chipStates = chips.map((chip) => {
+      const rect = chip.getBoundingClientRect();
+      const visible =
+        rect.left >= clipRect.left - 0.5 &&
+        rect.right <= clipRect.right + 0.5 &&
+        rect.top >= clipRect.top - 0.5 &&
+        rect.bottom <= clipRect.bottom + 0.5;
+      return {
+        label: chip.textContent?.trim() ?? "",
+        top: Math.round(rect.top),
+        visible,
       };
     });
+    const visibleStates = chipStates.filter((chip) => chip.visible);
+
+    return {
+      hiddenLabels: chipStates
+        .filter((chip) => !chip.visible)
+        .map((chip) => chip.label),
+      visibleLabels: visibleStates.map((chip) => chip.label),
+      visibleRowCount: new Set(visibleStates.map((chip) => chip.top)).size,
+    };
+  });
 
 test("transactions page renders demo transaction lines and expands records", async ({
   page,
@@ -1331,9 +1311,6 @@ test("transactions page renders demo transaction lines and expands records", asy
   ).toBeVisible();
 
   const transactionRows = page.locator("tbody > tr[aria-expanded]");
-  await expect(
-    transactionRows.locator(".transactions-description-column svg"),
-  ).toHaveCount(0);
   await expect(
     transactionRows.getByRole("button", { name: /expand|collapse/i }),
   ).toHaveCount(0);
@@ -1374,7 +1351,7 @@ test("transactions page renders demo transaction lines and expands records", asy
   const transferRowBackgroundBefore = await transferRow.evaluate(
     (element) => getComputedStyle(element).backgroundColor,
   );
-  await transferRow.locator("td").nth(3).click();
+  await transferRow.locator(".transactions-description-column").click();
   await expect(transferRow).toHaveAttribute("aria-expanded", "true");
   await expect(transferRow).toHaveAttribute(
     "aria-controls",
@@ -1384,6 +1361,10 @@ test("transactions page renders demo transaction lines and expands records", asy
   expect(recordsRowId).not.toBeNull();
   const recordsRow = page.locator(`[id="${recordsRowId}"]`);
   await expect(recordsRow).toBeVisible();
+  await expect(recordsRow.locator(":scope > td")).toHaveAttribute(
+    "colspan",
+    "8",
+  );
   await expect(recordsRow).toHaveCSS("border-bottom-width", "2px");
   await expect(
     page.getByRole("columnheader", { exact: true, name: "Memo" }),
@@ -1420,7 +1401,7 @@ test("transactions page renders demo transaction lines and expands records", asy
     });
   expect(recordsFitTableContent).toBe(true);
 
-  await transferRow.locator("td").nth(3).click();
+  await transferRow.locator(".transactions-description-column").click();
   await expect(transferRow).toHaveAttribute("aria-expanded", "false");
   await expect(transferRow).not.toHaveAttribute("aria-controls", /.+/);
   await expect(recordsRow).toHaveCount(0);
@@ -1499,7 +1480,7 @@ test("expanded records edit per-record values and escalate structural changes", 
     .filter({ hasText: memo })
     .first();
   await expect(transactionRow).toBeVisible();
-  await transactionRow.locator("td").nth(3).click();
+  await transactionRow.locator(".transactions-description-column").click();
   await expect(transactionRow).toHaveAttribute("aria-expanded", "true");
   const records = page.getByTestId("expanded-records");
 
@@ -1514,9 +1495,9 @@ test("expanded records edit per-record values and escalate structural changes", 
   await categoryInput.fill(nextCategory.fqn);
   await categoryEditor.getByRole("button", { name: "Save category" }).click();
   await expect(categoryCell).toContainText(nextCategory.fqn);
-  await expect(transactionRow.locator("td").nth(4)).toContainText(
-    nextCategory.name,
-  );
+  await expect(
+    transactionRow.locator(".transactions-category-column"),
+  ).toContainText(nextCategory.name);
 
   const tagCell = records.getByTestId("record-tags-cell").first();
   await tagCell.hover();
@@ -1638,7 +1619,7 @@ test("replacement edits preserve server-stamped pending dates", async ({
     .filter({ hasText: memo })
     .first();
   await expect(transactionRow).toBeVisible();
-  await transactionRow.locator("td").nth(3).click();
+  await transactionRow.locator(".transactions-description-column").click();
   const records = page.getByTestId("expanded-records");
   await expect(records).toBeVisible();
 
@@ -1712,7 +1693,7 @@ test("successful status saves tolerate an authoritative refetch failure", async 
     .filter({ hasText: memo })
     .first();
   await expect(transactionRow).toBeVisible();
-  await transactionRow.locator("td").nth(3).click();
+  await transactionRow.locator(".transactions-description-column").click();
   const records = page.getByTestId("expanded-records");
   await expect(records).toBeVisible();
 
@@ -2955,7 +2936,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
     .fill(nextCategory.fqn);
   await categoryEditor.getByRole("button", { name: "Save category" }).click();
   await expect(categoryEditor).toHaveCount(0);
-  await row.locator("td").nth(3).click();
+  await row.locator(".transactions-description-column").click();
   const expandedRecords = page.getByTestId("expanded-records");
   await expect(
     expandedRecords.getByText(nextCategory.fqn, { exact: true }),
@@ -3284,15 +3265,17 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   ).toHaveCount(0);
   await expect(firstCategoryEditor).toBeVisible();
 
-  await firstRow.locator("td").nth(3).dispatchEvent("pointerdown", {
-    button: 2,
-    buttons: 2,
-    pointerType: "mouse",
-  });
+  await firstRow
+    .locator(".transactions-description-column")
+    .dispatchEvent("pointerdown", {
+      button: 2,
+      buttons: 2,
+      pointerType: "mouse",
+    });
   await expect(firstCategoryEditor).toHaveCount(0);
-  await secondRow.locator("td").nth(3).click();
+  await secondRow.locator(".transactions-description-column").click();
   await expect(secondRow).toHaveAttribute("aria-expanded", "true");
-  await secondRow.locator("td").nth(3).click();
+  await secondRow.locator(".transactions-description-column").click();
   await expect(secondRow).toHaveAttribute("aria-expanded", "false");
 
   await firstCategoryCell.focus();
@@ -3461,7 +3444,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
     savedCategory.category_id,
   ]);
 
-  await firstRow.locator("td").nth(3).click();
+  await firstRow.locator(".transactions-description-column").click();
   const expandedRecords = page.getByTestId("expanded-records");
   await expect(
     expandedRecords.getByText(savedCategory.fqn, { exact: true }),
@@ -3519,15 +3502,13 @@ test("transactions page uses server pagination controls", async ({ page }) => {
     await page
       .locator("tbody > tr[aria-expanded]")
       .first()
-      .locator("td")
-      .nth(3)
+      .locator(".transactions-description-column")
       .innerText()
   ).split("\n")[0];
   const firstPageFirstDate = await page
     .locator("tbody > tr[aria-expanded]")
     .first()
-    .locator("td")
-    .nth(1)
+    .locator(".transactions-date-column")
     .innerText();
   expect(firstPageFirstDate).toMatch(/^[A-Z][a-z]{2} \d{1,2}\n\d{4}$/);
 
@@ -4084,9 +4065,9 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
     await expect(overdueMarker).toBeVisible();
     await expect(dueExpected).toBeVisible();
     await expect(dueRow.getByRole("img", { name: "Overdue" })).toHaveCount(0);
-    await expect(ordinaryRow.getByTestId("recurring-indicators")).toHaveCount(
-      0,
-    );
+    await expect(
+      ordinaryRow.getByTestId("transaction-status-indicators"),
+    ).toHaveCount(0);
 
     const geometry = await Promise.all(
       [overdueRow, dueRow, ordinaryRow].map((row) =>
@@ -4098,7 +4079,7 @@ test("transactions inline recurring occurrences support hide, confirm, dismiss, 
             "[data-testid='transaction-description-text']",
           );
           const indicators = element.querySelector<HTMLElement>(
-            "[data-testid='recurring-indicators']",
+            "[data-testid='transaction-status-indicators']",
           );
           const title = element.querySelector<HTMLElement>(
             "[data-testid='transaction-line-title']",
@@ -5635,9 +5616,8 @@ test("transactions page collapses low-priority columns instead of scrolling hori
         rows.find((candidate) =>
           candidate.textContent?.includes("BlueCash → Target"),
         ) ?? rows[0];
-      const headerCells = container.querySelectorAll("thead th");
       const cells = row?.querySelectorAll("td");
-      const rectFor = (cell: Element | undefined) => {
+      const rectFor = (cell: Element | null | undefined) => {
         const rect = cell?.getBoundingClientRect();
         return rect
           ? {
@@ -5649,7 +5629,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
             }
           : undefined;
       };
-      const isCollapsed = (cell: Element | undefined) => {
+      const isCollapsed = (cell: Element | null | undefined) => {
         if (!cell) {
           return true;
         }
@@ -5661,14 +5641,21 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           rect.width < 1
         );
       };
-      const amountCell = cells?.[7];
+      const amountCell = row?.querySelector<HTMLTableCellElement>(
+        ".transactions-amount-column",
+      );
       const amountRect = rectFor(amountCell);
-      const actionsCell = cells?.[8];
+      const actionsCell = row?.querySelector<HTMLTableCellElement>(
+        ".transactions-actions-column",
+      );
       const actionsRect = rectFor(actionsCell);
       const containerRect = container.getBoundingClientRect();
-      const memberRect = rectFor(cells?.[6]);
+      const memberCell = row?.querySelector<HTMLTableCellElement>(
+        ".transactions-member-column",
+      );
+      const memberRect = rectFor(memberCell);
       const memberContentRects = Array.from(
-        cells?.[6]?.querySelectorAll("*") ?? [],
+        memberCell?.querySelectorAll("*") ?? [],
       )
         .map((element) => element.getBoundingClientRect())
         .filter((rect) => rect.width > 0 && rect.height > 0);
@@ -5677,7 +5664,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
       )
         .map((element) => element.getBoundingClientRect())
         .filter((rect) => rect.width > 0 && rect.height > 0);
-      const hasTruncatedContent = (cell: Element | undefined) =>
+      const hasTruncatedContent = (cell: Element | null | undefined) =>
         Array.from(cell?.querySelectorAll<HTMLElement>("*") ?? []).some(
           (element) => {
             const style = getComputedStyle(element);
@@ -5702,7 +5689,9 @@ test("transactions page collapses low-priority columns instead of scrolling hori
         return rects;
       };
       const amountChips = rows.flatMap((visibleRow) => {
-        const cell = visibleRow.querySelectorAll("td")[7];
+        const cell = visibleRow.querySelector<HTMLTableCellElement>(
+          ".transactions-amount-column",
+        );
         if (!cell || isCollapsed(cell)) {
           return [];
         }
@@ -5734,11 +5723,19 @@ test("transactions page collapses low-priority columns instead of scrolling hori
         };
       });
       const visibleAmountCells = rows
-        .map((visibleRow) => visibleRow.querySelectorAll("td")[7])
+        .map((visibleRow) =>
+          visibleRow.querySelector<HTMLTableCellElement>(
+            ".transactions-amount-column",
+          ),
+        )
         .filter((cell): cell is HTMLTableCellElement => !isCollapsed(cell));
       const contentOverlappingAmount = amountRect
         ? Array.from(cells ?? [])
-            .slice(0, 7)
+            .filter(
+              (cell) =>
+                cell !== amountCell &&
+                !cell.matches(".transactions-actions-column"),
+            )
             .filter((cell) => !isCollapsed(cell))
             .flatMap((cell) => [
               cell,
@@ -5767,8 +5764,12 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           getComputedStyle(
             actionsCell?.querySelector(".row-actions-overflow") ?? container,
           ).display !== "none",
-        categoryCollapsed: isCollapsed(cells?.[4]),
-        categoryHeaderCollapsed: isCollapsed(headerCells[4]),
+        categoryCollapsed: isCollapsed(
+          row?.querySelector(".transactions-category-column"),
+        ),
+        categoryHeaderCollapsed: isCollapsed(
+          container.querySelector("thead .transactions-category-column"),
+        ),
         containerWidth: container.getBoundingClientRect().width,
         hasHorizontalOverflow:
           container.scrollWidth > container.clientWidth + 1,
@@ -5792,9 +5793,9 @@ test("transactions page collapses low-priority columns instead of scrolling hori
           cell.innerText.replace(/\s+/g, " ").trim(),
         ),
         amountText: amountCell?.innerText.replace(/\s+/g, " ").trim(),
-        memberCollapsed: isCollapsed(cells?.[6]),
+        memberCollapsed: isCollapsed(memberCell),
         memberFullyVisible:
-          isCollapsed(cells?.[6]) ||
+          isCollapsed(memberCell) ||
           (Boolean(memberRect) &&
             memberContentRects.every(
               (rect) =>
@@ -5802,11 +5803,15 @@ test("transactions page collapses low-priority columns instead of scrolling hori
                 rect.right <= (memberRect?.right ?? 0) + 0.5 &&
                 (!amountRect || rect.right <= amountRect.left + 0.5),
             )),
-        memberHeaderCollapsed: isCollapsed(headerCells[6]),
-        statusCollapsed: isCollapsed(cells?.[2]),
-        statusHeaderCollapsed: isCollapsed(headerCells[2]),
-        tagsCollapsed: isCollapsed(cells?.[5]),
-        tagsHeaderCollapsed: isCollapsed(headerCells[5]),
+        memberHeaderCollapsed: isCollapsed(
+          container.querySelector("thead .transactions-member-column"),
+        ),
+        tagsCollapsed: isCollapsed(
+          row?.querySelector(".transactions-tags-column"),
+        ),
+        tagsHeaderCollapsed: isCollapsed(
+          container.querySelector("thead .transactions-tags-column"),
+        ),
         visibleContentOverlapsAmount: contentOverlappingAmount,
       };
     });
@@ -5830,9 +5835,6 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   expect(intermediateTableState.amountTexts).toContain("+3,250.00 $");
   expect(intermediateTableState.memberFullyVisible).toBe(true);
   expect(intermediateTableState.visibleContentOverlapsAmount).toBe(false);
-  expect(intermediateTableState.statusHeaderCollapsed).toBe(
-    intermediateTableState.statusCollapsed,
-  );
   expect(intermediateTableState.memberHeaderCollapsed).toBe(
     intermediateTableState.memberCollapsed,
   );
@@ -5868,9 +5870,6 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     }
     if (tableState.tagsCollapsed) {
       expect(tableState.actionsFolded).toBe(true);
-    }
-    if (tableState.statusCollapsed) {
-      expect(tableState.memberCollapsed).toBe(true);
     }
   }
 
@@ -6112,9 +6111,9 @@ test("transactions contain long amount chips and align the pagination footer", a
     await page.setViewportSize({ width, height: 720 });
     const longAmountRow = page.getByRole("row").filter({ hasText: memo });
     await expect(longAmountRow).toBeVisible();
-    await expect(longAmountRow.locator("td").nth(7)).toContainText(
-      "-9,999,999,999.99 $",
-    );
+    await expect(
+      longAmountRow.locator(".transactions-amount-column"),
+    ).toContainText("-9,999,999,999.99 $");
     const mixedLongAmountRow = page
       .getByRole("row")
       .filter({ hasText: mixedMemo });
@@ -6281,11 +6280,13 @@ test("transactions display currency symbols with code fallback", async ({
       .getByRole("row")
       .filter({ hasText: "BlueCash → Target" })
       .first()
-      .locator("td")
-      .nth(7),
+      .locator(".transactions-amount-column"),
   ).toContainText("-43.98 $");
   await expect(
-    page.getByRole("row").filter({ hasText: memo }).locator("td").nth(7),
+    page
+      .getByRole("row")
+      .filter({ hasText: memo })
+      .locator(".transactions-amount-column"),
   ).toContainText("-3.21 XDR");
 });
 
@@ -6340,12 +6341,15 @@ test("transactions page help and leaf category chips", async ({
     .filter({ hasText: "BlueCash → Target" })
     .first();
   await expect(simpleSpendRow).toBeVisible();
-  await expect(simpleSpendRow.locator("td").nth(6)).not.toContainText("Mixed");
-  await expect(simpleSpendRow.locator("td").nth(7)).toContainText(/-43\.98 \$/);
+  await expect(
+    simpleSpendRow.locator(".transactions-member-column"),
+  ).not.toContainText("Mixed");
+  await expect(
+    simpleSpendRow.locator(".transactions-amount-column"),
+  ).toContainText(/-43\.98 \$/);
   await expect(
     simpleSpendRow
-      .locator("td")
-      .nth(3)
+      .locator(".transactions-description-column")
       .getByRole("button", { name: "Open transaction detail" }),
   ).toHaveCount(0);
 
@@ -6355,9 +6359,13 @@ test("transactions page help and leaf category chips", async ({
     .first();
   await expect(mixedRow).toBeVisible();
   await expect(
-    mixedRow.locator("td").nth(4).getByText("Mixed", { exact: true }),
+    mixedRow
+      .locator(".transactions-category-column")
+      .getByText("Mixed", { exact: true }),
   ).toBeVisible();
-  await expect(mixedRow.locator("td").nth(7)).toHaveText("+ parts");
+  await expect(mixedRow.locator(".transactions-amount-column")).toHaveText(
+    "+ parts",
+  );
   const rowHeights = await page
     .locator("tbody > tr[aria-expanded]")
     .evaluateAll((rows) => {
@@ -6560,7 +6568,6 @@ test("record role indicators preserve density across accounting shapes", async (
       fixture.roles,
       {
         narrowDetail: true,
-        statusContentFit: fixture.memo === adjustmentMemo,
       },
     );
 
@@ -6685,7 +6692,9 @@ test("transactions line composition uses compact dates and single-line leaf tags
   expect(fitTagState.hiddenLabels).toEqual([]);
   expect(fitTagState.visibleRowCount).toBeLessThanOrEqual(2);
   await expect(
-    fitTagRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
+    fitTagRow
+      .locator(".transactions-tags-column")
+      .getByTestId("transaction-tags-overflow"),
   ).toHaveCount(0);
 
   const overflowTagRow = page
@@ -6694,12 +6703,13 @@ test("transactions line composition uses compact dates and single-line leaf tags
     .first();
   await expect(overflowTagRow).toBeVisible();
 
-  const dateCell = overflowTagRow.locator("td").nth(1);
+  const dateCell = overflowTagRow.locator(".transactions-date-column");
   await expect(dateCell.locator("div").nth(0)).toHaveText("May 31");
   await expect(dateCell.locator("div").nth(1)).toHaveText("2026");
 
-  const statusCell = overflowTagRow.locator("td").nth(2);
-  await expect(statusCell).toHaveText("");
+  await expect(
+    overflowTagRow.getByTestId("transaction-status-indicators"),
+  ).toHaveCount(0);
 
   const overflowTagState = await tagChipLineState(overflowTagRow);
   expect(overflowTagState.visibleLabels.length).toBeGreaterThan(0);
@@ -6707,18 +6717,15 @@ test("transactions line composition uses compact dates and single-line leaf tags
   expect(overflowTagState.visibleRowCount).toBeLessThanOrEqual(2);
 
   const visibleOverflowTag = overflowTagRow
-    .locator("td")
-    .nth(5)
+    .locator(".transactions-tags-column")
     .getByText(createdOverflowTags[0]?.name ?? "", { exact: true });
   await expect(visibleOverflowTag).toBeVisible();
   const overflowChip = overflowTagRow
-    .locator("td")
-    .nth(5)
+    .locator(".transactions-tags-column")
     .getByTestId("transaction-tags-overflow");
   await expect(overflowChip).toBeVisible();
   const renderedOverflowTagLabels = await overflowTagRow
-    .locator("td")
-    .nth(5)
+    .locator(".transactions-tags-column")
     .getByTestId("transaction-tag-chips-list")
     .evaluate((list) =>
       Array.from(list.children)
@@ -6737,8 +6744,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
   expect(await chipShadowFitsClippingAncestors(visibleOverflowTag)).toBe(true);
 
   const memberChip = overflowTagRow
-    .locator("td")
-    .nth(6)
+    .locator(".transactions-member-column")
     .getByText(memberName.slice(0, 2), { exact: true });
   await expect(memberChip).toBeVisible();
   expect(await chipShadowFitsClippingAncestors(memberChip)).toBe(true);
@@ -6755,8 +6761,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
   const noMemoTagState = await tagChipLineState(noMemoRow);
   expect(noMemoTagState.visibleRowCount).toBe(2);
   const noMemoTitleCenterOffset = await noMemoRow
-    .locator("td")
-    .nth(3)
+    .locator(".transactions-description-column")
     .evaluate((descriptionCell) => {
       const title = descriptionCell.querySelector<HTMLElement>(
         "[data-testid='transaction-line-title']",
@@ -6918,7 +6923,9 @@ test("transaction detail panel shows full records and supports deep links", asyn
   await expect(detailRow).toBeVisible();
   await expect(alternateDetailRow).toBeVisible();
   await expect(
-    detailRow.locator("td").nth(5).getByTestId("transaction-tags-overflow"),
+    detailRow
+      .locator(".transactions-tags-column")
+      .getByTestId("transaction-tags-overflow"),
   ).toBeVisible();
 
   await page
@@ -7002,11 +7009,11 @@ test("transaction detail panel shows full records and supports deep links", asyn
     )
     .toBe("visible");
 
-  await alternateDetailRow.locator("td").nth(3).click();
+  await alternateDetailRow.locator(".transactions-description-column").click();
   await expect(panel).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
   await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "true");
-  await alternateDetailRow.locator("td").nth(3).click();
+  await alternateDetailRow.locator(".transactions-description-column").click();
   await expect(alternateDetailRow).toHaveAttribute("aria-expanded", "false");
 
   await clickRowAction(page, detailRow, "Open transaction detail");
@@ -7478,40 +7485,6 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     `${unique}Lifecycle`,
     { anchorDate: "2026-07-23" },
   );
-  const lifecycleDateLabels = await page.evaluate(
-    ({ cancelledPending, cancelledPosted, firstPosted, secondPosted }) => {
-      const dayLabel = (value: string) => {
-        const date = new Date(value);
-        return new Intl.DateTimeFormat(undefined, {
-          day: "numeric",
-          month: "short",
-          year:
-            date.getFullYear() === new Date().getFullYear()
-              ? undefined
-              : "numeric",
-        }).format(date);
-      };
-      const exactDateLabel = (value: string) =>
-        new Intl.DateTimeFormat(undefined, {
-          dateStyle: "medium",
-        }).format(new Date(value));
-
-      return {
-        cancelledPending: dayLabel(cancelledPending),
-        cancelledPosted: dayLabel(cancelledPosted),
-        firstPosted: dayLabel(firstPosted),
-        firstPostedExact: exactDateLabel(firstPosted),
-        secondPosted: dayLabel(secondPosted),
-        secondPostedExact: exactDateLabel(secondPosted),
-      };
-    },
-    {
-      cancelledPending: "2026-07-15T16:00:00Z",
-      cancelledPosted: "2026-07-16T16:00:00Z",
-      firstPosted: "2026-07-13T16:00:00Z",
-      secondPosted: "2026-07-14T16:00:00Z",
-    },
-  );
 
   await page.goto("/transactions?page=1&pageSize=50");
   const simpleRow = page
@@ -7519,7 +7492,13 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     .filter({ hasText: simpleMemo })
     .first();
   await expect(simpleRow).toBeVisible();
-  await simpleRow.locator("td").nth(3).click();
+  const mixedRow = page.getByRole("row").filter({ hasText: mixedMemo }).first();
+  const mixedIndicators = mixedRow.getByTestId("transaction-status-indicators");
+  await expect(mixedIndicators).toHaveAttribute("data-posting-status", "mixed");
+  await expect(
+    mixedIndicators.getByRole("img", { name: "Mixed posting status" }),
+  ).toBeVisible();
+  await simpleRow.locator(".transactions-description-column").click();
   const simpleExpandedRecords = simpleRow.locator(
     "xpath=following-sibling::tr[1]",
   );
@@ -7542,20 +7521,19 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
         }),
       )
       .toBe(true);
-    await expect(lifecycle).toContainText("Initiated");
-    await expect(lifecycle).toContainText("Pending");
-    await expect(lifecycle).toContainText("Posted");
-    await expect(lifecycle).not.toContainText("varies");
-    await expect(
-      lifecycle.getByRole("listitem").filter({ hasText: "Pending" }),
-    ).toContainText("—");
+    await expect(lifecycle).toHaveText(/Initiated\s*Jul 11/);
+    await expect(lifecycle).not.toContainText(
+      /expected|pending|posted|cancelled|varies|→|–/i,
+    );
     await expect(panel).not.toContainText("Invalid Date");
     await expect(lifecycle.locator("[tabindex]")).toHaveCount(0);
+    await expect(
+      lifecycle.locator("[data-slot='tooltip-trigger']"),
+    ).toHaveCount(0);
     await expect(lifecycle.getByText("Initiated", { exact: true })).toHaveCSS(
       "font-size",
       "12px",
     );
-    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(0);
     await expect(
       panel.getByText(firstTag.name, { exact: true }).first(),
     ).toBeVisible();
@@ -7567,71 +7545,21 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   const expectMixedSurface = async (panel: Locator) => {
     await expectDatelessReadOnlyDetailGrid(panel, 3);
     const lifecycle = panel.getByTestId("transaction-lifecycle");
-    const postedStage = lifecycle
-      .getByRole("listitem")
-      .filter({ hasText: "Posted" });
-    await expect(postedStage).toContainText(
-      `${lifecycleDateLabels.firstPosted}–${lifecycleDateLabels.secondPosted}`,
-    );
-    await expect(postedStage).toContainText("varies");
-    await expect(postedStage).toContainText("2 of 3");
-    await expect
-      .poll(() =>
-        postedStage
-          .locator("[data-lifecycle-qualifier='posted']")
-          .evaluate((qualifier) => {
-            const qualifierBounds = qualifier.getBoundingClientRect();
-            const stageBounds = qualifier
-              .closest("li")
-              ?.getBoundingClientRect();
-            return (
-              stageBounds !== undefined &&
-              qualifierBounds.left >= stageBounds.left &&
-              qualifierBounds.right <= stageBounds.right
-            );
-          }),
-      )
-      .toBe(true);
-    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(3);
+    await expect(lifecycle).toHaveText(/Initiated\s*Jul 12\s*pending/);
+    await expect(lifecycle).not.toContainText(/Posted|varies|2 of 3|→|–/);
     await expect(
-      panel.locator("td[data-label='Status']").filter({ hasText: "→" }),
-    ).toHaveCount(3);
-    const statusContent = panel.locator(
-      "[data-record-status-content]:has([aria-label^='Dates differ:'])",
-    );
-    await expect(statusContent).toHaveCount(3);
-    await expect
-      .poll(() =>
-        statusContent.evaluateAll((elements) =>
-          Math.max(
-            ...elements.map(
-              (element) => element.getBoundingClientRect().height,
-            ),
-          ),
-        ),
-      )
-      .toBeLessThanOrEqual(26);
-    await postedStage.locator("[data-slot='tooltip-trigger']").hover();
-    const tooltip = page.getByRole("tooltip");
-    await expect(tooltip).toContainText(lifecycleDateLabels.firstPostedExact);
-    await expect(tooltip).toContainText(lifecycleDateLabels.secondPostedExact);
-    await expect(tooltip).toContainText(/\d{1,2}:\d{2}:\d{2}/);
+      lifecycle.locator("[data-lifecycle-status='pending']"),
+    ).toHaveText("pending");
   };
 
   const expectLifecycleContentFits = async (panel: Locator) => {
     const lifecycle = panel.getByTestId("transaction-lifecycle");
     await expect
       .poll(() =>
-        lifecycle.evaluate((strip) =>
-          Array.from(
-            strip.querySelectorAll<HTMLElement>(
-              "[data-lifecycle-stage-content]",
-            ),
-          ).every(
-            (stage) =>
-              stage.scrollWidth <= stage.clientWidth + 1 &&
-              stage.scrollHeight <= stage.clientHeight + 1,
-          ),
+        lifecycle.evaluate(
+          (strip) =>
+            strip.scrollWidth <= strip.clientWidth + 1 &&
+            strip.scrollHeight <= strip.clientHeight + 1,
         ),
       )
       .toBe(true);
@@ -7640,38 +7568,21 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   const expectExpectedSurface = async (panel: Locator) => {
     await expectDatelessReadOnlyDetailGrid(panel, 2);
     const lifecycle = panel.getByTestId("transaction-lifecycle");
-    const expectedStage = lifecycle
-      .getByRole("listitem")
-      .filter({ hasText: "Expected" });
-    await expect(expectedStage).toContainText("Jul 23");
+    await expect(lifecycle).toHaveText(/Initiated\s*Jul 23\s*expected/);
+    await expect(lifecycle).not.toContainText(/Pending|Posted|Cancelled|—/);
     await expect(
-      lifecycle.getByRole("listitem").filter({ hasText: "Pending" }),
-    ).toContainText("—");
-    await expect(
-      lifecycle.getByRole("listitem").filter({ hasText: "Posted" }),
-    ).toContainText("—");
-    await expect(panel.locator("[aria-label^='Dates differ:']")).toHaveCount(0);
+      lifecycle.locator("[data-lifecycle-status='expected']"),
+    ).toHaveText("expected");
   };
 
   const expectCancelledSurface = async (panel: Locator) => {
     await expectDatelessReadOnlyDetailGrid(panel, 2);
     const lifecycle = panel.getByTestId("transaction-lifecycle");
-    const pendingStage = lifecycle
-      .getByRole("listitem")
-      .filter({ hasText: "Pending" });
-    await expect(pendingStage).toContainText(
-      lifecycleDateLabels.cancelledPending,
-    );
-    await expect(pendingStage).toContainText("varies");
-    await expect(pendingStage).toContainText("1 of 2");
-    const postedStage = lifecycle
-      .getByRole("listitem")
-      .filter({ hasText: "Posted" });
-    await expect(postedStage).toContainText(
-      lifecycleDateLabels.cancelledPosted,
-    );
-    await expect(postedStage).toContainText("varies");
-    await expect(postedStage).toContainText("1 of 2");
+    await expect(lifecycle).toHaveText(/Initiated\s*Jul 16\s*cancelled/);
+    await expect(lifecycle).not.toContainText(/Pending|Posted|varies|1 of 2|—/);
+    await expect(
+      lifecycle.locator("[data-lifecycle-status='cancelled']"),
+    ).toHaveText("cancelled");
     const cancelledRows = panel
       .locator("tr[data-detail-record-row='true']")
       .filter({ hasText: "Cancelled" });
@@ -7680,12 +7591,6 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
       "text-decoration-line",
       "line-through",
     );
-    await expect(panel.locator("[aria-label='Dates differ: —→—']")).toHaveCount(
-      1,
-    );
-    await expect(
-      panel.locator("[aria-label^='Cancelled lifecycle:']"),
-    ).toHaveCount(1);
   };
 
   await page.setViewportSize({ width: 1600, height: 900 });
@@ -7872,7 +7777,7 @@ test("Escape closes filter popover before transaction detail panel", async ({
   await expect(panel).toBeHidden();
 });
 
-test("focused transaction row closes detail with one Escape despite a lifecycle tooltip", async ({
+test("focused transaction row closes detail with one Escape", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 760 });
@@ -7919,17 +7824,8 @@ test("focused transaction row closes detail with one Escape despite a lifecycle 
   await expect(panel).toBeVisible();
   await expect(detailRow).toHaveAttribute("aria-expanded", "false");
 
-  await panel
-    .getByTestId("transaction-lifecycle")
-    .getByRole("listitem")
-    .filter({ hasText: "Initiated" })
-    .locator("[data-slot='tooltip-trigger']")
-    .hover();
-  await expect(page.getByRole("tooltip")).toBeVisible();
-
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
-  await expect(page.getByRole("tooltip")).toBeHidden();
   await expect(page).toHaveURL(/\/transactions\?page=1&pageSize=50$/);
   await expect(detailRow).toBeFocused();
 
@@ -8049,7 +7945,7 @@ test("transaction detail delete confirms, tombstones, and refreshes the row", as
   expect(failedTransactionRequests).toEqual([]);
 });
 
-test("transaction detail edit opens a fitting spend and replaces the same transaction", async ({
+test("transaction detail edit preserves imported sources through a fitting shorthand replacement", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 820 });
@@ -8079,7 +7975,7 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
           memo: null,
           posting_status: "posted",
           reconciliation_status: "unreconciled",
-          source: "manual",
+          source: "imported",
           tag_ids: [],
         },
         {
@@ -8091,7 +7987,7 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
           memo,
           posting_status: "posted",
           reconciliation_status: "unreconciled",
-          source: "manual",
+          source: "imported",
           tag_ids: [],
         },
       ],
@@ -8153,7 +8049,7 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
       memo: updatedMemo,
       posting_status: "posted",
       reconciliation_status: "unreconciled",
-      source: "manual",
+      source: "imported",
       tag_ids: [],
     },
     {
@@ -8165,7 +8061,7 @@ test("transaction detail edit opens a fitting spend and replaces the same transa
       memo: updatedMemo,
       posting_status: "posted",
       reconciliation_status: "unreconciled",
-      source: "manual",
+      source: "imported",
       tag_ids: [],
     },
   ]);
@@ -8313,7 +8209,7 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
   ]);
 });
 
-test("transaction detail edit opens non-fitting transactions in the journal editor", async ({
+test("transaction detail edit preserves imported sources through the journal editor", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -8343,7 +8239,7 @@ test("transaction detail edit opens non-fitting transactions in the journal edit
           memo,
           posting_status: "posted",
           reconciliation_status: "unreconciled",
-          source: "manual",
+          source: "imported",
           tag_ids: [],
         },
         {
@@ -8354,7 +8250,7 @@ test("transaction detail edit opens non-fitting transactions in the journal edit
           memo,
           posting_status: "posted",
           reconciliation_status: "unreconciled",
-          source: "manual",
+          source: "imported",
           tag_ids: [],
         },
         {
@@ -8365,7 +8261,7 @@ test("transaction detail edit opens non-fitting transactions in the journal edit
           memo,
           posting_status: "posted",
           reconciliation_status: "unreconciled",
-          source: "manual",
+          source: "imported",
           tag_ids: [],
         },
         {
@@ -8376,7 +8272,7 @@ test("transaction detail edit opens non-fitting transactions in the journal edit
           memo,
           posting_status: "posted",
           reconciliation_status: "unreconciled",
-          source: "manual",
+          source: "imported",
           tag_ids: [],
         },
       ],
@@ -8420,6 +8316,10 @@ test("transaction detail edit opens non-fitting transactions in the journal edit
   const replaced = (await replaceResponse.json()) as TransactionDetailFixture;
   expect(replaced.transaction_id).toBe(transaction.transaction_id);
   expect(replaced.records.some((record) => record.memo === updatedMemo)).toBe(
+    true,
+  );
+  expect(replaced.records).toHaveLength(4);
+  expect(replaced.records.every((record) => record.source === "imported")).toBe(
     true,
   );
 });
@@ -8562,7 +8462,10 @@ test("transaction detail duplicate prefills a new entry", async ({
 
   const detailPanel = page.getByTestId("transaction-detail-panel");
   const detailHeader = detailPanel.locator(":scope > div").first();
-  const detailFooter = detailPanel.locator(":scope > div").nth(2);
+  const duplicateButton = detailPanel.getByRole("button", {
+    name: "Duplicate",
+  });
+  const detailFooter = duplicateButton.locator("..");
   await expect(
     detailHeader.getByRole("button", {
       exact: true,
@@ -8582,9 +8485,6 @@ test("transaction detail duplicate prefills a new entry", async ({
     detailFooter.getByRole("button", { name: "Edit transaction" }),
   ).toHaveCount(0);
 
-  const duplicateButton = detailPanel.getByRole("button", {
-    name: "Duplicate",
-  });
   await duplicateButton.click();
   const entryPanel = page.getByRole("dialog", {
     name: "Transaction editor",
@@ -8969,7 +8869,9 @@ test("inline editors hide hidden controls and results while broader pickers reta
   const hiddenTagRow = page.getByRole("row").filter({ hasText: memo }).first();
   await expect(hiddenTagRow).toBeVisible();
   await expect(
-    hiddenTagRow.locator("td").nth(5).getByText("QuietTag", { exact: true }),
+    hiddenTagRow
+      .locator(".transactions-tags-column")
+      .getByText("QuietTag", { exact: true }),
   ).toBeVisible();
 
   const rowPrefix = `transaction-${transaction.transaction_id}`;
@@ -9156,7 +9058,9 @@ test("member pickers keep colon-containing names flat", async ({
   const slug = testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "");
   const member = await createMember(page, `Household:${slug}${Date.now()}`);
 
+  const ledgerLookups = waitForLedgerLookups(page);
   await page.goto("/transactions?page=1&pageSize=25");
+  await ledgerLookups;
   await page.getByRole("button", { name: "Open filters" }).click();
   await page.getByRole("button", { name: "Add filter" }).click();
   await page.getByRole("button", { exact: true, name: "Member" }).click();

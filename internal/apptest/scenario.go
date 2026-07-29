@@ -203,7 +203,7 @@ func (s *Scenario) BalancedTransaction(refs TransactionRefs) models.Transaction 
 				Memo:                 &memo,
 				PostingStatus:        models.PostingStatusPosted,
 				ReconciliationStatus: models.Reconciled,
-				Source:               models.ManualSourceManual,
+				Source:               models.WritableSourceManual,
 				TagIds:               &tagIDs,
 			},
 			{
@@ -214,7 +214,7 @@ func (s *Scenario) BalancedTransaction(refs TransactionRefs) models.Transaction 
 				Currency:             "USD",
 				PostingStatus:        models.PostingStatusPosted,
 				ReconciliationStatus: models.Reconciled,
-				Source:               models.ManualSourceManual,
+				Source:               models.WritableSourceManual,
 			},
 		},
 	})

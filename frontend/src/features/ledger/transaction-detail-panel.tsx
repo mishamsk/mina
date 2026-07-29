@@ -1,11 +1,7 @@
 import {
-  Calendar,
   Check,
-  ChevronRight,
-  Clock,
   Close,
   Copy,
-  Flag,
   MagicEdit,
   Scissors,
   Trash,
@@ -29,13 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useOutsidePointerClose } from "@/hooks/use-outside-pointer-close";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
-import {
-  formatInstantTimestamp,
-  formatLifecycleTimestamp,
-  formatLocalCivilDate,
-  lifecycleTimestampDateValue,
-  localCivilDate,
-} from "@/utils/date";
+import { formatInstantTimestamp, localCivilDate } from "@/utils/date";
 
 import { AmountText } from "./amount-text";
 import { ClassBadge } from "./class-badge";
@@ -106,306 +96,35 @@ const uniqueRecordSources = (transaction: Transaction): string =>
     ", ",
   );
 
-type LifecycleRecordStage = "pending" | "posted";
-
-interface LifecycleStageSummary {
-  readonly canonicalDay: string | null;
-  readonly dateValue: string;
-  readonly qualifier: string | null;
-  readonly reachedCount: number;
-  readonly tooltip: string;
-  readonly varies: boolean;
-}
-
-interface LifecycleRecordStageValue {
-  readonly day: string | null;
-  readonly reached: boolean;
-  readonly timestamp: string | null;
-}
-
-interface LifecycleRecord {
-  readonly pending: LifecycleRecordStageValue;
-  readonly posted: LifecycleRecordStageValue;
-  readonly record: JournalRecord;
-}
-
-interface TransactionLifecycle {
-  readonly expected: boolean;
-  readonly pending: LifecycleStageSummary;
-  readonly posted: LifecycleStageSummary;
-  readonly recordsById: ReadonlyMap<number, LifecycleRecord>;
-}
-
-const recordStageTimestamp = (
-  record: JournalRecord,
-  stage: LifecycleRecordStage,
-): string | null =>
-  stage === "pending" ? record.pending_date : (record.posted_date ?? null);
-
-const recordHasReachedStage = (
-  record: JournalRecord,
-  stage: LifecycleRecordStage,
-): boolean => {
-  if (record.posting_status === "cancelled") {
-    return recordStageTimestamp(record, stage) !== null;
-  }
-  return stage === "pending"
-    ? record.pending_date !== null
-    : record.posting_status === "posted";
-};
-
-const lifecycleRecordName = (maps: LookupMaps, record: JournalRecord): string =>
-  maps.accountsById.get(record.account_id)?.fqn ?? `Record ${record.record_id}`;
-
-const buildLifecycleRecordStage = (
-  record: JournalRecord,
-  stage: LifecycleRecordStage,
-  expected: boolean,
-): LifecycleRecordStageValue => {
-  const timestamp = expected ? null : recordStageTimestamp(record, stage);
-
-  return {
-    day: timestamp ? lifecycleTimestampDateValue(timestamp) || null : null,
-    reached: !expected && recordHasReachedStage(record, stage),
-    timestamp,
-  };
-};
-
-const buildLifecycleRecord = (
-  record: JournalRecord,
-  expected: boolean,
-): LifecycleRecord => ({
-  pending: buildLifecycleRecordStage(record, "pending", expected),
-  posted: buildLifecycleRecordStage(record, "posted", expected),
-  record,
-});
-
-const buildLifecycleStage = (
-  records: readonly LifecycleRecord[],
-  stage: LifecycleRecordStage,
-  maps: LookupMaps,
-): LifecycleStageSummary => {
-  const label = stage === "pending" ? "Pending" : "Posted";
-  const reachedRecords = records.flatMap((recordLifecycle) => {
-    const stageValue = recordLifecycle[stage];
-    if (!stageValue.reached) {
-      return [];
-    }
-    return [
-      {
-        day: stageValue.day,
-        record: recordLifecycle.record,
-        timestamp: stageValue.timestamp,
-      },
-    ];
-  });
-  const days = Array.from(
-    new Set(
-      reachedRecords
-        .map(({ day }) => day)
-        .filter((day): day is string => day !== null),
-    ),
-  ).sort();
-  const partial =
-    reachedRecords.length > 0 && reachedRecords.length < records.length;
-  const varies = days.length > 1 || partial;
-  const formattedDate =
-    days.length === 0
-      ? "—"
-      : days.length === 1
-        ? formatLocalCivilDate(days[0]!)
-        : `${formatLocalCivilDate(days[0]!)}–${formatLocalCivilDate(days.at(-1)!)}`;
-  const qualifiers = [
-    varies ? "varies" : undefined,
-    partial ? `${reachedRecords.length} of ${records.length}` : undefined,
-  ].filter((value): value is string => Boolean(value));
-  const exactTimestamps = Array.from(
-    new Set(
-      reachedRecords
-        .map(({ timestamp }) => timestamp)
-        .filter((timestamp): timestamp is string => timestamp !== null),
-    ),
-  );
-  const tooltip =
-    reachedRecords.length === 0
-      ? `${label} not reached`
-      : exactTimestamps.length === 1 &&
-          reachedRecords.every(
-            ({ timestamp }) => timestamp === exactTimestamps[0],
-          )
-        ? `${label} ${formatLifecycleTimestamp(exactTimestamps[0]!)}`
-        : reachedRecords
-            .map(
-              ({ record, timestamp }) =>
-                `${lifecycleRecordName(maps, record)} ${timestamp ? formatLifecycleTimestamp(timestamp) : "—"}`,
-            )
-            .join(" · ");
-
-  return {
-    canonicalDay: days.length === 1 ? days[0]! : null,
-    dateValue: formattedDate,
-    qualifier: qualifiers.length > 0 ? qualifiers.join(" · ") : null,
-    reachedCount: reachedRecords.length,
-    tooltip,
-    varies,
-  };
-};
-
-const buildTransactionLifecycle = (
-  transaction: Transaction,
-  maps: LookupMaps,
-): TransactionLifecycle => {
-  const expected = linePostingStatus(transaction) === "expected";
-  const records = transaction.records.map((record) =>
-    buildLifecycleRecord(record, expected),
-  );
-
-  return {
-    expected,
-    pending: buildLifecycleStage(records, "pending", maps),
-    posted: buildLifecycleStage(records, "posted", maps),
-    recordsById: new Map(
-      records.map((recordLifecycle) => [
-        recordLifecycle.record.record_id,
-        recordLifecycle,
-      ]),
-    ),
-  };
-};
-
-const LifecycleStageIcon = ({
-  reached,
-  stage,
-}: {
-  readonly reached: boolean;
-  readonly stage: "expected" | "initiated" | LifecycleRecordStage;
-}) => {
-  if (!reached) {
-    return null;
-  }
-  const Icon =
-    stage === "posted" ? Check : stage === "pending" ? Clock : Calendar;
-  return (
-    <Icon
-      aria-hidden="true"
-      className={cn(
-        "size-4 shrink-0",
-        stage === "posted"
-          ? "text-[var(--color-status-posted-ink)]"
-          : stage === "pending" || stage === "expected"
-            ? "text-[var(--color-status-pending-ink)]"
-            : "text-muted-foreground",
-      )}
-    />
-  );
-};
-
-const LifecycleStrip = ({
-  lifecycle,
+export const TransactionLifecycleStrip = ({
   transaction,
 }: {
-  readonly lifecycle: TransactionLifecycle;
   readonly transaction: Transaction;
 }) => {
-  const firstLabel = lifecycle.expected ? "Expected" : "Initiated";
-  const firstDate = formatInitiatedDate(transaction.initiated_date);
-  const stages = [
-    {
-      key: "initiated",
-      label: firstLabel,
-      reached: true,
-      stage: lifecycle.expected
-        ? ("expected" as const)
-        : ("initiated" as const),
-      tooltip: `${firstLabel} ${formatFullCivilDate(transaction.initiated_date)}`,
-      value: firstDate,
-      qualifier: null,
-    },
-    {
-      key: "pending",
-      label: "Pending",
-      reached: lifecycle.pending.reachedCount > 0,
-      stage: "pending" as const,
-      tooltip: lifecycle.pending.tooltip,
-      value: lifecycle.pending.dateValue,
-      qualifier: lifecycle.pending.qualifier,
-    },
-    {
-      key: "posted",
-      label: "Posted",
-      reached: lifecycle.posted.reachedCount > 0,
-      stage: "posted" as const,
-      tooltip: lifecycle.posted.tooltip,
-      value: lifecycle.posted.dateValue,
-      qualifier: lifecycle.posted.qualifier,
-    },
-  ];
+  const status = linePostingStatus(transaction);
+  const statusWord =
+    status === "mixed" ? "pending" : status === "posted" ? undefined : status;
 
   return (
-    <ol
-      aria-label="Transaction lifecycle"
-      className="flex flex-nowrap items-center overflow-x-auto border-y border-[var(--hairline)] bg-[var(--band)] px-2 py-1 font-mono text-xs"
+    <div
+      aria-label={`Transaction lifecycle: initiated ${formatFullCivilDate(transaction.initiated_date)}${statusWord ? `, ${statusWord}` : ""}`}
+      className="flex min-h-8 items-center gap-1 border-y border-[var(--hairline)] bg-[var(--band)] px-2 py-1 font-mono text-xs"
       data-testid="transaction-lifecycle"
     >
-      {stages.map((stage, index) => (
-        <li key={stage.key} className="flex shrink-0 items-center">
-          <Tooltip
-            className="min-h-6 shrink-0"
-            focusable={false}
-            label={stage.tooltip}
-          >
-            <span
-              className={cn(
-                "inline-flex shrink-0 flex-nowrap items-center gap-x-1",
-                !stage.reached && "text-muted-foreground",
-              )}
-              data-lifecycle-stage-content={stage.key}
-            >
-              <span className="text-muted-foreground shrink-0 font-semibold uppercase">
-                {stage.label}
-              </span>
-              <LifecycleStageIcon reached={stage.reached} stage={stage.stage} />
-              <span
-                className="shrink-0 whitespace-nowrap"
-                data-lifecycle-value={stage.key}
-              >
-                {stage.value}
-              </span>
-              {stage.qualifier ? (
-                <span
-                  className="shrink-0 whitespace-nowrap"
-                  data-lifecycle-qualifier={stage.key}
-                >
-                  · {stage.qualifier}
-                </span>
-              ) : null}
-            </span>
-          </Tooltip>
-          {index < stages.length - 1 ? (
-            <ChevronRight
-              aria-hidden="true"
-              className="text-muted-foreground ml-1 size-4 shrink-0"
-            />
-          ) : null}
-        </li>
-      ))}
-    </ol>
+      <span className="text-muted-foreground font-semibold uppercase">
+        Initiated
+      </span>
+      <span>{formatInitiatedDate(transaction.initiated_date)}</span>
+      {statusWord ? (
+        <span
+          className="text-muted-foreground ml-1 font-semibold lowercase"
+          data-lifecycle-status={statusWord}
+        >
+          {statusWord}
+        </span>
+      ) : null}
+    </div>
   );
-};
-
-export const TransactionLifecycleStrip = ({
-  maps,
-  transaction,
-}: {
-  readonly maps: LookupMaps;
-  readonly transaction: Transaction;
-}) => {
-  const lifecycle = useMemo(
-    () => buildTransactionLifecycle(transaction, maps),
-    [maps, transaction],
-  );
-
-  return <LifecycleStrip lifecycle={lifecycle} transaction={transaction} />;
 };
 
 const DetailAmountList = ({
@@ -468,75 +187,6 @@ const RecordTagSet = ({
   ) : null;
 };
 
-const stageDiffersForRecord = (
-  record: LifecycleRecord,
-  summary: LifecycleStageSummary,
-  stage: LifecycleRecordStage,
-): boolean => {
-  if (summary.reachedCount === 0) {
-    return false;
-  }
-  const recordStage = record[stage];
-  if (!recordStage.reached) {
-    return true;
-  }
-  if (recordStage.day === null) {
-    return summary.varies;
-  }
-  if (summary.canonicalDay === null) {
-    return summary.varies;
-  }
-  return summary.canonicalDay !== recordStage.day;
-};
-
-const recordDeviation = (
-  recordLifecycle: LifecycleRecord,
-  transaction: Transaction,
-  lifecycle: TransactionLifecycle,
-):
-  | {
-      readonly ariaLabel: string;
-      readonly text: string;
-      readonly tooltip: string;
-    }
-  | undefined => {
-  if (transaction.records.length <= 1) {
-    return undefined;
-  }
-  const { record } = recordLifecycle;
-  const pendingDiffers = stageDiffersForRecord(
-    recordLifecycle,
-    lifecycle.pending,
-    "pending",
-  );
-  const postedDiffers = stageDiffersForRecord(
-    recordLifecycle,
-    lifecycle.posted,
-    "posted",
-  );
-  const cancelled = record.posting_status === "cancelled";
-  if (!cancelled && !pendingDiffers && !postedDiffers) {
-    return undefined;
-  }
-
-  const pendingDay = recordLifecycle.pending.day;
-  const postedDay = recordLifecycle.posted.day;
-  const pendingDisplay = pendingDay ? formatLocalCivilDate(pendingDay) : "—";
-  const postedDisplay = postedDay ? formatLocalCivilDate(postedDay) : "—";
-  const text = `${pendingDisplay}→${postedDisplay}`;
-  const pendingTimestamp = recordLifecycle.pending.timestamp;
-  const postedTimestamp = recordLifecycle.posted.timestamp;
-
-  return {
-    ariaLabel:
-      pendingDiffers || postedDiffers
-        ? `Dates differ: ${text}`
-        : `Cancelled lifecycle: ${text}`,
-    text,
-    tooltip: `${postingStatusLabel(record.posting_status)} — initiated ${formatFullCivilDate(transaction.initiated_date)} · pending ${pendingTimestamp ? formatLifecycleTimestamp(pendingTimestamp) : "—"} · posted ${postedTimestamp ? formatLifecycleTimestamp(postedTimestamp) : "—"}`,
-  };
-};
-
 const sourceLabel = (source: JournalRecord["source"]): string =>
   source
     .split("_")
@@ -554,7 +204,6 @@ const isInteractiveRowTarget = (
   ) !== null;
 
 const DetailRecordsTable = ({
-  lifecycle,
   maps,
   onFilterCategory,
   onFilterMember,
@@ -562,7 +211,6 @@ const DetailRecordsTable = ({
   records,
   transaction,
 }: {
-  readonly lifecycle: TransactionLifecycle;
   readonly maps: LookupMaps;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
@@ -645,12 +293,8 @@ const DetailRecordsTable = ({
               record.member_id === null || record.member_id === undefined
                 ? undefined
                 : maps.membersById.get(record.member_id);
-            const recordLifecycle = lifecycle.recordsById.get(record.record_id);
             const expanded = expandedRecordIds.has(record.record_id);
             const disclosureId = `record-${record.record_id}-detail`;
-            const deviation = recordLifecycle
-              ? recordDeviation(recordLifecycle, transaction, lifecycle)
-              : undefined;
             const cancelled = record.posting_status === "cancelled";
             const rowTone = index % 2 === 0 ? "bg-card" : "bg-[var(--band)]";
             const rowHoverTone =
@@ -765,34 +409,13 @@ const DetailRecordsTable = ({
                     className="detail-records-status-column min-w-0 px-2 py-1.5"
                     data-label="Status"
                   >
-                    <span
-                      className="flex w-full max-w-full min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap"
-                      data-record-status-content="true"
-                    >
+                    <span className="flex w-full max-w-full min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
                       <StatusIcon
                         className="size-4"
                         focusable={false}
                         status={record.posting_status}
                       />
                       <span>{postingStatusLabel(record.posting_status)}</span>
-                      {deviation ? (
-                        <Tooltip
-                          className="text-muted-foreground min-h-6"
-                          focusable={false}
-                          label={deviation.tooltip}
-                        >
-                          <span
-                            aria-label={deviation.ariaLabel}
-                            className="inline-flex min-w-0 items-center gap-1 text-xs whitespace-nowrap"
-                          >
-                            <Flag
-                              aria-hidden="true"
-                              className="size-4 shrink-0"
-                            />
-                            <span>{deviation.text}</span>
-                          </span>
-                        </Tooltip>
-                      ) : null}
                     </span>
                   </td>
                   <td
@@ -822,7 +445,9 @@ const DetailRecordsTable = ({
                     >
                       <dl className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
                         <dt className="text-muted-foreground">
-                          {lifecycle.expected ? "Expected" : "Initiated"}
+                          {linePostingStatus(transaction) === "expected"
+                            ? "Expected"
+                            : "Initiated"}
                         </dt>
                         <dd>
                           {formatFullCivilDate(transaction.initiated_date)}
@@ -831,12 +456,12 @@ const DetailRecordsTable = ({
                         <dd>
                           {!record.pending_date
                             ? "—"
-                            : formatLifecycleTimestamp(record.pending_date)}
+                            : formatInstantTimestamp(record.pending_date)}
                         </dd>
                         <dt className="text-muted-foreground">Posted</dt>
                         <dd>
                           {record.posted_date
-                            ? formatLifecycleTimestamp(record.posted_date)
+                            ? formatInstantTimestamp(record.posted_date)
                             : "—"}
                         </dd>
                         <dt className="text-muted-foreground">
@@ -900,10 +525,6 @@ export const TransactionDetailContent = ({
 }) => {
   const summaryMemo = lineMemo(transaction);
   const effectiveRate = exchangeRateLabel(transaction);
-  const lifecycle = useMemo(
-    () => buildTransactionLifecycle(transaction, maps),
-    [maps, transaction],
-  );
 
   return (
     <div className="space-y-5 p-4">
@@ -939,7 +560,6 @@ export const TransactionDetailContent = ({
         </h3>
         <DetailRecordsTable
           key={transaction.transaction_id}
-          lifecycle={lifecycle}
           maps={maps}
           onFilterCategory={onFilterCategory}
           onFilterMember={onFilterMember}
@@ -1214,7 +834,7 @@ export const TransactionDetailPanel = ({
       </div>
 
       {transaction && !loading && !errorMessage ? (
-        <TransactionLifecycleStrip maps={maps} transaction={transaction} />
+        <TransactionLifecycleStrip transaction={transaction} />
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">

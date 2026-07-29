@@ -517,11 +517,11 @@ func accountTypeChangeTransactionRequest(fundingAccountID int64, counterpartyAcc
 		Records: []httpclient.CreateJournalRecordRequest{
 			{
 				AccountId: fundingAccountID, Currency: "USD", Amount: fundingAmount,
-				PostingStatus: httpclient.PostingStatusPosted, ReconciliationStatus: httpclient.Reconciled, Source: httpclient.ManualSourceManual,
+				PostingStatus: httpclient.PostingStatusPosted, ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
 			},
 			{
 				AccountId: counterpartyAccountID, CategoryId: apptest.Int64Ptr(categoryID), Currency: "USD", Amount: counterpartyAmount,
-				PostingStatus: httpclient.PostingStatusPosted, ReconciliationStatus: httpclient.Reconciled, Source: httpclient.ManualSourceManual,
+				PostingStatus: httpclient.PostingStatusPosted, ReconciliationStatus: httpclient.Reconciled, Source: httpclient.WritableSourceManual,
 			},
 		},
 	}
@@ -1264,7 +1264,7 @@ func createBalanceTransactionWithOptionalAmountUSD(
 				AmountUsd:            balanceAmountUSD,
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            counterAccountID,
@@ -1274,7 +1274,7 @@ func createBalanceTransactionWithOptionalAmountUSD(
 				CategoryId:           apptest.Int64Ptr(categoryID),
 				PostingStatus:        postingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	})

@@ -497,13 +497,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{
@@ -605,13 +605,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{
@@ -791,13 +791,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{
@@ -893,13 +893,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{
@@ -1089,13 +1089,13 @@ func Operations() []Operation {
 						{
 							Name:        "pending_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.",
+							Description: "UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.",
 							Required:    false,
 						},
 						{
 							Name:        "posted_date",
 							Type:        "string",
-							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.",
+							Description: "UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.",
 							Required:    false,
 						},
 						{

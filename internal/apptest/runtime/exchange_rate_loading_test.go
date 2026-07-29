@@ -178,7 +178,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 					PostedDate:           postedAt,
 					PostingStatus:        httpclient.PostingStatusPosted,
 					ReconciliationStatus: httpclient.Reconciled,
-					Source:               httpclient.ManualSourceManual,
+					Source:               httpclient.WritableSourceManual,
 				},
 				{
 					AccountId:            counterparty.AccountId,
@@ -189,7 +189,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 					PostedDate:           postedAt,
 					PostingStatus:        httpclient.PostingStatusPosted,
 					ReconciliationStatus: httpclient.Reconciled,
-					Source:               httpclient.ManualSourceManual,
+					Source:               httpclient.WritableSourceManual,
 				},
 			},
 		})
@@ -257,7 +257,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 						Currency:             "EUR",
 						PostingStatus:        httpclient.PostingStatusPosted,
 						ReconciliationStatus: httpclient.Reconciled,
-						Source:               httpclient.ManualSourceManual,
+						Source:               httpclient.WritableSourceManual,
 					},
 					{
 						AccountId:            counterparty.AccountId,
@@ -266,7 +266,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 						Currency:             "EUR",
 						PostingStatus:        httpclient.PostingStatusPosted,
 						ReconciliationStatus: httpclient.Reconciled,
-						Source:               httpclient.ManualSourceManual,
+						Source:               httpclient.WritableSourceManual,
 					},
 				},
 			})
@@ -323,7 +323,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 					Currency:             "EUR",
 					PostingStatus:        httpclient.PostingStatusPosted,
 					ReconciliationStatus: httpclient.Reconciled,
-					Source:               httpclient.ManualSourceManual,
+					Source:               httpclient.WritableSourceManual,
 				},
 				{
 					AccountId:            counterparty.AccountId,
@@ -332,7 +332,7 @@ func TestExchangeRateLoadingExpectedBehavior(t *testing.T) {
 					Currency:             "EUR",
 					PostingStatus:        httpclient.PostingStatusPosted,
 					ReconciliationStatus: httpclient.Reconciled,
-					Source:               httpclient.ManualSourceManual,
+					Source:               httpclient.WritableSourceManual,
 				},
 			},
 		})
@@ -475,7 +475,7 @@ func createForeignCurrencyTransaction(t *testing.T, client *apptest.Client, fixt
 				PostedDate:           fixture.PostedAt,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            counterparty.AccountId,
@@ -487,7 +487,7 @@ func createForeignCurrencyTransaction(t *testing.T, client *apptest.Client, fixt
 				PostedDate:           fixture.PostedAt,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	})

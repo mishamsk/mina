@@ -339,16 +339,6 @@ const PulseTile = ({
   </Card>
 );
 
-const StatusMixedMarker = () => (
-  <Tooltip
-    focusable={false}
-    label="Mixed posting status"
-    className="font-heading text-foreground bg-card inline-grid size-5 place-items-center border border-[var(--border-ink)] text-[11px] font-semibold uppercase shadow-[var(--shadow-chip)]"
-  >
-    <span aria-hidden="true">M</span>
-  </Tooltip>
-);
-
 const recentActivityTooltipLabel = (
   transaction: Transaction,
   memo: string | undefined,
@@ -406,11 +396,7 @@ const RecentActivityLine = ({
             </span>
           </span>
           <span className="inline-grid size-6 place-items-center">
-            {postingStatus === "mixed" ? (
-              <StatusMixedMarker />
-            ) : (
-              <StatusIcon focusable={false} status={postingStatus} />
-            )}
+            <StatusIcon focusable={false} status={postingStatus} />
           </span>
           <span className="min-w-0">
             <Tooltip

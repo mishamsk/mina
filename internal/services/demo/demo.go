@@ -336,16 +336,16 @@ func (b *seedBuilder) seedTransactions(ctx context.Context) error {
 func (b *seedBuilder) seedIncome(ctx context.Context) error {
 	for _, date := range []string{"2026-04-03", "2026-04-17", "2026-05-01", "2026-05-15", "2026-05-29"} {
 		if err := b.tx(ctx, date,
-			b.rec("checking:Chase:Joint", "Avery", "USD", 325000, 325000, "", []string{"Income"}, "Acme payroll", date),
-			b.rec("income:AcmePayroll", "", "USD", -325000, -325000, "Income:Salary", []string{"Income"}, "Acme payroll", date),
+			b.rec("checking:Chase:Joint", "Avery", "USD", 325000, 325000, "", []string{"Income"}, "Acme payroll"),
+			b.rec("income:AcmePayroll", "", "USD", -325000, -325000, "Income:Salary", []string{"Income"}, "Acme payroll"),
 		); err != nil {
 			return err
 		}
 	}
 	for _, date := range []string{"2026-04-22", "2026-05-20"} {
 		if err := b.tx(ctx, date,
-			b.rec("checking:Chase:Joint", "Morgan", "USD", 85000, 85000, "", []string{"Income"}, "Freelance design", date),
-			b.rec("income:Freelance", "", "USD", -85000, -85000, "Income:Freelance", []string{"Income"}, "Freelance design", date),
+			b.rec("checking:Chase:Joint", "Morgan", "USD", 85000, 85000, "", []string{"Income"}, "Freelance design"),
+			b.rec("income:Freelance", "", "USD", -85000, -85000, "Income:Freelance", []string{"Income"}, "Freelance design"),
 		); err != nil {
 			return err
 		}
@@ -357,11 +357,11 @@ func (b *seedBuilder) seedIncome(ctx context.Context) error {
 func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 	for _, date := range []string{"2026-04-05", "2026-05-05"} {
 		if err := b.tx(ctx, date,
-			b.rec("checking:Chase:Joint", "", "USD", -300000, -300000, "", []string{"Shared:Family"}, "Mortgage payment", date),
-			b.rec("mortgage:Rocket:Servicing", "", "USD", 220000, 220000, "Housing:Mortgage:Principal", []string{"Shared:Family"}, "Mortgage principal", date),
-			b.rec("mortgage:Rocket:Servicing", "", "USD", 45000, 45000, "Housing:Mortgage:Interest", []string{"Shared:Family"}, "Mortgage interest", date),
-			b.rec("mortgage:Rocket:Servicing", "", "USD", 25000, 25000, "Housing:Mortgage:Escrow", []string{"Shared:Family"}, "Mortgage escrow", date),
-			b.rec("mortgage:Rocket:Servicing", "", "USD", 10000, 10000, "Housing:Mortgage:Insurance", []string{"Shared:Family"}, "Mortgage insurance", date),
+			b.rec("checking:Chase:Joint", "", "USD", -300000, -300000, "", []string{"Shared:Family"}, "Mortgage payment"),
+			b.rec("mortgage:Rocket:Servicing", "", "USD", 220000, 220000, "Housing:Mortgage:Principal", []string{"Shared:Family"}, "Mortgage principal"),
+			b.rec("mortgage:Rocket:Servicing", "", "USD", 45000, 45000, "Housing:Mortgage:Interest", []string{"Shared:Family"}, "Mortgage interest"),
+			b.rec("mortgage:Rocket:Servicing", "", "USD", 25000, 25000, "Housing:Mortgage:Escrow", []string{"Shared:Family"}, "Mortgage escrow"),
+			b.rec("mortgage:Rocket:Servicing", "", "USD", 10000, 10000, "Housing:Mortgage:Insurance", []string{"Shared:Family"}, "Mortgage insurance"),
 		); err != nil {
 			return err
 		}
@@ -377,16 +377,16 @@ func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 		{"2026-05-18", "credit_card:Amex:BlueCash", 74000},
 	} {
 		if err := b.tx(ctx, input.date,
-			b.rec("checking:Chase:Joint", "", "USD", -input.amount, -input.amount, "", []string{"CardPayment"}, "Credit card payment", input.date),
-			b.rec(input.card, "", "USD", input.amount, input.amount, "", []string{"CardPayment"}, "Credit card payment", input.date),
+			b.rec("checking:Chase:Joint", "", "USD", -input.amount, -input.amount, "", []string{"CardPayment"}, "Credit card payment"),
+			b.rec(input.card, "", "USD", input.amount, input.amount, "", []string{"CardPayment"}, "Credit card payment"),
 		); err != nil {
 			return err
 		}
 	}
 	for _, date := range []string{"2026-04-06", "2026-04-13", "2026-04-20", "2026-04-27", "2026-05-04", "2026-05-11", "2026-05-18", "2026-05-25"} {
 		if err := b.tx(ctx, date,
-			b.rec("checking:Chase:Joint", "", "USD", -25000, -25000, "", []string{"Shared:Family"}, "Weekly savings transfer", date),
-			b.rec("savings:Ally:Emergency", "", "USD", 25000, 25000, "", []string{"Shared:Family"}, "Weekly savings transfer", date),
+			b.rec("checking:Chase:Joint", "", "USD", -25000, -25000, "", []string{"Shared:Family"}, "Weekly savings transfer"),
+			b.rec("savings:Ally:Emergency", "", "USD", 25000, 25000, "", []string{"Shared:Family"}, "Weekly savings transfer"),
 		); err != nil {
 			return err
 		}
@@ -479,9 +479,9 @@ func (b *seedBuilder) seedDailySpend(ctx context.Context) error {
 		date := start.AddDate(0, 0, day).Format("2006-01-02")
 		if day%10 == 4 {
 			if err := b.tx(ctx, date,
-				b.rec("credit_card:Chase:Sapphire", "Avery", "USD", -7200, -7200, "", []string{"Shared:Jordan"}, "Dinner split with Jordan", date),
-				b.rec("merchant:Restaurant:Local", "", "USD", 5400, 5400, "Food:Restaurants", []string{"Shared:Jordan"}, "Dinner split with Jordan", date),
-				b.rec("person:Friend:Jordan", "", "USD", 1800, 1800, "", []string{"Shared:Jordan"}, "Jordan share of dinner", date),
+				b.rec("credit_card:Chase:Sapphire", "Avery", "USD", -7200, -7200, "", []string{"Shared:Jordan"}, "Dinner split with Jordan"),
+				b.rec("merchant:Restaurant:Local", "", "USD", 5400, 5400, "Food:Restaurants", []string{"Shared:Jordan"}, "Dinner split with Jordan"),
+				b.rec("person:Friend:Jordan", "", "USD", 1800, 1800, "", []string{"Shared:Jordan"}, "Jordan share of dinner"),
 			); err != nil {
 				return err
 			}
@@ -503,8 +503,8 @@ func (b *seedBuilder) seedDailySpend(ctx context.Context) error {
 func (b *seedBuilder) seedCashAndFriends(ctx context.Context) error {
 	for _, date := range []string{"2026-04-04", "2026-04-19", "2026-05-03", "2026-05-17", "2026-05-30"} {
 		if err := b.tx(ctx, date,
-			b.rec("checking:Chase:Joint", "", "USD", -12000, -12000, "", []string{"Cash"}, "ATM withdrawal", date),
-			b.rec("cash:Wallet", "", "USD", 12000, 12000, "", []string{"Cash"}, "ATM withdrawal", date),
+			b.rec("checking:Chase:Joint", "", "USD", -12000, -12000, "", []string{"Cash"}, "ATM withdrawal"),
+			b.rec("cash:Wallet", "", "USD", 12000, 12000, "", []string{"Cash"}, "ATM withdrawal"),
 		); err != nil {
 			return err
 		}
@@ -538,8 +538,8 @@ func (b *seedBuilder) seedCashAndFriends(ctx context.Context) error {
 		checkingAmount := input.amount
 		friendAmount := -input.amount
 		if err := b.tx(ctx, input.date,
-			b.rec("checking:Chase:Joint", "", "USD", checkingAmount, checkingAmount, "", []string{"Shared:Jordan"}, input.memo, input.date),
-			b.rec("person:Friend:Jordan", "", "USD", friendAmount, friendAmount, "", []string{"Shared:Jordan"}, input.memo, input.date),
+			b.rec("checking:Chase:Joint", "", "USD", checkingAmount, checkingAmount, "", []string{"Shared:Jordan"}, input.memo),
+			b.rec("person:Friend:Jordan", "", "USD", friendAmount, friendAmount, "", []string{"Shared:Jordan"}, input.memo),
 		); err != nil {
 			return err
 		}
@@ -553,8 +553,8 @@ func (b *seedBuilder) seedCashAndFriends(ctx context.Context) error {
 		{"2026-05-16", -20000},
 	} {
 		if err := b.tx(ctx, input.date,
-			b.rec("checking:Chase:Joint", "", "USD", -input.amount, -input.amount, "", []string{"Trips:Vacation:Lisbon2026"}, "Beach house money pool", input.date),
-			b.rec("person:Pool:BeachHouse", "", "USD", input.amount, input.amount, "", []string{"Trips:Vacation:Lisbon2026"}, "Beach house money pool", input.date),
+			b.rec("checking:Chase:Joint", "", "USD", -input.amount, -input.amount, "", []string{"Trips:Vacation:Lisbon2026"}, "Beach house money pool"),
+			b.rec("person:Pool:BeachHouse", "", "USD", input.amount, input.amount, "", []string{"Trips:Vacation:Lisbon2026"}, "Beach house money pool"),
 		); err != nil {
 			return err
 		}
@@ -582,21 +582,21 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 		{"2026-05-21", 6720, 6000, "merchant:Travel:Dining:Lisbon", "Travel:Dining", "Lisbon cafe", "Trips:Vacation:Lisbon2026", "cash:Travel:EUR", "EUR", 6000},
 	} {
 		records := []transactions.JournalRecordInput{
-			b.rec(input.payAccount, "Morgan", input.payCurrency, -input.payCents, -input.usdCents, "", []string{input.tag}, input.memo, input.date),
-			b.rec(input.merchant, "", "EUR", input.eurCents, input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
+			b.rec(input.payAccount, "Morgan", input.payCurrency, -input.payCents, -input.usdCents, "", []string{input.tag}, input.memo),
+			b.rec(input.merchant, "", "EUR", input.eurCents, input.usdCents, input.category, []string{input.tag}, input.memo),
 		}
 		if input.payCurrency != "EUR" {
 			if err := b.tx(ctx, input.date,
-				b.rec(input.payAccount, "Morgan", input.payCurrency, -input.payCents, -input.usdCents, "", []string{input.tag}, input.memo, input.date),
-				b.rec("system:exchange", "", input.payCurrency, input.payCents, input.usdCents, "", []string{input.tag}, input.memo, input.date),
-				b.rec("system:exchange", "", "EUR", -input.eurCents, -input.usdCents, "", []string{input.tag}, input.memo, input.date),
-				b.rec("cash:Travel:EUR", "", "EUR", input.eurCents, input.usdCents, "", []string{input.tag}, input.memo, input.date),
+				b.rec(input.payAccount, "Morgan", input.payCurrency, -input.payCents, -input.usdCents, "", []string{input.tag}, input.memo),
+				b.rec("system:exchange", "", input.payCurrency, input.payCents, input.usdCents, "", []string{input.tag}, input.memo),
+				b.rec("system:exchange", "", "EUR", -input.eurCents, -input.usdCents, "", []string{input.tag}, input.memo),
+				b.rec("cash:Travel:EUR", "", "EUR", input.eurCents, input.usdCents, "", []string{input.tag}, input.memo),
 			); err != nil {
 				return err
 			}
 			records = []transactions.JournalRecordInput{
-				b.rec("cash:Travel:EUR", "Morgan", "EUR", -input.eurCents, -input.usdCents, "", []string{input.tag}, input.memo, input.date),
-				b.rec(input.merchant, "", "EUR", input.eurCents, input.usdCents, input.category, []string{input.tag}, input.memo, input.date),
+				b.rec("cash:Travel:EUR", "Morgan", "EUR", -input.eurCents, -input.usdCents, "", []string{input.tag}, input.memo),
+				b.rec(input.merchant, "", "EUR", input.eurCents, input.usdCents, input.category, []string{input.tag}, input.memo),
 			}
 		}
 		if err := b.tx(ctx, input.date, records...); err != nil {
@@ -612,16 +612,16 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 		{"2026-05-22", 4080, 600000},
 	} {
 		if err := b.tx(ctx, input.date,
-			b.rec("credit_card:Chase:Sapphire", "Riley", "USD", -input.usdCents, -input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
-			b.rec("system:exchange", "", "USD", input.usdCents, input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
-			b.rec("system:exchange", "", "JPY", -input.jpyCents, -input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
-			b.rec("cash:Travel:JPY", "", "JPY", input.jpyCents, input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
+			b.rec("credit_card:Chase:Sapphire", "Riley", "USD", -input.usdCents, -input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card"),
+			b.rec("system:exchange", "", "USD", input.usdCents, input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card"),
+			b.rec("system:exchange", "", "JPY", -input.jpyCents, -input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card"),
+			b.rec("cash:Travel:JPY", "", "JPY", input.jpyCents, input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card"),
 		); err != nil {
 			return err
 		}
 		if err := b.tx(ctx, input.date,
-			b.rec("cash:Travel:JPY", "Riley", "JPY", -input.jpyCents, -input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
-			b.rec("merchant:Travel:Transit:Tokyo", "", "JPY", input.jpyCents, input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card", input.date),
+			b.rec("cash:Travel:JPY", "Riley", "JPY", -input.jpyCents, -input.usdCents, "", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card"),
+			b.rec("merchant:Travel:Transit:Tokyo", "", "JPY", input.jpyCents, input.usdCents, "Travel:Transit", []string{"Trips:Vacation:Tokyo2026"}, "Tokyo transit card"),
 		); err != nil {
 			return err
 		}
@@ -635,10 +635,10 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 		{"2026-05-19", 22400, 20000},
 	} {
 		if err := b.tx(ctx, input.date,
-			b.rec("checking:Chase:Joint", "", "USD", -input.usdCents, -input.usdCents, "", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
-			b.rec("system:exchange", "", "USD", input.usdCents, input.usdCents, "", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
-			b.rec("system:exchange", "", "EUR", -input.eurCents, -input.usdCents, "", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
-			b.rec("cash:Travel:EUR", "", "EUR", input.eurCents, input.usdCents, "", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange", input.date),
+			b.rec("checking:Chase:Joint", "", "USD", -input.usdCents, -input.usdCents, "", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange"),
+			b.rec("system:exchange", "", "USD", input.usdCents, input.usdCents, "", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange"),
+			b.rec("system:exchange", "", "EUR", -input.eurCents, -input.usdCents, "", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange"),
+			b.rec("cash:Travel:EUR", "", "EUR", input.eurCents, input.usdCents, "", []string{"Trips:Vacation:Lisbon2026"}, "Currency exchange"),
 		); err != nil {
 			return err
 		}
@@ -649,55 +649,55 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 
 func (b *seedBuilder) seedSemanticCoverage(ctx context.Context) error {
 	if err := b.tx(ctx, "2026-04-02",
-		b.rec("checking:Chase:Joint", "", "USD", 100000, 100000, "", []string{"Shared:Family"}, "Opening balance", "2026-04-02"),
-		b.rec("system:opening_balance", "", "USD", -100000, -100000, "", []string{"Shared:Family"}, "Opening balance", "2026-04-02"),
+		b.rec("checking:Chase:Joint", "", "USD", 100000, 100000, "", []string{"Shared:Family"}, "Opening balance"),
+		b.rec("system:opening_balance", "", "USD", -100000, -100000, "", []string{"Shared:Family"}, "Opening balance"),
 	); err != nil {
 		return err
 	}
 	if err := b.tx(ctx, "2026-04-09",
-		b.rec("checking:Chase:Joint", "", "USD", 3499, 3499, "", []string{"Shared:Family"}, "Target return", "2026-04-09"),
-		b.rec("merchant:Target", "", "USD", -3499, -3499, "Shopping:Household", []string{"Shared:Family"}, "Target return", "2026-04-09"),
+		b.rec("checking:Chase:Joint", "", "USD", 3499, 3499, "", []string{"Shared:Family"}, "Target return"),
+		b.rec("merchant:Target", "", "USD", -3499, -3499, "Shopping:Household", []string{"Shared:Family"}, "Target return"),
 	); err != nil {
 		return err
 	}
 	if err := b.tx(ctx, "2026-04-15",
-		b.rec("checking:Chase:Joint", "", "USD", -10000, -10000, "", []string{"Shared:Family"}, "Wire transfer with fee", "2026-04-15"),
-		b.rec("savings:Ally:Emergency", "", "USD", 10000, 10000, "", []string{"Shared:Family"}, "Wire transfer with fee", "2026-04-15"),
-		b.rec("checking:Chase:Joint", "", "USD", -25, -25, "", []string{"Shared:Family"}, "Wire transfer fee", "2026-04-15"),
-		b.rec("bank:Chase:fees", "", "USD", 25, 25, "Bank:Fees", []string{"Shared:Family"}, "Wire transfer fee", "2026-04-15"),
+		b.rec("checking:Chase:Joint", "", "USD", -10000, -10000, "", []string{"Shared:Family"}, "Wire transfer with fee"),
+		b.rec("savings:Ally:Emergency", "", "USD", 10000, 10000, "", []string{"Shared:Family"}, "Wire transfer with fee"),
+		b.rec("checking:Chase:Joint", "", "USD", -25, -25, "", []string{"Shared:Family"}, "Wire transfer fee"),
+		b.rec("bank:Chase:fees", "", "USD", 25, 25, "Bank:Fees", []string{"Shared:Family"}, "Wire transfer fee"),
 	); err != nil {
 		return err
 	}
 	if err := b.tx(ctx, "2026-04-21",
-		b.rec("cash:Travel:EUR", "", "EUR", 1200, 1308, "", []string{"Trips:Vacation:Lisbon2026"}, "EUR correction", "2026-04-21"),
-		b.rec("system:correction", "", "EUR", -1200, -1308, "", []string{"Trips:Vacation:Lisbon2026"}, "EUR correction", "2026-04-21"),
+		b.rec("cash:Travel:EUR", "", "EUR", 1200, 1308, "", []string{"Trips:Vacation:Lisbon2026"}, "EUR correction"),
+		b.rec("system:correction", "", "EUR", -1200, -1308, "", []string{"Trips:Vacation:Lisbon2026"}, "EUR correction"),
 	); err != nil {
 		return err
 	}
 	if err := b.tx(ctx, "2026-04-23",
-		b.rec("checking:Chase:Joint", "", "USD", 215, 215, "", []string{"Income"}, "Checking interest", "2026-04-23"),
-		b.rec("bank:Chase:interest", "", "USD", -215, -215, "Income:BankInterest", []string{"Income"}, "Checking interest", "2026-04-23"),
+		b.rec("checking:Chase:Joint", "", "USD", 215, 215, "", []string{"Income"}, "Checking interest"),
+		b.rec("bank:Chase:interest", "", "USD", -215, -215, "Income:BankInterest", []string{"Income"}, "Checking interest"),
 	); err != nil {
 		return err
 	}
 	if err := b.tx(ctx, "2026-05-26",
-		b.rec("checking:Chase:Joint", "Avery", "USD", -500, -500, "", []string{"Shared:Family"}, "Mixed payroll correction", "2026-05-26"),
-		b.rec("merchant:BlueBottle", "", "USD", 500, 500, "Food:Coffee", []string{"Shared:Family"}, "Mixed payroll correction", "2026-05-26"),
-		b.rec("checking:Chase:Joint", "Avery", "USD", 10000, 10000, "", []string{"Income"}, "Mixed payroll correction", "2026-05-26"),
-		b.rec("income:AcmePayroll", "", "USD", -10000, -10000, "Income:Salary", []string{"Income"}, "Mixed payroll correction", "2026-05-26"),
+		b.rec("checking:Chase:Joint", "Avery", "USD", -500, -500, "", []string{"Shared:Family"}, "Mixed payroll correction"),
+		b.rec("merchant:BlueBottle", "", "USD", 500, 500, "Food:Coffee", []string{"Shared:Family"}, "Mixed payroll correction"),
+		b.rec("checking:Chase:Joint", "Avery", "USD", 10000, 10000, "", []string{"Income"}, "Mixed payroll correction"),
+		b.rec("income:AcmePayroll", "", "USD", -10000, -10000, "Income:Salary", []string{"Income"}, "Mixed payroll correction"),
 	); err != nil {
 		return err
 	}
 	if err := b.tx(ctx, "2026-05-27",
-		b.rec("checking:Chase:Joint", "Morgan", "USD", -8250, -8250, "", []string{"Shared:Family"}, "Household errands", "2026-05-27"),
-		b.rec("merchant:TraderJoes", "", "USD", 5425, 5425, "Food:Groceries", []string{"Shared:Family"}, "Household errands", "2026-05-27"),
-		b.rec("merchant:Target", "", "USD", 2825, 2825, "Shopping:Household", []string{"Shared:Family"}, "Household errands", "2026-05-27"),
+		b.rec("checking:Chase:Joint", "Morgan", "USD", -8250, -8250, "", []string{"Shared:Family"}, "Household errands"),
+		b.rec("merchant:TraderJoes", "", "USD", 5425, 5425, "Food:Groceries", []string{"Shared:Family"}, "Household errands"),
+		b.rec("merchant:Target", "", "USD", 2825, 2825, "Shopping:Household", []string{"Shared:Family"}, "Household errands"),
 	); err != nil {
 		return err
 	}
 	if err := b.tx(ctx, "2026-05-28",
-		b.rec("credit_card:Chase:Sapphire", "Avery", "USD", -4200, -4200, "", []string{"Shared:Family"}, "Reimbursable client dinner", "2026-05-28"),
-		b.rec("business:ExpenseClearing", "", "USD", 4200, 4200, "", []string{"Shared:Family"}, "Reimbursable client dinner", "2026-05-28"),
+		b.rec("credit_card:Chase:Sapphire", "Avery", "USD", -4200, -4200, "", []string{"Shared:Family"}, "Reimbursable client dinner"),
+		b.rec("business:ExpenseClearing", "", "USD", 4200, 4200, "", []string{"Shared:Family"}, "Reimbursable client dinner"),
 	); err != nil {
 		return err
 	}
@@ -730,8 +730,8 @@ func (b *seedBuilder) simpleSpendWithMember(
 	tagFQNs []string,
 ) error {
 	return b.tx(ctx, date,
-		b.rec(source, member, "USD", -amount, -amount, "", tagFQNs, memo, date),
-		b.rec(merchant, "", "USD", amount, amount, category, tagFQNs, memo, date),
+		b.rec(source, member, "USD", -amount, -amount, "", tagFQNs, memo),
+		b.rec(merchant, "", "USD", amount, amount, category, tagFQNs, memo),
 	)
 }
 
@@ -756,7 +756,6 @@ func (b *seedBuilder) rec(
 	categoryFQN string,
 	tagFQNs []string,
 	memo string,
-	postedDate string,
 ) transactions.JournalRecordInput {
 	var memberID *int64
 	if memberName != "" {
@@ -782,7 +781,6 @@ func (b *seedBuilder) rec(
 		CategoryID:           categoryID,
 		TagIDs:               tagIDs,
 		Memo:                 strPtr(memo),
-		PostedDate:           timePtr(postedDate),
 		PostingStatus:        transactions.PostingStatusPosted,
 		ReconciliationStatus: transactions.ReconciliationStatusReconciled,
 		Source:               transactions.SourceManual,
@@ -855,12 +853,6 @@ func money(cents int) values.Decimal {
 
 func strPtr(value string) *string {
 	return &value
-}
-
-func timePtr(value string) *time.Time {
-	parsed := mustDate(value)
-
-	return &parsed
 }
 
 func mustDecimal(value string) values.Decimal {

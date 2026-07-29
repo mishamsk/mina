@@ -79,7 +79,7 @@ const updateRecord = (
     update?.kind === "dates" ? update.postedDate : record.posted_date,
   posting_status: record.posting_status,
   reconciliation_status: record.reconciliation_status,
-  source: "manual",
+  source: record.source === "imported" ? "imported" : "manual",
   tag_ids: [...record.tag_ids],
 });
 

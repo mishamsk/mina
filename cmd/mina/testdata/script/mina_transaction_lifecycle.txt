@@ -14,18 +14,18 @@ httpget -method POST -status 201 -body directly_posted.json http://127.0.0.1:$PO
 stdout '"transaction_id":7'
 stdout '"pending_date":null'
 ! stdout '"pending_date":"'
-stdout '"posted_date":"2024-06-01T00:00:00Z"'
+stdout '"posted_date":"2024-06-01T23:59:59Z"'
 
 httpget -method POST -status 201 -body pending.json http://127.0.0.1:$PORT/api/transactions
 stdout '"transaction_id":10'
-stdout '"pending_date":"2024-06-02T00:00:00Z"'
+stdout '"pending_date":"2024-06-02T23:59:59Z"'
 ! stdout '"posted_date":"'
 
 httpget -method POST -status 200 -body post_pending.json http://127.0.0.1:$PORT/api/records/bulk/status
 stdout '"record_ids":\[11,12\]'
 stdout '"updated_count":2'
 httpget http://127.0.0.1:$PORT/api/transactions/10
-stdout '"pending_date":"2024-06-02T00:00:00Z"'
+stdout '"pending_date":"2024-06-02T23:59:59Z"'
 stdout '"posted_date":"'
 ! stdout '"posted_date":null'
 

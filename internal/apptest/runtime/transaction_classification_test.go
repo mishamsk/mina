@@ -813,7 +813,7 @@ func semanticRecord(accountID int64, amount string, currency string, categoryID 
 		Currency:             currency,
 		PostingStatus:        httpclient.PostingStatusPosted,
 		ReconciliationStatus: httpclient.Reconciled,
-		Source:               httpclient.ManualSourceManual,
+		Source:               httpclient.WritableSourceManual,
 	}
 }
 

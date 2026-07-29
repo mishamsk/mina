@@ -11,7 +11,7 @@
 - Materialization is idempotent by definition/date slot and creates only EXPECTED review-queue transactions.
 - Occurrence rows are permanent; terminal statuses are not reopened.
 - Confirm posts generated records; dismiss tombstones the generated transaction and keeps the occurrence row.
-- Confirm-next materializes directly as posted with `posted_date` equal to the initiated date; confirming an existing expected occurrence stamps `posted_date` with the current UTC wall clock.
+- Confirm-next materializes directly as posted with `posted_date` at the initiated date's end-of-day UTC; confirming an existing expected occurrence stamps `posted_date` with the current UTC wall clock.
 - Defer rewrites interval anchors only after writing a DEFERRED audit occurrence.
 - Pause suppresses materialization; resume prevents backlog across the paused window.
 - Definition edits affect only future materialization; existing occurrences keep copied generated transactions.

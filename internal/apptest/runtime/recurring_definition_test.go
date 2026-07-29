@@ -685,7 +685,7 @@ func TestRecurringDefinitionConfirmNextBoundary(t *testing.T) {
 	if transaction.JSON200.InitiatedDate.Format("2006-01-02") != formatDate(today) {
 		t.Fatalf("confirm-next initiated_date = %s, want %s", transaction.JSON200.InitiatedDate.Format("2006-01-02"), formatDate(today))
 	}
-	wantPostedDate := transaction.JSON200.InitiatedDate.Time
+	wantPostedDate := apptest.Timestamp(formatDate(today) + "T23:59:59Z")
 	for _, record := range transaction.JSON200.Records {
 		if record.PostingStatus != httpclient.PostingStatusPosted || record.PendingDate != nil || record.PostedDate == nil {
 			t.Fatalf("confirm-next record status/pending_date/posted_date = %q/%v/%v", record.PostingStatus, record.PendingDate, record.PostedDate)
@@ -1024,7 +1024,7 @@ func recurringExpectedReplacementRequest(refs recurringDefinitionRefs, memo stri
 				PostedDate:           &postedDate,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            refs.MerchantAccountID,
@@ -1034,7 +1034,7 @@ func recurringExpectedReplacementRequest(refs recurringDefinitionRefs, memo stri
 				CategoryId:           apptest.Int64Ptr(refs.CategoryID),
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	}

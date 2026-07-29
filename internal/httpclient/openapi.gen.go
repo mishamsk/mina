@@ -265,21 +265,6 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
-// Defines values for ManualSource.
-const (
-	ManualSourceManual ManualSource = "manual"
-)
-
-// Valid indicates whether the value is a known member of the ManualSource enum.
-func (e ManualSource) Valid() bool {
-	switch e {
-	case ManualSourceManual:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for NonExpectedPostingStatus.
 const (
 	NonExpectedPostingStatusCancelled NonExpectedPostingStatus = "cancelled"
@@ -510,6 +495,7 @@ func (e SettingSource) Valid() bool {
 
 // Defines values for Source.
 const (
+	Imported          Source = "imported"
 	Manual            Source = "manual"
 	RecurringTemplate Source = "recurring_template"
 )
@@ -517,6 +503,8 @@ const (
 // Valid indicates whether the value is a known member of the Source enum.
 func (e Source) Valid() bool {
 	switch e {
+	case Imported:
+		return true
 	case Manual:
 		return true
 	case RecurringTemplate:
@@ -610,6 +598,24 @@ func (e WritableAccountType) Valid() bool {
 	case WritableAccountTypeOwned:
 		return true
 	case WritableAccountTypeParty:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WritableSource.
+const (
+	WritableSourceImported WritableSource = "imported"
+	WritableSourceManual   WritableSource = "manual"
+)
+
+// Valid indicates whether the value is a known member of the WritableSource enum.
+func (e WritableSource) Valid() bool {
+	switch e {
+	case WritableSourceImported:
+		return true
+	case WritableSourceManual:
 		return true
 	default:
 		return false
@@ -1377,10 +1383,10 @@ type CreateExchangeTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1422,10 +1428,10 @@ type CreateIncomeTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1470,10 +1476,10 @@ type CreateJournalRecordRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
+	// PendingDate UTC timestamp when the record entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
+	// PostedDate UTC timestamp when the record posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1482,8 +1488,8 @@ type CreateJournalRecordRequest struct {
 	// ReconciliationStatus Whether a journal record has been reconciled with its external or expected source.
 	ReconciliationStatus ReconciliationStatus `json:"reconciliation_status"`
 
-	// Source Origin value accepted for manually created journal records.
-	Source ManualSource `json:"source"`
+	// Source User-writable journal-record origin. Recurring-template records are created only by Mina.
+	Source WritableSource `json:"source"`
 
 	// TagIds Tag identifiers to assign to the journal records.
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
@@ -1521,10 +1527,10 @@ type CreateRefundTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1563,10 +1569,10 @@ type CreateSpendTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1620,10 +1626,10 @@ type CreateTransferTransactionRequest struct {
 	// Memo Optional memo text for the journal records.
 	Memo *string `json:"memo,omitempty"`
 
-	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is pending.
+	// PendingDate UTC timestamp when the generated records entered pending. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is pending.
 	PendingDate *time.Time `json:"pending_date,omitempty"`
 
-	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 00:00:00Z only when posting_status is posted.
+	// PostedDate UTC timestamp when the generated records posted. Expected records discard both lifecycle timestamps; otherwise, omitted or null defaults to initiated_date at 23:59:59Z only when posting_status is posted.
 	PostedDate *time.Time `json:"posted_date,omitempty"`
 
 	// PostingStatus Journal-record lifecycle status; expected and cancelled records are excluded from balances and aggregates.
@@ -1860,9 +1866,6 @@ type JournalRecordSearchResponse struct {
 	// TotalCount Count of matching journal records before limit and offset are applied.
 	TotalCount int64 `json:"total_count"`
 }
-
-// ManualSource Origin value accepted for manually created journal records.
-type ManualSource string
 
 // Member defines model for Member.
 type Member struct {
@@ -2352,6 +2355,9 @@ type UpdateTransactionRequest struct {
 
 // WritableAccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
 type WritableAccountType string
+
+// WritableSource User-writable journal-record origin. Recurring-template records are created only by Mina.
+type WritableSource string
 
 // AccountFQNConflict defines model for AccountFQNConflict.
 type AccountFQNConflict = ErrorResponse

@@ -139,7 +139,7 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				Memo:                 &accountMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            refs.MerchantAccountId,
@@ -150,7 +150,7 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				Memo:                 &categoryMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            searchOnlyAccount.AccountId,
@@ -161,7 +161,7 @@ func TestTransactionListFiltersComposeAcrossActiveRecordsBoundary(t *testing.T) 
 				Memo:                 &searchMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	})
@@ -473,7 +473,7 @@ func TestTransactionListReferenceMetadataSearchDoesNotDuplicateMultiTagMatchesBo
 				Memo:                 &firstMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            merchant.AccountId,
@@ -485,7 +485,7 @@ func TestTransactionListReferenceMetadataSearchDoesNotDuplicateMultiTagMatchesBo
 				Memo:                 &secondMemo,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	})
@@ -912,7 +912,7 @@ func transactionListFilterRequest(input transactionListFilterInput) httpclient.C
 				PostedDate:           postedDate,
 				PostingStatus:        input.PostingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 			{
 				AccountId:            input.FlowID,
@@ -924,7 +924,7 @@ func transactionListFilterRequest(input transactionListFilterInput) httpclient.C
 				PostedDate:           postedDate,
 				PostingStatus:        input.PostingStatus,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	}

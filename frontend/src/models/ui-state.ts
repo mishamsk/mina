@@ -67,6 +67,7 @@ export interface JournalRecordRowDraft {
   readonly postingStatus: JournalRecordDraftPostingStatus;
   readonly reconciliationStatus: JournalRecordDraftReconciliationStatus;
   readonly showDates: boolean;
+  readonly source: "imported" | "manual";
   readonly tagIds: readonly number[];
 }
 

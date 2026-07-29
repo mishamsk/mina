@@ -16,7 +16,8 @@
 - Dry-run classification consumes only account, currency, amount, and optional category semantics; it resolves active references and derives roles, shapes, class, and amounts without requiring balance, except that exchange exclusivity still applies.
 - The transactions service owns `amount_usd` backfill for active journal records still storing `NULL`.
 - Active records within a transaction must be all cancelled or all non-cancelled, and all expected or none expected; create/replace reject mixed expected/non-expected outcomes, while create, replace, and bulk posting-status updates reject mixed cancelled/non-cancelled outcomes.
-- Create/replace derive a missing pending timestamp only for records created as pending and a missing posted timestamp only for records created as posted; expected records clear both lifecycle timestamps, while pending, posted, and cancelled records preserve explicit pending and posted timestamps.
+- Create/replace derive missing pending or posted timestamps at `initiated_date` end-of-day UTC only for the matching pending or posted status; expected records clear both lifecycle timestamps, while pending, posted, and cancelled records preserve explicit timestamps.
+- Transaction writes accept manual and imported records; imported non-expected records preserve their explicit lifecycle timestamps, while recurring-template source remains internal-only.
 - Bulk transitions to pending preserve or stamp `pending_date` and clear `posted_date`; transitions to posted preserve `pending_date` and preserve or stamp `posted_date`, so posting after a revert receives a fresh posted timestamp.
 - The `Cancel` use case sets all active records to cancelled, is idempotent, preserves record dates and reconciliation status, and returns not found for missing or tombstoned transactions.
 - Runtime may trigger backfill after non-canceled exchange-rate load attempts; backfill never overwrites non-`NULL` values.

@@ -39,7 +39,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useElementOverflow } from "@/hooks/use-element-overflow";
 import { cn } from "@/lib/utils";
 import type { LedgerLookupsSnapshot } from "@/store";
-import { lifecycleTimestampDateValue, localTodayISODate } from "@/utils/date";
+import { localTodayISODate, timestampDateValue } from "@/utils/date";
 
 import { AmountText } from "./amount-text";
 import {
@@ -198,9 +198,8 @@ const LoadingRows = () => (
     {Array.from({ length: 6 }).map((_, index) => (
       <div
         key={index}
-        className="grid grid-cols-[5fr_10fr_4fr_27fr_13fr_15fr_7fr_14fr_5fr] gap-3 border-b border-[var(--hairline)] p-3 last:border-b-0"
+        className="grid grid-cols-[5fr_10fr_31fr_13fr_15fr_7fr_14fr_5fr] gap-3 border-b border-[var(--hairline)] p-3 last:border-b-0"
       >
-        <Skeleton className="h-6" />
         <Skeleton className="h-6" />
         <Skeleton className="h-6" />
         <Skeleton className="h-6" />
@@ -631,7 +630,7 @@ const RecordsTable = ({
                   field="dates"
                   record={record}
                   transaction={transaction}
-                  value={`Initiated ${transaction.initiated_date}; pending ${lifecycleTimestampDateValue(record.pending_date) || "—"}; posted ${lifecycleTimestampDateValue(record.posted_date) || "—"}`}
+                  value={`Initiated ${transaction.initiated_date}; pending ${timestampDateValue(record.pending_date) || "—"}; posted ${timestampDateValue(record.posted_date) || "—"}`}
                   onSave={onUpdateRecord}
                 />
               </td>
@@ -1211,7 +1210,6 @@ export const TransactionBrowser = ({
             ) : null}
             <col className="transactions-class-column" />
             <col className="transactions-date-column" />
-            <col className="transactions-status-column" />
             <col className="transactions-description-column" />
             <col className="transactions-category-column" />
             <col className="transactions-tags-column" />
@@ -1236,9 +1234,6 @@ export const TransactionBrowser = ({
                 <span className="sr-only min-[1920px]:not-sr-only">Class</span>
               </th>
               <th className="transactions-date-column px-3 py-2">Date</th>
-              <th className="transactions-status-column px-1 py-2">
-                <span className="sr-only">Status</span>
-              </th>
               <th className="transactions-description-column px-3 py-2">
                 Description
               </th>
@@ -1612,16 +1607,6 @@ export const TransactionBrowser = ({
                         {initiatedDate.year}
                       </div>
                     </td>
-                    <td className="transactions-status-column px-1 py-2">
-                      <div className="flex items-center">
-                        {postingStatus === "expected" ? null : postingStatus ===
-                          "mixed" ? (
-                          <MixedSentinel />
-                        ) : (
-                          <StatusIcon status={postingStatus} />
-                        )}
-                      </div>
-                    </td>
                     <td className="transactions-description-column px-3 py-2">
                       <div className="flex min-w-0 items-center gap-1">
                         <div
@@ -1650,13 +1635,14 @@ export const TransactionBrowser = ({
                             </Tooltip>
                           ) : null}
                         </div>
-                        {postingStatus === "expected" ? (
+                        {postingStatus !== "posted" ? (
                           <div
                             className="flex shrink-0 items-center gap-1 whitespace-nowrap"
-                            data-testid="recurring-indicators"
+                            data-posting-status={postingStatus}
+                            data-testid="transaction-status-indicators"
                           >
                             <StatusIcon status={postingStatus} />
-                            {overdueExpected ? (
+                            {postingStatus === "expected" && overdueExpected ? (
                               <Tooltip
                                 label="Overdue occurrence"
                                 className="inline-flex size-6 shrink-0"
@@ -2043,7 +2029,7 @@ export const TransactionBrowser = ({
                       id={expandedRecordsId}
                       className="border-b-2 border-[var(--border-ink)]"
                     >
-                      <td colSpan={9} className="max-w-0 overflow-hidden p-0">
+                      <td colSpan={8} className="max-w-0 overflow-hidden p-0">
                         <RecordsTable
                           records={transaction.records}
                           maps={maps}

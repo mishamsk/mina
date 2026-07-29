@@ -145,7 +145,7 @@ export const RecordRoleIcon = ({
 interface StatusIconProps {
   readonly className?: string;
   readonly focusable?: boolean;
-  readonly status: PostingStatus;
+  readonly status: PostingStatus | "mixed";
 }
 
 export const StatusIcon = ({
@@ -158,7 +158,13 @@ export const StatusIcon = ({
   }
 
   const Icon =
-    status === "expected" ? Calendar : status === "pending" ? Clock : Cancel;
+    status === "expected"
+      ? Calendar
+      : status === "pending"
+        ? Clock
+        : status === "mixed"
+          ? Switch
+          : Cancel;
   const label = postingStatusLabel(status);
 
   return (
@@ -174,7 +180,8 @@ export const StatusIcon = ({
             "size-5",
             (status === "expected" || status === "pending") &&
               "text-[var(--color-status-pending-ink)]",
-            status === "cancelled" && "text-muted-foreground",
+            (status === "cancelled" || status === "mixed") &&
+              "text-muted-foreground",
           )}
         />
       </span>

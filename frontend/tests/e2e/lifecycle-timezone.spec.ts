@@ -13,12 +13,6 @@ interface TransactionFixture {
   readonly transaction_id: number;
 }
 
-interface TransactionDetailFixture extends TransactionFixture {
-  readonly records: readonly {
-    readonly posted_date: string | null;
-  }[];
-}
-
 test.use({ timezoneId: "America/Los_Angeles" });
 
 const createAccount = async (
@@ -64,12 +58,6 @@ const openTransactionDetail = async (
   return panel;
 };
 
-const lifecycleStage = (panel: Locator, label: string): Locator =>
-  panel
-    .getByTestId("transaction-lifecycle")
-    .getByRole("listitem")
-    .filter({ hasText: label });
-
 const firstRecordDisclosure = async (panel: Locator): Promise<Locator> => {
   const row = panel.locator("tr[data-detail-record-row='true']").first();
   await row.click();
@@ -78,7 +66,7 @@ const firstRecordDisclosure = async (panel: Locator): Promise<Locator> => {
   return disclosure;
 };
 
-test("lifecycle markers stay civil while real instants cross the local day boundary", async ({
+test("end-of-day lifecycle stamps stay on the initiated day while exact instants render locally", async ({
   page,
 }, testInfo) => {
   const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
@@ -103,7 +91,7 @@ test("lifecycle markers stay civil while real instants cross the local day bound
       currency: "USD",
       funding_account_id: fundingAccount.account_id,
       initiated_date: initiatedDate,
-      memo: `E2E lifecycle day marker ${unique}`,
+      memo: `E2E lifecycle end of day ${unique}`,
     },
   });
   const directBody = await directResponse.text();
@@ -147,85 +135,80 @@ test("lifecycle markers stay civil while real instants cross the local day bound
   expect(instantResponse.ok(), instantBody).toBe(true);
   const instant = JSON.parse(instantBody) as TransactionFixture;
 
+  const derivedStamp = `${initiatedDate}T23:59:59Z`;
   const labels = await page.evaluate(
-    ({ instantValue, markerDate }) => ({
+    ({ derivedValue, instantValue }) => ({
+      derivedInstant: new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "medium",
+      }).format(new Date(derivedValue)),
       exactInstant: new Intl.DateTimeFormat(undefined, {
         dateStyle: "medium",
         timeStyle: "medium",
       }).format(new Date(instantValue)),
-      marker: new Intl.DateTimeFormat(undefined, {
-        dateStyle: "medium",
-      }).format(
-        new Date(
-          Number(markerDate.slice(0, 4)),
-          Number(markerDate.slice(5, 7)) - 1,
-          Number(markerDate.slice(8, 10)),
-        ),
-      ),
     }),
-    { instantValue: realInstant, markerDate: initiatedDate },
+    { derivedValue: derivedStamp, instantValue: realInstant },
   );
-
-  const directBeforeResponse = await page.request.get(
-    `/api/transactions/${direct.transaction_id}`,
-  );
-  const directBeforeBody = await directBeforeResponse.text();
-  expect(directBeforeResponse.ok(), directBeforeBody).toBe(true);
-  const directBefore = JSON.parse(directBeforeBody) as TransactionDetailFixture;
 
   await page.goto("/transactions?page=1&pageSize=50&hideExpected=true");
   const directRow = page
     .locator("[data-transaction-row='true']")
-    .filter({ hasText: `E2E lifecycle day marker ${unique}` });
+    .filter({ hasText: `E2E lifecycle end of day ${unique}` });
+  const pendingRow = page
+    .locator("[data-transaction-row='true']")
+    .filter({ hasText: `E2E lifecycle real instant ${unique}` });
   await expect(directRow).toBeVisible();
-  await directRow.locator("td").nth(3).click();
-  const directRecords = page.getByTestId("expanded-records");
-  const datesCell = directRecords.getByTestId("record-dates-cell").first();
-  await expect(datesCell).toContainText(`posted ${initiatedDate}`);
-  await datesCell.getByRole("button", { name: "Edit dates" }).click();
-  const datesEditor = directRecords.getByTestId("record-dates-editor").first();
-  await expect(datesEditor.getByLabel("Posted")).toHaveValue(initiatedDate);
-  await datesEditor.getByRole("button", { name: "Save" }).click();
-  await expect(datesEditor).toHaveCount(0);
-
-  const directAfterResponse = await page.request.get(
-    `/api/transactions/${direct.transaction_id}`,
+  await expect(pendingRow).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Status" })).toHaveCount(
+    0,
   );
-  const directAfterBody = await directAfterResponse.text();
-  expect(directAfterResponse.ok(), directAfterBody).toBe(true);
-  const directAfter = JSON.parse(directAfterBody) as TransactionDetailFixture;
-  expect(directAfter.records.map((record) => record.posted_date)).toEqual(
-    directBefore.records.map((record) => record.posted_date),
+  await expect(
+    directRow.getByTestId("transaction-status-indicators"),
+  ).toHaveCount(0);
+  const pendingIndicators = pendingRow.getByTestId(
+    "transaction-status-indicators",
   );
+  await expect(pendingIndicators).toHaveAttribute(
+    "data-posting-status",
+    "pending",
+  );
+  await expect(
+    pendingIndicators.getByRole("img", { name: "Pending" }),
+  ).toBeVisible();
+  await expect(
+    pendingRow
+      .locator(".transactions-description-column")
+      .getByTestId("transaction-status-indicators"),
+  ).toBeVisible();
+  const [directRowHeight, pendingRowHeight] = await Promise.all([
+    directRow.evaluate((row) => row.getBoundingClientRect().height),
+    pendingRow.evaluate((row) => row.getBoundingClientRect().height),
+  ]);
+  expect(Math.abs(directRowHeight - pendingRowHeight)).toBeLessThanOrEqual(1);
 
   const directPanel = await openTransactionDetail(page, direct.transaction_id);
-  await expect(lifecycleStage(directPanel, "Initiated")).toContainText(
-    "Jul 27",
+  const directLifecycle = directPanel.getByTestId("transaction-lifecycle");
+  await expect(directLifecycle).toHaveText(/Initiated\s*Jul 27/);
+  await expect(directLifecycle).not.toContainText(
+    /expected|pending|posted|cancelled/i,
   );
-  const postedStage = lifecycleStage(directPanel, "Posted");
-  await expect(postedStage).toContainText("Jul 27");
-  await postedStage.locator("[data-slot='tooltip-trigger']").hover();
-  const markerTooltip = page.getByRole("tooltip");
-  await expect(markerTooltip).toContainText(labels.marker);
-  await expect(markerTooltip).not.toContainText(/\d{1,2}:\d{2}/);
-  const markerDisclosure = await firstRecordDisclosure(directPanel);
-  await expect(markerDisclosure).toContainText(labels.marker);
-  await expect(markerDisclosure).not.toContainText(/\d{1,2}:\d{2}/);
+  await expect(
+    directLifecycle.locator("[data-slot='tooltip-trigger']"),
+  ).toHaveCount(0);
+  const derivedDisclosure = await firstRecordDisclosure(directPanel);
+  await expect(derivedDisclosure).toContainText(labels.derivedInstant);
+  await expect(derivedDisclosure).toContainText(/\d{1,2}:\d{2}:\d{2}/);
   await expect(directPanel).not.toContainText("Invalid Date");
 
   const instantPanel = await openTransactionDetail(
     page,
     instant.transaction_id,
   );
-  await expect(lifecycleStage(instantPanel, "Initiated")).toContainText(
-    "Jul 27",
-  );
-  const pendingStage = lifecycleStage(instantPanel, "Pending");
-  await expect(pendingStage).toContainText("Jul 26");
-  await pendingStage.locator("[data-slot='tooltip-trigger']").hover();
-  await expect(page.getByRole("tooltip")).toContainText(labels.exactInstant);
-  await expect(page.getByRole("tooltip")).toContainText(/\d{1,2}:\d{2}/);
+  const instantLifecycle = instantPanel.getByTestId("transaction-lifecycle");
+  await expect(instantLifecycle).toHaveText(/Initiated\s*Jul 27\s*pending/);
+  await expect(instantLifecycle).not.toContainText(/Jul 26|Posted|varies|→|–/);
   const instantDisclosure = await firstRecordDisclosure(instantPanel);
   await expect(instantDisclosure).toContainText(labels.exactInstant);
+  await expect(instantDisclosure).toContainText(/\d{1,2}:\d{2}:\d{2}/);
   await expect(instantPanel).not.toContainText("Invalid Date");
 });

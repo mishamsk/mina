@@ -46,7 +46,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				MemberId:             &missingMemberID,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 				TagIds:               apptest.Int64SlicePtr(900005),
 			},
 			{
@@ -56,7 +56,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				Currency:             "USD",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	})
@@ -87,7 +87,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				MemberId:             &refs.memberID,
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 				TagIds:               &tagIDs,
 			},
 			{
@@ -97,7 +97,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 				Currency:             "USD",
 				PostingStatus:        httpclient.PostingStatusPosted,
 				ReconciliationStatus: httpclient.Reconciled,
-				Source:               httpclient.ManualSourceManual,
+				Source:               httpclient.WritableSourceManual,
 			},
 		},
 	})
@@ -483,7 +483,16 @@ func assertDemoSemanticCoverage(
 	hasMultiMerchantSpend := false
 	for _, transaction := range transactions {
 		expenseAccounts := map[int64]struct{}{}
+		wantPostedDate := transaction.InitiatedDate.Add(24*time.Hour - time.Second)
 		for _, record := range transaction.Records {
+			if record.PostedDate == nil || !record.PostedDate.Equal(wantPostedDate) {
+				t.Fatalf(
+					"seeded record %d posted_date = %v, want initiated-date end-of-day %v",
+					record.RecordId,
+					record.PostedDate,
+					wantPostedDate,
+				)
+			}
 			switch record.RecordRole {
 			case httpclient.RecordRoleExpense:
 				expenseAccounts[record.AccountId] = struct{}{}

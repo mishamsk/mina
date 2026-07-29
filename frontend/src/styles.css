@@ -270,16 +270,12 @@
     width: 9%;
   }
 
-  .transactions-table .transactions-status-column {
-    width: 4%;
-  }
-
   .transactions-table .transactions-description-column {
-    width: 20%;
+    width: 24%;
   }
 
   .transactions-table--bulk-edit .transactions-description-column {
-    width: calc(20% - 2.25rem);
+    width: calc(24% - 2.25rem);
   }
 
   .transactions-table .transactions-category-column {
@@ -328,11 +324,11 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 17%;
+      width: 21%;
     }
 
     .transactions-table--bulk-edit .transactions-description-column {
-      width: calc(17% - 2.25rem);
+      width: calc(21% - 2.25rem);
     }
 
     .transactions-table .transactions-category-column {
@@ -353,21 +349,6 @@
   }
 
   @container transactions-table (max-width: 940px) {
-    .transactions-table .transactions-status-column {
-      visibility: collapse;
-      width: 0;
-    }
-
-    .transactions-table :is(th, td).transactions-status-column {
-      font-size: 0 !important;
-      padding-right: 0 !important;
-      padding-left: 0 !important;
-    }
-
-    .transactions-table :is(th, td).transactions-status-column > * {
-      display: none !important;
-    }
-
     .transactions-table .transactions-description-column {
       width: 27%;
     }

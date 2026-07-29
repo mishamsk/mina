@@ -22,7 +22,8 @@
 - `useTransactionBrowserPage` composes shared browser snapshots, page-granular date jumps with a transient row anchor, transaction detail, row tombstones, pagination, and notices; pages supply their URL filter semantics.
 - `TransactionBrowserToolbar` owns filter-bar visibility; pages retain URL-filter ownership and supply chip clearing that preserves standing search, class, and expected-occurrence controls.
 - Transaction browsing requests expected recurring transactions by default and triggers one occurrence catch-up read per browser mount.
-- Expected and overdue recurring indicators trail the ellipsizing title/memo region inside the description cell; ordinary rows reserve no in-cell indicator space.
+- Expected, pending, cancelled, mixed-status, and overdue recurring indicators trail the ellipsizing title/memo region inside the description cell; posted rows reserve no in-cell indicator space.
+- Detail lifecycle strips show only the civil initiated date and an expected, pending, or cancelled status word; exact lifecycle timestamps remain in per-record disclosures and render as local instants.
 - Transaction-row actions use the shared `RowActions` cluster and follow the owning [table row-action rule](../../../../docs/webui-design.md#tables-and-filtering).
 - Expected recurring rows replace the normal delete action with confirm and named-dismiss occurrence actions while retaining transaction detail; successful lifecycle actions use the standard transaction-mutation refresh fan-out.
 - `C::` currencies render as crypto-scale values with up to 8 decimals; other currencies render as fiat-scale 2-decimal values.

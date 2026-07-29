@@ -48,6 +48,8 @@ type Source string
 const (
 	// SourceManual identifies manually-entered records.
 	SourceManual Source = "manual"
+	// SourceImported identifies records loaded from an external system.
+	SourceImported Source = "imported"
 	// SourceRecurringTemplate identifies records generated from recurring definitions.
 	SourceRecurringTemplate Source = "recurring_template"
 )
@@ -1359,7 +1361,7 @@ func invalidBulkAccountReferenceError() error {
 }
 
 func fillMissingLifecycleDates(input *CreateInput) {
-	defaultLifecycleDate := input.InitiatedDate.Time()
+	defaultLifecycleDate := LifecycleTimestampFromInitiatedDate(input.InitiatedDate)
 	for index := range input.Records {
 		record := &input.Records[index]
 		if record.PostingStatus == PostingStatusExpected {
@@ -1374,6 +1376,12 @@ func fillMissingLifecycleDates(input *CreateInput) {
 			record.PostedDate = &defaultLifecycleDate
 		}
 	}
+}
+
+// LifecycleTimestampFromInitiatedDate returns the end-of-day UTC timestamp
+// used when a lifecycle timestamp is derived from a transaction's civil date.
+func LifecycleTimestampFromInitiatedDate(initiatedDate values.CivilDate) time.Time {
+	return initiatedDate.Time().Add(24*time.Hour - time.Second)
 }
 
 func validateTransactionInput(input CreateInput) error {
@@ -1492,8 +1500,8 @@ func validateJournalRecord(index int, record JournalRecordInput) error {
 	if err := validateReconciliationStatus(index, record.ReconciliationStatus); err != nil {
 		return err
 	}
-	if record.Source != SourceManual {
-		return services.InvalidRequest(indexedField(index, "source") + " must be manual")
+	if record.Source != SourceManual && record.Source != SourceImported {
+		return services.InvalidRequest(indexedField(index, "source") + " must be manual or imported")
 	}
 	if record.Memo != nil && strings.TrimSpace(*record.Memo) != *record.Memo {
 		return services.InvalidRequest(indexedField(index, "memo") + " must not have leading or trailing whitespace")

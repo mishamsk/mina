@@ -477,9 +477,18 @@ test("command palette keeps narrow multi-part results single-height", async ({
 
   await page.goto("/overview");
   await page.getByRole("button", { name: "Command palette" }).click();
+  const searchResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/transactions" &&
+      url.searchParams.get("search") === `palette height ${unique}` &&
+      response.ok()
+    );
+  });
   await page
     .getByRole("combobox", { name: "Command search" })
     .fill(`'palette height ${unique}`);
+  await searchResponse;
 
   const dialog = page.getByRole("dialog", { name: "Command Palette" });
   const simpleOption = dialog

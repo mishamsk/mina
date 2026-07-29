@@ -373,7 +373,7 @@ func (s *RecurringStore) CreateConfirmedOccurrence(
 	initiatedDate values.CivilDate,
 	records []transactions.JournalRecordInput,
 ) (recurring.Occurrence, error) {
-	posted := postedJournalRecords(records, initiatedDate.Time())
+	posted := postedJournalRecords(records, transactions.LifecycleTimestampFromInitiatedDate(initiatedDate))
 	return s.createOccurrenceWithTransaction(ctx, definition, scheduledDate, initiatedDate, recurring.OccurrenceStatusConfirmed, posted)
 }
 

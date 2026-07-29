@@ -12,10 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  lifecycleTimestampDateValue,
-  localCivilDateStartISO,
-} from "@/utils/date";
+import { localCivilDateStartISO, timestampDateValue } from "@/utils/date";
 
 import { useInlineEdit } from "./inline-editing";
 import type { InlineSavePageRefresh, RecordUpdate } from "./record-editing";
@@ -47,7 +44,7 @@ interface RecordDetailCellsProps {
 }
 
 const inputDateValue = (value: string | null | undefined): string =>
-  lifecycleTimestampDateValue(value);
+  timestampDateValue(value);
 
 const nullableTimestampForDateInput = (
   value: string,

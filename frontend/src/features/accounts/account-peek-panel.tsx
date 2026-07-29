@@ -107,7 +107,7 @@ export const AccountPeekPanel = ({
       </div>
 
       {transaction && !loading && !errorMessage ? (
-        <TransactionLifecycleStrip maps={maps} transaction={transaction} />
+        <TransactionLifecycleStrip transaction={transaction} />
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">

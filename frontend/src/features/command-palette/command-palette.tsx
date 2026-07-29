@@ -51,7 +51,6 @@ import {
   lineDisplayAmounts,
   lineMemo,
   linePostingStatus,
-  MixedSentinel,
   MorePartsIndicator,
   postingStatusLabel,
   refreshLedgerLookups,
@@ -1276,14 +1275,10 @@ export const CommandPalette = () => {
                               transactionClass={transaction.transaction_class}
                             />
                             <span className="hidden h-6 w-10 shrink-0 place-items-center sm:grid">
-                              {postingStatus === "mixed" ? (
-                                <MixedSentinel />
-                              ) : (
-                                <StatusIcon
-                                  focusable={false}
-                                  status={postingStatus}
-                                />
-                              )}
+                              <StatusIcon
+                                focusable={false}
+                                status={postingStatus}
+                              />
                             </span>
                             <span
                               className="grid min-w-0 gap-0.5"
