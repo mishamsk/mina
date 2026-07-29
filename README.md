@@ -141,15 +141,47 @@ Normal builds follow the tip of `main`. Mina will only get a semantic version ta
 
 The goal is to always provide a forward migration path for databases and configuration. Downgrades are not supported: after Mina upgrades your data, do not expect an older build to understand it. Back up before updating.
 
-## API and Agents
+## REST API
 
 When Mina is running:
 
-- Browser UI: <http://127.0.0.1:8080>
-- Health: <http://127.0.0.1:8080/api/health>
-- OpenAPI document: <http://127.0.0.1:8080/api/openapi.json>
+- Health: `<Mina server URL>/api/health`
+- OpenAPI document: `<Mina server URL>/api/openapi.json`
 
-The OpenAPI document is the machine-readable map. An agent should inspect it instead of guessing routes, preserve the local/trusted-network restriction, and confirm before destructive or bulk financial changes. CLI database diagnostics are available with `mina db validate --help`.
+## MCP and CLI Clients
+
+Mina provides programmatic CLI and MCP clients for agents and scripts. Both are REST-backed interfaces that effectively wrap Mina's REST surface, while leaving room for client-specific features over time.
+
+`<Mina server URL>` is `http://<host>:<port>`, using the `--host` and `--port` values passed to `mina serve`.
+
+### MCP
+
+The running Mina server exposes Streamable HTTP MCP at `<Mina server URL>/mcp`; point an MCP client that supports this transport at that URL. For a client that launches MCP servers over stdio, configure the equivalent of:
+
+```text
+mina mcp stdio --server "$MINA_SERVER_URL"
+```
+
+> [!CAUTION]
+> Mina has no authentication yet. Do not expose MCP publicly: keep it on the same local or trusted private-network boundary as Mina's REST API and UI.
+
+All MCP tools document their purpose and inputs in the server; agents should use filtered list or search tools for discovery, get tools for known IDs, and ask for confirmation before using any tool that creates, changes, or deletes data. Client-specific configuration and Mina's transport behavior are covered by the [CLI and MCP architecture](docs/cli-mcp-architecture.md).
+
+### CLI Client
+
+The REST-backed CLI can operate on the running server:
+
+```bash
+mina client --server "$MINA_SERVER_URL" transactions list --limit 5
+```
+
+For one-off commands against a database file not already owned by `mina serve`, use `--db PATH` for an in-process local session without starting a server:
+
+```bash
+mina client --db ./mina.duckdb transactions list --limit 5
+```
+
+Run `mina client --help` and command-level `--help` for the available operations and input flags.
 
 ## Contributing
 
