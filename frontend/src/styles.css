@@ -238,6 +238,10 @@
 }
 
 @layer components {
+  [data-radix-popper-content-wrapper]:has(> [data-slot="tooltip-content"]) {
+    pointer-events: none !important;
+  }
+
   .transactions-table-scroll {
     container: transactions-table / inline-size;
   }
@@ -806,6 +810,24 @@
 
   .transaction-detail-records-table .detail-records-memo-column {
     width: 12%;
+  }
+
+  .transaction-detail-records-table--decluttered .detail-records-role-column {
+    width: 2.25rem;
+  }
+
+  .transaction-detail-records-table--decluttered
+    .detail-records-account-column {
+    width: 34%;
+  }
+
+  .transaction-detail-records-table--decluttered .detail-records-amount-column {
+    width: 10.5rem;
+  }
+
+  .transaction-detail-records-table--decluttered
+    .detail-records-category-column {
+    width: auto;
   }
 
   .transaction-detail-records-table

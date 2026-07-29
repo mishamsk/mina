@@ -322,6 +322,12 @@ test("overview keeps multi-part activity rows single-height", async ({
   await expect(mixedRow).toBeVisible();
   await expect(mixedRow.getByTestId("amount-chip")).toHaveText("-54.00 $");
   await expect(mixedRow.getByTestId("more-parts-indicator")).toBeVisible();
+  await expect(mixedRow.getByTestId("more-parts-indicator")).toHaveText("+");
+  expect(
+    await mixedRow
+      .getByTestId("more-parts-indicator")
+      .evaluate((indicator) => indicator.tabIndex),
+  ).toBe(-1);
   await expect(mixedRow).toHaveAccessibleName(
     /More transaction parts\. All parts: -54\.00 \$, -18\.00 \$/,
   );

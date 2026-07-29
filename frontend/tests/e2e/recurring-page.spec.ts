@@ -233,7 +233,10 @@ test("recurring definitions create, edit, pause, defer, resume, and cancel", asy
   const editPanel = page.getByRole("complementary", {
     name: "Edit recurring definition",
   });
-  await editPanel.getByLabel("Every").fill("2");
+  const everyInput = editPanel.getByLabel("Every");
+  await everyInput.fill("2");
+  await everyInput.press("Tab");
+  await expect(everyInput).toHaveValue("2");
   await editPanel.getByRole("button", { name: "Save definition" }).click();
   await expect(page.getByText("Definition updated.")).toBeVisible();
   definition = await definitionByFqn(page, fqn);

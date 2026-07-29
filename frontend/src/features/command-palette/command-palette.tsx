@@ -333,13 +333,7 @@ const TransactionResultAmounts = ({
           truncate
         />
       ))}
-      {hasMoreParts ? (
-        <MorePartsIndicator
-          compact
-          focusable={false}
-          transaction={transaction}
-        />
-      ) : null}
+      {hasMoreParts ? <MorePartsIndicator transaction={transaction} /> : null}
     </>
   );
 };

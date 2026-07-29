@@ -26,22 +26,18 @@ export const moreTransactionPartsLabel = (transaction: Transaction): string =>
   `More transaction parts. All parts: ${transactionPartsLabel(transaction)}`;
 
 export const MorePartsIndicator = ({
-  compact = false,
-  focusable = true,
   transaction,
 }: {
-  readonly compact?: boolean;
-  readonly focusable?: boolean;
   readonly transaction: Transaction;
 }) => (
   <Tooltip asChild label={`All parts: ${transactionPartsLabel(transaction)}`}>
     <span
       aria-label={moreTransactionPartsLabel(transaction)}
-      className="font-heading text-foreground bg-card inline-flex h-5 shrink-0 items-center border border-[var(--border-ink)] px-1.5 text-[11px] font-semibold uppercase shadow-[var(--shadow-chip)]"
+      className="font-heading text-foreground inline-grid h-4 w-3 shrink-0 place-items-center self-center text-sm leading-none font-semibold"
       data-testid="more-parts-indicator"
-      tabIndex={focusable ? 0 : undefined}
+      role="img"
     >
-      {compact ? "+" : "+ parts"}
+      +
     </span>
   </Tooltip>
 );

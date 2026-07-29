@@ -436,11 +436,7 @@ const RecentActivityLine = ({
               />
             ))}
             {hasMoreParts ? (
-              <MorePartsIndicator
-                compact
-                focusable={false}
-                transaction={transaction}
-              />
+              <MorePartsIndicator transaction={transaction} />
             ) : null}
           </span>
         </Link>

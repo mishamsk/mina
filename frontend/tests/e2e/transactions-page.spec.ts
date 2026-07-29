@@ -525,9 +525,27 @@ const openAccountTransactionPeek = async (
 const expectDatelessReadOnlyDetailGrid = async (
   panel: Locator,
   recordCount: number,
+  expectedVariant: "decluttered" | "full",
 ): Promise<void> => {
   const table = panel.getByTestId("transaction-detail-records-table");
+  const decluttered = expectedVariant === "decluttered";
+  const expectedHeaders = decluttered
+    ? ["Role", "Account", "Amount", "Category"]
+    : [
+        "Role",
+        "Account",
+        "Amount",
+        "Category",
+        "Tags",
+        "Member",
+        "Status",
+        "Memo",
+      ];
+  await expect(table.locator("th")).toHaveCount(expectedHeaders.length);
   await expect(table.locator("th", { hasText: "Dates" })).toHaveCount(0);
+  expect(
+    (await table.locator("th").allTextContents()).map((text) => text.trim()),
+  ).toEqual(expectedHeaders);
   await expect(table.locator("tr[data-detail-record-row='true']")).toHaveCount(
     recordCount,
   );
@@ -684,10 +702,7 @@ const expectMouseDisclosure = async (
   panel: Locator,
   memo: string,
 ): Promise<void> => {
-  const row = panel
-    .locator("tr[data-detail-record-row='true']")
-    .filter({ hasText: memo })
-    .first();
+  const row = panel.locator("tr[data-detail-record-row='true']").first();
   await expect(row).toHaveAttribute("aria-expanded", "false");
   await row.page().mouse.move(0, 0);
   const restingBackground = await row.evaluate(
@@ -699,7 +714,7 @@ const expectMouseDisclosure = async (
       row.evaluate((element) => getComputedStyle(element).backgroundColor),
     )
     .not.toBe(restingBackground);
-  await row.locator("td[data-label='Memo']").click();
+  await row.click();
   await expect(row).toHaveAttribute("aria-expanded", "true");
   const disclosure = panel
     .locator("tr.detail-records-disclosure-row")
@@ -718,21 +733,17 @@ const expectMouseDisclosure = async (
   ).toHaveText("—");
   await expect(disclosure).not.toContainText("Invalid Date");
   await expect(
-    disclosure.locator("button, input, textarea, select"),
+    disclosure.locator(
+      "button, input, textarea, select, [data-slot='tooltip-trigger'], [data-testid*='chip']",
+    ),
   ).toHaveCount(0);
-  await row.locator("td[data-label='Memo']").click();
+  await row.click();
   await expect(row).toHaveAttribute("aria-expanded", "false");
   await expect(disclosure).toHaveCount(0);
 };
 
-const expectKeyboardDisclosure = async (
-  panel: Locator,
-  memo: string,
-): Promise<void> => {
-  const row = panel
-    .locator("tr[data-detail-record-row='true']")
-    .filter({ hasText: memo })
-    .first();
+const expectKeyboardDisclosure = async (panel: Locator): Promise<void> => {
+  const row = panel.locator("tr[data-detail-record-row='true']").first();
   await row.focus();
   await expect(row).toBeFocused();
   await row.press("Enter");
@@ -3352,9 +3363,13 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
   await firstAmountEditor
     .getByRole("button", { name: "Cancel amount edit" })
     .click();
+  await expect(firstAmountEditor).toHaveCount(0);
 
-  await firstCategoryCell.focus();
-  await firstCategoryCell.press("F2");
+  await firstCategoryCell.hover();
+  await firstCategoryCell
+    .getByRole("button", { name: "Edit Category" })
+    .click();
+  await expect(firstCategoryEditor).toBeVisible();
   await firstCategoryEditor
     .getByRole("combobox", { name: "Category" })
     .fill(draftCategory.fqn);
@@ -4628,12 +4643,47 @@ test("multi-part transaction rows show one honest amount or only the indicator",
   await expect(spendTransferAmountCell.getByTestId("amount-chip")).toHaveText(
     "-54.00 $",
   );
+  await expect(spendTransferAmountCell.locator(":scope > div")).toHaveCSS(
+    "overflow",
+    "visible",
+  );
+  const [simpleAmountStyle, spendTransferAmountStyle] = await Promise.all([
+    simpleRow.getByTestId("amount-chip").evaluate((chip) => {
+      const style = getComputedStyle(chip);
+      return {
+        border: style.border,
+        boxShadow: style.boxShadow,
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        height: style.height,
+      };
+    }),
+    spendTransferAmountCell.getByTestId("amount-chip").evaluate((chip) => {
+      const style = getComputedStyle(chip);
+      return {
+        border: style.border,
+        boxShadow: style.boxShadow,
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        height: style.height,
+      };
+    }),
+  ]);
+  expect(spendTransferAmountStyle).toEqual(simpleAmountStyle);
+  expect(spendTransferAmountStyle.boxShadow).not.toBe("none");
   await expectAmountMarkerRightEdgesAligned([simpleRow, spendTransferRow]);
   const moreParts = spendTransferAmountCell.getByTestId("more-parts-indicator");
   await expect(moreParts).toHaveAttribute(
     "aria-label",
     "More transaction parts. All parts: -54.00 $, -18.00 $",
   );
+  await expect(moreParts).toHaveText("+");
+  expect(await moreParts.evaluate((indicator) => indicator.tabIndex)).toBe(-1);
+  await expect(moreParts).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(moreParts).toHaveCSS("border-top-width", "0px");
+  await expect(moreParts).toHaveCSS("box-shadow", "none");
   await moreParts.hover();
   await expect(page.getByRole("tooltip")).toHaveText(
     "All parts: -54.00 $, -18.00 $",
@@ -4679,13 +4729,13 @@ test("multi-part transaction rows show one honest amount or only the indicator",
     .getByRole("dialog", { name: "Transaction editor" })
     .getByTestId("more-parts-indicator")
     .first();
-  await expect(railMoreParts).toHaveCSS("height", "20px");
-  await expect(railMoreParts).toHaveCSS("border-top-style", "solid");
-  expect(
-    await railMoreParts.evaluate(
-      (indicator) => getComputedStyle(indicator).boxShadow,
-    ),
-  ).not.toBe("none");
+  await expect(railMoreParts).toHaveText("+");
+  await expect(railMoreParts).toHaveCSS("height", "16px");
+  await expect(railMoreParts).toHaveCSS("border-top-width", "0px");
+  await expect(railMoreParts).toHaveCSS("box-shadow", "none");
+  expect(await railMoreParts.evaluate((indicator) => indicator.tabIndex)).toBe(
+    -1,
+  );
 });
 
 test("transactions class toolbar filter owns class URL state", async ({
@@ -5188,10 +5238,7 @@ test("transaction entity chips add filters in place", async ({
     page.getByRole("row").filter({ hasText: alternateMemo }),
   ).toBeHidden();
 
-  await clickRowAction(page, targetRow, "Open transaction detail");
-  const panel = page.getByRole("dialog", { name: target.display_title });
-  await expect(panel).toBeVisible();
-  await panel
+  await targetRow
     .getByRole("button", { name: `Filter by ${tag.name}` })
     .first()
     .click();
@@ -5202,6 +5249,9 @@ test("transaction entity chips add filters in place", async ({
     tags: [tag.tag_id],
   });
   await expect(page.getByText(`Tag ${tag.name}`)).toBeVisible();
+
+  await clickRowAction(page, targetRow, "Open transaction detail");
+  const panel = page.getByRole("dialog", { name: target.display_title });
   await expect(panel).toBeVisible();
 });
 
@@ -6006,7 +6056,7 @@ test("mixed more-parts indicators stay inside the amount column where member fir
       expect(state.indicatorFitsCell, sample.name).toBe(true);
       expect(state.memberOverlaps, sample.name).toBe(false);
       expect(state.singleLine, sample.name).toBe(true);
-      expect(state.chipText, sample.name).toBe("+ PARTS");
+      expect(state.chipText, sample.name).toBe("+");
       expect(state.memberCollapsed, sample.name).toBe(sample.memberCollapsed);
     }
   } finally {
@@ -6181,12 +6231,14 @@ test("transactions contain long amount chips and align the pagination footer", a
     .getByRole("row")
     .filter({ hasText: mixedMemo });
   const bulkMoreParts = mixedLongAmountRow.getByTestId("more-parts-indicator");
-  await expect(bulkMoreParts).toHaveAttribute("tabindex", "0");
-  await bulkMoreParts.focus();
+  expect(await bulkMoreParts.evaluate((indicator) => indicator.tabIndex)).toBe(
+    -1,
+  );
+  await bulkMoreParts.hover();
   await expect(page.getByRole("tooltip")).toHaveText(
     "All parts: -9,999,999,998.98 $, -1.01 $",
   );
-  await longAmountRow.click();
+  await bulkMoreParts.click();
   await expect(bulkModeBar).toContainText("1 selected");
   await longAmountRow.getByTestId("amount-chip").hover();
   await expect(
@@ -6206,7 +6258,7 @@ test("transactions contain long amount chips and align the pagination footer", a
     name: "Transaction entry context",
   });
   const mixedRailAmount = entryRail
-    .getByTestId("amount-text")
+    .getByTestId("amount-chip")
     .filter({ hasText: "-9,999,999,998.98 $" });
   await expect(mixedRailAmount).toBeVisible();
   const mixedRailRow = mixedRailAmount.locator("../..");
@@ -6233,6 +6285,40 @@ test("transactions contain long amount chips and align the pagination footer", a
       );
     }),
   ).resolves.toBe(true);
+  const singleRailRow = entryRail
+    .getByTestId("amount-chip")
+    .filter({ hasText: fullAmountLabel })
+    .locator("../..");
+  const [mixedBounds, singleBounds, mixedStyle, singleStyle] =
+    await Promise.all([
+      mixedRailRow.boundingBox(),
+      singleRailRow.boundingBox(),
+      mixedRailAmount.evaluate((chip) => {
+        const style = getComputedStyle(chip);
+        return {
+          border: style.border,
+          boxShadow: style.boxShadow,
+          fontFamily: style.fontFamily,
+          fontSize: style.fontSize,
+          fontWeight: style.fontWeight,
+          height: style.height,
+        };
+      }),
+      singleRailRow.getByTestId("amount-chip").evaluate((chip) => {
+        const style = getComputedStyle(chip);
+        return {
+          border: style.border,
+          boxShadow: style.boxShadow,
+          fontFamily: style.fontFamily,
+          fontSize: style.fontSize,
+          fontWeight: style.fontWeight,
+          height: style.height,
+        };
+      }),
+    ]);
+  expect(mixedBounds?.height).toBe(singleBounds?.height);
+  expect(mixedStyle).toEqual(singleStyle);
+  expect(mixedStyle.boxShadow).not.toBe("none");
 
   await deleteTransaction(page, mixedTransaction);
   await deleteTransaction(page, spendTransaction);
@@ -6363,9 +6449,7 @@ test("transactions page help and leaf category chips", async ({
       .locator(".transactions-category-column")
       .getByText("Mixed", { exact: true }),
   ).toBeVisible();
-  await expect(mixedRow.locator(".transactions-amount-column")).toHaveText(
-    "+ parts",
-  );
+  await expect(mixedRow.locator(".transactions-amount-column")).toHaveText("+");
   const rowHeights = await page
     .locator("tbody > tr[aria-expanded]")
     .evaluateAll((rows) => {
@@ -6870,9 +6954,10 @@ test("transaction detail panel shows full records and supports deep links", asyn
   const createdTags = await Promise.all(
     tagFqns.map((fqn) => createTag(page, fqn)),
   );
-  const [accounts, categories] = await Promise.all([
+  const [accounts, categories, member] = await Promise.all([
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
+    createMember(page, `E2EDetailMember${unique.repeat(6)}`),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
   const merchantAccount = findByFqn(accounts, "merchant:Books");
@@ -6888,6 +6973,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
       currency: "USD",
       funding_account_id: fundingAccount.account_id,
       initiated_date: "2026-06-30",
+      member_id: member.member_id,
       memo,
       tag_ids: createdTags.map((tag) => tag.tag_id),
     },
@@ -6970,15 +7056,62 @@ test("transaction detail panel shows full records and supports deep links", asyn
     memo,
   );
   await expect(panel.getByText("Journal records")).toBeVisible();
-  const journalRecords = panel.locator(
-    "section[aria-labelledby='transaction-detail-records']",
-  );
+  const recordTable = panel.getByTestId("transaction-detail-records-table");
+  expect(
+    (await recordTable.locator("th").allTextContents()).map((text) =>
+      text.trim(),
+    ),
+  ).toEqual(["Role", "Account", "Amount", "Category"]);
+  const recordRows = recordTable.locator("tr[data-detail-record-row='true']");
+  await expect(recordRows).toHaveCount(2);
+  await expect(recordRows.first().locator("td")).toHaveCount(4);
   await expect(
-    journalRecords.getByRole("cell", { name: memo }).first(),
-  ).toBeVisible();
+    recordTable.locator(
+      "td[data-label='Tags'], td[data-label='Member'], td[data-label='Status'], td[data-label='Memo']",
+    ),
+  ).toHaveCount(0);
   await expect(panel.getByText("cash:Wallet").first()).toBeVisible();
   await expect(panel.getByText("merchant:Books").first()).toBeVisible();
   await expect(panel.getByText("Entertainment:Books").first()).toBeVisible();
+  const expectAmountCategorySeparation = async () => {
+    await expect
+      .poll(() =>
+        recordRows.evaluateAll((rows) =>
+          rows.every((row) => {
+            const amountCell = row.querySelector<HTMLElement>(
+              "td[data-label='Amount']",
+            );
+            const categoryCell = row.querySelector<HTMLElement>(
+              "td[data-label='Category']",
+            );
+            if (!amountCell || !categoryCell) {
+              return false;
+            }
+            const amountBounds = amountCell.getBoundingClientRect();
+            const categoryBounds = categoryCell.getBoundingClientRect();
+            const categoryChip =
+              categoryCell.querySelector<HTMLElement>("button");
+            const categoryChipBounds = categoryChip?.getBoundingClientRect();
+            const cellsOverlap =
+              amountBounds.left < categoryBounds.right - 0.5 &&
+              amountBounds.right > categoryBounds.left + 0.5 &&
+              amountBounds.top < categoryBounds.bottom - 0.5 &&
+              amountBounds.bottom > categoryBounds.top + 0.5;
+            const chipFitsCategory =
+              !categoryChipBounds ||
+              (categoryChipBounds.left >= categoryBounds.left - 0.5 &&
+                categoryChipBounds.right <= categoryBounds.right + 0.5);
+            return !cellsOverlap && chipFitsCategory;
+          }),
+        ),
+      )
+      .toBe(true);
+  };
+  for (const width of [1920, 760, 740, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expectAmountCategorySeparation();
+  }
+  await page.setViewportSize({ width: 1920, height: 760 });
   await expect
     .poll(() =>
       panel
@@ -6987,27 +7120,44 @@ test("transaction detail panel shows full records and supports deep links", asyn
     )
     .toBe(true);
   for (const tag of createdTags) {
+    await expect(recordTable.getByText(tag.fqn, { exact: false })).toHaveCount(
+      0,
+    );
+  }
+  await expect(recordTable.getByText(member.name, { exact: true })).toHaveCount(
+    0,
+  );
+  await recordRows.first().click();
+  const disclosure = recordTable.locator("tr.detail-records-disclosure-row");
+  await expect(disclosure).toBeVisible();
+  await expect(disclosure).toContainText(memo);
+  for (const tag of createdTags) {
     await expect(
-      panel.getByText(tag.name, { exact: true }).first(),
-    ).toBeVisible();
+      disclosure.getByTestId("record-disclosure-tags"),
+    ).toContainText(tag.fqn);
   }
-  const firstCreatedTag = createdTags.at(0);
-  if (!firstCreatedTag) {
-    throw new Error("expected at least one created tag");
+  await expect(disclosure.getByTestId("record-disclosure-member")).toHaveText(
+    member.name,
+  );
+  await page.setViewportSize({ width: 760, height: 900 });
+  for (const value of [
+    disclosure.getByTestId("record-disclosure-tags"),
+    disclosure.getByTestId("record-disclosure-member"),
+  ]) {
+    await expect
+      .poll(() =>
+        value.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth + 1,
+        ),
+      )
+      .toBe(true);
   }
-  await expect
-    .poll(() =>
-      journalRecords
-        .getByRole("button", { name: `Filter by ${firstCreatedTag.name}` })
-        .first()
-        .evaluate((element) => {
-          const wrapper = element.closest(
-            "[data-label='Tags']",
-          )?.firstElementChild;
-          return wrapper ? window.getComputedStyle(wrapper).overflow : null;
-        }),
-    )
-    .toBe("visible");
+  await page.setViewportSize({ width: 1920, height: 760 });
+  await expect(
+    disclosure.locator(
+      "button, [data-slot='tooltip-trigger'], [data-testid*='chip']",
+    ),
+  ).toHaveCount(0);
 
   await alternateDetailRow.locator(".transactions-description-column").click();
   await expect(panel).toBeHidden();
@@ -7110,6 +7260,7 @@ test("detail and peek account paths navigate without record-row side effects", a
     panel.locator(`a[href='/accounts/${merchant.account_id}']`),
     merchant.fqn,
   );
+  await expect(page.locator("[data-slot='tooltip-content']")).toBeVisible();
   await accountLink.click();
   await expectAccountLinkNavigation(page, account);
 
@@ -7156,7 +7307,7 @@ test("detail and peek account paths navigate without record-row side effects", a
   await expectAccountLinkNavigation(page, account);
 });
 
-test("transaction detail panel is read-only while chips keep filtering", async ({
+test("transaction detail panel is read-only while category chips keep filtering", async ({
   page,
 }, testInfo) => {
   test.slow();
@@ -7225,8 +7376,10 @@ test("transaction detail panel is read-only while chips keep filtering", async (
 
   const accountCell = panel.locator("td[data-label='Account']").first();
   const amountChip = panel.getByTestId("amount-chip").first();
-  const memoCell = panel.getByRole("cell", { name: memo }).first();
-  for (const target of [accountCell, amountChip, memoCell]) {
+  const detailRecordRow = panel
+    .locator("tr[data-detail-record-row='true']")
+    .first();
+  for (const target of [accountCell, amountChip, detailRecordRow]) {
     await target.hover();
     await expect(
       panel.getByRole("button", {
@@ -7235,15 +7388,29 @@ test("transaction detail panel is read-only while chips keep filtering", async (
     ).toHaveCount(0);
   }
 
-  await accountCell.click();
+  await detailRecordRow.click();
+  const disclosure = panel.locator("tr.detail-records-disclosure-row");
+  await expect(disclosure).toBeVisible();
+  await expect(disclosure.getByTestId("record-disclosure-tags")).toHaveText(
+    initialTag.fqn,
+  );
+  await expect(disclosure.getByTestId("record-disclosure-member")).toHaveText(
+    member.name,
+  );
+  await expect(disclosure).toContainText(memo);
+  await expect(
+    disclosure.locator(
+      "button, [data-slot='tooltip-trigger'], [data-testid*='chip']",
+    ),
+  ).toHaveCount(0);
   await page.keyboard.press("F2");
   await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
-  await page.keyboard.press("Enter");
-  await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
   await amountChip.click();
-  await memoCell.click();
   await expect(panel.locator("[data-inline-editor-id]")).toHaveCount(0);
-  await expect(memoCell.locator("span")).toHaveCSS("white-space", "pre-wrap");
+  await expect(disclosure.getByText(memo, { exact: true })).toHaveCSS(
+    "white-space",
+    "pre-wrap",
+  );
 
   await panel
     .getByRole("button", { name: `Filter by ${initialCategory.fqn}` })
@@ -7258,32 +7425,6 @@ test("transaction detail panel is read-only while chips keep filtering", async (
       name: `Remove Category ${initialCategory.name}`,
     }),
   ).toBeVisible();
-  await expect(panel).toBeVisible();
-
-  await panel
-    .getByRole("button", { name: `Filter by ${initialTag.name}` })
-    .first()
-    .click();
-  await expectTransactionFilterUrl(page, {
-    categories: [initialCategory.category_id],
-    hideExpected: true,
-    tags: [initialTag.tag_id],
-  });
-  await expect(
-    page.getByRole("button", { name: `Remove Tag ${initialTag.name}` }),
-  ).toBeVisible();
-  await expect(panel).toBeVisible();
-
-  await panel
-    .getByRole("button", { name: `Filter by ${member.name}` })
-    .first()
-    .click();
-  await expectTransactionFilterUrl(page, {
-    categories: [initialCategory.category_id],
-    hideExpected: true,
-    members: [member.member_id],
-    tags: [initialTag.tag_id],
-  });
   await expect(panel).toBeVisible();
 
   const expected = await createExpectedRecurringFixture(page, unique);
@@ -7505,8 +7646,13 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
   await expect(simpleExpandedRecords).toContainText("pending —; posted ");
   await expect(simpleExpandedRecords).not.toContainText("pending ;");
 
-  const expectSimpleSurface = async (panel: Locator) => {
-    await expectDatelessReadOnlyDetailGrid(panel, 2);
+  const expectSimpleSurface = async (
+    panel: Locator,
+    expectedVariant: "decluttered" | "full",
+  ) => {
+    await expectDatelessReadOnlyDetailGrid(panel, 2, expectedVariant);
+    const recordsTable = panel.getByTestId("transaction-detail-records-table");
+    const decluttered = expectedVariant === "decluttered";
     const lifecycle = panel.getByTestId("transaction-lifecycle");
     await expect
       .poll(() =>
@@ -7534,16 +7680,31 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
       "font-size",
       "12px",
     );
-    await expect(
-      panel.getByText(firstTag.name, { exact: true }).first(),
-    ).toBeVisible();
-    await expect(
-      panel.getByText(secondTag.name, { exact: true }).first(),
-    ).toBeVisible();
+    if (decluttered) {
+      await expect(recordsTable.locator("td[data-label='Tags']")).toHaveCount(
+        0,
+      );
+      await expect(
+        recordsTable.getByText(firstTag.fqn, { exact: false }),
+      ).toHaveCount(0);
+      await expect(
+        recordsTable.getByText(secondTag.fqn, { exact: false }),
+      ).toHaveCount(0);
+    } else {
+      await expect(
+        panel.getByText(firstTag.name, { exact: true }).first(),
+      ).toBeVisible();
+      await expect(
+        panel.getByText(secondTag.name, { exact: true }).first(),
+      ).toBeVisible();
+    }
   };
 
-  const expectMixedSurface = async (panel: Locator) => {
-    await expectDatelessReadOnlyDetailGrid(panel, 3);
+  const expectMixedSurface = async (
+    panel: Locator,
+    expectedVariant: "decluttered" | "full",
+  ) => {
+    await expectDatelessReadOnlyDetailGrid(panel, 3, expectedVariant);
     const lifecycle = panel.getByTestId("transaction-lifecycle");
     await expect(lifecycle).toHaveText(/Initiated\s*Jul 12\s*pending/);
     await expect(lifecycle).not.toContainText(/Posted|varies|2 of 3|→|–/);
@@ -7565,8 +7726,11 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
       .toBe(true);
   };
 
-  const expectExpectedSurface = async (panel: Locator) => {
-    await expectDatelessReadOnlyDetailGrid(panel, 2);
+  const expectExpectedSurface = async (
+    panel: Locator,
+    expectedVariant: "decluttered" | "full",
+  ) => {
+    await expectDatelessReadOnlyDetailGrid(panel, 2, expectedVariant);
     const lifecycle = panel.getByTestId("transaction-lifecycle");
     await expect(lifecycle).toHaveText(/Initiated\s*Jul 23\s*expected/);
     await expect(lifecycle).not.toContainText(/Pending|Posted|Cancelled|—/);
@@ -7575,18 +7739,26 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     ).toHaveText("expected");
   };
 
-  const expectCancelledSurface = async (panel: Locator) => {
-    await expectDatelessReadOnlyDetailGrid(panel, 2);
+  const expectCancelledSurface = async (
+    panel: Locator,
+    expectedVariant: "decluttered" | "full",
+  ) => {
+    await expectDatelessReadOnlyDetailGrid(panel, 2, expectedVariant);
+    const recordsTable = panel.getByTestId("transaction-detail-records-table");
+    const decluttered = expectedVariant === "decluttered";
     const lifecycle = panel.getByTestId("transaction-lifecycle");
     await expect(lifecycle).toHaveText(/Initiated\s*Jul 16\s*cancelled/);
     await expect(lifecycle).not.toContainText(/Pending|Posted|varies|1 of 2|—/);
     await expect(
       lifecycle.locator("[data-lifecycle-status='cancelled']"),
     ).toHaveText("cancelled");
-    const cancelledRows = panel
-      .locator("tr[data-detail-record-row='true']")
-      .filter({ hasText: "Cancelled" });
+    const cancelledRows = recordsTable.locator(
+      "tr[data-detail-record-row='true']",
+    );
     await expect(cancelledRows).toHaveCount(2);
+    if (!decluttered) {
+      await expect(cancelledRows.first()).toContainText("Cancelled");
+    }
     await expect(cancelledRows.first()).toHaveCSS(
       "text-decoration-line",
       "line-through",
@@ -7598,25 +7770,25 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     page,
     simple.transaction_id,
   );
-  await expectSimpleSurface(simpleDetail);
+  await expectSimpleSurface(simpleDetail, "decluttered");
   await expectMouseDisclosure(simpleDetail, simpleMemo);
 
   const mixedDetail = await openUrlTransactionDetail(
     page,
     mixed.transaction_id,
   );
-  await expectMixedSurface(mixedDetail);
+  await expectMixedSurface(mixedDetail, "decluttered");
   await expectLifecycleContentFits(mixedDetail);
   await page.setViewportSize({ width: 390, height: 900 });
   await expectLifecycleContentFits(mixedDetail);
   await page.setViewportSize({ width: 1600, height: 900 });
-  await expectKeyboardDisclosure(mixedDetail, mixedMemo);
+  await expectKeyboardDisclosure(mixedDetail);
 
   const expectedDetail = await openUrlTransactionDetail(
     page,
     expected.transactionId,
   );
-  await expectExpectedSurface(expectedDetail);
+  await expectExpectedSurface(expectedDetail, "decluttered");
   await expect(
     expectedDetail.getByRole("button", { name: "Edit transaction" }),
   ).toHaveCount(0);
@@ -7631,7 +7803,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     page,
     cancelled.transaction_id,
   );
-  await expectCancelledSurface(cancelledDetail);
+  await expectCancelledSurface(cancelledDetail, "decluttered");
 
   await page.setViewportSize({ width: 720, height: 900 });
   const simplePeek = await openAccountTransactionPeek(
@@ -7639,7 +7811,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     fundingAccount,
     simpleMemo,
   );
-  await expectSimpleSurface(simplePeek);
+  await expectSimpleSurface(simplePeek, "full");
   await expectMouseDisclosure(simplePeek, simpleMemo);
 
   const mixedPeek = await openAccountTransactionPeek(
@@ -7647,22 +7819,22 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     fundingAccount,
     mixedMemo,
   );
-  await expectMixedSurface(mixedPeek);
-  await expectKeyboardDisclosure(mixedPeek, mixedMemo);
+  await expectMixedSurface(mixedPeek, "full");
+  await expectKeyboardDisclosure(mixedPeek);
 
   const expectedPeek = await openAccountTransactionPeek(
     page,
     expected.checking,
     expected.memo,
   );
-  await expectExpectedSurface(expectedPeek);
+  await expectExpectedSurface(expectedPeek, "full");
 
   const cancelledPeek = await openAccountTransactionPeek(
     page,
     fundingAccount,
     cancelledMemo,
   );
-  await expectCancelledSurface(cancelledPeek);
+  await expectCancelledSurface(cancelledPeek, "full");
 });
 
 test("toolbar filter trigger opens after transaction detail closes", async ({
@@ -8686,7 +8858,15 @@ test("transaction detail split opens journal replacement and surfaces replace er
     page.getByRole("dialog", { name: "Transaction editor" }),
   ).toHaveCount(0);
   await expect(detailPanel).toBeVisible();
-  await expect(detailPanel.getByText(splitMemo).first()).toBeVisible();
+  const splitDetailRow = detailPanel
+    .getByTestId("transaction-detail-records-table")
+    .locator("tr[data-detail-record-row='true']")
+    .filter({ hasText: splitAccount.fqn });
+  await expect(splitDetailRow).toBeVisible();
+  await splitDetailRow.click();
+  await expect(
+    detailPanel.locator("tr.detail-records-disclosure-row"),
+  ).toContainText(splitMemo);
 });
 
 test("transaction row quick-delete confirms, handles errors, and preserves row behavior", async ({

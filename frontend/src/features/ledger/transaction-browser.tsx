@@ -1847,7 +1847,6 @@ export const TransactionBrowser = ({
                       <div
                         className={cn(
                           "flex min-w-0 items-end justify-end gap-1 overflow-visible",
-                          hasMoreParts && "overflow-hidden",
                           amounts.length > 1
                             ? "flex-col"
                             : "flex-row flex-nowrap",

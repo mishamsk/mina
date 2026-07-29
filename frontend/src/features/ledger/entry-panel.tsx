@@ -2465,23 +2465,18 @@ const EntryRailRow = ({
             <AmountText
               key={`${displayAmountKey(amount)}:${index}`}
               amount={amount}
+              chip
               positiveSign={
                 transaction.transaction_class !== "transfer" &&
                 transaction.transaction_class !== "currency_exchange"
               }
-              transactionClass={transaction.transaction_class}
+              tone="neutral"
               className="text-xs"
             />
           ))}
         </span>
       ) : null}
-      {hasMoreParts ? (
-        <MorePartsIndicator
-          compact
-          focusable={false}
-          transaction={transaction}
-        />
-      ) : null}
+      {hasMoreParts ? <MorePartsIndicator transaction={transaction} /> : null}
     </>
   );
 

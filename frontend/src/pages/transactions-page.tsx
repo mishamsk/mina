@@ -337,12 +337,6 @@ export const TransactionsPage = () => {
             onFilterCategory={(categoryId) => {
               addEntityFilter("category", categoryId);
             }}
-            onFilterMember={(memberId) => {
-              addEntityFilter("member", memberId);
-            }}
-            onFilterTag={(tagId) => {
-              addEntityFilter("tag", tagId);
-            }}
             onRestoreFocus={browser.detail.restoreDetailFocus}
             transaction={browser.detail.transaction}
           />

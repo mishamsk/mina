@@ -638,12 +638,6 @@ export const ReferenceDrilldownPage = ({
           onFilterCategory={(categoryId) => {
             addEntityFilter("category", categoryId);
           }}
-          onFilterMember={(memberId) => {
-            addEntityFilter("member", memberId);
-          }}
-          onFilterTag={(tagId) => {
-            addEntityFilter("tag", tagId);
-          }}
           onRestoreFocus={restoreTransactionDetailFocus}
           onSplit={(transaction) => {
             openTransactionEntryLaunch(

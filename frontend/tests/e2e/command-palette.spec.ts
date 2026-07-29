@@ -476,19 +476,19 @@ test("command palette keeps narrow multi-part results single-height", async ({
     (await multiPartResponse.json()) as TransactionFixture;
 
   await page.goto("/overview");
-  await page.getByRole("button", { name: "Command palette" }).click();
-  const searchResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await openPalette(page);
+  const searchRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
     return (
       url.pathname === "/api/transactions" &&
-      url.searchParams.get("search") === `palette height ${unique}` &&
-      response.ok()
+      url.searchParams.get("search") === `palette height ${unique}`
     );
   });
   await page
     .getByRole("combobox", { name: "Command search" })
     .fill(`'palette height ${unique}`);
-  await searchResponse;
+  await searchRequest;
 
   const dialog = page.getByRole("dialog", { name: "Command Palette" });
   const simpleOption = dialog
@@ -505,6 +505,14 @@ test("command palette keeps narrow multi-part results single-height", async ({
   await expect(
     multiPartOption.getByTestId("more-parts-indicator"),
   ).toBeVisible();
+  await expect(multiPartOption.getByTestId("more-parts-indicator")).toHaveText(
+    "+",
+  );
+  expect(
+    await multiPartOption
+      .getByTestId("more-parts-indicator")
+      .evaluate((indicator) => indicator.tabIndex),
+  ).toBe(-1);
   await expect(multiPartOption).toHaveAttribute(
     "aria-label",
     /more transaction parts, all parts -999,999\.99 \$, -0\.01 \$/,

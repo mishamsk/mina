@@ -61,8 +61,6 @@ interface TransactionDetailPanelProps {
   readonly onEdit?: (transaction: Transaction, opener?: HTMLElement) => void;
   readonly onSplit?: (transaction: Transaction, opener?: HTMLElement) => void;
   readonly onFilterCategory?: (categoryId: number) => void;
-  readonly onFilterMember?: (memberId: number) => void;
-  readonly onFilterTag?: (tagId: number) => void;
   readonly onRestoreFocus: () => void;
   readonly transaction: Transaction | undefined;
 }
@@ -209,6 +207,7 @@ const DetailRecordsTable = ({
   onFilterMember,
   onFilterTag,
   records,
+  variant,
   transaction,
 }: {
   readonly maps: LookupMaps;
@@ -216,6 +215,7 @@ const DetailRecordsTable = ({
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
   readonly records: readonly JournalRecord[];
+  readonly variant: "decluttered" | "full";
   readonly transaction: Transaction;
 }) => {
   const [expandedRecordIds, setExpandedRecordIds] = useState<
@@ -250,7 +250,11 @@ const DetailRecordsTable = ({
 
   return (
     <div
-      className="transaction-detail-records-table max-w-full overflow-visible border-2 border-[var(--border-ink)]"
+      className={cn(
+        "transaction-detail-records-table max-w-full overflow-visible border-2 border-[var(--border-ink)]",
+        variant === "decluttered" &&
+          "transaction-detail-records-table--decluttered",
+      )}
       data-testid="transaction-detail-records-table"
     >
       <table className="w-full table-fixed border-collapse text-sm">
@@ -259,10 +263,14 @@ const DetailRecordsTable = ({
           <col className="detail-records-account-column" />
           <col className="detail-records-amount-column" />
           <col className="detail-records-category-column" />
-          <col className="detail-records-tags-column" />
-          <col className="detail-records-member-column" />
-          <col className="detail-records-status-column" />
-          <col className="detail-records-memo-column" />
+          {variant === "full" ? (
+            <>
+              <col className="detail-records-tags-column" />
+              <col className="detail-records-member-column" />
+              <col className="detail-records-status-column" />
+              <col className="detail-records-memo-column" />
+            </>
+          ) : null}
         </colgroup>
         <thead>
           <tr className="font-heading bg-[var(--table-header)] text-left text-xs font-semibold uppercase">
@@ -276,10 +284,18 @@ const DetailRecordsTable = ({
             <th className="detail-records-category-column px-2 py-2">
               Category
             </th>
-            <th className="detail-records-tags-column px-2 py-2">Tags</th>
-            <th className="detail-records-member-column px-2 py-2">Member</th>
-            <th className="detail-records-status-column px-2 py-2">Status</th>
-            <th className="detail-records-memo-column px-2 py-2">Memo</th>
+            {variant === "full" ? (
+              <>
+                <th className="detail-records-tags-column px-2 py-2">Tags</th>
+                <th className="detail-records-member-column px-2 py-2">
+                  Member
+                </th>
+                <th className="detail-records-status-column px-2 py-2">
+                  Status
+                </th>
+                <th className="detail-records-memo-column px-2 py-2">Memo</th>
+              </>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -293,6 +309,14 @@ const DetailRecordsTable = ({
               record.member_id === null || record.member_id === undefined
                 ? undefined
                 : maps.membersById.get(record.member_id);
+            const disclosureTags =
+              variant === "decluttered"
+                ? record.tag_ids
+                    .map((tagId) => maps.tagsById.get(tagId))
+                    .filter((tag): tag is NonNullable<typeof tag> =>
+                      Boolean(tag),
+                    )
+                : [];
             const expanded = expandedRecordIds.has(record.record_id);
             const disclosureId = `record-${record.record_id}-detail`;
             const cancelled = record.posting_status === "cancelled";
@@ -330,6 +354,7 @@ const DetailRecordsTable = ({
                     data-label="Role"
                   >
                     <RecordRoleIcon
+                      className="size-4 min-w-4"
                       focusable={false}
                       role={record.record_role}
                     />
@@ -376,58 +401,64 @@ const DetailRecordsTable = ({
                       "Uncategorized"
                     )}
                   </td>
-                  <td
-                    className="detail-records-tags-column min-w-0 px-2 py-1.5"
-                    data-label="Tags"
-                  >
-                    <div className="max-w-full overflow-visible">
-                      <RecordTagSet
-                        maps={maps}
-                        onFilterTag={onFilterTag}
-                        record={record}
-                      />
-                    </div>
-                  </td>
-                  <td
-                    className="detail-records-member-column min-w-0 px-2 py-1.5"
-                    data-label="Member"
-                  >
-                    {member ? (
-                      <MemberChip
-                        name={member.name}
-                        onActivate={
-                          onFilterMember
-                            ? () => {
-                                onFilterMember(member.member_id);
-                              }
-                            : undefined
-                        }
-                      />
-                    ) : null}
-                  </td>
-                  <td
-                    className="detail-records-status-column min-w-0 px-2 py-1.5"
-                    data-label="Status"
-                  >
-                    <span className="flex w-full max-w-full min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
-                      <StatusIcon
-                        className="size-4"
-                        focusable={false}
-                        status={record.posting_status}
-                      />
-                      <span>{postingStatusLabel(record.posting_status)}</span>
-                    </span>
-                  </td>
-                  <td
-                    className="detail-records-memo-column text-muted-foreground min-w-0 px-2 py-1.5"
-                    data-label="Memo"
-                  >
-                    {record.memo ? (
-                      <span className="block break-words whitespace-pre-wrap">
-                        {record.memo}
-                      </span>
-                    ) : null}
-                  </td>
+                  {variant === "full" ? (
+                    <>
+                      <td
+                        className="detail-records-tags-column min-w-0 px-2 py-1.5"
+                        data-label="Tags"
+                      >
+                        <div className="max-w-full overflow-visible">
+                          <RecordTagSet
+                            maps={maps}
+                            onFilterTag={onFilterTag}
+                            record={record}
+                          />
+                        </div>
+                      </td>
+                      <td
+                        className="detail-records-member-column min-w-0 px-2 py-1.5"
+                        data-label="Member"
+                      >
+                        {member ? (
+                          <MemberChip
+                            name={member.name}
+                            onActivate={
+                              onFilterMember
+                                ? () => {
+                                    onFilterMember(member.member_id);
+                                  }
+                                : undefined
+                            }
+                          />
+                        ) : null}
+                      </td>
+                      <td
+                        className="detail-records-status-column min-w-0 px-2 py-1.5"
+                        data-label="Status"
+                      >
+                        <span className="flex w-full max-w-full min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap">
+                          <StatusIcon
+                            className="size-4"
+                            focusable={false}
+                            status={record.posting_status}
+                          />
+                          <span>
+                            {postingStatusLabel(record.posting_status)}
+                          </span>
+                        </span>
+                      </td>
+                      <td
+                        className="detail-records-memo-column text-muted-foreground min-w-0 px-2 py-1.5"
+                        data-label="Memo"
+                      >
+                        {record.memo ? (
+                          <span className="block break-words whitespace-pre-wrap">
+                            {record.memo}
+                          </span>
+                        ) : null}
+                      </td>
+                    </>
+                  ) : null}
                 </tr>
                 {expanded ? (
                   <tr
@@ -441,7 +472,7 @@ const DetailRecordsTable = ({
                     <td
                       id={disclosureId}
                       className="detail-records-disclosure-cell px-3 py-2"
-                      colSpan={8}
+                      colSpan={variant === "decluttered" ? 4 : 8}
                     >
                       <dl className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[max-content_minmax(0,1fr)_max-content_minmax(0,1fr)]">
                         <dt className="text-muted-foreground">
@@ -472,6 +503,28 @@ const DetailRecordsTable = ({
                         <dd>{recordRoleLabel(record.record_role)}</dd>
                         <dt className="text-muted-foreground">Source</dt>
                         <dd>{sourceLabel(record.source)}</dd>
+                        {variant === "decluttered" ? (
+                          <>
+                            <dt className="text-muted-foreground">Tags</dt>
+                            <dd
+                              className="min-w-0 [overflow-wrap:anywhere]"
+                              data-testid="record-disclosure-tags"
+                            >
+                              {disclosureTags.length > 0
+                                ? disclosureTags
+                                    .map((tag) => tag.fqn)
+                                    .join(", ")
+                                : "—"}
+                            </dd>
+                            <dt className="text-muted-foreground">Member</dt>
+                            <dd
+                              className="min-w-0 [overflow-wrap:anywhere]"
+                              data-testid="record-disclosure-member"
+                            >
+                              {member?.name ?? "—"}
+                            </dd>
+                          </>
+                        ) : null}
                         <dt className="text-muted-foreground">Memo</dt>
                         <dd className="break-words whitespace-pre-wrap sm:col-span-3">
                           {record.memo || "—"}
@@ -515,12 +568,14 @@ export const TransactionDetailContent = ({
   onFilterCategory,
   onFilterMember,
   onFilterTag,
+  recordTableVariant = "full",
   transaction,
 }: {
   readonly maps: LookupMaps;
   readonly onFilterCategory?: (categoryId: number) => void;
   readonly onFilterMember?: (memberId: number) => void;
   readonly onFilterTag?: (tagId: number) => void;
+  readonly recordTableVariant?: "decluttered" | "full";
   readonly transaction: Transaction;
 }) => {
   const summaryMemo = lineMemo(transaction);
@@ -565,6 +620,7 @@ export const TransactionDetailContent = ({
           onFilterMember={onFilterMember}
           onFilterTag={onFilterTag}
           records={transaction.records}
+          variant={recordTableVariant}
           transaction={transaction}
         />
       </section>
@@ -606,8 +662,6 @@ export const TransactionDetailPanel = ({
   onEdit,
   onSplit,
   onFilterCategory,
-  onFilterMember,
-  onFilterTag,
   onRestoreFocus,
   transaction,
 }: TransactionDetailPanelProps) => {
@@ -846,8 +900,7 @@ export const TransactionDetailPanel = ({
           <TransactionDetailContent
             maps={maps}
             onFilterCategory={onFilterCategory}
-            onFilterMember={onFilterMember}
-            onFilterTag={onFilterTag}
+            recordTableVariant="decluttered"
             transaction={transaction}
           />
         ) : null}
