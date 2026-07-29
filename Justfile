@@ -6,6 +6,7 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 default_codex_model := "gpt-5.6-sol"
 default_codex_reasoning_effort := "high"
 planning_codex_reasoning_effort := "xhigh"
+agent_model_thinking_levels := "claude-opus-5-high\nclaude-opus-5-xhigh\ncodex-5.6-sol-high\ncodex-5.6-sol-xhigh\ncodex-5.6-terra-high\ncodex-5.6-terra-xhigh"
 
 [private]
 @default:
@@ -450,6 +451,32 @@ codex-goal-fleet plan_file="":
 
     command codex -m gpt-5.6-sol -c model_reasoning_effort=xhigh --dangerously-bypass-approvals-and-sandbox "Operate @${plan_file} end to end in its stated order. You are the fleet operator: prepare plans, delegate implementation and review to subagents, and integrate results; do not edit implementation code yourself. Success means every applicable fleet checkbox is complete and the plan's validation, review limits, and stopping rules are honored. Report blockers with evidence instead of expanding scope."
 
+# List currently actionable parent Kata issues as tab-separated rows.
+[private]
+kata-open-issues:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    command -v jq >/dev/null || { echo "missing required tool: jq" >&2; exit 1; }
+    command -v kata >/dev/null || { echo "missing required tool: kata" >&2; exit 1; }
+
+    jq -r -s '
+        (.[1].issues
+            | map(select(.parent != null) | .parent.short_id)
+            | unique) as $parents
+        | .[0].issues
+        | map(select((.short_id as $id | $parents | index($id) | not)))
+        | sort_by(.updated_at)
+        | reverse[]
+        | [
+            .short_id,
+            ("P" + (.priority | tostring)),
+            .updated_at,
+            .title
+        ]
+        | @tsv
+    ' <(kata ready --json --limit 0) <(kata list --status all --limit 1000 --json)
+
 # Start a kata plan-only worktree through Codex.
 [group('agents')]
 codex-kata-plan:
@@ -458,30 +485,14 @@ codex-kata-plan:
 
     command -v codex >/dev/null || { echo "missing required tool: codex" >&2; exit 1; }
     command -v fzf >/dev/null || { echo "missing required tool: fzf" >&2; exit 1; }
-    command -v jq >/dev/null || { echo "missing required tool: jq" >&2; exit 1; }
-    command -v kata >/dev/null || { echo "missing required tool: kata" >&2; exit 1; }
 
     if ! selected="$(
-        jq -r -s '
-            (.[1].issues
-                | map(select(.parent != null) | .parent.short_id)
-                | unique) as $parents
-            | .[0].issues
-            | map(select((.short_id as $id | $parents | index($id) | not)))
-            | sort_by(.updated_at)
-            | reverse[]
-            | [
-                .short_id,
-                ("P" + (.priority | tostring)),
-                .updated_at,
-                .title
-            ]
-            | @tsv
-        ' <(kata ready --json --limit 0) <(kata list --status all --limit 1000 --json) | fzf \
+        just --quiet kata-open-issues | fzf \
             --prompt='Kata> ' \
             --delimiter=$'\t' \
             --with-nth=1,2,4 \
-            --preview='kata show {1} --agent'
+            --preview='kata show {1} --agent' \
+            --preview-window='right:50%:wrap-word'
     )"; then
         echo "no kata issue selected" >&2
         exit 1
@@ -490,6 +501,81 @@ codex-kata-plan:
 
     issue="${selected%%$'\t'*}"
     command codex exec -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + planning_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "\$kata-plan-worktree #${issue}"
+
+# Create a worktree for a selected Kata issue and launch an implementation agent.
+[group('agents')]
+kata-implement:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    command -v claude >/dev/null || { echo "missing required tool: claude" >&2; exit 1; }
+    command -v codex >/dev/null || { echo "missing required tool: codex" >&2; exit 1; }
+    command -v fzf >/dev/null || { echo "missing required tool: fzf" >&2; exit 1; }
+    command -v git >/dev/null || { echo "missing required tool: git" >&2; exit 1; }
+    command -v gt >/dev/null || { echo "missing required tool: gt" >&2; exit 1; }
+    command -v jq >/dev/null || { echo "missing required tool: jq" >&2; exit 1; }
+    command -v kata >/dev/null || { echo "missing required tool: kata" >&2; exit 1; }
+
+    if ! selected="$(
+        just --quiet kata-open-issues | fzf \
+            --prompt='Kata> ' \
+            --delimiter=$'\t' \
+            --with-nth=1,2,4 \
+            --preview='kata show {1} --agent' \
+            --preview-window='right:50%:wrap-word'
+    )"; then
+        echo "no kata issue selected" >&2
+        exit 1
+    fi
+    [ -n "$selected" ] || { echo "no kata issue selected" >&2; exit 1; }
+    issue="${selected%%$'\t'*}"
+
+    if ! agent_model_thinking="$(
+        printf '%s\n' {{ quote(agent_model_thinking_levels) }} | fzf --prompt='Agent model / thinking> '
+    )"; then
+        echo "no agent model and thinking level selected" >&2
+        exit 1
+    fi
+    [ -n "$agent_model_thinking" ] || { echo "no agent model and thinking level selected" >&2; exit 1; }
+
+    issue_json="$(kata show "$issue" --json)"
+    title="$(jq -r '.issue.title' <<<"$issue_json")"
+    issue_body="$(jq -r '.issue.body // ""' <<<"$issue_json")"
+    slug="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+    [ -n "$slug" ] || { echo "could not create a branch slug from Kata issue title" >&2; exit 1; }
+    branch="${issue}-${slug}"
+
+    git fetch origin main
+    gt "$branch" main -x true
+    worktree_path="$(
+        git worktree list --porcelain | awk -v branch="refs/heads/$branch" '
+            $1 == "worktree" { path = $2 }
+            $1 == "branch" && $2 == branch { print path; exit }
+        '
+    )"
+    [ -n "$worktree_path" ] || { echo "could not find worktree for branch $branch" >&2; exit 1; }
+
+    prompt_template="$(<docs/kata-implementation-prompt-template.md)"
+    prompt="${prompt_template//\{\{issue\}\}/#$issue}"
+    prompt="${prompt//\{\{issue_body\}\}/$issue_body}"
+    thinking_effort="${agent_model_thinking##*-}"
+
+    cd "$worktree_path"
+    case "$agent_model_thinking" in
+        claude-opus-5-*)
+            exec claude --model claude-opus-5 --effort "$thinking_effort" --dangerously-skip-permissions "$prompt"
+            ;;
+        codex-5.6-sol-*)
+            exec codex -m gpt-5.6-sol -c "model_reasoning_effort=$thinking_effort" --dangerously-bypass-approvals-and-sandbox "$prompt"
+            ;;
+        codex-5.6-terra-*)
+            exec codex -m gpt-5.6-terra -c "model_reasoning_effort=$thinking_effort" --dangerously-bypass-approvals-and-sandbox "$prompt"
+            ;;
+        *)
+            echo "unsupported agent model and thinking level: $agent_model_thinking" >&2
+            exit 1
+            ;;
+    esac
 
 # Rebase the current branch through Codex.
 [group('agents')]
