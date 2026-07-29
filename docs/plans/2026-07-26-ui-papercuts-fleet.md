@@ -100,7 +100,7 @@ Task scope details live in the Kata issues (`kata show <ref> --agent`). Respect 
 - [x] Task 13: `2q6j` — Polish segment-completion picker edge cases (P3 frontend; enumerated residual edge cases from the vmp6 review, including flat recurring-member picker names bypassing segment derivation; after Task 3 so draft-lifecycle fixes land first) — branch `2q6j-picker-edge-cases`
 - [x] Task 14: `r2ae` — Polish inline-save background reconciliation edges (P3 frontend; two enumerated edges in `use-transactions-resource.ts`; independent, ordered by priority) — branch `r2ae-inline-save-reconcile`
 - [x] Task 15: `q3rh` — Register page header middle-truncates the account FQN despite available width (P4 frontend; smallest polish item, applies the a4py width policy to the register header; independent) — branch `q3rh-register-header-fqn`
-- [ ] Task 16: (no Kata ref) — Lifecycle timestamps: no display magic, status-first lifecycle presentation, end-of-day derived stamps (user-directed follow-up revising the merged `5qah`/`e222` outcomes; scope is Brief C above; runs last so it revises settled lifecycle behavior exactly once) — branch `lifecycle-timestamp-simplify`
+- [x] Task 16: (no Kata ref) — Lifecycle timestamps: no display magic, status-first lifecycle presentation, end-of-day derived stamps (user-directed follow-up revising the merged `5qah`/`e222` outcomes; scope is Brief C above; runs last so it revises settled lifecycle behavior exactly once) — branch `lifecycle-timestamp-simplify`
 
 ## Final Verification
 
