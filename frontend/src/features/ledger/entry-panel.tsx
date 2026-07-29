@@ -2928,12 +2928,22 @@ export const EntryPanel = ({
       return;
     }
 
-    window.requestAnimationFrame(() => {
+    const activeElement = document.activeElement;
+    const animationFrame = window.requestAnimationFrame(() => {
+      if (
+        document.activeElement !== activeElement &&
+        entryPanelRef.current?.contains(document.activeElement)
+      ) {
+        return;
+      }
       (replacement ? dateInputRef.current : templateInputRef.current)?.focus({
         preventScroll: true,
       });
     });
-  }, [activeTab, currentDraftReady, open, replacement]);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [currentDraftReady, open, replacement]);
 
   const selectedEntityIds = useMemo(() => {
     const accountIds = new Set<number>();
@@ -4160,7 +4170,9 @@ export const EntryPanel = ({
             );
           }
           await onSaved(result.data, { operation: "created" });
-          setPickerLifecycle((current) => current + 1);
+          if (latestDraftRef.current.activeTab === activeShorthandTab) {
+            setPickerLifecycle((current) => current + 1);
+          }
           if (closeAfterSave) {
             onClose();
           } else {

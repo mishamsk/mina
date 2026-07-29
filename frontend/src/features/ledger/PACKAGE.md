@@ -45,7 +45,7 @@
 - A background page response replaces only its unchanged source snapshot and is discarded when a newer source exists; the first failure preserves the displayed snapshot, marks it stale, and lets the mounted resource retry without a table loading state, while a repeated failure keeps the snapshot visible and surfaces its staleness through the page error treatment.
 - Entry-modal saves retain the blocking visible-page refresh so stale displayed rows cannot start a conflicting full-replacement edit while the saved transaction refetches.
 - Successful bulk mutations use the same transaction, balance, overview, register, detail, and reference-page refresh fan-out as other transaction edits.
-- Transaction-entry drafts are per tab, store UI form values only, and persist after real input or a successful save establishes sticky values; initialization defaults alone never persist or trigger discard.
+- Transaction-entry drafts are per tab, store UI form values only, and persist after real input or a successful save establishes sticky values; initialization defaults alone never persist or trigger discard, and initialization never replaces entered values or steals focus after interaction.
 - Legacy bare transaction-entry drafts infer their shared initialization date and currency while preserving per-tab deviations as input; the next write upgrades them to envelopes.
 - The active entry tab is a persisted UI preference.
 
