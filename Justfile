@@ -362,6 +362,11 @@ bench-rest: build
 pre-commit:
     prek run --all-files
 
+# Serve recorded UI evidence from build/ on a fixed local port.
+[group('dev-tooling')]
+evidence-serve:
+    go run ./internal/tools/evidencegallery
+
 # Run the repository-local review loop through local Codex and Claude CLI sessions.
 [group('agents')]
 review-loop mode context branch_or_commit="" base_ref="" max_iterations="" claude_review_percent="" claude_model="opus" codex_reviewer="5.6-sol/xhigh" codex_aggregator="5.6-sol/medium" codex_validator="5.6-sol/high" codex_fixer="5.6-sol/high":
