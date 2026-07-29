@@ -506,7 +506,12 @@ export const AccountGroupPageContent = ({
             value={prefix}
             ancestorClassName="text-[var(--frame-muted)]"
             className="text-2xl"
-            leafClassName="text-[var(--frame-foreground)]"
+            collapseAncestors={false}
+            leafClassName={
+              prefix.includes(":")
+                ? "max-w-[calc(100%-2ch)] shrink-0 text-[var(--frame-foreground)]"
+                : "text-[var(--frame-foreground)]"
+            }
           />
         }
         titleId="account-group-title"

@@ -63,7 +63,13 @@ export const AccountHeader = ({
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <FqnPath
               value={account.fqn}
+              collapseAncestors={false}
               className="text-lg font-semibold sm:text-xl"
+              leafClassName={
+                account.fqn.includes(":")
+                  ? "max-w-[calc(100%-2ch)] shrink-0"
+                  : undefined
+              }
             />
             {creditLimitHistory.length > 0 ? <CreditLimitIndicator /> : null}
             <AccountTypeBadge accountType={account.account_type} />

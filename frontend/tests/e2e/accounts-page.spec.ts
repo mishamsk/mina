@@ -590,6 +590,163 @@ test("accounts tree gives Name column available width before truncating FQNs", a
     .toBe(true);
 });
 
+test("register headers use available width before truncating FQNs", async ({
+  browserName,
+  page,
+}) => {
+  const unique = `${browserName[0]}${Date.now().toString(36).slice(-5)}`;
+  const groupFqn = `banks:${unique}:Home`;
+  const account = await createAccount(page, {
+    fqn: `${groupFqn}:Primary`,
+  });
+  const longGroupFqn = `banks:${unique}:ExtraordinarilyLongHouseholdGroup`;
+  const longAccount = await createAccount(page, {
+    fqn: `${longGroupFqn}:ExtraordinarilyLongPrimaryCheckingAccount`,
+  });
+  const leafDominatedAccount = await createAccount(page, {
+    fqn: `x:${unique}LongPrimaryChecking`,
+  });
+
+  const expectFullPath = async (path: Locator, value: string) => {
+    await expect(path).toHaveText(value);
+    await expect
+      .poll(() =>
+        path.evaluate((element) =>
+          [...element.querySelectorAll<HTMLElement>("span")].every(
+            (span) => span.scrollWidth <= span.clientWidth + 1,
+          ),
+        ),
+      )
+      .toBe(true);
+  };
+  const expectMiddleTruncation = async (path: Locator, value: string) => {
+    const ancestors = path.locator(":scope > span").first();
+    const leaf = path.locator(":scope > span").last();
+    await expect
+      .poll(() =>
+        ancestors.evaluate((element) => ({
+          hasVisibleWidth: element.clientWidth > 1,
+          isTruncated: element.scrollWidth > element.clientWidth + 1,
+        })),
+      )
+      .toEqual({ hasVisibleWidth: true, isTruncated: true });
+    await expect
+      .poll(() =>
+        leaf.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth + 1,
+        ),
+      )
+      .toBe(true);
+    await path.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(value);
+    await page.mouse.move(0, 0);
+  };
+  const expectLongLeafTruncation = async (path: Locator, value: string) => {
+    const ancestors = path.locator(":scope > span").first();
+    const leaf = path.locator(":scope > span").last();
+    await expect
+      .poll(() =>
+        Promise.all(
+          [ancestors, leaf].map((segment) =>
+            segment.evaluate((element) => ({
+              hasVisibleWidth: element.clientWidth > 1,
+              isTruncated: element.scrollWidth > element.clientWidth + 1,
+            })),
+          ),
+        ),
+      )
+      .toEqual([
+        { hasVisibleWidth: true, isTruncated: true },
+        { hasVisibleWidth: true, isTruncated: true },
+      ]);
+    await path.hover();
+    await expect(page.getByRole("tooltip")).toHaveText(value);
+    await page.mouse.move(0, 0);
+  };
+  const expectNoHeaderOverflow = async (header: Locator) => {
+    await expect
+      .poll(() =>
+        header.evaluate(
+          (element) => element.scrollWidth <= element.clientWidth + 1,
+        ),
+      )
+      .toBe(true);
+  };
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(
+    `/accounts/${leafDominatedAccount.account_id}?page=1&pageSize=25`,
+  );
+  const leafDominatedAccountHeader = page.getByTestId("account-header");
+  const leafDominatedAccountPath = leafDominatedAccountHeader
+    .locator(".inline-flex.overflow-hidden.font-mono")
+    .first();
+  await expectFullPath(leafDominatedAccountPath, leafDominatedAccount.fqn);
+  await expectNoHeaderOverflow(leafDominatedAccountHeader);
+
+  await page.goto(
+    `/accounts/group?prefix=${encodeURIComponent(leafDominatedAccount.fqn)}&page=1&pageSize=25`,
+  );
+  const leafDominatedGroupTitle = page.locator("#account-group-title");
+  const leafDominatedGroupPath = leafDominatedGroupTitle
+    .locator(".inline-flex.overflow-hidden.font-mono")
+    .first();
+  const leafDominatedGroupHeader = page
+    .locator("header")
+    .filter({ has: leafDominatedGroupTitle });
+  await expectFullPath(leafDominatedGroupPath, leafDominatedAccount.fqn);
+  await expectNoHeaderOverflow(leafDominatedGroupHeader);
+
+  await page.goto(`/accounts/${account.account_id}?page=1&pageSize=25`);
+  const accountHeader = page.getByTestId("account-header");
+  const accountPath = accountHeader
+    .locator(".inline-flex.overflow-hidden.font-mono")
+    .first();
+  await expectFullPath(accountPath, account.fqn);
+  await expectNoHeaderOverflow(accountHeader);
+
+  await page.setViewportSize({ width: 480, height: 900 });
+  await expectMiddleTruncation(accountPath, account.fqn);
+  await expectNoHeaderOverflow(accountHeader);
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(
+    `/accounts/group?prefix=${encodeURIComponent(groupFqn)}&page=1&pageSize=25`,
+  );
+  const groupTitle = page.locator("#account-group-title");
+  const groupPath = groupTitle
+    .locator(".inline-flex.overflow-hidden.font-mono")
+    .first();
+  const groupHeader = page.locator("header").filter({ has: groupTitle });
+  await expectFullPath(groupPath, groupFqn);
+  await expectNoHeaderOverflow(groupHeader);
+
+  await page.setViewportSize({ width: 480, height: 900 });
+  await expectMiddleTruncation(groupPath, groupFqn);
+  await expectNoHeaderOverflow(groupHeader);
+
+  await page.goto(`/accounts/${longAccount.account_id}?page=1&pageSize=25`);
+  const longAccountHeader = page.getByTestId("account-header");
+  const longAccountPath = longAccountHeader
+    .locator(".inline-flex.overflow-hidden.font-mono")
+    .first();
+  await expectLongLeafTruncation(longAccountPath, longAccount.fqn);
+  await expectNoHeaderOverflow(longAccountHeader);
+
+  await page.goto(
+    `/accounts/group?prefix=${encodeURIComponent(longGroupFqn)}&page=1&pageSize=25`,
+  );
+  const longGroupTitle = page.locator("#account-group-title");
+  const longGroupPath = longGroupTitle
+    .locator(".inline-flex.overflow-hidden.font-mono")
+    .first();
+  const longGroupHeader = page
+    .locator("header")
+    .filter({ has: longGroupTitle });
+  await expectLongLeafTruncation(longGroupPath, longGroupFqn);
+  await expectNoHeaderOverflow(longGroupHeader);
+});
+
 test("register amount cells stay single-line through the collapse ladder", async ({
   page,
 }) => {
