@@ -271,15 +271,20 @@
   }
 
   .transactions-table .transactions-date-column {
-    width: 9%;
+    width: 8%;
+  }
+
+  .transactions-table :is(th, td).transactions-date-column {
+    padding-right: 0.25rem !important;
+    padding-left: 0.25rem !important;
   }
 
   .transactions-table .transactions-description-column {
-    width: 24%;
+    width: 25%;
   }
 
   .transactions-table--bulk-edit .transactions-description-column {
-    width: calc(24% - 2.25rem);
+    width: calc(25% - 2.25rem);
   }
 
   .transactions-table .transactions-category-column {
@@ -312,6 +317,10 @@
   }
 
   @container transactions-table (max-width: 1120px) {
+    .transactions-table .transactions-date-column {
+      width: 8%;
+    }
+
     .transactions-table .transactions-member-column {
       visibility: collapse;
       width: 0;
@@ -328,11 +337,11 @@
     }
 
     .transactions-table .transactions-description-column {
-      width: 21%;
+      width: 22%;
     }
 
     .transactions-table--bulk-edit .transactions-description-column {
-      width: calc(21% - 2.25rem);
+      width: calc(22% - 2.25rem);
     }
 
     .transactions-table .transactions-category-column {
@@ -353,6 +362,10 @@
   }
 
   @container transactions-table (max-width: 940px) {
+    .transactions-table .transactions-date-column {
+      width: 9%;
+    }
+
     .transactions-table .transactions-description-column {
       width: 27%;
     }
@@ -476,7 +489,6 @@
       width: 10%;
     }
 
-    .transactions-table :is(th, td).transactions-date-column,
     .transactions-table :is(th, td).transactions-description-column,
     .transactions-table :is(th, td).transactions-amount-column {
       padding-right: 0.25rem !important;

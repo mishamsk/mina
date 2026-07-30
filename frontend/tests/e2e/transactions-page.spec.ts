@@ -5942,6 +5942,87 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   await expect(page).toHaveURL(/[?&]transaction=\d+(?:&|$)/);
 });
 
+test("transaction layouts balance localized date fit and description width", async ({
+  page,
+}) => {
+  await page.goto("/transactions?page=1&pageSize=100&hideExpected=true");
+  await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
+
+  const table = page.locator("table.transactions-table");
+
+  for (const viewportWidth of [1280, 1445, 1920]) {
+    await page.setViewportSize({ width: viewportWidth, height: 720 });
+    const layout = await table.evaluate((tableElement) => {
+      const rows = Array.from(
+        tableElement.querySelectorAll<HTMLTableRowElement>(
+          "tbody > tr[aria-expanded]",
+        ),
+      );
+      const firstRow = rows[0];
+      const firstDay = firstRow?.querySelector<HTMLElement>(
+        ".transactions-date-column > div",
+      );
+      const tableWidth = tableElement.getBoundingClientRect().width;
+      if (firstDay && tableWidth > 1120) {
+        firstDay.textContent = "31. maijs";
+      }
+      const dateCell = firstRow?.querySelector<HTMLElement>(
+        ".transactions-date-column",
+      );
+      const descriptionCell = firstRow?.querySelector<HTMLElement>(
+        ".transactions-description-column",
+      );
+
+      return {
+        dateContentFits: rows.every((row) =>
+          Array.from(
+            row.querySelectorAll<HTMLElement>(
+              ".transactions-date-column > div",
+            ),
+          ).every((line) => {
+            const style = getComputedStyle(line);
+            const lineHeight = Number.parseFloat(style.lineHeight);
+            return (
+              line.scrollWidth <= line.clientWidth + 1 &&
+              line.getBoundingClientRect().height <= lineHeight + 1
+            );
+          }),
+        ),
+        dateRatio: (dateCell?.getBoundingClientRect().width ?? 0) / tableWidth,
+        descriptionRatio:
+          (descriptionCell?.getBoundingClientRect().width ?? 0) / tableWidth,
+        tableWidth,
+      };
+    });
+
+    expect(layout.dateContentFits).toBe(true);
+
+    if (layout.tableWidth > 1120) {
+      expect(layout.dateRatio).toBeLessThanOrEqual(0.081);
+      expect(layout.descriptionRatio).toBeGreaterThanOrEqual(0.249);
+    } else {
+      expect(layout.tableWidth).toBeGreaterThan(940);
+      expect(layout.dateRatio).toBeLessThanOrEqual(0.081);
+      expect(layout.descriptionRatio).toBeGreaterThanOrEqual(0.219);
+    }
+  }
+
+  await page.setViewportSize({ width: 1280, height: 720 });
+  const descriptionLines = table.locator(
+    '[data-testid="transaction-line-title"], [data-testid="transaction-line-memo"]',
+  );
+  const truncatedLineIndex = await descriptionLines.evaluateAll((lines) =>
+    lines.findIndex((line) => line.scrollWidth > line.clientWidth),
+  );
+  expect(truncatedLineIndex).toBeGreaterThanOrEqual(0);
+
+  const truncatedLine = descriptionLines.nth(truncatedLineIndex);
+  const fullText = (await truncatedLine.textContent())?.trim() ?? "";
+  await expect(truncatedLine).toHaveCSS("text-overflow", "ellipsis");
+  await truncatedLine.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(fullText);
+});
+
 test("mixed more-parts indicators stay inside the amount column where member first appears", async ({
   page,
 }, testInfo) => {
