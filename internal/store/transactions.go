@@ -13,7 +13,6 @@ import (
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
 	"github.com/mishamsk/mina/internal/services/categories"
-	"github.com/mishamsk/mina/internal/services/recurring"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/values"
 )
@@ -173,12 +172,12 @@ func (s *TransactionStore) MonthTotals(ctx context.Context, monthRange transacti
 		`WITH classified_records AS (
 	SELECT
 		CASE
-			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`) THEN 'spend'
-			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`) THEN 'income'
+			WHEN c.economic_intent = CAST('EXPENSE' AS `+s.db.accountingName("category_economic_intent")+`) THEN 'spend'
+			WHEN c.economic_intent = CAST('INCOME' AS `+s.db.accountingName("category_economic_intent")+`) THEN 'income'
 			ELSE NULL
 		END AS total_kind,
 		CASE
-			WHEN c.economic_intent = CAST(? AS `+s.db.accountingName("category_economic_intent")+`) THEN -jr.amount_usd
+			WHEN c.economic_intent = CAST('INCOME' AS `+s.db.accountingName("category_economic_intent")+`) THEN -jr.amount_usd
 			ELSE jr.amount_usd
 		END AS signed_amount_usd,
 		jr.amount_usd
@@ -188,9 +187,9 @@ func (s *TransactionStore) MonthTotals(ctx context.Context, monthRange transacti
 	JOIN `+s.db.accountingName("account")+` a ON a.account_id = jr.account_id
 	WHERE jr.tombstoned_at IS NULL
 	  AND tx.tombstoned_at IS NULL
-	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
-	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
-	  AND a.account_type = CAST(? AS `+s.db.accountingName("account_type")+`)
+	  AND jr.posting_status <> CAST('CANCELLED' AS `+s.db.accountingName("posting_status")+`)
+	  AND jr.posting_status <> CAST('EXPECTED' AS `+s.db.accountingName("posting_status")+`)
+	  AND a.account_type = CAST('FLOW' AS `+s.db.accountingName("account_type")+`)
 	  AND tx.initiated_date >= ?
 	  AND tx.initiated_date < ?
 )
@@ -207,12 +206,6 @@ SELECT
 	COALESCE(CAST(SUM(CASE WHEN total_kind = 'income' AND amount_usd IS NULL THEN 1 ELSE 0 END) AS BIGINT), 0) AS income_unconverted_count
 FROM classified_records
 WHERE total_kind IS NOT NULL`,
-		enumValue(categories.CategoryEconomicIntentExpense),
-		enumValue(categories.CategoryEconomicIntentIncome),
-		enumValue(categories.CategoryEconomicIntentIncome),
-		enumValue(transactions.PostingStatusCancelled),
-		enumValue(transactions.PostingStatusExpected),
-		enumValue(accounts.AccountTypeFlow),
 		civilDateArg(monthRange.Start),
 		civilDateArg(monthRange.End),
 	)
@@ -376,8 +369,7 @@ func (s *TransactionStore) transactionListPredicate(opts transactions.ListOption
 WHERE tx.tombstoned_at IS NULL`
 	args := []any{}
 	if !slices.Contains(opts.PostingStatuses, transactions.PostingStatusExpected) {
-		query += " AND NOT " + s.transactionListRecordExists("jr.posting_status = CAST(? AS "+s.db.accountingName("posting_status")+")")
-		args = append(args, enumValue(transactions.PostingStatusExpected))
+		query += " AND NOT " + s.transactionListRecordExists("jr.posting_status = CAST('EXPECTED' AS "+s.db.accountingName("posting_status")+")")
 	}
 	if opts.InitiatedDateFrom != nil {
 		query += " AND tx.initiated_date >= ?"
@@ -719,9 +711,8 @@ JOIN `+s.db.accountingName("recurring_occurrence")+` AS o
   ON o.recurring_occurrence_id = t.recurring_occurrence_id
 WHERE t.transaction_id = ?
   AND t.tombstoned_at IS NULL
-  AND o.status = CAST(? AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
+  AND o.status = CAST('EXPECTED' AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
 		id,
-		enumValue(recurring.OccurrenceStatusExpected),
 	).Scan(&count); err != nil {
 		return false, fmt.Errorf("check expected recurring occurrence transaction: %w", err)
 	}
@@ -747,8 +738,8 @@ JOIN `+s.db.accountingName("recurring_occurrence")+` AS o
 WHERE jr.record_id IN (`+placeholders(len(recordIDs))+`)
   AND jr.tombstoned_at IS NULL
   AND t.tombstoned_at IS NULL
-  AND o.status = CAST(? AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
-		append(int64Args(recordIDs), enumValue(recurring.OccurrenceStatusExpected))...,
+  AND o.status = CAST('EXPECTED' AS `+s.db.accountingName("recurring_occurrence_status")+`)`,
+		int64Args(recordIDs)...,
 	).Scan(&count); err != nil {
 		return false, fmt.Errorf("check expected recurring occurrence records: %w", err)
 	}
@@ -778,14 +769,12 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		if _, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("journal_record")+`
-SET posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`),
+SET posting_status = CAST('CANCELLED' AS `+s.db.accountingName("posting_status")+`),
     updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ?
   AND tombstoned_at IS NULL
-  AND posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)`,
-			enumValue(transactions.PostingStatusCancelled),
+  AND posting_status <> CAST('CANCELLED' AS `+s.db.accountingName("posting_status")+`)`,
 			id,
-			enumValue(transactions.PostingStatusCancelled),
 		); err != nil {
 			return fmt.Errorf("cancel transaction journal records: %w", err)
 		}
@@ -815,8 +804,8 @@ func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.
 		withQuery = `WITH running_balances AS (
 	SELECT jr.record_id,
 	       SUM(CAST(CASE
-	           WHEN jr.posting_status <> CAST(? AS ` + s.db.accountingName("posting_status") + `)
-	                AND jr.posting_status <> CAST(? AS ` + s.db.accountingName("posting_status") + `) THEN jr.amount
+	           WHEN jr.posting_status <> CAST('CANCELLED' AS ` + s.db.accountingName("posting_status") + `)
+	                AND jr.posting_status <> CAST('EXPECTED' AS ` + s.db.accountingName("posting_status") + `) THEN jr.amount
 	           ELSE CAST(0 AS DECIMAL(18,8))
 	       END AS DECIMAL(18,8))) OVER (
 	           PARTITION BY jr.account_id, jr.currency
@@ -830,7 +819,7 @@ func (s *TransactionStore) SearchRecords(ctx context.Context, opts transactions.
 `
 		runningBalanceSelect = "rb.running_balance"
 		runningBalanceJoin = "JOIN running_balances rb ON rb.record_id = jr.record_id"
-		runningBalanceArgs = append(runningBalanceArgs, enumValue(transactions.PostingStatusCancelled), enumValue(transactions.PostingStatusExpected), *opts.AccountID)
+		runningBalanceArgs = append(runningBalanceArgs, *opts.AccountID)
 	}
 
 	fromQuery := `FROM ` + s.db.accountingName("journal_record") + ` jr
@@ -840,8 +829,7 @@ LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.catego
 	whereQuery := `WHERE jr.tombstoned_at IS NULL AND tx.tombstoned_at IS NULL`
 	args := []any{}
 	if opts.PostingStatus == nil && !opts.IncludeExpected {
-		whereQuery += " AND jr.posting_status <> CAST(? AS " + s.db.accountingName("posting_status") + ")"
-		args = append(args, enumValue(transactions.PostingStatusExpected))
+		whereQuery += " AND jr.posting_status <> CAST('EXPECTED' AS " + s.db.accountingName("posting_status") + ")"
 	}
 	if opts.AccountID != nil {
 		whereQuery += " AND jr.account_id = ?"
@@ -865,12 +853,11 @@ LEFT JOIN ` + s.db.accountingName("category") + ` c ON c.category_id = jr.catego
 	}
 	if opts.PostingStatus != nil {
 		if opts.IncludeExpected && *opts.PostingStatus != transactions.PostingStatusExpected {
-			whereQuery += " AND (jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ") OR jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + "))"
-			args = append(args, enumValue(*opts.PostingStatus), enumValue(transactions.PostingStatusExpected))
+			whereQuery += " AND (jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ") OR jr.posting_status = CAST('EXPECTED' AS " + s.db.accountingName("posting_status") + "))"
 		} else {
 			whereQuery += " AND jr.posting_status = CAST(? AS " + s.db.accountingName("posting_status") + ")"
-			args = append(args, enumValue(*opts.PostingStatus))
 		}
+		args = append(args, enumValue(*opts.PostingStatus))
 	}
 	if opts.ReconciliationStatus != nil {
 		whereQuery += " AND jr.reconciliation_status = CAST(? AS " + s.db.accountingName("reconciliation_status") + ")"

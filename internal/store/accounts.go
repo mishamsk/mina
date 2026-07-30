@@ -11,7 +11,6 @@ import (
 	duckdb "github.com/duckdb/duckdb-go/v2"
 	"github.com/mishamsk/mina/internal/services"
 	"github.com/mishamsk/mina/internal/services/accounts"
-	"github.com/mishamsk/mina/internal/services/transactions"
 )
 
 // AccountStore persists accounts.
@@ -143,12 +142,12 @@ WHERE 1 = 1`
 // ListBalances returns active balance-account balances grouped by currency.
 func (s *AccountStore) ListBalances(ctx context.Context, opts accounts.BalanceListOptions) ([]accounts.AccountBalance, error) {
 	filter := `WHERE a.account_type IN (
-	CAST(? AS ` + s.db.accountingName("account_type") + `),
-	CAST(? AS ` + s.db.accountingName("account_type") + `)
+	CAST('OWNED' AS ` + s.db.accountingName("account_type") + `),
+	CAST('PARTY' AS ` + s.db.accountingName("account_type") + `)
 )
   AND a.tombstoned_at IS NULL
   AND COALESCE(ar.currency, a.currency) IS NOT NULL`
-	args := []any{enumValue(accounts.AccountTypeOwned), enumValue(accounts.AccountTypeParty)}
+	args := []any{}
 	if !opts.IncludeHidden {
 		filter += " AND a.is_hidden = 0"
 	}
@@ -165,8 +164,8 @@ func (s *AccountStore) ListBalances(ctx context.Context, opts accounts.BalanceLi
 	JOIN `+s.db.accountingName("transaction")+` tx ON tx.transaction_id = jr.transaction_id
 	WHERE jr.tombstoned_at IS NULL
 	  AND tx.tombstoned_at IS NULL
-	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
-	  AND jr.posting_status <> CAST(? AS `+s.db.accountingName("posting_status")+`)
+	  AND jr.posting_status <> CAST('CANCELLED' AS `+s.db.accountingName("posting_status")+`)
+	  AND jr.posting_status <> CAST('EXPECTED' AS `+s.db.accountingName("posting_status")+`)
 )
 SELECT a.account_id,
        COALESCE(ar.currency, a.currency) AS currency,
@@ -176,7 +175,7 @@ SELECT a.account_id,
            ELSE CAST(0 AS DECIMAL(18,8))
        END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS current_balance_usd,
        COALESCE(CAST(SUM(CASE
-           WHEN ar.posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`) THEN ar.amount
+           WHEN ar.posting_status = CAST('POSTED' AS `+s.db.accountingName("posting_status")+`) THEN ar.amount
            ELSE CAST(0 AS DECIMAL(18,8))
        END) AS DECIMAL(18,8)), CAST(0 AS DECIMAL(18,8))) AS posted_balance,
        COALESCE(CAST(SUM(CASE
@@ -188,7 +187,7 @@ LEFT JOIN active_records ar ON ar.account_id = a.account_id
 `+filter+`
 GROUP BY a.account_id, COALESCE(ar.currency, a.currency)
 ORDER BY a.account_id ASC, currency ASC`,
-		append([]any{enumValue(transactions.PostingStatusCancelled), enumValue(transactions.PostingStatusExpected), enumValue(transactions.PostingStatusPosted)}, args...)...,
+		args...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list account balances: %w", err)

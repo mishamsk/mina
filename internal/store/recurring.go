@@ -533,17 +533,14 @@ func (s *RecurringStore) ConfirmOccurrence(ctx context.Context, id int64) (recur
 		result, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("journal_record")+`
-SET posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`),
+SET posting_status = CAST('POSTED' AS `+s.db.accountingName("posting_status")+`),
     posted_date = timezone('UTC', CURRENT_TIMESTAMP),
     updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ?
   AND tombstoned_at IS NULL
-  AND posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`)
-  AND source = CAST(? AS `+s.db.accountingName("source")+`)`,
-			enumValue(transactions.PostingStatusPosted),
+  AND posting_status = CAST('EXPECTED' AS `+s.db.accountingName("posting_status")+`)
+  AND source = CAST('RECURRING_TEMPLATE' AS `+s.db.accountingName("source")+`)`,
 			*current.GeneratedTransactionID,
-			enumValue(transactions.PostingStatusExpected),
-			enumValue(transactions.SourceRecurringTemplate),
 		)
 		if err != nil {
 			return fmt.Errorf("confirm recurring occurrence journal records: %w", err)
@@ -558,11 +555,10 @@ WHERE transaction_id = ?
 		if _, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("recurring_occurrence")+`
-SET status = CAST(? AS `+s.db.accountingName("recurring_occurrence_status")+`),
+SET status = CAST('CONFIRMED' AS `+s.db.accountingName("recurring_occurrence_status")+`),
     reviewed_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE recurring_occurrence_id = ?`,
-			enumValue(recurring.OccurrenceStatusConfirmed),
 			id,
 		); err != nil {
 			return fmt.Errorf("confirm recurring occurrence: %w", err)
@@ -603,9 +599,8 @@ SET tombstoned_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE transaction_id = ?
   AND tombstoned_at IS NULL
-  AND source = CAST(? AS `+s.db.accountingName("source")+`)`,
+  AND source = CAST('RECURRING_TEMPLATE' AS `+s.db.accountingName("source")+`)`,
 			*current.GeneratedTransactionID,
-			enumValue(transactions.SourceRecurringTemplate),
 		)
 		if err != nil {
 			return fmt.Errorf("dismiss recurring occurrence journal records: %w", err)
@@ -637,11 +632,10 @@ WHERE transaction_id = ? AND tombstoned_at IS NULL`,
 		if _, err := tx.ExecContext(
 			ctx,
 			`UPDATE `+s.db.accountingName("recurring_occurrence")+`
-SET status = CAST(? AS `+s.db.accountingName("recurring_occurrence_status")+`),
+SET status = CAST('DISMISSED' AS `+s.db.accountingName("recurring_occurrence_status")+`),
     reviewed_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE recurring_occurrence_id = ?`,
-			enumValue(recurring.OccurrenceStatusDismissed),
 			id,
 		); err != nil {
 			return fmt.Errorf("dismiss recurring occurrence: %w", err)
@@ -895,12 +889,11 @@ func insertDeferredOccurrence(
 		`INSERT INTO `+db.accountingName("recurring_occurrence")+` (
 	recurring_definition_id, scheduled_date, status, materialized_definition_version, reviewed_at
 )
-VALUES (?, ?, CAST(? AS `+db.accountingName("recurring_occurrence_status")+`), ?, CURRENT_TIMESTAMP)
+VALUES (?, ?, CAST('DEFERRED' AS `+db.accountingName("recurring_occurrence_status")+`), ?, CURRENT_TIMESTAMP)
 RETURNING recurring_occurrence_id, recurring_definition_id, scheduled_date, CAST(status AS VARCHAR), materialized_definition_version,
 	materialized_at, reviewed_at, CAST(NULL AS BIGINT), created_at, updated_at`,
 		definitionID,
 		civilDateArg(scheduledDate),
-		enumValue(recurring.OccurrenceStatusDeferred),
 		definitionVersion,
 	), definitionFQN)
 	if err != nil {

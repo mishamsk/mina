@@ -458,13 +458,10 @@ JOIN `+s.db.accountingName("journal_record")+` AS jr
 WHERE t.tombstoned_at IS NULL
   AND t.recurring_occurrence_id IS NULL
   AND jr.tombstoned_at IS NULL
-  AND jr.posting_status = CAST(? AS `+s.db.accountingName("posting_status")+`)
-  AND jr.source = CAST(? AS `+s.db.accountingName("source")+`)
+  AND jr.posting_status = CAST('EXPECTED' AS `+s.db.accountingName("posting_status")+`)
+  AND jr.source = CAST('RECURRING_TEMPLATE' AS `+s.db.accountingName("source")+`)
 GROUP BY t.transaction_id
-ORDER BY t.transaction_id`,
-		enumValue(transactions.PostingStatusExpected),
-		enumValue(transactions.SourceRecurringTemplate),
-	)
+ORDER BY t.transaction_id`)
 	if err != nil {
 		return nil, fmt.Errorf("check expected transaction occurrence references: %w", err)
 	}
