@@ -2539,6 +2539,12 @@ type SearchAccountJournalRecordsParamsSort string
 // SearchAccountJournalRecordsParamsSortDir defines parameters for SearchAccountJournalRecords.
 type SearchAccountJournalRecordsParamsSortDir string
 
+// SeedDemoParams defines parameters for SeedDemo.
+type SeedDemoParams struct {
+	// AnchorDate Date anchoring the demo history and recurring activity; defaults to the current local civil date.
+	AnchorDate *openapi_types.Date `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+}
+
 // ListBackgroundOperationRunEnvelopesParams defines parameters for ListBackgroundOperationRunEnvelopes.
 type ListBackgroundOperationRunEnvelopesParams struct {
 	// OperationId Filter run history to one registered background-operation type.
@@ -3181,7 +3187,7 @@ type ClientInterface interface {
 	SearchAccountJournalRecords(ctx context.Context, accountId int64, params *SearchAccountJournalRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SeedDemo request
-	SeedDemo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	SeedDemo(ctx context.Context, params *SeedDemoParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListBackgroundOperations request
 	ListBackgroundOperations(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3675,8 +3681,8 @@ func (c *Client) SearchAccountJournalRecords(ctx context.Context, accountId int6
 	return c.Client.Do(req)
 }
 
-func (c *Client) SeedDemo(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSeedDemoRequest(c.Server)
+func (c *Client) SeedDemo(ctx context.Context, params *SeedDemoParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSeedDemoRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5949,7 +5955,7 @@ func NewSearchAccountJournalRecordsRequest(server string, accountId int64, param
 }
 
 // NewSeedDemoRequest generates requests for SeedDemo
-func NewSeedDemoRequest(server string) (*http.Request, error) {
+func NewSeedDemoRequest(server string, params *SeedDemoParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -5965,6 +5971,33 @@ func NewSeedDemoRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.AnchorDate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "anchor_date", *params.AnchorDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
@@ -10214,7 +10247,7 @@ type ClientWithResponsesInterface interface {
 	SearchAccountJournalRecordsWithResponse(ctx context.Context, accountId int64, params *SearchAccountJournalRecordsParams, reqEditors ...RequestEditorFn) (*SearchAccountJournalRecordsResponse, error)
 
 	// SeedDemoWithResponse request
-	SeedDemoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SeedDemoResponse, error)
+	SeedDemoWithResponse(ctx context.Context, params *SeedDemoParams, reqEditors ...RequestEditorFn) (*SeedDemoResponse, error)
 
 	// ListBackgroundOperationsWithResponse request
 	ListBackgroundOperationsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListBackgroundOperationsResponse, error)
@@ -13446,8 +13479,8 @@ func (c *ClientWithResponses) SearchAccountJournalRecordsWithResponse(ctx contex
 }
 
 // SeedDemoWithResponse request returning *SeedDemoResponse
-func (c *ClientWithResponses) SeedDemoWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*SeedDemoResponse, error) {
-	rsp, err := c.SeedDemo(ctx, reqEditors...)
+func (c *ClientWithResponses) SeedDemoWithResponse(ctx context.Context, params *SeedDemoParams, reqEditors ...RequestEditorFn) (*SeedDemoResponse, error) {
+	rsp, err := c.SeedDemo(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

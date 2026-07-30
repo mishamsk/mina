@@ -436,7 +436,7 @@ test("tag delete row actions respect the API deleteability signal", async ({
       listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
     ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const transactionResponse = await page.request.post(
     "/api/transactions/spend",
@@ -670,7 +670,7 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   await page.goto(`/tags?q=${encodeURIComponent(staleFqn)}`);
   const staleRow = page

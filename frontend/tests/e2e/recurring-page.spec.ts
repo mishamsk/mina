@@ -86,10 +86,10 @@ const completeEditor = async (page: Page, fqn: string) => {
   const records = editor.getByLabel("Definition records").locator("section");
   const first = records.nth(0);
   const second = records.nth(1);
-  await first.getByLabel("Account").fill("checking:Chase:Joint");
+  await first.getByLabel("Account").fill("bank:Chase:joint_checking");
   await first.getByLabel("Account").press("Enter");
   await first.getByLabel("Amount").fill("-12.34");
-  await second.getByLabel("Account").fill("merchant:Books");
+  await second.getByLabel("Account").fill("merchant:PowellsBooks");
   await second.getByLabel("Account").press("Enter");
   await second.getByLabel("Amount").fill("12.34");
   await second.getByLabel("Category").fill("Entertainment:Books");

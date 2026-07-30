@@ -193,7 +193,7 @@ const createSpend = async (
     "accounts",
   );
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const response = await page.request.post("/api/transactions/spend", {
     data: {
       amount: "12.34",

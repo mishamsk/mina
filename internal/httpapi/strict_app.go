@@ -6,8 +6,8 @@ import (
 	"github.com/mishamsk/mina/internal/httpapi/openapi"
 )
 
-func (s *strictServer) SeedDemo(ctx context.Context, _ openapi.SeedDemoRequestObject) (openapi.SeedDemoResponseObject, error) {
-	summary, err := s.deps.Demo.Seed(ctx)
+func (s *strictServer) SeedDemo(ctx context.Context, request openapi.SeedDemoRequestObject) (openapi.SeedDemoResponseObject, error) {
+	summary, err := s.deps.Demo.Seed(ctx, nullableCivilDateFromOpenAPI(request.Params.AnchorDate))
 	if err != nil {
 		return nil, err
 	}

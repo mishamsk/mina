@@ -308,7 +308,7 @@ test("shell renders and navigates between routed pages", async ({ page }) => {
   await featuredIcon.hover();
   const featuredTooltip = page
     .getByRole("tooltip")
-    .filter({ hasText: "Joint" });
+    .filter({ hasText: "joint_checking" });
   await expect(featuredTooltip).toContainText("Sapphire");
   await expect(featuredTooltip).toContainText("$");
   await page.mouse.move(0, 0);

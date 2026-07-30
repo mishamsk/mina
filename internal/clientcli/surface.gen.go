@@ -3106,8 +3106,17 @@ func Operations() []Operation {
 			Summary:     "Seed demo data into the opened app.",
 			Description: "",
 			CLI:         CLIOperation{Area: "demo", Name: "seed"},
-			Input:       InputDescriptor{},
-			Invoke:      invokeSeedDemo,
+			Input: InputDescriptor{
+				Query: []ParameterDescriptor{
+					{
+						Name:        "anchor_date",
+						Type:        "string",
+						Description: "Date anchoring the demo history and recurring activity; defaults to the current local civil date.",
+						Required:    false,
+					},
+				},
+			},
+			Invoke: invokeSeedDemo,
 		},
 		{
 			ID:          "setAccountHiddenByPath",
@@ -7786,10 +7795,31 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 }
 
 func invokeSeedDemo(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, nil, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"anchor_date"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
-	response, err := client.SeedDemoWithResponse(ctx)
+	params := &httpclient.SeedDemoParams{}
+	queryValues0, querySupplied0 := input.Query["anchor_date"]
+	if querySupplied0 {
+		if len(queryValues0) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues0)),
+			}
+		}
+		var queryValue0 openapi_types.Date
+		if err := parseInvocationValue(queryValues0[0], true, &queryValue0); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "anchor_date",
+				Value:    queryValues0[0],
+				Err:      err,
+			}
+		}
+		params.AnchorDate = &queryValue0
+	}
+	response, err := client.SeedDemoWithResponse(ctx, params)
 	if err != nil {
 		return InvocationResult{}, err
 	}

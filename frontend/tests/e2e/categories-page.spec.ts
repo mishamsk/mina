@@ -453,7 +453,7 @@ test("category delete row actions respect the API deleteability signal", async (
       listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const transactionResponse = await page.request.post(
     "/api/transactions/spend",
     {
@@ -702,7 +702,7 @@ test("categories side panel creates edits and deletes categories with conflict f
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   await page.goto(`/categories?q=${encodeURIComponent(staleFqn)}`);
   const staleRow = page
     .getByTestId("categories-tree-row")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,10 +13,11 @@ import (
 )
 
 func TestSeedDemoThroughREST(t *testing.T) {
-	clock := apptest.NewFakeClock(time.Date(2026, 7, 15, 12, 0, 0, 0, time.Local))
+	clock := apptest.NewFakeClock(time.Date(2026, 7, 14, 12, 0, 0, 0, time.Local))
 	client := newSharedClient(t, apptest.WithAccountingSchema("app_admin_demo_seed"), apptest.WithClock(clock))
+	anchorDate := apptest.Date("2026-07-15")
 
-	seeded, err := client.REST().SeedDemoWithResponse(context.Background())
+	seeded, err := client.REST().SeedDemoWithResponse(context.Background(), &httpclient.SeedDemoParams{AnchorDate: &anchorDate})
 	if err != nil {
 		t.Fatalf("seed demo request: %v", err)
 	}
@@ -25,9 +27,185 @@ func TestSeedDemoThroughREST(t *testing.T) {
 	if seeded.JSON200.Transactions < 100 {
 		t.Fatalf("seeded transactions = %d, want at least 100", seeded.JSON200.Transactions)
 	}
-	assertSeededRESTCounts(t, client, *seeded.JSON200)
-	assertSeededRecurringDemoData(t, client, *seeded.JSON200, clock.Now())
+	assertSeededRESTCounts(t, client, *seeded.JSON200, anchorDate.Time)
+	assertSeededRecurringDemoData(t, client, *seeded.JSON200, anchorDate.Time)
 	assertSeededFeaturedBalanceAccounts(t, client)
+	assertSeededPlausibleBalances(t, client)
+}
+
+func TestSeedDemoThroughRESTDefaultsToClockLocalDate(t *testing.T) {
+	localZone := time.FixedZone("UTC-4", -4*60*60)
+	clock := apptest.NewFakeClock(time.Date(2026, 7, 14, 23, 30, 0, 0, localZone))
+	client := newSharedClient(t, apptest.WithAccountingSchema("app_admin_demo_seed_clock_anchor"), apptest.WithClock(clock))
+
+	seeded, err := client.REST().SeedDemoWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("seed demo request: %v", err)
+	}
+	if seeded.StatusCode() != http.StatusOK {
+		t.Fatalf("seed demo status = %d, want %d; body %s", seeded.StatusCode(), http.StatusOK, seeded.Body)
+	}
+
+	transactions, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list seeded transactions request: %v", err)
+	}
+	if transactions.StatusCode() != http.StatusOK {
+		t.Fatalf("list seeded transactions status = %d, want %d; body %s", transactions.StatusCode(), http.StatusOK, transactions.Body)
+	}
+	earliestDate := clock.Now()
+	latestDate := clock.Now().AddDate(0, -6, 0)
+	for _, transaction := range transactions.JSON200.Transactions {
+		if transaction.InitiatedDate.Before(earliestDate) {
+			earliestDate = transaction.InitiatedDate.Time
+		}
+		if transaction.InitiatedDate.After(latestDate) {
+			latestDate = transaction.InitiatedDate.Time
+		}
+	}
+	if got, want := earliestDate.Format("2006-01-02"), "2026-01-14"; got != want {
+		t.Fatalf("earliest seeded transaction date = %s, want %s", got, want)
+	}
+	if got, want := latestDate.Format("2006-01-02"), "2026-07-14"; got != want {
+		t.Fatalf("latest seeded transaction date = %s, want local clock date %s", got, want)
+	}
+}
+
+func TestSeedDemoRejectsUnsupportedBoundaryAnchor(t *testing.T) {
+	client := newSharedClient(t, apptest.WithAccountingSchema("app_admin_demo_seed_boundary_anchor"))
+	anchorDate := apptest.Date("0000-01-01")
+
+	seeded, err := client.REST().SeedDemoWithResponse(context.Background(), &httpclient.SeedDemoParams{AnchorDate: &anchorDate})
+	if err != nil {
+		t.Fatalf("seed demo request: %v", err)
+	}
+	if seeded.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("seed demo status = %d, want %d; body %s", seeded.StatusCode(), http.StatusBadRequest, seeded.Body)
+	}
+}
+
+func TestSeedDemoMonthEndAnchorCoversSixCalendarMonths(t *testing.T) {
+	client := newSharedClient(t, apptest.WithAccountingSchema("app_admin_demo_seed_month_end_anchor"))
+	anchorDate := apptest.Date("2026-08-31")
+
+	seeded, err := client.REST().SeedDemoWithResponse(context.Background(), &httpclient.SeedDemoParams{AnchorDate: &anchorDate})
+	if err != nil {
+		t.Fatalf("seed demo request: %v", err)
+	}
+	if seeded.StatusCode() != http.StatusOK {
+		t.Fatalf("seed demo status = %d, want %d; body %s", seeded.StatusCode(), http.StatusOK, seeded.Body)
+	}
+
+	transactions, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list seeded transactions request: %v", err)
+	}
+	if transactions.StatusCode() != http.StatusOK {
+		t.Fatalf("list seeded transactions status = %d, want %d; body %s", transactions.StatusCode(), http.StatusOK, transactions.Body)
+	}
+	earliestDate := anchorDate.Time
+	var latestWeeklyTransferDate time.Time
+	var mortgageDates []string
+	for _, transaction := range transactions.JSON200.Transactions {
+		if transaction.InitiatedDate.Before(earliestDate) {
+			earliestDate = transaction.InitiatedDate.Time
+		}
+		for _, record := range transaction.Records {
+			if record.Memo != nil && *record.Memo == "Weekly savings transfer" && transaction.InitiatedDate.After(latestWeeklyTransferDate) {
+				latestWeeklyTransferDate = transaction.InitiatedDate.Time
+			}
+			if record.Memo != nil && *record.Memo == "Mortgage payment" {
+				mortgageDates = append(mortgageDates, transaction.InitiatedDate.Format("2006-01-02"))
+			}
+		}
+	}
+	if got, want := earliestDate.Format("2006-01-02"), "2026-02-28"; got != want {
+		t.Fatalf("earliest seeded transaction date = %s, want %s", got, want)
+	}
+	sort.Strings(mortgageDates)
+	assertStringSlicesEqual(
+		t,
+		"posted mortgage history dates",
+		mortgageDates,
+		[]string{"2026-03-05", "2026-04-05", "2026-05-05", "2026-06-05"},
+	)
+
+	definitions, err := client.REST().ListRecurringDefinitionsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list seeded recurring definitions request: %v", err)
+	}
+	if definitions.StatusCode() != http.StatusOK {
+		t.Fatalf("list seeded recurring definitions status = %d, want %d; body %s", definitions.StatusCode(), http.StatusOK, definitions.Body)
+	}
+	for _, definition := range definitions.JSON200.RecurringDefinitions {
+		if definition.Fqn != "Savings:WeeklyTransfer" {
+			continue
+		}
+		if got := definition.AnchorDate.Sub(latestWeeklyTransferDate); got != 7*24*time.Hour {
+			t.Fatalf("weekly transfer definition follows historical transfer by %s, want %s", got, 7*24*time.Hour)
+		}
+		return
+	}
+	t.Fatal("seeded demo missing weekly transfer definition")
+}
+
+func TestSeedDemoAnchorsActivityAndTripTagsAcrossYearBoundary(t *testing.T) {
+	client := newSharedClient(t, apptest.WithAccountingSchema("app_admin_demo_seed_trip_tag_years"))
+	anchorDate := apptest.Date("2030-01-10")
+
+	seeded, err := client.REST().SeedDemoWithResponse(context.Background(), &httpclient.SeedDemoParams{AnchorDate: &anchorDate})
+	if err != nil {
+		t.Fatalf("seed demo request: %v", err)
+	}
+	if seeded.StatusCode() != http.StatusOK {
+		t.Fatalf("seed demo status = %d, want %d; body %s", seeded.StatusCode(), http.StatusOK, seeded.Body)
+	}
+
+	transactions, err := client.REST().ListTransactionsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list seeded transactions request: %v", err)
+	}
+	if transactions.StatusCode() != http.StatusOK {
+		t.Fatalf("list seeded transactions status = %d, want %d; body %s", transactions.StatusCode(), http.StatusOK, transactions.Body)
+	}
+	earliestDate := anchorDate.Time
+	latestDate := sixCalendarMonthsBefore(anchorDate.Time)
+	for _, transaction := range transactions.JSON200.Transactions {
+		if transaction.InitiatedDate.Before(earliestDate) {
+			earliestDate = transaction.InitiatedDate.Time
+		}
+		if transaction.InitiatedDate.After(latestDate) {
+			latestDate = transaction.InitiatedDate.Time
+		}
+	}
+	if got, want := earliestDate.Format("2006-01-02"), "2029-07-10"; got != want {
+		t.Fatalf("earliest seeded transaction date = %s, want %s", got, want)
+	}
+	if got, want := latestDate.Format("2006-01-02"), "2030-01-10"; got != want {
+		t.Fatalf("latest seeded transaction date = %s, want %s", got, want)
+	}
+
+	tags, err := client.REST().ListTagsWithResponse(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list seeded tags request: %v", err)
+	}
+	if tags.StatusCode() != http.StatusOK {
+		t.Fatalf("list seeded tags status = %d, want %d; body %s", tags.StatusCode(), http.StatusOK, tags.Body)
+	}
+	tagsByFQN := make(map[string]struct{}, len(tags.JSON200.Tags))
+	for _, tag := range tags.JSON200.Tags {
+		tagsByFQN[tag.Fqn] = struct{}{}
+	}
+	for _, fqn := range []string{"Trips:Vacation:Lisbon2029", "Trips:Vacation:Tokyo2029"} {
+		if _, ok := tagsByFQN[fqn]; !ok {
+			t.Fatalf("seeded demo missing tag %q", fqn)
+		}
+	}
+	for _, fqn := range []string{"Trips:Vacation:Lisbon2030", "Trips:Vacation:Tokyo2030"} {
+		if _, ok := tagsByFQN[fqn]; ok {
+			t.Fatalf("seeded demo retained stale tag %q", fqn)
+		}
+	}
 }
 
 func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
@@ -67,7 +245,7 @@ func TestSeedDemoRefreshesWarmedReferenceCaches(t *testing.T) {
 		t.Fatalf("warm reference cache status = %d, want %d; body %s", warm.StatusCode(), http.StatusBadRequest, warm.Body)
 	}
 
-	seeded, err := client.REST().SeedDemoWithResponse(ctx)
+	seeded, err := client.REST().SeedDemoWithResponse(ctx, nil)
 	if err != nil {
 		t.Fatalf("seed demo request: %v", err)
 	}
@@ -122,7 +300,7 @@ func TestSeedDemoRefreshesWarmedNeededCurrencyCache(t *testing.T) {
 
 	triggerAndWaitForExchangeRateLoad(t, client)
 
-	seeded, err := client.REST().SeedDemoWithResponse(ctx)
+	seeded, err := client.REST().SeedDemoWithResponse(ctx, nil)
 	if err != nil {
 		t.Fatalf("seed demo request: %v", err)
 	}
@@ -135,7 +313,7 @@ func TestSeedDemoRefreshesWarmedNeededCurrencyCache(t *testing.T) {
 	assertExchangeRateRateOnDate(t, client, "USD", "EUR", "2026-06-01", "1.15000000")
 }
 
-func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpclient.DemoSeedResponse) {
+func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpclient.DemoSeedResponse, anchorDate time.Time) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -221,7 +399,7 @@ func assertSeededRESTCounts(t *testing.T, client *apptest.Client, seeded httpcli
 	if len(transactions.JSON200.Transactions) != seeded.Transactions {
 		t.Fatalf("listed transactions = %d, want %d", len(transactions.JSON200.Transactions), seeded.Transactions)
 	}
-	assertDemoSemanticCoverage(t, accounts.JSON200.Accounts, categories.JSON200.Categories, transactions.JSON200.Transactions)
+	assertDemoSemanticCoverage(t, accounts.JSON200.Accounts, categories.JSON200.Categories, transactions.JSON200.Transactions, anchorDate)
 }
 
 func assertSeededRecurringDemoData(t *testing.T, client *apptest.Client, seeded httpclient.DemoSeedResponse, today time.Time) {
@@ -301,35 +479,35 @@ func assertSeededRecurringDemoSeries(t *testing.T, definitions []httpclient.Recu
 	want := []expectedRecurringDemoSeries{
 		{
 			fqn:             "Household:Mortgage",
-			anchorDate:      "2026-06-05",
+			anchorDate:      "2026-05-20",
 			every:           1,
 			unit:            "MONTH",
-			nextDueDate:     "2026-08-05",
-			occurrenceDates: []string{"2026-06-05", "2026-07-05"},
+			nextDueDate:     "2026-07-20",
+			occurrenceDates: []string{"2026-05-20", "2026-06-20"},
 		},
 		{
 			fqn:             "Subscriptions:Netflix",
-			anchorDate:      "2026-06-10",
+			anchorDate:      "2026-05-25",
 			every:           1,
 			unit:            "MONTH",
-			nextDueDate:     "2026-08-10",
-			occurrenceDates: []string{"2026-06-10", "2026-07-10"},
+			nextDueDate:     "2026-07-25",
+			occurrenceDates: []string{"2026-05-25", "2026-06-25"},
 		},
 		{
 			fqn:             "Savings:WeeklyTransfer",
-			anchorDate:      "2026-06-01",
+			anchorDate:      "2026-06-09",
 			every:           1,
 			unit:            "WEEK",
-			nextDueDate:     "2026-07-20",
-			occurrenceDates: []string{"2026-06-01", "2026-06-08", "2026-06-15", "2026-06-22", "2026-06-29", "2026-07-06", "2026-07-13"},
+			nextDueDate:     "2026-07-21",
+			occurrenceDates: []string{"2026-06-09", "2026-06-16", "2026-06-23", "2026-06-30", "2026-07-07", "2026-07-14"},
 		},
 		{
 			fqn:             "Debt:CreditCardPayment",
-			anchorDate:      "2026-06-12",
+			anchorDate:      "2026-05-27",
 			every:           1,
 			unit:            "MONTH",
-			nextDueDate:     "2026-08-12",
-			occurrenceDates: []string{"2026-06-12", "2026-07-12"},
+			nextDueDate:     "2026-07-27",
+			occurrenceDates: []string{"2026-05-27", "2026-06-27"},
 		},
 	}
 
@@ -418,9 +596,9 @@ func assertSeededFeaturedBalanceAccounts(t *testing.T, client *apptest.Client) {
 	}
 
 	want := []string{
-		"checking:Chase:Joint",
-		"credit_card:Chase:Sapphire",
-		"savings:Ally:Emergency",
+		"bank:Ally:emergency_savings",
+		"bank:Chase:Sapphire",
+		"bank:Chase:joint_checking",
 	}
 	if len(accounts.JSON200.Accounts) != len(want) {
 		t.Fatalf("featured balance account count = %d, want %d; accounts = %+v", len(accounts.JSON200.Accounts), len(want), accounts.JSON200.Accounts)
@@ -432,31 +610,139 @@ func assertSeededFeaturedBalanceAccounts(t *testing.T, client *apptest.Client) {
 	}
 }
 
+func assertSeededPlausibleBalances(t *testing.T, client *apptest.Client) {
+	t.Helper()
+
+	ctx := context.Background()
+	accounts, err := client.REST().ListAccountsWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list accounts for balance sanity request: %v", err)
+	}
+	if accounts.StatusCode() != http.StatusOK {
+		t.Fatalf("list accounts for balance sanity status = %d, want %d; body %s", accounts.StatusCode(), http.StatusOK, accounts.Body)
+	}
+	balances, err := client.REST().ListAccountBalancesWithResponse(ctx, nil)
+	if err != nil {
+		t.Fatalf("list seeded balances request: %v", err)
+	}
+	if balances.StatusCode() != http.StatusOK {
+		t.Fatalf("list seeded balances status = %d, want %d; body %s", balances.StatusCode(), http.StatusOK, balances.Body)
+	}
+
+	accountFQNs := make(map[int64]string, len(accounts.JSON200.Accounts))
+	for _, account := range accounts.JSON200.Accounts {
+		accountFQNs[account.AccountId] = account.Fqn
+	}
+	balancesByFQN := make(map[string]string, len(balances.JSON200.Balances))
+	for _, balance := range balances.JSON200.Balances {
+		balancesByFQN[accountFQNs[balance.AccountId]] = balance.CurrentBalance
+	}
+	for _, fqn := range []string{"bank:Chase:joint_checking", "bank:Ally:emergency_savings", "cash:Wallet"} {
+		if balance := balancesByFQN[fqn]; balance == "" || balance == "0.00000000" || strings.HasPrefix(balance, "-") {
+			t.Fatalf("seeded asset balance %q = %q, want positive", fqn, balance)
+		}
+	}
+	for _, fqn := range []string{"bank:Chase:Sapphire", "bank:Amex:BlueCash"} {
+		if balance := balancesByFQN[fqn]; !strings.HasPrefix(balance, "-") {
+			t.Fatalf("seeded credit card balance %q = %q, want negative", fqn, balance)
+		}
+	}
+}
+
 func assertDemoSemanticCoverage(
 	t *testing.T,
 	accounts []httpclient.Account,
 	categories []httpclient.Category,
 	transactions []httpclient.Transaction,
+	anchorDate time.Time,
 ) {
 	t.Helper()
+
+	accountsByFQN := make(map[string]httpclient.Account, len(accounts))
+	for _, account := range accounts {
+		accountsByFQN[account.Fqn] = account
+		if strings.HasPrefix(account.Fqn, "Income:") {
+			t.Fatalf("seeded account %q mirrors an income category", account.Fqn)
+		}
+		if strings.HasPrefix(account.Fqn, "system:") && account.AccountType != httpclient.AccountTypeSystem {
+			t.Fatalf("seeded system account %q has type %q", account.Fqn, account.AccountType)
+		}
+	}
+	for fqn, accountType := range map[string]httpclient.AccountType{
+		"bank:Chase:joint_checking": httpclient.AccountTypeOwned,
+		"bank:Chase:Sapphire":       httpclient.AccountTypeOwned,
+		"bank:Rocket:mortgage":      httpclient.AccountTypeFlow,
+		"cash:Wallet":               httpclient.AccountTypeOwned,
+		"cash:Home-Stash":           httpclient.AccountTypeOwned,
+		"employers:Acme:salary":     httpclient.AccountTypeFlow,
+		"employers:Acme:expenses":   httpclient.AccountTypeParty,
+		"merchant:unspecified":      httpclient.AccountTypeFlow,
+		"person:Friend:Jordan":      httpclient.AccountTypeParty,
+		"system:opening_balance":    httpclient.AccountTypeSystem,
+	} {
+		account, ok := accountsByFQN[fqn]
+		if !ok {
+			t.Fatalf("seeded demo missing account %q", fqn)
+		}
+		if account.AccountType != accountType {
+			t.Fatalf("seeded account %q type = %q, want %q", fqn, account.AccountType, accountType)
+		}
+	}
+	for _, fqn := range []string{"cash:Wallet", "cash:Home-Stash", "merchant:unspecified"} {
+		if currency := accountsByFQN[fqn].Currency; currency != nil {
+			t.Fatalf("seeded multi-currency account %q currency = %q, want unrestricted", fqn, *currency)
+		}
+	}
+	wantMerchants := []string{
+		"merchant:BlueBottle",
+		"merchant:CVS",
+		"merchant:ConEd",
+		"merchant:MTA",
+		"merchant:Netflix",
+		"merchant:PowellsBooks",
+		"merchant:Shell",
+		"merchant:Target",
+		"merchant:TraderJoes",
+		"merchant:unspecified",
+	}
+	var gotMerchants []string
+	for fqn := range accountsByFQN {
+		if strings.HasPrefix(fqn, "merchant:") {
+			gotMerchants = append(gotMerchants, fqn)
+		}
+	}
+	sort.Strings(gotMerchants)
+	assertStringSlicesEqual(t, "seeded merchant accounts", gotMerchants, wantMerchants)
 
 	wantIntents := []httpclient.CategoryEconomicIntent{
 		httpclient.CategoryEconomicIntentExpense,
 		httpclient.CategoryEconomicIntentIncome,
 	}
 	gotIntents := map[httpclient.CategoryEconomicIntent]struct{}{}
+	categoriesByFQN := make(map[string]httpclient.Category, len(categories))
 	for _, category := range categories {
 		gotIntents[category.EconomicIntent] = struct{}{}
+		categoriesByFQN[category.Fqn] = category
 	}
 	for _, intent := range wantIntents {
 		if _, ok := gotIntents[intent]; !ok {
 			t.Fatalf("seeded demo missing category economic intent %q", intent)
 		}
 	}
+	for _, fqn := range []string{"Income:Salary", "Income:Bonus"} {
+		category, ok := categoriesByFQN[fqn]
+		if !ok {
+			t.Fatalf("seeded demo missing category %q", fqn)
+		}
+		if category.EconomicIntent != httpclient.CategoryEconomicIntentIncome {
+			t.Fatalf("seeded category %q intent = %q, want income", fqn, category.EconomicIntent)
+		}
+	}
 
 	wantClasses := []httpclient.TransactionClass{
 		httpclient.TransactionClassSpend,
 		httpclient.TransactionClassIncome,
+		httpclient.TransactionClassClawback,
 		httpclient.TransactionClassRefund,
 		httpclient.TransactionClassTransfer,
 		httpclient.TransactionClassCurrencyExchange,
@@ -481,8 +767,19 @@ func assertDemoSemanticCoverage(
 	refundCategories := map[int64]struct{}{}
 	partySigns := map[int64]map[bool]struct{}{}
 	hasMultiMerchantSpend := false
+	hasValidClawback := false
+	earliestDate := anchorDate
+	latestDate := anchorDate.AddDate(0, -6, 0)
 	for _, transaction := range transactions {
+		if transaction.InitiatedDate.Before(earliestDate) {
+			earliestDate = transaction.InitiatedDate.Time
+		}
+		if transaction.InitiatedDate.After(latestDate) {
+			latestDate = transaction.InitiatedDate.Time
+		}
 		expenseAccounts := map[int64]struct{}{}
+		hasClawbackRecord := false
+		hasClawbackOutflow := false
 		wantPostedDate := transaction.InitiatedDate.Add(24*time.Hour - time.Second)
 		for _, record := range transaction.Records {
 			if record.PostedDate == nil || !record.PostedDate.Equal(wantPostedDate) {
@@ -499,8 +796,14 @@ func assertDemoSemanticCoverage(
 				expenseCategories[*record.CategoryId] = struct{}{}
 			case httpclient.RecordRoleRefund:
 				refundCategories[*record.CategoryId] = struct{}{}
+			case httpclient.RecordRoleClawback:
+				hasClawbackRecord = true
 			}
-			if accountTypes[record.AccountId] == httpclient.AccountTypeParty {
+			accountType := accountTypes[record.AccountId]
+			if (accountType == httpclient.AccountTypeOwned || accountType == httpclient.AccountTypeParty) && record.Amount[0] == '-' {
+				hasClawbackOutflow = true
+			}
+			if accountType == httpclient.AccountTypeParty {
 				signs := partySigns[record.AccountId]
 				if signs == nil {
 					signs = map[bool]struct{}{}
@@ -512,6 +815,19 @@ func assertDemoSemanticCoverage(
 		if transaction.TransactionClass == httpclient.TransactionClassSpend && len(expenseAccounts) >= 2 {
 			hasMultiMerchantSpend = true
 		}
+		if transaction.TransactionClass == httpclient.TransactionClassClawback && hasClawbackRecord && hasClawbackOutflow {
+			hasValidClawback = true
+		}
+	}
+	wantEarliestDate := sixCalendarMonthsBefore(anchorDate)
+	if !earliestDate.Equal(wantEarliestDate) {
+		t.Fatalf("earliest seeded transaction date = %s, want %s", earliestDate.Format("2006-01-02"), wantEarliestDate.Format("2006-01-02"))
+	}
+	if !latestDate.Equal(anchorDate) {
+		t.Fatalf("latest seeded transaction date = %s, want anchor %s", latestDate.Format("2006-01-02"), anchorDate.Format("2006-01-02"))
+	}
+	if !hasValidClawback {
+		t.Fatal("seeded demo missing income clawback balanced by an owned or party outflow")
 	}
 	if !hasMultiMerchantSpend {
 		t.Fatal("seeded demo missing multi-merchant spend")
@@ -536,6 +852,17 @@ func assertDemoSemanticCoverage(
 	if !hasSwingingParty {
 		t.Fatal("seeded demo missing party balance with records of both signs")
 	}
+}
+
+func sixCalendarMonthsBefore(anchorDate time.Time) time.Time {
+	year, month, day := anchorDate.Date()
+	targetMonth := time.Date(year, month-6, 1, 0, 0, 0, 0, anchorDate.Location())
+	targetMonthEnd := targetMonth.AddDate(0, 1, -1)
+	if day > targetMonthEnd.Day() {
+		day = targetMonthEnd.Day()
+	}
+
+	return time.Date(targetMonth.Year(), targetMonth.Month(), day, 0, 0, 0, 0, anchorDate.Location())
 }
 
 type seededDemoRefs struct {
@@ -584,7 +911,7 @@ func seededDemoTransactionRefs(t *testing.T, client *apptest.Client) seededDemoR
 	}
 
 	return seededDemoRefs{
-		checkingAccountID: accountIDByFQN(t, accounts.JSON200.Accounts, "checking:Chase:Joint"),
+		checkingAccountID: accountIDByFQN(t, accounts.JSON200.Accounts, "bank:Chase:joint_checking"),
 		merchantAccountID: accountIDByFQN(t, accounts.JSON200.Accounts, "merchant:TraderJoes"),
 		categoryID:        categoryIDByFQN(t, categories.JSON200.Categories, "Food:Groceries"),
 		tagID:             tagIDByFQN(t, tags.JSON200.Tags, "Shared:Family"),

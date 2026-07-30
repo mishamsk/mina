@@ -35,6 +35,7 @@ import (
 	"github.com/mishamsk/mina/internal/services/tags"
 	"github.com/mishamsk/mina/internal/services/transactions"
 	"github.com/mishamsk/mina/internal/services/transactiontemplates"
+	"github.com/mishamsk/mina/internal/services/values"
 	"github.com/mishamsk/mina/internal/store"
 	"github.com/mishamsk/mina/internal/webui"
 )
@@ -533,9 +534,25 @@ func (a *App) AccountingLocation() store.AccountingLocation {
 	return a.appDB.Location()
 }
 
+// ParseDemoAnchorDate validates an optional startup demo anchor.
+func ParseDemoAnchorDate(value string) (*values.CivilDate, error) {
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := values.ParseCivilDate(value)
+	if err != nil {
+		return nil, fmt.Errorf("parse demo anchor date: %w", err)
+	}
+	if err := demo.ValidateAnchorDate(parsed); err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}
+
 // SeedDemo seeds deterministic demo data for startup demo mode.
-func (a *App) SeedDemo(ctx context.Context) (demo.Summary, error) {
-	return a.services.Demo.Seed(ctx)
+// A nil anchorDate uses the current local civil date.
+func (a *App) SeedDemo(ctx context.Context, anchorDate *values.CivilDate) (demo.Summary, error) {
+	return a.services.Demo.Seed(ctx, anchorDate)
 }
 
 // StartOperations starts runtime-owned startup and recurring operations once.

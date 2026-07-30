@@ -45,15 +45,14 @@ test("Spend submits multiple categorized merchants against one uncategorized fun
 
   await spend.getByLabel("Date").fill("2026-05-30");
   await chooseOption(page, spend, "Funding account", "Wallet", "cash:Wallet");
-  await spend.getByRole("button", { name: "Add merchant" }).click();
 
   const firstMerchant = spend.getByRole("group", { name: "Merchant 1" });
   await chooseOption(
     page,
     firstMerchant,
     "Merchant account",
-    "Books",
-    "merchant:Books",
+    "Powells",
+    "merchant:PowellsBooks",
   );
   await firstMerchant.getByLabel("Amount").fill("12.00");
   await chooseOption(
@@ -64,6 +63,7 @@ test("Spend submits multiple categorized merchants against one uncategorized fun
     "Entertainment:Books",
   );
 
+  await spend.getByRole("button", { name: "Add merchant" }).click();
   const secondMerchant = spend.getByRole("group", { name: "Merchant 2" });
   await editor.getByRole("button", { name: "Save and add another" }).click();
   await expect(
@@ -138,7 +138,7 @@ test("Refund is money coming back and Exchange shows the server-derived effectiv
     refund,
     "Destination account",
     "Joint",
-    "checking:Chase:Joint",
+    "bank:Chase:joint_checking",
   );
   await chooseOption(page, refund, "Merchant", "Target", "merchant:Target");
   await chooseOption(
@@ -162,14 +162,20 @@ test("Refund is money coming back and Exchange shows the server-derived effectiv
   await editor.getByRole("tab", { name: "Exchange" }).click();
   const exchange = editor.getByRole("tabpanel", { name: "Exchange" });
   await exchange.getByLabel("Date").fill("2026-05-30");
-  await chooseOption(page, exchange, "From account", "Wallet", "cash:Wallet");
+  await chooseOption(
+    page,
+    exchange,
+    "From account",
+    "joint_checking",
+    "bank:Chase:joint_checking",
+  );
   await exchange.getByLabel("Amount sold").fill("110.00");
   await chooseOption(
     page,
     exchange,
     "To account",
-    "Travel:EUR",
-    "cash:Travel:EUR",
+    "Fidelity:EUR",
+    "bank:Fidelity:EUR",
   );
   await exchange.getByLabel("Amount bought").fill("100.00");
   await expect(
@@ -191,25 +197,31 @@ test("Exchange excludes destination accounts in the sold currency", async ({
   const editor = await openEntry(page);
   await editor.getByRole("tab", { name: "Exchange" }).click();
   const exchange = editor.getByRole("tabpanel", { name: "Exchange" });
-  await chooseOption(page, exchange, "From account", "Wallet", "cash:Wallet");
+  await chooseOption(
+    page,
+    exchange,
+    "From account",
+    "joint_checking",
+    "bank:Chase:joint_checking",
+  );
 
   const destination = exchange.getByRole("combobox", { name: "To account" });
-  await destination.fill("checking:Chase:Joint");
+  await destination.fill("bank:Fidelity:USD");
   const optionsId = await destination.getAttribute("aria-controls");
   expect(optionsId).not.toBeNull();
   await expect(
     page
       .locator(`#${optionsId}`)
       .getByRole("option")
-      .filter({ hasText: "checking:Chase:Joint" }),
+      .filter({ hasText: "bank:Fidelity:USD" }),
   ).toHaveCount(0);
 
-  await destination.fill("Travel:EUR");
+  await destination.fill("Fidelity:EUR");
   await expect(
     page
       .locator(`#${optionsId}`)
       .getByRole("option")
-      .filter({ hasText: "cash:Travel:EUR" }),
+      .filter({ hasText: "bank:Fidelity:EUR" }),
   ).toBeVisible();
 });
 
@@ -235,8 +247,8 @@ test("Spend and Income allow party balance accounts", async ({ page }) => {
     page,
     merchant,
     "Merchant account",
-    "Books",
-    "merchant:Books",
+    "Powells",
+    "merchant:PowellsBooks",
   );
   await merchant.getByLabel("Amount").fill("8.00");
   await chooseOption(
@@ -270,13 +282,7 @@ test("Spend and Income allow party balance accounts", async ({ page }) => {
   const income = incomeEditor.getByRole("tabpanel", { name: "Income" });
   await income.getByLabel("Amount").fill("25.00");
   await chooseOption(page, income, "Destination account", "E2EParty", partyFqn);
-  await chooseOption(
-    page,
-    income,
-    "Source",
-    "AcmePayroll",
-    "income:AcmePayroll",
-  );
+  await chooseOption(page, income, "Source", "Acme", "employers:Acme:salary");
   await chooseOption(page, income, "Category", "Salary", "Income:Salary");
 
   const incomeResponse = page.waitForResponse(
@@ -317,7 +323,13 @@ test("Advanced offers categories only on flow rows and previews server classific
   ).toHaveCount(0);
   await funding.getByLabel("Amount").fill("-15.00");
 
-  await chooseOption(page, merchant, "Account", "Books", "merchant:Books");
+  await chooseOption(
+    page,
+    merchant,
+    "Account",
+    "Powells",
+    "merchant:PowellsBooks",
+  );
   await expect(
     merchant.getByRole("combobox", { name: "Category" }),
   ).toBeVisible();

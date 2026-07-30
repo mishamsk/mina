@@ -593,7 +593,7 @@ test("member delete affordances respect the API deleteability signal", async ({
       listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
     ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const transactionResponse = await page.request.post(
     "/api/transactions/spend",

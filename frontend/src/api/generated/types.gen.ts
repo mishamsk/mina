@@ -1347,7 +1347,12 @@ export type UpdateMemberHiddenRequest = {
 export type SeedDemoData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Date anchoring the demo history and recurring activity; defaults to the current local civil date.
+         */
+        anchor_date?: string;
+    };
     url: '/api/app/demo-seed';
 };
 

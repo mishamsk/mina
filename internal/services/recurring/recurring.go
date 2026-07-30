@@ -480,7 +480,7 @@ func (s *Service) Defer(ctx context.Context, definitionID int64, today values.Ci
 	if err != nil {
 		return Occurrence{}, err
 	}
-	newAnchor := intervalDueDate(scheduledDate, every, unit)
+	newAnchor := IntervalDueDate(scheduledDate, every, unit)
 	occurrence, err := s.repo.DeferOccurrenceAndShiftAnchor(ctx, definition, scheduledDate, newAnchor)
 	if errors.Is(err, services.ErrConflict) {
 		return Occurrence{}, services.Conflict("recurring occurrence slot already exists")
@@ -1250,14 +1250,15 @@ func firstIntervalDueAfter(payload map[string]any, anchor values.CivilDate, afte
 	}
 	unit, _ := payload["unit"].(string)
 	for step := 0; ; step++ {
-		candidate := intervalDueDate(anchor, step*every, unit)
+		candidate := IntervalDueDate(anchor, step*every, unit)
 		if candidate.Time().After(after.Time()) {
 			return candidate, nil
 		}
 	}
 }
 
-func intervalDueDate(anchor values.CivilDate, count int, unit string) values.CivilDate {
+// IntervalDueDate returns the date count intervals before or after anchor.
+func IntervalDueDate(anchor values.CivilDate, count int, unit string) values.CivilDate {
 	t := anchor.Time()
 	switch unit {
 	case "DAY":

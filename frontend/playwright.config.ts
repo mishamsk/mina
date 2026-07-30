@@ -47,7 +47,8 @@ const webServer = (browser: (typeof browserNames)[number], slot: number) => {
   const captureName = `MINA_FRONTEND_E2E_${browserEnvironmentName}_${slot}_URL`;
 
   return {
-    command: "../bin/mina serve --host 127.0.0.1 --port 0 --quiet --demo",
+    command:
+      "../bin/mina serve --host 127.0.0.1 --port 0 --quiet --demo --demo-anchor-date 2026-05-31",
     env: {
       MINA_BACKUP_FILE_DIRECTORY: `/tmp/mina-frontend-e2e-backups-${process.pid}-${browser}-${slot}`,
       MINA_FX_AUTO_LOAD_ENABLED: "false",

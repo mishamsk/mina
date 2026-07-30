@@ -51,6 +51,7 @@ func TestIntegrationScripts(t *testing.T) {
 			"frankfurter":    testscriptFrankfurter,
 			"httpget":        testscriptHTTPGet,
 			"httpwait":       testscriptHTTPWait,
+			"localdate":      testscriptLocalDate,
 			"mcpcall":        testscriptMCPCall,
 			"mcplist":        testscriptMCPList,
 			"glob":           testscriptGlob,
@@ -388,6 +389,21 @@ func testscriptFreePort(ts *testscript.TestScript, neg bool, args []string) {
 	ts.Check(err)
 	ts.Check(listener.Close())
 	ts.Setenv(envVar, port)
+}
+
+func testscriptLocalDate(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("localdate does not support negation")
+	}
+	if len(args) > 1 {
+		ts.Fatalf("usage: localdate [env_var]")
+	}
+
+	envVar := "LOCAL_DATE"
+	if len(args) == 1 {
+		envVar = args[0]
+	}
+	ts.Setenv(envVar, time.Now().Format("2006-01-02"))
 }
 
 func testscriptGlob(ts *testscript.TestScript, neg bool, args []string) {

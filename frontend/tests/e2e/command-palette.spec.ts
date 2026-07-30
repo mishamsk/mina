@@ -100,7 +100,7 @@ const createSearchFixtureTransaction = async (
 ): Promise<TransactionFixture> => {
   const accounts = await listAccountFixtures(page);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const response = await page.request.post("/api/transactions/spend", {
     data: {
       amount: options.amount,
@@ -416,7 +416,7 @@ test("command palette keeps narrow multi-part results single-height", async ({
   );
   const accounts = await listAccountFixtures(page);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const partyAccount = findByFqn(accounts, "person:Friend:Jordan");
   const simpleMemo = `E2E palette height ${unique} simple`;
   const multiPartMemo = `E2E palette height ${unique} multi`;
@@ -682,24 +682,26 @@ test("command palette navigates to account and account group matches", async ({
 
   await openPalette(page);
   const search = page.getByRole("combobox", { name: "Command search" });
-  await search.fill("Joint");
+  await search.fill("joint_checking");
   await expect(
-    page.getByRole("option", { name: /Account checking:Chase:Joint/ }),
+    page.getByRole("option", { name: /Account bank:Chase:joint_checking/ }),
   ).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/accounts\/\d+$/);
-  await expect(page.getByRole("heading", { name: /Joint/ })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /joint_checking/ }),
+  ).toBeVisible();
 
   await openPalette(page);
-  await search.fill("checking");
-  const checkingGroup = page.getByRole("option", {
+  await search.fill("bank");
+  const bankGroup = page.getByRole("option", {
     exact: true,
-    name: "Account group checking",
+    name: "Account group bank",
   });
-  await expect(checkingGroup).toBeVisible();
-  await checkingGroup.click();
-  await expect(page).toHaveURL(/\/accounts\/group\?prefix=checking$/);
-  await expect(page.getByRole("heading", { name: /checking/ })).toBeVisible();
+  await expect(bankGroup).toBeVisible();
+  await bankGroup.click();
+  await expect(page).toHaveURL(/\/accounts\/group\?prefix=bank$/);
+  await expect(page.getByRole("heading", { name: /bank/ })).toBeVisible();
 
   await openPalette(page);
   await search.fill(hiddenAccount.fqn);

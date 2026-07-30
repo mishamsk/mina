@@ -117,7 +117,7 @@ Canonical rendering rules; every screen uses these so the product reads as one s
 
 ### Transaction summary line
 
-- Simple two-sided transactions title as `From → To` using the leaf names of both sides: spend → `Joint → TraderJoes` (funding → merchant); income → `AcmePayroll → Joint` (source → destination); refund → `Target → Joint`; transfer → `Joint → Emergency`; exchange → `USD → EUR`; adjustment → affected account leaf. Complex/mixed transactions fall back to memo or the dominant counterparty leaf. Titles are derived server-side or from records as a display convention.
+- Simple two-sided transactions title as `From → To` using the leaf names of both sides: spend → `Joint → TraderJoes` (funding → merchant); income → `Acme → Joint` (source → destination); refund → `Target → Joint`; transfer → `Joint → Emergency`; exchange → `USD → EUR`; adjustment → affected account leaf. Complex/mixed transactions fall back to memo or the dominant counterparty leaf. Titles are derived server-side or from records as a display convention.
 - Row composition: class icon, initiated date, description (the `From → To` line) with the memo as a truncated second line (full memo in a tooltip) and trailing status indicators, category, tags, member, display amount, and the trailing actions column (open detail). The description column header reads "Description".
 - Class is encoded as a distinct icon plus its class color in a narrow leftmost column, with the class name in a tooltip; that column's header is hidden except on very wide screens.
 - The date cell is compact: the day (`May 31`) with the year as a de-emphasized second line on every row.

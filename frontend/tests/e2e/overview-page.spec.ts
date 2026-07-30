@@ -113,9 +113,9 @@ const createCurrentMonthFixtures = async (
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const wallet = findByFqn(accounts, "cash:Wallet");
-  const books = findByFqn(accounts, "merchant:Books");
-  const joint = findByFqn(accounts, "checking:Chase:Joint");
-  const payroll = findByFqn(accounts, "income:AcmePayroll");
+  const books = findByFqn(accounts, "merchant:PowellsBooks");
+  const joint = findByFqn(accounts, "bank:Chase:joint_checking");
+  const payroll = findByFqn(accounts, "employers:Acme:salary");
   const booksCategory = findByFqn(categories, "Entertainment:Books");
   const salaryCategory = findByFqn(categories, "Income:Salary");
 
@@ -168,7 +168,7 @@ test("overview landing page renders grouped balances, pulse, and recent activity
     "/api/accounts",
     "accounts",
   );
-  const sapphire = findByFqn(accounts, "credit_card:Chase:Sapphire");
+  const sapphire = findByFqn(accounts, "bank:Chase:Sapphire");
   const sapphireBalance = balances.find(
     (balance) => balance.account_id === sapphire.account_id,
   );
@@ -187,23 +187,27 @@ test("overview landing page renders grouped balances, pulse, and recent activity
     .getByRole("link", { exact: true, name: "Overview" });
   await expect(overviewNavLink).toHaveAttribute("aria-current", "page");
 
-  const creditGroup = page
+  const bankGroup = page
     .getByTestId("overview-balance-group")
-    .filter({ hasText: "credit_card" });
-  await expect(creditGroup).toBeVisible();
-  await expect(creditGroup.getByTestId("approximate-usd-amount")).toContainText(
+    .filter({ hasText: "bank" });
+  await expect(bankGroup).toBeVisible();
+  await expect(bankGroup.getByTestId("approximate-usd-amount")).toContainText(
     "≈",
   );
-  await expect(creditGroup.getByTestId("approximate-usd-amount")).toContainText(
+  await expect(bankGroup.getByTestId("approximate-usd-amount")).toContainText(
     "USD",
   );
-  const creditRows = creditGroup.getByTestId("overview-balance-row");
-  await expect(creditRows.first()).toContainText("Sapphire");
-  await expect(creditRows.nth(1)).toContainText("BlueCash");
-  await expect(creditRows.first()).toContainText("Remaining credit");
-  await expect(creditRows.first()).toContainText(
+  const sapphireRow = bankGroup
+    .getByTestId("overview-balance-row")
+    .filter({ hasText: "Sapphire" });
+  const blueCashRow = bankGroup
+    .getByTestId("overview-balance-row")
+    .filter({ hasText: "BlueCash" });
+  await expect(sapphireRow).toContainText("Remaining credit");
+  await expect(sapphireRow).toContainText(
     formatUsdMarkerAmount(remainingCredit),
   );
+  await expect(blueCashRow).toBeVisible();
 
   const spendTile = page
     .getByTestId("overview-pulse-tile")
@@ -267,7 +271,7 @@ test("overview keeps multi-part activity rows single-height", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const wallet = findByFqn(accounts, "cash:Wallet");
-  const books = findByFqn(accounts, "merchant:Books");
+  const books = findByFqn(accounts, "merchant:PowellsBooks");
   const friend = findByFqn(accounts, "person:Friend:Jordan");
   const booksCategory = findByFqn(categories, "Entertainment:Books");
   const mixedMemo = "E2E overview multi-part activity";

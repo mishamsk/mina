@@ -155,6 +155,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 	var assumeYes bool
 	var quiet bool
 	var seedDemo bool
+	var demoAnchorDate string
 	sources := appconfig.Sources()
 	flagCfg := appconfig.DefaultConfig()
 	cmd := &cobra.Command{
@@ -189,8 +190,11 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 			if err := validateServeConfig(cfg, quietValue); err != nil {
 				return err
 			}
+			if demoAnchorDate != "" && !seedDemo {
+				return fmt.Errorf("--demo-anchor-date requires --demo")
+			}
 
-			if err := serve(cmd.Context(), stdin, stdout, stderr, cfg, quietValue, seedDemo, assumeYesValue); err != nil {
+			if err := serve(cmd.Context(), stdin, stdout, stderr, cfg, quietValue, seedDemo, demoAnchorDate, assumeYesValue); err != nil {
 				return commandExitError(err)
 			}
 
@@ -220,6 +224,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 	)
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "disable access logs "+commandEnvHelp("MINA_QUIET"))
 	cmd.Flags().BoolVar(&seedDemo, "demo", false, "seed deterministic demo data at startup")
+	cmd.Flags().StringVar(&demoAnchorDate, "demo-anchor-date", "", "anchor demo history and recurring activity to YYYY-MM-DD instead of the current local date")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
 	})
@@ -423,8 +428,13 @@ func serve(
 	cfg appconfig.Config,
 	quiet bool,
 	seedDemo bool,
+	demoAnchorDate string,
 	assumeYes bool,
 ) error {
+	demoAnchor, err := runtime.ParseDemoAnchorDate(demoAnchorDate)
+	if err != nil {
+		return err
+	}
 	if cfg.DatabasePath == "" {
 		if _, err := fmt.Fprintln(stderr, "warning: no --db provided; using ephemeral in-memory accounting state"); err != nil {
 			return err
@@ -486,7 +496,7 @@ func serve(
 		}
 	}()
 	if seedDemo {
-		summary, err := appInstance.SeedDemo(ctx)
+		summary, err := appInstance.SeedDemo(ctx, demoAnchor)
 		if err != nil {
 			return fmt.Errorf("demo seed error: %w", err)
 		}

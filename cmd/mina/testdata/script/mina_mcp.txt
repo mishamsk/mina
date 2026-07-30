@@ -23,7 +23,7 @@ stdout '^transport=http tool=accounts_delete read_only=false destructive=true id
 mcpcall http http://127.0.0.1:$PORT/mcp accounts_get '{"account_id":8}'
 stdout '"status":200'
 stdout '"account_id":8'
-stdout '"fqn":"checking:Chase:Joint"'
+stdout '"fqn":"bank:Chase:joint_checking"'
 
 ! mcpcall http http://127.0.0.1:$PORT/mcp members_create '{"body":{"name":""}}'
 stderr '"code":"invalid_request"'

@@ -1,18 +1,24 @@
 # The generated remote client covers representative list, path, and JSON-body shapes.
 env MINA_FX_AUTO_LOAD_ENABLED=false
 freeport
-exec mina serve --demo --db $WORK/client-remote.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
+exec mina serve --db $WORK/client-remote.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
 httpwait -timeout 10s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+
+# Demo seeding accepts an exact historical anchor through the generated client.
+exec mina client --server http://127.0.0.1:$PORT demo seed --anchor_date 2026-07-15
+stdout '"transactions":[1-9][0-9]*'
+! stderr .
 
 # Query/list output is raw JSON on stdout.
 exec mina client --server http://127.0.0.1:$PORT transactions list --limit 5
 stdout '"transactions":\['
-stdout '"transaction_id":346'
+stdout '"initiated_date":"2026-07-15"'
+stdout '"transaction_id":844'
 ! stderr .
 
 # A path argument selects the transaction observed in the prior list.
-exec mina client --server http://127.0.0.1:$PORT transactions get 346
-stdout '"transaction_id":346'
+exec mina client --server http://127.0.0.1:$PORT transactions get 844
+stdout '"transaction_id":844'
 stdout '"records":\['
 ! stderr .
 

@@ -444,7 +444,7 @@ const createSearchSpend = async (
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const response = await page.request.post("/api/transactions/spend", {
     data: {
@@ -1439,7 +1439,7 @@ test("expanded records edit per-record values and escalate structural changes", 
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const initialCategory = findByFqn(categories, "Entertainment:Books");
   const nextCategory = await createCategory(
     page,
@@ -1775,7 +1775,7 @@ test("tag editor keeps many assignments and controls separate in a narrow viewpo
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E tag editor overlap ${unique}`;
   const createResponse = await page.request.post("/api/transactions", {
@@ -1989,7 +1989,7 @@ test("inline category tag member and amount saves keep the transaction table sta
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const initialCategory = findByFqn(categories, "Income:Salary");
   const [nextCategory, nextTag, nextMember] = await Promise.all([
     createCategory(page, `E2E:ResponsiveSave:${unique}:Category`, "expense"),
@@ -2164,7 +2164,7 @@ test("filtered inline category save restores focus after its row disappears", as
     createCategory(page, `E2E:FilteredInlineSave:${unique}:Next`, "expense"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const sourceMemo = `E2E filtered inline source ${unique}`;
   const neighborMemo = `E2E filtered inline neighbor ${unique}`;
   const createSpend = async (
@@ -2271,7 +2271,7 @@ test("filtered inline category save focuses the empty-list action", async ({
     createCategory(page, `E2E:FilteredEmptySave:${unique}:Next`, "expense"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const createResponse = await page.request.post("/api/transactions/spend", {
     data: {
       amount: "12.34",
@@ -2326,7 +2326,7 @@ test("filtered expanded and amount saves restore focus after row removal", async
     createCategory(page, `E2E:FilteredPaths:${unique}:Next`, "expense"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const createSpend = async (
     memo: string,
     amount: string,
@@ -2499,7 +2499,7 @@ test("reference editor releases while its page refresh is pending", async ({
     createCategory(page, `E2E:RefreshRelease:${unique}:Next`, "expense"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const memo = `E2E reference refresh release ${unique}`;
   const createResponse = await page.request.post("/api/transactions/spend", {
     data: {
@@ -2618,7 +2618,7 @@ test("overlapping filtered saves restore focus for the latest save", async ({
     createCategory(page, `E2E:OverlappingSave:${unique}:Next`, "expense"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const createSpend = async (
     memo: string,
     initiatedDate: string,
@@ -2748,7 +2748,7 @@ test("repeated background refresh failures surface stale transactions", async ({
     createCategory(page, `E2E:RepeatedRefresh:${unique}:Next`, "expense"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const memo = `E2E repeated refresh ${unique}`;
   const createResponse = await page.request.post("/api/transactions/spend", {
     data: {
@@ -2871,7 +2871,7 @@ test("transaction-row inline editing follows the uniformity rule", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const initialCategory = findByFqn(categories, "Entertainment:Books");
   const [nextCategory, initialTag, nextTag, member] = await Promise.all([
     createCategory(page, `E2E:RowEditing:${unique}:UpdatedCategory`, "expense"),
@@ -3142,7 +3142,7 @@ test("inline editing keeps one explicit-commit draft across transaction rows", a
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const initialCategory = findByFqn(categories, "Entertainment:Books");
   const [draftCategory, savedCategory] = await Promise.all([
     createCategory(page, `E2E:ExplicitCommit:${unique}:Draft`, "expense"),
@@ -3821,7 +3821,7 @@ test("transactions page add-filter menu drives server filters and chips", async 
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const targetMemo = `E2E filtered target ${unique}`;
 
@@ -4476,9 +4476,9 @@ test("multi-part transaction rows show one honest amount or only the indicator",
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const wallet = findByFqn(accounts, "cash:Wallet");
-  const joint = findByFqn(accounts, "checking:Chase:Joint");
-  const merchant = findByFqn(accounts, "merchant:Books");
-  const incomeSource = findByFqn(accounts, "income:AcmePayroll");
+  const joint = findByFqn(accounts, "bank:Chase:joint_checking");
+  const merchant = findByFqn(accounts, "merchant:PowellsBooks");
+  const incomeSource = findByFqn(accounts, "employers:Acme:salary");
   const party = findByFqn(accounts, "person:Friend:Jordan");
   const expenseCategory = findByFqn(categories, "Entertainment:Books");
   const incomeCategory = findByFqn(categories, "Income:Salary");
@@ -4609,7 +4609,7 @@ test("multi-part transaction rows show one honest amount or only the indicator",
         bought_amount: "100.00",
         initiated_date: initiatedDate,
         memo: exchangeMemo,
-        sold_account_id: wallet.account_id,
+        sold_account_id: joint.account_id,
         sold_amount: "110.00",
       },
     },
@@ -4748,9 +4748,9 @@ test("transactions class toolbar filter owns class URL state", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const wallet = findByFqn(accounts, "cash:Wallet");
-  const merchant = findByFqn(accounts, "merchant:Books");
-  const joint = findByFqn(accounts, "checking:Chase:Joint");
-  const payroll = findByFqn(accounts, "income:AcmePayroll");
+  const merchant = findByFqn(accounts, "merchant:PowellsBooks");
+  const joint = findByFqn(accounts, "bank:Chase:joint_checking");
+  const payroll = findByFqn(accounts, "employers:Acme:salary");
   const books = findByFqn(categories, "Entertainment:Books");
   const salary = findByFqn(categories, "Income:Salary");
   const spendMemo = `${unique} spend`;
@@ -5142,7 +5142,7 @@ test("transaction entity chips add filters in place", async ({
     "accounts",
   );
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = await createCategory(
     page,
     `E2E:ChipFilter:${unique}:CategoryOne`,
@@ -5559,7 +5559,7 @@ test("transactions page steps adjacent date anchors", async ({ page }) => {
 test("transactions page repositions a same-page day jump, then keeps stepping and offers Today", async ({
   page,
 }) => {
-  const mishaReviewDate = "2026-05-27";
+  const mishaReviewDate = shiftLocalDate(formatLocalDate(new Date()), -2);
   const previousDate = shiftLocalDate(mishaReviewDate, -1);
 
   await page.goto("/transactions?page=1&pageSize=50");
@@ -5867,7 +5867,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     });
 
   await page.setViewportSize({ width: 1000, height: 720 });
-  await page.goto("/transactions?page=1&pageSize=50");
+  await page.goto("/transactions?page=1&pageSize=100");
 
   await expect(page.getByText(/Page 1 of \d+/)).toBeVisible();
 
@@ -5881,7 +5881,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
   expect(intermediateTableState.amountChipsSingleLine).toBe(true);
   expect(intermediateTableState.actionsColumnCollapsed).toBe(false);
   expect(intermediateTableState.actionsColumnRightWithinContainer).toBe(true);
-  expect(intermediateTableState.amountText).toBe("-43.98 $");
+  expect(intermediateTableState.amountText).toBe("-45.35 $");
   expect(intermediateTableState.amountTexts).toContain("+3,250.00 $");
   expect(intermediateTableState.memberFullyVisible).toBe(true);
   expect(intermediateTableState.visibleContentOverlapsAmount).toBe(false);
@@ -5912,7 +5912,7 @@ test("transactions page collapses low-priority columns instead of scrolling hori
     expect(tableState.amountChipsSingleLine).toBe(true);
     expect(tableState.actionsColumnCollapsed).toBe(false);
     expect(tableState.actionsColumnRightWithinContainer).toBe(true);
-    expect(tableState.amountText).toBe("-43.98 $");
+    expect(tableState.amountText).toBe("-45.35 $");
     expect(tableState.amountTexts).toContain("+3,250.00 $");
     expect(tableState.visibleContentOverlapsAmount).toBe(false);
     if (tableState.categoryCollapsed) {
@@ -6033,8 +6033,8 @@ test("mixed more-parts indicators stay inside the amount column where member fir
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
-  const incomeSourceAccount = findByFqn(accounts, "income:AcmePayroll");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
+  const incomeSourceAccount = findByFqn(accounts, "employers:Acme:salary");
   const category = findByFqn(categories, "Entertainment:Books");
   const incomeCategory = findByFqn(categories, "Income:Salary");
   const member = await createMember(page, `Overlap ${unique}`);
@@ -6157,7 +6157,7 @@ test("transactions contain long amount chips and align the pagination footer", a
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const partyAccount = findByFqn(accounts, "person:Friend:Jordan");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E long amount ${unique}`;
@@ -6434,7 +6434,7 @@ test("transactions display currency symbols with code fallback", async ({
       counterparty_account_id: merchantAccount.account_id,
       currency: "XDR",
       funding_account_id: fundingAccount.account_id,
-      initiated_date: "2026-05-31",
+      initiated_date: formatLocalDate(new Date()),
       memo,
     },
   });
@@ -6448,7 +6448,7 @@ test("transactions display currency symbols with code fallback", async ({
       .filter({ hasText: "BlueCash → Target" })
       .first()
       .locator(".transactions-amount-column"),
-  ).toContainText("-43.98 $");
+  ).toContainText("-45.35 $");
   await expect(
     page
       .getByRole("row")
@@ -6468,7 +6468,7 @@ test("transactions page help and leaf category chips", async ({
     "/api/accounts",
     "accounts",
   );
-  const fundingAccount = findByFqn(accounts, "cash:Wallet");
+  const fundingAccount = findByFqn(accounts, "bank:Chase:joint_checking");
   const cashEUR = await createAccount(
     page,
     `cash:E2EExchange:${unique}:EUR`,
@@ -6513,7 +6513,7 @@ test("transactions page help and leaf category chips", async ({
   ).not.toContainText("Mixed");
   await expect(
     simpleSpendRow.locator(".transactions-amount-column"),
-  ).toContainText(/-43\.98 \$/);
+  ).toContainText(/-45\.35 \$/);
   await expect(
     simpleSpendRow
       .locator(".transactions-description-column")
@@ -6606,8 +6606,8 @@ test("record role indicators preserve density across accounting shapes", async (
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
-  const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const fundingAccount = findByFqn(accounts, "bank:Chase:joint_checking");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const correctionAccount = findByFqn(accounts, "system:correction");
   const category = findByFqn(categories, "Entertainment:Books");
   const boughtAccount = await createAccount(
@@ -6785,7 +6785,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const fitMemo = `E2E fitting tags ${unique}`;
   const overflowMemo = `E2E overflowing tags ${unique}`;
@@ -6844,7 +6844,7 @@ test("transactions line composition uses compact dates and single-line leaf tags
   );
   expect(noMemoSpendResponse.ok()).toBe(true);
 
-  await page.goto("/transactions?page=1&pageSize=50");
+  await page.goto("/transactions?page=1&pageSize=100");
   await expect(page.getByText("Description")).toBeVisible();
 
   const fitTagRow = page.getByRole("row").filter({ hasText: fitMemo }).first();
@@ -7006,7 +7006,7 @@ test("cold transaction detail deep link restores outside the list snapshot", asy
       .locator("tr[data-detail-record-row='true']"),
   ).toHaveCount(2);
   await expect(panel.getByText("cash:Wallet").first()).toBeVisible();
-  await expect(panel.getByText("merchant:Books").first()).toBeVisible();
+  await expect(panel.getByText("merchant:PowellsBooks").first()).toBeVisible();
   await expectTransactionsPageUrl(page, 1, 25, {
     q: missingSearch,
     transaction: String(transaction.transaction_id),
@@ -7041,7 +7041,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
     createMember(page, `E2EDetailMember${unique.repeat(6)}`),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E detail ${unique} full memo with receipt notes, household context, and enough words to be truncated on the transaction line but readable in the panel`;
   const alternateMemo = `E2E detail ${unique} alternate`;
@@ -7152,7 +7152,7 @@ test("transaction detail panel shows full records and supports deep links", asyn
     ),
   ).toHaveCount(0);
   await expect(panel.getByText("cash:Wallet").first()).toBeVisible();
-  await expect(panel.getByText("merchant:Books").first()).toBeVisible();
+  await expect(panel.getByText("merchant:PowellsBooks").first()).toBeVisible();
   await expect(panel.getByText("Entertainment:Books").first()).toBeVisible();
   const expectAmountCategorySeparation = async () => {
     await expect
@@ -7400,7 +7400,7 @@ test("transaction detail panel is read-only while category chips keep filtering"
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const initialCategory = findByFqn(categories, "Entertainment:Books");
   const [initialTag, member] = await Promise.all([
     createTag(page, `E2E:DetailReadonly:${unique}:InitialTag`),
@@ -7580,7 +7580,7 @@ test("detail lifecycle and dateless records cover variants in detail and peek", 
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const [fundingAccount, splitMerchant] = await Promise.all([
     createAccount(
@@ -7929,7 +7929,7 @@ test("toolbar filter trigger opens after transaction detail closes", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E escape layered ${unique}`;
 
@@ -7982,7 +7982,7 @@ test("Escape closes filter popover before transaction detail panel", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E escape order ${unique}`;
 
@@ -8041,7 +8041,7 @@ test("focused transaction row closes detail with one Escape", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E keyboard detail ${unique}`;
 
@@ -8111,7 +8111,7 @@ test("transaction detail delete confirms, tombstones, and refreshes the row", as
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E delete detail ${unique}`;
 
@@ -8209,7 +8209,7 @@ test("transaction detail edit preserves imported sources through a fitting short
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const member = await createMember(page, `E2E edit spend ${unique}`);
   const memo = `E2E edit spend ${unique}`;
@@ -8337,7 +8337,7 @@ test("sparse shorthand metadata survives merchant removal while Duplicate uses A
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const booksAccount = findByFqn(accounts, "merchant:Books");
+  const booksAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const targetAccount = findByFqn(accounts, "merchant:Target");
   const booksCategory = findByFqn(categories, "Entertainment:Books");
   const targetCategory = findByFqn(categories, "Food:Groceries");
@@ -8473,8 +8473,8 @@ test("transaction detail edit preserves imported sources through the journal edi
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
-  const incomeAccount = findByFqn(accounts, "income:AcmePayroll");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
+  const incomeAccount = findByFqn(accounts, "employers:Acme:salary");
   const expenseCategory = findByFqn(categories, "Entertainment:Books");
   const incomeCategory = findByFqn(categories, "Income:Salary");
   const memo = `E2E edit mixed ${unique}`;
@@ -8588,7 +8588,7 @@ test("shorthand edit escalation saves as a replacement", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E edit escalate ${unique}`;
 
@@ -8684,7 +8684,7 @@ test("transaction detail duplicate prefills a new entry", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E duplicate source ${unique}`;
   const duplicateMemo = `E2E duplicate copy ${unique}`;
@@ -8801,7 +8801,7 @@ test("transaction detail split opens journal replacement and surfaces replace er
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const splitAccount = await createAccount(
     page,
@@ -8961,7 +8961,7 @@ test("transaction row quick-delete confirms, handles errors, and preserves row b
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E quick delete ${unique}`;
 
@@ -9101,7 +9101,7 @@ test("inline editors hide hidden controls and results while broader pickers reta
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E hidden tag ${unique}`;
 
@@ -9112,7 +9112,7 @@ test("inline editors hide hidden controls and results while broader pickers reta
       counterparty_account_id: merchantAccount.account_id,
       currency: "USD",
       funding_account_id: fundingAccount.account_id,
-      initiated_date: "2026-05-31",
+      initiated_date: formatLocalDate(new Date()),
       memo,
       tag_ids: [hiddenTag.tag_id],
     },
@@ -9231,7 +9231,7 @@ test("entry category picker requests spend intents and excludes hidden categorie
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const memo = `E2E hidden category ${unique}`;
 
   const spendResponse = await page.request.post("/api/transactions/spend", {
@@ -9241,7 +9241,7 @@ test("entry category picker requests spend intents and excludes hidden categorie
       counterparty_account_id: merchantAccount.account_id,
       currency: "USD",
       funding_account_id: fundingAccount.account_id,
-      initiated_date: "2026-05-31",
+      initiated_date: formatLocalDate(new Date()),
       memo,
     },
   });
@@ -9282,9 +9282,15 @@ test("entry category picker requests spend intents and excludes hidden categorie
   expect(categoryRequestUrl.searchParams.has("include_tombstoned")).toBe(false);
 
   const spendPanel = page.getByRole("tabpanel", { name: "Spend" });
-  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books", {
-    scope: spendPanel,
-  });
+  await chooseOptionByKeyboard(
+    page,
+    "Merchant",
+    "Powells",
+    "merchant:PowellsBooks",
+    {
+      scope: spendPanel,
+    },
+  );
   const categoryPicker = page.getByRole("combobox", { name: "Category" });
   await categoryPicker.fill(visibleCategory.name);
   await expect(
@@ -9355,7 +9361,7 @@ test("bulk mode updates uniform fields and skips mixed rows", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const initialCategory = findByFqn(categories, "Entertainment:Books");
   const [targetCategory, initialMember, targetMember] = await Promise.all([
     createCategory(page, `E2E:Bulk:${unique}:Category`, "expense"),
@@ -9644,7 +9650,7 @@ test("an invalidated sibling page keeps its refresh error scoped", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const initialCategory = findByFqn(categories, "Entertainment:Books");
   const targetCategory = await createCategory(
     page,
@@ -9746,7 +9752,7 @@ test("bulk edit predicts and reports all-cancelled transactions as inactive", as
     createMember(page, `E2E bulk cancelled member ${unique}`),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E bulk all cancelled ${unique}`;
   const response = await page.request.post("/api/transactions", {
@@ -9930,7 +9936,7 @@ test("bulk selection keeps mutation targets after an edit changes the active fil
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const initialCategory = findByFqn(categories, "Entertainment:Books");
   const [targetCategory, tag] = await Promise.all([
     createCategory(page, `E2E:BulkFilter:${unique}:Category`, "expense"),
@@ -10735,9 +10741,15 @@ test("entry category picker completes hierarchy segments and preserves full-path
     .click();
 
   const spendPanel = page.getByRole("tabpanel", { name: "Spend" });
-  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books", {
-    scope: spendPanel,
-  });
+  await chooseOptionByKeyboard(
+    page,
+    "Merchant",
+    "Powells",
+    "merchant:PowellsBooks",
+    {
+      scope: spendPanel,
+    },
+  );
   const categoryPicker = page.getByRole("combobox", { name: "Category" });
   await page.getByRole("combobox", { name: "Funding account" }).focus();
   await categoryPicker.focus();
@@ -11048,7 +11060,8 @@ test("constrained inline category picker renders an unsliced level and selects i
     data: {
       amount: "8.31",
       category_id: initialCategory.category_id,
-      counterparty_account_id: findByFqn(accounts, "merchant:Books").account_id,
+      counterparty_account_id: findByFqn(accounts, "merchant:PowellsBooks")
+        .account_id,
       currency: "USD",
       funding_account_id: findByFqn(accounts, "cash:Wallet").account_id,
       initiated_date: "2026-05-31",
@@ -11375,11 +11388,16 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await chooseOptionByKeyboard(
     page,
     "Funding account",
-    "credit_card",
-    "credit_card:Chase:Sapphire",
+    "Sapphire",
+    "bank:Chase:Sapphire",
     { arrowDownPresses: 1 },
   );
-  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books");
+  await chooseOptionByKeyboard(
+    page,
+    "Merchant",
+    "Powells",
+    "merchant:PowellsBooks",
+  );
   await chooseOptionByKeyboard(
     page,
     "Category",
@@ -11448,7 +11466,7 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await expect(dateInput).toHaveValue("2026-05-31");
   await expect(
     page.getByRole("combobox", { name: "Funding account" }),
-  ).toHaveValue("credit_card:Chase:Sapphire");
+  ).toHaveValue("bank:Chase:Sapphire");
   await expect(page.getByLabel("Amount")).toHaveValue("");
 
   await page.getByRole("button", { name: "Close transaction editor" }).click();
@@ -11489,7 +11507,7 @@ test("entry panel creates each shorthand transaction type", async ({
     await expect(
       page.getByText(`Entries this session: ${count}`),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Saving" })).toHaveCount(0);
+    await expect(saveButton).toBeEnabled();
   };
 
   const ledgerLookups = waitForLedgerLookups(page);
@@ -11514,9 +11532,15 @@ test("entry panel creates each shorthand transaction type", async ({
     "cash:Wallet",
     { scope: spendPanel },
   );
-  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books", {
-    scope: spendPanel,
-  });
+  await chooseOptionByKeyboard(
+    page,
+    "Merchant",
+    "Powells",
+    "merchant:PowellsBooks",
+    {
+      scope: spendPanel,
+    },
+  );
   await chooseOptionByKeyboard(
     page,
     "Category",
@@ -11535,16 +11559,18 @@ test("entry panel creates each shorthand transaction type", async ({
   await chooseOptionByKeyboard(
     page,
     "Destination account",
-    "Chase:Joint",
-    "checking:Chase:Joint",
+    "joint_checking",
+    "bank:Chase:joint_checking",
     { scope: incomePanel },
   );
   await chooseOptionByKeyboard(
     page,
     "Source",
-    "AcmePayroll",
-    "income:AcmePayroll",
-    { scope: incomePanel },
+    "Acme",
+    "employers:Acme:salary",
+    {
+      scope: incomePanel,
+    },
   );
   await chooseOptionByKeyboard(page, "Category", "Salary", "Income:Salary", {
     scope: incomePanel,
@@ -11560,8 +11586,8 @@ test("entry panel creates each shorthand transaction type", async ({
   await chooseOptionByKeyboard(
     page,
     "Destination account",
-    "Chase:Joint",
-    "checking:Chase:Joint",
+    "joint_checking",
+    "bank:Chase:joint_checking",
     { scope: refundPanel },
   );
   await chooseOptionByKeyboard(
@@ -11589,15 +11615,15 @@ test("entry panel creates each shorthand transaction type", async ({
   await chooseOptionByKeyboard(
     page,
     "From account",
-    "Chase:Joint",
-    "checking:Chase:Joint",
+    "joint_checking",
+    "bank:Chase:joint_checking",
     { scope: transferPanel },
   );
   await chooseOptionByKeyboard(
     page,
     "To account",
-    "Ally:Emergency",
-    "savings:Ally:Emergency",
+    "emergency_savings",
+    "bank:Ally:emergency_savings",
     { scope: transferPanel },
   );
   await transferPanel.getByLabel("Memo").fill("E2E tab transfer");
@@ -11609,9 +11635,13 @@ test("entry panel creates each shorthand transaction type", async ({
   ).toBeVisible();
   const exchangePanel = entryPanel.getByRole("tabpanel", { name: "Exchange" });
   await exchangePanel.getByLabel("Date").fill("2026-05-30");
-  await chooseOptionByKeyboard(page, "From account", "Wallet", "cash:Wallet", {
-    scope: exchangePanel,
-  });
+  await chooseOptionByKeyboard(
+    page,
+    "From account",
+    "joint_checking",
+    "bank:Chase:joint_checking",
+    { scope: exchangePanel },
+  );
   await fillAndExpectValue(
     exchangePanel.getByLabel("Amount sold"),
     `32.${cents}`,
@@ -11619,8 +11649,8 @@ test("entry panel creates each shorthand transaction type", async ({
   await chooseOptionByKeyboard(
     page,
     "To account",
-    "Travel:EUR",
-    "cash:Travel:EUR",
+    "Fidelity:EUR",
+    "bank:Fidelity:EUR",
     { scope: exchangePanel },
   );
   await fillAndExpectValue(
@@ -11643,7 +11673,7 @@ test("pristine create drafts do not block saved transaction launches", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const spendResponse = await page.request.post("/api/transactions/spend", {
     data: {
@@ -11750,7 +11780,7 @@ test("dirty and stale-pristine entry drafts use their initialization baseline", 
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const spendResponse = await page.request.post("/api/transactions/spend", {
     data: {
@@ -11994,17 +12024,23 @@ test("advanced journal entry gates balance, persists drafts, and saves records",
   await chooseOptionByKeyboard(
     page,
     "Account",
-    "Chase:Joint",
-    "checking:Chase:Joint",
+    "joint_checking",
+    "bank:Chase:joint_checking",
     { scope: secondRecord },
   );
   await secondRecord.getByLabel("Amount").fill("-5.00");
 
   await page.getByRole("button", { name: "Add record" }).click();
   const thirdRecord = journalRecord(page, 3);
-  await chooseOptionByKeyboard(page, "Account", "Books", "merchant:Books", {
-    scope: thirdRecord,
-  });
+  await chooseOptionByKeyboard(
+    page,
+    "Account",
+    "Powells",
+    "merchant:PowellsBooks",
+    {
+      scope: thirdRecord,
+    },
+  );
   await thirdRecord.getByLabel("Amount").fill("15.00");
   await chooseOptionByKeyboard(
     page,
@@ -12042,7 +12078,7 @@ test("create-mode advanced drafts stay independent when switching tabs and keepi
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
 
   const spendResponse = await page.request.post("/api/transactions/spend", {
@@ -12156,7 +12192,7 @@ test("the modal protects an in-flight edit from underlying saved-transaction act
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
 
   for (const memo of [initialMemo, nextMemo]) {
@@ -12225,7 +12261,7 @@ test("spend entry escalates to matching journal records", async ({
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
 
   await page.goto("/transactions?page=1&pageSize=25");
@@ -12247,9 +12283,15 @@ test("spend entry escalates to matching journal records", async ({
     "cash:Wallet",
     { scope: spendPanel },
   );
-  await chooseOptionByKeyboard(page, "Merchant", "Books", "merchant:Books", {
-    scope: spendPanel,
-  });
+  await chooseOptionByKeyboard(
+    page,
+    "Merchant",
+    "Powells",
+    "merchant:PowellsBooks",
+    {
+      scope: spendPanel,
+    },
+  );
   await chooseOptionByKeyboard(
     page,
     "Category",
@@ -12275,7 +12317,7 @@ test("spend entry escalates to matching journal records", async ({
   await expect(firstRecord.getByLabel("Memo")).toHaveValue(memo);
   await expect(
     secondRecord.getByRole("combobox", { name: "Account" }),
-  ).toHaveValue("merchant:Books");
+  ).toHaveValue("merchant:PowellsBooks");
   await expect(secondRecord.getByLabel("Amount")).toHaveValue(amount);
   await expect(
     secondRecord.getByRole("combobox", { name: "Category" }),
@@ -12354,9 +12396,15 @@ test("advanced journal account picker follows selected category intent", async (
     firstRecord.getByRole("combobox", { name: "Category" }),
   ).toHaveCount(0);
 
-  await chooseOptionByKeyboard(page, "Account", "Books", "merchant:Books", {
-    scope: firstRecord,
-  });
+  await chooseOptionByKeyboard(
+    page,
+    "Account",
+    "Powells",
+    "merchant:PowellsBooks",
+    {
+      scope: firstRecord,
+    },
+  );
   const categoryPicker = firstRecord.getByRole("combobox", {
     name: "Category",
   });
@@ -12474,7 +12522,7 @@ test("the entry modal blocks the command palette while an edit is active", async
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E palette supersede ${unique}`;
 
@@ -12607,7 +12655,7 @@ test("entry modal deep links compose with history and report missing transaction
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const memo = `E2E entry deep link ${unique}`;
   const spendResponse = await page.request.post("/api/transactions/spend", {

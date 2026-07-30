@@ -278,11 +278,11 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
   };
   const accounts = accountsBody.accounts;
   const balances = balancesBody.balances;
-  const joint = findByFqn(accounts, "checking:Chase:Joint");
+  const joint = findByFqn(accounts, "bank:Chase:joint_checking");
   const jointBalance = balances.find(
     (balance) => balance.account_id === joint.account_id,
   );
-  const sapphire = findByFqn(accounts, "credit_card:Chase:Sapphire");
+  const sapphire = findByFqn(accounts, "bank:Chase:Sapphire");
   const sapphireBalance = balances.find(
     (balance) => balance.account_id === sapphire.account_id,
   );
@@ -295,14 +295,14 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     .getByRole("link", { exact: true, name: "Accounts" });
   await expect(accountsNavLink).toHaveAttribute("aria-current", "page");
 
-  const checkingGroup = page
+  const bankGroup = page
     .getByTestId("accounts-tree-row")
-    .filter({ hasText: "checking" })
+    .filter({ hasText: "bank" })
     .first();
-  await expect(checkingGroup).toBeVisible();
+  await expect(bankGroup).toBeVisible();
   const jointRow = page
     .getByTestId("accounts-tree-row")
-    .filter({ hasText: "Joint" })
+    .filter({ hasText: "joint_checking" })
     .first();
   await expect(jointRow).toBeVisible();
   await expect(jointRow).toContainText("Owned");
@@ -338,16 +338,16 @@ test("accounts page renders tree, URL toolbar state, balances, and sidebar navig
     page.getByTestId("accounts-tree-row").filter({ hasText: "TraderJoes" }),
   ).toBeVisible();
   await expect(
-    page.getByTestId("accounts-tree-row").filter({ hasText: "Joint" }),
+    page.getByTestId("accounts-tree-row").filter({ hasText: "joint_checking" }),
   ).toHaveCount(0);
 
-  await page.getByLabel("Search").fill("credit_card:Chase:Sapphire");
-  await expect(page).toHaveURL(/type=flow&q=credit_card%3AChase%3ASapphire/);
+  await page.getByLabel("Search").fill("bank:Chase:Sapphire");
+  await expect(page).toHaveURL(/type=flow&q=bank%3AChase%3ASapphire/);
   await expect(page.getByTestId("accounts-tree-row")).toHaveCount(0);
 
   await page.getByLabel("Type").click();
   await page.getByRole("option", { exact: true, name: "All types" }).click();
-  await expect(page).toHaveURL(/q=credit_card%3AChase%3ASapphire/);
+  await expect(page).toHaveURL(/q=bank%3AChase%3ASapphire/);
   const sapphireRow = page
     .getByTestId("accounts-tree-row")
     .filter({ hasText: "Sapphire" });
@@ -390,7 +390,7 @@ test("transaction quick-delete refreshes reference deleteability without a reloa
   );
   const feesAccount = findByFqn(accounts, "bank:Chase:fees");
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
 
   await page.goto("/accounts");
   await page.getByLabel("Search").fill(feesAccount.fqn);
@@ -755,7 +755,7 @@ test("register amount cells stay single-line through the collapse ladder", async
     "/api/accounts",
     "accounts",
   );
-  const joint = findByFqn(accounts, "checking:Chase:Joint");
+  const joint = findByFqn(accounts, "bank:Chase:joint_checking");
 
   for (const viewport of [
     { width: 1440, height: 900 },
@@ -805,7 +805,7 @@ test("account page renders header and paginated running-balance register", async
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
-  const merchant = findByFqn(accounts, "merchant:Books");
+  const merchant = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const transactions: TransactionFixture[] = [];
 
@@ -923,7 +923,7 @@ test("account page renders header and paginated running-balance register", async
   await expect(accountHeader.getByText(currentBalanceText)).toHaveCount(2);
   await expect(page.getByText("Credit limit", { exact: true })).toBeVisible();
   await expect(page.getByText("Credit limit USD")).toHaveCount(0);
-  await expect(page.getByText("5,000.00 $")).toHaveCount(2);
+  await expect(accountHeader.getByText("5,000.00 $")).toHaveCount(2);
   await expect(
     page.locator("li").filter({ hasText: "5,000.00 $" }).getByText("May 1"),
   ).toBeVisible();
@@ -942,8 +942,8 @@ test("account page renders header and paginated running-balance register", async
     .filter({ hasText: firstRecord.memo ?? "" })
     .first();
   await expect(firstRow).toBeVisible();
-  await expect(firstRow).toContainText("Card → Books");
-  await expect(firstRow).toContainText("Books");
+  await expect(firstRow).toContainText("Card → PowellsBooks");
+  await expect(firstRow).toContainText("PowellsBooks");
   await expect(firstRow).toContainText(
     formatUsdMarkerAmount(firstRecord.amount),
   );
@@ -972,7 +972,9 @@ test("account page renders header and paginated running-balance register", async
     peekPanel.getByTestId("transaction-detail-records-table"),
   ).toContainText(firstRecord.memo ?? "");
   await expect(peekPanel.getByText("Card").first()).toBeVisible();
-  await expect(peekPanel.getByText("merchant:Books").first()).toBeVisible();
+  await expect(
+    peekPanel.getByText("merchant:PowellsBooks").first(),
+  ).toBeVisible();
   const peekRecordsTable = peekPanel.getByTestId(
     "transaction-detail-records-table",
   );
@@ -982,7 +984,7 @@ test("account page renders header and paginated running-balance register", async
     .first();
   const peekAccountPath = peekRecordsTable
     .locator("[data-label='Account']")
-    .filter({ hasText: "merchant:Books" })
+    .filter({ hasText: "merchant:PowellsBooks" })
     .locator("[data-slot='tooltip-trigger']")
     .first();
   await expect(peekAmountText).toBeVisible();
@@ -1130,7 +1132,7 @@ test("account register peek tag chips open transactions with tag filter", async 
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
   const fundingAccount = findByFqn(accounts, "cash:Wallet");
-  const merchantAccount = findByFqn(accounts, "merchant:Books");
+  const merchantAccount = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const tag = await createTag(page, `E2E:PeekFilter:${unique}:RegisterTag`);
   const memo = `E2E register peek tag filter ${unique}`;
@@ -1184,8 +1186,8 @@ test("account group page renders subtotals and combined prefix register", async 
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
-  const siblingWallet = findByFqn(accounts, "savings:Ally:Emergency");
-  const siblingMerchant = findByFqn(accounts, "merchant:Books");
+  const siblingWallet = findByFqn(accounts, "bank:Ally:emergency_savings");
+  const siblingMerchant = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const [wallet, fees] = await Promise.all([
     createAccount(page, { fqn: `${prefix}:GroupBalance${unique}` }),
@@ -1397,14 +1399,14 @@ test("account group page renders subtotals and combined prefix register", async 
   await page.goto("/overview");
   const overviewGroupLink = page
     .getByTestId("overview-balance-group")
-    .filter({ hasText: "checking" })
-    .getByRole("link", { exact: true, name: "checking" });
+    .filter({ hasText: "bank" })
+    .getByRole("link", { exact: true, name: "bank" });
   await expect(overviewGroupLink).toHaveAttribute(
     "href",
-    "/accounts/group?prefix=checking",
+    "/accounts/group?prefix=bank",
   );
   await overviewGroupLink.click();
-  await expect(page).toHaveURL("/accounts/group?prefix=checking");
+  await expect(page).toHaveURL("/accounts/group?prefix=bank");
 });
 
 test("account tree rows and entry links navigate to account register pages", async ({
@@ -1415,27 +1417,29 @@ test("account tree rows and entry links navigate to account register pages", asy
     "/api/accounts",
     "accounts",
   );
-  const joint = findByFqn(accounts, "checking:Chase:Joint");
-  const sapphire = findByFqn(accounts, "credit_card:Chase:Sapphire");
+  const joint = findByFqn(accounts, "bank:Chase:joint_checking");
+  const sapphire = findByFqn(accounts, "bank:Chase:Sapphire");
 
   await page.goto("/accounts");
   const jointTreeRow = page
     .getByTestId("accounts-tree-row")
-    .filter({ hasText: "Joint" })
+    .filter({ hasText: "joint_checking" })
     .first();
   await expect(jointTreeRow).toHaveAttribute(
     "aria-label",
-    "Open account checking:Chase:Joint",
+    "Open account bank:Chase:joint_checking",
     { timeout: 10_000 },
   );
   await jointTreeRow.click();
   await expect(page).toHaveURL(new RegExp(`/accounts/${joint.account_id}$`));
-  await expect(page.getByRole("heading", { name: "Joint" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "joint_checking" }),
+  ).toBeVisible();
 
   await page.goto("/status");
   const jointStripLink = page
     .getByTestId("featured-balance-row")
-    .filter({ hasText: "Joint" })
+    .filter({ hasText: "joint_checking" })
     .getByTestId("featured-balance-name");
   await expect(jointStripLink).toHaveAttribute(
     "href",
@@ -1443,7 +1447,9 @@ test("account tree rows and entry links navigate to account register pages", asy
   );
   await jointStripLink.click();
   await expect(page).toHaveURL(new RegExp(`/accounts/${joint.account_id}$`));
-  await expect(page.getByRole("heading", { name: "Joint" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "joint_checking" }),
+  ).toBeVisible();
 
   await page.goto("/overview");
   const sapphireOverviewLink = page
@@ -1750,7 +1756,7 @@ test("accounts tree row quick actions hide feature and delete rows", async ({
     listFixtures<AccountFixture>(page, "/api/accounts", "accounts"),
     listFixtures<CategoryFixture>(page, "/api/categories", "categories"),
   ]);
-  const merchant = findByFqn(accounts, "merchant:Books");
+  const merchant = findByFqn(accounts, "merchant:PowellsBooks");
   const category = findByFqn(categories, "Entertainment:Books");
   const createBlockingSpend = async (
     fundingAccountId: number,
@@ -1930,7 +1936,10 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
 
   await page.goto("/accounts");
   await expect(
-    page.getByTestId("accounts-tree-row").filter({ hasText: "Joint" }).first(),
+    page
+      .getByTestId("accounts-tree-row")
+      .filter({ hasText: "joint_checking" })
+      .first(),
   ).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: "New account" }).click();
   const createPanel = page.getByRole("dialog", { name: "Create account" });
