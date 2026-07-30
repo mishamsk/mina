@@ -398,7 +398,7 @@ const TagChipsLine = ({
       ref={rootRef}
       className={cn(
         tagChipMicroHeightClass,
-        "relative max-w-full min-w-0 overflow-visible",
+        "relative flex min-h-6 max-w-full min-w-0 items-center overflow-visible",
       )}
     >
       <div

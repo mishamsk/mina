@@ -1277,9 +1277,11 @@ const tagChipLineState = async (row: Locator) =>
         hiddenLabels: [],
         visibleLabels: [],
         visibleRowCount: 0,
+        verticalCenterOffset: null,
       };
     }
 
+    const cellRect = cell.getBoundingClientRect();
     const clipRect = list.getBoundingClientRect();
     const chips = Array.from(list.children).filter(
       (child): child is HTMLElement => child instanceof HTMLElement,
@@ -1292,19 +1294,33 @@ const tagChipLineState = async (row: Locator) =>
         rect.top >= clipRect.top - 0.5 &&
         rect.bottom <= clipRect.bottom + 0.5;
       return {
+        bottom: rect.bottom,
         label: chip.textContent?.trim() ?? "",
-        top: Math.round(rect.top),
+        rowTop: Math.round(rect.top),
+        top: rect.top,
         visible,
       };
     });
     const visibleStates = chipStates.filter((chip) => chip.visible);
+    const chipShadowOffset = 2;
+    const visualCenterDelta =
+      visibleStates.length === 0
+        ? null
+        : (Math.min(...visibleStates.map((chip) => chip.top)) +
+            Math.max(
+              ...visibleStates.map((chip) => chip.bottom + chipShadowOffset),
+            )) /
+            2 -
+          (cellRect.top + cellRect.bottom) / 2;
 
     return {
       hiddenLabels: chipStates
         .filter((chip) => !chip.visible)
         .map((chip) => chip.label),
       visibleLabels: visibleStates.map((chip) => chip.label),
-      visibleRowCount: new Set(visibleStates.map((chip) => chip.top)).size,
+      visibleRowCount: new Set(visibleStates.map((chip) => chip.rowTop)).size,
+      verticalCenterOffset:
+        visualCenterDelta === null ? null : Math.abs(visualCenterDelta),
     };
   });
 
@@ -6855,7 +6871,16 @@ test("transactions line composition uses compact dates and single-line leaf tags
     expect.arrayContaining(createdFitTags.map((tag) => tag.name)),
   );
   expect(fitTagState.hiddenLabels).toEqual([]);
-  expect(fitTagState.visibleRowCount).toBeLessThanOrEqual(2);
+  for (const viewportWidth of [1600, 1200]) {
+    await page.setViewportSize({ width: viewportWidth, height: 720 });
+    const responsiveTagState = await tagChipLineState(fitTagRow);
+    expect(responsiveTagState.visibleRowCount).toBe(1);
+    expect(responsiveTagState.verticalCenterOffset).not.toBeNull();
+    expect(
+      responsiveTagState.verticalCenterOffset ?? Number.POSITIVE_INFINITY,
+    ).toBeLessThanOrEqual(1.5);
+  }
+  await page.setViewportSize({ width: 1600, height: 720 });
   await expect(
     fitTagRow
       .locator(".transactions-tags-column")
