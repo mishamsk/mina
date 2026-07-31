@@ -302,8 +302,13 @@ test("members side panel creates renames and deletes members with conflict feedb
   await expect(page.getByText("Member created.")).toBeVisible({
     timeout: 10_000,
   });
+  await expect(createPanel).toBeHidden();
+  await expect(page.getByRole("button", { name: "New member" })).toBeFocused();
 
   await page.getByLabel("Search").fill(originalName);
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("q"))
+    .toBe(originalName);
   const originalRow = page
     .getByTestId("members-list-row")
     .filter({ hasText: originalName })

@@ -41,7 +41,7 @@ grep 'GET / 200' $WORK/access.log
 # Demo startup seeding binds the listener and exposes REST data.
 freeport
 exec mina serve --demo --demo-anchor-date 2026-07-15 --db $WORK/rest-demo.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
-httpget 'http://127.0.0.1:'$PORT'/api/transactions?limit=1'
+httpwait -timeout 10s '"transactions":\[' 'http://127.0.0.1:'$PORT'/api/transactions?limit=1'
 stdout '"transactions":\['
 stdout '"transaction_id"'
 stdout '"initiated_date":"2026-07-15"'
@@ -52,7 +52,7 @@ wait server
 localdate
 freeport
 exec mina serve --demo --db $WORK/rest-demo-current-date.db --yes --host 127.0.0.1 --port $PORT --quiet &server&
-httpget 'http://127.0.0.1:'$PORT'/api/transactions?limit=1'
+httpwait -timeout 10s '"transactions":\[' 'http://127.0.0.1:'$PORT'/api/transactions?limit=1'
 stdout '"initiated_date":"'$LOCAL_DATE'"'
 kill -INT server
 wait server

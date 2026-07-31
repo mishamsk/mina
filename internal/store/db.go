@@ -38,8 +38,13 @@ func attachDatabaseWithOptions(ctx context.Context, appDB *AppDB, path string, o
 	return nil
 }
 
-func detachDatabase(ctx context.Context, appDB *AppDB) error {
+func closeAttachedDatabase(ctx context.Context, appDB *AppDB, checkpoint bool) error {
 	return appDB.withConn(ctx, func(conn sqlQueryer) error {
+		if checkpoint {
+			if _, err := conn.ExecContext(ctx, "CHECKPOINT "+appDB.accountingDatabaseIdentifier()); err != nil {
+				return fmt.Errorf("checkpoint accounting database %s before detach: %w", appDB.accountingDatabaseName(), err)
+			}
+		}
 		if _, err := conn.ExecContext(ctx, "USE memory.main"); err != nil {
 			return fmt.Errorf("select memory database before detach: %w", err)
 		}

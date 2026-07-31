@@ -334,8 +334,8 @@ snapshot_demo_data() {
     transactions="$(curl_body "$(api_url '/api/transactions?limit=500')")"
     printf '%s\n%s\n' "$accounts" "$transactions" | jq -cs '{
         account_total: .[0].total_count,
-        checking_id: (.[0].accounts[] | select(.fqn == "checking:Chase:Joint") | .account_id),
-        emergency_id: (.[0].accounts[] | select(.fqn == "savings:Ally:Emergency") | .account_id),
+        checking_id: (.[0].accounts[] | select(.fqn == "bank:Chase:joint_checking") | .account_id),
+        emergency_id: (.[0].accounts[] | select(.fqn == "bank:Ally:emergency_savings") | .account_id),
         featured_account_fqns: [.[0].accounts[] | select(.is_featured == true) | .fqn] | sort,
         transaction_total: .[1].total_count
     }'

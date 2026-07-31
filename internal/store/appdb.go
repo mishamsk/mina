@@ -24,18 +24,19 @@ type AppDB struct {
 
 // OpenAppDB opens the process DuckDB handle and prepares the accounting location.
 func OpenAppDB(ctx context.Context, request AppDBOpenRequest) (*AppDB, error) {
-	return openAppDBWithAttach(ctx, request, attachDatabase)
+	return openAppDBWithAttach(ctx, request, attachDatabase, true)
 }
 
 // OpenAppDBReadOnly opens the process DuckDB handle and attaches file-backed accounting state read-only.
 func OpenAppDBReadOnly(ctx context.Context, request AppDBOpenRequest) (*AppDB, error) {
-	return openAppDBWithAttach(ctx, request, attachDatabaseReadOnly)
+	return openAppDBWithAttach(ctx, request, attachDatabaseReadOnly, false)
 }
 
 func openAppDBWithAttach(
 	ctx context.Context,
 	request AppDBOpenRequest,
 	attach func(context.Context, *AppDB, string) error,
+	checkpointOnClose bool,
 ) (*AppDB, error) {
 	db, err := open(ctx, ":memory:", request.MaxOpenConns)
 	if err != nil {
@@ -45,7 +46,7 @@ func openAppDBWithAttach(
 	appDB, err := openAppDB(ctx, db, request, attach, func(appDB *AppDB) error {
 		var detachErr error
 		if request.Path != "" {
-			detachErr = detachDatabase(context.Background(), appDB)
+			detachErr = closeAttachedDatabase(context.Background(), appDB, checkpointOnClose)
 		}
 
 		return errors.Join(detachErr, db.Close())
@@ -69,7 +70,7 @@ func OpenAppDBWithProcessDB(ctx context.Context, db *sql.DB, request AppDBOpenRe
 			return nil
 		}
 
-		return detachDatabase(context.Background(), appDB)
+		return closeAttachedDatabase(context.Background(), appDB, true)
 	})
 }
 

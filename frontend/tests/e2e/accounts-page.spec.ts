@@ -1872,7 +1872,10 @@ test("accounts tree row quick actions hide feature and delete rows", async ({
   await expect(
     page.getByText("Account has active dependent records."),
   ).toBeVisible();
-  await blockedRow.getByRole("button", { name: "Edit account" }).click();
+  const blockedEditButton = blockedRow.getByRole("button", {
+    name: "Edit account",
+  });
+  await blockedEditButton.click();
   const blockedEditPanel = page.getByRole("dialog", {
     name: "Edit account",
   });
@@ -1897,6 +1900,8 @@ test("accounts tree row quick actions hide feature and delete rows", async ({
   await blockedEditPanel
     .getByRole("button", { name: "Close account panel" })
     .click();
+  await expect(blockedEditPanel).toHaveCount(0);
+  await expect(blockedEditButton).toBeFocused();
 
   await page.getByLabel("Search").fill(leafDeleteAccount.fqn);
   const leafDeleteRow = page
@@ -2097,13 +2102,14 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   await expect(deleteRow).toBeVisible();
   await deleteRow.getByRole("button", { name: "Edit account" }).click();
   await expect(editPanel).toBeVisible();
+  await expect(editPanel).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(editPanel).toBeHidden();
   await expect(
     deleteRow.getByRole("button", { name: "Edit account" }),
   ).toBeFocused();
   await deleteRow.getByRole("button", { name: "Edit account" }).click();
-  await expect(editPanel).toBeVisible();
+  await expect(editPanel).toBeFocused();
   await editPanel.getByRole("button", { name: "Delete" }).click();
   const accountDeleteDialog = page.getByRole("alertdialog", {
     name: "Delete account",

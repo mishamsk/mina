@@ -183,6 +183,7 @@ Do not use `frontend-e2e-tests` for:
 
 Frontend e2e tests prove browser, binary, embedded assets, and listener wiring.
 They must not duplicate REST scenario coverage.
+- Keep each frontend e2e spec file under 25 tests; split growing suites by user workflow.
 
 ## Docker-Lifecycle-Tests
 

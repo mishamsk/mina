@@ -248,8 +248,11 @@ const expectSameHorizontalSlot = async (
   expect(firstBox?.x).toBeCloseTo(secondBox?.x ?? 0, 4);
 };
 
-const favoriteStarGeometry = (button: Locator) =>
-  button.evaluate((element) => {
+const favoriteStarGeometry = (button: Locator, focus = false) =>
+  button.evaluate((element, shouldFocus) => {
+    if (shouldFocus) {
+      element.focus({ preventScroll: true });
+    }
     const iconBox = element.querySelector<HTMLElement>(
       ".row-actions-toggle-icon, [data-favorite-star-icon-box]",
     );
@@ -291,6 +294,7 @@ const favoriteStarGeometry = (button: Locator) =>
       controlKind: element.classList.contains("row-actions-toggle")
         ? "row-action"
         : "labeled",
+      focused: document.activeElement === element,
       iconBox: rect(iconBox),
       lowerPointsFilled:
         svg.dataset.state === "filled"
@@ -304,16 +308,19 @@ const favoriteStarGeometry = (button: Locator) =>
       svg: rect(svg),
       viewBox: svg.getAttribute("viewBox"),
     };
-  });
+  }, focus);
 
 const expectFavoriteStarGeometry = async (
   button: Locator,
   state: "filled" | "unfilled",
 ): Promise<void> => {
-  const expectCurrentGeometry = async () => {
-    const geometry = await favoriteStarGeometry(button);
+  const expectCurrentGeometry = async (focus = false) => {
+    const geometry = await favoriteStarGeometry(button, focus);
     expect(geometry.state).toBe(state);
     expect(geometry.viewBox).toBe("0 0 24 24");
+    if (focus) {
+      expect(geometry.focused).toBe(true);
+    }
     if (geometry.controlKind === "row-action") {
       expect(geometry.button.width).toBeCloseTo(28, 4);
       expect(geometry.button.height).toBeCloseTo(28, 4);
@@ -339,9 +346,7 @@ const expectFavoriteStarGeometry = async (
   await expectCurrentGeometry();
   await button.hover();
   await expectCurrentGeometry();
-  await button.focus();
-  await expect(button).toBeFocused();
-  await expectCurrentGeometry();
+  await expectCurrentGeometry(true);
 };
 
 const compactTableGeometry = (frame: Locator) =>

@@ -389,6 +389,8 @@ test("tags row actions hide groups and move renamed paths into transaction filte
   await expect(page.getByTestId("tags-tree-row")).toHaveCount(0, {
     timeout: 10_000,
   });
+  await expect(moveDialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "New tag" })).toBeFocused();
   await page.getByLabel("Search").fill(moveDestination);
   await expect(
     page.getByTestId("tags-tree-row").filter({ hasText: "Alpha" }),
@@ -589,8 +591,10 @@ test("tags side panel creates edits and deletes tags with conflict feedback", as
     timeout: 10_000,
   });
   await expect(createPanel).toBeHidden();
+  await expect(page.getByRole("button", { name: "New tag" })).toBeFocused();
 
   await page.getByLabel("Search").fill(fqn);
+  await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBe(fqn);
   const createdRow = page
     .getByTestId("tags-tree-row")
     .filter({ hasText: "Leaf" })

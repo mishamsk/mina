@@ -18,4 +18,6 @@
 ## Testing Notes
 
 - Use Justfile frontend recipes for formatting, linting, typechecking, build checks, and browser e2e checks.
-- Frontend e2e runs default to four workers; set `MINA_FRONTEND_E2E_WORKERS` to size the worker and Mina server pools.
+- Frontend e2e runs default to two workers; `MINA_FRONTEND_E2E_WORKERS` controls Playwright concurrency.
+- One invocation-owned, immutable demo template is seeded in the OS temporary directory; every test and retry gets a writable database copy, backup directory, listener, and Mina process.
+- Playwright owns all template and test lifecycle cleanup; no template database is committed to the repository.

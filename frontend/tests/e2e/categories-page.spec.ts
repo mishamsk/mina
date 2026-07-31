@@ -401,6 +401,10 @@ test("categories row actions hide groups and move renamed paths into transaction
   await expect(page.getByTestId("categories-tree-row")).toHaveCount(0, {
     timeout: 10_000,
   });
+  await expect(moveDialog).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "New category" }),
+  ).toBeFocused();
   await page.getByLabel("Search").fill(moveDestination);
   await expect(
     page.getByTestId("categories-tree-row").filter({ hasText: "Alpha" }),
@@ -613,8 +617,12 @@ test("categories side panel creates edits and deletes categories with conflict f
     timeout: 10_000,
   });
   await expect(createPanel).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "New category" }),
+  ).toBeFocused();
 
   await page.getByLabel("Search").fill(fqn);
+  await expect.poll(() => new URL(page.url()).searchParams.get("q")).toBe(fqn);
   const createdRow = page
     .getByTestId("categories-tree-row")
     .filter({ hasText: "Income" })
