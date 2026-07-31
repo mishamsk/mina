@@ -3114,6 +3114,12 @@ func Operations() []Operation {
 						Description: "Date anchoring the demo history and recurring activity; defaults to the current local civil date.",
 						Required:    false,
 					},
+					{
+						Name:        "max_months",
+						Type:        "integer",
+						Description: "Positive requested calendar months of demo transaction history and recurring activity; defaults to 6, and values above 6 use the full 6-month fixture.",
+						Required:    false,
+					},
 				},
 			},
 			Invoke: invokeSeedDemo,
@@ -7795,7 +7801,7 @@ func invokeSearchJournalRecords(ctx context.Context, client httpclient.ClientWit
 }
 
 func invokeSeedDemo(ctx context.Context, client httpclient.ClientWithResponsesInterface, input InvocationInput) (InvocationResult, error) {
-	if err := validateInvocationInput(input, nil, []string{"anchor_date"}, false, false); err != nil {
+	if err := validateInvocationInput(input, nil, []string{"anchor_date", "max_months"}, false, false); err != nil {
 		return InvocationResult{}, err
 	}
 	params := &httpclient.SeedDemoParams{}
@@ -7818,6 +7824,26 @@ func invokeSeedDemo(ctx context.Context, client httpclient.ClientWithResponsesIn
 			}
 		}
 		params.AnchorDate = &queryValue0
+	}
+	queryValues1, querySupplied1 := input.Query["max_months"]
+	if querySupplied1 {
+		if len(queryValues1) != 1 {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "max_months",
+				Err:      fmt.Errorf("got %d values, want 1", len(queryValues1)),
+			}
+		}
+		var queryValue1 int
+		if err := parseInvocationValue(queryValues1[0], false, &queryValue1); err != nil {
+			return InvocationResult{}, &InvocationInputError{
+				Location: "query",
+				Name:     "max_months",
+				Value:    queryValues1[0],
+				Err:      err,
+			}
+		}
+		params.MaxMonths = &queryValue1
 	}
 	response, err := client.SeedDemoWithResponse(ctx, params)
 	if err != nil {

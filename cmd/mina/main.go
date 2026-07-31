@@ -156,6 +156,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 	var quiet bool
 	var seedDemo bool
 	var demoAnchorDate string
+	var demoMaxMonths int
 	sources := appconfig.Sources()
 	flagCfg := appconfig.DefaultConfig()
 	cmd := &cobra.Command{
@@ -193,8 +194,15 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 			if demoAnchorDate != "" && !seedDemo {
 				return fmt.Errorf("--demo-anchor-date requires --demo")
 			}
+			if cmd.Flags().Changed("demo-max-months") && !seedDemo {
+				return fmt.Errorf("--demo-max-months requires --demo")
+			}
+			var requestedDemoMaxMonths *int
+			if cmd.Flags().Changed("demo-max-months") {
+				requestedDemoMaxMonths = &demoMaxMonths
+			}
 
-			if err := serve(cmd.Context(), stdin, stdout, stderr, cfg, quietValue, seedDemo, demoAnchorDate, assumeYesValue); err != nil {
+			if err := serve(cmd.Context(), stdin, stdout, stderr, cfg, quietValue, seedDemo, demoAnchorDate, requestedDemoMaxMonths, assumeYesValue); err != nil {
 				return commandExitError(err)
 			}
 
@@ -225,6 +233,7 @@ func newServeCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer, config
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "disable access logs "+commandEnvHelp("MINA_QUIET"))
 	cmd.Flags().BoolVar(&seedDemo, "demo", false, "seed deterministic demo data at startup")
 	cmd.Flags().StringVar(&demoAnchorDate, "demo-anchor-date", "", "anchor demo history and recurring activity to YYYY-MM-DD instead of the current local date")
+	cmd.Flags().IntVar(&demoMaxMonths, "demo-max-months", 0, "request at least 1 calendar month of demo history and recurring activity; defaults to 6, and values above 6 use the full 6-month fixture")
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return normalizeFlagError(err)
 	})
@@ -429,6 +438,7 @@ func serve(
 	quiet bool,
 	seedDemo bool,
 	demoAnchorDate string,
+	demoMaxMonths *int,
 	assumeYes bool,
 ) error {
 	demoAnchor, err := runtime.ParseDemoAnchorDate(demoAnchorDate)
@@ -496,7 +506,7 @@ func serve(
 		}
 	}()
 	if seedDemo {
-		summary, err := appInstance.SeedDemo(ctx, demoAnchor)
+		summary, err := appInstance.SeedDemo(ctx, demoAnchor, demoMaxMonths)
 		if err != nil {
 			return fmt.Errorf("demo seed error: %w", err)
 		}

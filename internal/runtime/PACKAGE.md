@@ -12,7 +12,7 @@
 - One-shot apps open and migrate normally, skip startup database validation, and never start automatic operations.
 - One-shot apps register the same manual-operation REST handlers as long-running apps.
 - App instances own one initialized `AppDB`, app service bundle, REST handler, and web UI handler.
-- Startup demo seeding runs after app composition and before HTTP listen, using an explicit civil-date anchor when supplied.
+- Startup demo seeding runs after app composition and before HTTP listen, using an explicit civil-date anchor when supplied and delegating history-window validation to the demo service.
 - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Runtime decides DuckDB open policy and database lifecycle, then delegates DuckDB mechanics to store `AppDB` open helpers.
 - Runtime keeps DuckDB connection parallelism fixed and CPU-bounded; it is not app config.

@@ -2543,6 +2543,9 @@ type SearchAccountJournalRecordsParamsSortDir string
 type SeedDemoParams struct {
 	// AnchorDate Date anchoring the demo history and recurring activity; defaults to the current local civil date.
 	AnchorDate *openapi_types.Date `form:"anchor_date,omitempty" json:"anchor_date,omitempty"`
+
+	// MaxMonths Positive requested calendar months of demo transaction history and recurring activity; defaults to 6, and values above 6 use the full 6-month fixture.
+	MaxMonths *int `form:"max_months,omitempty" json:"max_months,omitempty"`
 }
 
 // ListBackgroundOperationRunEnvelopesParams defines parameters for ListBackgroundOperationRunEnvelopes.
@@ -5985,6 +5988,18 @@ func NewSeedDemoRequest(server string, params *SeedDemoParams) (*http.Request, e
 		if params.AnchorDate != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "anchor_date", *params.AnchorDate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "date"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MaxMonths != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "max_months", *params.MaxMonths, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

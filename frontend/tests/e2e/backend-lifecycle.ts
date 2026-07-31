@@ -638,6 +638,8 @@ const createE2EInvocation = async (): Promise<() => Promise<void>> => {
         "--demo",
         "--demo-anchor-date",
         demoAnchorDate,
+        "--demo-max-months",
+        "2",
       ],
       backupDirectory,
       database: templateDatabase,

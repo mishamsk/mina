@@ -1352,6 +1352,10 @@ export type SeedDemoData = {
          * Date anchoring the demo history and recurring activity; defaults to the current local civil date.
          */
         anchor_date?: string;
+        /**
+         * Positive requested calendar months of demo transaction history and recurring activity; defaults to 6, and values above 6 use the full 6-month fixture.
+         */
+        max_months?: number;
     };
     url: '/api/app/demo-seed';
 };

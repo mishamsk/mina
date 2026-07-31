@@ -550,9 +550,9 @@ func ParseDemoAnchorDate(value string) (*values.CivilDate, error) {
 }
 
 // SeedDemo seeds deterministic demo data for startup demo mode.
-// A nil anchorDate uses the current local civil date.
-func (a *App) SeedDemo(ctx context.Context, anchorDate *values.CivilDate) (demo.Summary, error) {
-	return a.services.Demo.Seed(ctx, anchorDate)
+// Nil values use the current local civil date and default history window.
+func (a *App) SeedDemo(ctx context.Context, anchorDate *values.CivilDate, maxMonths *int) (demo.Summary, error) {
+	return a.services.Demo.Seed(ctx, anchorDate, maxMonths)
 }
 
 // StartOperations starts runtime-owned startup and recurring operations once.

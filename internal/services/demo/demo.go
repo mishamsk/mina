@@ -54,6 +54,9 @@ type Summary struct {
 	RecurringOccurrences int
 }
 
+// DefaultMaxMonths is the default demo history window.
+const DefaultMaxMonths = 6
+
 // Service owns deterministic demo seeding use cases.
 type Service struct {
 	deps Dependencies
@@ -64,12 +67,19 @@ func NewService(deps Dependencies) *Service {
 	return &Service{deps: deps}
 }
 
-// Seed creates deterministic demo data ending at anchorDate.
-// A nil anchorDate uses the current local civil date.
-func (s *Service) Seed(ctx context.Context, anchorDate *values.CivilDate) (Summary, error) {
+// Seed creates deterministic demo data ending at anchorDate and bounded by maxMonths.
+// Nil values use the current local civil date and DefaultMaxMonths.
+func (s *Service) Seed(ctx context.Context, anchorDate *values.CivilDate, maxMonths *int) (Summary, error) {
 	if anchorDate == nil {
 		defaultAnchor := values.LocalCivilDateFromTime(s.deps.Clock.Now())
 		anchorDate = &defaultAnchor
+	}
+	resolvedMaxMonths := DefaultMaxMonths
+	if maxMonths != nil {
+		resolvedMaxMonths = *maxMonths
+	}
+	if resolvedMaxMonths < 1 {
+		return Summary{}, services.InvalidRequest("demo max months must be at least 1")
 	}
 	if err := ValidateAnchorDate(*anchorDate); err != nil {
 		return Summary{}, err
@@ -80,6 +90,7 @@ func (s *Service) Seed(ctx context.Context, anchorDate *values.CivilDate) (Summa
 		builder := seedBuilder{
 			services:   services,
 			anchorDate: *anchorDate,
+			maxMonths:  resolvedMaxMonths,
 			members:    map[string]int64{},
 			accounts:   map[string]int64{},
 			cats:       map[string]int64{},
@@ -103,7 +114,7 @@ func (s *Service) Seed(ctx context.Context, anchorDate *values.CivilDate) (Summa
 func ValidateAnchorDate(anchorDate values.CivilDate) error {
 	const latestTemplateOffsetDays = 12
 
-	historyStart := sixMonthsBefore(anchorDate.Time())
+	historyStart := monthsBefore(anchorDate.Time(), DefaultMaxMonths)
 	latestTemplateDate := anchorDate.Time().AddDate(0, 0, latestTemplateOffsetDays)
 	if historyStart.Year() < 0 || latestTemplateDate.Year() > 9999 {
 		return services.InvalidRequest("demo anchor date is outside the supported seed range")
@@ -115,6 +126,7 @@ func ValidateAnchorDate(anchorDate values.CivilDate) error {
 type seedBuilder struct {
 	services   Services
 	anchorDate values.CivilDate
+	maxMonths  int
 	summary    Summary
 	members    map[string]int64
 	accounts   map[string]int64
@@ -399,7 +411,7 @@ func (b *seedBuilder) seedIncome(ctx context.Context) error {
 		}
 	}
 	for month := 0; ; month++ {
-		date := historyStart.AddDate(0, month, 10)
+		date := b.fullHistoryStart().AddDate(0, month, 10)
 		if date.After(b.anchorDate.Time()) {
 			break
 		}
@@ -427,19 +439,16 @@ func (b *seedBuilder) seedIncome(ctx context.Context) error {
 }
 
 func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
-	historyStart := b.historyStart()
+	fullHistoryStart := b.fullHistoryStart()
 	mortgageAnchor := mustCivilDate(b.templateDate("2026-06-05"))
 	chasePaymentAnchor := mustCivilDate(b.templateDate("2026-06-12"))
 	streamingAnchor := mustCivilDate(b.templateDate("2026-06-10"))
 	mortgageOccurrenceAnchor := b.monthlyOccurrenceAnchor("2026-06-05")
 	chasePaymentOccurrenceAnchor := b.monthlyOccurrenceAnchor("2026-06-12")
 	streamingOccurrenceAnchor := b.monthlyOccurrenceAnchor("2026-06-10")
-	for month := 0; ; month++ {
-		mortgageDate := recurring.IntervalDueDate(mortgageAnchor, month-6, "MONTH").Time()
-		if mortgageDate.After(b.anchorDate.Time()) {
-			break
-		}
-		if mortgageDate.Before(mortgageOccurrenceAnchor.Time()) {
+	for month := 0; month < DefaultMaxMonths; month++ {
+		mortgageDate := recurring.IntervalDueDate(mortgageAnchor, month-DefaultMaxMonths, "MONTH").Time()
+		if !mortgageDate.After(b.anchorDate.Time()) && mortgageDate.Before(mortgageOccurrenceAnchor.Time()) {
 			if err := b.tx(ctx, formatDate(mortgageDate),
 				b.rec("bank:Chase:joint_checking", "", "USD", -300000, -300000, "", []string{"Shared:Family"}, "Mortgage payment"),
 				b.rec("bank:Rocket:mortgage", "", "USD", 220000, 220000, "Housing:Mortgage:Principal", []string{"Shared:Family"}, "Mortgage principal"),
@@ -451,7 +460,7 @@ func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 			}
 		}
 
-		chasePaymentDate := recurring.IntervalDueDate(chasePaymentAnchor, month-6, "MONTH").Time()
+		chasePaymentDate := recurring.IntervalDueDate(chasePaymentAnchor, month-DefaultMaxMonths, "MONTH").Time()
 		if !chasePaymentDate.After(b.anchorDate.Time()) && chasePaymentDate.Before(chasePaymentOccurrenceAnchor.Time()) {
 			if err := b.tx(ctx, formatDate(chasePaymentDate),
 				b.rec("bank:Chase:joint_checking", "", "USD", -45000, -45000, "", []string{"CardPayment"}, "Credit card payment"),
@@ -460,7 +469,7 @@ func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 				return err
 			}
 		}
-		amexPaymentDate := historyStart.AddDate(0, month, 17)
+		amexPaymentDate := fullHistoryStart.AddDate(0, month, 17)
 		if !amexPaymentDate.After(b.anchorDate.Time()) {
 			if err := b.tx(ctx, formatDate(amexPaymentDate),
 				b.rec("bank:Chase:joint_checking", "", "USD", -25000, -25000, "", []string{"CardPayment"}, "Credit card payment"),
@@ -469,14 +478,14 @@ func (b *seedBuilder) seedRecurringHistory(ctx context.Context) error {
 				return err
 			}
 		}
-		utilityDate := historyStart.AddDate(0, month, 7)
+		utilityDate := fullHistoryStart.AddDate(0, month, 7)
 		if !utilityDate.After(b.anchorDate.Time()) {
 			amount := 16500 + month*287
 			if err := b.simpleSpend(ctx, formatDate(utilityDate), "bank:Chase:joint_checking", "merchant:ConEd", "Housing:Utilities", amount, "Electric bill", []string{"Shared:Family"}); err != nil {
 				return err
 			}
 		}
-		streamingDate := recurring.IntervalDueDate(streamingAnchor, month-6, "MONTH").Time()
+		streamingDate := recurring.IntervalDueDate(streamingAnchor, month-DefaultMaxMonths, "MONTH").Time()
 		if !streamingDate.After(b.anchorDate.Time()) && streamingDate.Before(streamingOccurrenceAnchor.Time()) {
 			if err := b.simpleSpend(ctx, formatDate(streamingDate), "bank:Chase:joint_checking", "merchant:Netflix", "Entertainment:Streaming", 2199, "Streaming subscription", []string{"Shared:Family"}); err != nil {
 				return err
@@ -558,8 +567,7 @@ func (b *seedBuilder) seedRecurringDefinitions(ctx context.Context) error {
 }
 
 func (b *seedBuilder) seedDailySpend(ctx context.Context) error {
-	start := b.historyStart()
-	for day, current := 0, start; !current.After(b.anchorDate.Time()); day, current = day+1, current.AddDate(0, 0, 1) {
+	for day, current := 0, b.fullHistoryStart(); !current.After(b.anchorDate.Time()); day, current = day+1, current.AddDate(0, 0, 1) {
 		date := formatDate(current)
 		if day%10 == 4 {
 			if err := b.tx(ctx, date,
@@ -732,7 +740,8 @@ func (b *seedBuilder) seedTravel(ctx context.Context) error {
 }
 
 func (b *seedBuilder) seedSemanticCoverage(ctx context.Context) error {
-	if err := b.tx(ctx, formatDate(b.historyStart()),
+	openingBalanceDate := b.fullHistoryStart()
+	if err := b.tx(ctx, formatDate(openingBalanceDate),
 		b.rec("bank:Chase:joint_checking", "", "USD", 2500000, 2500000, "", []string{"Shared:Family"}, "Opening balance"),
 		b.rec("system:opening_balance", "", "USD", -2500000, -2500000, "", []string{"Shared:Family"}, "Opening balance"),
 	); err != nil {
@@ -820,8 +829,12 @@ func (b *seedBuilder) simpleSpendWithMember(
 }
 
 func (b *seedBuilder) tx(ctx context.Context, date string, records ...transactions.JournalRecordInput) error {
+	initiatedDate := mustCivilDate(date)
+	if initiatedDate.Time().Before(b.historyStart()) {
+		return nil
+	}
 	if _, err := b.services.Transactions.Create(ctx, transactions.CreateInput{
-		InitiatedDate: mustCivilDate(date),
+		InitiatedDate: initiatedDate,
 		Records:       records,
 	}); err != nil {
 		return fmt.Errorf("create transaction %s: %w", date, err)
@@ -899,11 +912,19 @@ func intervalScheduleRule(every int, unit string) json.RawMessage {
 }
 
 func (b *seedBuilder) historyStart() time.Time {
-	return sixMonthsBefore(b.anchorDate.Time())
+	return monthsBefore(b.anchorDate.Time(), b.historyMonths())
+}
+
+func (b *seedBuilder) historyMonths() int {
+	return min(b.maxMonths, DefaultMaxMonths)
+}
+
+func (b *seedBuilder) fullHistoryStart() time.Time {
+	return monthsBefore(b.anchorDate.Time(), DefaultMaxMonths)
 }
 
 func (b *seedBuilder) weeklyTransferStartDate() time.Time {
-	return b.historyStart().AddDate(0, 0, 5)
+	return b.fullHistoryStart().AddDate(0, 0, 5)
 }
 
 func (b *seedBuilder) nextWeeklyTransferDate() time.Time {
@@ -917,17 +938,27 @@ func (b *seedBuilder) nextWeeklyTransferDate() time.Time {
 
 func (b *seedBuilder) monthlyOccurrenceAnchor(nextTemplateDate string) values.CivilDate {
 	nextDate := mustCivilDate(b.templateDate(nextTemplateDate))
-
-	return recurring.IntervalDueDate(nextDate, -2, "MONTH")
+	historyStart := b.historyStart()
+	for offset := -2; ; offset++ {
+		anchor := recurring.IntervalDueDate(nextDate, offset, "MONTH")
+		if !anchor.Time().Before(historyStart) {
+			return anchor
+		}
+	}
 }
 
 func (b *seedBuilder) weeklyOccurrenceAnchor() values.CivilDate {
-	return values.CivilDateFromTime(b.nextWeeklyTransferDate().AddDate(0, 0, -6*7))
+	anchor := b.nextWeeklyTransferDate().AddDate(0, 0, -6*7)
+	for anchor.Before(b.historyStart()) {
+		anchor = anchor.AddDate(0, 0, 7)
+	}
+
+	return values.CivilDateFromTime(anchor)
 }
 
-func sixMonthsBefore(anchorDate time.Time) time.Time {
+func monthsBefore(anchorDate time.Time, months int) time.Time {
 	year, month, day := anchorDate.Date()
-	targetMonth := time.Date(year, month-6, 1, 0, 0, 0, 0, anchorDate.Location())
+	targetMonth := time.Date(year, month-time.Month(months), 1, 0, 0, 0, 0, anchorDate.Location())
 	targetMonthEnd := targetMonth.AddDate(0, 1, -1)
 	if day > targetMonthEnd.Day() {
 		day = targetMonthEnd.Day()

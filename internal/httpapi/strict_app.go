@@ -7,7 +7,7 @@ import (
 )
 
 func (s *strictServer) SeedDemo(ctx context.Context, request openapi.SeedDemoRequestObject) (openapi.SeedDemoResponseObject, error) {
-	summary, err := s.deps.Demo.Seed(ctx, nullableCivilDateFromOpenAPI(request.Params.AnchorDate))
+	summary, err := s.deps.Demo.Seed(ctx, nullableCivilDateFromOpenAPI(request.Params.AnchorDate), request.Params.MaxMonths)
 	if err != nil {
 		return nil, err
 	}
