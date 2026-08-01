@@ -1591,16 +1591,31 @@ test("account restructure invalidates a cached register before revisit", async (
   const unique = `${browserName.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
   const sourceFqn = `e2e:register-invalidation:${unique}:Old`;
   const destinationFqn = `e2e:register-invalidation:${unique}:New`;
-  const account = await createAccount(page, { fqn: sourceFqn });
-  const initialRecordsResponse = page.waitForResponse(
-    (response) =>
-      new URL(response.url()).pathname ===
-      `/api/accounts/${account.account_id}/records`,
-  );
+  const transactionMemo = `E2E register invalidation ${unique}`;
+  const [account, destinationAccount] = await Promise.all([
+    createAccount(page, { fqn: sourceFqn }),
+    createAccount(page, {
+      fqn: `e2e:register-invalidation-destination:${unique}`,
+    }),
+  ]);
   await page.goto(`/accounts/${account.account_id}`);
-  await initialRecordsResponse;
+  await expect(page.getByText("No records", { exact: true })).toBeVisible();
 
   await page.goto("/accounts");
+  const transferResponse = await page.request.post(
+    "/api/transactions/transfer",
+    {
+      data: {
+        amount: "12.34",
+        currency: "USD",
+        destination_account_id: destinationAccount.account_id,
+        initiated_date: "2026-07-31",
+        memo: transactionMemo,
+        source_account_id: account.account_id,
+      },
+    },
+  );
+  expect(transferResponse.ok()).toBe(true);
   await page.getByLabel("Search").fill(sourceFqn);
   const sourceRow = page
     .getByTestId("accounts-tree-row")
@@ -1612,46 +1627,25 @@ test("account restructure invalidates a cached register before revisit", async (
     name: "Move or rename",
   });
   await fillAndExpectValue(restructureDialog.getByLabel("To"), destinationFqn);
-  const restructureResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === "/api/accounts/restructure" &&
-      response.request().method() === "POST"
-    );
-  });
   await restructureDialog.getByRole("button", { name: "Move" }).click();
-  expect((await restructureResponse).status()).toBe(200);
+  await expect(page.getByText("Moved 1 account(s).")).toBeVisible();
+  await page.getByLabel("Search").fill(destinationFqn);
+  const destinationRow = page
+    .getByTestId("accounts-tree-row")
+    .filter({ hasText: "New" })
+    .first();
+  await expect(destinationRow).toBeVisible({ timeout: 10_000 });
+  await destinationRow.click();
 
-  await expect
-    .poll(async () => {
-      const response = await page.request.get(
-        `/api/accounts/${account.account_id}`,
-      );
-      if (!response.ok()) {
-        return undefined;
-      }
-      return ((await response.json()) as AccountFixture).fqn;
-    })
-    .toBe(destinationFqn);
-
-  const freshAccountResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === `/api/accounts/${account.account_id}` &&
-      response.request().method() === "GET"
-    );
-  });
-  const freshRecordsResponse = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname === `/api/accounts/${account.account_id}/records` &&
-      response.request().method() === "GET"
-    );
-  });
-  await page.goto(`/accounts/${account.account_id}`);
-  expect((await freshAccountResponse).ok()).toBe(true);
-  expect((await freshRecordsResponse).ok()).toBe(true);
   await expect(page.getByRole("heading", { name: "New" })).toBeVisible();
+  await expect(page.getByTestId("account-header")).toContainText(
+    destinationFqn,
+  );
+  await expect(
+    page.getByTestId("account-register-row").filter({
+      hasText: transactionMemo,
+    }),
+  ).toBeVisible();
 });
 
 test("accounts tree restructure handles conflicts and cancel focus", async ({
