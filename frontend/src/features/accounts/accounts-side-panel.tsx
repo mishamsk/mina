@@ -54,6 +54,7 @@ type AccountFormErrors = Partial<Record<AccountFormField, string>>;
 interface AccountFormState {
   readonly accountType: WritableAccountType;
   readonly currency: string;
+  readonly currencyMode: "multi" | "single";
   readonly externalId: string;
   readonly externalSystem: string;
   readonly fqn: string;
@@ -79,9 +80,16 @@ const validCurrencyPattern = /^([A-Z]{3}|C::.+)$/;
 const nonNegativeDecimalPattern = /^\d+(\.\d{1,8})?$/;
 const floatingOverlaySelector =
   "[role='alertdialog'], [role='listbox'], [data-slot='select-content'][data-state='open']";
+const hasMatchingDatalistOption = (input: HTMLInputElement): boolean => {
+  const query = input.value.trim().toLocaleLowerCase();
+  return Array.from(input.list?.options ?? []).some((option) =>
+    option.value.toLocaleLowerCase().includes(query),
+  );
+};
 const blankForm = (): AccountFormState => ({
   accountType: "owned",
   currency: "USD",
+  currencyMode: "single",
   externalId: "",
   externalSystem: "",
   fqn: "",
@@ -94,7 +102,8 @@ const formFromAccount = (account: Account | undefined): AccountFormState =>
     ? {
         accountType:
           account.account_type === "system" ? "owned" : account.account_type,
-        currency: account.currency ?? "",
+        currency: account.currency ?? "USD",
+        currencyMode: account.currency == null ? "multi" : "single",
         externalId: account.external_id ?? "",
         externalSystem: account.external_system ?? "",
         fqn: account.fqn,
@@ -174,8 +183,12 @@ const validateForm = (
     errors.fqn = "FQN is required.";
   }
   const currency = normalizeCurrency(form.currency);
-  if (currency && !validCurrencyPattern.test(currency)) {
-    errors.currency = "Use a 3-letter code or C:: crypto code.";
+  if (form.currencyMode === "single") {
+    if (!currency) {
+      errors.currency = "Currency is required for single-currency mode.";
+    } else if (!validCurrencyPattern.test(currency)) {
+      errors.currency = "Use a 3-letter code or C:: crypto code.";
+    }
   }
   return errors;
 };
@@ -230,7 +243,7 @@ const CreditLimitRows = ({
   history,
   onDeleteClick,
 }: {
-  readonly currency: string;
+  readonly currency: string | null;
   readonly deletingId: number | undefined;
   readonly history: readonly CreditLimitHistory[];
   readonly onDeleteClick: (
@@ -255,14 +268,20 @@ const CreditLimitRows = ({
         >
           <div className="min-w-0">
             <p className="font-mono text-sm">{entry.effective_date}</p>
-            <AmountText
-              amount={{
-                amount: entry.credit_limit,
-                currency,
-              }}
-              positiveSign={false}
-              tone="neutral"
-            />
+            {currency ? (
+              <AmountText
+                amount={{
+                  amount: entry.credit_limit,
+                  currency,
+                }}
+                positiveSign={false}
+                tone="neutral"
+              />
+            ) : (
+              <p className="font-mono text-sm tabular-nums">
+                {entry.credit_limit}
+              </p>
+            )}
           </div>
           <Button
             type="button"
@@ -296,6 +315,9 @@ const AccountsSidePanelContent = ({
   const creditLimitAmountInputRef = useRef<HTMLInputElement | null>(null);
   const creditLimitDeleteOpenerRef = useRef<HTMLElement | null>(null);
   const creditLimitRevealButtonRef = useRef<HTMLButtonElement | null>(null);
+  const datalistEscapePendingRef = useRef(false);
+  const datalistKeyboardCommitTargetRef = useRef<HTMLInputElement | null>(null);
+  const datalistPointerTargetRef = useRef<HTMLInputElement | null>(null);
   const historyErrorRef = useRef<HTMLParagraphElement | null>(null);
   const [form, setForm] = useState<AccountFormState>(() =>
     mode === "create" ? blankForm() : formFromAccount(account),
@@ -304,8 +326,12 @@ const AccountsSidePanelContent = ({
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState<readonly CreditLimitHistory[]>([]);
   const [historyLoading, setHistoryLoading] = useState(
-    () => mode === "edit" && account?.account_type === "owned",
+    () =>
+      mode === "edit" &&
+      (account?.account_type === "owned" ||
+        account?.has_credit_limit_history === true),
   );
+  const [historyResolved, setHistoryResolved] = useState(false);
   const [historyError, setHistoryError] = useState<string | undefined>();
   const [creditDraft, setCreditDraft] = useState<CreditLimitDraft>({
     amount: "",
@@ -322,6 +348,11 @@ const AccountsSidePanelContent = ({
   >();
   const [accountDeleteOpen, setAccountDeleteOpen] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const historyAccountID = account?.account_id;
+  const historyAccountType = account?.account_type;
+  const accountHasCreditLimitHistory =
+    account?.has_credit_limit_history === true;
+  const accountCurrency = account?.currency ?? null;
 
   useEffect(() => {
     panelSessionActiveRef.current = true;
@@ -331,17 +362,24 @@ const AccountsSidePanelContent = ({
   }, []);
 
   const loadHistory = useCallback(async () => {
-    if (!account || account.account_type !== "owned") {
+    if (
+      historyAccountID === undefined ||
+      (historyAccountType !== "owned" && !accountHasCreditLimitHistory)
+    ) {
       setHistory([]);
+      setHistoryLoading(false);
+      setHistoryResolved(true);
+      setHistoryError(undefined);
       return [];
     }
 
     setHistoryLoading(true);
     setHistoryError(undefined);
-    const result = await fetchCreditLimitHistory(account.account_id);
+    const result = await fetchCreditLimitHistory(historyAccountID);
     setHistoryLoading(false);
     if (result.data) {
       setHistory(result.data.credit_limit_history);
+      setHistoryResolved(true);
       return result.data.credit_limit_history;
     }
     setHistoryError(
@@ -351,7 +389,7 @@ const AccountsSidePanelContent = ({
       ),
     );
     return undefined;
-  }, [account]);
+  }, [accountHasCreditLimitHistory, historyAccountID, historyAccountType]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -372,9 +410,18 @@ const AccountsSidePanelContent = ({
     if (!creditLimitEditorRevealed) {
       return;
     }
-    window.requestAnimationFrame(() => {
-      creditLimitAmountInputRef.current?.focus({ preventScroll: true });
+    let focusFrame: number | undefined;
+    const settleFrame = window.requestAnimationFrame(() => {
+      focusFrame = window.requestAnimationFrame(() => {
+        creditLimitAmountInputRef.current?.focus({ preventScroll: true });
+      });
     });
+    return () => {
+      window.cancelAnimationFrame(settleFrame);
+      if (focusFrame !== undefined) {
+        window.cancelAnimationFrame(focusFrame);
+      }
+    };
   }, [creditLimitEditorRevealed]);
 
   const closeAccountDelete = useCallback(() => {
@@ -401,24 +448,136 @@ const AccountsSidePanelContent = ({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        if (event.defaultPrevented) {
-          return;
-        }
-        if (document.querySelector(floatingOverlaySelector)) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
+      if (
+        event.key === "Enter" &&
+        event.target instanceof HTMLInputElement &&
+        event.target.list !== null &&
+        datalistEscapePendingRef.current
+      ) {
+        datalistKeyboardCommitTargetRef.current = event.target;
+        datalistPointerTargetRef.current = null;
+        datalistEscapePendingRef.current = false;
+        return;
+      }
+      if (event.key !== "Escape") {
+        datalistKeyboardCommitTargetRef.current = null;
+        datalistPointerTargetRef.current = null;
+        datalistEscapePendingRef.current =
+          event.key === "ArrowDown" &&
+          event.target instanceof HTMLInputElement &&
+          event.target.list !== null &&
+          !event.target.disabled &&
+          !event.target.readOnly &&
+          hasMatchingDatalistOption(event.target);
+        return;
+      }
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (document.querySelector(floatingOverlaySelector)) {
+        return;
+      }
+      const activeElement = document.activeElement;
+      if (
+        activeElement instanceof HTMLInputElement &&
+        activeElement.list !== null &&
+        !activeElement.disabled &&
+        !activeElement.readOnly &&
+        datalistEscapePendingRef.current
+      ) {
+        datalistKeyboardCommitTargetRef.current = null;
+        datalistPointerTargetRef.current = null;
+        datalistEscapePendingRef.current = false;
+        return;
+      }
+      datalistKeyboardCommitTargetRef.current = null;
+      datalistPointerTargetRef.current = null;
+      datalistEscapePendingRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!saving) {
         onClose();
       }
     };
+    const clearDatalistKeyboardCommit = (event: KeyboardEvent) => {
+      if (
+        event.key === "Enter" &&
+        event.target === datalistKeyboardCommitTargetRef.current
+      ) {
+        datalistKeyboardCommitTargetRef.current = null;
+      }
+    };
+    const clearDatalistEscape = (event: Event) => {
+      if (event.target === datalistPointerTargetRef.current) {
+        datalistPointerTargetRef.current = null;
+        return;
+      }
+      datalistKeyboardCommitTargetRef.current = null;
+      datalistPointerTargetRef.current = null;
+      datalistEscapePendingRef.current = false;
+    };
+    const updateDatalistEscapeFromPointer = (event: PointerEvent) => {
+      const target =
+        event.target instanceof HTMLInputElement &&
+        event.target.list !== null &&
+        !event.target.disabled &&
+        !event.target.readOnly &&
+        hasMatchingDatalistOption(event.target)
+          ? event.target
+          : null;
+      datalistKeyboardCommitTargetRef.current = null;
+      datalistPointerTargetRef.current = target;
+      datalistEscapePendingRef.current = target !== null;
+    };
+    const updateDatalistEscape = (event: Event) => {
+      if (event.target === datalistKeyboardCommitTargetRef.current) {
+        datalistKeyboardCommitTargetRef.current = null;
+        datalistEscapePendingRef.current = false;
+        return;
+      }
+      datalistEscapePendingRef.current =
+        event.target instanceof HTMLInputElement &&
+        event.target.list !== null &&
+        !event.target.disabled &&
+        !event.target.readOnly &&
+        hasMatchingDatalistOption(event.target);
+    };
 
     document.addEventListener("keydown", onKeyDown, { capture: true });
+    document.addEventListener("keyup", clearDatalistKeyboardCommit, {
+      capture: true,
+    });
+    document.addEventListener("pointerdown", updateDatalistEscapeFromPointer, {
+      capture: true,
+    });
+    document.addEventListener("focusin", clearDatalistEscape, {
+      capture: true,
+    });
+    document.addEventListener("input", updateDatalistEscape, { capture: true });
+    document.addEventListener("change", clearDatalistEscape, {
+      capture: true,
+    });
     return () => {
       document.removeEventListener("keydown", onKeyDown, { capture: true });
+      document.removeEventListener("keyup", clearDatalistKeyboardCommit, {
+        capture: true,
+      });
+      document.removeEventListener(
+        "pointerdown",
+        updateDatalistEscapeFromPointer,
+        { capture: true },
+      );
+      document.removeEventListener("focusin", clearDatalistEscape, {
+        capture: true,
+      });
+      document.removeEventListener("input", updateDatalistEscape, {
+        capture: true,
+      });
+      document.removeEventListener("change", clearDatalistEscape, {
+        capture: true,
+      });
     };
-  }, [onClose]);
+  }, [onClose, saving]);
 
   const currencyOptions = useMemo(
     () => [...new Set(currencies)].filter(Boolean).sort(),
@@ -462,7 +621,7 @@ const AccountsSidePanelContent = ({
   };
 
   const submitForm = async () => {
-    if (saving) {
+    if (saving || addingCreditLimit) {
       return;
     }
 
@@ -476,13 +635,19 @@ const AccountsSidePanelContent = ({
       mode === "edit" &&
       account !== undefined &&
       form.accountType !== account.account_type;
+    const currency =
+      form.currencyMode === "multi" ? null : normalizeCurrency(form.currency);
+    const currencyChanged =
+      mode === "edit" &&
+      account !== undefined &&
+      currency !== (account.currency ?? null);
 
     setSaving(true);
     const result =
       mode === "create"
         ? await createLedgerAccount({
             account_type: form.accountType,
-            currency: normalizeCurrency(form.currency),
+            currency,
             external_id: normalizeNullableString(form.externalId),
             external_system: normalizeNullableString(form.externalSystem),
             fqn: form.fqn.trim(),
@@ -492,24 +657,24 @@ const AccountsSidePanelContent = ({
         : account
           ? await updateLedgerAccount(account.account_id, {
               ...(accountTypeChanged ? { account_type: form.accountType } : {}),
+              ...(currencyChanged ? { currency } : {}),
               external_id: normalizeNullableString(form.externalId),
               external_system: normalizeNullableString(form.externalSystem),
               is_featured: form.isFeatured,
               is_hidden: form.isHidden,
             } satisfies UpdateAccountRequest)
           : undefined;
-    if (!panelSessionActiveRef.current) {
-      return;
-    }
     if (!result) {
-      setSaving(false);
+      if (panelSessionActiveRef.current) {
+        setSaving(false);
+      }
       return;
     }
 
     if (result.data) {
       await refreshAccountsAfterMutation({
         account: result.data,
-        bulk: accountTypeChanged,
+        bulk: accountTypeChanged || currencyChanged,
       });
       if (!panelSessionActiveRef.current) {
         return;
@@ -519,6 +684,9 @@ const AccountsSidePanelContent = ({
       return;
     }
 
+    if (!panelSessionActiveRef.current) {
+      return;
+    }
     setSaving(false);
     const message = apiErrorMessage(
       result.error,
@@ -528,7 +696,7 @@ const AccountsSidePanelContent = ({
   };
 
   const addCreditLimit = async () => {
-    if (!account || addingCreditLimit) {
+    if (!account || addingCreditLimit || saving) {
       return;
     }
 
@@ -554,21 +722,22 @@ const AccountsSidePanelContent = ({
     setAddingCreditLimit(false);
 
     if (result.data) {
-      setCreditDraft({ amount: "", effectiveDate: "" });
-      const [nextHistory] = await Promise.all([
-        loadHistory(),
-        refreshAccountsAfterMutation(),
-      ]);
+      setHistory((current) => [...current, result.data]);
+      setHistoryResolved(true);
+      setCreditDraft({
+        amount: "",
+        effectiveDate: "",
+      });
+      setForm((current) => ({
+        ...current,
+        accountType: "owned",
+        currency: account.currency ?? current.currency,
+        currencyMode: "single",
+      }));
+      setFieldError("type", undefined);
+      await Promise.all([loadHistory(), refreshAccountsAfterMutation()]);
       if (!panelSessionActiveRef.current) {
         return;
-      }
-      if (nextHistory && nextHistory.length > 0) {
-        setForm((current) =>
-          current.accountType === "owned"
-            ? current
-            : { ...current, accountType: "owned" },
-        );
-        setFieldError("type", undefined);
       }
       onNotice("Credit limit added.");
       return;
@@ -595,6 +764,14 @@ const AccountsSidePanelContent = ({
     setDeletingCreditLimitId(undefined);
     if (result.data !== undefined || !result.error) {
       setCreditLimitDeleteEntry(undefined);
+      setHistory((current) =>
+        current.filter(
+          (currentEntry) =>
+            currentEntry.credit_limit_history_id !==
+            entry.credit_limit_history_id,
+        ),
+      );
+      setHistoryResolved(true);
       const [nextHistory] = await Promise.all([
         loadHistory(),
         refreshAccountsAfterMutation(),
@@ -647,10 +824,21 @@ const AccountsSidePanelContent = ({
   };
 
   const title = mode === "create" ? "Create account" : "Edit account";
-  const showCreditLimits = mode === "edit" && account?.account_type === "owned";
+  const showCreditLimits =
+    mode === "edit" &&
+    ((account?.account_type === "owned" && accountCurrency != null) ||
+      accountHasCreditLimitHistory);
+  const canAddCreditLimits =
+    account?.account_type === "owned" && accountCurrency != null;
   const hasLoadedEmptyCreditLimitHistory =
     !historyLoading && !historyError && history.length === 0;
-  const creditLimitCurrency = account?.currency ?? form.currency;
+  const currencyControlsLocked =
+    mode === "edit" &&
+    account !== undefined &&
+    (showCreditLimits && historyResolved
+      ? history.length > 0
+      : account.has_credit_limit_history === true);
+  const currencyLockReasonId = "account-currency-lock-reason";
   const creditLimitHistoryList = historyLoading ? (
     <div className="space-y-2" aria-hidden="true">
       <Skeleton className="h-10" />
@@ -667,7 +855,7 @@ const AccountsSidePanelContent = ({
     </p>
   ) : (
     <CreditLimitRows
-      currency={creditLimitCurrency}
+      currency={accountCurrency}
       deletingId={deletingCreditLimitId}
       history={history}
       onDeleteClick={(entry, opener) => {
@@ -695,13 +883,25 @@ const AccountsSidePanelContent = ({
             {title}
           </h2>
         </div>
-        <Tooltip label="Close account panel" asChild>
+        <Tooltip
+          label={
+            saving
+              ? "Saving prevents closing the account panel."
+              : "Close account panel"
+          }
+          asChild
+        >
           <Button
             type="button"
             variant="outline"
             size="icon-sm"
             aria-label="Close account panel"
-            onClick={onClose}
+            aria-disabled={saving ? true : undefined}
+            onClick={() => {
+              if (!saving) {
+                onClose();
+              }
+            }}
           >
             <Close aria-hidden="true" />
           </Button>
@@ -756,12 +956,43 @@ const AccountsSidePanelContent = ({
               <FieldError message={fieldErrors.type} />
             </Field>
 
+            <Field htmlFor="account-currency-mode" label="Currency mode">
+              <Select
+                disabled={currencyControlsLocked || saving}
+                value={form.currencyMode}
+                onValueChange={(value) => {
+                  updateForm({
+                    currencyMode: value as AccountFormState["currencyMode"],
+                  });
+                  setFieldError("currency", undefined);
+                }}
+              >
+                <SelectTrigger
+                  id="account-currency-mode"
+                  aria-describedby={
+                    currencyControlsLocked ? currencyLockReasonId : undefined
+                  }
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="single">Single-currency</SelectItem>
+                  <SelectItem value="multi">Multi-currency</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+
+          {form.currencyMode === "single" ? (
             <Field htmlFor="account-currency" label="Currency">
               <input
                 id="account-currency"
                 list="account-currency-options"
-                className="bg-card disabled:bg-muted h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
-                readOnly={mode === "edit"}
+                disabled={currencyControlsLocked || saving}
+                aria-describedby={
+                  currencyControlsLocked ? currencyLockReasonId : undefined
+                }
+                className="bg-card disabled:bg-muted h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)] disabled:shadow-none"
                 value={form.currency}
                 onBlur={() => {
                   setFieldError(
@@ -773,15 +1004,37 @@ const AccountsSidePanelContent = ({
                   updateForm({ currency: event.target.value.toUpperCase() });
                   setFieldError("currency", undefined);
                 }}
+                onFocus={(event) => {
+                  event.currentTarget.select();
+                }}
+                onMouseUp={(event) => {
+                  event.preventDefault();
+                }}
               />
-              <datalist id="account-currency-options">
-                {currencyOptions.map((currency) => (
-                  <option key={currency} value={currency} />
-                ))}
-              </datalist>
               <FieldError message={fieldErrors.currency} />
             </Field>
-          </div>
+          ) : (
+            <>
+              <p className="text-muted-foreground font-body text-sm">
+                Records on this account may use any currency.
+              </p>
+              <FieldError message={fieldErrors.currency} />
+            </>
+          )}
+          <datalist id="account-currency-options">
+            {currencyOptions.map((currency) => (
+              <option key={currency} value={currency} />
+            ))}
+          </datalist>
+          {currencyControlsLocked ? (
+            <p
+              id={currencyLockReasonId}
+              className="text-muted-foreground font-body text-sm"
+            >
+              Currency cannot be changed while credit-limit history exists.
+              Delete all credit-limit history to unlock it.
+            </p>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex h-9 items-center gap-2 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]">
@@ -871,7 +1124,7 @@ const AccountsSidePanelContent = ({
                 </Button>
               </Tooltip>
             ) : null}
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || addingCreditLimit}>
               <Check aria-hidden="true" />
               {saving ? "Saving" : mode === "create" ? "Create" : "Save"}
             </Button>
@@ -889,7 +1142,9 @@ const AccountsSidePanelContent = ({
             >
               Credit-limit history
             </h3>
-            {hasLoadedEmptyCreditLimitHistory && !creditLimitEditorRevealed ? (
+            {canAddCreditLimits &&
+            hasLoadedEmptyCreditLimitHistory &&
+            !creditLimitEditorRevealed ? (
               <>
                 <Button
                   ref={creditLimitRevealButtonRef}
@@ -904,11 +1159,11 @@ const AccountsSidePanelContent = ({
                   Add credit limit
                 </Button>
               </>
-            ) : historyLoading || historyError ? (
+            ) : historyLoading || historyError || !canAddCreditLimits ? (
               <div className="mt-4">{creditLimitHistoryList}</div>
             ) : (
               <>
-                <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_10rem_auto]">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <Field htmlFor="credit-limit-amount" label="Amount">
                     <input
                       ref={creditLimitAmountInputRef}
@@ -961,8 +1216,8 @@ const AccountsSidePanelContent = ({
                   <Button
                     ref={creditLimitAddButtonRef}
                     type="button"
-                    className="self-start sm:mt-6"
-                    disabled={addingCreditLimit}
+                    className="self-start sm:justify-self-start"
+                    disabled={addingCreditLimit || saving}
                     onClick={() => {
                       void addCreditLimit();
                     }}
@@ -1005,14 +1260,20 @@ const AccountsSidePanelContent = ({
           <>
             <p>
               Delete credit limit{" "}
-              <AmountText
-                amount={{
-                  amount: creditLimitDeleteEntry.credit_limit,
-                  currency: creditLimitCurrency,
-                }}
-                positiveSign={false}
-                tone="neutral"
-              />
+              {accountCurrency ? (
+                <AmountText
+                  amount={{
+                    amount: creditLimitDeleteEntry.credit_limit,
+                    currency: accountCurrency,
+                  }}
+                  positiveSign={false}
+                  tone="neutral"
+                />
+              ) : (
+                <span className="font-mono tabular-nums">
+                  {creditLimitDeleteEntry.credit_limit}
+                </span>
+              )}
               {" from "}
               {creditLimitDeleteEntry.effective_date}?
             </p>

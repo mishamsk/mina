@@ -51,7 +51,10 @@ export const AccountHeader = ({
   featuredTogglePending,
   onToggleFeatured,
 }: AccountHeaderProps) => {
-  const latestCreditLimit = creditLimitHistory[0];
+  const accountCurrency = account.currency;
+  const accountCreditLimitHistory =
+    accountCurrency == null ? [] : creditLimitHistory;
+  const latestCreditLimit = accountCreditLimitHistory[0];
 
   return (
     <div
@@ -71,13 +74,13 @@ export const AccountHeader = ({
                   : undefined
               }
             />
-            {creditLimitHistory.length > 0 ? <CreditLimitIndicator /> : null}
-            <AccountTypeBadge accountType={account.account_type} />
-            {account.currency ? (
-              <Badge variant="outline" className="bg-[var(--band)]">
-                {account.currency}
-              </Badge>
+            {accountCreditLimitHistory.length > 0 ? (
+              <CreditLimitIndicator />
             ) : null}
+            <AccountTypeBadge accountType={account.account_type} />
+            <Badge variant="outline" className="bg-[var(--band)]">
+              {account.currency ?? "Multi-currency"}
+            </Badge>
             {account.account_type === "system" ? (
               <Badge variant="outline" className="bg-[var(--band)]">
                 Read-only system account
@@ -181,13 +184,13 @@ export const AccountHeader = ({
             )}
           </div>
 
-          {latestCreditLimit ? (
+          {latestCreditLimit && accountCurrency ? (
             <div className="border-2 border-[var(--border-ink)] bg-[var(--band)] p-3">
               <p className="font-heading text-xs font-semibold uppercase">
                 Credit history
               </p>
               <ul className="mt-3 space-y-2 font-mono text-sm">
-                {creditLimitHistory.slice(0, 3).map((entry) => (
+                {accountCreditLimitHistory.slice(0, 3).map((entry) => (
                   <li
                     key={entry.credit_limit_history_id}
                     className="flex items-center justify-between gap-3"
@@ -197,7 +200,7 @@ export const AccountHeader = ({
                     </span>
                     <BalanceAmount
                       amount={entry.credit_limit}
-                      currency={account.currency ?? "USD"}
+                      currency={accountCurrency}
                     />
                   </li>
                 ))}

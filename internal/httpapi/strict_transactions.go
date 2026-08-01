@@ -114,6 +114,8 @@ func (s *strictServer) CreateExchangeTransaction(ctx context.Context, request op
 		InitiatedDate:        civilDateFromOpenAPI(request.Body.InitiatedDate),
 		SoldAccountID:        request.Body.SoldAccountId,
 		BoughtAccountID:      request.Body.BoughtAccountId,
+		SoldCurrency:         request.Body.SoldCurrency,
+		BoughtCurrency:       request.Body.BoughtCurrency,
 		SoldAmount:           soldAmount,
 		BoughtAmount:         boughtAmount,
 		MemberID:             request.Body.MemberId,

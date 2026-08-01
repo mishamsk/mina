@@ -162,7 +162,7 @@ CREATE TABLE account (
     is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
     -- Marks active rows for prominent UI/account-picker placement without changing accounting semantics.
     is_featured BOOLEAN NOT NULL DEFAULT FALSE,
-    -- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
+    -- NULL means multi-currency; otherwise an ISO 4217 code or C::-prefixed crypto ticker required by every active journal and recurring-definition record.
     currency TEXT,
     -- Identifier assigned by an external system when this account is linked outside Mina.
     external_id TEXT,
@@ -198,7 +198,7 @@ COMMENT ON COLUMN account.fqn IS 'Colon-separated hierarchical account path, e.g
 COMMENT ON COLUMN account.account_type IS 'Explicit semantic account type used for balances and transaction classification.';
 COMMENT ON COLUMN account.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
 COMMENT ON COLUMN account.is_featured IS 'Marks active rows for prominent UI/account-picker placement without changing accounting semantics.';
-COMMENT ON COLUMN account.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN account.currency IS 'NULL means multi-currency; otherwise an ISO 4217 code or C::-prefixed crypto ticker required by every active journal and recurring-definition record.';
 COMMENT ON COLUMN account.external_id IS 'Identifier assigned by an external system when this account is linked outside Mina.';
 COMMENT ON COLUMN account.external_system IS 'External system namespace for external_id, e.g. plaid.';
 COMMENT ON COLUMN account.parent_fqn IS 'Parent account path derived from fqn, or NULL for root accounts.';
@@ -226,7 +226,7 @@ CREATE TABLE journal_record (
     account_id INTEGER NOT NULL,
     member_id INTEGER,
 
-    -- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
+    -- ISO 4217 code or C::-prefixed crypto ticker; must match account.currency when that account is single-currency.
     currency TEXT NOT NULL,
     -- Signed debit or credit amount in the record currency.
     amount DECIMAL(18,8) NOT NULL,
@@ -265,7 +265,7 @@ CREATE TABLE journal_record (
 );
 
 COMMENT ON COLUMN journal_record.category_id IS 'Category for flow records; NULL on every other record.';
-COMMENT ON COLUMN journal_record.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN journal_record.currency IS 'ISO 4217 code or C::-prefixed crypto ticker; must match account.currency when that account is single-currency.';
 COMMENT ON COLUMN journal_record.amount IS 'Signed debit or credit amount in the record currency.';
 COMMENT ON COLUMN journal_record.amount_usd IS 'Signed USD conversion at recording time; NULL when no exchange rate is available.';
 COMMENT ON COLUMN journal_record.tag_ids IS 'Tag IDs assigned to this record for flexible grouping.';
@@ -472,7 +472,7 @@ CREATE TABLE recurring_definition_record (
     account_id INTEGER NOT NULL,
     member_id INTEGER,
 
-    -- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
+    -- ISO 4217 code or C::-prefixed crypto ticker; must match account.currency when that account is single-currency.
     currency TEXT NOT NULL,
     -- Signed debit or credit amount copied to generated transactions.
     amount DECIMAL(18,8) NOT NULL,
@@ -491,7 +491,7 @@ CREATE TABLE recurring_definition_record (
 );
 
 COMMENT ON COLUMN recurring_definition_record.category_id IS 'Category for flow records; NULL on every other record.';
-COMMENT ON COLUMN recurring_definition_record.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN recurring_definition_record.currency IS 'ISO 4217 code or C::-prefixed crypto ticker; must match account.currency when that account is single-currency.';
 COMMENT ON COLUMN recurring_definition_record.amount IS 'Signed debit or credit amount copied to generated transactions.';
 COMMENT ON COLUMN recurring_definition_record.tag_ids IS 'Tag IDs assigned to generated records for flexible grouping.';
 COMMENT ON COLUMN recurring_definition_record.memo IS 'Optional record note or description.';
@@ -569,7 +569,7 @@ COMMENT ON COLUMN budget.amount IS 'Budgeted amount for category_fqn during mont
 CREATE TABLE credit_limit_history (
     credit_limit_history_id INTEGER PRIMARY KEY DEFAULT nextval('primary_key_gen_seq'),
     account_id INTEGER NOT NULL,
-    -- Credit limit amount effective for the account.
+    -- Credit limit amount denominated in the owning single-currency account's currency.
     credit_limit DECIMAL(18,8) NOT NULL,
     -- Calendar date when this credit limit starts applying.
     effective_date DATE NOT NULL,
@@ -579,7 +579,7 @@ CREATE TABLE credit_limit_history (
     UNIQUE(account_id, effective_date, tombstoned_at)
 );
 
-COMMENT ON COLUMN credit_limit_history.credit_limit IS 'Credit limit amount effective for the account.';
+COMMENT ON COLUMN credit_limit_history.credit_limit IS 'Credit limit amount denominated in the owning single-currency account''s currency.';
 COMMENT ON COLUMN credit_limit_history.effective_date IS 'Calendar date when this credit limit starts applying.';
 
 -- Active-row uniqueness uses expression indexes because DuckDB treats NULL values

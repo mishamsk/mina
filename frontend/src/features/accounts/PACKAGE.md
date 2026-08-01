@@ -11,7 +11,9 @@
 - Account register and header snapshots discard fetch writes that predate invalidation; single-account metadata responses may merge into a mounted header instead.
 - Account and group registers include expected recurring records after one occurrence catch-up read per mounted register; expected records stay excluded from running balances.
 - Account deletion controls consume the API `deletable` signal verbatim; eligibility rules remain backend-owned.
+- Accounts-tree credit-limit indicators consume the API `has_credit_limit_history` signal rather than inferring history from balance rows.
 - Fixed `system` accounts remain visible and selectable where ledger references are allowed, but Accounts and account-detail surfaces expose no mutation controls for them.
+- Account and credit-limit presentation follows the owning [Accounts specification](../../../../docs/webui-design.md#5-accounts-chart-of-accounts--phase-2).
 
 ## Boundaries
 

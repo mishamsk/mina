@@ -15,6 +15,8 @@
 - Defer rewrites interval anchors only after writing a DEFERRED audit occurrence.
 - Pause suppresses materialization; resume prevents backlog across the paused window.
 - Definition edits affect only future materialization; existing occurrences keep copied generated transactions.
+- Definition save and every materialization revalidate record currencies through account-reference validation, so later account mode changes cannot create invalid records.
+- Definition display enrichment resolves active account metadata without revalidating persisted record currencies.
 - Active definitions protect referenced accounts, categories, members, and tags from tombstone deletes.
 - Generated-record writes notify the runtime currency-usage signal after success.
 

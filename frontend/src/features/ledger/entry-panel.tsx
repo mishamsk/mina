@@ -129,6 +129,7 @@ type FieldName =
   | "amount"
   | "boughtAccountId"
   | "boughtAmount"
+  | "boughtCurrency"
   | "categoryId"
   | "chargeAccountId"
   | "chargeAmount"
@@ -345,6 +346,7 @@ const blankTabDraft = (): TransactionEntryTabDraft => ({
   amount: "",
   boughtAccountId: undefined,
   boughtAmount: "",
+  boughtCurrency: "EUR",
   categoryId: undefined,
   chargeAccountId: undefined,
   chargeAmount: "",
@@ -419,7 +421,7 @@ const shorthandRecordDraft = (
   accountId,
   amount: amountWithSign(amount, amountSign),
   categoryId,
-  currency: normalizeCurrency(currency) || "USD",
+  currency: normalizeCurrency(currency),
   memberId: draft.memberId,
   memo: draft.memo,
   postingStatus: "posted",
@@ -450,8 +452,10 @@ const shorthandDraftToAdvanced = (
   const systemExchangeAccountId = lookups?.accounts.find(
     (account) => account.fqn === "system:exchange",
   )?.account_id;
+  const soldCurrency =
+    accountCurrency(lookups, draft.soldAccountId) ?? draft.currency;
   const boughtCurrency =
-    accountCurrency(lookups, draft.boughtAccountId) ?? draft.currency;
+    accountCurrency(lookups, draft.boughtAccountId) ?? draft.boughtCurrency;
   const records =
     entryType === "spend"
       ? [
@@ -538,12 +542,16 @@ const shorthandDraftToAdvanced = (
                   draft.soldAccountId,
                   "negative",
                   undefined,
+                  draft.amount,
+                  soldCurrency,
                 ),
                 shorthandRecordDraft(
                   draft,
                   systemExchangeAccountId,
                   "positive",
                   undefined,
+                  draft.amount,
+                  soldCurrency,
                 ),
                 shorthandRecordDraft(
                   draft,
@@ -735,7 +743,10 @@ const entityOption = (
   entity: Account | Category | Tag,
   id: number,
 ): EntityOption => ({
-  detail: entity.fqn,
+  detail:
+    "account_id" in entity
+      ? `${entity.fqn} · ${entity.currency ? `${entity.currency} · Single-currency` : "Multi-currency"}`
+      : entity.fqn,
   hidden: entity.is_hidden,
   id,
   label: entity.name,
@@ -929,6 +940,7 @@ const tabDraftUserInput = (draft: TransactionEntryTabDraft) => ({
   amount: draft.amount.trim(),
   boughtAccountId: draft.boughtAccountId,
   boughtAmount: draft.boughtAmount.trim(),
+  boughtCurrency: normalizeCurrency(draft.boughtCurrency),
   categoryId: draft.categoryId,
   chargeAccountId: draft.chargeAccountId,
   chargeAmount: draft.chargeAmount.trim(),
@@ -1354,6 +1366,7 @@ const tabDraftFromShorthandFit = (
         ...common,
         boughtAccountId: fit.positiveRecord.account_id,
         boughtAmount: inputAmountFromRecord(fit.positiveRecord),
+        boughtCurrency: fit.positiveRecord.currency,
         soldAccountId: fit.negativeRecord.account_id,
       };
   }
@@ -1432,6 +1445,7 @@ const fieldErrorsFromAPI = (message: string): FieldErrors => {
     ["amount", ["amount"]],
     ["boughtAmount", ["bought_amount"]],
     ["boughtAccountId", ["bought_account_id"]],
+    ["boughtCurrency", ["bought_currency"]],
     ["categoryId", ["category_id", "category"]],
     ["currency", ["currency"]],
     ["date", ["initiated_date", "date"]],
@@ -1482,11 +1496,29 @@ const validateDraft = (
   if (entryType === "exchange" && !normalizeAmount(draft.boughtAmount)) {
     errors.boughtAmount = "Enter a positive amount with up to 8 decimals.";
   }
-  const currency = normalizeCurrency(draft.currency);
+  const currency =
+    entryType === "exchange"
+      ? (accountCurrency(lookups, draft.soldAccountId) ??
+        normalizeCurrency(draft.currency))
+      : normalizeCurrency(draft.currency);
   if (!currency) {
     errors.currency = "Currency is required.";
   } else if (!validCurrencyPattern.test(currency)) {
     errors.currency = "Use a 3-letter code or C:: crypto code.";
+  }
+  const boughtCurrency =
+    entryType === "exchange"
+      ? (accountCurrency(lookups, draft.boughtAccountId) ??
+        normalizeCurrency(draft.boughtCurrency))
+      : normalizeCurrency(draft.boughtCurrency);
+  if (entryType === "exchange" && !boughtCurrency) {
+    errors.boughtCurrency = "Bought currency is required.";
+  } else if (
+    entryType === "exchange" &&
+    boughtCurrency &&
+    !validCurrencyPattern.test(boughtCurrency)
+  ) {
+    errors.boughtCurrency = "Use a 3-letter code or C:: crypto code.";
   }
   if (!draft[config.primaryAccountField]) {
     errors[config.primaryAccountField] =
@@ -1540,12 +1572,12 @@ const validateDraft = (
     entryType === "exchange" &&
     draft.soldAccountId &&
     draft.boughtAccountId &&
-    accountCurrency(lookups, draft.soldAccountId) !== undefined &&
-    accountCurrency(lookups, draft.soldAccountId) ===
-      accountCurrency(lookups, draft.boughtAccountId)
+    currency &&
+    boughtCurrency &&
+    (accountCurrency(lookups, draft.soldAccountId) ?? currency) ===
+      (accountCurrency(lookups, draft.boughtAccountId) ?? boughtCurrency)
   ) {
-    errors.boughtAccountId =
-      "Choose a destination account with a different currency.";
+    errors.boughtCurrency = "Sold and bought currencies must differ.";
   }
   return errors;
 };
@@ -1905,11 +1937,9 @@ const updateBodyFromShorthandDraft = (
     const boughtAmount =
       normalizeAmount(draft.boughtAmount) ?? draft.boughtAmount;
     const soldCurrency =
-      accountCurrency(lookups, draft.soldAccountId) ??
-      fit.negativeRecord.currency;
+      accountCurrency(lookups, draft.soldAccountId) ?? draft.currency;
     const boughtCurrency =
-      accountCurrency(lookups, draft.boughtAccountId) ??
-      fit.positiveRecord.currency;
+      accountCurrency(lookups, draft.boughtAccountId) ?? draft.boughtCurrency;
     const [soldSystemRecord, boughtSystemRecord] = fit.systemExchangeRecords;
     return {
       initiated_date: draft.date,
@@ -2366,6 +2396,8 @@ const stickyNextTabDraft = (
       return {
         ...nextDraft,
         boughtAccountId: draft.boughtAccountId,
+        boughtCurrency: draft.boughtCurrency,
+        currency: draft.currency,
         soldAccountId: draft.soldAccountId,
       };
   }
@@ -2694,7 +2726,7 @@ export const EntryPanel = ({
   const launchKey = launch
     ? `${launch.type}:${launch.transaction.transaction_id}`
     : `create:${initialTab ?? "remembered"}`;
-  const launchLookupsReady = !launch || Boolean(lookups);
+  const launchLookupsReady = Boolean(lookups);
   const currentDraftReady =
     draftReady &&
     launchLookupsReady &&
@@ -3166,13 +3198,24 @@ export const EntryPanel = ({
   const advancedCanSubmit =
     !hasAdvancedErrors(localAdvancedErrors) && allCurrenciesBalanced(balances);
   const exchangeDraft = draft.tabs.exchange;
-  const exchangeSoldCurrency = accountCurrency(
+  const exchangeSoldAccountCurrency = accountCurrency(
     lookups,
     exchangeDraft.soldAccountId,
   );
-  const exchangeBoughtCurrency = accountCurrency(
+  const exchangeBoughtAccountCurrency = accountCurrency(
     lookups,
     exchangeDraft.boughtAccountId,
+  );
+  const exchangeSoldCurrency =
+    exchangeSoldAccountCurrency ?? normalizeCurrency(exchangeDraft.currency);
+  const exchangeBoughtCurrency =
+    exchangeBoughtAccountCurrency ??
+    normalizeCurrency(exchangeDraft.boughtCurrency);
+  const exchangeCurrenciesValid = Boolean(
+    exchangeSoldCurrency &&
+    validCurrencyPattern.test(exchangeSoldCurrency) &&
+    exchangeBoughtCurrency &&
+    validCurrencyPattern.test(exchangeBoughtCurrency),
   );
   const exchangeAccountsHaveSameCurrency = Boolean(
     exchangeDraft.soldAccountId &&
@@ -3242,6 +3285,7 @@ export const EntryPanel = ({
       !exchangeDraft.soldAccountId ||
       !exchangeDraft.boughtAccountId ||
       exchangeAccountsHaveSameCurrency ||
+      !exchangeCurrenciesValid ||
       !normalizeAmount(exchangeDraft.amount) ||
       !normalizeAmount(exchangeDraft.boughtAmount)
     ) {
@@ -3287,6 +3331,7 @@ export const EntryPanel = ({
   }, [
     activeTab,
     exchangeAccountsHaveSameCurrency,
+    exchangeCurrenciesValid,
     exchangeDraft,
     lookups,
     open,
@@ -3402,7 +3447,18 @@ export const EntryPanel = ({
       }));
       setFieldErrors((currentErrors) => {
         const nextErrors = { ...currentErrors };
-        for (const field of Object.keys(patch) as FieldName[]) {
+        const fields = new Set(Object.keys(patch) as FieldName[]);
+        if (
+          activeShorthandTab === "exchange" &&
+          (fields.has("currency") ||
+            fields.has("boughtCurrency") ||
+            fields.has("soldAccountId") ||
+            fields.has("boughtAccountId"))
+        ) {
+          fields.add("currency");
+          fields.add("boughtCurrency");
+        }
+        for (const field of fields) {
           const message = fieldErrorForDraft(
             nextTabDraft,
             activeShorthandTab,
@@ -3712,19 +3768,36 @@ export const EntryPanel = ({
         return;
       }
       setTemplates(result.data.transaction_templates);
-      const initialTemplate = initialTemplateFqn
-        ? result.data.transaction_templates.find(
-            (template) => template.fqn === initialTemplateFqn,
-          )
-        : undefined;
-      if (initialTemplate) {
-        applyTemplate(initialTemplate);
-      }
     });
     return () => {
       active = false;
     };
-  }, [applyTemplate, initialTemplateFqn, open, replacement, templates.length]);
+  }, [open, replacement, templates.length]);
+
+  useEffect(() => {
+    if (!open || !currentDraftReady || replacement || !initialTemplateFqn) {
+      return;
+    }
+    const initialTemplate = templates.find(
+      (template) => template.fqn === initialTemplateFqn,
+    );
+    if (!initialTemplate) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      applyTemplate(initialTemplate);
+    });
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    applyTemplate,
+    currentDraftReady,
+    initialTemplateFqn,
+    open,
+    replacement,
+    templates,
+  ]);
 
   const validateField = useCallback(
     (field: FieldName) => {
@@ -3988,7 +4061,16 @@ export const EntryPanel = ({
         activeShorthandTab === "spend"
           ? primarySpendMerchant?.amount
           : normalizeAmount(activeTabDraft.amount);
-      const currency = normalizeCurrency(activeTabDraft.currency);
+      const soldAccountCurrency =
+        activeShorthandTab === "exchange"
+          ? accountCurrency(lookups, activeTabDraft.soldAccountId)
+          : undefined;
+      const boughtAccountCurrency =
+        activeShorthandTab === "exchange"
+          ? accountCurrency(lookups, activeTabDraft.boughtAccountId)
+          : undefined;
+      const currency =
+        soldAccountCurrency ?? normalizeCurrency(activeTabDraft.currency);
       const categoryRequired =
         activeShorthandTab !== "spend" &&
         activeShorthandTab !== "transfer" &&
@@ -4082,6 +4164,13 @@ export const EntryPanel = ({
                       bought_account_id: activeTabDraft.boughtAccountId ?? -1,
                       bought_amount:
                         normalizeAmount(activeTabDraft.boughtAmount) ?? "",
+                      ...(boughtAccountCurrency === undefined
+                        ? {
+                            bought_currency: normalizeCurrency(
+                              activeTabDraft.boughtCurrency,
+                            ),
+                          }
+                        : {}),
                       initiated_date: activeTabDraft.date,
                       member_id: activeTabDraft.memberId ?? null,
                       memo: activeTabDraft.memo.trim()
@@ -4091,6 +4180,13 @@ export const EntryPanel = ({
                       reconciliation_status: "unreconciled",
                       sold_account_id: activeTabDraft.soldAccountId ?? -1,
                       sold_amount: amount,
+                      ...(soldAccountCurrency === undefined
+                        ? {
+                            sold_currency: normalizeCurrency(
+                              activeTabDraft.currency,
+                            ),
+                          }
+                        : {}),
                       tag_ids: [...activeTabDraft.tagIds],
                     } satisfies CreateExchangeTransactionRequest)
                   : chargeAmount &&
@@ -4217,21 +4313,22 @@ export const EntryPanel = ({
       ? accountValue(activeTabDraft, activeConfig.secondaryAccountField)
       : undefined;
   const primaryAccountOptions =
-    activeTab === "exchange" && exchangeBoughtCurrency
+    activeTab === "exchange" && exchangeBoughtAccountCurrency
       ? options.movementAccounts.filter(
           (option) =>
             option.id === primaryAccountValue ||
-            accountCurrency(lookups, option.id) !== exchangeBoughtCurrency,
+            accountCurrency(lookups, option.id) !==
+              exchangeBoughtAccountCurrency,
         )
       : activeConfig
         ? options[activeConfig.primaryAccountOptionSet]
         : [];
   const secondaryAccountOptions =
-    activeTab === "exchange" && exchangeSoldCurrency
+    activeTab === "exchange" && exchangeSoldAccountCurrency
       ? options.movementAccounts.filter(
           (option) =>
             option.id === secondaryAccountValue ||
-            accountCurrency(lookups, option.id) !== exchangeSoldCurrency,
+            accountCurrency(lookups, option.id) !== exchangeSoldAccountCurrency,
         )
       : activeConfig
         ? options[activeConfig.secondaryAccountOptionSet]
@@ -4326,7 +4423,8 @@ export const EntryPanel = ({
               type="text"
               list="entry-template-options"
               autoComplete="off"
-              className="bg-card h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-chip)]"
+              className="bg-card disabled:bg-muted h-9 border-2 border-[var(--border-ink)] px-2 text-sm shadow-[var(--shadow-chip)] disabled:cursor-wait"
+              disabled={!currentDraftReady}
               placeholder="Type a template name or skip"
               value={templateQuery}
               onChange={(event) => {
@@ -4896,6 +4994,38 @@ export const EntryPanel = ({
                   </div>
                 ) : null}
 
+                {activeTab === "exchange" ? (
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="exchange-sold-currency"
+                      className="text-sm font-semibold"
+                    >
+                      Currency sold
+                    </label>
+                    <input
+                      id="exchange-sold-currency"
+                      list="entry-currency-options"
+                      className="bg-card read-only:bg-muted h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                      readOnly={exchangeSoldAccountCurrency !== undefined}
+                      value={exchangeSoldCurrency}
+                      onBlur={() => {
+                        validateField("currency");
+                      }}
+                      onChange={(event) => {
+                        updateActiveTabDraft({
+                          currency: event.target.value.toUpperCase(),
+                        });
+                      }}
+                    />
+                    <datalist id="entry-currency-options">
+                      {options.currencies.map((currency) => (
+                        <option key={currency} value={currency} />
+                      ))}
+                    </datalist>
+                    <FieldError message={fieldErrors.currency} />
+                  </div>
+                ) : null}
+
                 <EntityPicker
                   key={`${pickerLifecycle}:${activeTab}:${activeConfig.primaryAccountField}`}
                   id={`${activeTab}-${activeConfig.primaryAccountField}`}
@@ -4905,9 +5035,13 @@ export const EntryPanel = ({
                   onChange={(accountId) => {
                     updateActiveTabDraft({
                       [activeConfig.primaryAccountField]: accountId,
-                      currency:
-                        accountCurrency(lookups, accountId) ??
-                        activeTabDraft.currency,
+                      ...(activeTab === "exchange"
+                        ? {}
+                        : {
+                            currency:
+                              accountCurrency(lookups, accountId) ??
+                              activeTabDraft.currency,
+                          }),
                     });
                   }}
                 />
@@ -5102,6 +5236,30 @@ export const EntryPanel = ({
                       />
                       <FieldError message={fieldErrors.boughtAmount} />
                     </div>
+                    <div className="flex flex-col gap-1">
+                      <label
+                        htmlFor="exchange-bought-currency"
+                        className="text-sm font-semibold"
+                      >
+                        Currency bought
+                      </label>
+                      <input
+                        id="exchange-bought-currency"
+                        list="entry-currency-options"
+                        className="bg-card read-only:bg-muted h-9 border-2 border-[var(--border-ink)] px-2 font-mono text-sm shadow-[var(--shadow-pixel)]"
+                        readOnly={exchangeBoughtAccountCurrency !== undefined}
+                        value={exchangeBoughtCurrency}
+                        onBlur={() => {
+                          validateField("boughtCurrency");
+                        }}
+                        onChange={(event) => {
+                          updateActiveTabDraft({
+                            boughtCurrency: event.target.value.toUpperCase(),
+                          });
+                        }}
+                      />
+                      <FieldError message={fieldErrors.boughtCurrency} />
+                    </div>
                     {exchangeRate ? (
                       <p className="min-w-0 font-mono text-sm break-all">
                         {exchangeRate}
@@ -5115,7 +5273,9 @@ export const EntryPanel = ({
                       </p>
                     ) : (
                       <p className="text-muted-foreground font-mono text-xs">
-                        Enter both exchange amounts to see the effective rate.
+                        {!exchangeCurrenciesValid
+                          ? "Enter valid exchange currencies to see the effective rate."
+                          : "Enter both exchange amounts to see the effective rate."}
                       </p>
                     )}
                   </>

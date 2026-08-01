@@ -108,6 +108,8 @@ func TestAccountListReportsDeleteability(t *testing.T) {
 	assertAccountDeletable(t, accounts.JSON200.Accounts, usedLeaf.AccountId, false)
 	assertAccountDeletable(t, accounts.JSON200.Accounts, templateUsedLeaf.AccountId, false)
 	assertAccountDeletable(t, accounts.JSON200.Accounts, creditLimitUsedLeaf.AccountId, false)
+	assertAccountCreditLimitHistory(t, accounts.JSON200.Accounts, creditLimitUsedLeaf.AccountId, true)
+	assertAccountCreditLimitHistory(t, accounts.JSON200.Accounts, deletableLeaf.AccountId, false)
 	assertAccountDeletable(t, accounts.JSON200.Accounts, hiddenUsedLeaf.AccountId, false)
 
 	assertAccountDeletable(t, accounts.JSON200.Accounts, visibleClearInBlockedGroup.AccountId, true)
@@ -329,6 +331,24 @@ func assertAccountDeletable(t *testing.T, accounts []httpclient.Account, account
 		}
 		if *account.Deletable != deletable {
 			t.Fatalf("account %d deletable = %t, want %t; account = %+v", accountID, *account.Deletable, deletable, account)
+		}
+		return
+	}
+	t.Fatalf("account %d not found in %+v", accountID, accounts)
+}
+
+func assertAccountCreditLimitHistory(t *testing.T, accounts []httpclient.Account, accountID int64, hasHistory bool) {
+	t.Helper()
+
+	for _, account := range accounts {
+		if account.AccountId != accountID {
+			continue
+		}
+		if account.HasCreditLimitHistory == nil {
+			t.Fatalf("account %d has_credit_limit_history = nil, want %t", accountID, hasHistory)
+		}
+		if *account.HasCreditLimitHistory != hasHistory {
+			t.Fatalf("account %d has_credit_limit_history = %t, want %t; account = %+v", accountID, *account.HasCreditLimitHistory, hasHistory, account)
 		}
 		return
 	}

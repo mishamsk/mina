@@ -1094,27 +1094,32 @@ type Account struct {
 	// AccountType Account semantic type. Owned and party accounts hold tracked household state; flow records carry categorized economic activity; system accounts are fixed Mina mechanics.
 	AccountType AccountType `json:"account_type"`
 	CreatedAt   time.Time   `json:"created_at"`
-	Currency    *string     `json:"currency,omitempty"`
+
+	// Currency NULL means the account is multi-currency. A code means every active journal and recurring-definition record for the account must use that currency.
+	Currency *string `json:"currency,omitempty"`
 
 	// Deletable Populated in listAccounts responses. True when the active account has no active dependent resources and can be tombstone-deleted.
-	Deletable      *bool      `json:"deletable,omitempty"`
-	ExternalId     *string    `json:"external_id,omitempty"`
-	ExternalSystem *string    `json:"external_system,omitempty"`
-	Fqn            string     `json:"fqn"`
-	IsFeatured     bool       `json:"is_featured"`
-	IsHidden       bool       `json:"is_hidden"`
-	Level          int        `json:"level"`
-	Name           string     `json:"name"`
-	ParentFqn      *string    `json:"parent_fqn"`
-	TombstonedAt   *time.Time `json:"tombstoned_at,omitempty"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	Deletable      *bool   `json:"deletable,omitempty"`
+	ExternalId     *string `json:"external_id,omitempty"`
+	ExternalSystem *string `json:"external_system,omitempty"`
+	Fqn            string  `json:"fqn"`
+
+	// HasCreditLimitHistory Populated in listAccounts responses. True when the account has active credit-limit history.
+	HasCreditLimitHistory *bool      `json:"has_credit_limit_history,omitempty"`
+	IsFeatured            bool       `json:"is_featured"`
+	IsHidden              bool       `json:"is_hidden"`
+	Level                 int        `json:"level"`
+	Name                  string     `json:"name"`
+	ParentFqn             *string    `json:"parent_fqn"`
+	TombstonedAt          *time.Time `json:"tombstoned_at,omitempty"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 // AccountBalance defines model for AccountBalance.
 type AccountBalance struct {
 	AccountId int64 `json:"account_id"`
 
-	// CreditLimit JSON string, not a JSON number. Current credit limit for the account, when known, from the latest active credit-limit-history row with effective_date on or before the API runtime clock's local civil date. Responses use fixed-scale formatting with exactly 8 fractional digits.
+	// CreditLimit JSON string, not a JSON number. Current credit limit in the account's single currency, when known, from the latest active credit-limit-history row with effective_date on or before the API runtime clock's local civil date. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	CreditLimit *string `json:"credit_limit,omitempty"`
 	Currency    string  `json:"currency"`
 
@@ -1293,7 +1298,7 @@ type ClassifyJournalRecordRequest struct {
 	// CategoryId Category identifier used to derive this draft flow record's semantic role.
 	CategoryId *int64 `json:"category_id,omitempty"`
 
-	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	// Currency Draft record currency; it must match the referenced account when that account is single-currency.
 	Currency string `json:"currency"`
 }
 
@@ -1308,7 +1313,7 @@ type CreateAccountRequest struct {
 	// AccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
 	AccountType WritableAccountType `json:"account_type"`
 
-	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	// Currency Use null or omit for a multi-currency account; use an ISO 4217 or `C::` crypto code for a single-currency account.
 	Currency *string `json:"currency,omitempty"`
 
 	// ExternalId Optional identifier assigned by an external system.
@@ -1344,7 +1349,7 @@ type CreateCategoryRequest struct {
 
 // CreateCreditLimitHistoryRequest defines model for CreateCreditLimitHistoryRequest.
 type CreateCreditLimitHistoryRequest struct {
-	// CreditLimit JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	// CreditLimit JSON string, not a JSON number. Non-negative DECIMAL(18,8) amount denominated in the owning account's single currency; responses use fixed-scale formatting with exactly 8 fractional digits.
 	CreditLimit string `json:"credit_limit"`
 
 	// EffectiveDate ISO 8601 date or timestamp when the value starts applying.
@@ -1371,8 +1376,11 @@ type CreateExchangeTransactionRequest struct {
 	// BoughtAccountId Owned or party account into which currency is bought.
 	BoughtAccountId int64 `json:"bought_account_id"`
 
-	// BoughtAmount JSON string, not a JSON number. Positive amount bought in the bought account's currency.
+	// BoughtAmount JSON string, not a JSON number. Positive amount denominated in the resolved bought currency.
 	BoughtAmount string `json:"bought_amount"`
+
+	// BoughtCurrency Currency bought. Optional for a single-currency bought account and required for a multi-currency bought account; an explicit value must match a single-currency account.
+	BoughtCurrency *string `json:"bought_currency,omitempty"`
 
 	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
 	InitiatedDate openapi_types.Date `json:"initiated_date"`
@@ -1398,8 +1406,11 @@ type CreateExchangeTransactionRequest struct {
 	// SoldAccountId Owned or party account from which currency is sold.
 	SoldAccountId int64 `json:"sold_account_id"`
 
-	// SoldAmount JSON string, not a JSON number. Positive amount sold in the sold account's currency.
+	// SoldAmount JSON string, not a JSON number. Positive amount denominated in the resolved sold currency.
 	SoldAmount string `json:"sold_amount"`
+
+	// SoldCurrency Currency sold. Optional for a single-currency sold account and required for a multi-currency sold account; an explicit value must match a single-currency account.
+	SoldCurrency *string `json:"sold_currency,omitempty"`
 
 	// TagIds Tag identifiers to assign to the journal records.
 	TagIds *[]int64 `json:"tag_ids,omitempty"`
@@ -1413,7 +1424,7 @@ type CreateIncomeTransactionRequest struct {
 	// CategoryId Category identifier for this journal record or shorthand transaction.
 	CategoryId int64 `json:"category_id"`
 
-	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.
 	Currency string `json:"currency"`
 
 	// DestinationAccountId Destination balance-account identifier for the income, refund, or transfer.
@@ -1461,7 +1472,7 @@ type CreateJournalRecordRequest struct {
 	// CategoryId Category identifier for a flow record; omit or use null for every other account type.
 	CategoryId *int64 `json:"category_id,omitempty"`
 
-	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	// Currency Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.
 	Currency string `json:"currency"`
 
 	// ExternalId Optional identifier assigned by an external system.
@@ -1512,7 +1523,7 @@ type CreateRefundTransactionRequest struct {
 	// CounterpartyAccountId Flow-account identifier for the spend or refund counterparty record.
 	CounterpartyAccountId int64 `json:"counterparty_account_id"`
 
-	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.
 	Currency string `json:"currency"`
 
 	// DestinationAccountId Destination balance-account identifier for the income, refund, or transfer.
@@ -1554,7 +1565,7 @@ type CreateSpendTransactionRequest struct {
 	// CounterpartyAccountId Flow-account identifier for the spend or refund counterparty record.
 	CounterpartyAccountId int64 `json:"counterparty_account_id"`
 
-	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.
 	Currency string `json:"currency"`
 
 	// FundingAccountId Balance-account identifier that funds the spend.
@@ -1611,7 +1622,7 @@ type CreateTransferTransactionRequest struct {
 	// Amount JSON string, not a JSON number. Positive DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
 	Amount string `json:"amount"`
 
-	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	// Currency Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.
 	Currency string `json:"currency"`
 
 	// DestinationAccountId Destination balance-account identifier for the income, refund, or transfer.
@@ -1650,7 +1661,7 @@ type CreditLimitHistory struct {
 	AccountId int64     `json:"account_id"`
 	CreatedAt time.Time `json:"created_at"`
 
-	// CreditLimit JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+	// CreditLimit JSON string, not a JSON number. For an active row, this non-negative DECIMAL(18,8) amount is denominated in the owning account's current single currency. A tombstoned row retains the numeric audit value but no durable denomination; if the account later changes currency, clients must not reinterpret the old value in the new currency. Responses use fixed-scale formatting with exactly 8 fractional digits.
 	CreditLimit          string             `json:"credit_limit"`
 	CreditLimitHistoryId int64              `json:"credit_limit_history_id"`
 	EffectiveDate        openapi_types.Date `json:"effective_date"`
@@ -1822,12 +1833,14 @@ type JournalRecord struct {
 	Amount string `json:"amount"`
 
 	// AmountUsd JSON string or null, not a JSON number. Signed non-zero DECIMAL(18,8) when present; responses use fixed-scale formatting with exactly 8 fractional digits.
-	AmountUsd      *string   `json:"amount_usd"`
-	CategoryId     *int64    `json:"category_id"`
-	CreatedAt      time.Time `json:"created_at"`
-	Currency       string    `json:"currency"`
-	ExternalId     *string   `json:"external_id,omitempty"`
-	ExternalSystem *string   `json:"external_system,omitempty"`
+	AmountUsd  *string   `json:"amount_usd"`
+	CategoryId *int64    `json:"category_id"`
+	CreatedAt  time.Time `json:"created_at"`
+
+	// Currency Authoritative record currency; matches account.currency when the account is single-currency.
+	Currency       string  `json:"currency"`
+	ExternalId     *string `json:"external_id,omitempty"`
+	ExternalSystem *string `json:"external_system,omitempty"`
 
 	// InitiatedDate Human-facing transaction date in YYYY-MM-DD format.
 	InitiatedDate openapi_types.Date `json:"initiated_date"`
@@ -1958,9 +1971,11 @@ type RecurringDefinitionRecord struct {
 	AccountId int64 `json:"account_id"`
 
 	// Amount JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
-	Amount                      string     `json:"amount"`
-	CategoryId                  *int64     `json:"category_id"`
-	CreatedAt                   time.Time  `json:"created_at"`
+	Amount     string    `json:"amount"`
+	CategoryId *int64    `json:"category_id"`
+	CreatedAt  time.Time `json:"created_at"`
+
+	// Currency Authoritative generated-record currency; matches account.currency when the account is single-currency.
 	Currency                    string     `json:"currency"`
 	MemberId                    *int64     `json:"member_id"`
 	Memo                        *string    `json:"memo"`
@@ -1982,7 +1997,7 @@ type RecurringDefinitionRecordRequest struct {
 	// CategoryId Category identifier for this recurring record. After template inheritance, flow-account records require a category; owned, party, and system-account records forbid one.
 	CategoryId nullable.Nullable[int64] `json:"category_id,omitempty"`
 
-	// Currency Currency code using ISO 4217 or the `C::` crypto prefix.
+	// Currency Record currency; after template inheritance, it must match the resolved account if that account is single-currency.
 	Currency *string `json:"currency,omitempty"`
 
 	// MemberId Optional household-member identifier for the journal records.
@@ -2294,6 +2309,9 @@ type TransactionTemplateWriteRequest struct {
 type UpdateAccountRequest struct {
 	// AccountType User-writable account semantic type. System accounts are installed and managed only by Mina.
 	AccountType *WritableAccountType `json:"account_type,omitempty"`
+
+	// Currency Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged.
+	Currency nullable.Nullable[string] `json:"currency,omitempty"`
 
 	// ExternalId Optional identifier assigned by an external system.
 	ExternalId nullable.Nullable[string] `json:"external_id,omitempty"`

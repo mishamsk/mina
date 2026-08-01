@@ -17,7 +17,7 @@ CREATE TABLE journal_record (
 	transaction_id INTEGER NOT NULL,
 	account_id INTEGER NOT NULL,
 	member_id INTEGER,
-	-- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
+	-- ISO 4217 code or C::-prefixed crypto ticker; must match account.currency when that account is single-currency.
 	currency TEXT NOT NULL,
 	-- Signed debit or credit amount in the record currency.
 	amount DECIMAL(18,8) NOT NULL,
@@ -48,7 +48,7 @@ CREATE TABLE journal_record (
 	tombstoned_at TIMESTAMP
 );
 
-COMMENT ON COLUMN journal_record.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN journal_record.currency IS 'ISO 4217 code or C::-prefixed crypto ticker; must match account.currency when that account is single-currency.';
 COMMENT ON COLUMN journal_record.amount IS 'Signed debit or credit amount in the record currency.';
 COMMENT ON COLUMN journal_record.amount_usd IS 'Signed USD conversion at recording time; NULL when no exchange rate is available.';
 COMMENT ON COLUMN journal_record.category_id IS 'Category for flow records; NULL on every other record.';

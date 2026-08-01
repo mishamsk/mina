@@ -1002,6 +1002,7 @@ paths:
       tags:
         - accounts
       summary: Create an account.
+      description: Creates a multi-currency account when `currency` is null or omitted, or a single-currency account when `currency` is a code.
       requestBody:
         required: true
         content:
@@ -1168,6 +1169,7 @@ paths:
       tags:
         - accounts
       summary: Update mutable account fields.
+      description: An actual currency-mode or currency-code change is rejected while active credit-limit history exists. Otherwise, setting or changing a single currency is allowed only when every active journal and recurring-definition record for the account already uses it. Omitting currency or setting its current value is not a change. Mina-managed system accounts remain immutable.
       requestBody:
         required: true
         content:
@@ -1275,6 +1277,7 @@ paths:
       tags:
         - accounts
       summary: Create a credit limit history entry.
+      description: Creates an account-denominated limit only for a single-currency account. Multi-currency accounts are rejected.
       requestBody:
         required: true
         content:
@@ -2348,7 +2351,7 @@ paths:
       tags:
         - transactions
       summary: Create a two-currency exchange transaction.
-      description: Creates the two supplied balance records and the matching `system:exchange` records.
+      description: Creates the two supplied balance records and the matching `system:exchange` records. Each side resolves from a single-currency account or requires an explicit currency for a multi-currency account; explicit values must match single-currency accounts, and the resolved currencies must differ.
       requestBody:
         required: true
         content:
@@ -3160,7 +3163,11 @@ components:
         deletable:
           type: boolean
           description: Populated in listAccounts responses. True when the active account has no active dependent resources and can be tombstone-deleted.
+        has_credit_limit_history:
+          type: boolean
+          description: Populated in listAccounts responses. True when the account has active credit-limit history.
         currency:
+          description: "NULL means the account is multi-currency. A code means every active journal and recurring-definition record for the account must use that currency."
           type: string
           nullable: true
           pattern: ^([A-Z]{3}|C::.+)$
@@ -3302,7 +3309,7 @@ components:
           maxLength: 40
         credit_limit:
           type: string
-          description: JSON string, not a JSON number. Current credit limit for the account, when known, from the latest active credit-limit-history row with effective_date on or before the API runtime clock's local civil date. Responses use fixed-scale formatting with exactly 8 fractional digits.
+          description: JSON string, not a JSON number. Current credit limit in the account's single currency, when known, from the latest active credit-limit-history row with effective_date on or before the API runtime clock's local civil date. Responses use fixed-scale formatting with exactly 8 fractional digits.
           pattern: ^-?[0-9]{1,30}(\.[0-9]{1,8})?$
           maxLength: 40
         current_balance_usd:
@@ -3363,7 +3370,7 @@ components:
           format: int64
         credit_limit:
           type: string
-          description: JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          description: JSON string, not a JSON number. For an active row, this non-negative DECIMAL(18,8) amount is denominated in the owning account's current single currency. A tombstoned row retains the numeric audit value but no durable denomination; if the account later changes currency, clients must not reinterpret the old value in the new currency. Responses use fixed-scale formatting with exactly 8 fractional digits.
           pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 19
         effective_date:
@@ -3572,7 +3579,7 @@ components:
           type: boolean
           default: false
         currency:
-          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
+          description: "Use null or omit for a multi-currency account; use an ISO 4217 or `C::` crypto code for a single-currency account."
           type: string
           nullable: true
           pattern: ^([A-Z]{3}|C::.+)$
@@ -3593,7 +3600,7 @@ components:
       properties:
         credit_limit:
           type: string
-          description: JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+          description: JSON string, not a JSON number. Non-negative DECIMAL(18,8) amount denominated in the owning account's single currency; responses use fixed-scale formatting with exactly 8 fractional digits.
           pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
           maxLength: 19
         effective_date:
@@ -3652,7 +3659,7 @@ components:
           minimum: 1
           nullable: true
         currency:
-          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
+          description: "Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -3852,7 +3859,7 @@ components:
           format: int64
           minimum: 1
         currency:
-          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -3926,7 +3933,7 @@ components:
           format: int64
           minimum: 1
         currency:
-          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -4000,7 +4007,7 @@ components:
           format: int64
           minimum: 1
         currency:
-          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -4068,7 +4075,7 @@ components:
           format: int64
           minimum: 1
         currency:
-          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
+          description: "Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -4135,16 +4142,24 @@ components:
           type: integer
           format: int64
           minimum: 1
+        sold_currency:
+          description: "Currency sold. Optional for a single-currency sold account and required for a multi-currency sold account; an explicit value must match a single-currency account."
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
+        bought_currency:
+          description: "Currency bought. Optional for a single-currency bought account and required for a multi-currency bought account; an explicit value must match a single-currency account."
+          type: string
+          pattern: ^([A-Z]{3}|C::.+)$
         sold_amount:
           type: string
-          description: JSON string, not a JSON number. Positive amount sold in the sold account's currency.
+          description: JSON string, not a JSON number. Positive amount denominated in the resolved sold currency.
           pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
           not:
             pattern: ^0{1,10}(\.0{1,8})?$
           maxLength: 19
         bought_amount:
           type: string
-          description: JSON string, not a JSON number. Positive amount bought in the bought account's currency.
+          description: JSON string, not a JSON number. Positive amount denominated in the resolved bought currency.
           pattern: ^[0-9]{1,10}(\.[0-9]{1,8})?$
           not:
             pattern: ^0{1,10}(\.0{1,8})?$
@@ -4342,7 +4357,7 @@ components:
           format: int64
           minimum: 1
         currency:
-          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
+          description: "Draft record currency; it must match the referenced account when that account is single-currency."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -4554,7 +4569,7 @@ components:
           x-go-type-import:
             path: github.com/oapi-codegen/nullable
         currency:
-          description: "Currency code using ISO 4217 or the `C::` crypto prefix."
+          description: "Record currency; after template inheritance, it must match the resolved account if that account is single-currency."
           type: string
           nullable: true
           pattern: ^([A-Z]{3}|C::.+)$
@@ -5056,6 +5071,7 @@ components:
           format: int64
           nullable: true
         currency:
+          description: "Authoritative record currency; matches account.currency when the account is single-currency."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -5474,6 +5490,7 @@ components:
           format: int64
           nullable: true
         currency:
+          description: "Authoritative generated-record currency; matches account.currency when the account is single-currency."
           type: string
           pattern: ^([A-Z]{3}|C::.+)$
         amount:
@@ -5681,6 +5698,15 @@ components:
       properties:
         account_type:
           $ref: "#/components/schemas/WritableAccountType"
+        currency:
+          description: "Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged."
+          type: string
+          nullable: true
+          pattern: ^([A-Z]{3}|C::.+)$
+          x-go-type: nullable.Nullable[string]
+          x-go-type-skip-optional-pointer: true
+          x-go-type-import:
+            path: github.com/oapi-codegen/nullable
         is_hidden:
           description: Whether the account is excluded from default lists.
           type: boolean

@@ -77,6 +77,36 @@ shows Jordan relationship balances and Jordan-as-counterparty activity together.
 
 No separate account usage field is required for accounting correctness.
 
+### Account currency
+
+Account currency is a record constraint, not a balance or display default.
+
+- `account.currency = NULL` means the account is multi-currency; its records may
+  use any valid currency.
+- A non-`NULL` currency means the account is single-currency; every active,
+  non-tombstoned journal and recurring-definition record on the account must use
+  that currency.
+- Credit-limit history has no currency of its own. It is valid only for a
+  single-currency account, and every active credit-limit value inherits that
+  account's currency.
+- While any active, non-tombstoned credit-limit history exists, the account's
+  currency cannot change: it cannot become multi-currency or switch to a
+  different currency. Omitting currency or setting its current value is not a
+  change.
+- A tombstoned credit-limit row retains its numeric audit value but no durable
+  denomination. If its account later changes currency, clients must not
+  reinterpret the old value in the new currency.
+- Without active credit-limit history, a single-currency account may become
+  multi-currency. A multi-currency account may become single-currency, and a
+  single-currency account may change currency, only when no active journal or
+  recurring-definition record on the account uses a different currency.
+
+Record and balance amounts remain authoritative in their own currencies.
+Tombstoned records, journal records in tombstoned transactions, and records in
+tombstoned recurring definitions do not constrain currency transitions.
+Tombstoned credit-limit history does not constrain them either. Fixed system
+accounts are multi-currency and immutable.
+
 ## Categories
 
 A category answers one question: **what was this spending or income for.**

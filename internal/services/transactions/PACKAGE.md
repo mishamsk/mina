@@ -6,13 +6,13 @@
 
 ## Implicit Contracts
 
-- Create/replace and bulk category/account/tag use cases validate references through dictionary service APIs before writes.
+- Create/replace and bulk category/account/tag use cases validate references through dictionary service APIs before writes; account-reference validation centrally enforces each single-currency account's record currency.
 - Transaction-list and record-search dictionary ID filters validate active references through dictionary service APIs before reads.
 - Account-scoped record search treats the path account ID as a target account and returns not found for missing or inactive accounts.
 - Create/replace infers missing `amount_usd` with posted-date-else-initiated lookup dates and preserves explicit values.
 - Derived classification, category validity, and exchange exclusivity follow `docs/accounting-semantics.md`; this package owns enforcing those rules.
 - The transactions service owns hypothetical account-type-change validation by reclassifying every active transaction that references the account with the proposed type.
-- Spend, refund, income, and transfer shorthand use cases build ordinary same-currency transactions; Exchange builds the four-record two-currency `system:exchange` form.
+- Spend, refund, income, and transfer shorthand use cases build ordinary same-currency transactions; Exchange resolves each single-currency side from its account, requires an explicit currency for each multi-currency side, and builds the four-record two-currency `system:exchange` form.
 - Dry-run classification consumes only account, currency, amount, and optional category semantics; it resolves active references and derives roles, shapes, class, and amounts without requiring balance, except that exchange exclusivity still applies.
 - The transactions service owns `amount_usd` backfill for active journal records still storing `NULL`.
 - Active records within a transaction must be all cancelled or all non-cancelled, and all expected or none expected; create/replace reject mixed expected/non-expected outcomes, while create, replace, and bulk posting-status updates reject mixed cancelled/non-cancelled outcomes.

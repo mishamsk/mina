@@ -84,7 +84,7 @@ const activeRecord = <T extends { readonly tombstoned_at?: string | null }>(
 ): boolean => !value.tombstoned_at;
 
 const accountOption = (account: Account): EntityOption => ({
-  detail: account.fqn,
+  detail: `${account.fqn} · ${account.currency ? `${account.currency} · Single-currency` : "Multi-currency"}`,
   hidden: account.is_hidden,
   id: account.account_id,
   label: account.name,

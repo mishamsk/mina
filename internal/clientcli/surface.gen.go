@@ -264,7 +264,7 @@ func Operations() []Operation {
 			Method:      "POST",
 			Path:        "/api/accounts",
 			Summary:     "Create an account.",
-			Description: "",
+			Description: "Creates a multi-currency account when `currency` is null or omitted, or a single-currency account when `currency` is a code.",
 			CLI:         CLIOperation{Area: "accounts", Name: "create"},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -282,7 +282,7 @@ func Operations() []Operation {
 						{
 							Name:        "currency",
 							Type:        "string",
-							Description: "Currency code using ISO 4217 or the `C::` crypto prefix.",
+							Description: "Use null or omit for a multi-currency account; use an ISO 4217 or `C::` crypto code for a single-currency account.",
 							Required:    false,
 						},
 						{
@@ -372,7 +372,7 @@ func Operations() []Operation {
 			Method:      "POST",
 			Path:        "/api/accounts/{account_id}/credit-limit-history",
 			Summary:     "Create a credit limit history entry.",
-			Description: "",
+			Description: "Creates an account-denominated limit only for a single-currency account. Multi-currency accounts are rejected.",
 			CLI:         CLIOperation{Area: "accounts", Name: "create-credit-limit"},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -391,7 +391,7 @@ func Operations() []Operation {
 						{
 							Name:        "credit_limit",
 							Type:        "string",
-							Description: "JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.",
+							Description: "JSON string, not a JSON number. Non-negative DECIMAL(18,8) amount denominated in the owning account's single currency; responses use fixed-scale formatting with exactly 8 fractional digits.",
 							Required:    true,
 						},
 						{
@@ -456,7 +456,7 @@ func Operations() []Operation {
 			Method:      "POST",
 			Path:        "/api/transactions/exchange",
 			Summary:     "Create a two-currency exchange transaction.",
-			Description: "Creates the two supplied balance records and the matching `system:exchange` records.",
+			Description: "Creates the two supplied balance records and the matching `system:exchange` records. Each side resolves from a single-currency account or requires an explicit currency for a multi-currency account; explicit values must match single-currency accounts, and the resolved currencies must differ.",
 			CLI:         CLIOperation{Area: "transactions", Name: "create-exchange"},
 			Input: InputDescriptor{
 				Body: BodyDescriptor{
@@ -473,8 +473,14 @@ func Operations() []Operation {
 						{
 							Name:        "bought_amount",
 							Type:        "string",
-							Description: "JSON string, not a JSON number. Positive amount bought in the bought account's currency.",
+							Description: "JSON string, not a JSON number. Positive amount denominated in the resolved bought currency.",
 							Required:    true,
+						},
+						{
+							Name:        "bought_currency",
+							Type:        "string",
+							Description: "Currency bought. Optional for a single-currency bought account and required for a multi-currency bought account; an explicit value must match a single-currency account.",
+							Required:    false,
 						},
 						{
 							Name:        "initiated_date",
@@ -529,8 +535,14 @@ func Operations() []Operation {
 						{
 							Name:        "sold_amount",
 							Type:        "string",
-							Description: "JSON string, not a JSON number. Positive amount sold in the sold account's currency.",
+							Description: "JSON string, not a JSON number. Positive amount denominated in the resolved sold currency.",
 							Required:    true,
+						},
+						{
+							Name:        "sold_currency",
+							Type:        "string",
+							Description: "Currency sold. Optional for a single-currency sold account and required for a multi-currency sold account; an explicit value must match a single-currency account.",
+							Required:    false,
 						},
 						{
 							Name:        "tag_ids",
@@ -575,7 +587,7 @@ func Operations() []Operation {
 						{
 							Name:        "currency",
 							Type:        "string",
-							Description: "Currency code using ISO 4217 or the `C::` crypto prefix.",
+							Description: "Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.",
 							Required:    true,
 						},
 						{
@@ -761,7 +773,7 @@ func Operations() []Operation {
 						{
 							Name:        "currency",
 							Type:        "string",
-							Description: "Currency code using ISO 4217 or the `C::` crypto prefix.",
+							Description: "Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.",
 							Required:    true,
 						},
 						{
@@ -863,7 +875,7 @@ func Operations() []Operation {
 						{
 							Name:        "currency",
 							Type:        "string",
-							Description: "Currency code using ISO 4217 or the `C::` crypto prefix.",
+							Description: "Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.",
 							Required:    true,
 						},
 						{
@@ -1059,7 +1071,7 @@ func Operations() []Operation {
 						{
 							Name:        "currency",
 							Type:        "string",
-							Description: "Currency code using ISO 4217 or the `C::` crypto prefix.",
+							Description: "Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.",
 							Required:    true,
 						},
 						{
@@ -3265,7 +3277,7 @@ func Operations() []Operation {
 			Method:      "PATCH",
 			Path:        "/api/accounts/{account_id}",
 			Summary:     "Update mutable account fields.",
-			Description: "",
+			Description: "An actual currency-mode or currency-code change is rejected while active credit-limit history exists. Otherwise, setting or changing a single currency is allowed only when every active journal and recurring-definition record for the account already uses it. Omitting currency or setting its current value is not a change. Mina-managed system accounts remain immutable.",
 			CLI:         CLIOperation{Area: "accounts", Name: "update"},
 			Input: InputDescriptor{
 				Path: []ParameterDescriptor{
@@ -3287,6 +3299,12 @@ func Operations() []Operation {
 							Description: "User-writable account semantic type. System accounts are installed and managed only by Mina.",
 							Required:    false,
 							Enum:        []string{"owned", "party", "flow"},
+						},
+						{
+							Name:        "currency",
+							Type:        "string",
+							Description: "Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged.",
+							Required:    false,
 						},
 						{
 							Name:        "external_id",

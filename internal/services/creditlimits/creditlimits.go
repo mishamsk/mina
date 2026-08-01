@@ -79,11 +79,15 @@ func (s *Service) Create(ctx context.Context, accountID int64, input CreateInput
 
 	var history CreditLimitHistory
 	if err := s.refs.SerializeReferenceOperation(func() error {
-		if _, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true}); err != nil {
+		account, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true})
+		if err != nil {
 			if errors.Is(err, services.ErrInvalidReference) {
 				return services.NotFound("account not found")
 			}
 			return err
+		}
+		if account.Currency == nil {
+			return services.InvalidRequest("credit limits require a single-currency account")
 		}
 		created, err := s.repo.Create(ctx, accountID, input)
 		if errors.Is(err, services.ErrNotFound) {

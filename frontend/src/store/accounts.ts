@@ -425,6 +425,9 @@ export const mergeAccountsPageAccount = (account: Account): void => {
       accountsById.set(account.account_id, {
         ...account,
         deletable: account.deletable ?? existingAccount?.deletable,
+        has_credit_limit_history:
+          account.has_credit_limit_history ??
+          existingAccount?.has_credit_limit_history,
       });
 
       return {

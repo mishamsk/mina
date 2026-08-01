@@ -527,13 +527,161 @@ func accountTypeChangeTransactionRequest(fundingAccountID int64, counterpartyAcc
 	}
 }
 
+func TestAccountCurrencyTransitionsBoundary(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	account := scenario.AccountWithType("checking:CurrencyTransitions", httpclient.WritableAccountTypeOwned)
+	merchant := scenario.AccountWithType("expense:CurrencyTransitions", httpclient.WritableAccountTypeFlow)
+	category := scenario.Category("CurrencyTransitions")
+
+	usd := "USD"
+	eur := "EUR"
+	updated := client.SetAccountCurrency(account.AccountId, &usd)
+	if updated.Currency == nil || *updated.Currency != usd {
+		t.Fatalf("multi-to-single currency = %v, want USD", updated.Currency)
+	}
+	updated = client.SetAccountCurrency(account.AccountId, &eur)
+	if updated.Currency == nil || *updated.Currency != eur {
+		t.Fatalf("single-to-single without records currency = %v, want EUR", updated.Currency)
+	}
+	updated = client.SetAccountCurrency(account.AccountId, nil)
+	if updated.Currency != nil {
+		t.Fatalf("single-to-multi currency = %v, want nil", updated.Currency)
+	}
+
+	transaction := createBalanceTransaction(
+		t,
+		client,
+		account.AccountId,
+		merchant.AccountId,
+		category.CategoryId,
+		"USD",
+		"-10.00",
+		"10.00",
+		httpclient.PostingStatusPosted,
+	)
+	client.SetAccountCurrency(account.AccountId, &usd)
+
+	rejected, err := client.REST().UpdateAccountWithResponse(context.Background(), account.AccountId, httpclient.UpdateAccountRequest{
+		Currency: nullable.NewNullableWithValue(eur),
+	})
+	if err != nil {
+		t.Fatalf("reject single currency change request: %v", err)
+	}
+	if rejected.StatusCode() != http.StatusConflict {
+		t.Fatalf("single currency change status = %d, want %d; body %s", rejected.StatusCode(), http.StatusConflict, rejected.Body)
+	}
+
+	client.SetAccountCurrency(account.AccountId, nil)
+	rejected, err = client.REST().UpdateAccountWithResponse(context.Background(), account.AccountId, httpclient.UpdateAccountRequest{
+		Currency: nullable.NewNullableWithValue(eur),
+	})
+	if err != nil {
+		t.Fatalf("reject multi-to-single mismatch request: %v", err)
+	}
+	if rejected.StatusCode() != http.StatusConflict {
+		t.Fatalf("multi-to-single mismatch status = %d, want %d; body %s", rejected.StatusCode(), http.StatusConflict, rejected.Body)
+	}
+
+	replacementAccount := scenario.AccountWithType("checking:CurrencyTransitionReplacement", httpclient.WritableAccountTypeOwned)
+	replacement, err := client.REST().ReplaceTransactionWithResponse(
+		context.Background(),
+		transaction.JSON201.TransactionId,
+		httpclient.UpdateTransactionRequest(accountTypeChangeTransactionRequest(
+			replacementAccount.AccountId,
+			merchant.AccountId,
+			category.CategoryId,
+			"-10.00",
+			"10.00",
+		)),
+	)
+	if err != nil {
+		t.Fatalf("replace transaction away from account request: %v", err)
+	}
+	if replacement.StatusCode() != http.StatusOK {
+		t.Fatalf("replace transaction away from account status = %d, want %d; body %s", replacement.StatusCode(), http.StatusOK, replacement.Body)
+	}
+	client.SetAccountCurrency(account.AccountId, &eur)
+}
+
+func TestAccountCreditLimitHistoryLocksCurrencyTransitions(t *testing.T) {
+	client := newSharedClient(t)
+	account := client.Scenario().AccountWithCurrency("credit:CurrencyTransitions", "USD")
+	usd := "USD"
+	eur := "EUR"
+
+	assertCurrencyConflict := func(currency nullable.Nullable[string]) {
+		t.Helper()
+
+		rejected, err := client.REST().UpdateAccountWithResponse(context.Background(), account.AccountId, httpclient.UpdateAccountRequest{
+			Currency: currency,
+		})
+		if err != nil {
+			t.Fatalf("reject account currency change request: %v", err)
+		}
+		if rejected.StatusCode() != http.StatusConflict {
+			t.Fatalf("account currency change status = %d, want %d; body %s", rejected.StatusCode(), http.StatusConflict, rejected.Body)
+		}
+		if rejected.JSON409 == nil || rejected.JSON409.Error.Code != httpclient.APIErrorCodeConflict {
+			t.Fatalf("account currency change error = %+v, want conflict; body %s", rejected.JSON409, rejected.Body)
+		}
+		if rejected.JSON409.Error.Message != "account currency cannot change while active credit limit history exists" {
+			t.Fatalf("account currency change message = %q, want credit-limit-history conflict", rejected.JSON409.Error.Message)
+		}
+	}
+
+	active := createCreditLimitHistory(t, client, account.AccountId, "5000.00", "2024-01-01")
+	remaining := createCreditLimitHistory(t, client, account.AccountId, "5500.00", "2024-06-01")
+	featured := true
+	omittedCurrency, err := client.REST().UpdateAccountWithResponse(context.Background(), account.AccountId, httpclient.UpdateAccountRequest{
+		IsFeatured: &featured,
+	})
+	if err != nil {
+		t.Fatalf("update account while omitting currency request: %v", err)
+	}
+	if omittedCurrency.StatusCode() != http.StatusOK {
+		t.Fatalf("update account while omitting currency status = %d, want %d; body %s", omittedCurrency.StatusCode(), http.StatusOK, omittedCurrency.Body)
+	}
+	if omittedCurrency.JSON200.Currency == nil || *omittedCurrency.JSON200.Currency != usd {
+		t.Fatalf("account currency after omitted update = %v, want USD", omittedCurrency.JSON200.Currency)
+	}
+	if !omittedCurrency.JSON200.IsFeatured {
+		t.Fatal("account featured after omitted currency update = false, want true")
+	}
+
+	updated := client.SetAccountCurrency(account.AccountId, &usd)
+	if updated.Currency == nil || *updated.Currency != usd {
+		t.Fatalf("same-value account currency = %v, want USD", updated.Currency)
+	}
+	assertCurrencyConflict(nullable.NewNullNullable[string]())
+	assertCurrencyConflict(nullable.NewNullableWithValue(eur))
+	deleteCreditLimitHistory(t, client, active.JSON201.CreditLimitHistoryId)
+	assertCurrencyConflict(nullable.NewNullNullable[string]())
+	assertCurrencyConflict(nullable.NewNullableWithValue(eur))
+	deleteCreditLimitHistory(t, client, remaining.JSON201.CreditLimitHistoryId)
+
+	future := createCreditLimitHistory(t, client, account.AccountId, "6000.00", "2099-01-01")
+	assertCurrencyConflict(nullable.NewNullNullable[string]())
+	assertCurrencyConflict(nullable.NewNullableWithValue(eur))
+	deleteCreditLimitHistory(t, client, future.JSON201.CreditLimitHistoryId)
+
+	updated = client.SetAccountCurrency(account.AccountId, nil)
+	if updated.Currency != nil {
+		t.Fatalf("currency after tombstoning all credit limit history = %v, want nil", updated.Currency)
+	}
+	updated = client.SetAccountCurrency(account.AccountId, &eur)
+	if updated.Currency == nil || *updated.Currency != eur {
+		t.Fatalf("currency after tombstoning all credit limit history = %v, want EUR", updated.Currency)
+	}
+}
+
 func TestAccountBalancesBoundary(t *testing.T) {
 	client := newSharedClient(t)
 	scenario := client.Scenario()
 
 	checking := scenario.AccountWithCurrency("checking:Balances:Primary", "EUR")
-	savings := scenario.AccountWithCurrency("savings:Balances:Reserve", "USD")
-	travel := scenario.AccountWithCurrency("cash:Travel", "USD")
+	savings := scenario.AccountWithType("savings:Balances:Reserve", httpclient.WritableAccountTypeOwned)
+	travel := scenario.AccountWithType("cash:Travel", httpclient.WritableAccountTypeOwned)
 	party := scenario.AccountWithType("people:Balances:Jordan", httpclient.WritableAccountTypeParty)
 	merchant := scenario.AccountWithType("merchant:Balances", httpclient.WritableAccountTypeFlow)
 	expenseCategory := scenario.Category("BalanceTests:Expense")
@@ -1047,6 +1195,18 @@ func TestAccountValidationErrors(t *testing.T) {
 	}
 	if validAccount.StatusCode() != http.StatusCreated {
 		t.Fatalf("valid account create status = %d, want %d; body %s", validAccount.StatusCode(), http.StatusCreated, validAccount.Body)
+	}
+	unknownCurrencyUpdate, err := client.REST().UpdateAccountWithResponse(context.Background(), validAccount.JSON201.AccountId, httpclient.UpdateAccountRequest{
+		Currency: nullable.NewNullableWithValue(unknownCurrencyValue),
+	})
+	if err != nil {
+		t.Fatalf("unknown currency update request: %v", err)
+	}
+	if unknownCurrencyUpdate.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("unknown currency update status = %d, want %d; body %s", unknownCurrencyUpdate.StatusCode(), http.StatusBadRequest, unknownCurrencyUpdate.Body)
+	}
+	if unknownCurrencyUpdate.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("unknown currency update code = %q, want %q", unknownCurrencyUpdate.JSON400.Error.Code, httpclient.APIErrorCodeInvalidRequest)
 	}
 	patchExternalID := "acct-only"
 	partialExternalIdentifiers, err := client.REST().UpdateAccountWithResponse(context.Background(), validAccount.JSON201.AccountId, httpclient.UpdateAccountRequest{

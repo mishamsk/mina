@@ -100,6 +100,43 @@ WHERE tombstoned_at IS NULL
 	return usageByID, nil
 }
 
+// HasActiveRecordCurrencyConflict reports whether active journal or recurring
+// definition records use a currency other than the proposed account currency.
+func (s *AccountStore) HasActiveRecordCurrencyConflict(ctx context.Context, accountID int64, currency string) (bool, error) {
+	var conflicts bool
+	err := s.db.query().QueryRowContext(
+		ctx,
+		`SELECT EXISTS (
+	SELECT 1
+	FROM `+s.db.accountingName("journal_record")+` jr
+	JOIN `+s.db.accountingName("transaction")+` t
+	  ON t.transaction_id = jr.transaction_id
+	WHERE jr.account_id = ?
+	  AND jr.currency <> ?
+	  AND jr.tombstoned_at IS NULL
+	  AND t.tombstoned_at IS NULL
+	UNION ALL
+	SELECT 1
+	FROM `+s.db.accountingName("recurring_definition_record")+` rdr
+	JOIN `+s.db.accountingName("recurring_definition")+` rd
+	  ON rd.recurring_definition_id = rdr.recurring_definition_id
+	WHERE rdr.account_id = ?
+	  AND rdr.currency <> ?
+	  AND rdr.tombstoned_at IS NULL
+	  AND rd.tombstoned_at IS NULL
+)`,
+		accountID,
+		currency,
+		accountID,
+		currency,
+	).Scan(&conflicts)
+	if err != nil {
+		return false, fmt.Errorf("check active account record currency conflicts: %w", err)
+	}
+
+	return conflicts, nil
+}
+
 // ActiveUsage reports active resources that reference categories.
 func (s *CategoryStore) ActiveUsage(ctx context.Context, ids []int64) (map[int64]categories.ActiveUsage, error) {
 	if len(ids) == 0 {

@@ -927,6 +927,7 @@ func TestAccountRecordRunningBalanceBoundary(t *testing.T) {
 func TestAccountRecordRunningBalanceByCurrency(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createSearchRefs(t, client)
+	client.SetAccountCurrency(refs.CheckingAccountId, nil)
 
 	firstUSD := balancedTransactionRequest(refs.transactionRefs)
 	firstUSD.InitiatedDate = apptest.Date("2024-01-01")

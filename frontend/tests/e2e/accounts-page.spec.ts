@@ -4,6 +4,7 @@ import { test } from "@tests/e2e/test";
 interface AccountFixture {
   readonly account_id: number;
   readonly account_type: "flow" | "owned" | "party" | "system";
+  readonly currency: string | null;
   readonly fqn: string;
 }
 
@@ -81,10 +82,12 @@ const createAccount = async (
   page: Page,
   {
     accountType = "owned",
+    currency = "USD",
     fqn,
     hidden = false,
   }: {
     readonly accountType?: "flow" | "owned" | "party";
+    readonly currency?: string | null;
     readonly fqn: string;
     readonly hidden?: boolean;
   },
@@ -92,7 +95,7 @@ const createAccount = async (
   const response = await page.request.post("/api/accounts", {
     data: {
       account_type: accountType,
-      currency: "USD",
+      currency,
       fqn,
       is_hidden: hidden,
     },
@@ -540,7 +543,7 @@ test("accounts tree gives Name column available width before truncating FQNs", a
   browserName,
   page,
 }) => {
-  const unique = `${browserName}${Date.now()}`;
+  const unique = `${browserName[0]}${Date.now().toString(36).slice(-5)}`;
   const shortFqn = `bank:Chase${unique}:fees`;
   const deepFqn = [
     "bank",
@@ -1958,7 +1961,7 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
   await expect(createPanel.getByText("FQN is required.")).toHaveCount(0);
   await createPanel.getByLabel("Type").click();
   await page.getByRole("option", { exact: true, name: "Owned" }).click();
-  await createPanel.getByLabel("Currency").fill("USD");
+  await createPanel.getByLabel("Currency", { exact: true }).fill("USD");
   const createAccountRequest = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (
@@ -2027,31 +2030,49 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
     name: "Add credit limit",
   });
   await expect(addCreditLimitRevealButton).toBeVisible();
+  await editPanel.getByLabel("Currency mode").click();
+  await page.getByRole("option", { name: "Multi-currency" }).click();
+  await expect(page.getByRole("listbox")).toBeHidden();
+  await expect(editPanel.getByLabel("Currency", { exact: true })).toHaveCount(
+    0,
+  );
   await expect(editPanel.getByLabel("Amount")).toHaveCount(0);
-  await addCreditLimitRevealButton.focus();
-  await expect(addCreditLimitRevealButton).toBeFocused();
-  await page.keyboard.press("Enter");
+  await addCreditLimitRevealButton.click();
   await expect(editPanel.getByLabel("Amount")).toBeFocused();
   await editPanel.getByLabel("Amount").fill("23000.00");
+  await expect(editPanel.getByLabel("Limit currency")).toHaveCount(0);
   await editPanel.getByLabel("Effective").fill("2026-07-05");
-  const creditLimitCreate = page.waitForResponse((response) => {
-    const url = new URL(response.url());
-    return (
-      url.pathname.endsWith("/credit-limit-history") &&
-      response.request().method() === "POST"
-    );
-  });
   await editPanel.getByRole("button", { name: "Add" }).click();
-  await creditLimitCreate;
   await expect(page.getByText("Credit limit added.")).toBeVisible({
     timeout: 10_000,
   });
   await expect(editPanel.getByText("2026-07-05")).toBeVisible();
   await expect(editPanel.getByText("23,000.00 $")).toBeVisible();
+  await expect(editPanel.getByLabel("Currency mode")).toBeDisabled();
+  await expect(editPanel.getByLabel("Currency mode")).toContainText(
+    "Single-currency",
+  );
+  await expect(
+    editPanel.getByLabel("Currency", { exact: true }),
+  ).toBeDisabled();
+  await expect(editPanel.getByLabel("Currency", { exact: true })).toHaveValue(
+    "USD",
+  );
+  await expect(
+    editPanel.getByText(
+      "Currency cannot be changed while credit-limit history exists. Delete all credit-limit history to unlock it.",
+    ),
+  ).toBeVisible();
   await expect(
     editPanel.getByRole("button", { name: "Add credit limit" }),
   ).toHaveCount(0);
   await expect(editPanel.getByLabel("Amount")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(editPanel).toBeHidden();
+  await creditLimitRow.getByRole("button", { name: "Edit account" }).click();
+  await expect(editPanel).toBeVisible();
+  await expect(editPanel.getByText("2026-07-05")).toBeVisible();
 
   await editPanel
     .getByRole("listitem")
@@ -2092,6 +2113,15 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
     timeout: 10_000,
   });
   await expect(editPanel.getByText("2026-07-05")).toHaveCount(0);
+  await expect(editPanel.getByLabel("Currency mode")).toBeEnabled();
+  await expect(
+    editPanel.getByLabel("Currency", { exact: true }),
+  ).toBeEditable();
+  await expect(
+    editPanel.getByText(
+      "Currency cannot be changed while credit-limit history exists. Delete all credit-limit history to unlock it.",
+    ),
+  ).toHaveCount(0);
 
   await editPanel.getByRole("button", { name: "Close account panel" }).click();
   await page.getByLabel("Search").fill(fqn);
@@ -2109,7 +2139,11 @@ test("accounts page manages account forms, credit limits, and tombstone delete",
     deleteRow.getByRole("button", { name: "Edit account" }),
   ).toBeFocused();
   await deleteRow.getByRole("button", { name: "Edit account" }).click();
+  await expect(editPanel).toBeVisible();
   await expect(editPanel).toBeFocused();
+  await expect(
+    editPanel.getByRole("button", { name: "Add credit limit" }),
+  ).toBeVisible();
   await editPanel.getByRole("button", { name: "Delete" }).click();
   const accountDeleteDialog = page.getByRole("alertdialog", {
     name: "Delete account",
@@ -2157,7 +2191,7 @@ test("accounts form clears API field errors after editing the field", async ({
   await fqnInput.fill(duplicateFqn);
   await createPanel.getByLabel("Type").click();
   await page.getByRole("option", { exact: true, name: "Owned" }).click();
-  await createPanel.getByLabel("Currency").fill("USD");
+  await createPanel.getByLabel("Currency", { exact: true }).fill("USD");
   const duplicateCreate = page.waitForResponse((response) => {
     const url = new URL(response.url());
     return (

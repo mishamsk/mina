@@ -26,6 +26,13 @@ export type Account = {
      * Populated in listAccounts responses. True when the active account has no active dependent resources and can be tombstone-deleted.
      */
     deletable?: boolean;
+    /**
+     * Populated in listAccounts responses. True when the account has active credit-limit history.
+     */
+    has_credit_limit_history?: boolean;
+    /**
+     * NULL means the account is multi-currency. A code means every active journal and recurring-definition record for the account must use that currency.
+     */
     currency?: string | null;
     external_id?: string | null;
     external_system?: string | null;
@@ -94,7 +101,7 @@ export type AccountBalance = {
      */
     current_balance: string;
     /**
-     * JSON string, not a JSON number. Current credit limit for the account, when known, from the latest active credit-limit-history row with effective_date on or before the API runtime clock's local civil date. Responses use fixed-scale formatting with exactly 8 fractional digits.
+     * JSON string, not a JSON number. Current credit limit in the account's single currency, when known, from the latest active credit-limit-history row with effective_date on or before the API runtime clock's local civil date. Responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     credit_limit?: string;
     /**
@@ -129,7 +136,7 @@ export type CreditLimitHistory = {
     credit_limit_history_id: number;
     account_id: number;
     /**
-     * JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+     * JSON string, not a JSON number. For an active row, this non-negative DECIMAL(18,8) amount is denominated in the owning account's current single currency. A tombstoned row retains the numeric audit value but no durable denomination; if the account later changes currency, clients must not reinterpret the old value in the new currency. Responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     credit_limit: string;
     effective_date: string;
@@ -233,7 +240,7 @@ export type CreateAccountRequest = {
      */
     is_featured?: boolean;
     /**
-     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     * Use null or omit for a multi-currency account; use an ISO 4217 or `C::` crypto code for a single-currency account.
      */
     currency?: string | null;
     /**
@@ -248,7 +255,7 @@ export type CreateAccountRequest = {
 
 export type CreateCreditLimitHistoryRequest = {
     /**
-     * JSON string, not a JSON number. Non-negative DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
+     * JSON string, not a JSON number. Non-negative DECIMAL(18,8) amount denominated in the owning account's single currency; responses use fixed-scale formatting with exactly 8 fractional digits.
      */
     credit_limit: string;
     /**
@@ -286,7 +293,7 @@ export type CreateJournalRecordRequest = {
      */
     member_id?: number | null;
     /**
-     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     * Record currency using ISO 4217 or the `C::` crypto prefix; it must match the referenced account when that account is single-currency.
      */
     currency: string;
     /**
@@ -405,7 +412,7 @@ export type CreateSpendTransactionRequest = {
      */
     category_id: number;
     /**
-     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     * Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.
      */
     currency: string;
     /**
@@ -454,7 +461,7 @@ export type CreateIncomeTransactionRequest = {
      */
     category_id: number;
     /**
-     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     * Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.
      */
     currency: string;
     /**
@@ -503,7 +510,7 @@ export type CreateRefundTransactionRequest = {
      */
     category_id: number;
     /**
-     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     * Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.
      */
     currency: string;
     /**
@@ -548,7 +555,7 @@ export type CreateTransferTransactionRequest = {
      */
     destination_account_id: number;
     /**
-     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     * Currency code using ISO 4217 or the `C::` crypto prefix; must match every referenced single-currency account.
      */
     currency: string;
     /**
@@ -593,11 +600,19 @@ export type CreateExchangeTransactionRequest = {
      */
     bought_account_id: number;
     /**
-     * JSON string, not a JSON number. Positive amount sold in the sold account's currency.
+     * Currency sold. Optional for a single-currency sold account and required for a multi-currency sold account; an explicit value must match a single-currency account.
+     */
+    sold_currency?: string;
+    /**
+     * Currency bought. Optional for a single-currency bought account and required for a multi-currency bought account; an explicit value must match a single-currency account.
+     */
+    bought_currency?: string;
+    /**
+     * JSON string, not a JSON number. Positive amount denominated in the resolved sold currency.
      */
     sold_amount: string;
     /**
-     * JSON string, not a JSON number. Positive amount bought in the bought account's currency.
+     * JSON string, not a JSON number. Positive amount denominated in the resolved bought currency.
      */
     bought_amount: string;
     /**
@@ -703,7 +718,7 @@ export type ClassifyJournalRecordRequest = {
      */
     account_id: number;
     /**
-     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     * Draft record currency; it must match the referenced account when that account is single-currency.
      */
     currency: string;
     /**
@@ -840,7 +855,7 @@ export type RecurringDefinitionRecordRequest = {
      */
     member_id?: number | null;
     /**
-     * Currency code using ISO 4217 or the `C::` crypto prefix.
+     * Record currency; after template inheritance, it must match the resolved account if that account is single-currency.
      */
     currency?: string | null;
     /**
@@ -1042,6 +1057,9 @@ export type JournalRecord = {
     initiated_date: string;
     account_id: number;
     member_id?: number | null;
+    /**
+     * Authoritative record currency; matches account.currency when the account is single-currency.
+     */
     currency: string;
     /**
      * JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -1205,6 +1223,9 @@ export type RecurringDefinitionRecord = {
     recurring_definition_id: number;
     account_id: number;
     member_id: number | null;
+    /**
+     * Authoritative generated-record currency; matches account.currency when the account is single-currency.
+     */
     currency: string;
     /**
      * JSON string, not a JSON number. Signed non-zero DECIMAL(18,8); responses use fixed-scale formatting with exactly 8 fractional digits.
@@ -1294,6 +1315,10 @@ export type UpdateCategoryRequest = {
 
 export type UpdateAccountRequest = {
     account_type?: WritableAccountType;
+    /**
+     * Set null for multi-currency, or set a code for single-currency. Omit to leave unchanged.
+     */
+    currency?: string | null;
     /**
      * Whether the account is excluded from default lists.
      */

@@ -80,7 +80,7 @@ export const AmountText = ({
     </span>
   );
 
-  return chip && overflowTooltip ? (
+  return overflowTooltip ? (
     <Tooltip label={label} className="justify-end">
       {content}
     </Tooltip>

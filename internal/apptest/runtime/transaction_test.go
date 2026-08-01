@@ -770,6 +770,7 @@ func TestTransactionTimestampsNormalizeOffsetInputBoundary(t *testing.T) {
 func TestTransactionAllowsNullAndUnbalancedAmountUSD(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createTransactionRefs(t, client)
+	client.SetAccountCurrency(refs.CheckingAccountId, nil)
 	req := balancedTransactionRequest(refs)
 	req.Records[0].Currency = "C::ETHEREUM-LONG-TOKEN"
 	req.Records[1].Currency = "C::ETHEREUM-LONG-TOKEN"

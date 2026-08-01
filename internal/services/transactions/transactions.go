@@ -338,6 +338,7 @@ type Repository interface {
 type AccountReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
 	ValidateActiveReference(context.Context, int64, accounts.ReferenceOptions) (accounts.Reference, error)
+	ValidateActiveRecordReferences(context.Context, []accounts.RecordReference, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
 	ActiveReferenceByFQN(context.Context, string) (accounts.Reference, error)
 }
 
@@ -1196,13 +1197,6 @@ func (s *Service) validateBulkCategorizeClassification(ctx context.Context, reco
 }
 
 func (s *Service) validateBulkReassignAccountClassification(ctx context.Context, recordIDs []int64, accountID int64) error {
-	accountReference, err := s.accounts.ValidateActiveReference(ctx, accountID, accounts.ReferenceOptions{AllowHidden: true})
-	if errors.Is(err, services.ErrInvalidReference) {
-		return invalidBulkAccountReferenceError()
-	}
-	if err != nil {
-		return err
-	}
 	affected, err := s.repo.TransactionsByRecordIDs(ctx, recordIDs)
 	if errors.Is(err, services.ErrInvalidReference) {
 		return invalidBulkAccountReferenceError()
@@ -1213,6 +1207,34 @@ func (s *Service) validateBulkReassignAccountClassification(ctx context.Context,
 
 	selected := idSet(recordIDs)
 	found := map[int64]struct{}{}
+	recordReferences := make([]accounts.RecordReference, 0)
+	referencedCurrencies := map[string]struct{}{}
+	for _, transaction := range affected {
+		for _, record := range transaction.Records {
+			if _, ok := selected[record.ID]; ok {
+				if _, ok := referencedCurrencies[record.Currency]; ok {
+					continue
+				}
+				referencedCurrencies[record.Currency] = struct{}{}
+				recordReferences = append(recordReferences, accounts.RecordReference{
+					AccountID: accountID,
+					Currency:  record.Currency,
+				})
+			}
+		}
+	}
+	accountReferences, err := s.accounts.ValidateActiveRecordReferences(
+		ctx,
+		recordReferences,
+		accounts.ReferenceOptions{AllowHidden: true},
+	)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return invalidBulkAccountReferenceError()
+	}
+	if err != nil {
+		return err
+	}
+	accountReference := accountReferences[accountID]
 	for transactionIndex := range affected {
 		for recordIndex := range affected[transactionIndex].Records {
 			record := &affected[transactionIndex].Records[recordIndex]
@@ -1283,12 +1305,15 @@ func (s *Service) validateBulkPostingStatusInvariants(ctx context.Context, recor
 }
 
 func (s *Service) semanticDictionaries(ctx context.Context, records []JournalRecordInput) (semanticDictionaries, error) {
-	accountIDs := make([]int64, 0, len(records))
+	accountReferences := make([]accounts.RecordReference, 0, len(records))
 	categoryIDs := make([]int64, 0, len(records))
 	memberIDs := []int64{}
 	tagIDs := []int64{}
 	for _, record := range records {
-		accountIDs = append(accountIDs, record.AccountID)
+		accountReferences = append(accountReferences, accounts.RecordReference{
+			AccountID: record.AccountID,
+			Currency:  record.Currency,
+		})
 		if record.CategoryID != nil {
 			categoryIDs = append(categoryIDs, *record.CategoryID)
 		}
@@ -1298,7 +1323,11 @@ func (s *Service) semanticDictionaries(ctx context.Context, records []JournalRec
 		tagIDs = append(tagIDs, record.TagIDs...)
 	}
 
-	accountReferences, err := s.accounts.ValidateActiveReferences(ctx, accountIDs, accounts.ReferenceOptions{AllowHidden: true})
+	resolvedAccounts, err := s.accounts.ValidateActiveRecordReferences(
+		ctx,
+		accountReferences,
+		accounts.ReferenceOptions{AllowHidden: true},
+	)
 	if errors.Is(err, services.ErrInvalidReference) {
 		return semanticDictionaries{}, invalidTransactionReferenceError()
 	}
@@ -1326,7 +1355,7 @@ func (s *Service) semanticDictionaries(ctx context.Context, records []JournalRec
 	}
 
 	return semanticDictionaries{
-		accounts:   accountReferences,
+		accounts:   resolvedAccounts,
 		categories: categoryReferences,
 	}, nil
 }

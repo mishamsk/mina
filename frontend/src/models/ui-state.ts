@@ -31,6 +31,7 @@ export interface TransactionEntryTabDraft {
   readonly amount: string;
   readonly boughtAmount: string;
   readonly boughtAccountId: number | undefined;
+  readonly boughtCurrency: string;
   readonly categoryId: number | undefined;
   readonly chargeAccountId: number | undefined;
   readonly chargeAmount: string;

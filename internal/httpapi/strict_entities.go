@@ -140,6 +140,7 @@ func (s *strictServer) GetAccount(ctx context.Context, request openapi.GetAccoun
 func (s *strictServer) UpdateAccount(ctx context.Context, request openapi.UpdateAccountRequestObject) (openapi.UpdateAccountResponseObject, error) {
 	account, err := s.deps.Accounts.UpdateMutable(ctx, request.AccountId, accounts.UpdateInput{
 		AccountType:    writableAccountTypeParam(request.Body.AccountType),
+		Currency:       optionalNullableString(request.Body.Currency),
 		IsHidden:       request.Body.IsHidden,
 		IsFeatured:     request.Body.IsFeatured,
 		ExternalID:     optionalNullableString(request.Body.ExternalId),
@@ -418,21 +419,22 @@ func boolParam(value *bool) bool {
 
 func accountAPIResponse(account accounts.Account) openapi.Account {
 	return openapi.Account{
-		AccountId:      account.ID,
-		Fqn:            account.FQN,
-		AccountType:    openapi.AccountType(account.AccountType),
-		IsHidden:       account.IsHidden,
-		IsFeatured:     account.IsFeatured,
-		Deletable:      account.Deletable,
-		Currency:       account.Currency,
-		ExternalId:     account.ExternalID,
-		ExternalSystem: account.ExternalSystem,
-		ParentFqn:      account.ParentFQN,
-		Name:           account.Name,
-		Level:          account.Level,
-		CreatedAt:      account.CreatedAt.UTC(),
-		UpdatedAt:      account.UpdatedAt.UTC(),
-		TombstonedAt:   nullableTimestampTime(account.TombstonedAt),
+		AccountId:             account.ID,
+		Fqn:                   account.FQN,
+		AccountType:           openapi.AccountType(account.AccountType),
+		IsHidden:              account.IsHidden,
+		IsFeatured:            account.IsFeatured,
+		Deletable:             account.Deletable,
+		HasCreditLimitHistory: account.HasCreditLimitHistory,
+		Currency:              account.Currency,
+		ExternalId:            account.ExternalID,
+		ExternalSystem:        account.ExternalSystem,
+		ParentFqn:             account.ParentFQN,
+		Name:                  account.Name,
+		Level:                 account.Level,
+		CreatedAt:             account.CreatedAt.UTC(),
+		UpdatedAt:             account.UpdatedAt.UTC(),
+		TombstonedAt:          nullableTimestampTime(account.TombstonedAt),
 	}
 }
 

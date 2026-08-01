@@ -145,6 +145,48 @@ func TestCreditLimitHistoryCreateReadListDeleteBoundary(t *testing.T) {
 	}
 }
 
+func TestCreditLimitHistoryRequiresSingleCurrencyAccount(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	single := scenario.AccountWithCurrency("credit:Currency:Single", "USD")
+	multi := scenario.AccountWithType("credit:Currency:Multi", httpclient.WritableAccountTypeOwned)
+
+	created, err := client.REST().CreateCreditLimitHistoryWithResponse(
+		context.Background(),
+		single.AccountId,
+		httpclient.CreateCreditLimitHistoryRequest{
+			CreditLimit:   "4500",
+			EffectiveDate: apptest.Date("2023-12-01"),
+		},
+	)
+	requireNoTransportError(t, "single-currency credit limit", err)
+	if created.StatusCode() != http.StatusCreated {
+		t.Fatalf("single-currency credit limit status = %d, want %d; body %s", created.StatusCode(), http.StatusCreated, created.Body)
+	}
+	if created.JSON201.CreditLimit != "4500.00000000" {
+		t.Fatalf("single-currency credit limit = %q, want 4500.00000000", created.JSON201.CreditLimit)
+	}
+
+	rejected, err := client.REST().CreateCreditLimitHistoryWithResponse(
+		context.Background(),
+		multi.AccountId,
+		httpclient.CreateCreditLimitHistoryRequest{
+			CreditLimit:   "5500",
+			EffectiveDate: apptest.Date("2023-12-01"),
+		},
+	)
+	requireNoTransportError(t, "multi-currency credit limit", err)
+	if rejected.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("multi-currency credit limit status = %d, want %d; body %s", rejected.StatusCode(), http.StatusBadRequest, rejected.Body)
+	}
+	if rejected.JSON400 == nil || rejected.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("multi-currency credit limit error = %+v, want invalid_request; body %s", rejected.JSON400, rejected.Body)
+	}
+	if rejected.JSON400.Error.Message != "credit limits require a single-currency account" {
+		t.Fatalf("multi-currency credit limit message = %q, want single-currency requirement", rejected.JSON400.Error.Message)
+	}
+}
+
 func TestCreditLimitHistoryRejectsDuplicateActiveAccountDate(t *testing.T) {
 	client := newSharedClient(t)
 	account := createCreditLimitAccount(t, client)
@@ -234,6 +276,19 @@ func TestCreditLimitHistoryValidationErrors(t *testing.T) {
 	}
 	if invalidDate.StatusCode() != http.StatusBadRequest {
 		t.Fatalf("invalid date status = %d, want %d; body %s", invalidDate.StatusCode(), http.StatusBadRequest, invalidDate.Body)
+	}
+
+	removedCurrency, err := client.REST().CreateCreditLimitHistoryWithBodyWithResponse(context.Background(), account.AccountId, "application/json", apptest.JSONReader(map[string]any{
+		"credit_limit":   "10000",
+		"currency":       "USD",
+		"effective_date": "2024-01-01",
+	}))
+	requireNoTransportError(t, "removed currency field", err)
+	if removedCurrency.StatusCode() != http.StatusBadRequest {
+		t.Fatalf("removed currency field status = %d, want %d; body %s", removedCurrency.StatusCode(), http.StatusBadRequest, removedCurrency.Body)
+	}
+	if removedCurrency.JSON400 == nil || removedCurrency.JSON400.Error.Code != httpclient.APIErrorCodeInvalidRequest {
+		t.Fatalf("removed currency field error = %+v, want invalid_request; body %s", removedCurrency.JSON400, removedCurrency.Body)
 	}
 
 	negativeLimit, err := client.REST().CreateCreditLimitHistoryWithResponse(context.Background(), account.AccountId, httpclient.CreateCreditLimitHistoryRequest{

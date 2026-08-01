@@ -279,6 +279,8 @@ export const listAccounts = <ThrowOnError extends boolean = false>(options?: Opt
 
 /**
  * Create an account.
+ *
+ * Creates a multi-currency account when `currency` is null or omitted, or a single-currency account when `currency` is a code.
  */
 export const createAccount = <ThrowOnError extends boolean = false>(options: Options<CreateAccountData, ThrowOnError>): RequestResult<CreateAccountResponses, CreateAccountErrors, ThrowOnError> => (options.client ?? client).post<CreateAccountResponses, CreateAccountErrors, ThrowOnError>({
     url: '/api/accounts',
@@ -343,6 +345,8 @@ export const getAccount = <ThrowOnError extends boolean = false>(options: Option
 
 /**
  * Update mutable account fields.
+ *
+ * An actual currency-mode or currency-code change is rejected while active credit-limit history exists. Otherwise, setting or changing a single currency is allowed only when every active journal and recurring-definition record for the account already uses it. Omitting currency or setting its current value is not a change. Mina-managed system accounts remain immutable.
  */
 export const updateAccount = <ThrowOnError extends boolean = false>(options: Options<UpdateAccountData, ThrowOnError>): RequestResult<UpdateAccountResponses, UpdateAccountErrors, ThrowOnError> => (options.client ?? client).patch<UpdateAccountResponses, UpdateAccountErrors, ThrowOnError>({
     url: '/api/accounts/{account_id}',
@@ -360,6 +364,8 @@ export const listCreditLimitHistory = <ThrowOnError extends boolean = false>(opt
 
 /**
  * Create a credit limit history entry.
+ *
+ * Creates an account-denominated limit only for a single-currency account. Multi-currency accounts are rejected.
  */
 export const createCreditLimitHistory = <ThrowOnError extends boolean = false>(options: Options<CreateCreditLimitHistoryData, ThrowOnError>): RequestResult<CreateCreditLimitHistoryResponses, CreateCreditLimitHistoryErrors, ThrowOnError> => (options.client ?? client).post<CreateCreditLimitHistoryResponses, CreateCreditLimitHistoryErrors, ThrowOnError>({
     url: '/api/accounts/{account_id}/credit-limit-history',
@@ -595,7 +601,7 @@ export const classifyTransaction = <ThrowOnError extends boolean = false>(option
 /**
  * Create a two-currency exchange transaction.
  *
- * Creates the two supplied balance records and the matching `system:exchange` records.
+ * Creates the two supplied balance records and the matching `system:exchange` records. Each side resolves from a single-currency account or requires an explicit currency for a multi-currency account; explicit values must match single-currency accounts, and the resolved currencies must differ.
  */
 export const createExchangeTransaction = <ThrowOnError extends boolean = false>(options: Options<CreateExchangeTransactionData, ThrowOnError>): RequestResult<CreateExchangeTransactionResponses, CreateExchangeTransactionErrors, ThrowOnError> => (options.client ?? client).post<CreateExchangeTransactionResponses, CreateExchangeTransactionErrors, ThrowOnError>({
     url: '/api/transactions/exchange',

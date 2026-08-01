@@ -211,6 +211,7 @@ type Repository interface {
 // AccountReferenceValidator resolves active account references for definition validation.
 type AccountReferenceValidator interface {
 	ValidateActiveReferences(context.Context, []int64, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
+	ValidateActiveRecordReferences(context.Context, []accounts.RecordReference, accounts.ReferenceOptions) (map[int64]accounts.Reference, error)
 }
 
 // CategoryReferenceValidator resolves active category references for definition validation.
@@ -418,32 +419,40 @@ func (s *Service) ConfirmNext(ctx context.Context, definitionID int64, today val
 	if err := s.materializeDueOccurrences(ctx, today); err != nil {
 		return Occurrence{}, err
 	}
-	definition, err := s.repo.Get(ctx, definitionID)
-	if errors.Is(err, services.ErrNotFound) {
-		return Occurrence{}, services.NotFound("recurring definition not found")
-	}
-	if err != nil {
-		return Occurrence{}, err
-	}
-	if definition.PausedAt != nil {
-		return Occurrence{}, services.InvalidRequest("recurring definition is paused")
-	}
-	scheduledDate, err := NextDueDateAfter(definition.ScheduleRule, definition.AnchorDate, definition.LastOccurrenceDate)
-	if err != nil {
-		return Occurrence{}, err
-	}
-	records, err := s.generatedJournalRecords(ctx, definition, today)
-	if err != nil {
-		return Occurrence{}, err
-	}
-	occurrence, err := s.repo.CreateConfirmedOccurrence(ctx, definition, scheduledDate, today, records)
-	if errors.Is(err, services.ErrConflict) {
-		return Occurrence{}, services.Conflict("recurring occurrence slot already exists")
-	}
-	if errors.Is(err, services.ErrNotFound) {
-		return Occurrence{}, services.NotFound("recurring definition not found")
-	}
-	if err != nil {
+
+	var occurrence Occurrence
+	if err := s.refs.SerializeReferenceOperation(func() error {
+		definition, err := s.repo.Get(ctx, definitionID)
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("recurring definition not found")
+		}
+		if err != nil {
+			return err
+		}
+		if definition.PausedAt != nil {
+			return services.InvalidRequest("recurring definition is paused")
+		}
+		scheduledDate, err := NextDueDateAfter(definition.ScheduleRule, definition.AnchorDate, definition.LastOccurrenceDate)
+		if err != nil {
+			return err
+		}
+		records, err := s.generatedJournalRecords(ctx, definition, today)
+		if err != nil {
+			return err
+		}
+		created, err := s.repo.CreateConfirmedOccurrence(ctx, definition, scheduledDate, today, records)
+		if errors.Is(err, services.ErrConflict) {
+			return services.Conflict("recurring occurrence slot already exists")
+		}
+		if errors.Is(err, services.ErrNotFound) {
+			return services.NotFound("recurring definition not found")
+		}
+		if err != nil {
+			return err
+		}
+		occurrence = created
+		return nil
+	}); err != nil {
 		return Occurrence{}, err
 	}
 	s.notifyCurrencyUsageChanged()
@@ -633,6 +642,12 @@ func (s *Service) Cancel(ctx context.Context, id int64) error {
 }
 
 func (s *Service) materializeDueOccurrences(ctx context.Context, today values.CivilDate) error {
+	return s.refs.SerializeReferenceOperation(func() error {
+		return s.materializeDueOccurrencesSerialized(ctx, today)
+	})
+}
+
+func (s *Service) materializeDueOccurrencesSerialized(ctx context.Context, today values.CivilDate) error {
 	definitions, err := s.repo.ListMaterializationDefinitions(ctx, today)
 	if err != nil {
 		return err
@@ -644,11 +659,18 @@ func (s *Service) materializeDueOccurrences(ctx context.Context, today values.Ci
 		if err != nil {
 			return err
 		}
+		referencesValidated := false
 		for _, slot := range slots {
 			if _, ok := existing[slot.String()]; ok {
 				continue
 			}
-			records, err := s.generatedJournalRecords(ctx, definition.Definition, slot)
+			if !referencesValidated {
+				if _, err := s.validateDefinitionAccountReferences(ctx, definition.Definition); err != nil {
+					return err
+				}
+				referencesValidated = true
+			}
+			records, err := s.generatedJournalRecordsFromValidatedDefinition(ctx, definition.Definition, slot)
 			if err != nil {
 				return err
 			}
@@ -679,6 +701,14 @@ func (s *Service) notifyCurrencyUsageChanged() {
 }
 
 func (s *Service) generatedJournalRecords(ctx context.Context, definition Definition, scheduledDate values.CivilDate) ([]transactions.JournalRecordInput, error) {
+	if _, err := s.validateDefinitionAccountReferences(ctx, definition); err != nil {
+		return nil, err
+	}
+
+	return s.generatedJournalRecordsFromValidatedDefinition(ctx, definition, scheduledDate)
+}
+
+func (s *Service) generatedJournalRecordsFromValidatedDefinition(ctx context.Context, definition Definition, scheduledDate values.CivilDate) ([]transactions.JournalRecordInput, error) {
 	records := make([]transactions.JournalRecordInput, 0, len(definition.Records))
 	for _, record := range definition.Records {
 		amountUSD, err := s.amountUSD.SignedAmountUSD(ctx, record.Currency, record.Amount, scheduledDate)
@@ -726,20 +756,24 @@ func (s *Service) withListDisplayAmounts(ctx context.Context, definitions []Defi
 }
 
 func (s *Service) definitionDisplayAmounts(ctx context.Context, definition Definition) (transactions.TransactionClass, []transactions.DisplayAmount, error) {
-	accountIDs := make([]int64, 0, len(definition.Records))
+	accountRefs, err := s.resolveDefinitionAccountReferences(ctx, definition)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return s.definitionDisplayAmountsWithAccountRefs(ctx, definition, accountRefs)
+}
+
+func (s *Service) definitionDisplayAmountsWithAccountRefs(
+	ctx context.Context,
+	definition Definition,
+	accountRefs map[int64]accounts.Reference,
+) (transactions.TransactionClass, []transactions.DisplayAmount, error) {
 	categoryIDs := make([]int64, 0, len(definition.Records))
 	for _, record := range definition.Records {
-		accountIDs = append(accountIDs, record.AccountID)
 		if record.CategoryID != nil {
 			categoryIDs = append(categoryIDs, *record.CategoryID)
 		}
-	}
-	accountRefs, err := s.accounts.ValidateActiveReferences(ctx, accountIDs, accounts.ReferenceOptions{AllowHidden: true})
-	if errors.Is(err, services.ErrInvalidReference) {
-		return "", nil, invalidReferenceError()
-	}
-	if err != nil {
-		return "", nil, err
 	}
 	categoryRefs, err := s.categories.ValidateActiveReferences(ctx, categoryIDs, categories.ReferenceOptions{AllowHidden: true})
 	if errors.Is(err, services.ErrInvalidReference) {
@@ -766,6 +800,55 @@ func (s *Service) definitionDisplayAmounts(ctx context.Context, definition Defin
 	}
 
 	return transactions.LineDisplayAmountsForSemanticRecords(records)
+}
+
+func (s *Service) resolveDefinitionAccountReferences(
+	ctx context.Context,
+	definition Definition,
+) (map[int64]accounts.Reference, error) {
+	accountIDs := make([]int64, 0, len(definition.Records))
+	for _, record := range definition.Records {
+		accountIDs = append(accountIDs, record.AccountID)
+	}
+	accountRefs, err := s.accounts.ValidateActiveReferences(
+		ctx,
+		accountIDs,
+		accounts.ReferenceOptions{AllowHidden: true},
+	)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return nil, invalidReferenceError()
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return accountRefs, nil
+}
+
+func (s *Service) validateDefinitionAccountReferences(
+	ctx context.Context,
+	definition Definition,
+) (map[int64]accounts.Reference, error) {
+	recordReferences := make([]accounts.RecordReference, 0, len(definition.Records))
+	for _, record := range definition.Records {
+		recordReferences = append(recordReferences, accounts.RecordReference{
+			AccountID: record.AccountID,
+			Currency:  record.Currency,
+		})
+	}
+	accountRefs, err := s.accounts.ValidateActiveRecordReferences(
+		ctx,
+		recordReferences,
+		accounts.ReferenceOptions{AllowHidden: true},
+	)
+	if errors.Is(err, services.ErrInvalidReference) {
+		return nil, invalidReferenceError()
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return accountRefs, nil
 }
 
 func (s *Service) skippedDateRuleSlots(ctx context.Context, definition Definition, today values.CivilDate) ([]values.CivilDate, error) {
@@ -831,7 +914,12 @@ func (s *Service) prepareInput(ctx context.Context, input WriteInput) (SaveInput
 			Memo:       record.Memo,
 		})
 	}
-	if _, _, err := s.definitionDisplayAmounts(ctx, Definition{Records: definitionRecords}); err != nil {
+	definition := Definition{Records: definitionRecords}
+	accountRefs, err := s.validateDefinitionAccountReferences(ctx, definition)
+	if err != nil {
+		return SaveInput{}, err
+	}
+	if _, _, err := s.definitionDisplayAmountsWithAccountRefs(ctx, definition, accountRefs); err != nil {
 		return SaveInput{}, err
 	}
 

@@ -61,6 +61,12 @@ interface TransactionListFixture {
 
 interface StoredTransactionEntryDraftFixture {
   readonly tabs?: {
+    readonly exchange?: {
+      readonly boughtAccountId?: number;
+      readonly boughtCurrency?: string;
+      readonly currency?: string;
+      readonly soldAccountId?: number;
+    };
     readonly spend?: {
       readonly memo?: string;
     };

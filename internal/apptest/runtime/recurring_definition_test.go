@@ -185,6 +185,103 @@ func TestRecurringDefinitionValidationAndConflicts(t *testing.T) {
 	assertRecurringDefinitionCreateStatus(t, client, "bad day", withRule(base, httpclient.RecurringScheduleRule{"version": 1, "kind": "day_of_month", "day": 32}), http.StatusBadRequest, httpclient.APIErrorCodeInvalidRequest)
 }
 
+func TestRecurringDefinitionEnforcesAccountCurrencyOnSaveAndMaterialization(t *testing.T) {
+	client := newSharedClient(t)
+	refs := createRecurringDefinitionRefs(t, client, "RecurringCurrency")
+	request := recurringDefinitionRequest(
+		"RecurringCurrency:Mismatch",
+		refs,
+		"-10.00000000",
+		"10.00000000",
+		intervalRule(1, "MONTH"),
+		"2024-01-31",
+	)
+	for index := range *request.Records {
+		(*request.Records)[index].Currency = recurringStringPtr("EUR")
+	}
+	assertRecurringDefinitionCreateStatus(
+		t,
+		client,
+		"single-currency mismatch",
+		request,
+		http.StatusBadRequest,
+		httpclient.APIErrorCodeInvalidRequest,
+	)
+
+	client.SetAccountCurrency(refs.CheckingAccountID, nil)
+	request.Fqn = "RecurringCurrency:Release"
+	created := createRecurringDefinition(t, client, request)
+	usd := "USD"
+	rejected, err := client.REST().UpdateAccountWithResponse(
+		context.Background(),
+		refs.CheckingAccountID,
+		httpclient.UpdateAccountRequest{Currency: nullable.NewNullableWithValue(usd)},
+	)
+	requireNoTransportError(t, "reject currency change conflicting with recurring definition", err)
+	if rejected.StatusCode() != http.StatusConflict {
+		t.Fatalf(
+			"currency change conflicting with recurring definition status = %d, want %d; body %s",
+			rejected.StatusCode(),
+			http.StatusConflict,
+			rejected.Body,
+		)
+	}
+	if rejected.JSON409 == nil || rejected.JSON409.Error.Message != "account currency change conflicts with existing journal or recurring-definition records" {
+		t.Fatalf(
+			"currency change conflicting with recurring definition message = %v, want recurring-definition conflict",
+			rejected.JSON409,
+		)
+	}
+	replaced, err := client.REST().ReplaceRecurringDefinitionWithResponse(
+		context.Background(),
+		created.JSON201.RecurringDefinitionId,
+		recurringDefinitionRequest(
+			"RecurringCurrency:Release",
+			refs,
+			"-10.00000000",
+			"10.00000000",
+			intervalRule(1, "MONTH"),
+			"2024-01-31",
+		),
+	)
+	requireNoTransportError(t, "replace currency-constraining recurring definition", err)
+	if replaced.StatusCode() != http.StatusOK {
+		t.Fatalf(
+			"replace currency-constraining recurring definition status = %d, want %d; body %s",
+			replaced.StatusCode(),
+			http.StatusOK,
+			replaced.Body,
+		)
+	}
+	updated := client.SetAccountCurrency(refs.CheckingAccountID, &usd)
+	if updated.Currency == nil || *updated.Currency != usd {
+		t.Fatalf("currency change after recurring replacement = %v, want USD", updated.Currency)
+	}
+	deleted, err := client.REST().DeleteRecurringDefinitionWithResponse(
+		context.Background(),
+		created.JSON201.RecurringDefinitionId,
+	)
+	requireNoTransportError(t, "cancel replaced recurring definition", err)
+	if deleted.StatusCode() != http.StatusNoContent {
+		t.Fatalf(
+			"cancel replaced recurring definition status = %d, want %d; body %s",
+			deleted.StatusCode(),
+			http.StatusNoContent,
+			deleted.Body,
+		)
+	}
+
+	client.SetAccountCurrency(refs.CheckingAccountID, nil)
+	request.Fqn = "RecurringCurrency:Materialization"
+	created = createRecurringDefinition(t, client, request)
+	eur := "EUR"
+	updated = client.SetAccountCurrency(refs.CheckingAccountID, &eur)
+	if updated.Currency == nil || *updated.Currency != eur {
+		t.Fatalf("currency change matching recurring definition = %v, want EUR", updated.Currency)
+	}
+	confirmNextRecurringDefinition(t, client, created.JSON201.RecurringDefinitionId)
+}
+
 func TestRecurringDefinitionTemplateSeedAndDeleteGuards(t *testing.T) {
 	client := newSharedClient(t)
 	refs := createRecurringDefinitionRefs(t, client, "RecurringSeed")

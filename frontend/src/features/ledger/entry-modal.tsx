@@ -46,6 +46,12 @@ interface EntryModalProps {
 
 const listRestoreSelector = "[data-transaction-detail-restore-target]";
 const appShellRestoreSelector = "[data-entry-modal-restore-target]";
+const hasMatchingDatalistOption = (input: HTMLInputElement): boolean => {
+  const query = input.value.trim().toLocaleLowerCase();
+  return Array.from(input.list?.options ?? []).some((option) =>
+    option.value.toLocaleLowerCase().includes(query),
+  );
+};
 
 const EntryLoadingSkeleton = ({ create }: { readonly create: boolean }) => (
   <>
@@ -133,6 +139,10 @@ export const EntryModal = ({
 }: EntryModalProps) => {
   const [attentionFlash, setAttentionFlash] = useState(false);
   const closeRequestRef = useRef<(() => void) | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const datalistEscapePendingRef = useRef(false);
+  const datalistKeyboardCommitTargetRef = useRef<HTMLInputElement | null>(null);
+  const datalistPointerTargetRef = useRef<HTMLInputElement | null>(null);
   const pointerLaunchTargetRef = useRef<HTMLElement | null>(null);
   const restoreFocusTargetRef = useRef<HTMLElement | null>(null);
   const statusCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -210,6 +220,8 @@ export const EntryModal = ({
           onPointerDown={flashAttention}
         />
         <Dialog.Content
+          ref={contentRef}
+          tabIndex={-1}
           className={`bg-card fixed inset-0 z-[70] h-dvh w-screen overflow-hidden border-2 border-[var(--border-ink)] shadow-[var(--shadow-pixel)] outline-none motion-safe:animate-[entry-stage-in_120ms_steps(2)] sm:top-1/2 sm:left-1/2 sm:h-[calc(100dvh-32px)] sm:w-[calc(100vw-32px)] sm:-translate-x-1/2 sm:-translate-y-1/2 lg:h-[calc(100dvh-48px)] lg:w-[calc(100vw-64px)] xl:h-[calc(100dvh-64px)] xl:w-[min(1200px,calc(100vw-96px))] ${
             attentionFlash
               ? "motion-safe:animate-[entry-attention-flash_120ms_steps(2)]"
@@ -231,6 +243,22 @@ export const EntryModal = ({
           }}
           onEscapeKeyDown={(event) => {
             if (
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              !event.target.disabled &&
+              !event.target.readOnly &&
+              datalistEscapePendingRef.current
+            ) {
+              datalistKeyboardCommitTargetRef.current = null;
+              datalistPointerTargetRef.current = null;
+              datalistEscapePendingRef.current = false;
+              event.preventDefault();
+              return;
+            }
+            datalistKeyboardCommitTargetRef.current = null;
+            datalistPointerTargetRef.current = null;
+            datalistEscapePendingRef.current = false;
+            if (
               event.target instanceof HTMLElement &&
               (event.target.matches(
                 "[role='combobox'][aria-expanded='true']",
@@ -239,6 +267,86 @@ export const EntryModal = ({
             ) {
               event.preventDefault();
             }
+          }}
+          onKeyDownCapture={(event) => {
+            if (
+              event.key === "Enter" &&
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              datalistEscapePendingRef.current
+            ) {
+              datalistKeyboardCommitTargetRef.current = event.target;
+              datalistPointerTargetRef.current = null;
+              datalistEscapePendingRef.current = false;
+              return;
+            }
+            if (
+              event.key === "ArrowDown" &&
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              !event.target.disabled &&
+              !event.target.readOnly &&
+              hasMatchingDatalistOption(event.target)
+            ) {
+              datalistEscapePendingRef.current = true;
+              return;
+            }
+            if (event.key !== "Escape") {
+              datalistKeyboardCommitTargetRef.current = null;
+              datalistPointerTargetRef.current = null;
+              datalistEscapePendingRef.current = false;
+            }
+          }}
+          onKeyUpCapture={(event) => {
+            if (
+              event.key === "Enter" &&
+              event.target === datalistKeyboardCommitTargetRef.current
+            ) {
+              datalistKeyboardCommitTargetRef.current = null;
+            }
+          }}
+          onPointerDownCapture={(event) => {
+            const target =
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              !event.target.disabled &&
+              !event.target.readOnly &&
+              hasMatchingDatalistOption(event.target)
+                ? event.target
+                : null;
+            datalistKeyboardCommitTargetRef.current = null;
+            datalistPointerTargetRef.current = target;
+            datalistEscapePendingRef.current = target !== null;
+          }}
+          onBlurCapture={(event) => {
+            if (event.relatedTarget === datalistPointerTargetRef.current) {
+              return;
+            }
+            datalistKeyboardCommitTargetRef.current = null;
+            datalistPointerTargetRef.current = null;
+            datalistEscapePendingRef.current = false;
+          }}
+          onFocusCapture={(event) => {
+            if (event.target === datalistPointerTargetRef.current) {
+              datalistPointerTargetRef.current = null;
+              return;
+            }
+            datalistKeyboardCommitTargetRef.current = null;
+            datalistPointerTargetRef.current = null;
+            datalistEscapePendingRef.current = false;
+          }}
+          onInputCapture={(event) => {
+            if (event.target === datalistKeyboardCommitTargetRef.current) {
+              datalistKeyboardCommitTargetRef.current = null;
+              datalistEscapePendingRef.current = false;
+              return;
+            }
+            datalistEscapePendingRef.current =
+              event.target instanceof HTMLInputElement &&
+              event.target.list !== null &&
+              !event.target.disabled &&
+              !event.target.readOnly &&
+              hasMatchingDatalistOption(event.target);
           }}
           onInteractOutside={(event) => {
             event.preventDefault();
@@ -254,6 +362,7 @@ export const EntryModal = ({
                   activeElement !== document.body
                 ? activeElement
                 : null;
+            focusWithoutTooltip(contentRef.current, { preventScroll: true });
           }}
         >
           <Dialog.Title className="sr-only">Transaction editor</Dialog.Title>

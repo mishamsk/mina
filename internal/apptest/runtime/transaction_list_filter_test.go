@@ -403,7 +403,6 @@ func TestTransactionListReferenceMetadataSearchBoundary(t *testing.T) {
 	eurMetadataAccount := createSearchAccount(t, client, httpclient.CreateAccountRequest{
 		Fqn:         "checking:ReferenceSearch:EuroRecord",
 		AccountType: httpclient.WritableAccountTypeOwned,
-		Currency:    ptrTo("GBP"),
 	})
 	eurMerchant := scenario.Account("expense:ReferenceSearch:EuroMerchant")
 	currencyOnlyTag := scenario.Tag("ReferenceSearch:Tags:CurrencyOnly")

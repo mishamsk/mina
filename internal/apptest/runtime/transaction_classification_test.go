@@ -429,6 +429,7 @@ func TestCategoryRuleNamesOffendingRecords(t *testing.T) {
 func TestExchangeExclusivityNamesOffendingRecords(t *testing.T) {
 	client := newSharedClient(t)
 	fixture := newSemanticFixture(t, client)
+	multiCurrency := client.Scenario().AccountWithType("cash:MultiCurrency", httpclient.WritableAccountTypeOwned)
 
 	tests := []struct {
 		name    string
@@ -494,7 +495,7 @@ func TestExchangeExclusivityNamesOffendingRecords(t *testing.T) {
 				semanticRecord(fixture.exchange.AccountId, "10.00", "USD", nil),
 				semanticRecord(fixture.exchange.AccountId, "-9.00", "EUR", nil),
 				semanticRecord(fixture.cashEUR.AccountId, "9.00", "EUR", nil),
-				semanticRecord(fixture.cash.AccountId, "-1.00", "JPY", nil),
+				semanticRecord(multiCurrency.AccountId, "-1.00", "JPY", nil),
 				semanticRecord(fixture.exchange.AccountId, "1.00", "JPY", nil),
 			},
 		},
@@ -702,6 +703,112 @@ func TestExchangeShorthandRejectsRateRoundedToZero(t *testing.T) {
 	}
 }
 
+func TestExchangeShorthandSingleAndMultiCurrencyCombinations(t *testing.T) {
+	client := newSharedClient(t)
+	scenario := client.Scenario()
+	singleUSD := scenario.AccountWithCurrency("exchange:single:USD", "USD")
+	singleEUR := scenario.AccountWithCurrency("exchange:single:EUR", "EUR")
+	multiSold := scenario.AccountWithType("exchange:multi:sold", httpclient.WritableAccountTypeOwned)
+	multiBought := scenario.AccountWithType("exchange:multi:bought", httpclient.WritableAccountTypeOwned)
+
+	successes := []struct {
+		name           string
+		soldAccount    int64
+		boughtAccount  int64
+		soldCurrency   *string
+		boughtCurrency *string
+		wantSold       string
+		wantBought     string
+	}{
+		{name: "single to single", soldAccount: singleUSD.AccountId, boughtAccount: singleEUR.AccountId, wantSold: "USD", wantBought: "EUR"},
+		{name: "multi to single", soldAccount: multiSold.AccountId, boughtAccount: singleEUR.AccountId, soldCurrency: apptest.StringPtr("USD"), wantSold: "USD", wantBought: "EUR"},
+		{name: "single to multi", soldAccount: singleUSD.AccountId, boughtAccount: multiBought.AccountId, boughtCurrency: apptest.StringPtr("EUR"), wantSold: "USD", wantBought: "EUR"},
+		{name: "multi to multi", soldAccount: multiSold.AccountId, boughtAccount: multiBought.AccountId, soldCurrency: apptest.StringPtr("USD"), boughtCurrency: apptest.StringPtr("EUR"), wantSold: "USD", wantBought: "EUR"},
+	}
+	for _, testCase := range successes {
+		t.Run(testCase.name, func(t *testing.T) {
+			response, err := client.REST().CreateExchangeTransactionWithResponse(
+				context.Background(),
+				httpclient.CreateExchangeTransactionRequest{
+					BoughtAccountId: testCase.boughtAccount,
+					BoughtAmount:    "100.00",
+					BoughtCurrency:  testCase.boughtCurrency,
+					InitiatedDate:   apptest.Date("2024-07-07"),
+					SoldAccountId:   testCase.soldAccount,
+					SoldAmount:      "110.00",
+					SoldCurrency:    testCase.soldCurrency,
+				},
+			)
+			requireClientResponse(t, "create exchange combination", err, response.StatusCode(), http.StatusCreated, response.Body)
+			if len(response.JSON201.Records) != 4 {
+				t.Fatalf("exchange combination records = %d, want 4", len(response.JSON201.Records))
+			}
+			for accountID, wantCurrency := range map[int64]string{
+				testCase.soldAccount:   testCase.wantSold,
+				testCase.boughtAccount: testCase.wantBought,
+			} {
+				matched := false
+				for _, record := range response.JSON201.Records {
+					if record.AccountId != accountID {
+						continue
+					}
+					matched = true
+					if record.Currency != wantCurrency {
+						t.Fatalf("account %d record currency = %q, want %q", accountID, record.Currency, wantCurrency)
+					}
+				}
+				if !matched {
+					t.Fatalf("exchange combination has no record for account %d", accountID)
+				}
+			}
+		})
+	}
+
+	failures := []struct {
+		name    string
+		request httpclient.CreateExchangeTransactionRequest
+	}{
+		{
+			name: "multi side requires explicit currency",
+			request: httpclient.CreateExchangeTransactionRequest{
+				BoughtAccountId: singleEUR.AccountId,
+				BoughtAmount:    "100.00",
+				InitiatedDate:   apptest.Date("2024-07-07"),
+				SoldAccountId:   multiSold.AccountId,
+				SoldAmount:      "110.00",
+			},
+		},
+		{
+			name: "explicit currency must match single account",
+			request: httpclient.CreateExchangeTransactionRequest{
+				BoughtAccountId: singleEUR.AccountId,
+				BoughtAmount:    "100.00",
+				InitiatedDate:   apptest.Date("2024-07-07"),
+				SoldAccountId:   singleUSD.AccountId,
+				SoldAmount:      "110.00",
+				SoldCurrency:    apptest.StringPtr("EUR"),
+			},
+		},
+		{
+			name: "resolved currencies must differ",
+			request: httpclient.CreateExchangeTransactionRequest{
+				BoughtAccountId: multiBought.AccountId,
+				BoughtAmount:    "100.00",
+				BoughtCurrency:  apptest.StringPtr("USD"),
+				InitiatedDate:   apptest.Date("2024-07-07"),
+				SoldAccountId:   singleUSD.AccountId,
+				SoldAmount:      "110.00",
+			},
+		},
+	}
+	for _, testCase := range failures {
+		t.Run(testCase.name, func(t *testing.T) {
+			response, err := client.REST().CreateExchangeTransactionWithResponse(context.Background(), testCase.request)
+			requireClientResponse(t, "reject exchange combination", err, response.StatusCode(), http.StatusBadRequest, response.Body)
+		})
+	}
+}
+
 func TestExchangeShorthandRejectsInvalidAccounts(t *testing.T) {
 	client := newSharedClient(t)
 	fixture := newSemanticFixture(t, client)
@@ -727,7 +834,7 @@ func TestExchangeShorthandRejectsInvalidAccounts(t *testing.T) {
 			name:            "same currency",
 			soldAccountID:   fixture.checking.AccountId,
 			boughtAccountID: fixture.savings.AccountId,
-			message:         "must have two distinct currencies",
+			message:         "must differ",
 		},
 	}
 

@@ -260,7 +260,7 @@ operations:
     mcp:
       state: exposed
       name: create
-      description: Create one account leaf after accounts_list confirms the colon-separated FQN does not already exist. Choose owned, party, or flow from accounting meaning, not the FQN text; the system namespace is reserved for Mina-managed accounts.
+      description: Create one account leaf after accounts_list confirms the colon-separated FQN does not already exist. Choose owned, party, or flow from accounting meaning, not the FQN text; set currency for single-currency or null for multi-currency. The system namespace is reserved for Mina-managed accounts.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   restructureAccounts:
     cli: {state: exposed, name: restructure}
@@ -302,7 +302,7 @@ operations:
     mcp:
       state: exposed
       name: update
-      description: Update mutable metadata for one account ID; Mina-managed system accounts are immutable. This does not rename the FQN or change currency; use accounts_restructure for rename or move operations.
+      description: Update mutable metadata or currency mode for one account ID; Mina-managed system accounts are immutable. Active credit-limit history blocks actual currency changes; otherwise a new single currency requires all active journal and recurring-definition records to match. Use accounts_restructure for rename or move operations.
       annotations: {read_only: false, destructive: false, idempotent: true, open_world: false}
   deleteAccount:
     cli: {state: exposed, name: delete}
@@ -316,21 +316,21 @@ operations:
     mcp:
       state: exposed
       name: list_credit_limits
-      description: List dated credit limits for one exact account. Keep results bounded with limit (1-500) and offset; defaults sort by effective date ascending and exclude tombstoned entries.
+      description: List dated credit limits for one exact account. Active values inherit its current single currency; tombstoned numeric values have no durable denomination after a later account-currency change. Keep results bounded with limit (1-500) and offset; defaults sort by effective date ascending and exclude tombstoned entries.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   createCreditLimitHistory:
     cli: {state: exposed, name: create-credit-limit}
     mcp:
       state: exposed
       name: create_credit_limit
-      description: Add a dated credit limit for one balance account after reviewing its existing credit-limit history. The server selects the effective limit by date.
+      description: Add a dated credit limit for one single-currency account after reviewing its existing history. The value inherits the account currency; multi-currency accounts are rejected. The server selects the effective limit by date.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getCreditLimitHistory:
     cli: {state: exposed, name: get-credit-limit}
     mcp:
       state: exposed
       name: get_credit_limit
-      description: Use when you already have an exact credit-limit-history ID and need one entry, optionally tombstoned. Use accounts_list_credit_limits to discover IDs.
+      description: Use when you already have an exact credit-limit-history ID and need one entry, optionally tombstoned. Active values inherit the account's current single currency; a tombstoned numeric value has no durable denomination after a later account-currency change. Use accounts_list_credit_limits to discover IDs.
       annotations: {read_only: true, destructive: false, idempotent: true, open_world: false}
   deleteCreditLimitHistory:
     cli: {state: exposed, name: delete-credit-limit}
@@ -530,7 +530,7 @@ operations:
     mcp:
       state: exposed
       name: create_exchange
-      description: Preferred shortcut for exchanging two currencies between tracked owned or party accounts. Mina supplies the fixed system exchange records and returns the effective rate.
+      description: Preferred shortcut for exchanging two currencies between tracked owned or party accounts. A single-currency side supplies its account currency; a multi-currency side requires an explicit sold_currency or bought_currency. Mina supplies the fixed system exchange records and returns the effective rate.
       annotations: {read_only: false, destructive: false, idempotent: false, open_world: false}
   getTransactionMonthTotals:
     cli: {state: exposed, name: month-totals}

@@ -9,7 +9,7 @@ CREATE TABLE account (
 	is_hidden BOOLEAN NOT NULL DEFAULT FALSE,
 	-- Marks active rows for prominent UI/account-picker placement without changing accounting semantics.
 	is_featured BOOLEAN NOT NULL DEFAULT FALSE,
-	-- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
+	-- NULL means multi-currency; otherwise an ISO 4217 code or C::-prefixed crypto ticker required by every active journal and recurring-definition record.
 	currency TEXT,
 	-- Identifier assigned by an external system when this account is linked outside Mina.
 	external_id TEXT,
@@ -33,7 +33,7 @@ COMMENT ON COLUMN account.fqn IS 'Colon-separated hierarchical account path, e.g
 COMMENT ON COLUMN account.account_type IS 'Explicit semantic account type used for balances and transaction classification.';
 COMMENT ON COLUMN account.is_hidden IS 'Excludes active rows from default lists while keeping them selectable by explicit query.';
 COMMENT ON COLUMN account.is_featured IS 'Marks active rows for prominent UI/account-picker placement without changing accounting semantics.';
-COMMENT ON COLUMN account.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN account.currency IS 'NULL means multi-currency; otherwise an ISO 4217 code or C::-prefixed crypto ticker required by every active journal and recurring-definition record.';
 COMMENT ON COLUMN account.external_id IS 'Identifier assigned by an external system when this account is linked outside Mina.';
 COMMENT ON COLUMN account.external_system IS 'External system namespace for external_id, e.g. plaid.';
 COMMENT ON COLUMN account.parent_fqn IS 'Parent account path derived from fqn, or NULL for root accounts.';

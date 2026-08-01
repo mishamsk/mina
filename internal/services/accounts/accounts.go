@@ -33,21 +33,22 @@ func ValidAccountType(value AccountType) bool {
 
 // Account is a hierarchical financial account or counterparty.
 type Account struct {
-	ID             int64
-	FQN            string
-	AccountType    AccountType
-	IsHidden       bool
-	IsFeatured     bool
-	Deletable      *bool
-	Currency       *string
-	ExternalID     *string
-	ExternalSystem *string
-	ParentFQN      *string
-	Name           string
-	Level          int
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	TombstonedAt   *time.Time
+	ID                    int64
+	FQN                   string
+	AccountType           AccountType
+	IsHidden              bool
+	IsFeatured            bool
+	Deletable             *bool
+	HasCreditLimitHistory *bool
+	Currency              *string
+	ExternalID            *string
+	ExternalSystem        *string
+	ParentFQN             *string
+	Name                  string
+	Level                 int
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	TombstonedAt          *time.Time
 }
 
 // AccountBalance is one server-computed account balance row for a currency.
@@ -80,6 +81,7 @@ type OptionalStringUpdate struct {
 // UpdateInput contains mutable account fields.
 type UpdateInput struct {
 	AccountType    *AccountType
+	Currency       OptionalStringUpdate
 	IsHidden       *bool
 	IsFeatured     *bool
 	ExternalID     OptionalStringUpdate
@@ -116,6 +118,12 @@ type Reference struct {
 	Currency    *string
 }
 
+// RecordReference identifies the account and currency of a record write.
+type RecordReference struct {
+	AccountID int64
+	Currency  string
+}
+
 // ActiveUsage reports active resources that reference an account.
 type ActiveUsage struct {
 	JournalRecords             bool
@@ -139,6 +147,7 @@ type Repository interface {
 	RestructureFQNs(context.Context, string, string) (int64, error)
 	SetHiddenByPath(context.Context, string, bool) error
 	ActiveUsage(context.Context, []int64) (map[int64]ActiveUsage, error)
+	HasActiveRecordCurrencyConflict(context.Context, int64, string) (bool, error)
 	Tombstone(context.Context, int64) error
 }
 
@@ -255,6 +264,33 @@ func (s *Service) ValidateActiveReference(ctx context.Context, id int64, opts Re
 	return refs[id], nil
 }
 
+// ValidateActiveRecordReferences validates active account references and
+// enforces every referenced single-currency account's record currency.
+func (s *Service) ValidateActiveRecordReferences(
+	ctx context.Context,
+	records []RecordReference,
+	opts ReferenceOptions,
+) (map[int64]Reference, error) {
+	ids := make([]int64, 0, len(records))
+	for _, record := range records {
+		ids = append(ids, record.AccountID)
+	}
+	refs, err := s.ValidateActiveReferences(ctx, ids, opts)
+	if err != nil {
+		return nil, err
+	}
+	for _, record := range records {
+		ref := refs[record.AccountID]
+		if ref.Currency != nil && record.Currency != *ref.Currency {
+			return nil, services.InvalidRequest(
+				"record currency must match single-currency account " + ref.FQN + " (" + *ref.Currency + ")",
+			)
+		}
+	}
+
+	return refs, nil
+}
+
 // ActiveReferenceByFQN returns one active account reference by exact FQN.
 func (s *Service) ActiveReferenceByFQN(ctx context.Context, fqn string) (Reference, error) {
 	states, err := s.cache.Snapshot(ctx)
@@ -361,6 +397,11 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 	if input.AccountType != nil && !ValidAccountType(*input.AccountType) {
 		return Account{}, services.InvalidRequest("account_type must be one of owned, party, flow, or system")
 	}
+	if input.Currency.Specified {
+		if err := validateCurrency(input.Currency.Value); err != nil {
+			return Account{}, err
+		}
+	}
 
 	var account Account
 	if err := s.refs.SerializeReferenceOperation(func() error {
@@ -374,7 +415,10 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 		if current.AccountType == AccountTypeSystem {
 			return services.InvalidRequest("system accounts are read-only")
 		}
-		if input.ExternalID.Specified || input.ExternalSystem.Specified || input.AccountType != nil {
+		if input.ExternalID.Specified ||
+			input.ExternalSystem.Specified ||
+			input.AccountType != nil ||
+			input.Currency.Specified {
 			externalID := current.ExternalID
 			if input.ExternalID.Specified {
 				externalID = input.ExternalID.Value
@@ -397,6 +441,29 @@ func (s *Service) UpdateMutable(ctx context.Context, id int64, input UpdateInput
 						return services.Conflict("account type change would invalidate existing transaction records")
 					}
 					return err
+				}
+			}
+			if input.Currency.Specified {
+				switch {
+				case equalNullableStrings(input.Currency.Value, current.Currency):
+					input.Currency = OptionalStringUpdate{}
+				default:
+					usageByID, err := s.repo.ActiveUsage(ctx, []int64{id})
+					if err != nil {
+						return err
+					}
+					if usageByID[id].CreditLimitHistory {
+						return services.Conflict("account currency cannot change while active credit limit history exists")
+					}
+					if input.Currency.Value != nil {
+						conflicts, err := s.repo.HasActiveRecordCurrencyConflict(ctx, id, *input.Currency.Value)
+						if err != nil {
+							return err
+						}
+						if conflicts {
+							return services.Conflict("account currency change conflicts with existing journal or recurring-definition records")
+						}
+					}
 				}
 			}
 			if !input.hasChanges() {
@@ -544,10 +611,19 @@ func singleLeafMove(moved map[int64]accountReferenceState, from string) bool {
 
 func (input UpdateInput) hasChanges() bool {
 	return input.AccountType != nil ||
+		input.Currency.Specified ||
 		input.IsHidden != nil ||
 		input.IsFeatured != nil ||
 		input.ExternalID.Specified ||
 		input.ExternalSystem.Specified
+}
+
+func equalNullableStrings(left *string, right *string) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+
+	return *left == *right
 }
 
 // Delete tombstones an account.
@@ -605,6 +681,8 @@ func (s *Service) populateDeleteability(ctx context.Context, accountItems []Acco
 			accountItems[index].AccountType != AccountTypeSystem &&
 			!usage.HasActiveDependents()
 		accountItems[index].Deletable = &deletable
+		hasCreditLimitHistory := usage.CreditLimitHistory
+		accountItems[index].HasCreditLimitHistory = &hasCreditLimitHistory
 	}
 
 	return nil

@@ -9,9 +9,10 @@
 
 - Embedded migration SQL hash mismatch is a validator-internal exit-2 failure.
 - Validation layers run schema, referential, SQL invariants, classification; only error findings stop later layers.
+- SQL invariants include active journal and recurring-definition record currency alignment with single-currency accounts, plus active credit-limit eligibility only on single-currency accounts.
 - Missing table `UNIQUE` constraints are warnings because active-row uniqueness is guarded by partial unique indexes; primary-key presence is reported by table diff.
 - Startup validation supports `none`, `shallow`, and `full`; the default is owned by `internal/appconfig`.
-- Non-checks: posted date/status consistency; record currency vs account currency; exchange-rate self-pairs; parent FQN existence; budget month/sign rules; amount_usd derivation correctness.
+- Non-checks: posted date/status consistency; exchange-rate self-pairs; parent FQN existence; budget month/sign rules; amount_usd derivation correctness.
 
 ## Boundaries
 

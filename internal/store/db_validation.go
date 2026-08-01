@@ -20,7 +20,7 @@ import (
 )
 
 // PinnedMigrationContentHash is the validator-reviewed sha256 of embedded migration SQL.
-const PinnedMigrationContentHash = "d45dc900b5af0c693d9c41d583039cabb31fd5d93fdffd037037f6778dab6fb7"
+const PinnedMigrationContentHash = "fa5c2918db86a99a64d01ed10d85bb53906a350c40e000dd9fc5931a040a4cc5"
 
 const validationTrimSpaceCharactersSQL = `' ' || ` +
 	`chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || ` +
@@ -196,6 +196,7 @@ func (s *DBValidationStore) InvariantFindings(ctx context.Context, missingUnique
 		s.shortTransactionFindings,
 		s.mixedCancellationTransactionFindings,
 		s.mixedExpectedTransactionFindings,
+		s.accountCurrencyFindings,
 		s.unbalancedRecurringDefinitionFindings,
 		s.shortRecurringDefinitionFindings,
 		s.expectedTransactionOccurrenceFindings,
@@ -254,6 +255,58 @@ func (s *DBValidationStore) fixedSystemAccountFindings(ctx context.Context) ([]d
 	 AND a.tombstoned_at IS NULL
 	WHERE a.account_id IS NULL
 )`, dbvalidation.SeverityError, "fixed system account catalog is incomplete")
+}
+
+func (s *DBValidationStore) accountCurrencyFindings(ctx context.Context) ([]dbvalidation.Finding, error) {
+	findings, err := s.existsFinding(ctx, `SELECT EXISTS (
+	SELECT 1
+	FROM `+s.db.accountingName("journal_record")+` AS jr
+	JOIN `+s.db.accountingName("transaction")+` AS tx
+	  ON tx.transaction_id = jr.transaction_id
+	JOIN `+s.db.accountingName("account")+` AS a
+	  ON a.account_id = jr.account_id
+	WHERE jr.tombstoned_at IS NULL
+	  AND tx.tombstoned_at IS NULL
+	  AND a.tombstoned_at IS NULL
+	  AND a.currency IS NOT NULL
+	  AND jr.currency <> a.currency
+)`, dbvalidation.SeverityError, "active journal record currency conflicts with single-currency account")
+	if err != nil {
+		return nil, err
+	}
+
+	recurringFindings, err := s.existsFinding(ctx, `SELECT EXISTS (
+	SELECT 1
+	FROM `+s.db.accountingName("recurring_definition_record")+` AS rdr
+	JOIN `+s.db.accountingName("recurring_definition")+` AS rd
+	  ON rd.recurring_definition_id = rdr.recurring_definition_id
+	JOIN `+s.db.accountingName("account")+` AS a
+	  ON a.account_id = rdr.account_id
+	WHERE rdr.tombstoned_at IS NULL
+	  AND rd.tombstoned_at IS NULL
+	  AND a.tombstoned_at IS NULL
+	  AND a.currency IS NOT NULL
+	  AND rdr.currency <> a.currency
+)`, dbvalidation.SeverityError, "active recurring definition record currency conflicts with single-currency account")
+	if err != nil {
+		return nil, err
+	}
+
+	creditLimitFindings, err := s.existsFinding(ctx, `SELECT EXISTS (
+	SELECT 1
+	FROM `+s.db.accountingName("credit_limit_history")+` AS clh
+	JOIN `+s.db.accountingName("account")+` AS a
+	  ON a.account_id = clh.account_id
+	WHERE clh.tombstoned_at IS NULL
+	  AND a.tombstoned_at IS NULL
+	  AND a.currency IS NULL
+)`, dbvalidation.SeverityError, "active credit limit history is associated with a multi-currency account")
+	if err != nil {
+		return nil, err
+	}
+
+	findings = append(findings, recurringFindings...)
+	return append(findings, creditLimitFindings...), nil
 }
 
 func (s *DBValidationStore) hierarchyFindings(ctx context.Context) ([]dbvalidation.Finding, error) {

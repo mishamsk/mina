@@ -29,6 +29,7 @@ import { ReferenceEntityDeleteDescription } from "@/components/reference-entity-
 import { referenceTableFrameClassName } from "@/components/reference-table-frame";
 import { type RowAction, RowActions } from "@/components/row-actions";
 import { focusWithoutTooltip, Tooltip } from "@/components/tooltip";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AmountText, FqnPath } from "@/features/ledger";
@@ -176,7 +177,7 @@ const BalanceAmounts = ({
 }: {
   readonly balances: readonly AccountBalance[];
 }) => (
-  <div className="flex flex-col items-end gap-1">
+  <div className="flex min-w-0 flex-col items-end gap-1">
     {balances.map((balance) => {
       const amount: DisplayAmount = {
         amount: balance.current_balance,
@@ -186,7 +187,8 @@ const BalanceAmounts = ({
         <AmountText
           key={`${balance.currency}:${balance.current_balance}`}
           amount={amount}
-          className="justify-end"
+          className="min-w-0 justify-end"
+          overflowTooltip
           positiveSign={false}
           tone="neutral"
         />
@@ -208,12 +210,12 @@ const HiddenRowIndicator = ({ label }: { readonly label: string }) => (
 );
 
 const accountsTreeSkeletonGridClass =
-  "grid grid-cols-[44%_32%_24%] sm:grid-cols-[36%_14%_30%_20%] md:grid-cols-[30%_14%_12%_20%_24%]";
+  "grid grid-cols-[44%_32%_24%] sm:grid-cols-[36%_14%_30%_20%] md:grid-cols-[23%_14%_22%_20%_21%] lg:grid-cols-[28%_14%_14%_20%_24%]";
 
 const accountTreeSkeletonColumnClasses = [
   "px-3",
   "hidden px-3 sm:block",
-  "hidden px-3 md:block",
+  "hidden px-1 md:block lg:px-3",
   "px-2 sm:px-3",
   "px-1 sm:px-3",
 ] as const;
@@ -485,7 +487,7 @@ export const AccountsTree = ({
               <tr className="font-heading text-left text-xs font-semibold uppercase">
                 <th
                   scope="col"
-                  className="w-[44%] px-3 py-2 sm:w-[36%] md:w-[30%]"
+                  className="w-[44%] px-3 py-2 sm:w-[36%] md:w-[23%] lg:w-[28%]"
                 >
                   Name
                 </th>
@@ -497,7 +499,7 @@ export const AccountsTree = ({
                 </th>
                 <th
                   scope="col"
-                  className="hidden w-[12%] px-3 py-2 md:table-cell"
+                  className="hidden w-[22%] px-1 py-2 md:table-cell lg:w-[14%] lg:px-3"
                 >
                   Currency
                 </th>
@@ -509,7 +511,7 @@ export const AccountsTree = ({
                 </th>
                 <th
                   scope="col"
-                  className="w-[24%] px-3 py-2 text-center sm:w-[20%] md:w-[24%]"
+                  className="w-[24%] px-3 py-2 text-center sm:w-[20%] md:w-[21%] lg:w-[24%]"
                 />
               </tr>
             </thead>
@@ -519,9 +521,8 @@ export const AccountsTree = ({
                 const rowBalances = account
                   ? (accountBalancesById.get(account.account_id) ?? [])
                   : [];
-                const hasCreditLimit = rowBalances.some(
-                  (balance) => balance.credit_limit !== undefined,
-                );
+                const hasCreditLimit =
+                  account?.has_credit_limit_history === true;
                 const group = groupByFqn.get(row.fqn);
                 const readOnlySystemPath =
                   row.fqn === "system" || row.fqn.startsWith("system:");
@@ -725,8 +726,21 @@ export const AccountsTree = ({
                         <AccountTypeBadge accountType={account.account_type} />
                       ) : null}
                     </td>
-                    <td className="hidden px-3 py-2 align-middle font-mono text-sm md:table-cell">
-                      {account?.currency ?? ""}
+                    <td className="hidden px-1 py-2 align-middle font-mono text-sm md:table-cell lg:px-3">
+                      {account ? (
+                        account.currency ? (
+                          <span className="block break-all">
+                            {account.currency}
+                          </span>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="max-w-full bg-[var(--band)] text-center"
+                          >
+                            Multi-currency
+                          </Badge>
+                        )
+                      ) : null}
                     </td>
                     <td className="px-2 py-2 text-right align-middle sm:px-3">
                       {account?.account_type === "owned" ||

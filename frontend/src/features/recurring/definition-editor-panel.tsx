@@ -218,9 +218,12 @@ export const DefinitionEditorPanel = ({
       values: readonly T[],
     ) => values.filter((value) => !value.is_hidden && !value.tombstoned_at);
     return {
-      accounts: visible(lookups.snapshot?.accounts ?? []).map((account) =>
-        option(account, account.account_id),
-      ),
+      accounts: visible(lookups.snapshot?.accounts ?? []).map((account) => ({
+        ...option(account, account.account_id),
+        detail: account.currency
+          ? `${account.currency} · Single-currency`
+          : "Multi-currency",
+      })),
       categories: visible(lookups.snapshot?.categories ?? []).map((category) =>
         option(category, category.category_id),
       ),

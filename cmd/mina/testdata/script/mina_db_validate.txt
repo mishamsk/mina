@@ -168,6 +168,21 @@ duckdbexec $WORK/inv_mixed_expected_status.db inv_mixed_expected_status.sql
 ! exec mina db validate --db $WORK/inv_mixed_expected_status.db --schema demo
 stderr 'error: invariant: transaction .* mixes expected and non-expected active records'
 
+duckdbclone $WORK/demo.db $WORK/inv_account_currency.db
+duckdbexec $WORK/inv_account_currency.db inv_account_currency.sql
+! exec mina db validate --db $WORK/inv_account_currency.db --schema demo
+stderr 'error: invariant: active journal record currency conflicts with single-currency account'
+
+duckdbclone $WORK/demo.db $WORK/inv_recurring_account_currency.db
+duckdbexec $WORK/inv_recurring_account_currency.db inv_recurring_account_currency.sql
+! exec mina db validate --db $WORK/inv_recurring_account_currency.db --schema demo
+stderr 'error: invariant: active recurring definition record currency conflicts with single-currency account'
+
+duckdbclone $WORK/demo.db $WORK/inv_multi_currency_credit_limit.db
+duckdbexec $WORK/inv_multi_currency_credit_limit.db inv_multi_currency_credit_limit.sql
+! exec mina db validate --db $WORK/inv_multi_currency_credit_limit.db --schema demo
+stderr 'error: invariant: active credit limit history is associated with a multi-currency account'
+
 duckdbclone $WORK/demo.db $WORK/inv_expected_without_occurrence.db
 duckdbexec $WORK/inv_expected_without_occurrence.db inv_expected_without_occurrence.sql
 ! exec mina db validate --db $WORK/inv_expected_without_occurrence.db --schema demo

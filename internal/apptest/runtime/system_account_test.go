@@ -63,6 +63,7 @@ func TestFixedSystemAccountCatalogAndProtection(t *testing.T) {
 		request httpclient.UpdateAccountRequest
 	}{
 		{name: "type", request: httpclient.UpdateAccountRequest{AccountType: &ownedType}},
+		{name: "currency", request: httpclient.UpdateAccountRequest{Currency: nullable.NewNullableWithValue("USD")}},
 		{name: "hidden", request: httpclient.UpdateAccountRequest{IsHidden: &trueValue}},
 		{name: "featured", request: httpclient.UpdateAccountRequest{IsFeatured: &trueValue}},
 		{name: "external id", request: httpclient.UpdateAccountRequest{ExternalId: nullable.NewNullableWithValue("external-id")}},

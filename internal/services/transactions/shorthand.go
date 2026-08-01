@@ -61,6 +61,8 @@ type ExchangeInput struct {
 	InitiatedDate        values.CivilDate
 	SoldAccountID        int64
 	BoughtAccountID      int64
+	SoldCurrency         *string
+	BoughtCurrency       *string
 	SoldAmount           values.Decimal
 	BoughtAmount         values.Decimal
 	MemberID             *int64
@@ -190,8 +192,16 @@ func (s *Service) CreateExchange(ctx context.Context, input ExchangeInput) (Tran
 	if !shorthandWritableAccountType(sold.AccountType) || !shorthandWritableAccountType(bought.AccountType) {
 		return Transaction{}, services.InvalidRequest("exchange accounts must be owned or party accounts")
 	}
-	if sold.Currency == nil || bought.Currency == nil || *sold.Currency == *bought.Currency {
-		return Transaction{}, services.InvalidRequest("exchange accounts must have two distinct currencies")
+	soldCurrency, err := resolveExchangeCurrency("sold", sold, input.SoldCurrency)
+	if err != nil {
+		return Transaction{}, err
+	}
+	boughtCurrency, err := resolveExchangeCurrency("bought", bought, input.BoughtCurrency)
+	if err != nil {
+		return Transaction{}, err
+	}
+	if soldCurrency == boughtCurrency {
+		return Transaction{}, services.InvalidRequest("sold_currency and bought_currency must differ")
 	}
 	exchange, err := s.accounts.ActiveReferenceByFQN(ctx, "system:exchange")
 	if errors.Is(err, services.ErrInvalidReference) {
@@ -227,12 +237,23 @@ func (s *Service) CreateExchange(ctx context.Context, input ExchangeInput) (Tran
 	return s.Create(ctx, CreateInput{
 		InitiatedDate: input.InitiatedDate,
 		Records: []JournalRecordInput{
-			record(sold.ID, *sold.Currency, input.SoldAmount.Neg()),
-			record(exchange.ID, *sold.Currency, input.SoldAmount),
-			record(exchange.ID, *bought.Currency, input.BoughtAmount.Neg()),
-			record(bought.ID, *bought.Currency, input.BoughtAmount),
+			record(sold.ID, soldCurrency, input.SoldAmount.Neg()),
+			record(exchange.ID, soldCurrency, input.SoldAmount),
+			record(exchange.ID, boughtCurrency, input.BoughtAmount.Neg()),
+			record(bought.ID, boughtCurrency, input.BoughtAmount),
 		},
 	})
+}
+
+func resolveExchangeCurrency(side string, account accounts.Reference, explicit *string) (string, error) {
+	if explicit != nil {
+		return *explicit, nil
+	}
+	if account.Currency == nil {
+		return "", services.InvalidRequest(side + "_currency is required for a multi-currency account")
+	}
+
+	return *account.Currency, nil
 }
 
 func shorthandWritableAccountType(accountType accounts.AccountType) bool {

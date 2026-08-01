@@ -56,7 +56,7 @@ CREATE TABLE recurring_definition_record (
 	recurring_definition_id INTEGER NOT NULL,
 	account_id INTEGER NOT NULL,
 	member_id INTEGER,
-	-- ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.
+	-- ISO 4217 code or C::-prefixed crypto ticker; must match account.currency when that account is single-currency.
 	currency TEXT NOT NULL,
 	-- Signed debit or credit amount copied to generated transactions.
 	amount DECIMAL(18,8) NOT NULL,
@@ -71,7 +71,7 @@ CREATE TABLE recurring_definition_record (
 	tombstoned_at TIMESTAMP
 );
 
-COMMENT ON COLUMN recurring_definition_record.currency IS 'ISO 4217 code for fiat currencies; crypto token ticker prefixed with C:: for crypto.';
+COMMENT ON COLUMN recurring_definition_record.currency IS 'ISO 4217 code or C::-prefixed crypto ticker; must match account.currency when that account is single-currency.';
 COMMENT ON COLUMN recurring_definition_record.amount IS 'Signed debit or credit amount copied to generated transactions.';
 COMMENT ON COLUMN recurring_definition_record.category_id IS 'Category for flow records; NULL on every other record.';
 COMMENT ON COLUMN recurring_definition_record.tag_ids IS 'Tag IDs assigned to generated records for flexible grouping.';

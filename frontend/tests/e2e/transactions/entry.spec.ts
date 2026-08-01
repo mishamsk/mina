@@ -26,6 +26,35 @@ import {
   waitForLedgerLookups,
 } from "@tests/e2e/transactions/support";
 
+test("the entry modal traps focus while lookups load", async ({ page }) => {
+  let releaseCategories = () => {};
+  const categoriesGate = new Promise<void>((resolve) => {
+    releaseCategories = resolve;
+  });
+  await page.route("**/api/categories?**", async (route) => {
+    await categoriesGate;
+    await route.continue();
+  });
+
+  try {
+    await page.goto("/settings");
+    const launcher = page
+      .locator("header")
+      .getByRole("button", { name: "New transaction" });
+    await launcher.click();
+    const entryModal = page.getByRole("dialog", {
+      name: "Transaction editor",
+    });
+    await expect(entryModal).toBeVisible();
+    await expect(entryModal).toBeFocused();
+
+    releaseCategories();
+    await expect(page.getByLabel("Start from a template")).toBeFocused();
+  } finally {
+    releaseCategories();
+  }
+});
+
 test("pristine create drafts do not block saved transaction launches", async ({
   page,
 }, testInfo) => {

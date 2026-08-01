@@ -3,11 +3,14 @@ import {
   type AccountFixture,
   type CategoryFixture,
   chooseOptionByKeyboard,
+  clickRowAction,
+  createAccount,
   createCategory,
   createTag,
   expect,
   fillAndExpectValue,
   findByFqn,
+  journalRecord,
   listFixtures,
   type Route,
   type TransactionFixture,
@@ -665,6 +668,15 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   await expect(
     page.locator("datalist#entry-currency-options option[value='EUR']"),
   ).toHaveCount(1);
+  const currencyBox = await currency.boundingBox();
+  expect(currencyBox).not.toBeNull();
+  await currency.click({
+    position: { x: currencyBox!.width - 8, y: currencyBox!.height / 2 },
+  });
+  await currency.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toBeVisible();
   await currency.fill("bitcoin");
   await expect(currency).toHaveValue("BITCOIN");
   await currency.blur();
@@ -783,6 +795,20 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
   ).toHaveCount(0);
   await page.getByLabel("Search").fill("E2E arcade spend");
   await expect(page.getByText("E2E arcade spend").first()).toBeVisible();
+
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  const committedCurrency = page.getByRole("combobox", { name: "Currency" });
+  await committedCurrency.fill("USD");
+  await committedCurrency.press("ArrowDown");
+  await committedCurrency.press("Enter");
+  await expect(committedCurrency).toHaveValue("USD");
+  await committedCurrency.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toBeHidden();
 });
 
 test("entry panel creates each shorthand transaction type", async ({
@@ -950,6 +976,8 @@ test("entry panel creates each shorthand transaction type", async ({
     "bank:Chase:joint_checking",
     { scope: exchangePanel },
   );
+  await expect(exchangePanel.getByLabel("Currency sold")).toHaveValue("USD");
+  await expect(exchangePanel.getByLabel("Currency sold")).not.toBeEditable();
   await fillAndExpectValue(
     exchangePanel.getByLabel("Amount sold"),
     `32.${cents}`,
@@ -961,10 +989,201 @@ test("entry panel creates each shorthand transaction type", async ({
     "bank:Fidelity:EUR",
     { scope: exchangePanel },
   );
+  await expect(exchangePanel.getByLabel("Currency bought")).toHaveValue("EUR");
+  await expect(exchangePanel.getByLabel("Currency bought")).not.toBeEditable();
   await fillAndExpectValue(
     exchangePanel.getByLabel("Amount bought"),
     `30.${cents}`,
   );
   await exchangePanel.getByLabel("Memo").fill("E2E tab exchange");
   await saveAndExpectEntryCount("/api/transactions/exchange", 5);
+  const lockedSoldCurrency = exchangePanel.getByLabel("Currency sold");
+  await expect(lockedSoldCurrency).not.toBeEditable();
+  await lockedSoldCurrency.press("ArrowDown");
+  await lockedSoldCurrency.press("Escape");
+  await expect(entryPanel).toBeHidden();
+});
+
+test("exchange entry accepts explicit currencies for multi-currency accounts", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const soldFqn = `e2e:exchange:${unique}:MultiSold`;
+  const boughtFqn = `e2e:exchange:${unique}:MultiBought`;
+  await Promise.all([
+    createAccount(page, soldFqn, "owned"),
+    createAccount(page, boughtFqn, "owned"),
+  ]);
+
+  const ledgerLookups = waitForLedgerLookups(page);
+  await page.goto("/transactions?page=1&pageSize=25");
+  await ledgerLookups;
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await page.getByRole("tab", { name: "Exchange" }).click();
+  const exchangePanel = page
+    .getByRole("dialog", { name: "Transaction editor" })
+    .getByRole("tabpanel", { name: "Exchange" });
+
+  await exchangePanel.getByLabel("Date").fill("2026-05-30");
+  await chooseOptionByKeyboard(page, "From account", "MultiSold", soldFqn, {
+    scope: exchangePanel,
+  });
+  await expect(exchangePanel.getByLabel("Currency sold")).toBeEditable();
+  const soldCurrency = exchangePanel.getByLabel("Currency sold");
+  await soldCurrency.fill("USD");
+  await soldCurrency.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toBeVisible();
+  await soldCurrency.fill("U");
+  await soldCurrency.press("ArrowDown");
+  await soldCurrency.press("Escape");
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toBeVisible();
+  await soldCurrency.fill("CAD");
+  await exchangePanel.getByLabel("Amount sold").fill("12.34");
+  await chooseOptionByKeyboard(page, "To account", "MultiBought", boughtFqn, {
+    scope: exchangePanel,
+  });
+  await expect(exchangePanel.getByLabel("Currency bought")).toBeEditable();
+  const boughtCurrency = exchangePanel.getByLabel("Currency bought");
+  await boughtCurrency.fill("CAD");
+  await boughtCurrency.blur();
+  await expect(
+    exchangePanel.getByText("Sold and bought currencies must differ."),
+  ).toBeVisible();
+  await soldCurrency.fill("");
+  await boughtCurrency.fill("");
+  await boughtCurrency.blur();
+  await expect(
+    exchangePanel.getByText("Bought currency is required."),
+  ).toBeVisible();
+  await expect(
+    exchangePanel.getByText("Sold and bought currencies must differ."),
+  ).toBeHidden();
+  await page.getByRole("button", { name: "Edit as journal" }).click();
+  await expect(
+    page.getByRole("heading", { name: "New journal" }),
+  ).toBeVisible();
+  await expect(journalRecord(page, 3).getByLabel("Currency")).toHaveValue("");
+  await expect(journalRecord(page, 4).getByLabel("Currency")).toHaveValue("");
+  await page.getByRole("tab", { name: "Exchange" }).click();
+  await soldCurrency.fill("USD");
+  await expect(
+    exchangePanel.getByText("Sold and bought currencies must differ."),
+  ).toBeHidden();
+  await boughtCurrency.fill("JPY");
+  await exchangePanel.getByLabel("Amount bought").fill("1500");
+  const memo = `E2E multi-currency exchange ${unique}`;
+  await exchangePanel.getByLabel("Memo").fill(memo);
+  await exchangePanel.getByRole("button", { name: "Save and close" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toBeHidden();
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Edit transaction",
+  );
+  const reopenedExchangePanel = page
+    .getByRole("dialog", { name: "Transaction editor" })
+    .getByRole("tabpanel", { name: "Exchange" });
+  await expect(reopenedExchangePanel.getByLabel("Currency sold")).toHaveValue(
+    "USD",
+  );
+  await expect(reopenedExchangePanel.getByLabel("Currency bought")).toHaveValue(
+    "JPY",
+  );
+});
+
+test("exchange edit preserves record currencies when selecting a multi-currency account", async ({
+  page,
+}, testInfo) => {
+  const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]+/g, "")}${Date.now()}`;
+  const soldFqn = `e2e:exchange-edit:${unique}:CadSold`;
+  const boughtFqn = `e2e:exchange-edit:${unique}:JpyBought`;
+  const multiSoldFqn = `e2e:exchange-edit:${unique}:MultiSold`;
+  await Promise.all([
+    createAccount(page, soldFqn, "owned", "CAD"),
+    createAccount(page, boughtFqn, "owned", "JPY"),
+    createAccount(page, multiSoldFqn, "owned"),
+  ]);
+  const memo = `E2E exchange edit ${unique}`;
+
+  const ledgerLookups = waitForLedgerLookups(page);
+  await page.goto("/transactions?page=1&pageSize=25");
+  await ledgerLookups;
+  await page
+    .locator("header")
+    .getByRole("button", { name: "New transaction" })
+    .click();
+  await page.getByRole("tab", { name: "Exchange" }).click();
+  let exchangePanel = page
+    .getByRole("dialog", { name: "Transaction editor" })
+    .getByRole("tabpanel", { name: "Exchange" });
+  await exchangePanel.getByLabel("Date").fill("2026-07-30");
+  await chooseOptionByKeyboard(page, "From account", "CadSold", soldFqn, {
+    scope: exchangePanel,
+  });
+  await exchangePanel.getByLabel("Amount sold").fill("14");
+  await chooseOptionByKeyboard(page, "To account", "JpyBought", boughtFqn, {
+    scope: exchangePanel,
+  });
+  await exchangePanel.getByLabel("Amount bought").fill("1500");
+  await exchangePanel.getByLabel("Memo").fill(memo);
+  await exchangePanel.getByRole("button", { name: "Save and close" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toBeHidden();
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Edit transaction",
+  );
+  exchangePanel = page
+    .getByRole("dialog", { name: "Transaction editor" })
+    .getByRole("tabpanel", { name: "Exchange" });
+  await expect(exchangePanel.getByLabel("Currency sold")).toHaveValue("CAD");
+  await expect(exchangePanel.getByLabel("Currency sold")).not.toBeEditable();
+
+  await chooseOptionByKeyboard(
+    page,
+    "From account",
+    "MultiSold",
+    multiSoldFqn,
+    { scope: exchangePanel },
+  );
+  await expect(exchangePanel.getByLabel("Currency sold")).toBeEditable();
+  await expect(exchangePanel.getByLabel("Currency sold")).toHaveValue("CAD");
+
+  await page.getByRole("button", { name: "Update transaction" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Transaction editor" }),
+  ).toBeHidden();
+
+  await page.goto(
+    `/transactions?page=1&pageSize=50&q=${encodeURIComponent(memo)}`,
+  );
+  await clickRowAction(
+    page,
+    page.getByRole("row").filter({ hasText: memo }).first(),
+    "Edit transaction",
+  );
+  exchangePanel = page
+    .getByRole("dialog", { name: "Transaction editor" })
+    .getByRole("tabpanel", { name: "Exchange" });
+  await expect(exchangePanel.getByLabel("Currency sold")).toHaveValue("CAD");
+  await expect(exchangePanel.getByLabel("Currency bought")).toHaveValue("JPY");
 });
