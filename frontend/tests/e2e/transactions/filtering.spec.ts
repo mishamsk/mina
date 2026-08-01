@@ -427,10 +427,19 @@ test("transactions page add-filter menu drives server filters and chips", async 
     "No matches",
     { timeout: 10000 },
   );
-  await page.getByText("Include hidden", { exact: true }).click();
-  await expect(page.locator("#transactions-filter-tag-options")).toContainText(
-    "HiddenMatch",
-  );
+  const includeHiddenTags = page.getByRole("checkbox", {
+    name: "Include hidden",
+  });
+  await includeHiddenTags.click();
+  await expect(includeHiddenTags).toBeChecked();
+  await tagsPicker.focus();
+  await expect(tagsPicker).toHaveValue("HiddenMatch");
+  await expect(
+    page
+      .locator("#transactions-filter-tag-options")
+      .getByRole("option")
+      .filter({ hasText: "HiddenMatch" }),
+  ).toBeVisible();
   await fillAndExpectValue(tagsPicker, visibleTagOne.fqn);
   await expect(
     page.getByRole("button", { name: "Remove Groceries" }),

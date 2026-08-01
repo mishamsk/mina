@@ -234,7 +234,9 @@ test("recurring definitions create, edit, pause, defer, resume, and cancel", asy
     name: "Edit recurring definition",
   });
   const everyInput = editPanel.getByLabel("Every");
-  await everyInput.fill("2");
+  await everyInput.selectText();
+  await everyInput.pressSequentially("2");
+  await expect(everyInput).toHaveValue("2");
   await everyInput.press("Tab");
   await expect(everyInput).toHaveValue("2");
   await editPanel.getByRole("button", { name: "Save definition" }).click();

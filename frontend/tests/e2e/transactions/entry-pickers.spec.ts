@@ -451,14 +451,21 @@ test("tags multi-picker retains its prefix for sibling batching", async ({
     .click();
   const tagsPicker = page.getByRole("combobox", { name: "Tags" });
   const selectedTags = page.getByTestId("entity-multi-picker-selected");
+  const tagsOptions = page.locator("#spend-tags-options");
 
   await tagsPicker.fill(rootSearchTag.name);
+  const rootSearchOptionId = `spend-tags-option-${rootSearchTag.tag_id}`;
+  const rootSearchOption = tagsOptions.locator(`#${rootSearchOptionId}`);
+  await expect(rootSearchOption).toBeVisible();
+  await expect(tagsPicker).toHaveAttribute(
+    "aria-activedescendant",
+    rootSearchOptionId,
+  );
   await tagsPicker.press("Enter");
   await expect(tagsPicker).toHaveValue("");
   await expect(selectedTags).toContainText(rootSearchTag.name);
 
   await tagsPicker.fill(`${prefix}:`);
-  const tagsOptions = page.locator("#spend-tags-options");
   await expect(tagsOptions).toHaveAttribute("data-picker-mode", "level");
   await expect(tagsOptions.getByRole("option")).toHaveCount(2);
   await tagsPicker.press("Enter");
@@ -800,12 +807,13 @@ test("keyboard spend entry creates a transaction and keeps sticky fields", async
     .locator("header")
     .getByRole("button", { name: "New transaction" })
     .click();
+  await expect(page.getByLabel("Start from a template")).toBeFocused();
   const committedCurrency = page.getByRole("combobox", { name: "Currency" });
   await committedCurrency.fill("USD");
   await committedCurrency.press("ArrowDown");
   await committedCurrency.press("Enter");
   await expect(committedCurrency).toHaveValue("USD");
-  await committedCurrency.press("Escape");
+  await page.keyboard.press("Escape");
   await expect(
     page.getByRole("dialog", { name: "Transaction editor" }),
   ).toBeHidden();

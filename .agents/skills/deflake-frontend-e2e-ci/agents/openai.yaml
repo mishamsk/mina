@@ -1,0 +1,5 @@
+interface:
+  display_name: "Deflake Frontend E2E CI"
+  short_description: "Harden flaky frontend E2E CI assertions"
+policy:
+  allow_implicit_invocation: false
