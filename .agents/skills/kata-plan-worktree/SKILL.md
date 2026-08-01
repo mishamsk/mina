@@ -70,7 +70,7 @@ gt <name-of-the-branch>
 9. Start a headless GPT-5.6 Sol Codex session in the new worktree with xhigh reasoning effort. Give it the outcome, completion bar, plan-only boundary, and source material; let it derive the planning mechanics from `docs/plan_template.md` and the repository.
 
 ```bash
-codex exec -C "<worktree-path>" -m gpt-5.6-sol -c model_reasoning_effort=xhigh "Create the implementation plan for Kata issue <ref>: <issue title>. Use kata show <ref> --agent, repository evidence, and docs/plan_template.md. Success means a concrete, sequential multi-task plan exists under docs/plans with outcome-based success criteria, validation selected only where it provides relevant evidence, and the template's default review-loop unless the issue explicitly forbids it. This is plan-only work: do not implement, run tests, commit, or run review-loop. If a material unresolved decision prevents a reliable plan, report that blocker instead of guessing."
+codex exec -C "<worktree-path>" -m gpt-5.6-sol -c model_reasoning_effort=xhigh "Create the implementation plan for Kata issue <ref>: <issue title>. Use kata show <ref> --agent, repository evidence, and docs/plan_template.md. Success means a lean, sequential, outcome-oriented plan exists under docs/plans with relevant validation and task decomposition only where useful. This is plan-only work: do not implement, run tests, commit, or run review-loop. If a material unresolved decision prevents a reliable plan, report that blocker instead of guessing."
 ```
 
 ## End State

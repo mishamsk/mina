@@ -1,38 +1,34 @@
 # Plan: <Short outcome-oriented title> <optional: Kata issue>
 
-<In 1-2 sentences, state the user-visible outcome and what must be true for the plan to be complete.>
+## Goal
 
-## Plan Context
+<In a short paragraph, state the high-level outcome this plan will achieve.>
 
-<Include only context that changes implementation: requirements, constraints, chosen decisions, named files or interfaces, state/data flow, failure behavior, privacy/security concerns, and material open questions. Link to owning docs instead of repeating them. Omit categories that do not apply. If the user's request explicitly excludes review-loop, record `Do not run review-loop.` here.>
+- <Optional concrete deliverable; remove this list when none are needed.>
 
-## Tasks
+## Constraints
 
-> Keep a sequential, multi-task structure. Size tasks as small, self-contained commits that are independently verifiable when practical.
-> Describe the required outcome and completion evidence for each task; do not prescribe implementation mechanics the executing agent can derive from the repository.
-> Add validation to the task(s) where it provides useful evidence. Select repository-owned commands from the affected behavior and guidance; do not mechanically repeat irrelevant checks. Do not include this note in the resulting plan.
-
-### Task 1: [First independently useful outcome]
-
-<State the end state, affected resources or contracts, dependencies, and success criteria.>
-
-- [ ] Deliver <observable implementation outcome>, including required tests and documentation.
-- [ ] <Add further outcome, acceptance, or task-specific validation checkboxes only when they change the completion bar.>
-- [ ] Commit the task as `<descriptive commit subject>`.
-
-### Task 2: [Next independently useful outcome]
-
-<State how this task builds on the prior task, plus its end state and success criteria. Add further tasks only when they represent distinct, ordered outcomes.>
-
-- [ ] Deliver <observable implementation outcome>, including required tests and documentation.
-- [ ] <Add further outcome, acceptance, or task-specific validation checkboxes only when they change the completion bar.>
-- [ ] Commit the task as `<descriptive commit subject>`.
+- <Include only hard scope boundaries, prohibitions, immovable decisions, or compatibility, security, and permission requirements.>
+- <If review-loop is prohibited, write `Do not run review-loop.`>
 
 ## Success Criteria
 
-- [ ] Every task's stated outcome and acceptance conditions are complete.
-- [ ] `<Exact repository validation selected for the affected behavior>` passes; omit commands that do not provide relevant evidence.
-- [ ] Planned commits are present and the worktree is clean.
-- [ ] Unless Plan Context records the user's explicit request to omit it, with a clean worktree run `just review-loop --plan "<this plan's repo-relative path>"` exactly once; resolve its findings, rerun affected validation, and commit the fixes. The plan is immutable ground truth for reviewers and fixers. Never invoke review-loop a second time — one invocation satisfies this item permanently; findings that remain after the fix commits go into the completion report instead.
-- [ ] Move this plan to `docs/plans/completed/` and commit the move.
+- [ ] <State the observable final outcomes and evidence that prove the goal is complete.>
+- [ ] `<Only repository validation commands that provide relevant evidence>` pass.
+<Include the review-loop item below only when Constraints do not prohibit it.>
+
+- [ ] From a clean worktree, run `just review-loop --plan "<this plan's repo-relative path>"` once, resolve its findings, and rerun affected validation. Do not run review-loop more than once; report any remaining findings.
 - [ ] <If a Kata issue exists, close it with the commits and validation evidence.>
+- [ ] Move this plan to `docs/plans/completed/`, commit the move, and leave the worktree clean.
+
+## Tasks
+
+<Use tasks only when ordered steps make the work clearer or safer. Omit this section for a single cohesive change. Add one block per distinct outcome and do not repeat plan-wide goals, constraints, or success criteria.>
+
+### Task 1: <Outcome>
+
+<Describe this task's scope and only the local constraints or important details that are not clear from the goal.>
+
+- [ ] <State the evidence that proves this task is complete.>
+- [ ] <Add task-local validation only when it provides useful evidence.>
+- [ ] Commit as `<descriptive commit subject>`.
