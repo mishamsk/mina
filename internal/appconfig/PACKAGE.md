@@ -16,6 +16,7 @@
 - Settings snapshot construction captures resolved process-config values and validates presentation-metadata completeness and consistency.
 - `DefaultConfig` does not inspect the filesystem or environment.
 - `Load` resolves Mina's app cache directory as `mina` under `XDG_CACHE_HOME` when set, otherwise under `os.UserCacheDir()`, unless `Overrides.CacheDir` is set.
+- `MINA_DATABASE_ENCRYPTION_KEY` is read through a dedicated env-only accessor and never enters `Config`, source metadata, TOML, overrides, or settings snapshots.
 
 ## Boundaries
 

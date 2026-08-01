@@ -300,6 +300,7 @@ Each screen below lists purpose, layout, behavior, primary data sources, and pha
 - Shared building blocks (selector, envelope runs table, run-detail frame) are common to all operations; each operation type ships a dedicated frontend module owning its run-detail rendering and operation-specific controls through that operation's named concrete APIs. There are no generic fallback renderers.
 - Module completeness is enforced statically: the module registry is keyed by the generated operation-id union, so a newly added operation type fails typecheck until its module exists.
 - Settings is a server-driven read-only view of the operational configuration loaded for the running process. It renders backend-provided groups, labels, help, active values, and the resolved config-file location without setting-key-specific UI code. Bare indicators beside each label mark non-default values and identify CLI or environment overrides; config-file origin is implicit.
+- Status reports whether database encryption is active as a labeled health card; the encrypted state includes a supporting lock icon.
 - Configuration is loaded once at startup; this screen does not mutate runtime state, write the config file, or predict values for a later process.
 - Browser-local UI preferences remain persisted per `docs/frontend-architecture.md` and do not appear in the server settings manifest; they include table density, default landing screen, and theme selection.
 

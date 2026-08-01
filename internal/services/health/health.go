@@ -14,13 +14,15 @@ const (
 
 // Health describes process availability and migrated accounting state.
 type Health struct {
-	Status        Status
-	SchemaVersion int64
+	DatabaseEncrypted bool
+	Status            Status
+	SchemaVersion     int64
 }
 
 // Repository reads health-related state.
 type Repository interface {
 	CurrentSchemaVersion(context.Context) (int64, error)
+	DatabaseEncrypted(context.Context) (bool, error)
 }
 
 // Service owns health use cases.
@@ -39,9 +41,14 @@ func (s *Service) Check(ctx context.Context) (Health, error) {
 	if err != nil {
 		return Health{}, err
 	}
+	encrypted, err := s.repo.DatabaseEncrypted(ctx)
+	if err != nil {
+		return Health{}, err
+	}
 
 	return Health{
-		Status:        StatusOK,
-		SchemaVersion: version,
+		DatabaseEncrypted: encrypted,
+		Status:            StatusOK,
+		SchemaVersion:     version,
 	}, nil
 }

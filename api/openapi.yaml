@@ -4893,9 +4893,13 @@ components:
       type: object
       additionalProperties: false
       required:
+        - database_encrypted
         - status
         - schema_version
       properties:
+        database_encrypted:
+          type: boolean
+          description: Whether the selected accounting database is encrypted at rest.
         status:
           type: string
           enum:

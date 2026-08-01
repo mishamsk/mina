@@ -58,7 +58,8 @@ func (s *backupSource) CopyDatabaseToDuckDBFile(ctx context.Context, path string
 }
 
 func (s *backupSource) attachTarget(ctx context.Context, conn sqlQueryer, path string, targetIdentifier string) error {
-	_, err := conn.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+targetIdentifier)
+	options := attachOptions(false, s.db.encryptionKey)
+	_, err := conn.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+targetIdentifier+options)
 	return backupSourceError(ctx, "attach backup target database", err)
 }
 

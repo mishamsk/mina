@@ -84,13 +84,17 @@ func newApp(
 	if err := Validate(cfg, opts.automaticOperationsEnabled()); err != nil {
 		return nil, err
 	}
+	openRequest, err := appDBOpenRequest(cfg)
+	if err != nil {
+		return nil, err
+	}
 	if cfg.DatabasePath != "" {
 		if err := prepareDatabasePath(cfg.DatabasePath); err != nil {
 			return nil, err
 		}
 	}
 
-	appDB, err := openAppDB(ctx, AppDBOpenRequest(cfg))
+	appDB, err := openAppDB(ctx, openRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +121,11 @@ func ValidateDatabase(ctx context.Context, cfg appconfig.Config, level dbvalidat
 	if err := Validate(cfg, false); err != nil {
 		return dbvalidation.Report{}, err
 	}
-	appDB, err := store.OpenAppDBReadOnly(ctx, AppDBOpenRequest(cfg))
+	openRequest, err := appDBOpenRequest(cfg)
+	if err != nil {
+		return dbvalidation.Report{}, err
+	}
+	appDB, err := store.OpenAppDBReadOnly(ctx, openRequest)
 	if err != nil {
 		return dbvalidation.Report{}, err
 	}
@@ -194,7 +202,11 @@ func HasPendingMigrations(ctx context.Context, cfg appconfig.Config, operationsE
 		}
 	}
 
-	appDB, err := store.OpenAppDBReadOnly(ctx, AppDBOpenRequest(cfg))
+	openRequest, err := appDBOpenRequest(cfg)
+	if err != nil {
+		return false, err
+	}
+	appDB, err := store.OpenAppDBReadOnly(ctx, openRequest)
 	if err != nil {
 		return false, err
 	}
@@ -221,7 +233,11 @@ func AccountingSchemaExists(ctx context.Context, cfg appconfig.Config, operation
 		return false, nil
 	}
 
-	appDB, err := store.OpenAppDBReadOnly(ctx, AppDBOpenRequest(cfg))
+	openRequest, err := appDBOpenRequest(cfg)
+	if err != nil {
+		return false, err
+	}
+	appDB, err := store.OpenAppDBReadOnly(ctx, openRequest)
 	if err != nil {
 		return false, err
 	}

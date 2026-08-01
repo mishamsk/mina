@@ -6,7 +6,7 @@
 
 ## Implicit Contracts
 
-- Fetches one immutable startup snapshot through the generated Settings read operation.
+- Fetches the immutable startup snapshot through Settings.
 - Dispatches value formatting only on generated `SettingControlKind`; setting keys and group names remain opaque.
 
 ## Boundaries

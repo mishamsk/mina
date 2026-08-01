@@ -24,6 +24,10 @@ const (
 	defaultDuckDBMaxOpenConns  = 2
 )
 
+// bundledHTTPFSExtensionPath is set by supported container builds. Direct
+// binaries leave it empty and use DuckDB's signed, version-matched cache.
+var bundledHTTPFSExtensionPath string
+
 // Options contains live process dependencies and controls supplied by composition.
 type Options struct {
 	ExecutionProfile ExecutionProfile
@@ -127,13 +131,20 @@ func Validate(cfg appconfig.Config, operationsEnabled bool) error {
 	return nil
 }
 
-// AppDBOpenRequest returns the store request selected by runtime database policy.
-func AppDBOpenRequest(cfg appconfig.Config) store.AppDBOpenRequest {
-	return store.AppDBOpenRequest{
-		Path:               cfg.DatabasePath,
-		AccountingLocation: AccountingLocationConfig(cfg),
-		MaxOpenConns:       duckDBMaxOpenConns(),
+// appDBOpenRequest returns the store request selected by runtime database policy.
+func appDBOpenRequest(cfg appconfig.Config) (store.AppDBOpenRequest, error) {
+	encryptionKey, err := appconfig.DatabaseEncryptionKeyFromEnvironment()
+	if err != nil {
+		return store.AppDBOpenRequest{}, err
 	}
+
+	return store.AppDBOpenRequest{
+		Path:                cfg.DatabasePath,
+		AccountingLocation:  AccountingLocationConfig(cfg),
+		MaxOpenConns:        duckDBMaxOpenConns(),
+		EncryptionKey:       encryptionKey,
+		HTTPFSExtensionPath: bundledHTTPFSExtensionPath,
+	}, nil
 }
 
 func duckDBMaxOpenConns() int {

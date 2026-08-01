@@ -71,6 +71,7 @@ type Option func(*clientOptions)
 type clientOptions struct {
 	config                    appconfig.Config
 	accountingSchemaSpecified bool
+	databaseEncryptionKey     *string
 	runtimeOptions            runtime.Options
 	processDB                 *ProcessDB
 }
@@ -206,6 +207,13 @@ func WithDatabasePath(path string) Option {
 	}
 }
 
+// WithDatabaseEncryptionKey supplies the database key through the test app's process environment.
+func WithDatabaseEncryptionKey(key string) Option {
+	return func(opts *clientOptions) {
+		opts.databaseEncryptionKey = &key
+	}
+}
+
 // WithAccountingSchema customizes the accounting schema used by the test app.
 func WithAccountingSchema(schema string) Option {
 	return func(opts *clientOptions) {
@@ -330,6 +338,8 @@ func New(t *testing.T, options ...Option) *Client {
 // NewResult creates an in-process app and returns composition errors to the caller.
 func NewResult(t *testing.T, options ...Option) (*Client, error) {
 	t.Helper()
+	restoreEncryptionKey := isolateDatabaseEncryptionKey(t)
+	defer restoreEncryptionKey()
 
 	ctx := context.Background()
 	schema := testSchemaName(t)
@@ -347,6 +357,11 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 	}
 	for _, option := range options {
 		option(&opts)
+	}
+	if opts.databaseEncryptionKey != nil {
+		if err := os.Setenv(appconfig.DatabaseEncryptionKeyEnvironment, *opts.databaseEncryptionKey); err != nil {
+			t.Fatalf("set test database encryption key: %v", err)
+		}
 	}
 	if opts.config.AccountingSchema == "" && !opts.accountingSchemaSpecified {
 		opts.config.AccountingSchema = schema
@@ -377,6 +392,23 @@ func NewResult(t *testing.T, options ...Option) (*Client, error) {
 	t.Cleanup(client.Close)
 
 	return client, nil
+}
+
+func isolateDatabaseEncryptionKey(t *testing.T) func() {
+	t.Helper()
+	key, present := os.LookupEnv(appconfig.DatabaseEncryptionKeyEnvironment)
+	if err := os.Unsetenv(appconfig.DatabaseEncryptionKeyEnvironment); err != nil {
+		t.Fatalf("isolate test database encryption key: %v", err)
+	}
+
+	return func() {
+		if !present {
+			return
+		}
+		if err := os.Setenv(appconfig.DatabaseEncryptionKeyEnvironment, key); err != nil {
+			t.Fatalf("restore test database encryption key: %v", err)
+		}
+	}
 }
 
 // REST returns the generated in-process REST client.

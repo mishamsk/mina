@@ -18,6 +18,7 @@
 - Ordinary `docker compose down` preserves named volumes; `down --volumes` and explicit volume deletion are destructive.
 - `/config/mina` is writable; first `serve` copies the image template only when `/config/mina/config.toml` is absent.
 - `/data/mina.duckdb` is the fixed Compose database path; `/cache/mina` remains the app's normal XDG cache layout.
+- Compose forwards `MINA_DATABASE_ENCRYPTION_KEY` from the operator environment or deployment `.env`; the secret is absent from the Compose file, config template, and image, and `.env` must remain private and outside version control.
 - Backups bind independently to `/backups` and never derive from database storage.
 - Utility commands such as `version` and `db validate` do not bootstrap or require writable config.
 - The entrypoint applies umask `077`; newly created config, database, backup, and cache files must have no group or other permissions.
@@ -41,6 +42,7 @@
 - The entrypoint ends with `exec mina` so Mina directly receives stop signals.
 - Builder Go and Node defaults match `mise.toml`; pnpm comes from `frontend/package.json#packageManager`.
 - The runtime uses Debian slim, retains package inventory, and removes apt indexes only.
+- The runtime image carries the signed DuckDB-version-matched `httpfs` artifact for its target architecture and loads it directly without runtime download.
 - Build from the repository root with `docker/Dockerfile` and its Dockerfile-specific ignore file.
 
 ## Compose Contract
@@ -77,6 +79,6 @@
 - `just docker-manifest-check IMAGE` verifies that a remote image index contains `linux/amd64` and `linux/arm64`.
 - `just test-docker` builds real images unless `MINA_IMAGE` is supplied.
 - The publication workflow runs `MINA_IMAGE=ghcr.io/mishamsk/mina:<full-commit-sha> just test-docker` against the published registry image before promotion.
-- The lifecycle test covers private bind permissions, named-volume ownership and `down` persistence, explicit import, config bootstrap and writes, hardening, reachability, recreation, restart, image replacement, backups, validation, and destructive test cleanup.
+- The lifecycle test covers private bind permissions, named-volume ownership and `down` persistence, encrypted creation, explicit encrypted import/restore, config bootstrap and writes, hardening, reachability, recreation, restart, image replacement, encrypted backups, correct/wrong/missing-key validation, and destructive test cleanup.
 - It also builds and runs the non-native supported architecture when local emulation is available and reports an explicit limitation otherwise.
 - Docker tests must leave no test containers, networks, tagged test images, or temporary state.

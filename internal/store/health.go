@@ -27,3 +27,17 @@ func (s *HealthStore) CurrentSchemaVersion(ctx context.Context) (int64, error) {
 
 	return version, nil
 }
+
+// DatabaseEncrypted reports whether the selected accounting database uses encryption at rest.
+func (s *HealthStore) DatabaseEncrypted(ctx context.Context) (bool, error) {
+	var encrypted bool
+	if err := s.db.query().QueryRowContext(
+		ctx,
+		"SELECT encrypted FROM duckdb_databases() WHERE database_name = ?",
+		s.db.accountingDatabaseName(),
+	).Scan(&encrypted); err != nil {
+		return false, fmt.Errorf("read database encryption status: %w", err)
+	}
+
+	return encrypted, nil
+}

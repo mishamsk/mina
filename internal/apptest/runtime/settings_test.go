@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/mishamsk/mina/internal/apptest"
@@ -68,6 +69,20 @@ func TestSettingsReportsFileBackedDefaultSchema(t *testing.T) {
 	schema := settingsField(t, storageGroup.Fields, "schema", 20)
 	if schema.Value != "main" || schema.Source != httpclient.Default {
 		t.Fatalf("schema = %+v, want resolved file-backed default", schema)
+	}
+}
+
+func TestSettingsExcludesDatabaseEncryptionKey(t *testing.T) {
+	const key = "settings-secret-fixture"
+	client := apptest.New(t, apptest.WithDatabaseEncryptionKey(key))
+	response, err := client.REST().GetSettingsWithResponse(context.Background())
+	requireSettingsResponse(t, err, response.StatusCode(), response.Body)
+
+	body := string(response.Body)
+	for _, secret := range []string{key, "MINA_DATABASE_ENCRYPTION_KEY", "database_encryption_key"} {
+		if strings.Contains(body, secret) {
+			t.Fatalf("settings response contains database encryption secret %q", secret)
+		}
 	}
 }
 

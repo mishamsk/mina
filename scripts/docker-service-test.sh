@@ -39,6 +39,7 @@ OWNED_IMAGES=""
 DEMO_SNAPSHOT=""
 PRE_UPDATE_BACKUP=""
 POST_UPDATE_BACKUP=""
+DATABASE_ENCRYPTION_KEY="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 
 log() {
     printf '\n== %s ==\n' "$*"
@@ -75,6 +76,12 @@ select_port() {
 }
 
 compose_base() {
+    compose_with_key "$DATABASE_ENCRYPTION_KEY" "$@"
+}
+
+compose_with_key() {
+    local encryption_key="$1"
+    shift
     MINA_IMAGE="$CURRENT_IMAGE" \
     MINA_UID="$HOST_UID" \
     MINA_GID="$HOST_GID" \
@@ -83,6 +90,21 @@ compose_base() {
     MINA_CONFIG_DIR="$CONFIG_DIR" \
     MINA_BACKUP_DIR="$BACKUP_DIR" \
     MINA_BACKUP_FILE_SCHEDULE_UTC="" \
+    MINA_DATABASE_ENCRYPTION_KEY="$encryption_key" \
+        docker compose -p "$PROJECT" -f "$COMPOSE_FILE" "$@"
+}
+
+compose_without_key() {
+    env \
+        -u MINA_DATABASE_ENCRYPTION_KEY \
+        MINA_IMAGE="$CURRENT_IMAGE" \
+        MINA_UID="$HOST_UID" \
+        MINA_GID="$HOST_GID" \
+        MINA_BIND_ADDRESS="127.0.0.1" \
+        MINA_HOST_PORT="$HOST_PORT" \
+        MINA_CONFIG_DIR="$CONFIG_DIR" \
+        MINA_BACKUP_DIR="$BACKUP_DIR" \
+        MINA_BACKUP_FILE_SCHEDULE_UTC="" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" "$@"
 }
 
@@ -95,6 +117,7 @@ compose_demo() {
     MINA_CONFIG_DIR="$CONFIG_DIR" \
     MINA_BACKUP_DIR="$BACKUP_DIR" \
     MINA_BACKUP_FILE_SCHEDULE_UTC="" \
+    MINA_DATABASE_ENCRYPTION_KEY="$DATABASE_ENCRYPTION_KEY" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" -f "$DEMO_OVERRIDE" "$@"
 }
 
@@ -107,15 +130,18 @@ compose_traefik_config() {
     MINA_CONFIG_DIR="$CONFIG_DIR" \
     MINA_BACKUP_DIR="$BACKUP_DIR" \
     MINA_BACKUP_FILE_SCHEDULE_UTC="" \
+    MINA_DATABASE_ENCRYPTION_KEY="$DATABASE_ENCRYPTION_KEY" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" -f "$TRAEFIK_OVERRIDE" config --format json
 }
 
 compose_default_config() {
-    MINA_IMAGE="" \
-    MINA_UID="" \
-    MINA_GID="" \
-    MINA_CONFIG_DIR="" \
-    MINA_BACKUP_DIR="" \
+    env \
+        -u MINA_DATABASE_ENCRYPTION_KEY \
+        MINA_IMAGE="" \
+        MINA_UID="" \
+        MINA_GID="" \
+        MINA_CONFIG_DIR="" \
+        MINA_BACKUP_DIR="" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" config --format json
 }
 
@@ -131,6 +157,7 @@ compose_explicit_config_without_home() {
         MINA_GID="$HOST_GID" \
         MINA_CONFIG_DIR="$CONFIG_DIR" \
         MINA_BACKUP_DIR="$BACKUP_DIR" \
+        MINA_DATABASE_ENCRYPTION_KEY="$DATABASE_ENCRYPTION_KEY" \
         docker compose -p "$PROJECT" -f "$COMPOSE_FILE" config --format json
 }
 
@@ -143,6 +170,7 @@ compose_import() {
     MINA_CONFIG_DIR="$IMPORT_CONFIG_DIR" \
     MINA_BACKUP_DIR="$IMPORT_BACKUP_DIR" \
     MINA_BACKUP_FILE_SCHEDULE_UTC="" \
+    MINA_DATABASE_ENCRYPTION_KEY="$DATABASE_ENCRYPTION_KEY" \
         docker compose -p "$IMPORT_PROJECT" -f "$COMPOSE_FILE" "$@"
 }
 
@@ -502,6 +530,35 @@ assert_standalone_version() {
     fi
 }
 
+assert_bundled_httpfs_extension() {
+    docker run --rm \
+        --read-only \
+        --cap-drop ALL \
+        --security-opt no-new-privileges \
+        --entrypoint sh \
+        "$INITIAL_IMAGE" \
+        -c 'test -r /usr/local/lib/mina/duckdb/httpfs.duckdb_extension && test ! -w /usr/local/lib/mina/duckdb/httpfs.duckdb_extension'
+}
+
+assert_offline_encrypted_database() {
+    local image="$1"
+    local platform="${2:-}"
+    local -a platform_args=()
+    if [[ -n "$platform" ]]; then
+        platform_args=(--platform "$platform")
+    fi
+
+    docker run --rm ${platform_args[@]+"${platform_args[@]}"} \
+        --network none \
+        --read-only \
+        --cap-drop ALL \
+        --security-opt no-new-privileges \
+        --tmpfs /data:size=64m,mode=0700,uid=10001,gid=10001 \
+        --tmpfs /tmp:size=64m,mode=1777 \
+        -e MINA_DATABASE_ENCRYPTION_KEY="$DATABASE_ENCRYPTION_KEY" \
+        "$image" migrate --db /data/offline-encrypted.duckdb --yes
+}
+
 assert_zero_identity_rejected() {
     local user="$1"
     local output rc
@@ -675,10 +732,12 @@ assert_rendered_compose_config() {
     local image="$2"
     local config_dir="$3"
     local backup_dir="$4"
+    local encryption_key="${5:-}"
     jq -e \
         --arg image "$image" \
         --arg config_dir "$config_dir" \
         --arg backup_dir "$backup_dir" \
+        --arg encryption_key "$encryption_key" \
         '
         .services.mina.image == $image
         and (.services.mina.volumes | any(.source == $config_dir and .target == "/config/mina" and .read_only != true and .bind.create_host_path != true))
@@ -691,6 +750,7 @@ assert_rendered_compose_config() {
         and .services.mina.depends_on["volume-init"].condition == "service_completed_successfully"
         and .services.mina.environment.XDG_CONFIG_HOME == "/config"
         and .services.mina.environment.MINA_DB == "/data/mina.duckdb"
+        and (if $encryption_key == "" then .services.mina.environment.MINA_DATABASE_ENCRYPTION_KEY == null else .services.mina.environment.MINA_DATABASE_ENCRYPTION_KEY == $encryption_key end)
         and (.services.mina.environment | has("MINA_SCHEMA") | not)
         ' <<<"$config" >/dev/null
 }
@@ -710,7 +770,8 @@ assert_default_compose_config() {
         "$config" \
         "$CURRENT_IMAGE" \
         "$CONFIG_DIR" \
-        "$BACKUP_DIR"
+        "$BACKUP_DIR" \
+        "$DATABASE_ENCRYPTION_KEY"
 }
 
 assert_import_rejected() {
@@ -848,6 +909,31 @@ validate_database_file() {
     compose_base run --rm --no-deps mina db validate --db "$db_path"
 }
 
+assert_encrypted_database_file() {
+    local db_path="$1"
+    local output rc
+
+    set +e
+    output="$(compose_without_key run --rm --no-deps mina db validate --db "$db_path" 2>&1)"
+    rc=$?
+    set -e
+    if (( rc == 0 )) || [[ "$output" != *"Cannot open encrypted database"* ]]; then
+        printf 'encrypted database unexpectedly validated without a key: rc=%s output=%s\n' "$rc" "$output" >&2
+        exit 1
+    fi
+
+    set +e
+    output="$(compose_with_key wrong-key run --rm --no-deps mina db validate --db "$db_path" 2>&1)"
+    rc=$?
+    set -e
+    if (( rc == 0 )) || [[ "$output" != *"Wrong encryption key used to open the database file"* ]]; then
+        printf 'encrypted database wrong-key failure was not safe and clear: rc=%s output=%s\n' "$rc" "$output" >&2
+        exit 1
+    fi
+
+    validate_database_file "$db_path"
+}
+
 smoke_non_native_platform() {
     local native target smoke_image output
     native="$(docker image inspect "$INITIAL_IMAGE" --format '{{.Architecture}}')"
@@ -880,6 +966,7 @@ smoke_non_native_platform() {
         --cap-drop ALL \
         --security-opt no-new-privileges \
         "$smoke_image" version
+    assert_offline_encrypted_database "$smoke_image" "linux/$target"
 }
 
 assert_no_owned_docker_objects() {
@@ -918,6 +1005,8 @@ CURRENT_IMAGE="$INITIAL_IMAGE"
 assert_default_compose_config
 assert_config_permission_failure
 assert_standalone_version
+assert_bundled_httpfs_extension
+assert_offline_encrypted_database "$INITIAL_IMAGE"
 assert_zero_identities_rejected
 assert_volume_init_identity_rejected 0 12345 "MINA_UID must not be 0"
 assert_volume_init_identity_rejected 12345 0 "MINA_GID must not be 0"
@@ -1032,11 +1121,11 @@ if [[ "$restart_count" != "0" || "$exit_code" != "0" ]]; then
     printf 'unexpected stopped container state: restart_count=%s exit_code=%s\n' "$restart_count" "$exit_code" >&2
     exit 1
 fi
-validate_database_file /data/mina.duckdb
+assert_encrypted_database_file /data/mina.duckdb
 
 log "backup validation"
-validate_database_file "/backups/$(basename "$PRE_UPDATE_BACKUP")"
-validate_database_file "/backups/$(basename "$POST_UPDATE_BACKUP")"
+assert_encrypted_database_file "/backups/$(basename "$PRE_UPDATE_BACKUP")"
+assert_encrypted_database_file "/backups/$(basename "$POST_UPDATE_BACKUP")"
 
 log "explicit database and cache import"
 test_container_import

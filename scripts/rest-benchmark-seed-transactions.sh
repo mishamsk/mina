@@ -59,12 +59,24 @@ positive_int transactions "$transactions"
 positive_int years "$years"
 [[ "$schema" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || { echo "schema must be a simple DuckDB identifier" >&2; exit 2; }
 
-duckdb "$db_path" <<SQL
+db_sql_path="${db_path//\'/\'\'}"
+encryption_setup=""
+encryption_options=""
+if [[ -n "${MINA_DATABASE_ENCRYPTION_KEY:-}" ]]; then
+    encryption_setup=$'INSTALL httpfs;\nLOAD httpfs;'
+    encryption_options=" (ENCRYPTION_KEY getenv('MINA_DATABASE_ENCRYPTION_KEY'), ENCRYPTION_CIPHER 'GCM')"
+fi
+
+duckdb :memory: <<SQL
 .bail on
 PRAGMA disable_progress_bar;
-USE "$schema";
+$encryption_setup
+ATTACH '$db_sql_path' AS benchmark$encryption_options;
+USE benchmark."$schema";
 
 BEGIN TRANSACTION;
+
+SELECT setseed(0.42);
 
 CREATE TEMP TABLE seed_category AS
 SELECT row_number() OVER (ORDER BY category_id) AS rn, category_id
@@ -198,4 +210,7 @@ SELECT
 FROM "transaction"
 WHERE tombstoned_at IS NULL
   AND transaction_id IN (SELECT transaction_id FROM seed_transaction_rows);
+
+USE memory.main;
+DETACH benchmark;
 SQL

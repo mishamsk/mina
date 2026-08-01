@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -18,24 +19,45 @@ func OpenInMemory(ctx context.Context) (*sql.DB, error) {
 }
 
 func attachDatabase(ctx context.Context, appDB *AppDB, path string) error {
-	return attachDatabaseWithOptions(ctx, appDB, path, "")
+	return attachDatabaseWithOptions(ctx, appDB, path, false)
 }
 
 func attachDatabaseReadOnly(ctx context.Context, appDB *AppDB, path string) error {
-	return attachDatabaseWithOptions(ctx, appDB, path, " (READ_ONLY)")
+	return attachDatabaseWithOptions(ctx, appDB, path, true)
 }
 
-func attachDatabaseWithOptions(ctx context.Context, appDB *AppDB, path string, options string) error {
+func attachDatabaseWithOptions(ctx context.Context, appDB *AppDB, path string, readOnly bool) error {
 	if path == "" {
 		return errors.New("database path is required")
 	}
+	options := attachOptions(readOnly, appDB.encryptionKey)
 	// DuckDB does not accept bind parameters in ATTACH, so the file path is
-	// rendered as a SQL string literal with standard single-quote escaping.
+	// rendered as a SQL string literal with standard single-quote escaping. The
+	// encryption key is encoded byte-by-byte into a BLOB-safe string literal so
+	// DuckDB does not interpret key bytes as BLOB escape sequences.
 	if _, err := appDB.db.ExecContext(ctx, "ATTACH "+quoteStringLiteral(path)+" AS "+appDB.accountingDatabaseIdentifier()+options); err != nil {
 		return fmt.Errorf("attach accounting database %s: %w", path, err)
 	}
 
 	return nil
+}
+
+func attachOptions(readOnly bool, encryptionKey string) string {
+	var options []string
+	if readOnly {
+		options = append(options, "READ_ONLY")
+	}
+	if encryptionKey != "" {
+		options = append(options,
+			"ENCRYPTION_KEY "+quoteBlobStringLiteral(encryptionKey),
+			"ENCRYPTION_CIPHER 'GCM'",
+		)
+	}
+	if len(options) == 0 {
+		return ""
+	}
+
+	return " (" + strings.Join(options, ", ") + ")"
 }
 
 func closeAttachedDatabase(ctx context.Context, appDB *AppDB, checkpoint bool) error {
@@ -84,4 +106,18 @@ func open(ctx context.Context, path string, maxOpenConns int) (*sql.DB, error) {
 
 func quoteStringLiteral(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func quoteBlobStringLiteral(value string) string {
+	encoded := hex.EncodeToString([]byte(value))
+	var literal strings.Builder
+	literal.Grow(2 + len(encoded)*2)
+	literal.WriteByte('\'')
+	for i := 0; i < len(encoded); i += 2 {
+		literal.WriteString(`\x`)
+		literal.WriteString(encoded[i : i+2])
+	}
+	literal.WriteByte('\'')
+
+	return literal.String()
 }

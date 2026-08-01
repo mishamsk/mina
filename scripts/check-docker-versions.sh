@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCKERFILE="$ROOT_DIR/docker/Dockerfile"
 MISE_FILE="$ROOT_DIR/mise.toml"
 PACKAGE_FILE="$ROOT_DIR/frontend/package.json"
+GO_MOD_FILE="$ROOT_DIR/go.mod"
 
 docker_arg() {
     sed -n "s/^ARG $1=//p" "$DOCKERFILE"
@@ -67,6 +68,8 @@ fi
 package_pnpm="${package_manager#pnpm@}"
 docker_go="$(docker_arg GO_VERSION)"
 docker_node="$(docker_arg NODE_VERSION)"
+docker_duckdb="$(docker_arg DUCKDB_VERSION)"
+duckdb_go="$(awk '$1 == "github.com/duckdb/duckdb-go/v2" { print $2 }' "$GO_MOD_FILE")"
 mise_go="$(mise_tool go)"
 mise_node="$(mise_tool node)"
 mise_pnpm="$(mise_tool pnpm)"
@@ -85,8 +88,17 @@ check_equal "Docker Node version" "$docker_node" "$mise_node"
 check_equal "frontend packageManager" "$package_manager" "pnpm@$mise_pnpm"
 check_equal "frontend pnpm version" "$package_pnpm" "$mise_pnpm"
 
+IFS=. read -r duckdb_major duckdb_minor duckdb_patch <<< "$docker_duckdb"
+if [[ ! "$duckdb_major" =~ ^[0-9]+$ || ! "$duckdb_minor" =~ ^[0-9]+$ || ! "$duckdb_patch" =~ ^[0-9]+$ ]]; then
+    printf 'Docker DuckDB version has unsupported shape: %q\n' "$docker_duckdb" >&2
+    fail=true
+else
+    expected_duckdb_go="$(printf 'v2.%d%02d%02d.0' "$duckdb_major" "$duckdb_minor" "$duckdb_patch")"
+    check_equal "Docker DuckDB extension version" "$duckdb_go" "$expected_duckdb_go"
+fi
+
 if [[ "$fail" == true ]]; then
     exit 1
 fi
 
-printf 'Docker tool versions match mise.toml and frontend/package.json\n'
+printf 'Docker tool and DuckDB extension versions match project dependencies\n'

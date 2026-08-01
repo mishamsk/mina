@@ -3,6 +3,7 @@
 /bin/
 /dist/
 /build/
+.env
 
 # Go test, coverage, and profiling artifacts
 *.test

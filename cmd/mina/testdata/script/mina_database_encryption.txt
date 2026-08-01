@@ -1,0 +1,58 @@
+# An env-only fixture key creates and migrates a new AES-256-GCM database.
+env MINA_DATABASE_ENCRYPTION_KEY=mina-integration-fixture-key
+env MINA_FX_AUTO_LOAD_ENABLED=false
+mkdir $WORK/home
+env HOME=$WORK/home
+exec mina migrate --db $WORK/encrypted-migrate.duckdb --yes
+exec mina db validate --db $WORK/encrypted-migrate.duckdb
+stdout 'ok: database is valid'
+duckdbencryption $WORK/encrypted-migrate.duckdb
+stdout 'encrypted=true cipher=GCM'
+
+# Local clients create, reopen, mutate, and close encrypted state cleanly.
+env MINA_BACKUP_FILE_DIRECTORY=$WORK/backups
+exec mina client --db $WORK/encrypted.duckdb --yes tags create --json '{"fqn":"EncryptedCLI"}'
+stdout '"fqn":"EncryptedCLI"'
+exec mina client --db $WORK/encrypted.duckdb --yes tags list
+stdout '"fqn":"EncryptedCLI"'
+duckdbencryption $WORK/encrypted.duckdb
+stdout 'encrypted=true cipher=GCM'
+! exists $WORK/encrypted.duckdb.wal
+
+# Long-running serve reopens the same encrypted file and shuts down cleanly.
+freeport
+exec mina serve --db $WORK/encrypted.duckdb --yes --host 127.0.0.1 --port $PORT --quiet &server&
+httpwait -timeout 10s '"status":"ok"' http://127.0.0.1:$PORT/api/health
+kill -INT server
+wait server
+! exists $WORK/encrypted.duckdb.wal
+
+# A missing key fails with DuckDB's native error.
+! exec env -u MINA_DATABASE_ENCRYPTION_KEY mina db validate --db $WORK/encrypted.duckdb
+stderr 'Cannot open encrypted database'
+
+# Encrypted primaries produce encrypted backups that validate and restore only with the key.
+exec mina client --db $WORK/encrypted.duckdb --yes operations start-database-backup
+stdout '"operation_id":"database-backup"'
+stdout '"outcome":"succeeded"'
+glob backups/mina-backup-*.duckdb
+! glob backups/.*.tmp-*
+glob backups/mina-backup-*.duckdb BACKUP
+cp $BACKUP $WORK/restored.duckdb
+duckdbencryption $WORK/restored.duckdb
+stdout 'encrypted=true cipher=GCM'
+! exec env -u MINA_DATABASE_ENCRYPTION_KEY mina db validate --db $WORK/restored.duckdb
+stderr 'Cannot open encrypted database'
+exec mina db validate --db $WORK/restored.duckdb
+stdout 'ok: database is valid'
+exec mina client --db $WORK/restored.duckdb --yes tags list
+stdout '"fqn":"EncryptedCLI"'
+! exists $WORK/restored.duckdb.wal
+
+# Backslashes are treated as key bytes rather than DuckDB BLOB escapes.
+env 'MINA_DATABASE_ENCRYPTION_KEY=visible-secret\value'
+exec mina migrate --db $WORK/backslash-key.duckdb --yes
+! stderr 'visible-secret'
+exec mina db validate --db $WORK/backslash-key.duckdb
+stdout 'ok: database is valid'
+! stderr 'visible-secret'

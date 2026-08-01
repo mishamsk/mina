@@ -11,6 +11,7 @@ repeats="${REPEATS:-25}"
 warmup_repeats="${WARMUP_REPEATS:-1}"
 jobs="${JOBS:-4}"
 requested_port="${PORT:-}"
+run_dir="${BENCHMARK_RUN_DIR:-build/load-tests/rest-benchmark}"
 
 usage() {
     cat >&2 <<'EOF'
@@ -162,7 +163,8 @@ start_server() {
     local port="$2"
     local base_url="http://127.0.0.1:$port"
 
-    ./bin/mina serve --db "$db_path" --yes --host 127.0.0.1 --port "$port" --quiet > "$run_dir/server.stdout.log" 2> "$run_dir/server.stderr.log" &
+    MINA_BACKUP_FILE_DIRECTORY="$backup_dir" \
+        ./bin/mina serve --db "$db_path" --yes --host 127.0.0.1 --port "$port" --quiet > "$run_dir/server.stdout.log" 2> "$run_dir/server.stderr.log" &
     server_pid="$!"
     wait_for_health "$base_url" || {
         echo "server stdout: $run_dir/server.stdout.log" >&2
@@ -265,8 +267,16 @@ add_hurl_summary_rows() {
 
 load_fixture_refs() {
     local refs
-    refs="$(duckdb "$db_path" -csv <<'SQL' | tail -n 1
-USE main;
+    local db_sql_path="${db_path//\'/\'\'}"
+    local encryption_options=""
+    if [[ -n "${MINA_DATABASE_ENCRYPTION_KEY:-}" ]]; then
+        encryption_options=" (READ_ONLY, ENCRYPTION_KEY getenv('MINA_DATABASE_ENCRYPTION_KEY'))"
+    else
+        encryption_options=" (READ_ONLY)"
+    fi
+    refs="$(duckdb :memory: -csv <<SQL | tail -n 1
+ATTACH '$db_sql_path' AS benchmark$encryption_options;
+USE benchmark.main;
 SELECT
   (SELECT category_id FROM category WHERE fqn LIKE 'Benchmark:Expense:%' AND tombstoned_at IS NULL ORDER BY category_id LIMIT 1) AS category_id,
   (SELECT member_id FROM member WHERE name LIKE 'Benchmark Member %' AND tombstoned_at IS NULL ORDER BY member_id LIMIT 1) AS member_id,
@@ -281,16 +291,42 @@ SQL
     done
 }
 
+run_backup_timing() {
+    local response run_id outcome backup_start backup_elapsed_ms
+    backup_start="$(now_ms)"
+    response="$(curl -fsS -X POST "$base_url/api/background-operations/database-backup/runs")"
+    run_id="$(jq -er '.operation_run_id' <<< "$response")"
+    outcome="running"
+    for _ in $(seq 1 300); do
+        response="$(curl -fsS "$base_url/api/background-operations/database-backup/runs/$run_id")"
+        outcome="$(jq -er '.outcome' <<< "$response")"
+        case "$outcome" in
+            succeeded|failed|skipped|canceled) break ;;
+        esac
+        sleep 0.1
+    done
+    backup_elapsed_ms="$(elapsed_ms "$backup_start")"
+    printf '%s\n' "$backup_elapsed_ms" > "$backup_latency"
+    if [[ "$outcome" == succeeded ]]; then
+        add_summary_row "database-backup" 1 1 0 "$backup_elapsed_ms" "$backup_latency"
+        return 0
+    fi
+    add_summary_row "database-backup" 1 0 1 "$backup_elapsed_ms" "$backup_latency"
+    printf 'database backup benchmark failed: %s\n' "$response" > "$run_dir/database-backup.output.log"
+    return 1
+}
+
 run_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-run_dir="build/load-tests/rest-benchmark"
 db_path="$run_dir/mina.db"
+backup_dir="$run_dir/backups"
 hurl_output="$run_dir/hurl.output.log"
 hurl_json="$run_dir/hurl-results.jsonl"
 hurl_latency="$run_dir/hurl-latency.tsv"
 warmup_output="$run_dir/hurl-warmup.output.log"
 validate_latency="$run_dir/validate-latency-ms.txt"
+backup_latency="$run_dir/backup-latency-ms.txt"
 summary_tsv="$run_dir/summary.tsv"
-mkdir -p "$run_dir"
+mkdir -p "$run_dir" "$backup_dir"
 rm -f "$hurl_output" "$hurl_json" "$hurl_latency" "$warmup_output" "$validate_latency" "$summary_tsv" "$run_dir/db-validate.output.log" "$run_dir/server.stdout.log" "$run_dir/server.stderr.log"
 rm -f build/load-tests/latest
 printf 'scenario\trequests\tok\terrors\ttotal_s\treq_per_s\tmin_ms\tavg_ms\tp50_ms\tp90_ms\tp95_ms\tp99_ms\tmax_ms\n' > "$summary_tsv"
@@ -405,7 +441,6 @@ mise exec -- hurl --test --json --jobs "$jobs" \
 hurl_status="$?"
 set -e
 hurl_elapsed_ms="$(elapsed_ms "$hurl_start")"
-stop_server
 
 jq -r '.filename as $filename | .entries[]?.calls[]?.timings?.total? | [$filename, .] | @tsv' "$hurl_json" 2>/dev/null |
     awk -F '\t' '{
@@ -415,6 +450,14 @@ jq -r '.filename as $filename | .entries[]?.calls[]?.timings?.total? | [$filenam
         printf "%s\t%.6f\n", scenario, $2 / 1000
     }' > "$hurl_latency" || true
 add_hurl_summary_rows "$hurl_latency" "$hurl_elapsed_ms" "$hurl_status"
+
+echo "running database backup timing"
+set +e
+run_backup_timing
+backup_status="$?"
+set -e
+
+stop_server
 
 echo "running full database validation timing"
 validate_start="$(now_ms)"
@@ -440,4 +483,8 @@ fi
 if [ "$validate_status" -ne 0 ]; then
     echo "db validation failed; see $run_dir/db-validate.output.log" >&2
     exit "$validate_status"
+fi
+if [ "$backup_status" -ne 0 ]; then
+    echo "database backup failed; see $run_dir/database-backup.output.log" >&2
+    exit "$backup_status"
 fi

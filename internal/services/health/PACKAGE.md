@@ -6,11 +6,11 @@
 
 ## Implicit Contracts
 
-- Health reports the migrated accounting schema version selected at runtime.
+- Health reports the migrated schema version and encryption-at-rest state of the accounting database selected at runtime.
 
 ## Boundaries
 
-- Owns: health use-case shape, schema-version repository contract, and current server time reporting.
+- Owns: health use-case shape, database-status repository contract, and current server time reporting.
 - Does not own: HTTP DTOs, SQL queries, database row types, or process configuration.
 
 ## Testing Notes

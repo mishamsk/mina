@@ -15,9 +15,10 @@
 - Startup demo seeding runs after app composition and before HTTP listen, using an explicit civil-date anchor when supplied and delegating history-window validation to the demo service.
 - File-backed startup demo seeding refuses when the selected accounting schema already exists.
 - Runtime decides DuckDB open policy and database lifecycle, then delegates DuckDB mechanics to store `AppDB` open helpers.
+- Runtime reads the optional database encryption key only through appconfig's dedicated environment accessor and carries it directly to every writable and read-only file attach.
 - Runtime keeps DuckDB connection parallelism fixed and CPU-bounded; it is not app config.
 - Long-running startup runs configured database validation after migration for file-backed accounting state only; error findings abort startup.
-- `ValidateDatabase` opens the selected file-backed accounting state read-only and never writes to the target.
+- `ValidateDatabase` opens the selected file-backed accounting state read-only with the active key when present and never writes to the target.
 - Runtime derives accounting database and schema defaults from `appconfig.Config`.
 - Runtime consumes source-loaded app settings from `internal/appconfig`.
 - Runtime resolves mode-ready config values once, adapts appconfig's immutable settings snapshot, and composes the settings service; see `docs/settings-architecture.md`.

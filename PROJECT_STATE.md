@@ -25,13 +25,14 @@
   - Read-only runtime Settings reporting resolved startup values, effective sources, and the resolved config-file location.
   - OpenAPI discovery through `GET /api/openapi.json`.
 - Implemented runtime/demo behavior:
-  - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, and localhost-only publishing by default.
+  - Supported Docker image and Compose deployment run Mina as a configured host UID/GID with a read-only root, independent config/backup binds, named database/cache volumes, localhost-only publishing by default, env-only database-key forwarding, and baked signed `httpfs` artifacts for both supported architectures.
   - Docker publication workflows build multi-architecture GHCR SHA images and guard `main` promotion behind registry-image Compose lifecycle verification.
-  - `just test-docker` runs a real Docker lifecycle check covering Compose health, demo-data retention across recreation/restart/image replacement, backups, database validation, and cleanup.
+  - `just test-docker` runs a real encrypted Docker lifecycle check covering Compose health, demo-data retention across recreation/restart/image replacement, encrypted backups/restores, database validation, and cleanup.
   - Runtime opens one app for the process lifetime and composes REST, embedded Streamable HTTP MCP at `/mcp`, and embedded web UI handlers.
   - Runtime runs non-blocking startup and recurring operations in `serve`, with public operation status and manual trigger APIs.
   - Exchange-rate startup loading uses a Frankfurter USD NDJSON cache file by default; scheduled and manual REST-triggered loading use targeted Frankfurter API requests.
-  - Database backups copy the selected file-backed DuckDB accounting database to configured local backup files; empty backup config creates no automatic runs.
+  - File-backed accounting databases remain plaintext when `MINA_DATABASE_ENCRYPTION_KEY` is absent and use DuckDB AES-256-GCM when it is present; the key is environment-only and excluded from ordinary config and settings snapshots, while Status reports whether encryption is active.
+  - Database backups copy the selected file-backed DuckDB accounting database to configured local backup files, preserving primary-database encryption; empty backup config creates no automatic runs.
   - `mina serve --demo` seeds realistic demo transactions, recurring definitions, and expected occurrences for new in-memory state or new file-backed schemas, anchored to the current date by default or an exact caller-supplied date; the default history limit is six months, callers may request any positive month limit, and requests above six use the full six-month fixture.
   - File-backed startup demo seeding refuses when the selected accounting schema already exists.
   - File-backed startup runs configurable database validation (`none`, `shallow`, or `full`; default `shallow`) after migrations.

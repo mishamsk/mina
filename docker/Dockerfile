@@ -22,9 +22,13 @@ RUN go mod download
 COPY . .
 COPY --from=frontend-builder /src/internal/webui/dist ./internal/webui/dist
 RUN CGO_ENABLED=1 GOOS="${TARGETOS}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" \
-    go build -trimpath -ldflags="-s -w" -o /out/mina ./cmd/mina
+    go build -trimpath \
+      -ldflags="-s -w -X github.com/mishamsk/mina/internal/runtime.bundledHTTPFSExtensionPath=/usr/local/lib/mina/duckdb/httpfs.duckdb_extension" \
+      -o /out/mina ./cmd/mina
 
 FROM debian:${DEBIAN_VERSION}-slim AS runtime
+ARG TARGETARCH
+ARG DUCKDB_VERSION=1.5.5
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl tzdata libstdc++6 \
     && groupadd --system --gid 10001 mina \
@@ -32,6 +36,14 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     && mkdir -p /config/mina /data /cache/mina /backups \
     && chown -R mina:mina /config /data /cache /backups \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+RUN case "${TARGETARCH}" in amd64|arm64) ;; *) echo "unsupported DuckDB extension architecture: ${TARGETARCH}" >&2; exit 1 ;; esac \
+    && mkdir -p /usr/local/lib/mina/duckdb \
+    && curl --fail --silent --show-error --location \
+      "https://extensions.duckdb.org/v${DUCKDB_VERSION}/linux_${TARGETARCH}/httpfs.duckdb_extension.gz" \
+      --output /tmp/httpfs.duckdb_extension.gz \
+    && gzip -dc /tmp/httpfs.duckdb_extension.gz > /usr/local/lib/mina/duckdb/httpfs.duckdb_extension \
+    && rm /tmp/httpfs.duckdb_extension.gz \
+    && chmod 0444 /usr/local/lib/mina/duckdb/httpfs.duckdb_extension
 
 COPY --from=go-builder /out/mina /usr/local/bin/mina
 COPY docker/config-template.toml /usr/local/share/mina/config.toml

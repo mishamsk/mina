@@ -42,21 +42,55 @@ func TestIntegrationScripts(t *testing.T) {
 		Dir:                 "testdata/script",
 		RequireExplicitExec: true,
 		Cmds: map[string]func(ts *testscript.TestScript, neg bool, args []string){
-			"duckdbclone":    testscriptDuckDBClone,
-			"duckdbsnapshot": testscriptDuckDBSnapshot,
-			"duckdbexec":     testscriptDuckDBExec,
-			"duckdbtables":   testscriptDuckDBTables,
-			"duckdbtouch":    testscriptDuckDBTouch,
-			"freeport":       testscriptFreePort,
-			"frankfurter":    testscriptFrankfurter,
-			"httpget":        testscriptHTTPGet,
-			"httpwait":       testscriptHTTPWait,
-			"localdate":      testscriptLocalDate,
-			"mcpcall":        testscriptMCPCall,
-			"mcplist":        testscriptMCPList,
-			"glob":           testscriptGlob,
+			"duckdbclone":      testscriptDuckDBClone,
+			"duckdbencryption": testscriptDuckDBEncryption,
+			"duckdbsnapshot":   testscriptDuckDBSnapshot,
+			"duckdbexec":       testscriptDuckDBExec,
+			"duckdbtables":     testscriptDuckDBTables,
+			"duckdbtouch":      testscriptDuckDBTouch,
+			"freeport":         testscriptFreePort,
+			"frankfurter":      testscriptFrankfurter,
+			"httpget":          testscriptHTTPGet,
+			"httpwait":         testscriptHTTPWait,
+			"localdate":        testscriptLocalDate,
+			"mcpcall":          testscriptMCPCall,
+			"mcplist":          testscriptMCPList,
+			"glob":             testscriptGlob,
 		},
 	})
+}
+
+func testscriptDuckDBEncryption(ts *testscript.TestScript, neg bool, args []string) {
+	if neg {
+		ts.Fatalf("duckdbencryption does not support negation")
+	}
+	if len(args) != 1 {
+		ts.Fatalf("usage: duckdbencryption path")
+	}
+	key := ts.Getenv("MINA_DATABASE_ENCRYPTION_KEY")
+	if key == "" {
+		ts.Fatalf("MINA_DATABASE_ENCRYPTION_KEY is required")
+	}
+
+	db, err := sql.Open("duckdb", "")
+	ts.Check(err)
+	defer func() {
+		ts.Check(db.Close())
+	}()
+	ctx := context.Background()
+	_, err = db.ExecContext(ctx, "ATTACH "+duckDBStringLiteral(args[0])+" AS encrypted (READ_ONLY, ENCRYPTION_KEY "+duckDBStringLiteral(key)+")")
+	ts.Check(err)
+	defer func() {
+		_, err := db.ExecContext(context.Background(), "DETACH encrypted")
+		ts.Check(err)
+	}()
+
+	var encrypted bool
+	var cipher string
+	err = db.QueryRowContext(ctx, "SELECT encrypted, cipher FROM duckdb_databases() WHERE database_name = 'encrypted'").Scan(&encrypted, &cipher)
+	ts.Check(err)
+	_, err = fmt.Fprintf(ts.Stdout(), "encrypted=%t cipher=%s\n", encrypted, cipher)
+	ts.Check(err)
 }
 
 func testscriptMCPList(ts *testscript.TestScript, neg bool, args []string) {
@@ -407,8 +441,8 @@ func testscriptLocalDate(ts *testscript.TestScript, neg bool, args []string) {
 }
 
 func testscriptGlob(ts *testscript.TestScript, neg bool, args []string) {
-	if len(args) != 1 {
-		ts.Fatalf("usage: glob pattern")
+	if len(args) < 1 || len(args) > 2 {
+		ts.Fatalf("usage: glob pattern [env_var]")
 	}
 
 	matches, err := filepath.Glob(ts.MkAbs(args[0]))
@@ -421,6 +455,12 @@ func testscriptGlob(ts *testscript.TestScript, neg bool, args []string) {
 	}
 	if len(matches) == 0 {
 		ts.Fatalf("glob %q did not match any files", args[0])
+	}
+	if len(args) == 2 {
+		if len(matches) != 1 {
+			ts.Fatalf("glob %q matched %d files, want 1: %v", args[0], len(matches), matches)
+		}
+		ts.Setenv(args[1], matches[0])
 	}
 }
 

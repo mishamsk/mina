@@ -10,6 +10,13 @@ import (
 )
 
 func TestRuntimeValidationExpectedBehavior(t *testing.T) {
+	t.Run("empty database encryption key fails runtime composition", func(t *testing.T) {
+		_, err := apptest.NewResult(t, apptest.WithDatabaseEncryptionKey(""))
+		if err == nil || !strings.Contains(err.Error(), "MINA_DATABASE_ENCRYPTION_KEY must not be empty") {
+			t.Fatalf("runtime composition error = %v, want empty database encryption key failure", err)
+		}
+	})
+
 	t.Run("invalid enabled exchange-rate schedule fails runtime composition", func(t *testing.T) {
 		_, err := apptest.NewResult(
 			t,

@@ -1,4 +1,5 @@
 import { RefreshCw } from "lucide-react";
+import { Lock } from "pixelarticons/react";
 import { useEffect, useState } from "react";
 
 import { getHealth, type HealthResponse, isNetworkFailure } from "../api";
@@ -153,7 +154,11 @@ export const StatusPage = () => {
       />
 
       {health.loading ? (
-        <div className="grid gap-3 md:grid-cols-3" aria-label="Loading status">
+        <div
+          className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+          aria-label="Loading status"
+        >
+          <Skeleton className="h-28" />
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
           <Skeleton className="h-28" />
@@ -177,7 +182,7 @@ export const StatusPage = () => {
       ) : null}
 
       {health.data ? (
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Card size="sm">
             <CardHeader>
               <p className="text-muted-foreground text-sm">API status</p>
@@ -205,6 +210,21 @@ export const StatusPage = () => {
             <CardContent>
               <p className="text-lg font-semibold break-words">
                 {formatServerTime(health.serverTime)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card size="sm">
+            <CardHeader>
+              <p className="text-muted-foreground text-sm">
+                Database encryption
+              </p>
+            </CardHeader>
+            <CardContent>
+              <p className="flex items-center gap-2 text-lg font-semibold">
+                {health.data.database_encrypted ? (
+                  <Lock aria-hidden="true" className="size-4 shrink-0" />
+                ) : null}
+                {health.data.database_encrypted ? "Encrypted" : "Not encrypted"}
               </p>
             </CardContent>
           </Card>

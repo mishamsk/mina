@@ -75,7 +75,6 @@ test("settings navigation renders the immutable backend snapshot", async ({
   await page.route("**/api/settings", async (route) => {
     await fulfillJson(route, settingsFixture);
   });
-
   await page.goto("/overview");
   const settingsLink = page
     .getByLabel("Primary")

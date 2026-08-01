@@ -13,8 +13,8 @@
 - `AppDB` owns the DuckDB process handle, selected accounting location, active transaction, and close policy.
 - Shared process-local runtime state lives in ephemeral `memory._mina_internal` tables, outside the portable accounting schema.
 - Operation runs use numeric IDs from a `_mina_internal` sequence and a store-owned DuckDB status enum.
-- AppDB open helpers perform DuckDB-specific process DB open/reuse and one-time file attach lifecycle.
-- Backup sources perform DuckDB attach/copy/detach mechanics and reject in-memory accounting sources.
+- AppDB open helpers perform DuckDB-specific process DB open/reuse and one-time plaintext or AES-256-GCM file attach lifecycle; encrypted writes load OpenSSL through signed `httpfs`, while read-only encrypted opens require no extension.
+- Backup sources perform DuckDB attach/copy/detach mechanics, encrypt targets with the active primary key, and reject in-memory accounting sources.
 - Closing a writable `AppDB` explicitly checkpoints and detaches file-backed accounting state; read-only handles detach without checkpointing, and borrowed process handles remain open.
 - Accounting locations cache rendered database and schema identifiers resolved with DuckDB keyword metadata at open time.
 - Schema-existence checks report the selected accounting schema before migration creates missing schemas.

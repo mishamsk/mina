@@ -9,33 +9,37 @@ import (
 
 // AppDBOpenRequest describes how to open the app database handle.
 type AppDBOpenRequest struct {
-	Path               string
-	AccountingLocation AccountingLocationConfig
-	MaxOpenConns       int
+	Path                string
+	AccountingLocation  AccountingLocationConfig
+	MaxOpenConns        int
+	EncryptionKey       string
+	HTTPFSExtensionPath string
 }
 
 // AppDB represents the DuckDB handle and selected accounting location.
 type AppDB struct {
-	db       *sql.DB
-	tx       *sql.Tx
-	location AccountingLocation
-	close    func() error
+	db            *sql.DB
+	tx            *sql.Tx
+	location      AccountingLocation
+	encryptionKey string
+	close         func() error
 }
 
 // OpenAppDB opens the process DuckDB handle and prepares the accounting location.
 func OpenAppDB(ctx context.Context, request AppDBOpenRequest) (*AppDB, error) {
-	return openAppDBWithAttach(ctx, request, attachDatabase, true)
+	return openAppDBWithAttach(ctx, request, attachDatabase, true, true)
 }
 
 // OpenAppDBReadOnly opens the process DuckDB handle and attaches file-backed accounting state read-only.
 func OpenAppDBReadOnly(ctx context.Context, request AppDBOpenRequest) (*AppDB, error) {
-	return openAppDBWithAttach(ctx, request, attachDatabaseReadOnly, false)
+	return openAppDBWithAttach(ctx, request, attachDatabaseReadOnly, false, false)
 }
 
 func openAppDBWithAttach(
 	ctx context.Context,
 	request AppDBOpenRequest,
 	attach func(context.Context, *AppDB, string) error,
+	prepareEncryptedWrites bool,
 	checkpointOnClose bool,
 ) (*AppDB, error) {
 	db, err := open(ctx, ":memory:", request.MaxOpenConns)
@@ -43,7 +47,7 @@ func openAppDBWithAttach(
 		return nil, err
 	}
 
-	appDB, err := openAppDB(ctx, db, request, attach, func(appDB *AppDB) error {
+	appDB, err := openAppDB(ctx, db, request, attach, prepareEncryptedWrites, func(appDB *AppDB) error {
 		var detachErr error
 		if request.Path != "" {
 			detachErr = closeAttachedDatabase(context.Background(), appDB, checkpointOnClose)
@@ -65,7 +69,7 @@ func openAppDBWithAttach(
 // OpenAppDBWithProcessDB opens accounting state on an existing DuckDB process handle.
 // Closing the returned AppDB does not close the process handle.
 func OpenAppDBWithProcessDB(ctx context.Context, db *sql.DB, request AppDBOpenRequest) (*AppDB, error) {
-	return openAppDB(ctx, db, request, attachDatabase, func(appDB *AppDB) error {
+	return openAppDB(ctx, db, request, attachDatabase, true, func(appDB *AppDB) error {
 		if request.Path == "" {
 			return nil
 		}
@@ -79,15 +83,22 @@ func openAppDB(
 	db *sql.DB,
 	request AppDBOpenRequest,
 	attach func(context.Context, *AppDB, string) error,
+	prepareEncryptedWrites bool,
 	close func(*AppDB) error,
 ) (*AppDB, error) {
+	if prepareEncryptedWrites {
+		if err := prepareEncryptedDatabaseSupport(ctx, db, request); err != nil {
+			return nil, err
+		}
+	}
 	location, err := NewAccountingLocation(ctx, db, request.AccountingLocation)
 	if err != nil {
 		return nil, err
 	}
 	appDB := &AppDB{
-		db:       db,
-		location: location,
+		db:            db,
+		location:      location,
+		encryptionKey: request.EncryptionKey,
 	}
 	appDB.close = func() error {
 		return close(appDB)

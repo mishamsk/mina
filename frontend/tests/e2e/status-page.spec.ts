@@ -130,6 +130,8 @@ test("status page reports backend health", async ({ page }) => {
   await expect(page.getByText("ok")).toBeVisible();
   await expect(page.getByText("Schema version")).toBeVisible();
   await expect(page.getByText("Server time")).toBeVisible();
+  await expect(page.getByText("Database encryption")).toBeVisible();
+  await expect(page.getByText("Not encrypted")).toBeVisible();
   await expect(page.getByText("GMT")).toHaveCount(0);
 
   await expect(
@@ -143,6 +145,26 @@ test("status page reports backend health", async ({ page }) => {
   await expect(
     page.getByText("Backend health and local UI state for this Mina process."),
   ).toBeHidden();
+});
+
+test("status page reports an encrypted database", async ({ page }) => {
+  await page.route("**/api/health", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        database_encrypted: true,
+        schema_version: 1,
+        status: "ok",
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
+  await page.goto("/status");
+
+  await expect(page.getByText("Database encryption")).toBeVisible();
+  await expect(page.getByText("Encrypted", { exact: true })).toBeVisible();
+  await expect(page.getByText("Not encrypted")).toHaveCount(0);
 });
 
 test("status page navigates registered operation runs", async ({ page }) => {

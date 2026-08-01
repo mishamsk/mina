@@ -1818,8 +1818,10 @@ type GroupStateListResponse struct {
 
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
-	SchemaVersion int64                `json:"schema_version"`
-	Status        HealthResponseStatus `json:"status"`
+	// DatabaseEncrypted Whether the selected accounting database is encrypted at rest.
+	DatabaseEncrypted bool                 `json:"database_encrypted"`
+	SchemaVersion     int64                `json:"schema_version"`
+	Status            HealthResponseStatus `json:"status"`
 }
 
 // HealthResponseStatus defines model for HealthResponse.Status.

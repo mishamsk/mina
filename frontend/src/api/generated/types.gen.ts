@@ -989,6 +989,10 @@ export type BackgroundOperationRunListResponse = {
 };
 
 export type HealthResponse = {
+    /**
+     * Whether the selected accounting database is encrypted at rest.
+     */
+    database_encrypted: boolean;
     status: 'ok';
     schema_version: number;
 };

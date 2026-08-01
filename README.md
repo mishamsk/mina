@@ -35,7 +35,7 @@ Mina is still moving quickly. See [VISION.md](VISION.md) for the full destinatio
 
 ## Quick Start
 
-The supported deployment path is Docker Compose. It keeps Mina bound to localhost, gives the database and cache persistent volumes, and configures scheduled backups.
+The supported deployment path is Docker Compose. It keeps Mina bound to localhost, gives the database and cache persistent volumes, and configures scheduled backups. Encryption is recommended for every persistent deployment.
 
 ```bash
 mkdir -p "$HOME/mina-deployment"
@@ -46,6 +46,13 @@ curl -fsSLo compose.yaml \
 mkdir -p config backups
 chmod 0700 config backups
 printf 'MINA_UID=%s\nMINA_GID=%s\n' "$(id -u)" "$(id -g)" > .env
+
+# Generate once, store this value in a password manager, and supply the same
+# value for every future start and restore. Compose reads it from .env.
+MINA_KEY="$(openssl rand -base64 32)"
+printf 'MINA_DATABASE_ENCRYPTION_KEY=%s\n' "$MINA_KEY" >> .env
+unset MINA_KEY
+chmod 0600 .env
 
 docker compose pull
 docker compose up -d
@@ -69,13 +76,19 @@ Do not overwrite an existing Mina database, config, deployment, or port. Verify 
 
 ### Release Binary
 
-Download the archive for your platform from [GitHub Releases](https://github.com/mishamsk/mina/releases), put `mina` on your `PATH`, then start a persistent local instance:
+Download the archive for your platform from [GitHub Releases](https://github.com/mishamsk/mina/releases), put `mina` on your `PATH`, then start a persistent local instance. Supply the key only through the process environment:
 
 ```bash
+printf 'Mina database encryption key: ' >&2
+IFS= read -rs MINA_DATABASE_ENCRYPTION_KEY
+printf '\n' >&2
+export MINA_DATABASE_ENCRYPTION_KEY
 mina serve --db "$HOME/mina.duckdb"
 ```
 
-Confirm database creation when prompted, then open <http://127.0.0.1:8080>. Run `mina serve --help` for config, host, port, logging, and demo options.
+Generate a new key with `openssl rand -base64 32`, store it in a password manager, and enter it at the prompt above. Confirm database creation, then open <http://127.0.0.1:8080>. Run `mina serve --help` for config, host, port, logging, and demo options.
+
+A release binary's first encrypted writable start downloads DuckDB's signed, version-matched `httpfs` extension, so a clean installation needs outbound network access. Supported Docker images bundle the extension and are the offline-capable deployment path.
 
 ### Install With mise
 
@@ -83,10 +96,14 @@ If you already use [mise](https://mise.jdx.dev/), its Go backend can build and a
 
 ```bash
 mise use -g go:github.com/mishamsk/mina/cmd/mina@latest
+printf 'Mina database encryption key: ' >&2
+IFS= read -rs MINA_DATABASE_ENCRYPTION_KEY
+printf '\n' >&2
+export MINA_DATABASE_ENCRYPTION_KEY
 mina serve --db "$HOME/mina.duckdb"
 ```
 
-This route requires the Go/CGO build prerequisites used by DuckDB. Release binaries or Compose are less adventurous.
+Generate and store the key before the first persistent start, as described above. This route requires the Go/CGO build prerequisites used by DuckDB. Release binaries or Compose are less adventurous.
 
 ### Try Demo Data
 
@@ -102,10 +119,14 @@ No database file means the accounting state disappears when Mina stops. Demo see
 
 With the Compose setup:
 
-- `mina-data` holds the portable accounting database.
+- `mina-data` holds the portable accounting database, encrypted with AES-256-GCM when `MINA_DATABASE_ENCRYPTION_KEY` is present.
 - `mina-cache` holds rebuildable provider data.
 - `./config/config.toml` holds operational configuration.
-- `./backups` receives database backups; the template keeps 14 and schedules a daily backup at `03:00` UTC.
+- `./backups` receives database backups; the template keeps 14 and schedules a daily backup at `03:00` UTC. Backups from an encrypted database use the same key and are encrypted too.
+
+The key is intentionally not a Mina setting: there is no TOML field, CLI flag, REST/MCP/UI input, or settings-snapshot value for it. Compose forwards it from the operator's shell environment or deployment `.env` file. Keep `.env` mode `0600`, out of version control and ordinary deployment backups, and keep a separate copy of the key in a password manager. A key/file mismatch fails without changing the database; omit the variable only when intentionally using plaintext state.
+
+Losing the key makes the encrypted database and every encrypted backup unrecoverable. Keep the key separately from the database and backups, retain tested independent backup copies, and test restore with `MINA_DATABASE_ENCRYPTION_KEY` set before relying on them. Encryption protects files at rest; it is not authentication and Mina does not claim NIST, FIPS, or other compliance certification.
 
 Named volumes survive `docker compose down`. `docker compose down --volumes` deletes them. A backup on the same machine is useful; a tested copy elsewhere is an actual recovery plan.
 
@@ -116,11 +137,14 @@ curl -fsS -X POST \
   http://127.0.0.1:8080/api/background-operations/database-backup/runs
 ```
 
-Mina is local-first, not magically private. Anyone who can reach the service can use it, and anyone who can read the database or backups can read your financial data. Keep the listener, files, and backup copies inside boundaries you trust.
+Mina is local-first, not magically private. Anyone who can reach the service can use it. Encryption reduces exposure from copied files but does not protect a running process or a disclosed key. Keep the listener, key, files, and backup copies inside boundaries you trust.
 
 ## Operating Compose
 
-Update and recreate Mina:
+Update and recreate Mina. Compose automatically reuses the encrypted database
+key from the deployment `.env` file. If the key is not stored there, export it
+in the shell before running these commands. For a plaintext database, keep
+`MINA_DATABASE_ENCRYPTION_KEY` absent from both sources.
 
 ```bash
 docker compose pull
