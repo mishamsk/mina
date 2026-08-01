@@ -420,7 +420,7 @@ codex-goal plan_file="":
         [ -n "$plan_file" ] || { echo "no plan selected" >&2; exit 1; }
     fi
 
-    command codex -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + planning_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "/goal Implement @${plan_file}. The plan's completion criteria define when the goal is complete."
+    command codex -m {{ quote(default_codex_model) }} -c {{ quote("model_reasoning_effort=" + default_codex_reasoning_effort) }} --dangerously-bypass-approvals-and-sandbox "/goal Implement @${plan_file}. The plan's completion criteria define when the goal is complete."
 
 # Run a Codex operator against a sequential fleet plan.
 [group('agents')]
